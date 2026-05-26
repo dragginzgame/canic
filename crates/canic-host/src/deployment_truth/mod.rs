@@ -12,6 +12,7 @@ use std::{
 
 mod authority;
 mod executor;
+mod lifecycle;
 mod model;
 mod observe;
 mod plan;
@@ -35,6 +36,12 @@ pub use executor::{
     missing_executor_capabilities, testkit_execution_context,
     validate_deployment_execution_preflight, validate_deployment_execution_preflight_for_check,
 };
+pub use lifecycle::{
+    ExternalUpgradeReceiptError, external_lifecycle_plan_from_check,
+    external_upgrade_proposal_report_from_lifecycle_plan,
+    external_upgrade_receipt_from_observation, lifecycle_authority_report_from_check,
+    validate_external_upgrade_receipt,
+};
 pub use model::{
     ArtifactDigestSourceV1, ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanV1,
     ArtifactPromotionProvenanceReportV1, ArtifactSourceV1, ArtifactTransportV1,
@@ -45,12 +52,18 @@ pub use model::{
     AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, AuthorityReportCountsV1,
     AuthorityReportV1, BuildMaterializationEvidenceV1, BuildMaterializationInputV1,
     BuildMaterializationResultV1, BuildRecipeIdentityV1, CanisterAuthorityActionV1,
-    CanisterControlClassV1, DeploymentAssumptionV1, DeploymentCheckV1, DeploymentCommandResultV1,
-    DeploymentDiffV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
+    CanisterControlClassV1, ConsentChannelKindV1, ConsentRequirementV1, ConsentSubjectKindV1,
+    DeploymentAssumptionV1, DeploymentCheckV1, DeploymentCommandResultV1, DeploymentDiffV1,
+    DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
     DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
     DeploymentExecutorCapabilityV1, DeploymentIdentityV1, DeploymentInventoryV1,
     DeploymentObservationGapV1, DeploymentPlanV1, DeploymentReceiptV1, DiffItemV1,
-    ExpectedCanisterV1, ExpectedPoolCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1,
+    ExpectedCanisterV1, ExpectedPoolCanisterV1, ExternalLifecyclePlanStatusV1,
+    ExternalLifecyclePlanV1, ExternalLifecycleRoleUpgradeV1, ExternalUpgradeAuthorizationModeV1,
+    ExternalUpgradeConsentStateV1, ExternalUpgradeProposalReportV1, ExternalUpgradeProposalV1,
+    ExternalUpgradeReceiptV1, ExternalUpgradeVerificationResultV1, LifecycleAuthorityReportV1,
+    LifecycleAuthorityV1, LifecycleModeV1, LifecycleUpgradeModeV1,
+    LifecycleVerificationRequirementV1, LocalDeploymentConfigV1, ObservationStatusV1,
     ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1, PhaseReceiptV1,
     PreviousArtifactReceiptKindV1, PromotionArtifactIdentityGroupV1,
     PromotionArtifactIdentityKindV1, PromotionArtifactIdentityReportV1,

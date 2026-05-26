@@ -64,6 +64,556 @@ fn plan_round_trips_through_json() {
 }
 
 #[test]
+fn lifecycle_authority_report_projects_deployment_controlled_roles() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+
+    let report = lifecycle_authority_report_from_check("lifecycle-authority-1", &check);
+
+    assert_eq!(report.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(report.report_id, "lifecycle-authority-1");
+    assert_eq!(report.check_id, "check-1");
+    assert_eq!(report.authorities.len(), 1);
+    assert_eq!(report.external_action_required_count, 0);
+    assert_eq!(report.blocked_count, 0);
+    let authority = &report.authorities[0];
+    assert_eq!(authority.role.as_deref(), Some("root"));
+    assert_eq!(
+        authority.control_class,
+        CanisterControlClassV1::DeploymentControlled
+    );
+    assert_eq!(
+        authority.lifecycle_mode,
+        LifecycleModeV1::DirectDeploymentAuthority
+    );
+    assert_eq!(authority.required_controllers, vec!["aaaaa-aa"]);
+    assert_eq!(authority.expected_deployment_controllers, vec!["aaaaa-aa"]);
+    assert!(authority.external_controllers.is_empty());
+    assert!(authority.consent_requirements.is_empty());
+    assert!(
+        authority
+            .allowed_upgrade_modes
+            .contains(&LifecycleUpgradeModeV1::DirectByDeploymentAuthority)
+    );
+    assert!(
+        authority
+            .verification_requirements
+            .contains(&LifecycleVerificationRequirementV1::ProtectedCallReadiness)
+    );
+    assert_json_round_trip(&report);
+}
+
+#[test]
+fn lifecycle_authority_report_projects_user_controlled_roles_as_external() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+
+    let report = lifecycle_authority_report_from_check("lifecycle-authority-1", &check);
+
+    assert_eq!(report.external_action_required_count, 1);
+    assert_eq!(report.blocked_count, 0);
+    let authority = &report.authorities[0];
+    assert_eq!(
+        authority.control_class,
+        CanisterControlClassV1::UserControlled
+    );
+    assert_eq!(
+        authority.lifecycle_mode,
+        LifecycleModeV1::ExternalCompletionOnly
+    );
+    assert_eq!(authority.external_controllers, vec!["user-principal"]);
+    assert_eq!(
+        authority.consent_requirements[0].required_principals,
+        vec!["user-principal"]
+    );
+    assert!(authority.external_action_required);
+    assert!(!authority.blocked);
+    assert!(
+        !authority
+            .allowed_upgrade_modes
+            .contains(&LifecycleUpgradeModeV1::DirectByDeploymentAuthority)
+    );
+    assert!(
+        authority
+            .allowed_upgrade_modes
+            .contains(&LifecycleUpgradeModeV1::ExternalProposal)
+    );
+    assert!(
+        authority
+            .allowed_upgrade_modes
+            .contains(&LifecycleUpgradeModeV1::VerifyExternalCompletion)
+    );
+}
+
+#[test]
+fn lifecycle_authority_report_blocks_unknown_unsafe_roles() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UnknownUnsafe;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UnknownUnsafe;
+    let check = sample_check(plan, inventory);
+
+    let report = lifecycle_authority_report_from_check("lifecycle-authority-1", &check);
+
+    assert_eq!(report.external_action_required_count, 0);
+    assert_eq!(report.blocked_count, 1);
+    let authority = &report.authorities[0];
+    assert_eq!(
+        authority.control_class,
+        CanisterControlClassV1::UnknownUnsafe
+    );
+    assert_eq!(
+        authority.allowed_upgrade_modes,
+        vec![LifecycleUpgradeModeV1::Blocked]
+    );
+    assert!(authority.blocked);
+    assert_eq!(
+        authority.lifecycle_mode,
+        LifecycleModeV1::UnknownUnsafeBlocked
+    );
+    assert!(!authority.blockers.is_empty());
+}
+
+#[test]
+fn external_lifecycle_plan_partitions_roles_before_proposals() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+
+    assert_eq!(
+        lifecycle_plan.schema_version,
+        DEPLOYMENT_TRUTH_SCHEMA_VERSION
+    );
+    assert_eq!(
+        lifecycle_plan.lifecycle_plan_id,
+        "external-lifecycle-plan-1"
+    );
+    assert_eq!(
+        lifecycle_plan.lifecycle_authority_report_id,
+        "lifecycle-authority-1"
+    );
+    assert_eq!(
+        lifecycle_plan.status,
+        ExternalLifecyclePlanStatusV1::PendingExternalAction
+    );
+    assert_eq!(lifecycle_plan.lifecycle_plan_digest.len(), 64);
+    assert!(lifecycle_plan.directly_executable_role_upgrades.is_empty());
+    assert_eq!(lifecycle_plan.proposed_external_role_upgrades.len(), 1);
+    assert!(lifecycle_plan.blocked_role_upgrades.is_empty());
+    assert!(!lifecycle_plan.residual_exposure.is_empty());
+    assert_json_round_trip(&lifecycle_plan);
+}
+
+#[test]
+fn lifecycle_authority_report_json_shape_is_stable() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let report = lifecycle_authority_report_from_check("lifecycle-authority-1", &check);
+    let encoded = serde_json::to_value(&report).expect("report should encode");
+
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "report_id",
+            "check_id",
+            "plan_id",
+            "inventory_id",
+            "authorities",
+            "external_action_required_count",
+            "blocked_count",
+        ],
+    );
+    assert_object_keys(
+        &encoded["authorities"][0],
+        &[
+            "subject",
+            "canister_id",
+            "role",
+            "control_class",
+            "lifecycle_mode",
+            "observed_controllers",
+            "expected_deployment_controllers",
+            "external_controllers",
+            "required_controllers",
+            "consent_requirements",
+            "allowed_upgrade_modes",
+            "verification_requirements",
+            "external_action_required",
+            "blocked",
+            "blockers",
+            "warnings",
+            "reason",
+        ],
+    );
+}
+
+#[test]
+fn external_upgrade_proposal_report_binds_user_controlled_target_identity() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+
+    assert_eq!(report.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(report.report_id, "external-upgrade-proposals-1");
+    assert_eq!(report.lifecycle_plan_id, "external-lifecycle-plan-1");
+    assert_eq!(report.lifecycle_plan_digest.len(), 64);
+    assert!(report.blocked_subjects.is_empty());
+    assert_eq!(report.proposals.len(), 1);
+    let proposal = &report.proposals[0];
+    assert_eq!(proposal.deployment_plan_id, "plan-local-root");
+    assert_eq!(proposal.deployment_plan_digest.len(), 64);
+    assert_eq!(proposal.lifecycle_plan_id, lifecycle_plan.lifecycle_plan_id);
+    assert_eq!(
+        proposal.lifecycle_plan_digest,
+        lifecycle_plan.lifecycle_plan_digest
+    );
+    assert_eq!(proposal.proposal_digest.len(), 64);
+    assert_eq!(proposal.subject, "root:aaaaa-aa");
+    assert_eq!(proposal.role.as_deref(), Some("root"));
+    assert_eq!(
+        proposal.control_class,
+        CanisterControlClassV1::UserControlled
+    );
+    assert_eq!(proposal.current_module_hash.as_deref(), Some("module"));
+    assert_eq!(
+        proposal.current_canonical_embedded_config_sha256.as_deref(),
+        Some("canonical")
+    );
+    assert_eq!(proposal.target_wasm_sha256.as_deref(), Some("wasm"));
+    assert_eq!(proposal.target_wasm_gz_sha256.as_deref(), Some("gzip"));
+    assert_eq!(
+        proposal.target_canonical_embedded_config_sha256.as_deref(),
+        Some("canonical")
+    );
+    assert_eq!(proposal.observed_before_digest.len(), 64);
+    assert!(proposal.target_role_artifact_identity.is_some());
+    assert_eq!(
+        proposal.consent_requirements[0].required_principals,
+        vec!["user-principal"]
+    );
+    assert_eq!(
+        proposal.required_external_action,
+        "external_controller_execution"
+    );
+    assert!(
+        proposal
+            .allowed_authorization_modes
+            .contains(&ExternalUpgradeAuthorizationModeV1::ExternalControllerExecution)
+    );
+    assert!(
+        proposal
+            .verification_requirements
+            .contains(&LifecycleVerificationRequirementV1::ModuleHash)
+    );
+    assert_json_round_trip(&report);
+}
+
+#[test]
+fn external_upgrade_proposal_report_skips_direct_roles_and_blocks_unsafe_rows() {
+    let direct = sample_check(sample_plan(), sample_matching_inventory());
+    let direct_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &direct,
+    );
+    let direct_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &direct_plan,
+        &direct,
+    );
+    assert!(direct_report.proposals.is_empty());
+    assert!(direct_report.blocked_subjects.is_empty());
+
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UnknownUnsafe;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UnknownUnsafe;
+    let unsafe_check = sample_check(plan, inventory);
+    let unsafe_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &unsafe_check,
+    );
+    let unsafe_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &unsafe_plan,
+        &unsafe_check,
+    );
+
+    assert!(unsafe_report.proposals.is_empty());
+    assert_eq!(unsafe_report.blocked_subjects, vec!["root:aaaaa-aa"]);
+}
+
+#[test]
+fn external_upgrade_proposal_report_json_shape_is_stable() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let encoded = serde_json::to_value(&report).expect("report should encode");
+
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "report_id",
+            "lifecycle_plan_id",
+            "lifecycle_plan_digest",
+            "deployment_plan_id",
+            "deployment_plan_digest",
+            "inventory_id",
+            "proposals",
+            "blocked_subjects",
+        ],
+    );
+    assert_object_keys(
+        &encoded["proposals"][0],
+        &[
+            "proposal_id",
+            "proposal_digest",
+            "deployment_plan_id",
+            "deployment_plan_digest",
+            "lifecycle_plan_id",
+            "lifecycle_plan_digest",
+            "promotion_plan_id",
+            "promotion_plan_digest",
+            "promotion_provenance_id",
+            "promotion_provenance_digest",
+            "subject",
+            "canister_id",
+            "role",
+            "control_class",
+            "lifecycle_mode",
+            "observed_before_digest",
+            "current_module_hash",
+            "current_canonical_embedded_config_sha256",
+            "target_wasm_sha256",
+            "target_wasm_gz_sha256",
+            "target_installed_module_hash",
+            "target_role_artifact_identity",
+            "target_canonical_embedded_config_sha256",
+            "root_trust_anchor",
+            "authority_profile_hash",
+            "required_external_action",
+            "consent_requirements",
+            "allowed_authorization_modes",
+            "verification_requirements",
+            "expires_at",
+            "supersedes_proposal_id",
+        ],
+    );
+}
+
+#[test]
+fn external_upgrade_receipt_verifies_matching_external_completion() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let proposal = &proposal_report.proposals[0];
+
+    let receipt = external_upgrade_receipt_from_observation(
+        "external-upgrade-receipt-1",
+        proposal,
+        ExternalUpgradeConsentStateV1::ExecutedExternally,
+        Some("user-principal".to_string()),
+        Some(&check.inventory.observed_canisters[0]),
+    );
+
+    assert_eq!(receipt.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(receipt.proposal_id, proposal.proposal_id);
+    assert_eq!(receipt.proposal_digest, proposal.proposal_digest);
+    assert_eq!(receipt.subject, proposal.subject);
+    assert_eq!(
+        receipt.verification_result,
+        ExternalUpgradeVerificationResultV1::Verified
+    );
+    assert!(receipt.verification_notes.is_empty());
+    validate_external_upgrade_receipt(&receipt).expect("receipt should validate");
+    assert_json_round_trip(&receipt);
+}
+
+#[test]
+fn external_upgrade_receipt_reports_mismatched_external_completion() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let mut observed_after = check.inventory.observed_canisters[0].clone();
+    observed_after.module_hash = Some("different-module".to_string());
+
+    let receipt = external_upgrade_receipt_from_observation(
+        "external-upgrade-receipt-1",
+        &proposal_report.proposals[0],
+        ExternalUpgradeConsentStateV1::ExecutedExternally,
+        Some("user-principal".to_string()),
+        Some(&observed_after),
+    );
+
+    assert_eq!(
+        receipt.verification_result,
+        ExternalUpgradeVerificationResultV1::Mismatch
+    );
+    assert!(
+        receipt
+            .verification_notes
+            .iter()
+            .any(|note| note.contains("module hash"))
+    );
+    validate_external_upgrade_receipt(&receipt).expect("mismatch receipt is still valid evidence");
+}
+
+#[test]
+fn external_upgrade_receipt_validation_rejects_contradictory_refusal() {
+    let mut receipt = ExternalUpgradeReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        receipt_id: "external-upgrade-receipt-1".to_string(),
+        proposal_id: "proposal-1".to_string(),
+        proposal_digest: sample_sha256("1"),
+        subject: "root:aaaaa-aa".to_string(),
+        canister_id: Some("aaaaa-aa".to_string()),
+        role: Some("root".to_string()),
+        consent_state: ExternalUpgradeConsentStateV1::Refused,
+        reported_by: None,
+        observed_before_module_hash: Some("old".to_string()),
+        observed_after_module_hash: Some("new".to_string()),
+        observed_after_canonical_embedded_config_sha256: Some("config".to_string()),
+        verification_result: ExternalUpgradeVerificationResultV1::Verified,
+        verification_notes: Vec::new(),
+        receipt_digest: sample_sha256("2"),
+    };
+
+    let err = validate_external_upgrade_receipt(&receipt)
+        .expect_err("refused consent cannot verify completion");
+    assert!(matches!(
+        err,
+        ExternalUpgradeReceiptError::RefusedConsentVerified
+    ));
+
+    receipt.verification_result = ExternalUpgradeVerificationResultV1::Pending;
+    receipt.receipt_id.clear();
+    let err =
+        validate_external_upgrade_receipt(&receipt).expect_err("blank receipt id should fail");
+    assert!(matches!(
+        err,
+        ExternalUpgradeReceiptError::MissingRequiredField {
+            field: "receipt_id"
+        }
+    ));
+}
+
+#[test]
+fn external_upgrade_receipt_json_shape_is_stable() {
+    let mut plan = sample_plan();
+    plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    let mut inventory = sample_matching_inventory();
+    inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    let check = sample_check(plan, inventory);
+    let lifecycle_plan = external_lifecycle_plan_from_check(
+        "external-lifecycle-plan-1",
+        "lifecycle-authority-1",
+        &check,
+    );
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        "external-upgrade-proposals-1",
+        &lifecycle_plan,
+        &check,
+    );
+    let receipt = external_upgrade_receipt_from_observation(
+        "external-upgrade-receipt-1",
+        &proposal_report.proposals[0],
+        ExternalUpgradeConsentStateV1::ExecutedExternally,
+        Some("user-principal".to_string()),
+        Some(&check.inventory.observed_canisters[0]),
+    );
+    let encoded = serde_json::to_value(&receipt).expect("receipt should encode");
+
+    assert_object_keys(
+        &encoded,
+        &[
+            "schema_version",
+            "receipt_id",
+            "proposal_id",
+            "proposal_digest",
+            "subject",
+            "canister_id",
+            "role",
+            "consent_state",
+            "reported_by",
+            "observed_before_module_hash",
+            "observed_after_module_hash",
+            "observed_after_canonical_embedded_config_sha256",
+            "verification_result",
+            "verification_notes",
+            "receipt_digest",
+        ],
+    );
+}
+
+#[test]
 fn role_artifact_source_round_trips_through_json() {
     let source = sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz);
 

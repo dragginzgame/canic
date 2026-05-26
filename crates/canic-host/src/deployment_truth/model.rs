@@ -881,6 +881,278 @@ pub struct DeploymentCheckV1 {
 }
 
 ///
+/// LifecycleAuthorityReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LifecycleAuthorityReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub check_id: String,
+    pub plan_id: String,
+    pub inventory_id: String,
+    pub authorities: Vec<LifecycleAuthorityV1>,
+    pub external_action_required_count: usize,
+    pub blocked_count: usize,
+}
+
+///
+/// LifecycleAuthorityV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LifecycleAuthorityV1 {
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub control_class: CanisterControlClassV1,
+    pub lifecycle_mode: LifecycleModeV1,
+    pub observed_controllers: Vec<String>,
+    pub expected_deployment_controllers: Vec<String>,
+    pub external_controllers: Vec<String>,
+    pub required_controllers: Vec<String>,
+    pub consent_requirements: Vec<ConsentRequirementV1>,
+    pub allowed_upgrade_modes: Vec<LifecycleUpgradeModeV1>,
+    pub verification_requirements: Vec<LifecycleVerificationRequirementV1>,
+    pub external_action_required: bool,
+    pub blocked: bool,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+    pub reason: String,
+}
+
+///
+/// LifecycleModeV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum LifecycleModeV1 {
+    DirectDeploymentAuthority,
+    ProposalRequired,
+    DelegatedInstallRequired,
+    ExternalCompletionOnly,
+    VerifyOnly,
+    MustNotTouch,
+    UnknownUnsafeBlocked,
+}
+
+///
+/// LifecycleUpgradeModeV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum LifecycleUpgradeModeV1 {
+    DirectByDeploymentAuthority,
+    ExternalProposal,
+    ExternalExecution,
+    VerifyExternalCompletion,
+    ObserveOnly,
+    Blocked,
+}
+
+///
+/// LifecycleVerificationRequirementV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum LifecycleVerificationRequirementV1 {
+    LiveInventory,
+    ControllerObservation,
+    ModuleHash,
+    CanonicalEmbeddedConfig,
+    ProtectedCallReadiness,
+}
+
+///
+/// ConsentRequirementV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConsentRequirementV1 {
+    pub consent_subject_kind: ConsentSubjectKindV1,
+    pub required_principals: Vec<String>,
+    pub required_controller_set_digest: Option<String>,
+    pub consent_channel_kind: ConsentChannelKindV1,
+    pub required_action: ExternalUpgradeAuthorizationModeV1,
+}
+
+///
+/// ConsentSubjectKindV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ConsentSubjectKindV1 {
+    UserPrincipal,
+    ProjectHub,
+    GovernanceCanister,
+    CustomerController,
+    DelegatedInstallCanister,
+    MultisigAuthority,
+    UnknownExternalController,
+}
+
+///
+/// ConsentChannelKindV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ConsentChannelKindV1 {
+    OutOfBand,
+    GeneratedCommand,
+    DelegatedInstall,
+    GovernanceProposal,
+    ApplicationSpecific,
+}
+
+///
+/// ExternalLifecyclePlanV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecyclePlanV1 {
+    pub schema_version: u32,
+    pub lifecycle_plan_id: String,
+    pub lifecycle_plan_digest: String,
+    pub lifecycle_authority_report_id: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub inventory_id: String,
+    pub lifecycle_authority_rows: Vec<LifecycleAuthorityV1>,
+    pub directly_executable_role_upgrades: Vec<ExternalLifecycleRoleUpgradeV1>,
+    pub proposed_external_role_upgrades: Vec<ExternalLifecycleRoleUpgradeV1>,
+    pub blocked_role_upgrades: Vec<ExternalLifecycleRoleUpgradeV1>,
+    pub dependency_blockers: Vec<String>,
+    pub protected_call_implications: Vec<String>,
+    pub residual_exposure: Vec<String>,
+    pub status: ExternalLifecyclePlanStatusV1,
+}
+
+///
+/// ExternalLifecycleRoleUpgradeV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecycleRoleUpgradeV1 {
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub control_class: CanisterControlClassV1,
+    pub lifecycle_mode: LifecycleModeV1,
+    pub required_external_action: Option<String>,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+///
+/// ExternalLifecyclePlanStatusV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ExternalLifecyclePlanStatusV1 {
+    Ready,
+    PendingExternalAction,
+    Blocked,
+}
+
+///
+/// ExternalUpgradeProposalReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeProposalReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub lifecycle_plan_id: String,
+    pub lifecycle_plan_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub inventory_id: String,
+    pub proposals: Vec<ExternalUpgradeProposalV1>,
+    pub blocked_subjects: Vec<String>,
+}
+
+///
+/// ExternalUpgradeProposalV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeProposalV1 {
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub lifecycle_plan_id: String,
+    pub lifecycle_plan_digest: String,
+    pub promotion_plan_id: Option<String>,
+    pub promotion_plan_digest: Option<String>,
+    pub promotion_provenance_id: Option<String>,
+    pub promotion_provenance_digest: Option<String>,
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub control_class: CanisterControlClassV1,
+    pub lifecycle_mode: LifecycleModeV1,
+    pub observed_before_digest: String,
+    pub current_module_hash: Option<String>,
+    pub current_canonical_embedded_config_sha256: Option<String>,
+    pub target_wasm_sha256: Option<String>,
+    pub target_wasm_gz_sha256: Option<String>,
+    pub target_installed_module_hash: Option<String>,
+    pub target_role_artifact_identity: Option<String>,
+    pub target_canonical_embedded_config_sha256: Option<String>,
+    pub root_trust_anchor: Option<String>,
+    pub authority_profile_hash: Option<String>,
+    pub required_external_action: String,
+    pub consent_requirements: Vec<ConsentRequirementV1>,
+    pub allowed_authorization_modes: Vec<ExternalUpgradeAuthorizationModeV1>,
+    pub verification_requirements: Vec<LifecycleVerificationRequirementV1>,
+    pub expires_at: Option<String>,
+    pub supersedes_proposal_id: Option<String>,
+}
+
+///
+/// ExternalUpgradeAuthorizationModeV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ExternalUpgradeAuthorizationModeV1 {
+    ConsentForDirectInstall,
+    DelegatedInstallAuthority,
+    ExternalControllerExecution,
+    ObserveAndVerifyOnly,
+}
+
+///
+/// ExternalUpgradeReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalUpgradeReceiptV1 {
+    pub schema_version: u32,
+    pub receipt_id: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub subject: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub consent_state: ExternalUpgradeConsentStateV1,
+    pub reported_by: Option<String>,
+    pub observed_before_module_hash: Option<String>,
+    pub observed_after_module_hash: Option<String>,
+    pub observed_after_canonical_embedded_config_sha256: Option<String>,
+    pub verification_result: ExternalUpgradeVerificationResultV1,
+    pub verification_notes: Vec<String>,
+    pub receipt_digest: String,
+}
+
+///
+/// ExternalUpgradeConsentStateV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ExternalUpgradeConsentStateV1 {
+    Pending,
+    Refused,
+    Delegated,
+    ExecutedExternally,
+}
+
+///
+/// ExternalUpgradeVerificationResultV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ExternalUpgradeVerificationResultV1 {
+    Pending,
+    Refused,
+    Verified,
+    Mismatch,
+}
+
+///
 /// AuthorityReconciliationPlanV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

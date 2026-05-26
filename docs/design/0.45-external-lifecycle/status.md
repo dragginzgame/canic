@@ -1,6 +1,6 @@
 # 0.45 Status: External Lifecycle
 
-Last updated: 2026-05-22
+Last updated: 2026-05-26
 
 ## Purpose
 
@@ -10,29 +10,58 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-Not started.
+Started.
 
-0.45 depends on earlier deployment truth and authority reconciliation work so
-external or user-owned lifecycle flows can be explicit instead of inferred from
-installer side effects.
+0.45 now has the first passive lifecycle-authority projection over existing
+deployment truth, lifecycle plan partitioning, and derived proposal/receipt
+evidence. External or user-owned lifecycle flows remain explicit report data;
+no consent delivery, external execution, or install mutation path has landed.
 
 ## Implemented
 
-- No 0.45 implementation work has landed yet.
+- `LifecycleAuthorityReportV1` and `LifecycleAuthorityV1` model the
+  role/canister lifecycle authority projection for a `DeploymentCheckV1`.
+- `lifecycle_authority_report_from_check(...)` consumes existing
+  `CanisterControlClassV1` classifications from plans and inventory. It does
+  not reclassify controller ownership, query IC state, mutate deployment state,
+  or create an external lifecycle execution path.
+- Lifecycle authority rows report direct deployment-authority lifecycle,
+  external proposal/execution, verify-external-completion, observe-only, and
+  blocked modes, plus verification requirements that later proposal/receipt
+  surfaces can cite.
+- `ExternalLifecyclePlanV1` partitions lifecycle rows into directly executable,
+  externally proposed, and blocked upgrades. It carries a deterministic plan
+  digest plus residual exposure and protected-call implications.
+- `ExternalUpgradeProposalReportV1` and `ExternalUpgradeProposalV1` model the
+  first passive proposal artifacts for externally actionable lifecycle rows.
+  Proposal reports are derived from `ExternalLifecyclePlanV1` and bind current
+  observed module/config facts, target role artifact/config facts, root trust
+  anchor, authority profile identity, consent requirements, proposal/lifecycle
+  digests, and allowed authorization modes without granting consent or
+  attempting execution.
+- Blocked lifecycle rows are reported as blocked subjects instead of producing
+  executable-looking proposals.
+- `ExternalUpgradeReceiptV1` models pending, refused, delegated, and
+  externally executed lifecycle outcomes. Receipt validation checks structural
+  consistency only; live inventory remains the source of truth for completion.
+- JSON shape and projection coverage pins deployment-controlled,
+  user-controlled, and unknown-unsafe lifecycle authority behavior, plus the
+  first external proposal and receipt artifact shapes.
 
 ## Not Implemented Yet
 
-- External/user-owned lifecycle model.
 - Consent and operator handoff workflow.
 - Safe upgrade/install boundaries for externally controlled canisters.
-- Receipts and observations for external lifecycle actions.
+- Live re-inventory integration for external lifecycle verification.
 
 ## Drift Log
 
-- No implementation drift recorded yet.
+- The first implementation slice follows the 0.42.14 handoff constraint:
+  lifecycle authority is projected from existing `CanisterControlClassV1`
+  observations instead of introducing a second user/external classification
+  model.
 
 ## Release Bar
 
 0.45 should not close until Canic can represent user-owned or externally
 controlled lifecycle states without pretending Canic has unilateral authority.
-

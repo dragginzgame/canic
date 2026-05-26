@@ -12,6 +12,20 @@ present.
 
 ## Unreleased
 
+## [0.45.x] - 2026-05-26 - External lifecycle
+
+- `0.45.0` starts the external/user-owned lifecycle line with passive
+  lifecycle authority projection from existing `CanisterControlClassV1`
+  deployment truth, central `ExternalLifecyclePlanV1` partitioning, and the
+  first passive external-upgrade proposal artifacts that bind current
+  observations to target artifact/config facts without granting consent or
+  executing upgrades. It also adds external lifecycle receipts that
+  structurally record pending, refused, delegated, or externally completed
+  outcomes while keeping live inventory as truth.
+
+See detailed breakdown:
+[docs/changelog/0.45.md](docs/changelog/0.45.md)
+
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
 - `0.44.16` closes the artifact-promotion line: promotion is represented as

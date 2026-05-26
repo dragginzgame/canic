@@ -9,21 +9,40 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.44.x` artifact overrides and promotion closeout.
-- Theme: promote artifact identity across deployment trust domains without
-  copying source authority, stale embedded topology, or authority dry-run
-  evidence.
-- Current release-work area: 0.44 closeout. The line is ready to close after
-  the closeout patch lands; the next design line is `0.45.x` lifecycle
-  authority.
+- Active minor: `0.45.x` external and user-owned lifecycle.
+- Theme: coordinate lifecycle work for canisters Canic cannot unilaterally
+  upgrade, without reclassifying authority or pretending deployment authority
+  can mutate externally controlled roles.
+- Current release-work area: 0.45 first slice. The line starts by projecting
+  existing `CanisterControlClassV1` observations into `LifecycleAuthorityV1`,
+  partitioning them through `ExternalLifecyclePlanV1`, and deriving passive
+  proposal/receipt evidence without adding consent delivery, external
+  execution, or install mutation.
 - Design starts at
-  `docs/design/0.44-artifact-promotion/0.44-design.md`. Promotion execution
-  must remain a `DeploymentPlanV1` transformation and must use the
-  current-install runner/gate path established at the 0.43 closeout before any
-  promoted plan executes through the existing install command.
+  `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
+  canonical control classifications from deployment truth and authority
+  reconciliation; it must not introduce a second user/external classification
+  path.
 
 ## Recent Work
 
+- 0.45 has started with passive `LifecycleAuthorityReportV1` /
+  `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
+  consumes existing `CanisterControlClassV1` values, reports direct,
+  external/proposal, observe-only, verify-external-completion, and blocked
+  lifecycle modes, and records required verification facts without mutating
+  deployment state or adding a consent/execution path.
+- 0.45 also has the first passive `ExternalUpgradeProposalReportV1` /
+  `ExternalUpgradeProposalV1` artifacts, derived from `ExternalLifecyclePlanV1`
+  rather than ad hoc role-only inputs. They bind lifecycle authority rows to
+  current module/config observations, target artifact/config facts, consent
+  requirements, lifecycle/proposal digests, and allowed authorization modes.
+  Directly controlled rows do not produce external proposals, and
+  unknown-unsafe rows remain blocked.
+- `ExternalUpgradeReceiptV1` now records pending, refused, delegated, and
+  externally executed outcomes with structural verification against observed
+  module/config facts. These receipts remain evidence; live inventory remains
+  truth.
 - 0.44 has started with passive role artifact source DTOs and validation for
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run
