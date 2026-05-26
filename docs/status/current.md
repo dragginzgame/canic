@@ -33,6 +33,8 @@ inspect only the files needed for the current task.
   restage warnings without executing promoted plans. Readiness artifacts now
   have validation for schema, identity fields, status/blocker consistency,
   duplicate roles, digest shape, restage state, and finding severities.
+  Readiness artifacts now also carry deterministic readiness digests over their
+  target plan link, status, role rows, blockers, and warnings.
 - Promotion readiness also has host-owned passive text rendering, keeping
   operator formatting out of future CLI code and clearly labeling the surface
   as non-executing readiness output.
@@ -60,7 +62,8 @@ inspect only the files needed for the current task.
 - `PromotionPlanTransformEvidenceV1` now wraps validated promotion transforms
   with passive evidence ID and generated-at provenance. Evidence validation
   rechecks the nested transform and does not claim execution, staging, or live
-  deployment state.
+  deployment state. Transform evidence artifacts now also carry deterministic
+  evidence digests over their metadata and nested transform.
 - Promotion transform evidence now has host-owned passive text rendering that
   explicitly reports `execution: none`.
 - `PromotionArtifactIdentityReportV1` now records role source locator kind
@@ -83,6 +86,10 @@ inspect only the files needed for the current task.
 - `BuildMaterializationEvidenceV1` now links those source/build pieces with a
   computed target materialization-input digest, consistency flags, validation,
   and passive text output that explicitly reports no execution occurred.
+  Materialization evidence now also carries a deterministic evidence digest
+  over the recipe, materialization input, materialization result, computed
+  input digest, and consistency flags; materialization identity reports and
+  source-build transform links preserve that digest beside the evidence ID.
 - Role promotion policy checks now model the 0.44 policy distinction between
   roles that must reuse sealed bytes and roles that may rebuild only when
   byte-identical output is later proven.
@@ -94,8 +101,9 @@ inspect only the files needed for the current task.
   without treating the standalone policy check as execution authority.
 - Source/build promotion transforms can now carry validated materialization
   evidence links, giving the passive transform summary the recipe/input/result
-  evidence ID, target materialization-input digest, and output digests it would
-  rely on before any execution path is introduced.
+  evidence ID, materialization evidence digest, target materialization-input
+  digest, and output digests it would rely on before any execution path is
+  introduced.
 - Passive promotion transforms now carry deterministic promotion-plan lineage
   digests, giving later execution receipts a stable promoted-plan identity to
   cite without treating source authority as target authority.
@@ -128,8 +136,10 @@ inspect only the files needed for the current task.
   reference the same wasm-store identity report or it becomes a passive
   provenance blocker. Role-level provenance also preserves the catalog
   observation digest and blocks locator drift between wasm-store identity and
-  catalog verification artifacts. Promotion execution receipt wrappers carry
-  that same role-level catalog observation digest forward.
+  catalog verification artifacts. Role-level provenance also preserves the
+  materialization evidence digest for source/build roles. Promotion execution
+  receipt wrappers carry those same role-level catalog and materialization
+  digests forward.
 - Passive artifact promotion plan envelopes now carry deterministic plan
   digests over their linkage, readiness, artifact identity, transform, optional
   target execution lineage, and blocker set. Promotion provenance reports cite

@@ -59,6 +59,10 @@ pub fn promotion_readiness_text(readiness: &PromotionReadinessV1) -> String {
             promotion_readiness_status_label(readiness.status)
         ),
         format!("readiness_id: {}", readiness.readiness_id),
+        format!(
+            "promotion_readiness_digest: {}",
+            readiness.promotion_readiness_digest
+        ),
         format!("target_plan_id: {}", readiness.target_plan_id),
         String::new(),
         "counts:".to_string(),
@@ -81,6 +85,10 @@ pub fn build_materialization_evidence_text(evidence: &BuildMaterializationEviden
         "Build materialization evidence".to_string(),
         "mode: passive".to_string(),
         format!("evidence_id: {}", evidence.evidence_id),
+        format!(
+            "materialization_evidence_digest: {}",
+            evidence.materialization_evidence_digest
+        ),
         format!("recipe_id: {}", evidence.recipe.recipe_id),
         format!(
             "materialization_input_id: {}",
@@ -396,6 +404,10 @@ pub fn promotion_plan_transform_evidence_text(
         "mode: passive".to_string(),
         "execution: none".to_string(),
         format!("evidence_id: {}", evidence.evidence_id),
+        format!(
+            "promotion_plan_transform_evidence_digest: {}",
+            evidence.promotion_plan_transform_evidence_digest
+        ),
         format!("generated_at: {}", evidence.generated_at),
         format!("transform_id: {}", evidence.transform.transform_id),
         format!("target_plan_id: {}", evidence.transform.target_plan_id),
@@ -578,11 +590,14 @@ pub fn artifact_promotion_provenance_report_text(
         lines.push("roles:".to_string());
         for role in &report.roles {
             lines.push(format!(
-                "  {} {:?}/{:?}: materialization={} wasm_store={} catalog_digest={}",
+                "  {} {:?}/{:?}: materialization={} materialization_digest={} wasm_store={} catalog_digest={}",
                 role.role,
                 role.promotion_level,
                 role.source_kind,
                 role.materialization_evidence_id
+                    .as_deref()
+                    .unwrap_or("none"),
+                role.materialization_evidence_digest
                     .as_deref()
                     .unwrap_or("none"),
                 role.wasm_store_locator.as_deref().unwrap_or("none"),
@@ -721,13 +736,16 @@ pub fn artifact_promotion_execution_receipt_text(
         lines.push("roles:".to_string());
         for role in &receipt.roles {
             lines.push(format!(
-                "  {} {:?}: result={} artifact={} observed_module={} catalog_digest={}",
+                "  {} {:?}: result={} artifact={} observed_module={} materialization_digest={} catalog_digest={}",
                 role.role,
                 role.promotion_level,
                 role.role_phase_result
                     .map_or_else(|| "none".to_string(), |result| format!("{result:?}")),
                 role.artifact_digest.as_deref().unwrap_or("none"),
                 role.observed_module_hash_after.as_deref().unwrap_or("none"),
+                role.materialization_evidence_digest
+                    .as_deref()
+                    .unwrap_or("none"),
                 role.wasm_store_catalog_observation_digest
                     .as_deref()
                     .unwrap_or("none")
@@ -1334,6 +1352,10 @@ fn append_promotion_transform_role_items(
             lines.push(format!(
                 "    materialization_evidence_id: {}",
                 materialization.evidence_id
+            ));
+            lines.push(format!(
+                "    materialization_evidence_digest: {}",
+                materialization.materialization_evidence_digest
             ));
             lines.push(format!(
                 "    materialization_input_digest: {}",

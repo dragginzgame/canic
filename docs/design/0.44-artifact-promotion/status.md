@@ -28,6 +28,9 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added the first passive `PromotionReadinessV1` model, with role-scoped
   source identity, target wasm/config identity, byte/config identity
   comparisons, blockers, warnings, and restage-required reporting.
+- Promotion readiness artifacts now carry deterministic readiness digests over
+  their target plan link, status, role rows, blockers, and warnings, so
+  archived readiness reports reject stale pre-plan drift directly.
 - Added validation for archived `PromotionReadinessV1` artifacts, including
   schema, identity fields, status/blocker consistency, duplicate roles, digest
   shape, restage state, and finding severity checks.
@@ -55,6 +58,9 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added `PromotionPlanTransformEvidenceV1` as a passive provenance wrapper for
   validated promotion transforms, with evidence ID, generated-at metadata, and
   validation that rechecks the nested transform.
+- Promotion transform evidence artifacts now carry deterministic evidence
+  digests over their metadata and nested transform, so archived transform
+  evidence rejects stale wrapper or transform drift directly.
 - Added host-owned passive text rendering for `PromotionPlanTransformEvidenceV1`
   that explicitly reports no execution occurred.
 - Added `PromotionArtifactIdentityReportV1` to separate role source locator
@@ -82,6 +88,10 @@ promotion can prove what was built, uploaded, installed, and promoted.
 - Added `BuildMaterializationEvidenceV1` to link a recipe, materialization
   input, and materialization result with computed input-digest evidence and
   explicit passive text rendering.
+- Build materialization evidence now carries deterministic evidence digests
+  over the recipe, materialization input, materialization result, computed
+  input digest, and consistency flags. Materialization identity reports and
+  source-build transform links preserve that digest beside the evidence ID.
 - Added passive `RolePromotionPolicyV1` and `PromotionPolicyCheckV1` so
   promotion can report role policy decisions before execution, including the
   distinction between roles that must reuse sealed bytes and roles that may
@@ -93,8 +103,9 @@ promotion can prove what was built, uploaded, installed, and promoted.
   into the same passive `PromotionReadinessV1` artifact, while keeping the
   standalone policy check available for separate operator reports.
 - Source/build promotion transforms can now opt into validated materialization
-  evidence links, recording the evidence ID, target materialization input
-  digest, and materialized output digests in the role transform summary.
+  evidence links, recording the evidence ID, materialization evidence digest,
+  target materialization input digest, and materialized output digests in the
+  role transform summary.
 - Passive promotion transforms now carry a deterministic promotion-plan lineage
   digest over the target plan ID, promoted plan ID, promoted plan, and role
   summaries. Validation rejects stale lineage digests.
@@ -146,9 +157,14 @@ promotion can prove what was built, uploaded, installed, and promoted.
   Role-level provenance rows also preserve the catalog observation digest, and
   provenance blocks locator drift between the identity report and the supplied
   catalog verification.
+- Role-level provenance rows now also preserve the materialization evidence
+  digest for source/build roles, keeping materialization references
+  digest-pinned when provenance is inspected without the full materialization
+  report loaded.
 - Promotion execution receipt wrappers now preserve the role-level catalog
-  observation digest from provenance, keeping receipt evidence tied to the same
-  archived catalog observation without making the receipt a live catalog proof.
+  observation and materialization evidence digests from provenance, keeping
+  receipt evidence tied to the same archived catalog/materialization artifacts
+  without making the receipt a live catalog or build proof.
 - Artifact promotion plan envelopes now carry a deterministic plan digest over
   the plan linkage, readiness, artifact identity, transform, optional target
   execution lineage, and blocker set, so archived plans reject stale plan-body

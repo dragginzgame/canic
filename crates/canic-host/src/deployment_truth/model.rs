@@ -297,6 +297,7 @@ pub struct BuildMaterializationResultV1 {
 pub struct BuildMaterializationEvidenceV1 {
     pub schema_version: u32,
     pub evidence_id: String,
+    pub materialization_evidence_digest: String,
     pub recipe: BuildRecipeIdentityV1,
     pub materialization_input: BuildMaterializationInputV1,
     pub materialization_result: BuildMaterializationResultV1,
@@ -327,6 +328,7 @@ pub struct PromotionMaterializationIdentityReportV1 {
 pub struct RolePromotionMaterializationIdentityV1 {
     pub role: String,
     pub evidence_id: String,
+    pub materialization_evidence_digest: String,
     pub recipe_id: String,
     pub materialization_input_id: String,
     pub materialization_result_id: String,
@@ -502,6 +504,7 @@ pub enum PromotionArtifactIdentityKindV1 {
 pub struct PromotionReadinessV1 {
     pub schema_version: u32,
     pub readiness_id: String,
+    pub promotion_readiness_digest: String,
     pub target_plan_id: String,
     pub status: PromotionReadinessStatusV1,
     pub roles: Vec<RolePromotionReadinessV1>,
@@ -604,6 +607,7 @@ pub struct RolePromotionExecutionReceiptV1 {
     pub role: String,
     pub promotion_level: PromotionArtifactLevelV1,
     pub materialization_evidence_id: Option<String>,
+    pub materialization_evidence_digest: Option<String>,
     pub wasm_store_locator: Option<String>,
     pub wasm_store_catalog_observation_digest: Option<String>,
     pub role_phase_result: Option<RolePhaseResultV1>,
@@ -624,6 +628,7 @@ pub struct RolePromotionProvenanceV1 {
     pub embedded_config_changed: bool,
     pub target_materialization_preserved: bool,
     pub materialization_evidence_id: Option<String>,
+    pub materialization_evidence_digest: Option<String>,
     pub wasm_store_locator: Option<String>,
     pub wasm_store_catalog_observation_digest: Option<String>,
 }
@@ -635,6 +640,7 @@ pub struct RolePromotionProvenanceV1 {
 pub struct PromotionPlanTransformEvidenceV1 {
     pub schema_version: u32,
     pub evidence_id: String,
+    pub promotion_plan_transform_evidence_digest: String,
     pub generated_at: String,
     pub transform: PromotionPlanTransformV1,
 }
@@ -685,6 +691,7 @@ pub struct RolePromotionPlanTransformV1 {
 pub struct RolePromotionMaterializationLinkV1 {
     pub role: String,
     pub evidence_id: String,
+    pub materialization_evidence_digest: String,
     pub recipe_id: String,
     pub materialization_input_id: String,
     pub materialization_result_id: String,

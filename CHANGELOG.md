@@ -14,6 +14,10 @@ present.
 
 ## [0.44.x] - 2026-05-25 - Artifact promotion
 
+- `0.44.11` digest-pins promotion readiness, transform evidence, and build
+  materialization evidence, carrying materialization evidence digests through
+  source-build transform, provenance, and execution receipt role rows.
+
 - `0.44.10` digest-pins passive promotion policy, catalog verification,
   provenance, and execution receipt artifacts so archived promotion evidence
   rejects stale policy decisions, catalog observations, report links, and

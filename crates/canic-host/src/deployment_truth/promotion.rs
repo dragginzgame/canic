@@ -78,6 +78,8 @@ pub enum PromotionReadinessError {
     },
     #[error("promotion readiness field {field} must be a lowercase sha256 hex digest")]
     InvalidSha256Digest { field: &'static str },
+    #[error("promotion readiness field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
 }
 
 ///
@@ -128,6 +130,12 @@ pub enum PromotionPlanTransformEvidenceError {
     SchemaVersionMismatch { expected: u32, found: u32 },
     #[error("promotion plan transform evidence is missing required field: {field}")]
     MissingRequiredField { field: &'static str },
+    #[error(
+        "promotion plan transform evidence field {field} must be a lowercase sha256 hex digest"
+    )]
+    InvalidSha256Digest { field: &'static str },
+    #[error("promotion plan transform evidence field {field} is inconsistent")]
+    LinkageMismatch { field: &'static str },
     #[error("promotion plan transform evidence has invalid transform: {0}")]
     Transform(#[from] PromotionPlanTransformError),
 }
@@ -719,6 +727,19 @@ struct PromotionMaterializationIdentityReportDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct BuildMaterializationEvidenceDigestInput<'a> {
+    schema_version: u32,
+    evidence_id: &'a str,
+    recipe: &'a BuildRecipeIdentityV1,
+    materialization_input: &'a BuildMaterializationInputV1,
+    materialization_result: &'a BuildMaterializationResultV1,
+    computed_materialization_input_digest: &'a str,
+    recipe_id_matches_input: bool,
+    recipe_id_matches_result: bool,
+    materialization_input_digest_matches_result: bool,
+}
+
+#[derive(Serialize)]
 struct PromotionWasmStoreIdentityReportDigestInput<'a> {
     schema_version: u32,
     report_id: &'a str,
@@ -744,6 +765,25 @@ struct PromotionPolicyCheckDigestInput<'a> {
     status: PromotionReadinessStatusV1,
     roles: &'a [RolePromotionPolicyDecisionV1],
     blockers: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct PromotionReadinessDigestInput<'a> {
+    schema_version: u32,
+    readiness_id: &'a str,
+    target_plan_id: &'a str,
+    status: PromotionReadinessStatusV1,
+    roles: &'a [RolePromotionReadinessV1],
+    blockers: &'a [SafetyFindingV1],
+    warnings: &'a [SafetyFindingV1],
+}
+
+#[derive(Serialize)]
+struct PromotionPlanTransformEvidenceDigestInput<'a> {
+    schema_version: u32,
+    evidence_id: &'a str,
+    generated_at: &'a str,
+    transform: &'a PromotionPlanTransformV1,
 }
 
 #[derive(Serialize)]
@@ -1224,12 +1264,15 @@ pub fn promotion_plan_transform_evidence(
     ensure_evidence_field("evidence_id", &request.evidence_id)?;
     ensure_evidence_field("generated_at", &request.generated_at)?;
     validate_promotion_plan_transform(&request.transform)?;
-    let evidence = PromotionPlanTransformEvidenceV1 {
+    let mut evidence = PromotionPlanTransformEvidenceV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         evidence_id: request.evidence_id,
+        promotion_plan_transform_evidence_digest: String::new(),
         generated_at: request.generated_at,
         transform: request.transform,
     };
+    evidence.promotion_plan_transform_evidence_digest =
+        promotion_plan_transform_evidence_digest(&evidence);
     validate_promotion_plan_transform_evidence(&evidence)?;
     Ok(evidence)
 }
@@ -1540,8 +1583,19 @@ pub fn validate_promotion_plan_transform_evidence(
         });
     }
     ensure_evidence_field("evidence_id", &evidence.evidence_id)?;
+    ensure_evidence_sha256(
+        "promotion_plan_transform_evidence_digest",
+        &evidence.promotion_plan_transform_evidence_digest,
+    )?;
     ensure_evidence_field("generated_at", &evidence.generated_at)?;
     validate_promotion_plan_transform(&evidence.transform)?;
+    if evidence.promotion_plan_transform_evidence_digest
+        != promotion_plan_transform_evidence_digest(evidence)
+    {
+        return Err(PromotionPlanTransformEvidenceError::LinkageMismatch {
+            field: "promotion_plan_transform_evidence_digest",
+        });
+    }
     Ok(())
 }
 
@@ -1663,15 +1717,18 @@ pub fn promotion_readiness_from_inputs(
         PromotionReadinessStatusV1::Blocked
     };
 
-    PromotionReadinessV1 {
+    let mut readiness = PromotionReadinessV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         readiness_id: readiness_id.into(),
+        promotion_readiness_digest: String::new(),
         target_plan_id: target_plan.plan_id.clone(),
         status,
         roles,
         blockers,
         warnings,
-    }
+    };
+    readiness.promotion_readiness_digest = promotion_readiness_digest(&readiness);
+    readiness
 }
 
 #[must_use]
@@ -1691,6 +1748,7 @@ pub fn promotion_readiness_from_inputs_with_policy(
     } else {
         PromotionReadinessStatusV1::Blocked
     };
+    readiness.promotion_readiness_digest = promotion_readiness_digest(&readiness);
     readiness
 }
 
@@ -1704,6 +1762,10 @@ pub fn validate_promotion_readiness(
         });
     }
     ensure_readiness_field("readiness_id", &readiness.readiness_id)?;
+    ensure_readiness_sha256(
+        "promotion_readiness_digest",
+        &readiness.promotion_readiness_digest,
+    )?;
     ensure_readiness_field("target_plan_id", &readiness.target_plan_id)?;
     ensure_readiness_status_matches_blockers(readiness)?;
     ensure_unique_readiness_roles(&readiness.roles)?;
@@ -1716,6 +1778,11 @@ pub fn validate_promotion_readiness(
         SafetySeverityV1::HardFailure,
     )?;
     validate_readiness_findings("warnings", &readiness.warnings, SafetySeverityV1::Warning)?;
+    if readiness.promotion_readiness_digest != promotion_readiness_digest(readiness) {
+        return Err(PromotionReadinessError::LinkageMismatch {
+            field: "promotion_readiness_digest",
+        });
+    }
     Ok(())
 }
 
@@ -1802,9 +1869,10 @@ pub fn build_materialization_evidence(
     validate_build_materialization_result(&request.materialization_result)?;
     let computed_materialization_input_digest =
         build_materialization_input_digest(&request.materialization_input);
-    let evidence = BuildMaterializationEvidenceV1 {
+    let mut evidence = BuildMaterializationEvidenceV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         evidence_id: request.evidence_id,
+        materialization_evidence_digest: String::new(),
         recipe_id_matches_input: request.recipe.recipe_id
             == request.materialization_input.build_recipe_id,
         recipe_id_matches_result: request.recipe.recipe_id
@@ -1816,6 +1884,7 @@ pub fn build_materialization_evidence(
         materialization_input: request.materialization_input,
         materialization_result: request.materialization_result,
     };
+    evidence.materialization_evidence_digest = build_materialization_evidence_digest(&evidence);
     validate_build_materialization_evidence(&evidence)?;
     Ok(evidence)
 }
@@ -1832,6 +1901,10 @@ pub fn validate_build_materialization_evidence(
         );
     }
     ensure_materialization_field("evidence_id", &evidence.evidence_id)?;
+    ensure_materialization_sha256(
+        "materialization_evidence_digest",
+        &evidence.materialization_evidence_digest,
+    )?;
     validate_build_recipe_identity(&evidence.recipe)?;
     validate_build_materialization_input(&evidence.materialization_input)?;
     validate_build_materialization_result(&evidence.materialization_result)?;
@@ -1872,6 +1945,11 @@ pub fn validate_build_materialization_evidence(
         "materialization_input_digest_matches_result",
         evidence.materialization_input_digest_matches_result,
     )?;
+    if evidence.materialization_evidence_digest != build_materialization_evidence_digest(evidence) {
+        return Err(PromotionMaterializationIdentityError::LinkageMismatch {
+            field: "materialization_evidence_digest",
+        });
+    }
     Ok(())
 }
 
@@ -1956,6 +2034,21 @@ pub fn build_materialization_input_digest(input: &BuildMaterializationInputV1) -
     stable_json_sha256_hex(input)
 }
 
+fn build_materialization_evidence_digest(evidence: &BuildMaterializationEvidenceV1) -> String {
+    stable_json_sha256_hex(&BuildMaterializationEvidenceDigestInput {
+        schema_version: evidence.schema_version,
+        evidence_id: &evidence.evidence_id,
+        recipe: &evidence.recipe,
+        materialization_input: &evidence.materialization_input,
+        materialization_result: &evidence.materialization_result,
+        computed_materialization_input_digest: &evidence.computed_materialization_input_digest,
+        recipe_id_matches_input: evidence.recipe_id_matches_input,
+        recipe_id_matches_result: evidence.recipe_id_matches_result,
+        materialization_input_digest_matches_result: evidence
+            .materialization_input_digest_matches_result,
+    })
+}
+
 fn promotion_artifact_identity_report_digest(report: &PromotionArtifactIdentityReportV1) -> String {
     stable_json_sha256_hex(&PromotionArtifactIdentityReportDigestInput {
         schema_version: report.schema_version,
@@ -2013,6 +2106,27 @@ fn promotion_policy_check_digest(check: &PromotionPolicyCheckV1) -> String {
         status: check.status,
         roles: &check.roles,
         blockers: &check.blockers,
+    })
+}
+
+fn promotion_readiness_digest(readiness: &PromotionReadinessV1) -> String {
+    stable_json_sha256_hex(&PromotionReadinessDigestInput {
+        schema_version: readiness.schema_version,
+        readiness_id: &readiness.readiness_id,
+        target_plan_id: &readiness.target_plan_id,
+        status: readiness.status,
+        roles: &readiness.roles,
+        blockers: &readiness.blockers,
+        warnings: &readiness.warnings,
+    })
+}
+
+fn promotion_plan_transform_evidence_digest(evidence: &PromotionPlanTransformEvidenceV1) -> String {
+    stable_json_sha256_hex(&PromotionPlanTransformEvidenceDigestInput {
+        schema_version: evidence.schema_version,
+        evidence_id: &evidence.evidence_id,
+        generated_at: &evidence.generated_at,
+        transform: &evidence.transform,
     })
 }
 
@@ -2285,6 +2399,7 @@ fn materialization_link_from_evidence(
     RolePromotionMaterializationLinkV1 {
         role: evidence.recipe.package_or_role_selector.clone(),
         evidence_id: evidence.evidence_id.clone(),
+        materialization_evidence_digest: evidence.materialization_evidence_digest.clone(),
         recipe_id: evidence.recipe.recipe_id.clone(),
         materialization_input_id: evidence
             .materialization_input
@@ -2609,6 +2724,10 @@ fn role_promotion_provenance_from_transform(
             .source_build_materialization
             .as_ref()
             .map(|materialization| materialization.evidence_id.clone()),
+        materialization_evidence_digest: role
+            .source_build_materialization
+            .as_ref()
+            .map(|materialization| materialization.materialization_evidence_digest.clone()),
         wasm_store_locator: None,
         wasm_store_catalog_observation_digest: None,
     }
@@ -2658,6 +2777,8 @@ fn attach_materialization_provenance(
         if let Some(materialization_role) = report.roles.iter().find(|item| item.role == role.role)
         {
             role.materialization_evidence_id = Some(materialization_role.evidence_id.clone());
+            role.materialization_evidence_digest =
+                Some(materialization_role.materialization_evidence_digest.clone());
         }
     }
 }
@@ -2733,6 +2854,7 @@ fn role_promotion_execution_receipt(
         role: role.role.clone(),
         promotion_level: role.promotion_level,
         materialization_evidence_id: role.materialization_evidence_id.clone(),
+        materialization_evidence_digest: role.materialization_evidence_digest.clone(),
         wasm_store_locator: role.wasm_store_locator.clone(),
         wasm_store_catalog_observation_digest: role.wasm_store_catalog_observation_digest.clone(),
         role_phase_result: role_receipt.map(|receipt| receipt.result),
@@ -3030,6 +3152,7 @@ fn role_materialization_identity_from_evidence(
     RolePromotionMaterializationIdentityV1 {
         role: evidence.recipe.package_or_role_selector.clone(),
         evidence_id: evidence.evidence_id.clone(),
+        materialization_evidence_digest: evidence.materialization_evidence_digest.clone(),
         recipe_id: evidence.recipe.recipe_id.clone(),
         materialization_input_id: evidence
             .materialization_input
@@ -3822,6 +3945,10 @@ fn validate_role_materialization_link(
         "source_build_materialization.evidence_id",
         &link.evidence_id,
     )?;
+    ensure_materialization_sha256(
+        "source_build_materialization.materialization_evidence_digest",
+        &link.materialization_evidence_digest,
+    )?;
     ensure_transform_field("source_build_materialization.recipe_id", &link.recipe_id)?;
     ensure_transform_field(
         "source_build_materialization.materialization_input_id",
@@ -4518,6 +4645,10 @@ fn validate_role_materialization_identity(
 ) -> Result<(), PromotionMaterializationIdentityReportError> {
     ensure_materialization_report_field("role", &role.role)?;
     ensure_materialization_report_field("evidence_id", &role.evidence_id)?;
+    ensure_materialization_report_sha256(
+        "materialization_evidence_digest",
+        &role.materialization_evidence_digest,
+    )?;
     ensure_materialization_report_field("recipe_id", &role.recipe_id)?;
     ensure_materialization_report_field(
         "materialization_input_id",
@@ -4597,6 +4728,9 @@ fn validate_role_promotion_provenance(
     ensure_provenance_report_field("role", &role.role)?;
     if let Some(evidence_id) = &role.materialization_evidence_id {
         ensure_provenance_report_field("materialization_evidence_id", evidence_id)?;
+    }
+    if let Some(digest) = &role.materialization_evidence_digest {
+        ensure_provenance_report_sha256("materialization_evidence_digest", digest)?;
     }
     if let Some(locator) = &role.wasm_store_locator {
         ensure_provenance_report_field("wasm_store_locator", locator)?;
@@ -4759,6 +4893,9 @@ fn ensure_unique_execution_receipt_roles(
         }
         if let Some(evidence_id) = &role.materialization_evidence_id {
             ensure_execution_receipt_field("materialization_evidence_id", evidence_id)?;
+        }
+        if let Some(digest) = &role.materialization_evidence_digest {
+            ensure_execution_receipt_sha256("materialization_evidence_digest", digest)?;
         }
         if let Some(locator) = &role.wasm_store_locator {
             ensure_execution_receipt_field("wasm_store_locator", locator)?;
@@ -4997,6 +5134,17 @@ fn ensure_readiness_field(field: &'static str, value: &str) -> Result<(), Promot
     Ok(())
 }
 
+fn ensure_readiness_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionReadinessError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionReadinessError::InvalidSha256Digest { field })
+    }
+}
+
 fn ensure_readiness_optional_sha256(
     field: &'static str,
     value: Option<&str>,
@@ -5029,6 +5177,17 @@ fn ensure_evidence_field(
         return Err(PromotionPlanTransformEvidenceError::MissingRequiredField { field });
     }
     Ok(())
+}
+
+fn ensure_evidence_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), PromotionPlanTransformEvidenceError> {
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(PromotionPlanTransformEvidenceError::InvalidSha256Digest { field })
+    }
 }
 
 fn ensure_artifact_promotion_plan_field(
