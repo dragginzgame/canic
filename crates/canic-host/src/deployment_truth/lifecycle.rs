@@ -236,6 +236,26 @@ struct ExternalUpgradeVerificationCheckDigestInput<'a> {
 }
 
 #[derive(Serialize)]
+struct ExternalUpgradeCompletionReportDigestInput<'a> {
+    report_id: &'a str,
+    proposal_id: &'a str,
+    proposal_digest: &'a str,
+    consent_evidence_id: &'a str,
+    consent_evidence_digest: &'a str,
+    verification_check_id: &'a str,
+    verification_check_digest: &'a str,
+    subject: &'a str,
+    canister_id: &'a Option<String>,
+    role: &'a Option<String>,
+    consent_state: ExternalUpgradeConsentStateV1,
+    verification_result: ExternalUpgradeVerificationResultV1,
+    completion_status: ExternalUpgradeCompletionStatusV1,
+    blockers: &'a [String],
+    next_actions: &'a [String],
+    status_summary: &'a str,
+}
+
+#[derive(Serialize)]
 struct ObservedBeforeDigestInput<'a> {
     subject: &'a str,
     canister_id: &'a Option<String>,
@@ -344,6 +364,27 @@ pub enum ExternalUpgradeVerificationCheckError {
     RequirementStatusMismatch {
         requirement: LifecycleVerificationRequirementV1,
     },
+}
+
+///
+/// ExternalUpgradeCompletionReportError
+///
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ExternalUpgradeCompletionReportError {
+    #[error(
+        "external upgrade completion report schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+    #[error("external upgrade completion report field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+    #[error("external upgrade completion report field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+    #[error("external upgrade completion report field `{field}` does not match source evidence")]
+    SourceMismatch { field: &'static str },
+    #[error(transparent)]
+    ConsentEvidence(#[from] ExternalUpgradeConsentEvidenceError),
+    #[error(transparent)]
+    VerificationCheck(#[from] ExternalUpgradeVerificationCheckError),
 }
 
 ///
@@ -1196,6 +1237,136 @@ pub fn validate_external_upgrade_verification_check_for_policy(
     );
     if check != &expected {
         return Err(ExternalUpgradeVerificationCheckError::SourceMismatch { field: "policy" });
+    }
+    Ok(())
+}
+
+/// Build a passive completion report for an external lifecycle proposal.
+///
+/// This report only combines structural evidence. It does not deliver consent,
+/// execute upgrades, query live inventory, or mutate deployment state.
+pub fn external_upgrade_completion_report_from_evidence(
+    report_id: impl Into<String>,
+    proposal: &ExternalUpgradeProposalV1,
+    consent_evidence: &ExternalUpgradeConsentEvidenceV1,
+    verification_check: &ExternalUpgradeVerificationCheckV1,
+) -> Result<ExternalUpgradeCompletionReportV1, ExternalUpgradeCompletionReportError> {
+    validate_external_upgrade_proposal(proposal);
+    validate_external_upgrade_consent_evidence(consent_evidence)?;
+    validate_external_upgrade_verification_check(verification_check)?;
+    ensure_completion_sources_match_proposal(proposal, consent_evidence, verification_check)?;
+
+    let completion_status = external_upgrade_completion_status(
+        consent_evidence.consent_state,
+        verification_check.verification_result,
+    );
+    let blockers = external_upgrade_completion_blockers(completion_status);
+    let next_actions = external_upgrade_completion_next_actions(completion_status);
+    let mut report = ExternalUpgradeCompletionReportV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        report_id: report_id.into(),
+        report_digest: String::new(),
+        proposal_id: proposal.proposal_id.clone(),
+        proposal_digest: proposal.proposal_digest.clone(),
+        consent_evidence_id: consent_evidence.evidence_id.clone(),
+        consent_evidence_digest: consent_evidence.evidence_digest.clone(),
+        verification_check_id: verification_check.check_id.clone(),
+        verification_check_digest: verification_check.check_digest.clone(),
+        subject: proposal.subject.clone(),
+        canister_id: proposal.canister_id.clone(),
+        role: proposal.role.clone(),
+        consent_state: consent_evidence.consent_state,
+        verification_result: verification_check.verification_result,
+        completion_status,
+        blockers,
+        next_actions,
+        status_summary: external_upgrade_completion_summary(completion_status).to_string(),
+    };
+    report.report_digest = external_upgrade_completion_report_digest(&report);
+    Ok(report)
+}
+
+/// Validate archived completion report consistency and digest.
+pub fn validate_external_upgrade_completion_report(
+    report: &ExternalUpgradeCompletionReportV1,
+) -> Result<(), ExternalUpgradeCompletionReportError> {
+    if report.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            ExternalUpgradeCompletionReportError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                actual: report.schema_version,
+            },
+        );
+    }
+    ensure_external_completion_report_field("report_id", report.report_id.as_str())?;
+    ensure_external_completion_report_field("report_digest", report.report_digest.as_str())?;
+    ensure_external_completion_report_field("proposal_id", report.proposal_id.as_str())?;
+    ensure_external_completion_report_field("proposal_digest", report.proposal_digest.as_str())?;
+    ensure_external_completion_report_field(
+        "consent_evidence_id",
+        report.consent_evidence_id.as_str(),
+    )?;
+    ensure_external_completion_report_field(
+        "consent_evidence_digest",
+        report.consent_evidence_digest.as_str(),
+    )?;
+    ensure_external_completion_report_field(
+        "verification_check_id",
+        report.verification_check_id.as_str(),
+    )?;
+    ensure_external_completion_report_field(
+        "verification_check_digest",
+        report.verification_check_digest.as_str(),
+    )?;
+    ensure_external_completion_report_field("subject", report.subject.as_str())?;
+    ensure_external_completion_report_field("status_summary", report.status_summary.as_str())?;
+    if report.completion_status
+        != external_upgrade_completion_status(report.consent_state, report.verification_result)
+    {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch {
+            field: "completion_status",
+        });
+    }
+    if report.status_summary != external_upgrade_completion_summary(report.completion_status) {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch {
+            field: "status_summary",
+        });
+    }
+    if report.blockers != external_upgrade_completion_blockers(report.completion_status) {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch { field: "blockers" });
+    }
+    if report.next_actions != external_upgrade_completion_next_actions(report.completion_status) {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch {
+            field: "next_actions",
+        });
+    }
+    if report.report_digest != external_upgrade_completion_report_digest(report) {
+        return Err(ExternalUpgradeCompletionReportError::DigestMismatch {
+            field: "report_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Validate that an archived completion report still matches its source
+/// proposal, consent evidence, and verification check.
+pub fn validate_external_upgrade_completion_report_for_evidence(
+    report: &ExternalUpgradeCompletionReportV1,
+    proposal: &ExternalUpgradeProposalV1,
+    consent_evidence: &ExternalUpgradeConsentEvidenceV1,
+    verification_check: &ExternalUpgradeVerificationCheckV1,
+) -> Result<(), ExternalUpgradeCompletionReportError> {
+    validate_external_upgrade_completion_report(report)?;
+    let expected = external_upgrade_completion_report_from_evidence(
+        report.report_id.clone(),
+        proposal,
+        consent_evidence,
+        verification_check,
+    )?;
+    if report != &expected {
+        return Err(ExternalUpgradeCompletionReportError::SourceMismatch {
+            field: "source_evidence",
+        });
     }
     Ok(())
 }
