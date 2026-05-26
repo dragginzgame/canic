@@ -134,6 +134,75 @@ pub fn external_lifecycle_pending_report_text(report: &ExternalLifecyclePendingR
     lines.join("\n")
 }
 
+/// Render an external lifecycle check as passive operator text.
+#[must_use]
+pub fn external_lifecycle_check_text(check: &ExternalLifecycleCheckV1) -> String {
+    let mut lines = vec![
+        "External lifecycle check".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            external_lifecycle_plan_status_label(check.status)
+        ),
+        format!("check_id: {}", check.check_id),
+        format!("check_digest: {}", check.check_digest),
+        format!("summary: {}", check.summary),
+        format!("lifecycle_plan_id: {}", check.lifecycle_plan_id),
+        format!("lifecycle_plan_digest: {}", check.lifecycle_plan_digest),
+        format!("proposal_report_id: {}", check.proposal_report_id),
+        format!("proposal_report_digest: {}", check.proposal_report_digest),
+        format!("pending_report_id: {}", check.pending_report_id),
+        format!("pending_report_digest: {}", check.pending_report_digest),
+        format!("deployment_plan_id: {}", check.deployment_plan_id),
+        format!("deployment_plan_digest: {}", check.deployment_plan_digest),
+        format!("inventory_id: {}", check.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  directly_executable: {}", check.direct_upgrade_count),
+        format!("  pending_external: {}", check.pending_external_count),
+        format!("  blocked: {}", check.blocked_count),
+        format!("  residual_exposure: {}", check.residual_exposure_count),
+    ];
+    append_string_items(&mut lines, "next_actions", &check.next_actions);
+    lines.join("\n")
+}
+
+/// Render an external lifecycle handoff as passive operator text.
+#[must_use]
+pub fn external_lifecycle_handoff_text(handoff: &ExternalLifecycleHandoffV1) -> String {
+    let mut lines = vec![
+        "External lifecycle handoff".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!(
+            "status: {}",
+            external_lifecycle_plan_status_label(handoff.status)
+        ),
+        format!("handoff_id: {}", handoff.handoff_id),
+        format!("handoff_digest: {}", handoff.handoff_digest),
+        format!("summary: {}", handoff.operator_summary),
+        format!("lifecycle_check_id: {}", handoff.lifecycle_check_id),
+        format!("lifecycle_check_digest: {}", handoff.lifecycle_check_digest),
+        format!("pending_report_id: {}", handoff.pending_report_id),
+        format!("pending_report_digest: {}", handoff.pending_report_digest),
+        format!("proposal_report_id: {}", handoff.proposal_report_id),
+        format!("proposal_report_digest: {}", handoff.proposal_report_digest),
+        format!("deployment_plan_id: {}", handoff.deployment_plan_id),
+        format!("deployment_plan_digest: {}", handoff.deployment_plan_digest),
+        format!("inventory_id: {}", handoff.inventory_id),
+        String::new(),
+        "counts:".to_string(),
+        format!("  handoff_actions: {}", handoff.handoff_actions.len()),
+        format!("  blocked_subjects: {}", handoff.blocked_subjects.len()),
+        format!("  residual_exposure: {}", handoff.residual_exposure.len()),
+    ];
+    append_external_lifecycle_handoff_action_items(&mut lines, &handoff.handoff_actions);
+    append_string_items(&mut lines, "blocked_subjects", &handoff.blocked_subjects);
+    append_string_items(&mut lines, "residual_exposure", &handoff.residual_exposure);
+    lines.join("\n")
+}
+
 /// Render a critical external fix report as passive operator text.
 #[must_use]
 pub fn critical_external_fix_report_text(report: &CriticalExternalFixReportV1) -> String {
@@ -1907,6 +1976,28 @@ const fn external_upgrade_verification_result_label(
     }
 }
 
+const fn consent_channel_label(kind: ConsentChannelKindV1) -> &'static str {
+    match kind {
+        ConsentChannelKindV1::OutOfBand => "out_of_band",
+        ConsentChannelKindV1::GeneratedCommand => "generated_command",
+        ConsentChannelKindV1::DelegatedInstall => "delegated_install",
+        ConsentChannelKindV1::GovernanceProposal => "governance_proposal",
+        ConsentChannelKindV1::ApplicationSpecific => "application_specific",
+    }
+}
+
+const fn consent_subject_label(kind: ConsentSubjectKindV1) -> &'static str {
+    match kind {
+        ConsentSubjectKindV1::UserPrincipal => "user_principal",
+        ConsentSubjectKindV1::ProjectHub => "project_hub",
+        ConsentSubjectKindV1::GovernanceCanister => "governance_canister",
+        ConsentSubjectKindV1::CustomerController => "customer_controller",
+        ConsentSubjectKindV1::DelegatedInstallCanister => "delegated_install_canister",
+        ConsentSubjectKindV1::MultisigAuthority => "multisig_authority",
+        ConsentSubjectKindV1::UnknownExternalController => "unknown_external_controller",
+    }
+}
+
 fn append_external_lifecycle_role_items(
     lines: &mut Vec<String>,
     label: &str,
@@ -1993,6 +2084,32 @@ fn append_external_lifecycle_pending_action_items(
             lifecycle_mode_label(action.lifecycle_mode),
             action.required_external_action,
             action.consent_requirements.len(),
+            action.proposal_digest
+        ));
+    }
+}
+
+fn append_external_lifecycle_handoff_action_items(
+    lines: &mut Vec<String>,
+    actions: &[ExternalLifecycleHandoffActionV1],
+) {
+    if actions.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("handoff_actions:".to_string());
+    for action in actions {
+        lines.push(format!(
+            "  - proposal_id={} subject={} role={} canister_id={} lifecycle_mode={} required_external_action={} consent_channel={} consent_subject={} verification_requirements={} proposal_digest={}",
+            action.proposal_id,
+            action.subject,
+            optional_text(action.role.as_deref()),
+            optional_text(action.canister_id.as_deref()),
+            lifecycle_mode_label(action.lifecycle_mode),
+            action.required_external_action,
+            consent_channel_label(action.consent_channel_kind),
+            consent_subject_label(action.consent_subject_kind),
+            action.verification_requirements.len(),
             action.proposal_digest
         ));
     }

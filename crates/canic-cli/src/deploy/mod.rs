@@ -18,13 +18,14 @@ use canic_host::{
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
         DeploymentCheckV1, DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
-        ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1,
-        ExternalUpgradeConsentEvidenceRequest, ExternalUpgradeConsentEvidenceV1,
-        ExternalUpgradeProposalReportV1, ExternalUpgradeVerificationReportRequest,
-        ExternalUpgradeVerificationReportV1, PromotionArtifactIdentityReportRequest,
-        PromotionArtifactIdentityReportV1, PromotionMaterializationIdentityReportRequest,
-        PromotionMaterializationIdentityReportV1, PromotionPlanTransformEvidenceRequest,
-        PromotionPlanTransformEvidenceV1, PromotionPlanTransformRequest, PromotionPlanTransformV1,
+        ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1,
+        ExternalLifecyclePlanV1, ExternalUpgradeConsentEvidenceRequest,
+        ExternalUpgradeConsentEvidenceV1, ExternalUpgradeProposalReportV1,
+        ExternalUpgradeVerificationReportRequest, ExternalUpgradeVerificationReportV1,
+        PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
+        PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
+        PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
+        PromotionPlanTransformRequest, PromotionPlanTransformV1,
         PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
         PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessStatusV1,
         PromotionReadinessV1, PromotionTargetExecutionLineageRequest,
@@ -42,6 +43,8 @@ use canic_host::{
         authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
         check_promotion_readiness, compare_plan_inventory_and_receipt,
         critical_external_fix_report_from_pending, critical_external_fix_report_text,
+        external_lifecycle_check_from_reports, external_lifecycle_check_text,
+        external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
         external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
         external_lifecycle_plan_from_check, external_lifecycle_plan_text,
         external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
@@ -90,6 +93,8 @@ Examples:
   canic deploy authority report demo
   canic deploy authority receipt demo
   canic deploy external plan demo
+  canic deploy external check demo
+  canic deploy external handoff demo
   canic deploy external proposals demo
   canic deploy external pending demo
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
@@ -154,6 +159,8 @@ not that the deployment is globally safe or that controller state was changed.";
 const DEPLOY_EXTERNAL_HELP_AFTER: &str = "\
 Examples:
   canic deploy external plan demo
+  canic deploy external check demo
+  canic deploy external handoff demo
   canic deploy external proposals demo
   canic deploy external pending demo
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
@@ -376,6 +383,26 @@ Examples:
 Prints ExternalLifecyclePlanV1 JSON by default, or host-owned passive text with
 --format text. No consent delivery, external execution, install, or mutation is
 attempted.";
+const DEPLOY_EXTERNAL_CHECK_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external check demo
+  canic deploy external check --format text demo
+  canic --network local deploy external check --profile fast demo
+
+Prints ExternalLifecycleCheckV1 JSON by default, or host-owned passive text
+with --format text. External lifecycle checks summarize direct, pending,
+blocked, and residual-exposure status without requesting consent, executing
+external upgrades, or mutating state.";
+const DEPLOY_EXTERNAL_HANDOFF_HELP_AFTER: &str = "\
+Examples:
+  canic deploy external handoff demo
+  canic deploy external handoff --format text demo
+  canic --network local deploy external handoff --profile fast demo
+
+Prints ExternalLifecycleHandoffV1 JSON by default, or host-owned passive text
+with --format text. Handoff packets package pending external proposals into
+operator coordination instructions; they do not deliver consent, execute
+external upgrades, or mutate state.";
 const DEPLOY_EXTERNAL_PROPOSALS_HELP_AFTER: &str = "\
 Examples:
   canic deploy external proposals demo
@@ -1208,6 +1235,8 @@ where
         .map_err(|_| DeployCommandError::Usage(external_usage()))?
     {
         Some((command, args)) if command == "plan" => run_external_plan(args),
+        Some((command, args)) if command == "check" => run_external_check(args),
+        Some((command, args)) if command == "handoff" => run_external_handoff(args),
         Some((command, args)) if command == "proposals" => run_external_proposals(args),
         Some((command, args)) if command == "pending" => run_external_pending(args),
         Some((command, args)) if command == "critical-fix" => run_external_critical_fix(args),
@@ -1250,6 +1279,32 @@ where
         external_plan_usage,
         build_external_lifecycle_plan,
         external_lifecycle_plan_text,
+    )
+}
+
+fn run_external_check<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_external_output(
+        args,
+        deploy_external_check_command,
+        external_check_usage,
+        build_external_lifecycle_check,
+        external_lifecycle_check_text,
+    )
+}
+
+fn run_external_handoff<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_external_output(
+        args,
+        deploy_external_handoff_command,
+        external_handoff_usage,
+        build_external_lifecycle_handoff,
+        external_lifecycle_handoff_text,
     )
 }
 
@@ -1417,6 +1472,52 @@ fn build_external_lifecycle_pending_report(
     )
 }
 
+fn build_external_lifecycle_check(check: &DeploymentCheckV1) -> ExternalLifecycleCheckV1 {
+    let lifecycle_plan = build_external_lifecycle_plan(check);
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        local_external_proposal_report_id(check),
+        &lifecycle_plan,
+        check,
+    );
+    let pending_report = external_lifecycle_pending_report_from_plan(
+        local_external_pending_report_id(check),
+        &lifecycle_plan,
+        &proposal_report,
+    );
+    external_lifecycle_check_from_reports(
+        local_external_check_id(check),
+        &lifecycle_plan,
+        &proposal_report,
+        &pending_report,
+    )
+}
+
+fn build_external_lifecycle_handoff(check: &DeploymentCheckV1) -> ExternalLifecycleHandoffV1 {
+    let lifecycle_plan = build_external_lifecycle_plan(check);
+    let proposal_report = external_upgrade_proposal_report_from_lifecycle_plan(
+        local_external_proposal_report_id(check),
+        &lifecycle_plan,
+        check,
+    );
+    let pending_report = external_lifecycle_pending_report_from_plan(
+        local_external_pending_report_id(check),
+        &lifecycle_plan,
+        &proposal_report,
+    );
+    let lifecycle_check = external_lifecycle_check_from_reports(
+        local_external_check_id(check),
+        &lifecycle_plan,
+        &proposal_report,
+        &pending_report,
+    );
+    external_lifecycle_handoff_from_reports(
+        local_external_handoff_id(check),
+        &lifecycle_check,
+        &proposal_report,
+        &pending_report,
+    )
+}
+
 fn build_critical_external_fix_report(
     check: &DeploymentCheckV1,
     fix_id: &str,
@@ -1466,6 +1567,14 @@ fn build_external_upgrade_verification_report(
 
 fn local_external_lifecycle_plan_id(check: &DeploymentCheckV1) -> String {
     local_external_artifact_id(check, "external-lifecycle-plan")
+}
+
+fn local_external_check_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "external-lifecycle-check")
+}
+
+fn local_external_handoff_id(check: &DeploymentCheckV1) -> String {
+    local_external_artifact_id(check, "external-lifecycle-handoff")
 }
 
 fn local_lifecycle_authority_report_id(check: &DeploymentCheckV1) -> String {
@@ -2059,6 +2168,16 @@ fn deploy_external_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("check")
+                .about("Build a passive external lifecycle check")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("handoff")
+                .about("Build a passive external lifecycle handoff packet")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("proposals")
                 .about("Build passive external upgrade proposals")
                 .disable_help_flag(true),
@@ -2422,6 +2541,20 @@ fn deploy_external_plan_command() -> ClapCommand {
         .after_help(DEPLOY_EXTERNAL_PLAN_HELP_AFTER)
 }
 
+fn deploy_external_check_command() -> ClapCommand {
+    deploy_truth_leaf_command("check", "Print the local external lifecycle check")
+        .arg(external_format_arg())
+        .bin_name("canic deploy external check")
+        .after_help(DEPLOY_EXTERNAL_CHECK_HELP_AFTER)
+}
+
+fn deploy_external_handoff_command() -> ClapCommand {
+    deploy_truth_leaf_command("handoff", "Print the local external lifecycle handoff")
+        .arg(external_format_arg())
+        .bin_name("canic deploy external handoff")
+        .after_help(DEPLOY_EXTERNAL_HANDOFF_HELP_AFTER)
+}
+
 fn deploy_external_proposals_command() -> ClapCommand {
     deploy_truth_leaf_command("proposals", "Print local external upgrade proposals")
         .arg(external_format_arg())
@@ -2623,6 +2756,16 @@ fn external_usage() -> String {
 
 fn external_plan_usage() -> String {
     let mut command = deploy_external_plan_command();
+    command.render_help().to_string()
+}
+
+fn external_check_usage() -> String {
+    let mut command = deploy_external_check_command();
+    command.render_help().to_string()
+}
+
+fn external_handoff_usage() -> String {
+    let mut command = deploy_external_handoff_command();
     command.render_help().to_string()
 }
 
@@ -2839,13 +2982,14 @@ mod tests {
     use super::*;
     use canic_host::deployment_truth::{
         ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
-        DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1, DeploymentIdentityV1,
-        DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, ExternalUpgradeConsentStateV1,
-        LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
-        PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
-        RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
-        TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
-        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
+        ConsentChannelKindV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1,
+        DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1,
+        ExternalUpgradeConsentStateV1, LocalDeploymentConfigV1, ObservationStatusV1,
+        ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1,
+        ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
+        RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
+        VerifierReadinessObservationV1, external_upgrade_receipt_from_observation,
+        promotion_readiness_from_inputs,
     };
 
     #[test]
@@ -3064,6 +3208,18 @@ mod tests {
             external_plan_usage,
         )
         .expect("parse deploy external plan");
+        let external_check = DeployExternalOptions::parse(
+            [OsString::from("demo")],
+            deploy_external_check_command,
+            external_check_usage,
+        )
+        .expect("parse deploy external check");
+        let external_handoff = DeployExternalOptions::parse(
+            [OsString::from("demo")],
+            deploy_external_handoff_command,
+            external_handoff_usage,
+        )
+        .expect("parse deploy external handoff");
         let external_proposals = DeployExternalOptions::parse(
             [OsString::from("demo")],
             deploy_external_proposals_command,
@@ -3077,7 +3233,13 @@ mod tests {
         )
         .expect("parse deploy external pending");
 
-        for options in [external_plan, external_proposals, external_pending] {
+        for options in [
+            external_plan,
+            external_check,
+            external_handoff,
+            external_proposals,
+            external_pending,
+        ] {
             assert_eq!(options.truth.fleet, "demo");
             assert_eq!(options.format, ExternalOutputFormat::Json);
         }
@@ -3133,6 +3295,26 @@ mod tests {
             external_plan_usage,
         )
         .expect("parse deploy external plan text");
+        let external_check = DeployExternalOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_external_check_command,
+            external_check_usage,
+        )
+        .expect("parse deploy external check text");
+        let external_handoff = DeployExternalOptions::parse(
+            [
+                OsString::from("--format"),
+                OsString::from("text"),
+                OsString::from("demo"),
+            ],
+            deploy_external_handoff_command,
+            external_handoff_usage,
+        )
+        .expect("parse deploy external handoff text");
         let external_proposals = DeployExternalOptions::parse(
             [
                 OsString::from("--format"),
@@ -3156,10 +3338,18 @@ mod tests {
 
         assert_eq!(external_plan.truth.fleet, "demo");
         assert_eq!(external_plan.format, ExternalOutputFormat::Text);
+        assert_eq!(external_check.truth.fleet, "demo");
+        assert_eq!(external_check.format, ExternalOutputFormat::Text);
+        assert_eq!(external_handoff.truth.fleet, "demo");
+        assert_eq!(external_handoff.format, ExternalOutputFormat::Text);
         assert_eq!(external_proposals.truth.fleet, "demo");
         assert_eq!(external_proposals.format, ExternalOutputFormat::Text);
         assert_eq!(external_pending.truth.fleet, "demo");
         assert_eq!(external_pending.format, ExternalOutputFormat::Text);
+    }
+
+    #[test]
+    fn deploy_external_request_commands_parse_text_format() {
         let critical_fix = DeployExternalCriticalFixOptions::parse(
             [
                 OsString::from("--fix-id"),
@@ -3355,6 +3545,8 @@ mod tests {
     fn deploy_external_help_documents_passive_scope() {
         let help = external_usage();
         let plan_help = external_plan_usage();
+        let check_help = external_check_usage();
+        let handoff_help = external_handoff_usage();
         let proposals_help = external_proposals_usage();
         let pending_help = external_pending_usage();
         let critical_fix_help = external_critical_fix_usage();
@@ -3365,12 +3557,18 @@ mod tests {
         assert!(help.contains("Build passive external lifecycle reports"));
         assert!(help.contains("do not request"));
         assert!(help.contains("mutate deployment state"));
+        assert!(help.contains("Build a passive external lifecycle check"));
+        assert!(help.contains("Build a passive external lifecycle handoff packet"));
         assert!(help.contains("Build a passive external lifecycle pending report"));
         assert!(help.contains("Build a passive critical external fix report"));
         assert!(help.contains("Inspect passive external lifecycle internals"));
         assert!(help.contains("Build a passive external upgrade verification report"));
         assert!(plan_help.contains("ExternalLifecyclePlanV1 JSON"));
         assert!(plan_help.contains("No consent delivery"));
+        assert!(check_help.contains("ExternalLifecycleCheckV1 JSON"));
+        assert!(check_help.contains("summarize direct, pending"));
+        assert!(handoff_help.contains("ExternalLifecycleHandoffV1 JSON"));
+        assert!(handoff_help.contains("operator coordination instructions"));
         assert!(proposals_help.contains("ExternalUpgradeProposalReportV1 JSON"));
         assert!(proposals_help.contains("do not grant consent"));
         assert!(pending_help.contains("ExternalLifecyclePendingReportV1 JSON"));
@@ -3572,7 +3770,14 @@ mod tests {
 
     #[test]
     fn deploy_external_command_dispatches_passive_leaf_commands() {
-        for command in ["plan", "proposals", "pending", "critical-fix"] {
+        for command in [
+            "plan",
+            "check",
+            "handoff",
+            "proposals",
+            "pending",
+            "critical-fix",
+        ] {
             let parsed = parse_subcommand(
                 deploy_command(),
                 [
@@ -3893,6 +4098,57 @@ mod tests {
         assert_eq!(plan.proposed_external_role_upgrades.len(), 1);
         assert!(plan.directly_executable_role_upgrades.is_empty());
         assert_eq!(plan.lifecycle_plan_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_lifecycle_check_builder_links_pending_report() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let pending_report = build_external_lifecycle_pending_report(&check);
+        let lifecycle_check = build_external_lifecycle_check(&check);
+
+        assert_eq!(
+            lifecycle_check.check_id,
+            "local:local:demo:external-lifecycle-check"
+        );
+        assert_eq!(lifecycle_check.pending_report_id, pending_report.report_id);
+        assert_eq!(
+            lifecycle_check.pending_report_digest,
+            pending_report.report_digest
+        );
+        assert_eq!(lifecycle_check.pending_external_count, 1);
+        assert_eq!(lifecycle_check.direct_upgrade_count, 0);
+        assert_eq!(lifecycle_check.blocked_count, 0);
+        assert_eq!(lifecycle_check.check_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_lifecycle_handoff_builder_packages_pending_actions() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let lifecycle_check = build_external_lifecycle_check(&check);
+        let handoff = build_external_lifecycle_handoff(&check);
+
+        assert_eq!(
+            handoff.handoff_id,
+            "local:local:demo:external-lifecycle-handoff"
+        );
+        assert_eq!(handoff.lifecycle_check_id, lifecycle_check.check_id);
+        assert_eq!(handoff.lifecycle_check_digest, lifecycle_check.check_digest);
+        assert_eq!(handoff.handoff_actions.len(), 1);
+        assert_eq!(
+            handoff.handoff_actions[0].consent_channel_kind,
+            ConsentChannelKindV1::GeneratedCommand
+        );
+        assert_eq!(handoff.handoff_digest.len(), 64);
     }
 
     #[test]

@@ -47,7 +47,7 @@ if [ "$CONFIRM" = "y" ]; then
 
   # Delete remote tags
   if [ -n "$REMOTE_TAGS" ]; then
-    echo "$REMOTE_TAGS" | xargs -r -n 1 git push origin --delete
+    echo "$REMOTE_TAGS" | xargs -r git push --no-verify origin --delete
   fi
 
   echo "Done."

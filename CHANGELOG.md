@@ -14,6 +14,18 @@ present.
 
 ## [0.45.x] - 2026-05-26 - External lifecycle
 
+- `0.45.5` adds passive external lifecycle check and handoff artifacts so
+  operators can summarize direct/pending/blocked lifecycle work and package
+  pending external proposals into coordination instructions without delivering
+  consent or executing upgrades.
+
+```bash
+canic deploy external check demo
+canic deploy external check --format text demo
+canic deploy external handoff demo
+canic deploy external handoff --format text demo
+```
+
 - `0.45.4` adds passive critical-fix, consent-evidence, and verification
   report artifacts for external lifecycle work, keeping reported consent,
   reported external action, and verified live completion distinct.

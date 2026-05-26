@@ -16,9 +16,9 @@ inspect only the files needed for the current task.
 - Current release-work area: 0.45 passive external lifecycle hardening. The line
   now projects existing `CanisterControlClassV1` observations into
   `LifecycleAuthorityV1`, partitions them through `ExternalLifecyclePlanV1`,
-  derives passive proposal/receipt/pending evidence, and exposes the first
-  external lifecycle CLI reports without adding consent delivery, external
-  execution, or install mutation.
+  derives passive proposal/receipt/pending/check/handoff evidence, and
+  exposes the first external lifecycle CLI reports without adding consent
+  delivery, external execution, or install mutation.
 - Design starts at
   `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
   canonical control classifications from deployment truth and authority
@@ -82,6 +82,19 @@ inspect only the files needed for the current task.
   live completion proof. `canic deploy external inspect consent --request
   <file>` exposes it as an advanced passive artifact without promoting it to a
   top-level lifecycle workflow command.
+- `ExternalLifecycleCheckV1` now summarizes lifecycle plan, proposal, and
+  pending evidence into one passive status artifact with direct, pending,
+  blocked, and residual-exposure counts plus operator next actions.
+  `canic deploy external check <fleet>` exposes that check as JSON by default
+  or host-owned text with `--format text`, without consent delivery, external
+  execution, live lookup, install, or mutation.
+- `ExternalLifecycleHandoffV1` now packages pending external proposals into
+  passive operator coordination instructions. It carries proposal/check/pending
+  digests, consent channel/subject facts, target verification facts, blocked
+  subjects, and residual exposure while preserving the boundary that handoff is
+  not consent delivery or execution. `canic deploy external handoff <fleet>`
+  exposes the packet as JSON by default or host-owned text with
+  `--format text`.
 - 0.44 has started with passive role artifact source DTOs and validation for
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run

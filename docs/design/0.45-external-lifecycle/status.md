@@ -13,11 +13,11 @@ landed, what drifted, and what remains open.
 Started.
 
 0.45 now has passive lifecycle-authority projection over existing deployment
-truth, lifecycle plan partitioning, derived proposal/receipt/pending evidence,
-critical-fix residual exposure reporting, and structural external verification
-reporting. External or user-owned lifecycle flows remain explicit report data;
-no consent delivery, external execution, live re-inventory, or install mutation
-path has landed.
+truth, lifecycle plan partitioning, derived proposal/receipt/pending/check/
+handoff evidence, critical-fix residual exposure reporting, and structural
+external verification reporting. External or user-owned lifecycle flows remain
+explicit report data; no consent delivery, external execution, live
+re-inventory, or install mutation path has landed.
 
 ## Implemented
 
@@ -82,10 +82,18 @@ path has landed.
   proposal/receipt pair into a digest-pinned passive verification artifact.
   It records the verification result, source proposal/receipt digests, notes,
   and whether fresh live inventory remains required.
+- `ExternalLifecycleCheckV1` summarizes lifecycle plan, proposal, and pending
+  evidence into one passive status artifact with direct, pending, blocked, and
+  residual-exposure counts, source artifact digests, summary text, and next
+  actions.
+- `ExternalLifecycleHandoffV1` packages pending external proposals into
+  passive operator coordination instructions with proposal/check/pending
+  digests, consent channel/subject facts, target verification facts, blocked
+  subjects, residual exposure, and deterministic handoff validation.
 - `canic deploy external plan <fleet>`, `proposals <fleet>`,
-  `pending <fleet>`, and `critical-fix <fleet>` expose local deployment-truth
-  external lifecycle artifacts as JSON by default or passive text with
-  `--format text`.
+  `check <fleet>`, `handoff <fleet>`, `pending <fleet>`, and
+  `critical-fix <fleet>` expose local deployment-truth external lifecycle
+  artifacts as JSON by default or passive text with `--format text`.
 - `canic deploy external verify --request <file>` reads an
   `ExternalUpgradeVerificationReportRequest` JSON file and emits a passive
   `ExternalUpgradeVerificationReportV1` without live lookup, consent delivery,

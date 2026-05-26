@@ -1086,6 +1086,79 @@ pub struct ExternalLifecyclePendingReportV1 {
 }
 
 ///
+/// ExternalLifecycleCheckV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecycleCheckV1 {
+    pub schema_version: u32,
+    pub check_id: String,
+    pub check_digest: String,
+    pub lifecycle_plan_id: String,
+    pub lifecycle_plan_digest: String,
+    pub proposal_report_id: String,
+    pub proposal_report_digest: String,
+    pub pending_report_id: String,
+    pub pending_report_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub inventory_id: String,
+    pub status: ExternalLifecyclePlanStatusV1,
+    pub direct_upgrade_count: usize,
+    pub pending_external_count: usize,
+    pub blocked_count: usize,
+    pub residual_exposure_count: usize,
+    pub summary: String,
+    pub next_actions: Vec<String>,
+}
+
+///
+/// ExternalLifecycleHandoffV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecycleHandoffV1 {
+    pub schema_version: u32,
+    pub handoff_id: String,
+    pub handoff_digest: String,
+    pub lifecycle_check_id: String,
+    pub lifecycle_check_digest: String,
+    pub pending_report_id: String,
+    pub pending_report_digest: String,
+    pub proposal_report_id: String,
+    pub proposal_report_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
+    pub inventory_id: String,
+    pub status: ExternalLifecyclePlanStatusV1,
+    pub handoff_actions: Vec<ExternalLifecycleHandoffActionV1>,
+    pub blocked_subjects: Vec<String>,
+    pub residual_exposure: Vec<String>,
+    pub operator_summary: String,
+}
+
+///
+/// ExternalLifecycleHandoffActionV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExternalLifecycleHandoffActionV1 {
+    pub subject: String,
+    pub proposal_id: String,
+    pub proposal_digest: String,
+    pub canister_id: Option<String>,
+    pub role: Option<String>,
+    pub control_class: CanisterControlClassV1,
+    pub lifecycle_mode: LifecycleModeV1,
+    pub required_external_action: String,
+    pub consent_channel_kind: ConsentChannelKindV1,
+    pub consent_subject_kind: ConsentSubjectKindV1,
+    pub required_principals: Vec<String>,
+    pub current_module_hash: Option<String>,
+    pub target_installed_module_hash: Option<String>,
+    pub target_canonical_embedded_config_sha256: Option<String>,
+    pub verification_requirements: Vec<LifecycleVerificationRequirementV1>,
+    pub operator_instructions: Vec<String>,
+}
+
+///
 /// ExternalLifecyclePendingActionV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
