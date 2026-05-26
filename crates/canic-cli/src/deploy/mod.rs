@@ -2093,11 +2093,13 @@ fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use canic_host::deployment_truth::{
-        AuthorityProfileV1, CanisterControlClassV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        DeploymentDiffV1, DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1,
-        ExpectedCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
-        ResumeSafetyV1, TrustDomainV1, VerifierReadinessExpectationV1,
-        VerifierReadinessObservationV1,
+        ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
+        DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1, DeploymentIdentityV1,
+        DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
+        ObservationStatusV1, ObservedCanisterV1, PreviousArtifactReceiptKindV1,
+        PromotionArtifactLevelV1, ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
+        RoleArtifactV1, RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
+        VerifierReadinessObservationV1, promotion_readiness_from_inputs,
     };
 
     #[test]
@@ -2680,6 +2682,27 @@ mod tests {
     }
 
     #[test]
+    fn deploy_install_path_uses_current_install_with_plan_override() {
+        let source = include_str!("mod.rs");
+        let install_source = source_between(source, "fn run_install<I>", "fn run_promote<I>");
+
+        assert!(install_source.contains("read_install_deployment_plan"));
+        assert!(install_source.contains("into_install_root_options"));
+        assert!(install_source.contains("install_root"));
+        for forbidden in [
+            "artifact_promotion_execution_receipt",
+            "artifact_promotion_provenance_report",
+            "build_artifact_promotion_plan",
+            "run_promote",
+        ] {
+            assert!(
+                !install_source.contains(forbidden),
+                "deploy install path must stay current-install mediated; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
     fn deploy_promote_command_dispatches_inspect_namespace() {
         let parsed = parse_subcommand(
             deploy_command(),
@@ -3100,6 +3123,46 @@ mod tests {
         assert!(options.deployment_plan_override.is_some());
     }
 
+    #[test]
+    fn deploy_install_plan_reader_accepts_raw_deployment_plan() {
+        let path = temp_json_path("deploy-install-raw-plan.json");
+        let plan = sample_deployment_plan(sample_deployment_identity());
+        fs::write(&path, serde_json::to_vec(&plan).expect("encode plan")).expect("write plan");
+
+        let decoded = read_install_deployment_plan(&path).expect("decode deployment plan");
+
+        assert_eq!(decoded.plan_id, "plan-1");
+        fs::remove_file(path).expect("clean temp plan");
+    }
+
+    #[test]
+    fn deploy_install_plan_reader_accepts_ready_promotion_envelope() {
+        let path = temp_json_path("deploy-install-ready-promotion-plan.json");
+        let plan = sample_artifact_promotion_plan();
+        fs::write(&path, serde_json::to_vec(&plan).expect("encode plan")).expect("write plan");
+
+        let decoded = read_install_deployment_plan(&path).expect("decode promotion plan");
+
+        assert_eq!(decoded.plan_id, "promoted-plan-1");
+        fs::remove_file(path).expect("clean temp plan");
+    }
+
+    #[test]
+    fn deploy_install_plan_reader_rejects_blocked_promotion_envelope() {
+        let path = temp_json_path("deploy-install-blocked-promotion-plan.json");
+        let plan = sample_blocked_artifact_promotion_plan();
+        fs::write(&path, serde_json::to_vec(&plan).expect("encode plan")).expect("write plan");
+
+        let result = read_install_deployment_plan(&path);
+
+        assert!(matches!(
+            result,
+            Err(DeployCommandError::Blocked(message))
+                if message.contains("artifact promotion plan artifact-promotion-plan-1 is not ready")
+        ));
+        fs::remove_file(path).expect("clean temp plan");
+    }
+
     fn sample_authority_check() -> DeploymentCheckV1 {
         let identity = sample_deployment_identity();
         let plan = sample_deployment_plan(identity.clone());
@@ -3151,7 +3214,7 @@ mod tests {
                 staging_controllers: Vec::new(),
                 emergency_controllers: Vec::new(),
             },
-            role_artifacts: Vec::new(),
+            role_artifacts: vec![sample_role_artifact()],
             expected_canisters: vec![ExpectedCanisterV1 {
                 role: "root".to_string(),
                 canister_id: Some("aaaaa-aa".to_string()),
@@ -3164,6 +3227,132 @@ mod tests {
             },
             unresolved_assumptions: Vec::new(),
         }
+    }
+
+    fn sample_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
+        sample_artifact_promotion_plan_for_input(sample_role_promotion_input(
+            PromotionArtifactLevelV1::SealedWasm,
+        ))
+    }
+
+    fn sample_blocked_artifact_promotion_plan() -> ArtifactPromotionPlanV1 {
+        let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+        input.source.expected_canonical_embedded_config_sha256 = Some(sample_sha256("e"));
+        sample_artifact_promotion_plan_for_inputs(
+            input,
+            sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm),
+        )
+    }
+
+    fn sample_artifact_promotion_plan_for_input(
+        input: RolePromotionInputV1,
+    ) -> ArtifactPromotionPlanV1 {
+        sample_artifact_promotion_plan_for_inputs(input.clone(), input)
+    }
+
+    fn sample_artifact_promotion_plan_for_inputs(
+        report_input: RolePromotionInputV1,
+        transform_input: RolePromotionInputV1,
+    ) -> ArtifactPromotionPlanV1 {
+        let target_plan = sample_deployment_plan(sample_deployment_identity());
+        let readiness = promotion_readiness_from_inputs(
+            "promotion-readiness-1",
+            &target_plan,
+            std::slice::from_ref(&report_input),
+        );
+        let artifact_identity_report = promotion_artifact_identity_report_from_inputs(
+            PromotionArtifactIdentityReportRequest {
+                report_id: "promotion-artifact-identity-1".to_string(),
+                inputs: vec![report_input],
+            },
+        )
+        .expect("sample artifact identity report");
+        let transform =
+            promoted_deployment_plan_transform_from_inputs(&PromotionPlanTransformRequest {
+                promoted_plan_id: "promoted-plan-1".to_string(),
+                target_plan,
+                inputs: vec![transform_input],
+            })
+            .expect("sample transform");
+
+        artifact_promotion_plan(ArtifactPromotionPlanRequest {
+            plan_id: "artifact-promotion-plan-1".to_string(),
+            generated_at: "2026-05-26T00:00:00Z".to_string(),
+            readiness,
+            artifact_identity_report,
+            transform,
+            target_execution_lineage: None,
+        })
+        .expect("sample artifact promotion plan")
+    }
+
+    fn sample_role_promotion_input(
+        promotion_level: PromotionArtifactLevelV1,
+    ) -> RolePromotionInputV1 {
+        RolePromotionInputV1 {
+            role: "root".to_string(),
+            promotion_level,
+            source: sample_role_artifact_source(RoleArtifactSourceKindV1::LocalWasmGz),
+            require_byte_identical_wasm: promotion_level == PromotionArtifactLevelV1::SealedWasm,
+            require_target_embedded_config: true,
+            target_store_has_artifact: Some(true),
+        }
+    }
+
+    fn sample_role_artifact_source(kind: RoleArtifactSourceKindV1) -> RoleArtifactSourceV1 {
+        RoleArtifactSourceV1 {
+            role: "root".to_string(),
+            kind,
+            locator: Some("artifacts/root.wasm.gz".to_string()),
+            previous_receipt_kind: (kind == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
+                .then_some(PreviousArtifactReceiptKindV1::DeploymentReceipt),
+            previous_receipt_lineage_digest: (kind
+                == RoleArtifactSourceKindV1::PreviousReceiptArtifact)
+                .then(|| sample_sha256("9")),
+            expected_wasm_sha256: Some(sample_sha256("d")),
+            expected_wasm_gz_sha256: Some(sample_sha256("a")),
+            expected_candid_sha256: Some(sample_sha256("b")),
+            expected_canonical_embedded_config_sha256: Some(sample_sha256("c")),
+        }
+    }
+
+    fn sample_role_artifact() -> RoleArtifactV1 {
+        RoleArtifactV1 {
+            role: "root".to_string(),
+            source: ArtifactSourceV1::LocalBuild,
+            build_profile: "fast".to_string(),
+            wasm_path: Some("artifacts/root.wasm".to_string()),
+            wasm_gz_path: Some("artifacts/root.wasm.gz".to_string()),
+            wasm_gz_size_bytes: Some(123),
+            wasm_sha256: Some(sample_sha256("d")),
+            wasm_gz_sha256: Some(sample_sha256("a")),
+            wasm_gz_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            observed_wasm_gz_file_sha256: Some(sample_sha256("a")),
+            observed_wasm_gz_file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            installed_module_hash: Some("module".to_string()),
+            candid_path: Some("root.did".to_string()),
+            candid_sha256: Some(sample_sha256("b")),
+            raw_config_sha256: Some("raw".to_string()),
+            canonical_embedded_config_sha256: Some(sample_sha256("c")),
+            embedded_topology_sha256: Some("topology".to_string()),
+            builder_version: Some("0.44.0".to_string()),
+            rust_toolchain: Some("stable".to_string()),
+            package_version: Some("0.44.0".to_string()),
+        }
+    }
+
+    fn sample_sha256(seed: &str) -> String {
+        seed.repeat(64)
+    }
+
+    fn temp_json_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "canic-cli-{name}-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time")
+                .as_nanos()
+        ))
     }
 
     fn sample_deployment_inventory(identity: DeploymentIdentityV1) -> DeploymentInventoryV1 {

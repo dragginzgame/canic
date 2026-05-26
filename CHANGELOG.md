@@ -12,6 +12,15 @@ present.
 
 ## Unreleased
 
+- Hardens plan-mediated promotion install with direct coverage for ready and
+  blocked promotion plan envelopes, raw deployment plan input, target network
+  mismatches, missing root wasm artifacts, and the current-install mediation
+  source guard.
+
+```bash
+canic deploy install --plan promoted-plan.json
+```
+
 - Adds plan-mediated promotion install for supplied `DeploymentPlanV1` or
   `ArtifactPromotionPlanV1` files, routing execution through the current
   install runner/gate path.

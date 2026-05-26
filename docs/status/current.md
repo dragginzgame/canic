@@ -31,7 +31,11 @@ inspect only the files needed for the current task.
 - `canic deploy install --plan <file>` now accepts a raw `DeploymentPlanV1` or
   an `ArtifactPromotionPlanV1` envelope and routes the supplied plan through
   the current install deployment-truth/preflight gate plus activation operation
-  runner. Blocked promotion plan envelopes are rejected before mutation.
+  runner. Blocked promotion plan envelopes are rejected before mutation, and
+  the path now has focused coverage for raw and ready promotion plan input,
+  blocked promotion envelopes, supplied-plan network mismatch rejection,
+  missing root wasm artifact validation before mutation, and CLI source-guard
+  mediation through `install_root`.
 - 0.44 also has the first passive promotion readiness model. It reports
   role-scoped promotion source identity, target wasm/config identity,
   byte/config identity comparisons, blocking findings, and target-store

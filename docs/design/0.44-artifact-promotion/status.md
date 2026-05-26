@@ -1,6 +1,6 @@
 # 0.44 Status: Artifact Promotion
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Purpose
 
@@ -20,6 +20,11 @@ runner: `canic deploy install --plan <file>` accepts a raw `DeploymentPlanV1`
 or an `ArtifactPromotionPlanV1` envelope, rejects blocked promotion envelopes
 before mutation, and keeps execution on the existing
 deployment-truth/preflight plus activation operation-runner path.
+The install-plan path now has direct coverage for raw plan input, ready and
+blocked promotion envelopes, supplied-plan network mismatch rejection, missing
+root wasm pre-mutation artifact validation, and a source guard proving the CLI
+stays mediated by `install_root` instead of adding a promotion-specific
+executor shortcut.
 
 ## Implemented
 
@@ -241,6 +246,15 @@ deployment-truth/preflight plus activation operation-runner path.
   wrappers through
   `canic deploy promote inspect execution-receipt --request <file>`, with JSON
   output by default and host-owned text output through `--format text`.
+- Added plan-mediated promotion install through
+  `canic deploy install --plan <file>`, accepting either raw `DeploymentPlanV1`
+  files or ready `ArtifactPromotionPlanV1` envelopes and routing them through
+  the current install deployment-truth/preflight plus activation operation
+  runner path.
+- Added install-plan hardening for raw plan decoding, ready/blocked promotion
+  envelope decoding, supplied-plan network mismatch rejection, missing root
+  wasm pre-mutation artifact validation, and CLI source-guard coverage proving
+  no promotion-specific executor shortcut was introduced.
 
 ## Not Implemented Yet
 

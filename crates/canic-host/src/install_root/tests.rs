@@ -17,9 +17,9 @@ use super::{
     parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
     parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
     resolve_install_config_path, root_init_args, validate_expected_fleet_name,
-    write_completed_install_phase_receipt, write_current_install_execution_preflight_receipt,
-    write_install_deployment_truth_receipt, write_install_state,
-    write_install_state_with_deployment_truth_receipt,
+    validate_plan_artifacts_with_phase, write_completed_install_phase_receipt,
+    write_current_install_execution_preflight_receipt, write_install_deployment_truth_receipt,
+    write_install_state, write_install_state_with_deployment_truth_receipt,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
@@ -525,6 +525,54 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
     .expect("deployment truth check");
 
     assert_eq!(supplied_check.plan.plan_id, "promoted-plan-1");
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_check_rejects_supplied_plan_network_mismatch() {
+    let (root, mut check) =
+        demo_install_deployment_truth_check("canic-install-truth-plan-network-mismatch");
+    check.plan.deployment_identity.network = "ic".to_string();
+    let config_path = root.join("fleets/demo/canic.toml");
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+        deployment_plan_override: Some(check.plan),
+    };
+
+    let err = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect_err("network mismatch should fail");
+
+    assert!(err.to_string().contains("deployment plan network mismatch"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_plan_artifact_validation_rejects_missing_root_wasm_before_mutation() {
+    let (root, check) = demo_install_deployment_truth_check("canic-install-plan-missing-root-wasm");
+
+    let Err(err) = validate_plan_artifacts_with_phase(&check.plan, &root, "local") else {
+        panic!("missing root wasm should fail before install mutation");
+    };
+
+    assert!(
+        err.to_string()
+            .contains("deployment plan root wasm artifact does not exist")
+    );
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
