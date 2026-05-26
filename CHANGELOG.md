@@ -12,19 +12,16 @@ present.
 
 ## Unreleased
 
-- External upgrade verification policies now make the required live-inventory
-  postconditions explicit before an externally reported lifecycle action can
-  be treated as complete.
-- `canic deploy external inspect verification-policy --request <file>` exposes
-  those passive postconditions from proposal evidence without querying live
-  inventory or verifying completion.
+## [0.45.x] - 2026-05-26 - External lifecycle
+
+- `0.45.6` adds passive external upgrade verification-policy artifacts so
+  proposals can publish digest-bound live-inventory postconditions before any
+  externally reported lifecycle action is treated as complete.
 
 ```bash
 canic deploy external inspect verification-policy --request external-verification-policy.json
 canic deploy external inspect verification-policy --request external-verification-policy.json --format text
 ```
-
-## [0.45.x] - 2026-05-26 - External lifecycle
 
 - `0.45.5` adds passive external lifecycle check and handoff artifacts so
   operators can summarize direct/pending/blocked lifecycle work and package
