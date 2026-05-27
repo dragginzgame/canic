@@ -14,6 +14,10 @@ present.
 
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
+- `0.46.9` adds automated coverage for the release-index guard and tightens it
+  so release commits fail when the index is empty, includes staged deletions or
+  non-release files, or has partially staged release files.
+
 - `0.46.8` adds a release-index guard so `make release-commit` refuses staged
   non-release files or partially staged release files before creating a release
   commit and tag.

@@ -111,6 +111,9 @@ inspect only the files needed for the current task.
 - Release commits now run a dedicated release-index guard before tagging. The
   guard refuses staged non-release files and release files that also have
   unstaged edits, preventing accidental mixed code/version release commits.
+- The release-index guard now has focused regression coverage for empty
+  release indexes, staged deletions, staged non-release files, partially staged
+  release files, and clean release-only indexes.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

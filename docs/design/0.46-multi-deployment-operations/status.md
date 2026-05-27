@@ -82,6 +82,9 @@ fleet-named install state is refused as deployment truth.
   non-release files and partially staged release files before creating the
   release commit/tag. This keeps code slices separate from version-only release
   commits.
+- Added automated regression coverage for the release-index guard's accepted
+  release-only case and its empty-index, staged-deletion,
+  staged-non-release-file, and partially-staged-release-file failures.
 
 ## Not Implemented Yet
 

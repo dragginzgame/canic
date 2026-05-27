@@ -4,10 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 
-mapfile -t STAGED_FILES < <(git diff --cached --name-only --diff-filter=ACMR)
+mapfile -t STAGED_FILES < <(git diff --cached --name-only --diff-filter=ACMRD)
 
 if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
   echo "No staged release files; run make release-stage first." >&2
+  exit 1
+fi
+
+mapfile -t DELETED_FILES < <(git diff --cached --name-only --diff-filter=D)
+
+if [[ ${#DELETED_FILES[@]} -ne 0 ]]; then
+  echo "Release commit index contains staged deletions:" >&2
+  printf '  %s\n' "${DELETED_FILES[@]}" >&2
+  echo "Commit file removals separately before running make release-commit." >&2
   exit 1
 fi
 
