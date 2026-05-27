@@ -12,6 +12,14 @@ present.
 
 ## Unreleased
 
+- 0.47 continues verified deployment registration by adding the receipt-backed
+  local-state transition for registered roots whose deployment-truth evidence
+  is satisfied.
+
+```bash
+canic deploy root verify demo-local --from-check deployment-check.json
+```
+
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)

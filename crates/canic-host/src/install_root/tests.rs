@@ -4,8 +4,8 @@ use super::{
     InstallReceiptScope, InstallRootOptions, InstallRootWasmOperation, InstallState,
     InstallTimingSummary, RegisterDeploymentStateOptions, ResolveRootCanisterOperation,
     ResumeBootstrapOperation, RootVerificationStatus, StageReleaseSetOperation,
-    WaitRootReadyOperation, add_create_root_target, add_icp_environment_target,
-    add_local_root_create_cycles_arg, check_install_deployment_truth,
+    VerifyDeploymentRootOptions, WaitRootReadyOperation, add_create_root_target,
+    add_icp_environment_target, add_local_root_create_cycles_arg, check_install_deployment_truth,
     check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
     current_install_executor_missing_capabilities, current_install_staging_evidence,
@@ -19,23 +19,24 @@ use super::{
     parse_cycle_balance_response, parse_root_ready_value, read_deployment_install_state,
     register_deployment_state, render_install_timing_summary, resolve_install_config_path,
     root_init_args, validate_expected_fleet_name, validate_plan_artifacts_with_phase,
-    write_artifact_promotion_execution_receipt_for_install, write_completed_install_phase_receipt,
-    write_current_install_execution_preflight_receipt, write_install_deployment_truth_receipt,
-    write_install_state, write_install_state_with_deployment_truth_receipt,
+    verify_registered_deployment_root, write_artifact_promotion_execution_receipt_for_install,
+    write_completed_install_phase_receipt, write_current_install_execution_preflight_receipt,
+    write_install_deployment_truth_receipt, write_install_state,
+    write_install_state_with_deployment_truth_receipt, write_verified_root_state_if_unchanged,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
     DeploymentExecutionPreflightStatusV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
-    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, ObservationStatusV1, ObservedCanisterV1,
-    PromotionArtifactIdentityReportRequest, PromotionArtifactLevelV1,
-    PromotionPlanTransformRequest, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
-    RolePromotionInputV1, SafetyFindingV1, SafetySeverityV1, SafetyStatusV1,
+    DeploymentExecutorCapabilityV1, DeploymentReceiptV1, DeploymentRootObservationSourceV1,
+    ObservationStatusV1, ObservedCanisterV1, PromotionArtifactIdentityReportRequest,
+    PromotionArtifactLevelV1, PromotionPlanTransformRequest, RoleArtifactSourceKindV1,
+    RoleArtifactSourceV1, RolePromotionInputV1, SafetyFindingV1, SafetySeverityV1, SafetyStatusV1,
     artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, artifact_promotion_plan,
     compare_plan_to_inventory, promoted_deployment_plan_transform_from_inputs,
     promotion_artifact_identity_report_from_inputs, promotion_readiness_from_inputs,
-    safety_report_from_diff,
+    safety_report_from_diff, validate_deployment_root_verification_receipt,
 };
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::{ReleaseSetEntry, RootReleaseSetManifest, configured_install_targets};
@@ -2606,6 +2607,103 @@ kind = "root"
 }
 
 #[test]
+fn verify_registered_deployment_root_promotes_unverified_state() {
+    let (root, check) = demo_unverified_registered_root_check("canic-root-verify-promote");
+
+    let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        deployment_check: check,
+        verified_at_unix_secs: Some(100),
+        icp_root: Some(root.clone()),
+    })
+    .expect("verify registered root");
+    let state = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read verified state")
+        .expect("state exists");
+
+    assert_eq!(state.root_verification, RootVerificationStatus::Verified);
+    assert_eq!(state.updated_at_unix_secs, 100);
+    assert_eq!(
+        receipt.state_transition,
+        crate::deployment_truth::DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified
+    );
+    assert_eq!(
+        receipt.previous_root_verification,
+        crate::deployment_truth::DeploymentRootVerificationStateV1::NotVerified
+    );
+    assert_eq!(
+        receipt.new_root_verification,
+        crate::deployment_truth::DeploymentRootVerificationStateV1::Verified
+    );
+    assert_eq!(receipt.source_check_id, "local:local:demo-local:check");
+    assert_eq!(receipt.local_state_digest_before.len(), 64);
+    assert_eq!(receipt.local_state_digest_after.len(), 64);
+    assert_ne!(
+        receipt.local_state_digest_before,
+        receipt.local_state_digest_after
+    );
+    assert_eq!(receipt.receipt_digest.len(), 64);
+    assert!(validate_deployment_root_verification_receipt(&receipt).is_ok());
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
+    let (root, mut check) = demo_unverified_registered_root_check("canic-root-verify-local-only");
+    let observed_root = check
+        .inventory
+        .observed_root
+        .as_mut()
+        .expect("observed root");
+    observed_root.observation_source = DeploymentRootObservationSourceV1::LocalDeploymentState;
+
+    let err = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        deployment_check: check,
+        verified_at_unix_secs: Some(100),
+        icp_root: Some(root.clone()),
+    })
+    .expect_err("local-state-only evidence must not verify root");
+    let state = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read state")
+        .expect("state exists");
+
+    assert!(
+        err.to_string()
+            .contains("deployment root verification failed")
+    );
+    assert_eq!(state.root_verification, RootVerificationStatus::NotVerified);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn verify_registered_deployment_root_rejects_state_digest_race() {
+    let root = temp_dir("canic-root-verify-state-race");
+    let state = sample_install_state(&root, "demo-local", "demo");
+    write_install_state(&root, "local", &state).expect("write state");
+    let mut changed = state.clone();
+    changed.updated_at_unix_secs = 99;
+
+    let err = write_verified_root_state_if_unchanged(&root, "local", &changed, "not-current")
+        .expect_err("stale digest must fail closed");
+    let stored = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read state")
+        .expect("state exists");
+
+    assert!(
+        err.to_string()
+            .contains("deployment root verification state changed before write")
+    );
+    assert_eq!(stored.updated_at_unix_secs, state.updated_at_unix_secs);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_truth_check_uses_deployment_state_config_for_target_named_commands() {
     let root = temp_dir("canic-deploy-target-state-config");
     let config_path = root.join("fleets/demo/canic.toml");
@@ -2850,6 +2948,71 @@ kind = "root"
         "2026-05-22T00:00:00Z".to_string(),
     )
     .expect("deployment truth check");
+    (root, check)
+}
+
+fn demo_unverified_registered_root_check(root_name: &str) -> (PathBuf, DeploymentCheckV1) {
+    let root = temp_dir(root_name);
+    let config_path = root.join("fleets/demo/canic.toml");
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        &config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    let mut state = sample_install_state(&root, "demo-local", "demo");
+    state.root_verification = RootVerificationStatus::NotVerified;
+    write_install_state(&root, "local", &state).expect("write unverified state");
+
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        deployment_name: Some("demo-local".to_string()),
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+        deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
+    };
+    let mut check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo-local",
+        "2026-05-27T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+    let observed_root = check
+        .inventory
+        .observed_root
+        .as_mut()
+        .expect("observed root");
+    observed_root.observation_source = DeploymentRootObservationSourceV1::IcpCanisterStatus;
+    observed_root.role_assignment_source = Some("icp_canister_status".to_string());
+    check
+        .report
+        .hard_failures
+        .retain(|finding| finding.code == "unverified_deployment_root");
+    check.report.warnings.clear();
     (root, check)
 }
 

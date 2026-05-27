@@ -959,6 +959,36 @@ pub struct DeploymentRootVerificationReportV1 {
 }
 
 ///
+/// DeploymentRootVerificationReceiptV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentRootVerificationReceiptV1 {
+    pub schema_version: u32,
+    pub receipt_id: String,
+    pub receipt_digest: String,
+    pub deployment_name: String,
+    pub network: String,
+    pub fleet_template: String,
+    pub root_principal: String,
+    pub previous_root_verification: DeploymentRootVerificationStateV1,
+    pub new_root_verification: DeploymentRootVerificationStateV1,
+    pub state_transition: DeploymentRootVerificationStateTransitionV1,
+    pub source_report_id: String,
+    pub source_report_digest: String,
+    pub source_check_id: String,
+    pub source_check_digest: String,
+    pub source_deployment_plan_id: String,
+    pub source_deployment_plan_digest: String,
+    pub source_inventory_id: String,
+    pub source_inventory_digest: String,
+    pub verified_at_unix_secs: u64,
+    pub local_state_path: String,
+    pub local_state_digest_before: String,
+    pub local_state_digest_after: String,
+    pub warnings: Vec<SafetyFindingV1>,
+}
+
+///
 /// DeploymentRootVerificationCheckV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

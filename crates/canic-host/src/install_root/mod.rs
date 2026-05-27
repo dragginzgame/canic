@@ -8,13 +8,18 @@ use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentCommandResultV1,
     DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1,
     DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentPlanV1, DeploymentReceiptV1,
+    DeploymentRootVerificationEvidenceStatusV1, DeploymentRootVerificationReceiptV1,
+    DeploymentRootVerificationRequestV1, DeploymentRootVerificationSourceV1,
+    DeploymentRootVerificationStateTransitionV1, DeploymentRootVerificationStateV1,
     LocalDeploymentCheckRequest, LocalInventoryRequest, ObservationStatusV1, SafetyFindingV1,
     StagingReceiptV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
     artifact_promotion_execution_receipt, artifact_promotion_provenance_report,
     check_local_deployment, collect_local_deployment_inventory, compare_plan_to_inventory,
     deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
+    deployment_root_verification_receipt_digest, deployment_root_verification_report_from_check,
     missing_executor_capabilities, phase_receipt, safety_report_from_diff,
     staging_receipt_evidence, validate_deployment_execution_preflight_for_check,
+    validate_deployment_root_verification_receipt, validate_deployment_root_verification_report,
 };
 use crate::format::wasm_size_label;
 use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
@@ -36,6 +41,7 @@ use canic_core::{
 };
 use config_selection::resolve_install_config_path;
 use serde_json::Value as JsonValue;
+use sha2::{Digest, Sha256};
 use std::{
     env,
     ffi::OsString,
@@ -55,7 +61,8 @@ pub use config_selection::{
 };
 use readiness::wait_for_root_ready;
 use state::{
-    INSTALL_STATE_SCHEMA_VERSION, validate_network_name, validate_state_name, write_install_state,
+    INSTALL_STATE_SCHEMA_VERSION, deployment_install_state_path, read_deployment_install_state,
+    validate_network_name, validate_state_name, write_install_state,
 };
 pub use state::{
     InstallState, RootVerificationStatus, read_named_deployment_install_state,
@@ -70,9 +77,7 @@ use config_selection::config_selection_error;
 #[cfg(test)]
 use readiness::{parse_bootstrap_status_value, parse_root_ready_value};
 #[cfg(test)]
-use state::{
-    deployment_install_state_path, legacy_fleet_install_state_path, read_deployment_install_state,
-};
+use state::legacy_fleet_install_state_path;
 
 ///
 /// InstallRootOptions
@@ -107,6 +112,18 @@ pub struct RegisterDeploymentStateOptions {
     pub allow_unverified: bool,
     pub icp_root: Option<PathBuf>,
     pub workspace_root: Option<PathBuf>,
+}
+
+///
+/// VerifyDeploymentRootOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifyDeploymentRootOptions {
+    pub deployment_name: String,
+    pub network: String,
+    pub deployment_check: DeploymentCheckV1,
+    pub verified_at_unix_secs: Option<u64>,
+    pub icp_root: Option<PathBuf>,
 }
 
 ///
@@ -332,6 +349,109 @@ pub fn register_deployment_state(
     };
 
     write_install_state(&icp_root, &options.network, &state)
+}
+
+/// Promote an explicitly registered deployment root from `not_verified` to
+/// `verified` using bound deployment-truth evidence.
+pub fn verify_registered_deployment_root(
+    options: VerifyDeploymentRootOptions,
+) -> Result<DeploymentRootVerificationReceiptV1, Box<dyn std::error::Error>> {
+    validate_state_name(&options.deployment_name)?;
+    validate_network_name(&options.network)?;
+    let verified_at_unix_secs = match options.verified_at_unix_secs {
+        Some(value) => value,
+        None => current_unix_secs()?,
+    };
+    let icp_root = match options.icp_root {
+        Some(path) => path,
+        None => icp_root()?,
+    };
+    let state_path =
+        deployment_install_state_path(&icp_root, &options.network, &options.deployment_name);
+    let state =
+        read_deployment_install_state(&icp_root, &options.network, &options.deployment_name)?
+            .ok_or_else(|| {
+                format!(
+                    "no local deployment state exists for {}; run canic deploy register first",
+                    options.deployment_name
+                )
+            })?;
+    let local_state_digest_before = file_sha256_hex(&state_path)?;
+    let previous_root_verification = deployment_root_verification_state(&state.root_verification);
+    let report =
+        deployment_root_verification_report_from_check(DeploymentRootVerificationRequestV1 {
+            report_id: format!(
+                "local:{}:{}:root-verification-report",
+                options.network, options.deployment_name
+            ),
+            requested_at: format!("unix:{verified_at_unix_secs}"),
+            deployment_name: options.deployment_name.clone(),
+            network: options.network.clone(),
+            expected_fleet_template: state.fleet_template.clone(),
+            expected_root_principal: state.root_canister_id.clone(),
+            current_root_verification: previous_root_verification,
+            source: DeploymentRootVerificationSourceV1::DeploymentTruthCheck,
+            deployment_check: options.deployment_check,
+        });
+    validate_deployment_root_verification_report(&report)?;
+    if report.evidence_status != DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied {
+        return Err(format!(
+            "deployment root verification failed for {}: {} blocker(s)",
+            options.deployment_name,
+            report.blockers.len()
+        )
+        .into());
+    }
+
+    let mut verified_state = state.clone();
+    verified_state.root_verification = RootVerificationStatus::Verified;
+    verified_state.updated_at_unix_secs = verified_at_unix_secs;
+    let local_state_digest_after = write_verified_root_state_if_unchanged(
+        &icp_root,
+        &options.network,
+        &verified_state,
+        &local_state_digest_before,
+    )?;
+    let state_transition = match previous_root_verification {
+        DeploymentRootVerificationStateV1::NotVerified => {
+            DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified
+        }
+        DeploymentRootVerificationStateV1::Verified => {
+            DeploymentRootVerificationStateTransitionV1::NoStateChange
+        }
+    };
+
+    let mut receipt = DeploymentRootVerificationReceiptV1 {
+        schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        receipt_id: format!(
+            "local:{}:{}:root-verification-receipt",
+            options.network, options.deployment_name
+        ),
+        receipt_digest: String::new(),
+        deployment_name: options.deployment_name,
+        network: options.network,
+        fleet_template: state.fleet_template,
+        root_principal: state.root_canister_id,
+        previous_root_verification,
+        new_root_verification: DeploymentRootVerificationStateV1::Verified,
+        state_transition,
+        source_report_id: report.report_id,
+        source_report_digest: report.report_digest,
+        source_check_id: report.source_check_id,
+        source_check_digest: report.source_check_digest,
+        source_deployment_plan_id: report.source_deployment_plan_id,
+        source_deployment_plan_digest: report.source_deployment_plan_digest,
+        source_inventory_id: report.source_inventory_id,
+        source_inventory_digest: report.source_inventory_digest,
+        verified_at_unix_secs,
+        local_state_path: state_path.display().to_string(),
+        local_state_digest_before,
+        local_state_digest_after,
+        warnings: report.warnings,
+    };
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+    validate_deployment_root_verification_receipt(&receipt)?;
+    Ok(receipt)
 }
 
 struct PreparedInstallTruth {
@@ -2407,6 +2527,47 @@ fn current_unix_secs() -> Result<u64, Box<dyn std::error::Error>> {
 
 fn current_unix_timestamp_label() -> Result<String, Box<dyn std::error::Error>> {
     Ok(format!("unix:{}", current_unix_secs()?))
+}
+
+const fn deployment_root_verification_state(
+    status: &RootVerificationStatus,
+) -> DeploymentRootVerificationStateV1 {
+    match status {
+        RootVerificationStatus::Verified => DeploymentRootVerificationStateV1::Verified,
+        RootVerificationStatus::NotVerified => DeploymentRootVerificationStateV1::NotVerified,
+    }
+}
+
+fn write_verified_root_state_if_unchanged(
+    icp_root: &Path,
+    network: &str,
+    state: &InstallState,
+    expected_digest_before: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let path = deployment_install_state_path(icp_root, network, &state.deployment_name);
+    let current_digest = file_sha256_hex(&path)?;
+    if current_digest != expected_digest_before {
+        return Err(format!(
+            "deployment root verification state changed before write: expected {expected_digest_before}, found {current_digest}"
+        )
+        .into());
+    }
+    write_install_state(icp_root, network, state)?;
+    file_sha256_hex(&path)
+}
+
+fn file_sha256_hex(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(bytes_sha256_hex(&fs::read(path)?))
+}
+
+fn bytes_sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    hex
 }
 
 // Build each configured local install target through the host builder.

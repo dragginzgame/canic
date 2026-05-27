@@ -48,13 +48,14 @@ use canic_host::{
         check_promotion_readiness, compare_plan_inventory_and_receipt,
         critical_external_fix_report_from_pending, critical_external_fix_report_text,
         deployment_comparison_report_from_checks, deployment_comparison_report_text,
-        deployment_root_verification_report_from_check, deployment_root_verification_report_text,
-        external_lifecycle_check_from_reports, external_lifecycle_check_text,
-        external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
-        external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
-        external_lifecycle_plan_from_check, external_lifecycle_plan_text,
-        external_upgrade_completion_report_from_evidence, external_upgrade_completion_report_text,
-        external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
+        deployment_root_verification_receipt_text, deployment_root_verification_report_from_check,
+        deployment_root_verification_report_text, external_lifecycle_check_from_reports,
+        external_lifecycle_check_text, external_lifecycle_handoff_from_reports,
+        external_lifecycle_handoff_text, external_lifecycle_pending_report_from_plan,
+        external_lifecycle_pending_report_text, external_lifecycle_plan_from_check,
+        external_lifecycle_plan_text, external_upgrade_completion_report_from_evidence,
+        external_upgrade_completion_report_text, external_upgrade_consent_evidence_from_receipt,
+        external_upgrade_consent_evidence_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
         external_upgrade_proposal_report_text, external_upgrade_verification_check_from_policy,
         external_upgrade_verification_check_text,
@@ -79,8 +80,10 @@ use canic_host::{
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
-        InstallRootOptions, RegisterDeploymentStateOptions, check_install_deployment_truth,
-        install_root, latest_deployment_truth_receipt_path_from_root, register_deployment_state,
+        InstallRootOptions, RegisterDeploymentStateOptions, VerifyDeploymentRootOptions,
+        check_install_deployment_truth, install_root,
+        latest_deployment_truth_receipt_path_from_root, register_deployment_state,
+        verify_registered_deployment_root,
     },
 };
 use clap::{ArgAction, Command as ClapCommand};
@@ -121,6 +124,7 @@ Examples:
   canic deploy external inspect completion --request external-completion.json
   canic deploy external verify --request external-verification.json
   canic deploy root inspect --request root-verification.json
+  canic deploy root verify demo-local --from-check deployment-check.json
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
@@ -139,12 +143,13 @@ mutate controller state.";
 const DEPLOY_ROOT_HELP_AFTER: &str = "\
 Examples:
   canic deploy root inspect --request root-verification.json
+  canic deploy root verify demo-local --from-check deployment-check.json
   canic deploy root inspect --request root-verification.json --format text
 
-0.47 root commands are deployment-root scoped. The inspect command builds a
-passive root-verification report from a DeploymentRootVerificationRequestV1
-JSON file. It does not write verified root state, install code, or mutate
-deployments.";
+0.47 root commands are deployment-root scoped. Inspect builds passive
+root-verification reports without writing state. Verify records verified root
+state only when a registered deployment target and DeploymentCheckV1 source
+evidence match.";
 const DEPLOY_ROOT_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy root inspect --request root-verification.json
@@ -155,6 +160,15 @@ DeploymentRootVerificationReportV1 JSON artifact by default, or host-owned
 passive text with --format text. EvidenceSatisfied means the supplied
 deployment-truth evidence is sufficient for a later explicit state transition;
 this command does not persist verified root state.";
+const DEPLOY_ROOT_VERIFY_HELP_AFTER: &str = "\
+Examples:
+  canic deploy root verify demo-local --from-check deployment-check.json
+  canic deploy root verify demo-local --from-check deployment-check.json --format text
+
+Verifies a registered deployment root from a deployment-truth check artifact
+and records verified root state only when deployment target identity and source
+evidence match. This is not full deployment verification and does not install
+code or mutate canisters.";
 const DEPLOY_COMPARE_HELP_AFTER: &str = "\
 Examples:
   canic deploy compare --left staging-check.json --right prod-check.json
@@ -685,6 +699,17 @@ struct DeployRootInspectOptions {
 }
 
 ///
+/// DeployRootVerifyOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployRootVerifyOptions {
+    deployment: String,
+    from_check: PathBuf,
+    network: String,
+    format: RootOutputFormat,
+}
+
+///
 /// DeployPromoteReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -874,6 +899,7 @@ where
         .map_err(|_| DeployCommandError::Usage(root_usage()))?
     {
         Some((command, args)) if command == "inspect" => run_root_inspect(args),
+        Some((command, args)) if command == "verify" => run_root_verify(args),
         _ => {
             println!("{}", root_usage());
             Ok(())
@@ -896,6 +922,34 @@ where
     match options.format {
         RootOutputFormat::Json => print_json(&report)?,
         RootOutputFormat::Text => println!("{}", deployment_root_verification_report_text(&report)),
+    }
+    Ok(())
+}
+
+fn run_root_verify<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, root_verify_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployRootVerifyOptions::parse(args)?;
+    let check = read_json_file::<DeploymentCheckV1>(&options.from_check)?;
+    let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+        deployment_name: options.deployment,
+        network: options.network,
+        deployment_check: check,
+        verified_at_unix_secs: None,
+        icp_root: resolve_current_canic_icp_root().ok(),
+    })
+    .map_err(DeployCommandError::from)?;
+    match options.format {
+        RootOutputFormat::Json => print_json(&receipt)?,
+        RootOutputFormat::Text => {
+            println!("{}", deployment_root_verification_receipt_text(&receipt));
+        }
     }
     Ok(())
 }
@@ -2525,6 +2579,25 @@ impl DeployRootInspectOptions {
     }
 }
 
+impl DeployRootVerifyOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_root_verify_command(), args)
+            .map_err(|_| DeployCommandError::Usage(root_verify_usage()))?;
+        Ok(Self {
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
+            from_check: path_option(&matches, "from-check").expect("clap requires from-check"),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            format: parse_root_output_format(
+                string_option(&matches, "format").as_deref(),
+                root_verify_usage,
+            )?,
+        })
+    }
+}
+
 impl DeployPromoteReportOptions {
     fn parse<I>(
         args: I,
@@ -2678,6 +2751,11 @@ fn deploy_root_command() -> ClapCommand {
                 .about("Inspect deployment-root verification evidence")
                 .disable_help_flag(true),
         ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("verify")
+                .about("Verify a registered deployment root from check evidence")
+                .disable_help_flag(true),
+        ))
         .after_help(DEPLOY_ROOT_HELP_AFTER)
 }
 
@@ -2702,6 +2780,30 @@ fn deploy_root_inspect_command() -> ClapCommand {
                 .help("Output format; defaults to json"),
         )
         .after_help(DEPLOY_ROOT_INSPECT_HELP_AFTER)
+}
+
+fn deploy_root_verify_command() -> ClapCommand {
+    ClapCommand::new("verify")
+        .bin_name("canic deploy root verify")
+        .about("Verify a registered deployment root from check evidence")
+        .disable_help_flag(true)
+        .override_usage("canic deploy root verify <deployment> --from-check <file>")
+        .arg(
+            value_arg("deployment")
+                .value_name("deployment")
+                .required(true)
+                .help("Registered deployment target whose root should be verified"),
+        )
+        .arg(
+            value_arg("from-check")
+                .long("from-check")
+                .value_name("file")
+                .required(true)
+                .help("DeploymentCheckV1 JSON artifact carrying explicit root evidence"),
+        )
+        .arg(root_format_arg())
+        .arg(internal_network_arg())
+        .after_help(DEPLOY_ROOT_VERIFY_HELP_AFTER)
 }
 
 fn deploy_external_command() -> ClapCommand {
@@ -3414,6 +3516,14 @@ fn compare_format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn root_format_arg() -> clap::Arg {
+    value_arg("format")
+        .long("format")
+        .value_name("json|text")
+        .num_args(1)
+        .help("Output format; defaults to json")
+}
+
 fn usage() -> String {
     let mut command = deploy_command();
     command.render_help().to_string()
@@ -3526,6 +3636,11 @@ fn root_usage() -> String {
 
 fn root_inspect_usage() -> String {
     let mut command = deploy_root_inspect_command();
+    command.render_help().to_string()
+}
+
+fn root_verify_usage() -> String {
+    let mut command = deploy_root_verify_command();
     command.render_help().to_string()
 }
 
@@ -3979,6 +4094,25 @@ mod tests {
     }
 
     #[test]
+    fn deploy_root_verify_parses_deployment_check_and_text_format() {
+        let options = DeployRootVerifyOptions::parse([
+            OsString::from("demo-local"),
+            OsString::from("--from-check"),
+            OsString::from("deployment-check.json"),
+            OsString::from("--format"),
+            OsString::from("text"),
+            OsString::from("--__canic-network"),
+            OsString::from("ic"),
+        ])
+        .expect("parse deploy root verify");
+
+        assert_eq!(options.deployment, "demo-local");
+        assert_eq!(options.from_check, PathBuf::from("deployment-check.json"));
+        assert_eq!(options.network, "ic");
+        assert_eq!(options.format, RootOutputFormat::Text);
+    }
+
+    #[test]
     fn deploy_authority_leaf_commands_default_to_json() {
         let authority_check = DeployAuthorityOptions::parse(
             [OsString::from("demo")],
@@ -4289,14 +4423,16 @@ mod tests {
     fn deploy_root_help_documents_passive_boundary() {
         let help = root_usage();
         let inspect_help = root_inspect_usage();
+        let verify_help = root_verify_usage();
 
-        assert!(help.contains("passive deployment-root verification reports"));
-        assert!(help.contains("does not write verified root state"));
-        assert!(help.contains("mutate"));
-        assert!(help.contains("deployments"));
+        assert!(help.contains("deployment-root scoped"));
+        assert!(help.contains("Verify records verified root"));
         assert!(inspect_help.contains("DeploymentRootVerificationRequestV1-shaped JSON"));
         assert!(inspect_help.contains("does not persist verified root state"));
         assert!(inspect_help.contains("EvidenceSatisfied means"));
+        assert!(verify_help.contains("Verifies a registered deployment root"));
+        assert!(verify_help.contains("not full deployment verification"));
+        assert!(verify_help.contains("does not install"));
     }
 
     #[test]
@@ -4640,7 +4776,7 @@ mod tests {
     #[test]
     fn deploy_root_path_has_no_mutation_primitives() {
         let source = include_str!("mod.rs");
-        let root_source = source_between(source, "fn run_root<I>", "fn run_install<I>");
+        let root_source = source_between(source, "fn run_root_inspect<I>", "fn run_root_verify<I>");
         for forbidden in [
             "update_settings",
             "install_code",
@@ -4655,7 +4791,30 @@ mod tests {
         ] {
             assert!(
                 !root_source.contains(forbidden),
-                "root verification CLI path must stay passive; found forbidden token {forbidden}"
+                "root inspect CLI path must stay passive; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn deploy_root_verify_path_has_no_controller_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let root_source = source_between(source, "fn run_root_verify<I>", "fn run_install<I>");
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+            "install_root",
+            "register_deployment_state",
+        ] {
+            assert!(
+                !root_source.contains(forbidden),
+                "root verify CLI path must not mutate IC/controller state; found forbidden token {forbidden}"
             );
         }
     }
@@ -5004,6 +5163,37 @@ mod tests {
             vec![
                 OsString::from("--request"),
                 OsString::from("root-verification.json")
+            ]
+        );
+    }
+
+    #[test]
+    fn deploy_root_command_dispatches_verify() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("root"),
+                OsString::from("verify"),
+                OsString::from("demo-local"),
+                OsString::from("--from-check"),
+                OsString::from("deployment-check.json"),
+            ],
+        )
+        .expect("parse deploy root")
+        .expect("root command");
+
+        assert_eq!(parsed.0, "root");
+
+        let root = parse_subcommand(deploy_root_command(), parsed.1)
+            .expect("parse nested root")
+            .expect("root verify command");
+        assert_eq!(root.0, "verify");
+        assert_eq!(
+            root.1,
+            vec![
+                OsString::from("demo-local"),
+                OsString::from("--from-check"),
+                OsString::from("deployment-check.json")
             ]
         );
     }

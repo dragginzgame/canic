@@ -66,6 +66,12 @@ inspect only the files needed for the current task.
   default or text with `--format text`. The command does not install code,
   register state, query live inventory, or write `root_verification =
   verified`.
+- `canic deploy root verify <deployment> --from-check <file>` now performs the
+  explicit 0.47 state transition. It reads registered deployment-target state,
+  validates a `DeploymentCheckV1` with explicit root evidence, writes
+  `root_verification = verified` only after a state-digest compare-and-swap
+  check, and emits a `DeploymentRootVerificationReceiptV1`. The command does
+  not install code or mutate IC/controller state.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

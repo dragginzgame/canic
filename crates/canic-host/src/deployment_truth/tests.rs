@@ -9458,6 +9458,44 @@ fn root_verification_report_validation_rejects_digest_drift() {
 }
 
 #[test]
+fn root_verification_receipt_validation_accepts_state_transition() {
+    let receipt = sample_root_verification_receipt();
+
+    assert!(validate_deployment_root_verification_receipt(&receipt).is_ok());
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_digest_drift() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.root_principal = "other-root".to_string();
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("receipt digest drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::DigestMismatch {
+            field: "receipt_digest"
+        }
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_bad_transition() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.state_transition = DeploymentRootVerificationStateTransitionV1::NoStateChange;
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("invalid transition should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::StateTransitionMismatch
+    );
+}
+
+#[test]
 fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
     let mut plan = sample_plan();
     plan.expected_canisters[0].canister_id = None;
@@ -12543,6 +12581,40 @@ fn sample_root_verification_check() -> DeploymentCheckV1 {
         sample_root_verification_plan(),
         sample_root_verification_inventory(),
     )
+}
+
+fn sample_root_verification_receipt() -> DeploymentRootVerificationReceiptV1 {
+    let report = deployment_root_verification_report_from_check(sample_root_verification_request(
+        sample_root_verification_check(),
+    ));
+    let mut receipt = DeploymentRootVerificationReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        receipt_id: "receipt-root-verification".to_string(),
+        receipt_digest: String::new(),
+        deployment_name: report.deployment_name,
+        network: report.network,
+        fleet_template: report.expected_fleet_template,
+        root_principal: report.expected_root_principal,
+        previous_root_verification: DeploymentRootVerificationStateV1::NotVerified,
+        new_root_verification: DeploymentRootVerificationStateV1::Verified,
+        state_transition:
+            DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified,
+        source_report_id: report.report_id,
+        source_report_digest: report.report_digest,
+        source_check_id: report.source_check_id,
+        source_check_digest: report.source_check_digest,
+        source_deployment_plan_id: report.source_deployment_plan_id,
+        source_deployment_plan_digest: report.source_deployment_plan_digest,
+        source_inventory_id: report.source_inventory_id,
+        source_inventory_digest: report.source_inventory_digest,
+        verified_at_unix_secs: 100,
+        local_state_path: ".canic/local/deployments/demo.json".to_string(),
+        local_state_digest_before: "a".repeat(64),
+        local_state_digest_after: "b".repeat(64),
+        warnings: Vec::new(),
+    };
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+    receipt
 }
 
 fn sample_root_verification_plan() -> DeploymentPlanV1 {

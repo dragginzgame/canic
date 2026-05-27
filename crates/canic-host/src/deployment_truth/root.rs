@@ -31,6 +31,31 @@ struct DeploymentRootVerificationReportDigestInput<'a> {
     recommended_next_actions: &'a [String],
 }
 
+#[derive(Serialize)]
+struct DeploymentRootVerificationReceiptDigestInput<'a> {
+    receipt_id: &'a str,
+    deployment_name: &'a str,
+    network: &'a str,
+    fleet_template: &'a str,
+    root_principal: &'a str,
+    previous_root_verification: DeploymentRootVerificationStateV1,
+    new_root_verification: DeploymentRootVerificationStateV1,
+    state_transition: DeploymentRootVerificationStateTransitionV1,
+    source_report_id: &'a str,
+    source_report_digest: &'a str,
+    source_check_id: &'a str,
+    source_check_digest: &'a str,
+    source_deployment_plan_id: &'a str,
+    source_deployment_plan_digest: &'a str,
+    source_inventory_id: &'a str,
+    source_inventory_digest: &'a str,
+    verified_at_unix_secs: u64,
+    local_state_path: &'a str,
+    local_state_digest_before: &'a str,
+    local_state_digest_after: &'a str,
+    warnings: &'a [SafetyFindingV1],
+}
+
 ///
 /// DeploymentRootVerificationReportError
 ///
@@ -49,6 +74,26 @@ pub enum DeploymentRootVerificationReportError {
 
     #[error("deployment root verification report status is inconsistent")]
     StatusMismatch,
+}
+
+///
+/// DeploymentRootVerificationReceiptError
+///
+#[derive(Debug, Eq, PartialEq, ThisError)]
+pub enum DeploymentRootVerificationReceiptError {
+    #[error(
+        "deployment root verification receipt schema version {actual} does not match expected {expected}"
+    )]
+    SchemaVersionMismatch { expected: u32, actual: u32 },
+
+    #[error("deployment root verification receipt field `{field}` is required")]
+    MissingRequiredField { field: &'static str },
+
+    #[error("deployment root verification receipt field `{field}` digest is stale")]
+    DigestMismatch { field: &'static str },
+
+    #[error("deployment root verification receipt state transition is inconsistent")]
+    StateTransitionMismatch,
 }
 
 /// Build a passive 0.47 root-verification report from an existing
@@ -158,6 +203,105 @@ pub fn validate_deployment_root_verification_report(
     if report.report_digest != deployment_root_verification_report_digest(report) {
         return Err(DeploymentRootVerificationReportError::DigestMismatch {
             field: "report_digest",
+        });
+    }
+    Ok(())
+}
+
+/// Calculate the stable digest for a root-verification state-transition
+/// receipt.
+#[must_use]
+pub fn deployment_root_verification_receipt_digest(
+    receipt: &DeploymentRootVerificationReceiptV1,
+) -> String {
+    stable_json_sha256_hex(&DeploymentRootVerificationReceiptDigestInput {
+        receipt_id: &receipt.receipt_id,
+        deployment_name: &receipt.deployment_name,
+        network: &receipt.network,
+        fleet_template: &receipt.fleet_template,
+        root_principal: &receipt.root_principal,
+        previous_root_verification: receipt.previous_root_verification,
+        new_root_verification: receipt.new_root_verification,
+        state_transition: receipt.state_transition,
+        source_report_id: &receipt.source_report_id,
+        source_report_digest: &receipt.source_report_digest,
+        source_check_id: &receipt.source_check_id,
+        source_check_digest: &receipt.source_check_digest,
+        source_deployment_plan_id: &receipt.source_deployment_plan_id,
+        source_deployment_plan_digest: &receipt.source_deployment_plan_digest,
+        source_inventory_id: &receipt.source_inventory_id,
+        source_inventory_digest: &receipt.source_inventory_digest,
+        verified_at_unix_secs: receipt.verified_at_unix_secs,
+        local_state_path: &receipt.local_state_path,
+        local_state_digest_before: &receipt.local_state_digest_before,
+        local_state_digest_after: &receipt.local_state_digest_after,
+        warnings: &receipt.warnings,
+    })
+}
+
+/// Validate archived root-verification receipt consistency and digest
+/// stability.
+pub fn validate_deployment_root_verification_receipt(
+    receipt: &DeploymentRootVerificationReceiptV1,
+) -> Result<(), DeploymentRootVerificationReceiptError> {
+    if receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        return Err(
+            DeploymentRootVerificationReceiptError::SchemaVersionMismatch {
+                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+                actual: receipt.schema_version,
+            },
+        );
+    }
+    ensure_root_verification_receipt_field("receipt_id", receipt.receipt_id.as_str())?;
+    ensure_root_verification_receipt_field("receipt_digest", receipt.receipt_digest.as_str())?;
+    ensure_root_verification_receipt_field("deployment_name", receipt.deployment_name.as_str())?;
+    ensure_root_verification_receipt_field("network", receipt.network.as_str())?;
+    ensure_root_verification_receipt_field("fleet_template", receipt.fleet_template.as_str())?;
+    ensure_root_verification_receipt_field("root_principal", receipt.root_principal.as_str())?;
+    ensure_root_verification_receipt_field("source_report_id", receipt.source_report_id.as_str())?;
+    ensure_root_verification_receipt_field(
+        "source_report_digest",
+        receipt.source_report_digest.as_str(),
+    )?;
+    ensure_root_verification_receipt_field("source_check_id", receipt.source_check_id.as_str())?;
+    ensure_root_verification_receipt_field(
+        "source_check_digest",
+        receipt.source_check_digest.as_str(),
+    )?;
+    ensure_root_verification_receipt_field(
+        "source_deployment_plan_id",
+        receipt.source_deployment_plan_id.as_str(),
+    )?;
+    ensure_root_verification_receipt_field(
+        "source_deployment_plan_digest",
+        receipt.source_deployment_plan_digest.as_str(),
+    )?;
+    ensure_root_verification_receipt_field(
+        "source_inventory_id",
+        receipt.source_inventory_id.as_str(),
+    )?;
+    ensure_root_verification_receipt_field(
+        "source_inventory_digest",
+        receipt.source_inventory_digest.as_str(),
+    )?;
+    ensure_root_verification_receipt_field("local_state_path", receipt.local_state_path.as_str())?;
+    ensure_root_verification_receipt_field(
+        "local_state_digest_before",
+        receipt.local_state_digest_before.as_str(),
+    )?;
+    ensure_root_verification_receipt_field(
+        "local_state_digest_after",
+        receipt.local_state_digest_after.as_str(),
+    )?;
+
+    if receipt.new_root_verification != DeploymentRootVerificationStateV1::Verified
+        || receipt.state_transition != receipt_state_transition(receipt)
+    {
+        return Err(DeploymentRootVerificationReceiptError::StateTransitionMismatch);
+    }
+    if receipt.receipt_digest != deployment_root_verification_receipt_digest(receipt) {
+        return Err(DeploymentRootVerificationReceiptError::DigestMismatch {
+            field: "receipt_digest",
         });
     }
     Ok(())
@@ -382,6 +526,19 @@ const fn report_state_transition(
     root_verification_transition(report.evidence_status, report.current_root_verification)
 }
 
+const fn receipt_state_transition(
+    receipt: &DeploymentRootVerificationReceiptV1,
+) -> DeploymentRootVerificationStateTransitionV1 {
+    match receipt.previous_root_verification {
+        DeploymentRootVerificationStateV1::NotVerified => {
+            DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified
+        }
+        DeploymentRootVerificationStateV1::Verified => {
+            DeploymentRootVerificationStateTransitionV1::NoStateChange
+        }
+    }
+}
+
 fn deployment_root_verification_report_digest(
     report: &DeploymentRootVerificationReportV1,
 ) -> String {
@@ -420,6 +577,17 @@ const fn ensure_root_verification_field(
 ) -> Result<(), DeploymentRootVerificationReportError> {
     if value.is_empty() {
         Err(DeploymentRootVerificationReportError::MissingRequiredField { field })
+    } else {
+        Ok(())
+    }
+}
+
+const fn ensure_root_verification_receipt_field(
+    field: &'static str,
+    value: &str,
+) -> Result<(), DeploymentRootVerificationReceiptError> {
+    if value.is_empty() {
+        Err(DeploymentRootVerificationReceiptError::MissingRequiredField { field })
     } else {
         Ok(())
     }
