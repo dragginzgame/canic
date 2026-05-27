@@ -23,7 +23,7 @@ fn parses_download_options() {
     .expect("parse options");
 
     assert_eq!(options.canister.as_deref(), Some(ROOT));
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.deployment, "demo");
     assert_eq!(options.out.as_deref(), Some(Path::new("backups/test")));
     assert!(options.include_children);
     assert!(options.recursive);
@@ -32,7 +32,7 @@ fn parses_download_options() {
     assert_eq!(options.lifecycle, SnapshotLifecycleMode::StopAndResume);
 }
 
-// Ensure --out can be omitted for the common named-fleet backup flow.
+// Ensure --out can be omitted for the common named-deployment backup flow.
 #[test]
 fn download_options_default_output_directory() {
     let options = SnapshotDownloadOptions::parse([
@@ -42,28 +42,29 @@ fn download_options_default_output_directory() {
         OsString::from("--recursive"),
     ])
     .expect("parse options");
-    let out = default_snapshot_output_path(&options.fleet);
+    let out = default_snapshot_output_path(&options.deployment);
     let out = out.to_string_lossy();
 
-    assert!(out.starts_with("backups/fleet-"));
+    assert!(out.starts_with("backups/deployment-"));
+    assert!(!out.contains("backups/fleet-"));
     assert!(out.chars().last().is_some_and(|last| last.is_ascii_digit()));
 }
 
-// Ensure a named fleet can be selected without spelling out its root canister.
+// Ensure a named deployment can be selected without spelling out its root canister.
 #[test]
-fn parses_download_fleet_options_without_canister() {
+fn parses_download_deployment_options_without_canister() {
     let options =
         SnapshotDownloadOptions::parse([OsString::from("demo"), OsString::from("--dry-run")])
             .expect("parse options");
 
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.deployment, "demo");
     assert_eq!(options.canister, None);
     assert!(options.dry_run);
 }
 
-// Ensure explicit fleet/canister selections fail when the registry omits the canister.
+// Ensure explicit deployment/canister selections fail when the registry omits the canister.
 #[test]
-fn fleet_membership_rejects_unknown_canister() {
+fn deployment_membership_rejects_unknown_canister() {
     let registry = serde_json::json!({
         "Ok": [
             {
@@ -79,14 +80,14 @@ fn fleet_membership_rejects_unknown_canister() {
 
     assert!(matches!(
         err,
-        SnapshotCommandError::CanisterNotInFleet { fleet, canister }
-            if fleet == "demo" && canister == "missing-cai"
+        SnapshotCommandError::CanisterNotInDeployment { deployment, canister }
+            if deployment == "demo" && canister == "missing-cai"
     ));
 }
 
 // Ensure cached installed-deployment registry entries can validate membership without reparsing.
 #[test]
-fn fleet_membership_entries_accept_known_canister() {
+fn deployment_membership_entries_accept_known_canister() {
     let entries = vec![HostRegistryEntry {
         pid: ROOT.to_string(),
         role: Some("root".to_string()),

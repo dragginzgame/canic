@@ -109,7 +109,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "manifest",
-        about: "Validate fleet backup manifests",
+        about: "Validate backup manifests",
         scope: CommandScope::BackupRestore,
     },
     CommandSpec {

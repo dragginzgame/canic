@@ -38,7 +38,7 @@ use std::{
 pub(super) struct SnapshotDownloadOptions {
     canister: Option<String>,
     out: Option<PathBuf>,
-    fleet: String,
+    deployment: String,
     root: Option<String>,
     include_children: bool,
     recursive: bool,
@@ -61,7 +61,7 @@ impl SnapshotDownloadOptions {
         Ok(Self {
             canister: string_option(&matches, "canister"),
             out: path_option(&matches, "out"),
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
             root: string_option(&matches, "root"),
             include_children,
             recursive,
@@ -81,17 +81,16 @@ fn snapshot_download_command() -> ClapCommand {
         .about("Download canister snapshots for one canister or subtree")
         .disable_help_flag(true)
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("deployment")
+                .value_name("deployment")
                 .required(true)
                 .help("Installed deployment name to snapshot"),
         )
         .arg(value_arg("canister").long("canister").value_name("id"))
         .arg(
-            value_arg("out")
-                .long("out")
-                .value_name("dir")
-                .help("Backup output directory; defaults to backups/fleet-<name>-YYYYMMDD-HHMMSS"),
+            value_arg("out").long("out").value_name("dir").help(
+                "Backup output directory; defaults to backups/deployment-<name>-YYYYMMDD-HHMMSS",
+            ),
         )
         .arg(value_arg("root").long("root").value_name("id"))
         .arg(flag_arg("include-children").long("include-children"))
@@ -146,7 +145,7 @@ pub(super) fn download_snapshots(
 struct ResolvedSnapshotDownload {
     canister: String,
     out: PathBuf,
-    fleet: Option<String>,
+    deployment: Option<String>,
     explicit_canister: bool,
     root: Option<String>,
     include_children: bool,
@@ -159,7 +158,7 @@ struct ResolvedSnapshotDownload {
     registry_entries: Option<Vec<HostRegistryEntry>>,
 }
 
-// Resolve the named fleet into the explicit backup contract used downstream.
+// Resolve the named deployment into the explicit backup contract used downstream.
 fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
@@ -168,7 +167,7 @@ fn resolve_snapshot_download_request(
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
     let installed = match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: options.fleet.clone(),
+            deployment: options.deployment.clone(),
             network,
             icp: options.icp.clone(),
             detect_lost_local_root: false,
@@ -186,8 +185,8 @@ fn resolve_snapshot_download_request(
         .clone()
         .or_else(|| state.map(|state| state.root_canister_id.clone()))
         .ok_or(SnapshotCommandError::MissingSnapshotSource)?;
-    let fleet = state.map_or_else(
-        || options.fleet.clone(),
+    let deployment = state.map_or_else(
+        || options.deployment.clone(),
         |state| state.deployment_name.clone(),
     );
     let root = resolved_snapshot_root(options, state)?;
@@ -200,12 +199,12 @@ fn resolve_snapshot_download_request(
     let out = options
         .out
         .clone()
-        .unwrap_or_else(|| default_snapshot_output_path(&fleet));
+        .unwrap_or_else(|| default_snapshot_output_path(&deployment));
 
     Ok(ResolvedSnapshotDownload {
         canister,
         out,
-        fleet: Some(fleet),
+        deployment: Some(deployment),
         explicit_canister,
         root,
         include_children,
@@ -230,8 +229,8 @@ fn resolved_snapshot_root(
     if let Some(root) = &options.root
         && root != &state.root_canister_id
     {
-        return Err(SnapshotCommandError::ConflictingFleetRoot {
-            fleet_root: state.root_canister_id.clone(),
+        return Err(SnapshotCommandError::ConflictingDeploymentRoot {
+            deployment_root: state.root_canister_id.clone(),
             root: root.clone(),
         });
     }
@@ -245,7 +244,7 @@ fn validate_fleet_selection_if_needed(
     if !request.explicit_canister {
         return Ok(());
     }
-    let Some(fleet) = &request.fleet else {
+    let Some(deployment) = &request.deployment else {
         return Ok(());
     };
     let Some(root) = &request.root else {
@@ -253,15 +252,15 @@ fn validate_fleet_selection_if_needed(
     };
 
     if let Some(entries) = &request.registry_entries {
-        return validate_fleet_membership_entries(fleet, &request.canister, entries);
+        return validate_fleet_membership_entries(deployment, &request.canister, entries);
     }
 
     let registry_json = call_subnet_registry(request, root)?;
-    validate_fleet_membership_json(fleet, &request.canister, &registry_json)
+    validate_fleet_membership_json(deployment, &request.canister, &registry_json)
 }
 
 fn validate_fleet_membership_json(
-    fleet: &str,
+    deployment: &str,
     canister: &str,
     registry_json: &str,
 ) -> Result<(), SnapshotCommandError> {
@@ -270,14 +269,14 @@ fn validate_fleet_membership_json(
         return Ok(());
     }
 
-    Err(SnapshotCommandError::CanisterNotInFleet {
-        fleet: fleet.to_string(),
+    Err(SnapshotCommandError::CanisterNotInDeployment {
+        deployment: deployment.to_string(),
         canister: canister.to_string(),
     })
 }
 
 fn validate_fleet_membership_entries(
-    fleet: &str,
+    deployment: &str,
     canister: &str,
     entries: &[HostRegistryEntry],
 ) -> Result<(), SnapshotCommandError> {
@@ -285,16 +284,19 @@ fn validate_fleet_membership_entries(
         return Ok(());
     }
 
-    Err(SnapshotCommandError::CanisterNotInFleet {
-        fleet: fleet.to_string(),
+    Err(SnapshotCommandError::CanisterNotInDeployment {
+        deployment: deployment.to_string(),
         canister: canister.to_string(),
     })
 }
 
-fn default_snapshot_output_path(label: &str) -> PathBuf {
+fn default_snapshot_output_path(deployment: &str) -> PathBuf {
     let marker = current_backup_directory_stamp();
 
-    PathBuf::from("backups").join(format!("fleet-{}-{marker}", file_safe_component(label)))
+    PathBuf::from("backups").join(format!(
+        "deployment-{}-{marker}",
+        file_safe_component(deployment)
+    ))
 }
 
 fn state_network(network: Option<&str>) -> String {

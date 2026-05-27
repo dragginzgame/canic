@@ -33,6 +33,18 @@ fn missing_manifest_validate_option_names_required_path() {
     assert!(err.to_string().contains("canic manifest validate"));
 }
 
+// Ensure manifest help stays backup-artifact scoped instead of live-fleet scoped.
+#[test]
+fn manifest_usage_avoids_fleet_owned_backup_wording() {
+    let text = usage();
+    let validate = validate_usage();
+
+    assert!(text.contains("Validate backup manifests"));
+    assert!(validate.contains("Validate a backup manifest"));
+    assert!(!text.contains("fleet backup"));
+    assert!(!validate.contains("fleet backup"));
+}
+
 // Ensure manifest validation loads JSON and runs the manifest contract.
 #[test]
 fn validate_manifest_reads_and_validates_manifest() {

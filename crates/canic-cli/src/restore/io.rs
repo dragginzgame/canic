@@ -221,7 +221,7 @@ fn restore_backup_dir(
         .map_err(RestoreCommandError::from)
 }
 
-// Read and decode a fleet backup manifest from disk.
+// Read and decode a backup manifest from disk.
 fn read_manifest(path: &PathBuf) -> Result<FleetBackupManifest, RestoreCommandError> {
     output::read_json_file::<FleetBackupManifest, RestoreCommandError>(path)
 }

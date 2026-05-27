@@ -25,11 +25,17 @@ pub enum SnapshotCommandError {
     #[error("snapshot download needs an installed deployment name")]
     MissingSnapshotSource,
 
-    #[error("cannot combine fleet root {fleet_root} with --root {root}")]
-    ConflictingFleetRoot { fleet_root: String, root: String },
+    #[error("cannot combine deployment root {deployment_root} with --root {root}")]
+    ConflictingDeploymentRoot {
+        deployment_root: String,
+        root: String,
+    },
 
-    #[error("canister {canister} is not a member of fleet {fleet}")]
-    CanisterNotInFleet { fleet: String, canister: String },
+    #[error("canister {canister} is not a member of deployment {deployment}")]
+    CanisterNotInDeployment {
+        deployment: String,
+        canister: String,
+    },
 
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },

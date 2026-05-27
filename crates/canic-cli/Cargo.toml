@@ -4,7 +4,7 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
-description = "Operator CLI for Canic fleet backup and restore workflows"
+description = "Operator CLI for Canic deployment backup and restore workflows"
 readme = "README.md"
 documentation = "https://docs.rs/canic-cli"
 homepage = { workspace = true }

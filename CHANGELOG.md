@@ -12,14 +12,26 @@ present.
 
 ## Unreleased
 
-- Tightens backup create/status/inspect as deployment-target surfaces:
-  `canic backup create` now uses deployment identity internally, defaults new
-  backup directories to `backups/deployment-...`, renders `DEPLOYMENT` in
-  create/inspect tables, serializes dry-run status and inspect JSON with
-  `deployment`, and maps the legacy lower-level backup plan `fleet` field only
-  at the CLI boundary.
+- Cleans remaining backup/restore manifest help around backup artifacts:
+  `canic manifest` / `canic manifest validate` now describe backup manifests
+  without presenting them as live fleet-owned state, and `canic-cli` package
+  metadata now describes deployment backup/restore workflows.
 
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.13` tightens snapshot download and restore examples around
+  deployment-target backup layout naming: `canic snapshot download` now parses
+  an installed deployment target, defaults snapshot backup directories to
+  `backups/deployment-...`, reports deployment-root/membership errors with
+  deployment wording, and restore help examples use the deployment-prefixed
+  layout path.
+
+- `0.46.12` tightens backup create/status/inspect as deployment-target
+  surfaces: `canic backup create` now uses deployment identity internally,
+  defaults new backup directories to `backups/deployment-...`, renders
+  `DEPLOYMENT` in create/inspect tables, serializes dry-run status and inspect
+  JSON with `deployment`, and maps the legacy lower-level backup plan `fleet`
+  field only at the CLI boundary.
 
 - `0.46.11` tightens live operator surfaces as installed-deployment surfaces:
   `canic info list`, `canic info cycles`, `canic metrics`, and

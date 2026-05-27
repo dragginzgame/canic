@@ -57,7 +57,7 @@ impl ManifestValidateOptions {
 fn manifest_validate_command() -> ClapCommand {
     ClapCommand::new("validate")
         .bin_name("canic manifest validate")
-        .about("Validate a fleet backup manifest")
+        .about("Validate a backup manifest")
         .disable_help_flag(true)
         .arg(
             value_arg("manifest")
@@ -98,7 +98,7 @@ where
     }
 }
 
-/// Read and validate a fleet backup manifest from disk.
+/// Read and validate a backup manifest from disk.
 fn validate_manifest(
     options: &ManifestValidateOptions,
 ) -> Result<FleetBackupManifest, ManifestCommandError> {
@@ -130,11 +130,11 @@ fn validate_usage() -> String {
 fn manifest_command() -> ClapCommand {
     ClapCommand::new("manifest")
         .bin_name("canic manifest")
-        .about("Validate fleet backup manifests")
+        .about("Validate backup manifests")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("validate")
-                .about("Validate a fleet backup manifest")
+                .about("Validate a backup manifest")
                 .disable_help_flag(true),
         ))
 }

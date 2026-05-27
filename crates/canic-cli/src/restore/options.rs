@@ -12,7 +12,7 @@ const BACKUP_REF: &str = "backup-ref";
 const RESTORE_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic restore plan 1 --require-verified --require-restore-ready
-  canic restore plan --backup-dir backups/fleet-test-YYYYMMDD-HHMMSS --out restore-plan.json";
+  canic restore plan --backup-dir backups/deployment-test-YYYYMMDD-HHMMSS --out restore-plan.json";
 const RESTORE_PREPARE_HELP_AFTER: &str = "\
 Examples:
   canic restore prepare 1 --require-verified --require-restore-ready
@@ -20,7 +20,7 @@ Examples:
 const RESTORE_APPLY_HELP_AFTER: &str = "\
 Examples:
   canic restore apply 1 --dry-run
-  canic restore apply --plan restore-plan.json --backup-dir backups/fleet-test-YYYYMMDD-HHMMSS --dry-run";
+  canic restore apply --plan restore-plan.json --backup-dir backups/deployment-test-YYYYMMDD-HHMMSS --dry-run";
 const RESTORE_RUN_HELP_AFTER: &str = "\
 Examples:
   canic restore run 1 --dry-run

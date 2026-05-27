@@ -98,6 +98,10 @@ fleet-named install state is refused as deployment truth.
   `backups/deployment-...`, create/inspect text tables render `DEPLOYMENT`,
   and dry-run status plus inspect JSON serialize `deployment` instead of
   exposing stale `fleet` fields from the lower-level backup plan model.
+- Updated `canic snapshot download` and restore help examples so snapshot
+  backup layouts use deployment-target naming (`backups/deployment-...`) and
+  snapshot root/membership diagnostics describe deployment targets instead of
+  live fleet state.
 
 ## Not Implemented Yet
 

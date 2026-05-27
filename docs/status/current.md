@@ -128,6 +128,10 @@ inspect only the files needed for the current task.
   `backups/deployment-...`, create/inspect tables render `DEPLOYMENT`, dry-run
   status and inspect JSON serialize `deployment`, and the lower-level backup
   plan `fleet` field is mapped only at the CLI boundary.
+- Snapshot download now follows the same deployment-target backup layout
+  boundary: it parses an installed deployment target, defaults output to
+  `backups/deployment-...`, uses deployment-root/membership wording in errors,
+  and restore help examples now point at deployment-prefixed backup layouts.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,
@@ -1391,7 +1395,7 @@ inspect only the files needed for the current task.
   burn and top-up rates alongside net cycle movement in a compact default
   table, keeps wider diagnostics behind `--verbose`, and includes JSON fields
   for the derived burn and top-up per-hour values.
-- Fixed full non-root fleet backup manifest finalization so root-omitted
+- Fixed full non-root deployment backup manifest finalization so root-omitted
   sibling branches are emitted as separate consistency units. The deployed
   local `test` fleet now completes `canic backup create test` with six
   non-root targets, and the resulting layout passes status and verification.
@@ -1637,9 +1641,9 @@ inspect only the files needed for the current task.
   canisters.
 - Grouped `snapshot`, `backup`, `manifest`, and `restore` under a dedicated
   backup/restore section in the top-level `canic help` output.
-- Fixed local `canic snapshot download <fleet>` target discovery to use decoded
-  local replica registry queries instead of parsing the ICP CLI transport JSON
-  wrapper.
+- Fixed local `canic snapshot download <deployment>` target discovery to use
+  decoded local replica registry queries instead of parsing the ICP CLI
+  transport JSON wrapper.
 - Fixed real snapshot-download id extraction to use
   `icp canister snapshot create --quiet` and hex-only parsing, preventing table
   units such as `MiB` from being treated as snapshot ids.
@@ -1911,7 +1915,7 @@ inspect only the files needed for the current task.
 - `cargo run -q -p canic-cli --bin canic -- backup list`
 - `cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-wasm-store --locked --allow-dirty`
 - `cargo metadata --no-deps --format-version 1`
-- `cargo run -q -p canic-cli --bin canic -- backup status --dir backups/fleet-demo-20260510-222116`
+- `cargo run -q -p canic-cli --bin canic -- backup status --dir backups/deployment-demo-20260510-222116`
 - `cargo test -p canic-cli endpoints -- --nocapture`
 - `cargo test -p canic-cli cycles::tests -- --nocapture`
 - `cargo test -p canic-cli metrics::tests -- --nocapture`
@@ -1937,8 +1941,8 @@ inspect only the files needed for the current task.
 - `cargo clippy -p canic-cli --all-targets -- -D warnings`
 - `git diff --check`
 - `cargo test -p canic-cli backup -- --nocapture`
-- `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/fleet-demo-20260510-222116`
-- `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/fleet-demo-20260510-222116 --json`
+- `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/deployment-demo-20260510-222116`
+- `cargo run -q -p canic-cli --bin canic -- backup inspect --dir backups/deployment-demo-20260510-222116 --json`
 - `cargo run -q -p canic-cli --bin canic -- backup list`
 - `cargo run -q -p canic-cli --bin canic -- backup inspect 1`
 - `cargo run -q -p canic-cli --bin canic -- backup status 1`
