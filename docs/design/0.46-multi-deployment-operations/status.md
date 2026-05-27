@@ -10,15 +10,22 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-In progress.
+Closed with documented caveats.
 
-0.46 depends on deployment truth, promotion, and external lifecycle state so
-multiple deployment targets can be compared and operated without conflating
-template identity with live deployment identity.
+0.46 closes as a deployment-target identity hard cut plus passive two-target
+comparison line. Canic now distinguishes reusable fleet templates from concrete
+deployment-target local state, refuses old fleet-named live state as
+deployment truth, requires exact deployment target identity for supplied-plan
+install, and can compare two archived `DeploymentCheckV1` artifacts without
+live lookup or mutation.
 
-The deployment-target local state hard cut is underway: fleet templates remain
-reusable topology inputs, deployments are the only live target state, and old
-fleet-named install state is refused as deployment truth.
+The closeout is intentionally narrow. `canic deploy register` writes minimal
+unverified recovery state for a known live root, and unverified roots block
+mutation until explicit verification evidence is recorded. No live
+verified-root registration path landed in 0.46.
+
+Group/catalog, teardown, and test-deployment features remain deferred beyond
+0.46; they are not part of this line's closeout claim.
 
 ## Implemented
 
@@ -103,11 +110,12 @@ fleet-named install state is refused as deployment truth.
   snapshot root/membership diagnostics describe deployment targets instead of
   live fleet state.
 
-## Not Implemented Yet
+## Deferred Beyond 0.46
 
 - Passive comparison beyond the current two-check artifact command.
 - Live inventory crawling for comparison inputs.
 - Verified-root registration that can write `root_verification = "verified"`.
+- Group/catalog, teardown, and test-deployment feature work.
 
 ## Drift Log
 

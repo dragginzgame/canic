@@ -1,6 +1,6 @@
 # Post-46 Backlog Status: Wasm-Store Artifact Registry
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Purpose
 
@@ -9,10 +9,13 @@ numbered release line.
 
 ## Current State
 
-Not started.
+Topic implementation not started.
 
 This topic depends on artifact truth and promotion work so the wasm-store can
 become an explicit artifact registry rather than a hidden deployment helper.
+The 0.41-0.46 foundation made wasm-store evidence visible to deployment truth
+and promotion, but no post-46 registry, provenance, pinning, or GC model has
+been promoted or implemented.
 
 ## Implemented
 

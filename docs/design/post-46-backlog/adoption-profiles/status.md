@@ -1,6 +1,6 @@
 # Post-46 Backlog Status: Adoption Profiles
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Purpose
 
@@ -9,11 +9,14 @@ numbered release line.
 
 ## Current State
 
-Not started.
+Topic implementation not started.
 
 This topic depends on deployment truth and authority reconciliation so adoption
 can be an explicit profile-driven operation rather than a best-effort inference
 from current config.
+The 0.41-0.46 foundation supplies inventory, authority, and lifecycle evidence,
+but no post-46 adoption profile model or guided brownfield workflow has been
+promoted or implemented.
 
 ## Implemented
 

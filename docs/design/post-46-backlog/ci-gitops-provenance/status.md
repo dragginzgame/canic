@@ -1,6 +1,6 @@
 # Post-46 Backlog Status: CI/GitOps Provenance
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Purpose
 
@@ -9,11 +9,15 @@ numbered release line.
 
 ## Current State
 
-Not started.
+Topic implementation not started.
 
 This topic depends on deployment truth, receipts, artifact provenance, and
 promotion state so CI/GitOps can prove what it intended and what was actually
 deployed.
+The 0.41-0.46 foundation supplies raw JSON deployment artifacts and some
+automation gates, but no stable public JSON envelope, exit-code contract,
+provenance model, CI lock, or signing workflow has been promoted or
+implemented.
 
 ## Implemented
 

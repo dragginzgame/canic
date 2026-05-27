@@ -2,7 +2,7 @@
 
 ## Status
 
-TBD.
+Backlog only.
 
 This is a post-0.46 backlog topic. It captures CI/CD, GitOps, and
 supply-chain needs that should build on deployment truth, authority, execution,
@@ -192,16 +192,18 @@ an independent deployment state model.
 Tentative operator surface:
 
 ```text
-canic deploy plan --json
-canic deploy check --json
+canic deploy plan <deployment>
+canic deploy check <deployment>
 canic deploy receipt sign
 canic deploy lock acquire
 canic deploy lock release
 canic project validate
 ```
 
-Command names are tentative. The stable part is the JSON envelope, exit-code
-classes, provenance, and lock model.
+Current deployment-truth commands print JSON by default; this topic would own a
+stable public JSON envelope rather than relying on the current raw internal
+payloads. Command names are tentative. The stable part is the JSON envelope,
+exit-code classes, provenance, and lock model.
 
 ---
 

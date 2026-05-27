@@ -28,12 +28,40 @@ pub struct DeploymentInventoryV1 {
     pub inventory_id: String,
     pub observed_at: String,
     pub observed_identity: Option<DeploymentIdentityV1>,
+    pub observed_root: Option<DeploymentRootObservationV1>,
     pub local_config: LocalDeploymentConfigV1,
     pub observed_canisters: Vec<ObservedCanisterV1>,
     pub observed_pool: Vec<ObservedPoolCanisterV1>,
     pub observed_artifacts: Vec<ObservedArtifactV1>,
     pub observed_verifier_readiness: VerifierReadinessObservationV1,
     pub unresolved_observations: Vec<DeploymentObservationGapV1>,
+}
+
+///
+/// DeploymentRootObservationV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentRootObservationV1 {
+    pub deployment_name: String,
+    pub network: String,
+    pub fleet_template: String,
+    pub root_principal: String,
+    pub observed_canister_id: String,
+    pub observation_source: DeploymentRootObservationSourceV1,
+    pub control_class: CanisterControlClassV1,
+    pub controllers: Vec<String>,
+    pub module_hash: Option<String>,
+    pub status: Option<String>,
+    pub role_assignment_source: Option<String>,
+}
+
+///
+/// DeploymentRootObservationSourceV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DeploymentRootObservationSourceV1 {
+    IcpCanisterStatus,
+    LocalDeploymentState,
 }
 
 ///
@@ -878,6 +906,106 @@ pub struct DeploymentCheckV1 {
     pub inventory: DeploymentInventoryV1,
     pub diff: DeploymentDiffV1,
     pub report: SafetyReportV1,
+}
+
+///
+/// DeploymentRootVerificationRequestV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentRootVerificationRequestV1 {
+    pub report_id: String,
+    pub requested_at: String,
+    pub deployment_name: String,
+    pub network: String,
+    pub expected_fleet_template: String,
+    pub expected_root_principal: String,
+    pub current_root_verification: DeploymentRootVerificationStateV1,
+    pub source: DeploymentRootVerificationSourceV1,
+    pub deployment_check: DeploymentCheckV1,
+}
+
+///
+/// DeploymentRootVerificationReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentRootVerificationReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub report_digest: String,
+    pub requested_at: String,
+    pub evidence_status: DeploymentRootVerificationEvidenceStatusV1,
+    pub state_transition: DeploymentRootVerificationStateTransitionV1,
+    pub deployment_name: String,
+    pub network: String,
+    pub expected_fleet_template: String,
+    pub expected_root_principal: String,
+    pub observed_deployment_name: Option<String>,
+    pub observed_network: Option<String>,
+    pub observed_fleet_template: Option<String>,
+    pub observed_root_principal: Option<String>,
+    pub source: DeploymentRootVerificationSourceV1,
+    pub source_check_id: String,
+    pub source_check_digest: String,
+    pub source_deployment_plan_id: String,
+    pub source_deployment_plan_digest: String,
+    pub source_inventory_id: String,
+    pub source_inventory_digest: String,
+    pub current_root_verification: DeploymentRootVerificationStateV1,
+    pub identity_checks: Vec<DeploymentRootVerificationCheckV1>,
+    pub evidence_checks: Vec<DeploymentRootVerificationCheckV1>,
+    pub blockers: Vec<SafetyFindingV1>,
+    pub warnings: Vec<SafetyFindingV1>,
+    pub recommended_next_actions: Vec<String>,
+}
+
+///
+/// DeploymentRootVerificationCheckV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentRootVerificationCheckV1 {
+    pub name: String,
+    pub expected: Option<String>,
+    pub observed: Option<String>,
+    pub satisfied: bool,
+}
+
+///
+/// DeploymentRootVerificationSourceV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum DeploymentRootVerificationSourceV1 {
+    DeploymentTruthCheck,
+}
+
+///
+/// DeploymentRootVerificationEvidenceStatusV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum DeploymentRootVerificationEvidenceStatusV1 {
+    EvidenceSatisfied,
+    VerificationFailed,
+    NotApplicable,
+}
+
+///
+/// DeploymentRootVerificationStateTransitionV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum DeploymentRootVerificationStateTransitionV1 {
+    NotAttempted,
+    WouldPromoteNotVerifiedToVerified,
+    PromotedNotVerifiedToVerified,
+    NoStateChange,
+    Blocked,
+}
+
+///
+/// DeploymentRootVerificationStateV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum DeploymentRootVerificationStateV1 {
+    NotVerified,
+    Verified,
 }
 
 ///

@@ -68,6 +68,52 @@ pub fn deployment_comparison_report_text(report: &DeploymentComparisonReportV1) 
     lines.join("\n")
 }
 
+/// Render a deployment-root verification report as passive operator text.
+#[must_use]
+pub fn deployment_root_verification_report_text(
+    report: &DeploymentRootVerificationReportV1,
+) -> String {
+    let mut lines = vec![
+        "Deployment root verification report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        "local_state_write: none".to_string(),
+        format!("evidence_status: {:?}", report.evidence_status),
+        format!("state_transition: {:?}", report.state_transition),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("requested_at: {}", report.requested_at),
+        format!("deployment: {}", report.deployment_name),
+        format!("network: {}", report.network),
+        format!("fleet_template: {}", report.expected_fleet_template),
+        format!("root_principal: {}", report.expected_root_principal),
+        format!("source_check_id: {}", report.source_check_id),
+        format!("source_check_digest: {}", report.source_check_digest),
+        format!("source_inventory_id: {}", report.source_inventory_id),
+        format!(
+            "source_inventory_digest: {}",
+            report.source_inventory_digest
+        ),
+        String::new(),
+        "counts:".to_string(),
+        format!("  identity_checks: {}", report.identity_checks.len()),
+        format!("  evidence_checks: {}", report.evidence_checks.len()),
+        format!("  blockers: {}", report.blockers.len()),
+        format!("  warnings: {}", report.warnings.len()),
+    ];
+
+    append_root_verification_check_items(&mut lines, "identity_checks", &report.identity_checks);
+    append_root_verification_check_items(&mut lines, "evidence_checks", &report.evidence_checks);
+    append_hard_failure_items(&mut lines, "blockers", &report.blockers);
+    append_warning_items(&mut lines, "warnings", &report.warnings);
+    append_string_items(
+        &mut lines,
+        "recommended_next_actions",
+        &report.recommended_next_actions,
+    );
+    lines.join("\n")
+}
+
 /// Render lifecycle authority projection as passive operator text.
 #[must_use]
 pub fn lifecycle_authority_report_text(report: &LifecycleAuthorityReportV1) -> String {
@@ -92,6 +138,27 @@ pub fn lifecycle_authority_report_text(report: &LifecycleAuthorityReportV1) -> S
 
     append_lifecycle_authority_items(&mut lines, &report.authorities);
     lines.join("\n")
+}
+
+fn append_root_verification_check_items(
+    lines: &mut Vec<String>,
+    label: &str,
+    items: &[DeploymentRootVerificationCheckV1],
+) {
+    if items.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push(format!("{label}:"));
+    for item in items {
+        lines.push(format!(
+            "  - {} expected={} observed={} satisfied={}",
+            item.name,
+            item.expected.as_deref().unwrap_or("missing"),
+            item.observed.as_deref().unwrap_or("missing"),
+            item.satisfied
+        ));
+    }
 }
 
 fn append_comparison_diff_items(

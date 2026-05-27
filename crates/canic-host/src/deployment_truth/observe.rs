@@ -55,44 +55,11 @@ pub fn collect_local_deployment_inventory(
 ) -> Result<DeploymentInventoryV1, DeploymentTruthError> {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_observations = Vec::new();
-    let mut roles = Vec::new();
-
-    let fleet_name = match configured_fleet_name(&config) {
-        Ok(fleet) => fleet,
-        Err(err) => {
-            unresolved_observations.push(observation_gap(
-                "local_config.fleet_name",
-                format!(
-                    "could not resolve fleet name from {}: {err}",
-                    config.display()
-                ),
-            ));
-            request.deployment_name.clone()
-        }
-    };
-
-    match configured_fleet_roles(&config) {
-        Ok(configured_roles) => {
-            roles = deployment_truth_roles_with_implicit_wasm_store(configured_roles);
-        }
-        Err(err) => unresolved_observations.push(observation_gap(
-            "local_config.roles",
-            format!(
-                "could not resolve configured roles from {}: {err}",
-                config.display()
-            ),
-        )),
-    }
-    let pool_expectations = configured_pool_expectations(&config).unwrap_or_else(|err| {
-        unresolved_observations.push(observation_gap(
-            "local_config.pools",
-            format!(
-                "could not resolve configured pool expectations from {}: {err}",
-                config.display()
-            ),
-        ));
-        Vec::new()
-    });
+    let local_config_facts = observe_local_config_facts(
+        &config,
+        &request.deployment_name,
+        &mut unresolved_observations,
+    );
 
     let install_state = read_named_deployment_install_state_from_root(
         &request.icp_root,
@@ -111,20 +78,24 @@ pub fn collect_local_deployment_inventory(
     let observed_artifacts = collect_observed_artifacts(
         &request.icp_root,
         &request.network,
-        &roles,
+        &local_config_facts.roles,
         &mut unresolved_observations,
     );
     let (observed_canisters, observed_pool) = install_state_observations(
         install_state.as_ref(),
         request,
-        &fleet_name,
-        &pool_expectations,
+        &local_config_facts.pool_expectations,
         &mut unresolved_observations,
+    );
+    let observed_root = observed_root_observation(
+        install_state.as_ref(),
+        request,
+        &local_config_facts.fleet_name,
+        &observed_canisters,
     );
     let observed_identity = Some(local_inventory_identity(
         request,
         InventoryIdentityFacts {
-            fleet_name: &fleet_name,
             root_principal: install_state
                 .as_ref()
                 .map(|state| state.root_canister_id.clone()),
@@ -141,6 +112,7 @@ pub fn collect_local_deployment_inventory(
         inventory_id: format!("local:{}:{}", request.network, request.deployment_name),
         observed_at: request.observed_at.clone(),
         observed_identity,
+        observed_root,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some(config.display().to_string()),
             raw_config_sha256,
@@ -157,10 +129,60 @@ pub fn collect_local_deployment_inventory(
     })
 }
 
+struct LocalConfigObservation {
+    fleet_name: String,
+    roles: Vec<String>,
+    pool_expectations: Vec<ConfiguredPoolExpectation>,
+}
+
+fn observe_local_config_facts(
+    config: &Path,
+    fallback_fleet_name: &str,
+    unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
+) -> LocalConfigObservation {
+    let fleet_name = configured_fleet_name(config).unwrap_or_else(|err| {
+        unresolved_observations.push(observation_gap(
+            "local_config.fleet_name",
+            format!(
+                "could not resolve fleet name from {}: {err}",
+                config.display()
+            ),
+        ));
+        fallback_fleet_name.to_string()
+    });
+    let roles = configured_fleet_roles(config).map_or_else(
+        |err| {
+            unresolved_observations.push(observation_gap(
+                "local_config.roles",
+                format!(
+                    "could not resolve configured roles from {}: {err}",
+                    config.display()
+                ),
+            ));
+            Vec::new()
+        },
+        deployment_truth_roles_with_implicit_wasm_store,
+    );
+    let pool_expectations = configured_pool_expectations(config).unwrap_or_else(|err| {
+        unresolved_observations.push(observation_gap(
+            "local_config.pools",
+            format!(
+                "could not resolve configured pool expectations from {}: {err}",
+                config.display()
+            ),
+        ));
+        Vec::new()
+    });
+    LocalConfigObservation {
+        fleet_name,
+        roles,
+        pool_expectations,
+    }
+}
+
 fn install_state_observations(
     install_state: Option<&crate::install_root::InstallState>,
     request: &LocalInventoryRequest,
-    fleet_name: &str,
     pool_expectations: &[ConfiguredPoolExpectation],
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> (Vec<ObservedCanisterV1>, Vec<ObservedPoolCanisterV1>) {
@@ -176,7 +198,6 @@ fn install_state_observations(
     let observed_pool = install_state_registry_observations(
         state,
         request,
-        fleet_name,
         pool_expectations,
         &mut observed_canisters,
         unresolved_observations,
@@ -185,7 +206,6 @@ fn install_state_observations(
 }
 
 struct InventoryIdentityFacts<'a> {
-    fleet_name: &'a str,
     root_principal: Option<String>,
     deployment_manifest_digest: Option<String>,
     canonical_runtime_config_digest: Option<String>,
@@ -201,7 +221,6 @@ fn local_inventory_identity(
     local_deployment_identity(
         request,
         InventoryIdentityInput {
-            fleet_name: facts.fleet_name,
             root_principal: facts.root_principal,
             deployment_manifest_digest: facts.deployment_manifest_digest,
             canonical_runtime_config_digest: facts.canonical_runtime_config_digest,
@@ -543,8 +562,7 @@ fn observe_canonical_runtime_config_digest(
     }
 }
 
-struct InventoryIdentityInput<'a> {
-    fleet_name: &'a str,
+struct InventoryIdentityInput {
     root_principal: Option<String>,
     deployment_manifest_digest: Option<String>,
     canonical_runtime_config_digest: Option<String>,
@@ -555,10 +573,10 @@ struct InventoryIdentityInput<'a> {
 
 fn local_deployment_identity(
     request: &LocalInventoryRequest,
-    input: InventoryIdentityInput<'_>,
+    input: InventoryIdentityInput,
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
-        deployment_name: input.fleet_name.to_string(),
+        deployment_name: request.deployment_name.clone(),
         network: request.network.clone(),
         root_principal: input.root_principal,
         authority_profile_hash: None,
@@ -570,6 +588,39 @@ fn local_deployment_identity(
         pool_identity_set_digest: input.pool_identity_set_digest,
         canic_version: Some(env!("CARGO_PKG_VERSION").to_string()),
         ic_memory_version: None,
+    }
+}
+
+fn observed_root_observation(
+    install_state: Option<&crate::install_root::InstallState>,
+    request: &LocalInventoryRequest,
+    fleet_name: &str,
+    observed_canisters: &[ObservedCanisterV1],
+) -> Option<DeploymentRootObservationV1> {
+    let state = install_state?;
+    let observed = observed_canisters
+        .iter()
+        .find(|canister| canister.canister_id == state.root_canister_id)?;
+    Some(DeploymentRootObservationV1 {
+        deployment_name: request.deployment_name.clone(),
+        network: request.network.clone(),
+        fleet_template: fleet_name.to_string(),
+        root_principal: state.root_canister_id.clone(),
+        observed_canister_id: observed.canister_id.clone(),
+        observation_source: root_observation_source(observed),
+        control_class: observed.control_class,
+        controllers: observed.controllers.clone(),
+        module_hash: observed.module_hash.clone(),
+        status: observed.status.clone(),
+        role_assignment_source: observed.role_assignment_source.clone(),
+    })
+}
+
+fn root_observation_source(observed: &ObservedCanisterV1) -> DeploymentRootObservationSourceV1 {
+    if observed.role_assignment_source.as_deref() == Some("icp_canister_status") {
+        DeploymentRootObservationSourceV1::IcpCanisterStatus
+    } else {
+        DeploymentRootObservationSourceV1::LocalDeploymentState
     }
 }
 
@@ -597,14 +648,13 @@ fn install_state_observed_canisters(
 fn install_state_registry_observations(
     state: &crate::install_root::InstallState,
     request: &LocalInventoryRequest,
-    fleet_name: &str,
     pool_expectations: &[ConfiguredPoolExpectation],
     observed_canisters: &mut Vec<ObservedCanisterV1>,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedPoolCanisterV1> {
     match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: fleet_name.to_string(),
+            deployment: request.deployment_name.clone(),
             network: request.network.clone(),
             icp: "icp".to_string(),
             detect_lost_local_root: false,

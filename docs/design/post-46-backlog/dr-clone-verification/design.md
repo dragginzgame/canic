@@ -2,7 +2,7 @@
 
 ## Status
 
-TBD.
+Backlog only.
 
 This is a post-0.46 backlog topic. It captures deployment clone, trust-domain
 migration, disaster recovery coordination, and post-deploy verification. It is
@@ -35,13 +35,17 @@ This topic reuses:
 - 0.43 executor boundaries;
 - 0.44 artifact promotion and readiness reports;
 - 0.45 external lifecycle proposals and receipts;
-- 0.46 deployment groups and comparisons;
+- 0.46 passive two-check deployment comparison;
+- post-46 deployment groups if they are promoted before or alongside this
+  topic;
 - post-46 artifact registry and retention where available;
 - post-46 adoption profiles where a deployment is partial or brownfield;
 - post-46 provenance, JSON, signing, and CI lock contracts where automation is
   involved.
 
-0.46 may compare verification artifacts if present.
+0.46 can compare archived deployment-check evidence. This topic would produce
+the broader verification profiles and result artifacts that later comparisons
+may consume.
 
 This topic would produce those artifacts and own the verification command and
 profile if promoted into a real release line.

@@ -2,7 +2,7 @@
 
 ## Status
 
-TBD.
+Backlog only.
 
 This is a post-0.46 backlog topic. It is intentionally outside the approved
 0.41 through 0.46 deployment truth foundation and is not a promised numbered

@@ -9,19 +9,19 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.46.x` multi-deployment operations.
-- Theme: compare prod, staging, v2, tenant, and test deployments as operational
-  objects without turning comparison artifacts into deployment orchestration.
-- Current release-work area: 0.46 deployment-target hard cut plus passive
-  comparison and drift reporting. The line has started with
-  `DeploymentComparisonReportV1`, a host-side artifact that compares two
-  existing `DeploymentCheckV1` inputs across identity, artifact, module hash,
-  embedded config, authority, pool, verifier readiness, and external lifecycle
-  evidence without querying live state or mutating deployments. `canic deploy
-  compare --left <file> --right <file>` exposes that artifact as the first
-  0.46 operator command over archived deployment-truth checks.
-- The 0.46 deployment-target local state hard cut has started: local install
-  state now writes to `.canic/<network>/deployments/<deployment>.json`,
+- Active minor: `0.47.x` verified deployment registration.
+- Current release-work area: 0.47 removes the main 0.46 caveat by adding
+  receipt-backed verification for explicitly registered deployment roots.
+  The implementation must not infer root authority from CLI arguments,
+  filenames, local state alone, fleet templates, or deployment names; it needs
+  explicit root evidence carried by deployment-truth artifacts before any
+  `not_verified` root can become `verified`.
+- The previous line, `0.46`, is closed with documented caveats as a focused
+  deployment-target identity hard cut plus passive two-target comparison line.
+  Live verified-root registration, live comparison crawling, and broader
+  group/catalog/teardown/test-deployment work are deferred beyond 0.46.
+- 0.46 moved local install state to
+  `.canic/<network>/deployments/<deployment>.json`,
   deployment truth reads state by deployment target name, old
   `.canic/<network>/fleets/<fleet>.json` live state fails closed instead of
   being read as deployment truth, and supplied-plan install now requires exact
@@ -29,15 +29,14 @@ inspect only the files needed for the current task.
   intentionally minimal: it writes target state for a known root, marks that
   root `not_verified`, and does not migrate old state or claim live deployment
   truth. No automatic migration or silent fallback exists.
-- 0.46 must preserve the 0.45 external lifecycle handoff: supplied
+- 0.47 must preserve the 0.45 external lifecycle handoff: supplied
   observations, consent evidence, reported external action, and passive
   completion reports are evidence, not live deployment truth.
   `DeploymentTruthInventory`-backed verification remains the only 0.45
   external lifecycle artifact that may be compared as verified external
   completion.
 - Design starts at
-  `docs/design/0.46-multi-deployment-operations/0.46-design.md`; status is
-  tracked in `docs/design/0.46-multi-deployment-operations/status.md`.
+  `docs/design/0.47-verified-deployment-registration/0.47-design.md`.
 - The previous active line, `0.45.x`, closed with documented caveats: no live
   inventory crawler, no consent delivery, no external execution, and no
   wall-clock `max_observation_age_seconds` enforcement.
@@ -49,6 +48,24 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.47 started by making deployment-truth inventory carry explicit
+  `observed_root` evidence. `DeploymentRootObservationV1` records deployment
+  target, network, fleet template, root principal, observed canister ID,
+  observation source, controller facts, module hash, status, and role
+  assignment source. Local inventory identity now records the deployment
+  target name rather than the fleet template name.
+- 0.47 now has a passive root-verification report shape.
+  `DeploymentRootVerificationRequestV1` consumes an existing
+  `DeploymentCheckV1`, and `DeploymentRootVerificationReportV1` can mark
+  source-check evidence as `EvidenceSatisfied` without persisting verified
+  root state. The exact `unverified_deployment_root` blocker is allowed only
+  as the sole hard blocker; unrelated safety blockers keep verification
+  blocked.
+- `canic deploy root inspect --request <file>` now reads a
+  root-verification request JSON file and emits a passive report as JSON by
+  default or text with `--format text`. The command does not install code,
+  register state, query live inventory, or write `root_verification =
+  verified`.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

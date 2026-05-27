@@ -1,26 +1,46 @@
 # Deployment Adoption Gap Inventory
 
-This is product-gap source material for the 0.41-0.46 roadmap and post-46
-backlog. It is not itself a release contract.
+This is reconciled product-gap source material for the completed 0.41-0.46
+deployment foundation and the post-46 backlog. It is not itself a release
+contract, an approved numbered follow-on line, or current implementation truth.
 
-The normative design is in the per-line design docs and
-`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`.
+Last reconciled after the 0.46 closeout on 2026-05-27.
+
+The normative design remains in the per-line design docs and
+`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`. Active backlog
+topics live under `post-46-backlog/`.
+
+Status markers:
+
+- **Resolved by 0.41-0.46**: the original adoption concern is now covered by
+  the completed deployment foundation.
+- **Partially covered**: the model or passive workflow exists, but the
+  operator workflow is not complete.
+- **Open backlog**: still product work, not part of the completed 0.41-0.46
+  line.
 
 ---
 
-## A. Use cases the product does not serve today (and may still miss after 0.46)
+## A. Adoption Use Cases And Current Status
 
 ### A.1 Multiple real IC deployments (no testnet)
 
 **Need:** Run prod, staging, v2, canary, and destructive-rehearsal lanes on IC as separate deployments that share one topology template but differ in root, controllers, wasm per role, and embedded config per role.
 
-**Gap today:** One install name, one `.canic/<network>/fleets/<name>.json`, global `controllers = []`, rediscovery on every install. Reusing a root id **deletes** other fleet install records (`install_root/state.rs`).
+**Status after 0.46:** Partially covered.
 
-**Roadmap:** 0.41 truth model plus the 0.46 deployment-target hard cut make
-this possible. Deployment groups/catalog UX is now a post-46 backlog topic, not
-part of the 0.46 release bar.
+Resolved by 0.46:
 
-**Still missing after roadmap (propose explicitly):**
+- live local state is deployment-target state under
+  `.canic/<network>/deployments/<deployment>.json`;
+- fleet templates are reusable desired topology inputs, not live state;
+- supplied-plan install requires exact deployment target identity;
+- old fleet-named live state fails closed instead of being read as deployment
+  truth;
+- `canic deploy compare --left <file> --right <file>` compares two archived
+  `DeploymentCheckV1` artifacts passively.
+
+Still open backlog:
 
 - **Deployment catalog** — list/search deployments by group, environment, owner team, not only fleet directory names.
 - **Lane teardown** — retire a test deployment (controllers, pool release policy, `.canic` state) without manual IC archaeology.
@@ -32,11 +52,14 @@ part of the 0.46 release bar.
 
 **Need:** Staging runs `project_hub` v1 + `project_instance` v2 candidate; prod runs all v1; one role from a pinned `.wasm.gz`, others from workspace packages.
 
-**Gap today:** One discovered package per role per fleet config; config variance requires different `CANIC_CONFIG_PATH` builds, not a host-side matrix.
+**Status after 0.46:** Partially covered.
 
-**Roadmap:** 0.44 artifact overrides + promotion.
+0.44 added digest-pinned promotion artifacts, sealed-wasm vs source/build
+identity, promotion readiness/provenance, materialization evidence, and
+plan-mediated install for ready promotion envelopes. It remains deliberately
+passive around live `wasm_store` catalog lookup and active dedupe policy.
 
-**Still missing:**
+Still open backlog:
 
 - **Mixed-lane install in one command** — install only roles `{X,Y}` on deployment `staging` without rebuilding the whole release set.
 - **Config-independent roles** — explicit manifest flag for roles where sealed wasm can promote across trust domains (rare; must be deliberate).
@@ -48,13 +71,13 @@ part of the 0.46 release bar.
 
 **Need:** Team already has canisters on IC (dfx/icp legacy layout, hand-rolled controllers, SNS-upgraded canisters). They want root + topology **without** reinstalling everything from zero.
 
-**Gap today:**
+**Status after 0.46:** Open backlog.
 
-- No first-class **import canister into fleet registry** with `CanisterControlClass` = `ExternallyImported` / `JointlyControlled` (enum appears in 0.45 design only).
-- Pool `import.*` is destructive (controllers reset, code uninstalled per `CONFIG.md`) — terrifying for brownfield.
-- No guided “adopt this principal as role `foo`” flow.
+0.42 and 0.45 provide the control-class and external lifecycle vocabulary
+needed for adoption planning, but Canic still does not provide a guided
+brownfield adoption workflow.
 
-**Propose (not in roadmap):**
+Still open backlog:
 
 - `canic fleet adopt <role> <principal>` — read-only inventory first, then optional registry entry + controller reconciliation plan (0.42).
 - **Import dry-run** — show exactly which management calls would run before pool import mutates live canisters.
@@ -66,7 +89,7 @@ part of the 0.46 release bar.
 
 **Need:** Project wants `canic` macros + stable memory + auth on **one** canister, no root fleet, no wasm store, no thin-root staging.
 
-**Gap today:**
+**Status after 0.46:** Open backlog.
 
 - Docs and scaffold push `fleets/<name>/root` + `app` + `canic install`.
 - `build_standalone!` exists but is framed for probes/sandbox, not “production single canister.”
@@ -84,17 +107,21 @@ part of the 0.46 release bar.
 
 **Need:** Rust canisters in `backend/`, `icp.yaml` at repo root, frontend needs Candid/declarations, CI builds from nested cwd.
 
-**Gap today:**
+**Status after 0.46:** Partially covered.
 
-- `CANIC_WORKSPACE_ROOT` / `CANIC_ICP_ROOT` exist but are easy to misconfigure; install state does not record them in a way CI can verify.
+Deployment-target state now records workspace and ICP roots, and deployment
+truth uses those roots for local plan/inventory. The broader split-repo
+developer experience is still open.
+
+Still open backlog:
+
 - No official hook: “after build, emit declarations to `frontend/src/declarations`.”
 - Downstreams still wrap `canic` in shell scripts (common in large apps).
-
-**Propose:**
-
 - `canic build --emit-declarations <dir>` (or integrate with existing `generate_declarations` patterns as a documented contract).
 - **Project manifest** — optional `canic.project.toml` at repo root mapping workspace root, icp root, declaration output, deployment group name (single file for CI).
-- JSON output on all operator commands for CI parsers (`--json` is inconsistent across command families today).
+- Stable machine-readable output on all operator commands for CI parsers
+  (today some commands print raw JSON by default, while others use
+  `--format json|text`).
 
 ---
 
@@ -102,15 +129,17 @@ part of the 0.46 release bar.
 
 **Need:** Pipeline builds artifacts, pins digests, runs plan diff against prod inventory, applies only on approval; no interactive install prompts.
 
-**Gap today:**
+**Status after 0.46:** Partially covered.
 
-- Install can prompt for config choice when multiple `canic.toml` exist.
-- No `canic deploy plan` / inventory in CLI (design only).
-- No policy gate: “fail if `SafetyReport` contains `unsafe_blocked`.”
+Resolved or partially covered by 0.41-0.46:
 
-**Roadmap:** 0.41 inventory + safety report; 0.43 executor abstraction.
+- `canic deploy plan`, `inventory`, `check`, `diff`, `report`, and
+  `compare` exist;
+- safety reports and deployment checks can block unsafe install gates;
+- promotion, authority, and external lifecycle artifacts have JSON surfaces;
+- release-index guarding prevents mixed release commits.
 
-**Still missing:**
+Still open backlog:
 
 - **Stable machine-readable exit codes** per diff category (controller drift vs module hash vs config digest).
 - **Signed plans / receipts** — optional Sigstore/cosign-style attestation for artifact promotion between CI stages (not in roadmap).
@@ -123,11 +152,13 @@ part of the 0.46 release bar.
 
 **Need:** SaaS model: fleet provisions `project_instance`; end user is IC controller; fleet must propose upgrades, not push them.
 
-**Gap today:** No lifecycle consent flow in CLI.
+**Status after 0.46:** Partially covered.
 
-**Roadmap:** 0.45 `ExternalUpgradeProposalV1`, control classes.
+0.45 added passive external lifecycle projection, plans, proposals, consent
+evidence, completion reports, and deployment-truth inventory-backed
+verification checks. It did not add consent delivery or external execution.
 
-**Still missing:**
+Still open backlog:
 
 - **Operator playbook** — document flows for security patch on user-controlled role (proposal → consent → verify → receipt).
 - **Frontend/SDK contract** — how a web app requests user consent aligned with Canic receipts (0.45 is canister-side only).
@@ -139,12 +170,18 @@ part of the 0.46 release bar.
 
 **Need:** Platform team vs app team vs emergency break-glass; staging principals must not be IC controllers (design notes in 0.42) but operators need a story.
 
-**Gap today:** Single operator identity via `icp`/`dfx` identity; `controllers = []` in config.
+**Status after 0.46:** Partially covered.
 
-**Propose:**
+0.42 can report authority dry-run state and external-action cases, but operator
+identity binding, profile-specific CLI enforcement, and break-glass workflow
+remain open.
+
+Still open backlog:
 
 - **Authority profiles** in repo config (0.42) plus **CLI identity binding** — `canic deploy plan --as-profile staging-operator` fails if current `dfx identity` not in profile.
-- Audit log export: who ran install, which receipt, which principal (receipts need operator principal field — verify in 0.41 schema).
+- Audit log export: who ran install, which receipt, which principal
+  (`DeploymentReceiptV1.operator_principal` exists, but capture/export policy
+  remains open).
 - **Break-glass** explicit in plans with TTL and mandatory post-incident inventory diff.
 
 ---
@@ -153,9 +190,12 @@ part of the 0.46 release bar.
 
 **Need:** Backup/restore is subtree-oriented and journal-heavy (powerful, heavy). Many teams want: snapshot all roles, restore one role, or clone deployment to new root.
 
-**Gap today:** Restore tied to backup layouts; no “clone deployment identity to new root” migration object (0.41 mentions migration but no operator command).
+**Status after 0.46:** Open backlog.
 
-**Propose:**
+Backup/restore has deployment-shaped manifests, journals, and verification
+coverage. Clone and lighter DR workflows remain separate post-46 work.
+
+Still open backlog:
 
 - **Deployment clone plan** — new trust domain, replay artifact set from receipt, explicit migration receipt chain.
 - **Role-scoped DR** — backup/restore selectors already have subtree; expose “restore only role X on deployment Y” as first-class doc + CLI examples.
@@ -167,12 +207,17 @@ part of the 0.46 release bar.
 
 **Need:** After deploy, verify: all roles ready, cycles above threshold, protected calls work hub→instance, metrics sane.
 
-**Gap today:** `canic info list` + readiness; `canic metrics` exists but no deploy-gated **verification profile**.
+**Status after 0.46:** Partially covered.
 
-**Propose:**
+List, cycles, metrics, and deployment truth checks exist, but no deploy-gated
+verification profile combines those checks into one post-deploy acceptance
+surface.
+
+Still open backlog:
 
 - `canic deploy verify <deployment>` — run checklist: readiness, `canic_metadata` version skew, sample protected call (where applicable), cycle floors.
-- Export metrics snapshot to file after install for 0.46 comparison baselines.
+- Export metrics snapshot to file after install for future comparison
+  baselines.
 - Integration with external monitoring (OpenTelemetry export is **not** present — missing use case for enterprises).
 
 ---
@@ -181,11 +226,16 @@ part of the 0.46 release bar.
 
 **Need:** Fleet includes Motoko, legacy wasm, or partner canisters; root still orchestrates registry.
 
-**Gap today:** Rust-centric build pipeline; discovery assumes Cargo packages.
+**Status after 0.46:** Partially covered.
 
-**Propose:**
+0.44 added role artifact source and promotion identity vocabulary, but the
+build/discovery path is still Rust/Cargo-centric.
 
-- **Role artifact source** `external_wasm` with digest pin (0.44) plus **no Canic build** for that role — must be in 0.41 inventory.
+Still open backlog:
+
+- **Role artifact source** `external_wasm` with digest pin plus **no Canic
+  build** for that role, represented in deployment truth inventory instead of
+  the Rust build pipeline.
 - Candid/interface validation only mode for external roles.
 - Document that root/registry can reference roles Canic does not build (topology without `build!` for that role).
 
@@ -195,9 +245,13 @@ part of the 0.46 release bar.
 
 **Need:** Prove artifact X was built from git sha Y with profile Z.
 
-**Gap today:** Wasm hash in install table; no build provenance object.
+**Status after 0.46:** Partially covered.
 
-**Propose:**
+0.44 records source/build and materialization identity, but full reproducible
+build policy, dirty-workspace enforcement, and signed provenance remain
+post-46 work.
+
+Still open backlog:
 
 - Extend `RoleArtifact` with `source_revision`, `build_profile`, `cargo_hash`, `builder_version` (optional fields).
 - **Reproducible build check** in plan — same inputs → same wasm sha256 within tolerance.
@@ -209,9 +263,9 @@ part of the 0.46 release bar.
 
 **Need:** Two-canister app, no sharding/scaling/directory pools, no delegated auth.
 
-**Gap today:** `canic fleet create` scaffolds minimal root+app but CONFIG.md and features expose enormous surface; delegated auth defaults enabled in scaffold TOML.
+**Status after 0.46:** Open backlog.
 
-**Propose:**
+Still open backlog:
 
 - **Tiered config profiles:** `minimal`, `standard`, `platform` with forbidden sections per tier.
 - Lint: `canic config lint` rejects unused sections (e.g. sharding pools on leaf-only fleet).
@@ -239,11 +293,12 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Problem:** Documented as optional list appended to provisioned canisters; field reports (see `gabriel.md`) show installed controllers ≠ config, pool canisters not gaining root, metadata-only feel.
 
-**Change:**
+**Status after 0.46:** Partially covered.
 
-- 0.41 inventory must query **live IC controllers** on every canister and diff vs plan (design says this — must ship).
-- Until reconciliation (0.42), `canic install` should warn loudly when post-install controller set ≠ configured expectation.
-- Stop implying `controllers` in toml alone is sufficient — document required `update_settings` reconciliation path.
+0.41-0.42 added deployment truth and authority reconciliation reports. The
+remaining adoption problem is active policy/application: controller mutation
+remains outside the 0.42 dry-run boundary, and future docs must not imply that
+`controllers` in config alone proves live IC controller state.
 
 ---
 
@@ -251,11 +306,11 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Problem:** Not in fleet tree; excluded from `configured_install_targets`; path mismatches panic root build (`gabriel.md`); not in operator mental model.
 
-**Change:**
+**Status after 0.46:** Partially covered.
 
-- Treat as normal role in inventory/plan immediately (0.41 design says so — implement).
-- Validate artifact paths in plan **before** root `build.rs` reads files (fail with `SafetyReport`, not panic).
-- Single canonical artifact root env (`CANIC_ICP_ROOT` / `.icp`) — reject `.dfx` path drift in validation.
+0.41-0.44 moved `wasm_store` into deployment truth, artifact manifests,
+promotion, and install-plan validation. Live catalog lookup and active
+artifact-registry retention remain post-46 work.
 
 ---
 
@@ -263,10 +318,12 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Problem:** Role listed as install target but orchestrated build skipped role → install panics on missing `wasm.gz` (`gabriel.md`).
 
-**Change:**
+**Status after 0.46:** Partially covered.
 
-- **Materialization gate** — mandatory in 0.41 post-build checks: every planned role has file + digest or install refuses.
-- `canic build --all-roles-for <fleet>` that fails if any role missing.
+Deployment truth and install-plan validation now catch missing materialized
+artifacts before mutation in the current install path. A dedicated
+`canic build --all-roles-for <fleet-template>` convenience command remains
+open backlog, if still needed.
 
 ---
 
@@ -274,11 +331,11 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Problem:** Fleet-named JSON keyed by directory name; conflicts deleted on root reuse; no deployment identity.
 
-**Change:**
+**Status after 0.46:** Resolved for current local deployment state.
 
-- Persist under **deployment id**, not fleet folder name.
-- Allow multiple deployment records per fleet template.
-- Record: digests, profiles, workspace/icp roots, operator principal, phase receipts (when 0.41 lands).
+0.46 stores live local state under deployment target identity and rejects old
+fleet-named state as deployment truth. Richer catalog/history and operator
+principal reporting remain separate backlog topics.
 
 ---
 
@@ -286,11 +343,21 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Problem:** README/INSTALLING defer mainnet workflows — adopters hit a wall exactly where multi-deployment matters.
 
-**Change:**
+**Status after 0.46:** Open backlog.
 
-- Short term: document required external steps honestly + provide **inventory-only** against `ic` network (read-only truth).
-- Medium: 0.43 executor with `icp` backend still counts as “managed” if Canic drives it — clarify wording.
-- Do not label 0.46 “multi-deployment” complete if `install` still local-first.
+0.46 is closed only as a deployment-target identity hard cut plus passive
+two-target comparison line. Broader mainnet/operator workflows still need an
+honest status page that distinguishes read-only inventory, explicit external
+steps, and Canic-driven mutation.
+
+Still open backlog:
+
+- Document required external steps honestly and provide **inventory-only**
+  against `ic` network as read-only truth.
+- Clarify when an `icp` backend execution path counts as Canic-managed versus
+  externally managed.
+- Keep future "multi-deployment" claims scoped to the actual command surfaces
+  that exist.
 
 ---
 
@@ -322,11 +389,11 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Problem:** Backup has plans, journals, row refs, integrity tests; deploy has `install` only. New adopters learn backup complexity before deploy honesty.
 
-**Change:**
+**Status after 0.46:** Partially covered.
 
-- Align UX vocabulary: `plan`, `receipt`, `row ref` across backup and deploy (0.41+).
-- Offer **lightweight deploy receipt** before full backup-grade journal infrastructure.
-- Document when backup is unnecessary for small fleets (reduce perceived mandatory complexity).
+0.41-0.46 added deployment plans, checks, receipts, promotion/external
+evidence, plan-mediated install, and deployment-shaped backup terminology. A
+simple operator guide that explains when backup is unnecessary remains open.
 
 ---
 
@@ -336,7 +403,8 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 **Change:**
 
-- Host-side validator for deploy overlay + fleet template **before** build (0.41 role artifact manifest).
+- Host-side validator for deploy overlay + fleet template **before** build,
+  reusing role artifact manifest evidence where available.
 - `canic config validate --deployment staging` runnable in CI without compiling all wasm.
 
 ---
@@ -367,11 +435,11 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 | Topic | Why it matters for generic adoption |
 | --- | --- |
-| Canonical embedded config digest algorithm | Without spec + tests, drift/promotion warnings become noise (predesign High 2). |
-| Promotion artifact level: sealed vs source/build | Without it, staging→prod footgun remains (predesign High 1). |
-| Automated resume vs resume report | Resume skipping phases is high-risk; default should be report-only first (predesign High 3). |
+| Canonical embedded config digest algorithm | Partially covered by deployment truth/promotion; keep spec and cross-role edge cases in the backlog. |
+| Promotion artifact level: sealed vs source/build | Covered by 0.44; future work is operator workflow and live catalog/dedupe policy. |
+| Automated resume vs resume report | Resume report exists; automated resume remains safety-sensitive backlog. |
 | Concurrent install protection | Teams with multiple operators/CI jobs. |
-| CLI/library API for inventory/plan | Rust consumers (CI tools) need stable crate surface, not only `canic` binary. |
+| CLI/library API for inventory/plan | CLI surfaces exist; stable library/API contract is still backlog. |
 | `canic-host` publish story | Downstream automation should not shell out for everything — document which APIs are stable. |
 | Controller overlap validation | `staging_principals` must not appear in IC controllers (gabriel.md) — plan validation rule. |
 | Spawned canister controller policy | AuthorityProfile vs per-spawn policy undefined (gabriel.md). |
@@ -387,37 +455,36 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 
 ## D. Proposed feature/changes summary (prioritized for “any project”)
 
-### P0 — Unblock honest multi-deployment (align with 0.41–0.42, ship in CLI)
+### P0 — Keep Multi-Deployment Honest After 0.46
 
-1. Live **inventory** (IC controllers, module hashes, embedded config digest per role, pool state) — not self-reporting `canic.toml`.
-2. **Safety report** that blocks install on mismatch — not post-hoc panic on missing wasm.
-3. **Deployment receipt** on every install with digests and paths used.
-4. **wasm_store** in inventory as normal role + path validation.
-5. Rename operator concepts in CLI: **fleet template** vs **deployment target** (reduce `fleet` overload).
+1. **Resolved by 0.41-0.46:** deployment-target local state, safety reports,
+   deployment checks, receipts, `wasm_store` deployment-truth participation,
+   plan-mediated install gates, and current operator terminology.
+2. **Still open:** live comparison crawling, verified-root registration, and
+   broader catalog/group UX.
 
 ### P1 — Integration ergonomics
 
-6. `canic.project.toml` (or equivalent) for split monorepos.
-7. Consistent `--json` and exit codes for CI.
-8. `canic fleet check` icp.yaml ↔ canic.toml role diff + suggestions.
-9. Materialization gate before stage/install.
-10. Post-install **verify** profile (readiness + metadata skew).
+3. `canic.project.toml` (or equivalent) for split monorepos.
+4. Stable machine-readable exit codes for CI.
+5. `canic fleet check` icp.yaml ↔ canic.toml role diff + suggestions.
+6. Post-install **verify** profile (readiness + metadata skew).
 
 ### P2 — Adoption paths
 
-11. Brownfield **adopt** + non-destructive pool registration.
-12. Standalone / leaf-only documented profile without root fleet.
-13. External wasm role sources (hybrid fleets).
-14. Declaration emit hook for frontends.
-15. Protected-call migration scanner in inventory.
+7. Brownfield **adopt** + non-destructive pool registration.
+8. Standalone / leaf-only documented profile without root fleet.
+9. External wasm role sources (hybrid fleets).
+10. Declaration emit hook for frontends.
+11. Protected-call migration scanner in inventory.
 
 ### P3 — Maturity
 
-16. Deployment clone / trust-domain migration plans.
-17. CI deploy lock + optional signed receipts.
-18. Build provenance fields on role artifacts.
-19. Config lint tiers (`minimal` / `platform`).
-20. GitHub Action wrapping plan/diff/inventory.
+12. Deployment clone / trust-domain migration plans.
+13. CI deploy lock + optional signed receipts.
+14. Build provenance fields on role artifacts.
+15. Config lint tiers (`minimal` / `platform`).
+16. GitHub Action wrapping plan/diff/inventory.
 
 ---
 
@@ -426,20 +493,20 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 | Use case | Served today? | Roadmap | Still needed |
 | --- | --- | --- | --- |
 | Local dev single fleet | Partial | — | Better lost-state UX |
-| IC prod + staging + v2 | No | 0.41–0.46 | CLI + deployment catalog |
-| Per-role wasm override | No | 0.44 | Partial role install |
-| Per-role config variant | No | 0.41 variants | Build-once vs per-env clarity |
-| Canary one role | No | 0.44/0.46 | Same-root policy explicit |
-| Promote tested wasm to prod | No | 0.44 | Attestation + config digest rules |
-| User-controlled instance | No | 0.45 | SDK/frontend consent story |
+| IC prod + staging + v2 | Partial | 0.41–0.46 complete | Deployment catalog/group UX |
+| Per-role wasm override | Partial | 0.44 complete | Partial role install |
+| Per-role config variant | No | 0.41 foundation complete | Build-once vs per-env clarity |
+| Canary one role | No | 0.44/0.46 foundation complete | Same-root policy explicit |
+| Promote tested wasm to prod | Partial | 0.44 complete | Live catalog/dedupe, attestation, config digest rules |
+| User-controlled instance | Partial | 0.45 complete | SDK/frontend consent story |
 | Import existing canister | Partial/destructive | 0.42/0.45 | Adopt + dry-run import |
-| CI plan-only gate | No | 0.41 | Exit codes + Action |
-| Split repo frontend+backend | Partial | 0.43 | Declarations + project manifest |
+| CI plan-only gate | Partial | 0.41 complete | Exit codes + Action |
+| Split repo frontend+backend | Partial | 0.43 foundation complete | Declarations + project manifest |
 | Single canister, no root | Poor | — | Standalone profile |
 | Hybrid Motoko/legacy wasm | No | 0.44 partial | External role docs |
 | Brownfield dfx→canic | No | — | Migration guide + inventory |
-| Operator RBAC / break-glass | No | 0.42 | CLI identity binding |
-| DR clone deployment | No | 0.41 migration mention | Clone command |
+| Operator RBAC / break-glass | No | 0.42 foundation complete | CLI identity binding |
+| DR clone deployment | No | Post-46 backlog | Clone command |
 | Reproducible/supply chain | Partial | — | Provenance fields |
 | Post-deploy verification | Partial | — | `deploy verify` |
 | External metrics/OTel | No | — | Export pipeline |
@@ -453,5 +520,6 @@ Until fixed, “build once, deploy many” is a **footgun** for every adopter, n
 | --- | --- |
 | `docs/design/0.41-deployment-flexibility/` | Superseded by `0.41-deployment-truth-model/` — remove or redirect to avoid duplicate truths. |
 | INSTALLING vs deployment roadmap | Adopters read install guide, not 0.41 design — gap between “what works now” and “what’s planned” should be one page (`DEPLOYMENT-STATUS.md` or section in OBSERVATIONS). |
+| This inventory | Must remain reconciled backlog source material under `post-46-backlog/`; do not treat it as an approved release design. |
 
 ---

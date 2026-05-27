@@ -1,6 +1,6 @@
 # Post-46 Backlog Status: DR Clone Verification
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Purpose
 
@@ -9,11 +9,15 @@ numbered release line.
 
 ## Current State
 
-Not started.
+Topic implementation not started.
 
 This topic depends on earlier deployment truth, provenance, promotion, and
 multi-deployment work so disaster-recovery clone verification can compare real
 deployment facts instead of relying on naming or operator memory.
+The 0.41-0.46 foundation supplies deployment truth, receipts, promotion
+evidence, deployment-shaped backup manifests, and passive comparison, but no
+post-46 clone plan, verification profile, or role-scoped DR workflow has been
+promoted or implemented.
 
 ## Implemented
 

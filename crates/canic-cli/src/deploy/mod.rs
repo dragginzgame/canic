@@ -18,8 +18,9 @@ use canic_host::{
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
         DeploymentCheckV1, DeploymentComparisonReportV1, DeploymentExecutionPreflightV1,
-        DeploymentPlanV1, DeploymentReceiptV1, ExternalLifecycleCheckV1,
-        ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1,
+        DeploymentPlanV1, DeploymentReceiptV1, DeploymentRootVerificationReportV1,
+        DeploymentRootVerificationRequestV1, ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1,
+        ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1,
         ExternalUpgradeCompletionReportRequest, ExternalUpgradeCompletionReportV1,
         ExternalUpgradeConsentEvidenceRequest, ExternalUpgradeConsentEvidenceV1,
         ExternalUpgradeProposalReportV1, ExternalUpgradeVerificationCheckRequest,
@@ -47,6 +48,7 @@ use canic_host::{
         check_promotion_readiness, compare_plan_inventory_and_receipt,
         critical_external_fix_report_from_pending, critical_external_fix_report_text,
         deployment_comparison_report_from_checks, deployment_comparison_report_text,
+        deployment_root_verification_report_from_check, deployment_root_verification_report_text,
         external_lifecycle_check_from_reports, external_lifecycle_check_text,
         external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
         external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
@@ -71,7 +73,7 @@ use canic_host::{
         promotion_wasm_store_catalog_verification_text,
         promotion_wasm_store_identity_report_from_staging,
         promotion_wasm_store_identity_report_text, validate_artifact_promotion_plan,
-        validate_deployment_comparison_report,
+        validate_deployment_comparison_report, validate_deployment_root_verification_report,
         validate_external_upgrade_verification_check_for_deployment_check,
         validate_external_upgrade_verification_check_for_policy,
     },
@@ -118,6 +120,7 @@ Examples:
   canic deploy external inspect verification-check --request external-verification-check.json
   canic deploy external inspect completion --request external-completion.json
   canic deploy external verify --request external-verification.json
+  canic deploy root inspect --request root-verification.json
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
@@ -133,6 +136,25 @@ Deployment truth commands are read-only checks. Plan-mediated mutation flows
 through `canic deploy install <deployment> --plan <file>` or the legacy `canic install`
 entrypoint. Authority commands are dry-run reconciliation reports and do not
 mutate controller state.";
+const DEPLOY_ROOT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy root inspect --request root-verification.json
+  canic deploy root inspect --request root-verification.json --format text
+
+0.47 root commands are deployment-root scoped. The inspect command builds a
+passive root-verification report from a DeploymentRootVerificationRequestV1
+JSON file. It does not write verified root state, install code, or mutate
+deployments.";
+const DEPLOY_ROOT_INSPECT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy root inspect --request root-verification.json
+  canic deploy root inspect --request root-verification.json --format text
+
+Reads a DeploymentRootVerificationRequestV1-shaped JSON file and prints a
+DeploymentRootVerificationReportV1 JSON artifact by default, or host-owned
+passive text with --format text. EvidenceSatisfied means the supplied
+deployment-truth evidence is sufficient for a later explicit state transition;
+this command does not persist verified root state.";
 const DEPLOY_COMPARE_HELP_AFTER: &str = "\
 Examples:
   canic deploy compare --left staging-check.json --right prod-check.json
@@ -654,6 +676,15 @@ struct DeployExternalInspectOptions {
 }
 
 ///
+/// DeployRootInspectOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployRootInspectOptions {
+    request: PathBuf,
+    format: RootOutputFormat,
+}
+
+///
 /// DeployPromoteReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -694,6 +725,15 @@ enum PromotionOutputFormat {
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CompareOutputFormat {
+    Json,
+    Text,
+}
+
+///
+/// RootOutputFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RootOutputFormat {
     Json,
     Text,
 }
@@ -806,6 +846,7 @@ where
             "authority" => run_authority(args),
             "external" => run_external(args),
             "promote" => run_promote(args),
+            "root" => run_root(args),
             "install" => run_install(args),
             "register" => run_register(args),
             "compare" => run_compare(args),
@@ -818,6 +859,45 @@ where
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_root<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, root_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_root_command(), args)
+        .map_err(|_| DeployCommandError::Usage(root_usage()))?
+    {
+        Some((command, args)) if command == "inspect" => run_root_inspect(args),
+        _ => {
+            println!("{}", root_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_root_inspect<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, root_inspect_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployRootInspectOptions::parse(args)?;
+    let request = read_json_file::<DeploymentRootVerificationRequestV1>(&options.request)?;
+    let report = build_root_verification_report(request)?;
+    match options.format {
+        RootOutputFormat::Json => print_json(&report)?,
+        RootOutputFormat::Text => println!("{}", deployment_root_verification_report_text(&report)),
+    }
+    Ok(())
 }
 
 fn run_install<I>(args: I) -> Result<(), DeployCommandError>
@@ -1293,6 +1373,15 @@ fn build_promotion_materialization_identity_report(
         },
     )
     .map_err(|err| DeployCommandError::Check(Box::new(err)))
+}
+
+fn build_root_verification_report(
+    request: DeploymentRootVerificationRequestV1,
+) -> Result<DeploymentRootVerificationReportV1, DeployCommandError> {
+    let report = deployment_root_verification_report_from_check(request);
+    validate_deployment_root_verification_report(&report)
+        .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
+    Ok(report)
 }
 
 fn run_authority<I>(args: I) -> Result<(), DeployCommandError>
@@ -2419,6 +2508,23 @@ impl DeployExternalInspectOptions {
     }
 }
 
+impl DeployRootInspectOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_root_inspect_command(), args)
+            .map_err(|_| DeployCommandError::Usage(root_inspect_usage()))?;
+        Ok(Self {
+            request: path_option(&matches, "request").expect("clap requires request"),
+            format: parse_root_output_format(
+                string_option(&matches, "format").as_deref(),
+                root_inspect_usage,
+            )?,
+        })
+    }
+}
+
 impl DeployPromoteReportOptions {
     fn parse<I>(
         args: I,
@@ -2510,6 +2616,11 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("root")
+                .about("Build passive deployment-root verification reports")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("install")
                 .about("Install through the current runner using a supplied deployment plan")
                 .disable_help_flag(true),
@@ -2555,6 +2666,42 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
+}
+
+fn deploy_root_command() -> ClapCommand {
+    ClapCommand::new("root")
+        .bin_name("canic deploy root")
+        .about("Build passive deployment-root verification reports")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect deployment-root verification evidence")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_ROOT_HELP_AFTER)
+}
+
+fn deploy_root_inspect_command() -> ClapCommand {
+    ClapCommand::new("inspect")
+        .bin_name("canic deploy root inspect")
+        .about("Inspect deployment-root verification evidence")
+        .disable_help_flag(true)
+        .override_usage("canic deploy root inspect --request <file>")
+        .arg(
+            value_arg("request")
+                .long("request")
+                .value_name("file")
+                .required(true)
+                .help("DeploymentRootVerificationRequestV1 JSON file to inspect"),
+        )
+        .arg(
+            value_arg("format")
+                .long("format")
+                .value_name("json|text")
+                .num_args(1)
+                .help("Output format; defaults to json"),
+        )
+        .after_help(DEPLOY_ROOT_INSPECT_HELP_AFTER)
 }
 
 fn deploy_external_command() -> ClapCommand {
@@ -3372,6 +3519,16 @@ fn external_verify_usage() -> String {
     command.render_help().to_string()
 }
 
+fn root_usage() -> String {
+    let mut command = deploy_root_command();
+    command.render_help().to_string()
+}
+
+fn root_inspect_usage() -> String {
+    let mut command = deploy_root_inspect_command();
+    command.render_help().to_string()
+}
+
 fn deploy_install_usage() -> String {
     let mut command = deploy_install_command();
     command.render_help().to_string()
@@ -3558,6 +3715,20 @@ fn parse_compare_output_format(
     }
 }
 
+fn parse_root_output_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<RootOutputFormat, DeployCommandError> {
+    match value.unwrap_or("json") {
+        "json" => Ok(RootOutputFormat::Json),
+        "text" => Ok(RootOutputFormat::Text),
+        other => Err(DeployCommandError::Usage(format!(
+            "invalid deployment root output format: {other}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
 fn default_fleet_config_path(fleet: &str) -> String {
     format!("fleets/{fleet}/canic.toml")
 }
@@ -3575,16 +3746,19 @@ mod tests {
     use canic_host::deployment_truth::{
         ArtifactDigestSourceV1, ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1,
         ConsentChannelKindV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentDiffV1,
-        DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1,
-        ExternalUpgradeCompletionStatusV1, ExternalUpgradeConsentStateV1,
-        ExternalUpgradeVerificationObservationV1, ExternalUpgradeVerificationRequirementStatusV1,
-        ExternalUpgradeVerificationResultV1, ExternalVerificationObservationSourceV1,
-        LifecycleVerificationRequirementV1, LocalDeploymentConfigV1, ObservationStatusV1,
-        ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1,
-        ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-        RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
-        VerifierReadinessObservationV1, external_upgrade_receipt_from_observation,
-        promotion_readiness_from_inputs,
+        DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1,
+        DeploymentRootObservationSourceV1, DeploymentRootObservationV1,
+        DeploymentRootVerificationEvidenceStatusV1, DeploymentRootVerificationRequestV1,
+        DeploymentRootVerificationSourceV1, DeploymentRootVerificationStateTransitionV1,
+        DeploymentRootVerificationStateV1, ExpectedCanisterV1, ExternalUpgradeCompletionStatusV1,
+        ExternalUpgradeConsentStateV1, ExternalUpgradeVerificationObservationV1,
+        ExternalUpgradeVerificationRequirementStatusV1, ExternalUpgradeVerificationResultV1,
+        ExternalVerificationObservationSourceV1, LifecycleVerificationRequirementV1,
+        LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
+        PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
+        RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
+        TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
     };
 
     #[test]
@@ -3759,6 +3933,48 @@ mod tests {
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid deployment comparison output format: yaml")
+        ));
+    }
+
+    #[test]
+    fn deploy_root_inspect_parses_request_and_text_format() {
+        let options = DeployRootInspectOptions::parse([
+            OsString::from("--request"),
+            OsString::from("root-verification.json"),
+            OsString::from("--format"),
+            OsString::from("text"),
+        ])
+        .expect("parse deploy root inspect");
+
+        assert_eq!(options.request, PathBuf::from("root-verification.json"));
+        assert_eq!(options.format, RootOutputFormat::Text);
+    }
+
+    #[test]
+    fn deploy_root_inspect_defaults_to_json() {
+        let options = DeployRootInspectOptions::parse([
+            OsString::from("--request"),
+            OsString::from("root-verification.json"),
+        ])
+        .expect("parse deploy root inspect");
+
+        assert_eq!(options.request, PathBuf::from("root-verification.json"));
+        assert_eq!(options.format, RootOutputFormat::Json);
+    }
+
+    #[test]
+    fn deploy_root_inspect_rejects_unknown_format() {
+        let result = DeployRootInspectOptions::parse([
+            OsString::from("--request"),
+            OsString::from("root-verification.json"),
+            OsString::from("--format"),
+            OsString::from("yaml"),
+        ]);
+
+        assert!(matches!(
+            result,
+            Err(DeployCommandError::Usage(message))
+                if message.contains("invalid deployment root output format: yaml")
         ));
     }
 
@@ -4067,6 +4283,20 @@ mod tests {
         assert!(!help.contains("authority dry-run evidence JSON"));
         assert!(!help.contains("authority reconciliation report JSON"));
         assert!(!help.contains("authority dry-run receipt JSON"));
+    }
+
+    #[test]
+    fn deploy_root_help_documents_passive_boundary() {
+        let help = root_usage();
+        let inspect_help = root_inspect_usage();
+
+        assert!(help.contains("passive deployment-root verification reports"));
+        assert!(help.contains("does not write verified root state"));
+        assert!(help.contains("mutate"));
+        assert!(help.contains("deployments"));
+        assert!(inspect_help.contains("DeploymentRootVerificationRequestV1-shaped JSON"));
+        assert!(inspect_help.contains("does not persist verified root state"));
+        assert!(inspect_help.contains("EvidenceSatisfied means"));
     }
 
     #[test]
@@ -4408,6 +4638,29 @@ mod tests {
     }
 
     #[test]
+    fn deploy_root_path_has_no_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let root_source = source_between(source, "fn run_root<I>", "fn run_install<I>");
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+            "register_deployment_state",
+            "install_root",
+        ] {
+            assert!(
+                !root_source.contains(forbidden),
+                "root verification CLI path must stay passive; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
     fn deploy_authority_command_dispatches_check() {
         let parsed = parse_subcommand(
             deploy_command(),
@@ -4727,6 +4980,35 @@ mod tests {
     }
 
     #[test]
+    fn deploy_root_command_dispatches_inspect() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("root"),
+                OsString::from("inspect"),
+                OsString::from("--request"),
+                OsString::from("root-verification.json"),
+            ],
+        )
+        .expect("parse deploy root")
+        .expect("root command");
+
+        assert_eq!(parsed.0, "root");
+
+        let root = parse_subcommand(deploy_root_command(), parsed.1)
+            .expect("parse nested root")
+            .expect("root inspect command");
+        assert_eq!(root.0, "inspect");
+        assert_eq!(
+            root.1,
+            vec![
+                OsString::from("--request"),
+                OsString::from("root-verification.json")
+            ]
+        );
+    }
+
+    #[test]
     fn deploy_register_builds_minimal_registration_options() {
         let options = DeployRegisterOptions {
             deployment: "demo-local".to_string(),
@@ -4921,6 +5203,25 @@ mod tests {
         assert_eq!(receipt.inventory_id, "inventory-1");
         assert_eq!(receipt.authority_profile_hash.as_deref(), Some("authority"));
         assert!(receipt.attempted_actions.is_empty());
+    }
+
+    #[test]
+    fn root_verification_report_builder_delegates_to_host_report() {
+        let report = build_root_verification_report(sample_root_verification_request())
+            .expect("build root verification report");
+
+        assert_eq!(
+            report.evidence_status,
+            DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied
+        );
+        assert_eq!(
+            report.state_transition,
+            DeploymentRootVerificationStateTransitionV1::WouldPromoteNotVerifiedToVerified
+        );
+        assert_eq!(report.deployment_name, "demo");
+        assert_eq!(report.source_check_id, "check-1");
+        assert_eq!(report.source_inventory_id, "inventory-1");
+        assert_eq!(report.report_digest.len(), 64);
     }
 
     #[test]
@@ -5807,6 +6108,34 @@ mod tests {
         }
     }
 
+    fn sample_root_verification_request() -> DeploymentRootVerificationRequestV1 {
+        let mut check = sample_authority_check();
+        check.inventory.observed_root = Some(DeploymentRootObservationV1 {
+            deployment_name: "demo".to_string(),
+            network: "local".to_string(),
+            fleet_template: "demo".to_string(),
+            root_principal: "aaaaa-aa".to_string(),
+            observed_canister_id: "aaaaa-aa".to_string(),
+            observation_source: DeploymentRootObservationSourceV1::IcpCanisterStatus,
+            control_class: CanisterControlClassV1::DeploymentControlled,
+            controllers: vec!["aaaaa-aa".to_string()],
+            module_hash: None,
+            status: Some("running".to_string()),
+            role_assignment_source: Some("icp_canister_status".to_string()),
+        });
+        DeploymentRootVerificationRequestV1 {
+            report_id: "root-verification-report-1".to_string(),
+            requested_at: "2026-05-27T00:00:00Z".to_string(),
+            deployment_name: "demo".to_string(),
+            network: "local".to_string(),
+            expected_fleet_template: "demo".to_string(),
+            expected_root_principal: "aaaaa-aa".to_string(),
+            current_root_verification: DeploymentRootVerificationStateV1::NotVerified,
+            source: DeploymentRootVerificationSourceV1::DeploymentTruthCheck,
+            deployment_check: check,
+        }
+    }
+
     fn sample_deployment_identity() -> DeploymentIdentityV1 {
         DeploymentIdentityV1 {
             deployment_name: "demo".to_string(),
@@ -5988,6 +6317,7 @@ mod tests {
             inventory_id: "inventory-1".to_string(),
             observed_at: "2026-05-23T00:00:00Z".to_string(),
             observed_identity: Some(identity),
+            observed_root: None,
             local_config: LocalDeploymentConfigV1 {
                 config_path: None,
                 raw_config_sha256: None,

@@ -2,7 +2,7 @@
 
 ## Status
 
-TBD.
+Backlog only.
 
 This is a post-0.46 backlog topic. It captures adoption paths that are
 important for real projects but should not expand the approved 0.41 through

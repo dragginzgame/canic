@@ -10,9 +10,9 @@ are design source material only.
 
 ## Topics
 
+- [Deployment Adoption Gap Inventory](adoption-gap-inventory/README.md)
 - [Deferred From 0.46](deferred-from-0.46.md)
 - [Wasm Store Artifact Registry And Retention](wasm-store-artifact-registry/design.md)
 - [Adoption Profiles](adoption-profiles/design.md)
 - [CI, GitOps, And Provenance](ci-gitops-provenance/design.md)
 - [DR, Clone, And Operational Verification](dr-clone-verification/design.md)
-

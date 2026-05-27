@@ -6135,6 +6135,19 @@ fn inventory_round_trips_through_json() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: Some(DeploymentRootObservationV1 {
+            deployment_name: "demo".to_string(),
+            network: "local".to_string(),
+            fleet_template: "root".to_string(),
+            root_principal: "aaaaa-aa".to_string(),
+            observed_canister_id: "aaaaa-aa".to_string(),
+            observation_source: DeploymentRootObservationSourceV1::IcpCanisterStatus,
+            control_class: CanisterControlClassV1::DeploymentControlled,
+            controllers: vec!["aaaaa-aa".to_string()],
+            module_hash: Some("module".to_string()),
+            status: Some("running".to_string()),
+            role_assignment_source: Some("icp_canister_status".to_string()),
+        }),
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: Some("raw".to_string()),
@@ -7193,6 +7206,7 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-22T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("canic.toml".to_string()),
             raw_config_sha256: None,
@@ -7708,6 +7722,53 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
             .unresolved_observations
             .iter()
             .any(|gap| gap.key == "local_artifacts.user_hub")
+    );
+}
+
+#[test]
+fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
+    let temp = TempWorkspace::new("canic-host-local-root-evidence");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_deployment_state_json(&icp_root, "local", sample_install_state("prod", "aaaaa-aa"));
+
+    let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
+        deployment_name: "prod".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        observed_at: "2026-05-27T00:00:00Z".to_string(),
+    })
+    .expect("collect inventory");
+
+    let observed_identity = inventory.observed_identity.as_ref().expect("identity");
+    assert_eq!(observed_identity.deployment_name, "prod");
+    assert_eq!(
+        observed_identity.root_principal.as_deref(),
+        Some("aaaaa-aa")
+    );
+
+    let observed_root = inventory.observed_root.as_ref().expect("root evidence");
+    assert_eq!(observed_root.deployment_name, "prod");
+    assert_eq!(observed_root.network, "local");
+    assert_eq!(observed_root.fleet_template, "demo");
+    assert_eq!(observed_root.root_principal, "aaaaa-aa");
+    assert_eq!(observed_root.observed_canister_id, "aaaaa-aa");
+    assert_eq!(
+        observed_root.observation_source,
+        DeploymentRootObservationSourceV1::LocalDeploymentState
+    );
+    assert_eq!(
+        observed_root.control_class,
+        CanisterControlClassV1::UnknownUnsafe
+    );
+    assert_eq!(
+        observed_root.role_assignment_source.as_deref(),
+        Some("local_install_state")
     );
 }
 
@@ -8404,6 +8465,7 @@ fn deployment_diff_blocks_deployment_manifest_mismatch() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(observed_identity),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: Some("different-manifest".to_string()),
@@ -8452,6 +8514,7 @@ fn deployment_diff_blocks_raw_config_digest_mismatch_without_claiming_manifest_i
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(observed_identity),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: Some("observed-raw-config".to_string()),
@@ -8501,6 +8564,7 @@ fn deployment_diff_blocks_installed_module_hash_mismatch() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -8629,6 +8693,7 @@ fn deployment_diff_blocks_missing_expected_controller() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -8691,6 +8756,7 @@ fn deployment_diff_warns_for_extra_declared_emergency_controller() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -8749,6 +8815,7 @@ fn deployment_diff_blocks_authority_profile_controller_overlap() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -8790,6 +8857,7 @@ fn deployment_diff_warns_for_undeclared_extra_controller() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -8851,6 +8919,7 @@ fn deployment_diff_blocks_artifact_file_digest_mismatch() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -9006,6 +9075,7 @@ fn deployment_diff_blocks_missing_artifacts_and_unsafe_control_class() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -9063,6 +9133,7 @@ fn deployment_diff_warns_on_observation_gaps_without_blocking() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -9123,6 +9194,7 @@ fn deployment_diff_warns_on_plan_assumptions_without_blocking() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -9175,6 +9247,7 @@ fn deployment_diff_blocks_unverified_registered_root_assumption() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -9213,6 +9286,178 @@ fn deployment_diff_blocks_unverified_registered_root_assumption() {
 }
 
 #[test]
+fn root_verification_report_accepts_bound_root_evidence() {
+    let check = sample_root_verification_check();
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied,
+        "{:?}",
+        report.blockers
+    );
+    assert_eq!(
+        report.state_transition,
+        DeploymentRootVerificationStateTransitionV1::WouldPromoteNotVerifiedToVerified
+    );
+    assert_eq!(report.deployment_name, "demo");
+    assert_eq!(report.expected_fleet_template, "root");
+    assert_eq!(report.expected_root_principal, "aaaaa-aa");
+    assert_eq!(report.observed_root_principal.as_deref(), Some("aaaaa-aa"));
+    assert!(report.blockers.is_empty());
+    assert_eq!(report.source_deployment_plan_id, "plan-local-root");
+    assert_eq!(report.source_inventory_id, "inventory-1");
+    assert!(validate_deployment_root_verification_report(&report).is_ok());
+}
+
+#[test]
+fn root_verification_report_accepts_exact_unverified_root_blocker() {
+    let mut plan = sample_root_verification_plan();
+    plan.unresolved_assumptions.push(DeploymentAssumptionV1 {
+        key: "local_state.unverified_root_canister_id".to_string(),
+        description: "registered root is not verified".to_string(),
+    });
+    let check = sample_check(plan, sample_root_verification_inventory());
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied,
+        "{:?}",
+        report.blockers
+    );
+    assert!(report.blockers.is_empty());
+    assert!(validate_deployment_root_verification_report(&report).is_ok());
+}
+
+#[test]
+fn root_verification_report_rejects_unverified_root_plus_unrelated_blocker() {
+    let mut plan = sample_root_verification_plan();
+    plan.unresolved_assumptions.push(DeploymentAssumptionV1 {
+        key: "local_state.unverified_root_canister_id".to_string(),
+        description: "registered root is not verified".to_string(),
+    });
+    let mut check = sample_check(plan, sample_root_verification_inventory());
+    check.report.status = SafetyStatusV1::Blocked;
+    check.report.hard_failures.push(SafetyFindingV1 {
+        code: "artifact_missing".to_string(),
+        message: "root artifact is missing".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "artifact_missing")
+    );
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "unverified_deployment_root")
+    );
+}
+
+#[test]
+fn root_verification_report_rejects_local_state_only_root_evidence() {
+    let mut inventory = sample_root_verification_inventory();
+    let observed_root = inventory.observed_root.as_mut().expect("root evidence");
+    observed_root.observation_source = DeploymentRootObservationSourceV1::LocalDeploymentState;
+    observed_root.role_assignment_source = Some("local_install_state".to_string());
+    let check = sample_check(sample_root_verification_plan(), inventory);
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert_eq!(
+        report.state_transition,
+        DeploymentRootVerificationStateTransitionV1::Blocked
+    );
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|finding| finding.subject.as_deref() == Some("root_observation_source"))
+    );
+}
+
+#[test]
+fn root_verification_report_rejects_missing_explicit_root_evidence() {
+    let mut inventory = sample_root_verification_inventory();
+    inventory.observed_root = None;
+    let check = sample_check(sample_root_verification_plan(), inventory);
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|finding| finding.subject.as_deref() == Some("explicit_observed_root"))
+    );
+}
+
+#[test]
+fn root_verification_report_rejects_unrelated_source_check_blocker() {
+    let mut check = sample_root_verification_check();
+    check.report.status = SafetyStatusV1::Blocked;
+    check.report.hard_failures.push(SafetyFindingV1 {
+        code: "artifact_missing".to_string(),
+        message: "root artifact is missing".to_string(),
+        severity: SafetySeverityV1::HardFailure,
+        subject: Some("root".to_string()),
+    });
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert!(
+        report
+            .blockers
+            .iter()
+            .any(|finding| finding.code == "artifact_missing")
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_digest_drift() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.observed_root_principal = Some("other-root".to_string());
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("digest drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::DigestMismatch {
+            field: "report_digest"
+        }
+    );
+}
+
+#[test]
 fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
     let mut plan = sample_plan();
     plan.expected_canisters[0].canister_id = None;
@@ -9222,6 +9467,7 @@ fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -10116,6 +10362,7 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
             raw_config_sha256: None,
@@ -12223,6 +12470,7 @@ fn sample_matching_inventory() -> DeploymentInventoryV1 {
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-22T00:00:00Z".to_string(),
         observed_identity: Some(sample_identity()),
+        observed_root: Some(sample_root_observation()),
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("canic.toml".to_string()),
             raw_config_sha256: Some("raw".to_string()),
@@ -12261,6 +12509,22 @@ fn sample_matching_inventory() -> DeploymentInventoryV1 {
     }
 }
 
+fn sample_root_observation() -> DeploymentRootObservationV1 {
+    DeploymentRootObservationV1 {
+        deployment_name: "demo".to_string(),
+        network: "local".to_string(),
+        fleet_template: "root".to_string(),
+        root_principal: "aaaaa-aa".to_string(),
+        observed_canister_id: "aaaaa-aa".to_string(),
+        observation_source: DeploymentRootObservationSourceV1::IcpCanisterStatus,
+        control_class: CanisterControlClassV1::DeploymentControlled,
+        controllers: vec!["aaaaa-aa".to_string()],
+        module_hash: Some("module".to_string()),
+        status: Some("running".to_string()),
+        role_assignment_source: Some("icp_canister_status".to_string()),
+    }
+}
+
 fn sample_check(plan: DeploymentPlanV1, inventory: DeploymentInventoryV1) -> DeploymentCheckV1 {
     let diff = compare_plan_to_inventory(&plan, &inventory);
     let report = safety_report_from_diff("report-1", Some("diff-1".to_string()), &diff);
@@ -12271,6 +12535,43 @@ fn sample_check(plan: DeploymentPlanV1, inventory: DeploymentInventoryV1) -> Dep
         inventory,
         diff,
         report,
+    }
+}
+
+fn sample_root_verification_check() -> DeploymentCheckV1 {
+    sample_check(
+        sample_root_verification_plan(),
+        sample_root_verification_inventory(),
+    )
+}
+
+fn sample_root_verification_plan() -> DeploymentPlanV1 {
+    let mut plan = sample_plan();
+    plan.deployment_identity.deployment_name = "demo".to_string();
+    plan
+}
+
+fn sample_root_verification_inventory() -> DeploymentInventoryV1 {
+    let mut inventory = sample_matching_inventory();
+    if let Some(identity) = inventory.observed_identity.as_mut() {
+        identity.deployment_name = "demo".to_string();
+    }
+    inventory
+}
+
+fn sample_root_verification_request(
+    deployment_check: DeploymentCheckV1,
+) -> DeploymentRootVerificationRequestV1 {
+    DeploymentRootVerificationRequestV1 {
+        report_id: "root-verification-report-1".to_string(),
+        requested_at: "2026-05-27T00:00:00Z".to_string(),
+        deployment_name: "demo".to_string(),
+        network: "local".to_string(),
+        expected_fleet_template: "root".to_string(),
+        expected_root_principal: "aaaaa-aa".to_string(),
+        current_root_verification: DeploymentRootVerificationStateV1::NotVerified,
+        source: DeploymentRootVerificationSourceV1::DeploymentTruthCheck,
+        deployment_check,
     }
 }
 
@@ -12443,6 +12744,20 @@ fn write_release_set_manifest(icp_root: &Path) {
         serde_json::to_vec_pretty(&manifest).expect("encode manifest"),
     )
     .expect("write manifest");
+}
+
+fn write_deployment_state_json(icp_root: &Path, network: &str, state: InstallState) {
+    let path = icp_root
+        .join(".canic")
+        .join(network)
+        .join("deployments")
+        .join(format!("{}.json", state.deployment_name));
+    fs::create_dir_all(path.parent().expect("state parent")).expect("create state dir");
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&state).expect("encode install state"),
+    )
+    .expect("write install state");
 }
 
 fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> InstallState {

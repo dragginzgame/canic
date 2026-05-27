@@ -12,6 +12,18 @@ present.
 
 ## Unreleased
 
+## [0.47.x] - 2026-05-27 - Verified deployment registration
+
+Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.0` starts verified deployment registration with explicit
+  deployment-root observation evidence, passive root-verification reports, and
+  a read-only root inspection command for digest-bound source-check evidence.
+
+```bash
+canic deploy root inspect --request root-verification.json
+```
+
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
 - `0.46.19` updates `canic-host` package metadata, README, and crate docs so
