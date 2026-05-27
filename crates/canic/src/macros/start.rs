@@ -360,7 +360,7 @@ macro_rules! __canic_start_ingress_payload_inspect {
 macro_rules! __canic_require_finish {
     () => {
         #[doc(hidden)]
-        const _: fn() = __canic_missing_finish_macro_add_canic_finish_at_end;
+        const _: fn() = __canic_missing_finish_macro__add_canic_finish_at_end_after_all_endpoints;
     };
 }
 
@@ -376,7 +376,7 @@ macro_rules! finish {
     () => {
         #[doc(hidden)]
         #[allow(dead_code)]
-        fn __canic_missing_finish_macro_add_canic_finish_at_end() {}
+        fn __canic_missing_finish_macro__add_canic_finish_at_end_after_all_endpoints() {}
 
         #[cfg(debug_assertions)]
         $crate::cdk::export_candid!();

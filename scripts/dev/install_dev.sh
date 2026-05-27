@@ -6,8 +6,6 @@ CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.95.0}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
-ICP_CLI_VERSION="${ICP_CLI_VERSION:-0.2.5}"
-ICP_WASM_VERSION="${ICP_WASM_VERSION:-0.9.10}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RUSTUP_INIT_URL="https://sh.rustup.rs"
@@ -111,46 +109,6 @@ clean_icp_npm_staging_dirs() {
     done
 }
 
-resolve_icp_npm_versions() {
-    local latest_icp_cli
-    local latest_ic_wasm
-    local check_updates="${CANIC_CHECK_ICP_UPDATES:-0}"
-    local auto_bump="${CANIC_AUTO_BUMP_ICP_TOOLS:-0}"
-
-    if [ "$check_updates" != "1" ] && [ "$auto_bump" != "1" ]; then
-        return 0
-    fi
-
-    yellow "ICP CLI update check:"
-    require_command npm
-
-    if ! latest_icp_cli="$(npm view @icp-sdk/icp-cli version 2>/dev/null)"; then
-        yellow "Could not check @icp-sdk/icp-cli latest version; continuing with pinned $ICP_CLI_VERSION."
-    elif [ "$latest_icp_cli" != "$ICP_CLI_VERSION" ]; then
-        if [ "$auto_bump" = "1" ]; then
-            yellow "@icp-sdk/icp-cli update available: pinned $ICP_CLI_VERSION, using latest $latest_icp_cli for this update."
-            ICP_CLI_VERSION="$latest_icp_cli"
-        else
-            yellow "@icp-sdk/icp-cli update available: pinned $ICP_CLI_VERSION, latest $latest_icp_cli."
-        fi
-    else
-        green "@icp-sdk/icp-cli is current at pinned $ICP_CLI_VERSION."
-    fi
-
-    if ! latest_ic_wasm="$(npm view @icp-sdk/ic-wasm version 2>/dev/null)"; then
-        yellow "Could not check @icp-sdk/ic-wasm latest version; continuing with pinned $ICP_WASM_VERSION."
-    elif [ "$latest_ic_wasm" != "$ICP_WASM_VERSION" ]; then
-        if [ "$auto_bump" = "1" ]; then
-            yellow "@icp-sdk/ic-wasm update available: pinned $ICP_WASM_VERSION, using latest $latest_ic_wasm for this update."
-            ICP_WASM_VERSION="$latest_ic_wasm"
-        else
-            yellow "@icp-sdk/ic-wasm update available: pinned $ICP_WASM_VERSION, latest $latest_ic_wasm."
-        fi
-    else
-        green "@icp-sdk/ic-wasm is current at pinned $ICP_WASM_VERSION."
-    fi
-}
-
 install_or_update_icp_cli() {
     local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
     local path_had_npm_bin=0
@@ -161,12 +119,11 @@ install_or_update_icp_cli() {
 
     yellow "ICP CLI:"
     require_command npm
-    resolve_icp_npm_versions
     mkdir -p "$npm_bin_dir"
     clean_icp_npm_staging_dirs
     export PATH="$npm_bin_dir:$PATH"
-    cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/icp-cli@$ICP_CLI_VERSION @icp-sdk/ic-wasm@$ICP_WASM_VERSION"
-    npm install -g --prefix "$CANIC_NPM_PREFIX" "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+    cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/icp-cli @icp-sdk/ic-wasm"
+    npm install -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/icp-cli @icp-sdk/ic-wasm
     require_command icp
     require_command ic-wasm
     green "icp ready: $(icp --version 2>&1)"

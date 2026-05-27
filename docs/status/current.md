@@ -9,46 +9,55 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.45.x` external and user-owned lifecycle.
-- Theme: coordinate lifecycle work for canisters Canic cannot unilaterally
-  upgrade, without reclassifying authority or pretending deployment authority
-  can mutate externally controlled roles.
-- Current release-work area: 0.45 passive external lifecycle hardening. The line
-  now projects existing `CanisterControlClassV1` observations into
-  `LifecycleAuthorityV1`, partitions them through `ExternalLifecyclePlanV1`,
-  derives passive proposal/receipt/pending/check/handoff evidence, and
-  exposes the first external lifecycle CLI reports without adding consent
-  delivery, external execution, or install mutation.
-- `ExternalUpgradeVerificationPolicyV1` now makes required live-inventory
-  postconditions explicit for an external lifecycle proposal. It records the
-  source proposal digest, required verification facts, expected module/config
-  facts, protected-call readiness requirements, and passive status summary.
-  `canic deploy external inspect verification-policy --request <file>`
-  exposes that policy from proposal evidence without querying live inventory
-  or verifying completion.
-- `ExternalUpgradeVerificationCheckV1` now evaluates supplied observation
-  facts against a passive verification policy. It records per-requirement
-  expected/observed values and a verified/mismatch result, while preserving
-  the boundary that the command does not query live inventory or execute
-  lifecycle work. `canic deploy external inspect verification-check --request
-  <file>` exposes that passive check.
-- `ExternalUpgradeCompletionReportV1` now combines proposal, consent-evidence,
-  and verification-check artifacts into one passive completion status. It
-  records blockers and next actions for awaiting-consent, refused,
-  awaiting-verification, verified-complete, and verification-failed cases
-  without delivering consent, querying live inventory, or executing lifecycle
-  work.
-- Source-guard coverage now pins the 0.45 lifecycle projection to the
-  canonical `CanisterControlClassV1` model so the external lifecycle layer
-  cannot silently introduce a second user/external control-class path.
+- Active minor: `0.46.x` multi-deployment operations.
+- Theme: compare prod, staging, v2, tenant, and test deployments as operational
+  objects without turning comparison artifacts into deployment orchestration.
+- Current release-work area: 0.46 deployment-target hard cut plus passive
+  comparison and drift reporting. The line has started with
+  `DeploymentComparisonReportV1`, a host-side artifact that compares two
+  existing `DeploymentCheckV1` inputs across identity, artifact, module hash,
+  embedded config, authority, pool, verifier readiness, and external lifecycle
+  evidence without querying live state or mutating deployments. `canic deploy
+  compare --left <file> --right <file>` exposes that artifact as the first
+  0.46 operator command over archived deployment-truth checks.
+- The next required 0.46 correction is the deployment-target local state hard
+  cut: fleet templates are reusable desired topology, deployments are concrete
+  live targets, old `.canic/<network>/fleets/<fleet>.json` state must not be
+  read as deployment truth, and supplied-plan install must require exact
+  deployment target identity. Any recovery path must be explicit operator
+  registration, not automatic migration. Registered state should stay minimal
+  and carry root verification status; unverified roots must not allow mutation.
+  `deploy check` must stay observational and must not silently rewrite local
+  state.
+- 0.46 must preserve the 0.45 external lifecycle handoff: supplied
+  observations, consent evidence, reported external action, and passive
+  completion reports are evidence, not live deployment truth.
+  `DeploymentTruthInventory`-backed verification remains the only 0.45
+  external lifecycle artifact that may be compared as verified external
+  completion.
 - Design starts at
-  `docs/design/0.45-external-lifecycle/0.45-design.md`. 0.45 must reuse the
-  canonical control classifications from deployment truth and authority
-  reconciliation; it must not introduce a second user/external classification
-  path.
+  `docs/design/0.46-multi-deployment-operations/0.46-design.md`; status is
+  tracked in `docs/design/0.46-multi-deployment-operations/status.md`.
+- The previous active line, `0.45.x`, closed with documented caveats: no live
+  inventory crawler, no consent delivery, no external execution, and no
+  wall-clock `max_observation_age_seconds` enforcement.
+- 0.45 projected existing `CanisterControlClassV1` observations into
+  `LifecycleAuthorityV1`, partitioned them through `ExternalLifecyclePlanV1`,
+  derived passive proposal/receipt/pending/check/handoff evidence, and exposed
+  external lifecycle CLI reports without adding consent delivery, external
+  execution, or install mutation.
 
 ## Recent Work
 
+- 0.46 has started with passive `DeploymentComparisonReportV1` comparison over
+  two existing `DeploymentCheckV1` artifacts. It binds check/plan/inventory
+  digests for both sides, compares normalized identity/artifact/module/config/
+  authority/pool/verifier/external-lifecycle evidence categories, validates
+  archived digest drift, and renders host-owned passive text with no execution.
+- `canic deploy compare --left <file> --right <file>` now reads two
+  `DeploymentCheckV1` JSON artifacts and prints a passive comparison report as
+  JSON by default or host-owned text with `--format text`; it does not query
+  live state, install code, apply authority, or mutate deployments.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,
@@ -98,9 +107,10 @@ inspect only the files needed for the current task.
   <file>` exposes the report from an `ExternalUpgradeVerificationReportRequest`
   JSON file as JSON by default or passive text with `--format text`.
 - `ExternalUpgradeVerificationCheckV1` now bridges verification-policy
-  postconditions and supplied observation facts without adding live
-  re-inventory. It reports each required postcondition as satisfied or
-  mismatched and remains passive structural evidence.
+  postconditions to either supplied observation facts or an existing
+  deployment-truth check artifact. It reports each required postcondition as
+  satisfied or mismatched, records the observation source and observed control
+  class, and keeps supplied evidence from becoming live verified completion.
 - `ExternalUpgradeCompletionReportV1` now prevents downstream consumers from
   conflating consent evidence, reported external action, and verified
   completion. `canic deploy external inspect completion --request <file>`
@@ -760,7 +770,8 @@ inspect only the files needed for the current task.
   proves configured role artifacts are missing.
 - Added changelog governance coverage so `## Unreleased` remains root-only and
   detailed minor changelog files stay versioned.
-- Added per-design-line `status.md` logs to the 0.41-0.50 design directories.
+- Added per-design-line `status.md` logs to the 0.41-0.46 design directories
+  and post-46 backlog topics.
   These files are now the durable place to record what actually landed, what
   drifted from the design, and what remains open for each minor.
 - Clarified the deployment roadmap ladder without changing the hard cut:

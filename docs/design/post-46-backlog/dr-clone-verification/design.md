@@ -1,17 +1,18 @@
-# 0.50 Design: DR, Clone, And Operational Verification
+# Post-46 Backlog: DR, Clone, And Operational Verification
 
 ## Status
 
 TBD.
 
-This is a post-0.46 design stub. It captures deployment clone, trust-domain
-migration, disaster recovery coordination, and post-deploy verification.
+This is a post-0.46 backlog topic. It captures deployment clone, trust-domain
+migration, disaster recovery coordination, and post-deploy verification. It is
+not a promised numbered follow-on release.
 
 ---
 
 ## Goal
 
-0.50 gives operators explicit plans for cloning, verification, and
+A future line may give operators explicit plans for cloning, verification, and
 role-scoped recovery while preserving trust-domain, authority, artifact, and
 verification evidence.
 
@@ -24,9 +25,9 @@ receipts with backups or crossing trust domains accidentally?
 
 ---
 
-## Dependency On 0.41-0.49
+## Dependency On Completed Deployment Foundation
 
-0.50 reuses:
+This topic reuses:
 
 - 0.41 deployment plans, inventories, receipts, safety reports, and materialized
   artifact facts;
@@ -35,21 +36,22 @@ receipts with backups or crossing trust domains accidentally?
 - 0.44 artifact promotion and readiness reports;
 - 0.45 external lifecycle proposals and receipts;
 - 0.46 deployment groups and comparisons;
-- 0.47 artifact registry and retention where available;
-- 0.48 adoption profiles where a deployment is partial or brownfield;
-- 0.49 provenance, JSON, signing, and CI lock contracts where automation is
+- post-46 artifact registry and retention where available;
+- post-46 adoption profiles where a deployment is partial or brownfield;
+- post-46 provenance, JSON, signing, and CI lock contracts where automation is
   involved.
 
 0.46 may compare verification artifacts if present.
 
-0.50 produces those artifacts and owns the verification command and profile.
+This topic would produce those artifacts and own the verification command and
+profile if promoted into a real release line.
 
 ---
 
 ## Core Decision
 
-0.50 coordinates clone, migration, DR, and verification using deployment truth
-objects.
+This topic coordinates clone, migration, DR, and verification using deployment
+truth objects.
 
 It does not replace backup/restore journals or make receipts into backups.
 
@@ -93,7 +95,7 @@ TrustDomainMigrationPlanV1 {
 
 A clone plan should never silently reuse source authority, source root,
 controllers, or pool canister IDs. It may reuse artifact identity only through
-0.44 promotion semantics and 0.47 registry evidence where available.
+0.44 promotion semantics and post-46 registry evidence where available.
 
 ---
 
@@ -184,7 +186,7 @@ Restore must remain authority-aware and postcondition-verified.
 
 ## Data Model
 
-Core 0.50 objects:
+Core objects:
 
 ```text
 DeploymentClonePlanV1
@@ -218,7 +220,7 @@ verification, and restore plan model.
 
 ## Non-Goals
 
-0.50 should not:
+This future work should not:
 
 - replace backup journals;
 - run broad destructive cleanup;
@@ -268,7 +270,7 @@ not need full backup journal workflows.
 
 ## Exit Criterion
 
-0.50 is complete when:
+This topic is ready to promote into a real release line when:
 
 ```text
 Operators can clone or verify a deployment and plan role-scoped recovery while

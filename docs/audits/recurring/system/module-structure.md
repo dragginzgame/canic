@@ -196,14 +196,16 @@ Use this crate map for top-level ownership and boundary assessment:
 | Crate / Area                           | Responsibility                               |
 | -------------------------------------- | -------------------------------------------- |
 | `crates/canic`                         | public facade and macro entry surface        |
+| `crates/canic-backup`                  | backup/restore primitives and layout checks  |
+| `crates/canic-cli`                     | operator CLI and command presentation        |
 | `crates/canic-core`                    | core runtime, orchestration, and shared DTOs |
 | `crates/canic-control-plane`           | root/store control-plane runtime support     |
+| `crates/canic-host`                    | host-side build/install/deployment support   |
+| `crates/canic-macros`                  | proc-macro support for the public facade     |
 | `crates/canic-wasm-store`              | canonical publishable `wasm_store` canister  |
-| `crates/canic-cdk`                     | curated IC CDK facade                        |
-| `crates/canic-memory`                  | stable-memory/runtime helpers                |
-| `crates/canic-testkit`                 | public generic PocketIC/test infrastructure  |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses           |
 | `crates/canic-tests`                   | integration test entrypoints                 |
+| sibling `../ic-testkit`                | public generic PocketIC/test infrastructure  |
 | `fleets/**`                            | config-defined operator fleets               |
 | `canisters/test/**`                    | internal correctness/integration fixtures    |
 | `canisters/audit/**`                   | internal audit/perf probe canisters          |
@@ -211,7 +213,7 @@ Use this crate map for top-level ownership and boundary assessment:
 
 Rules:
 
-* `canic` is the only intended broad public facade unless a crate is explicitly designed as standalone public infrastructure (`canic-testkit`, `canic-cdk`, `canic-memory`).
+* `canic` is the only intended broad public facade.
 * `canic-testing-internal`, `canisters/test`, and `canisters/audit` are not public product API.
 * `fleets/**` is operator fleet surface, not generic test or audit plumbing.
 * `canisters/sandbox/**` is manual scratch space and must not become product API.
@@ -290,14 +292,16 @@ Interpretation rules:
 Default audit scope:
 
 * `crates/canic`
+* `crates/canic-backup`
+* `crates/canic-cli`
 * `crates/canic-core`
 * `crates/canic-control-plane`
+* `crates/canic-host`
+* `crates/canic-macros`
 * `crates/canic-wasm-store`
-* `crates/canic-cdk`
-* `crates/canic-memory`
-* `crates/canic-testkit`
 * `crates/canic-testing-internal`
 * `crates/canic-tests`
+* sibling `../ic-testkit` when present
 * `fleets/**`
 * `canisters/test/**`
 * `canisters/audit/**`
@@ -324,9 +328,14 @@ Enumerate for each public-facing crate:
 Public-facing crates to scan by default:
 
 * `crates/canic`
-* `crates/canic-testkit`
-* `crates/canic-cdk`
-* `crates/canic-memory`
+* `crates/canic-backup`
+* `crates/canic-cli`
+* `crates/canic-core`
+* `crates/canic-control-plane`
+* `crates/canic-host`
+* `crates/canic-macros`
+* `crates/canic-wasm-store`
+* sibling `../ic-testkit` when present
 * any other crate intentionally published or externally consumed in this run
 
 For each item, record:
@@ -367,7 +376,7 @@ Guidance:
 * convenience overexposure is usually **pressure**
 * exposure of implementation-owned or unstable types is a **violation**
 * a stable DTO is not an accidental exposure merely because it is broad
-* public generic helpers in `canic-testkit`, `canic-cdk`, or `canic-memory` are acceptable when aligned to stated crate responsibility
+* public generic helpers are acceptable only when aligned to the owning crate's stated responsibility
 
 ## 1C. Public Field Exposure
 
@@ -397,7 +406,7 @@ Evaluate:
 
 * crate-to-crate direction
 * `canic-core` subsystem direction
-* public/internal seam direction (`canic-testkit` vs `canic-testing-internal`)
+* public/internal seam direction (`../ic-testkit` vs `canic-testing-internal`)
 * fleet/test/audit canister ownership
 * re-export ownership and whether re-exports preserve or blur responsibility
 
@@ -417,7 +426,7 @@ Produce:
 Minimum checks:
 
 * `canic` must not depend upward on testing crates
-* `canic-testkit` must not depend on `canic-testing-internal`
+* sibling `../ic-testkit` must not depend on `canic-testing-internal` when in scope
 * fleet canisters must not depend on audit canisters
 * audit canisters must not become fleet dependencies
 * `workflow` must not reach into storage internals directly
@@ -528,7 +537,7 @@ Check:
 * runtime modules importing test utilities
 * test helper re-exports leaking into non-test builds
 * audit-only helpers leaking into fleet crates
-* `canic-testing-internal` concepts surfacing through `canic-testkit`
+* `canic-testing-internal` concepts surfacing through sibling `../ic-testkit`
 * test canister support re-used by runtime/demo code
 
 Produce:
@@ -553,7 +562,7 @@ Explicitly test:
 * `ops` does not depend on `workflow`
 * `policy` does not depend on `ops` or runtime side effects
 * lower layers do not encode endpoint or facade policy
-* `canic-testkit` does not encode Canic-internal runtime semantics
+* sibling `../ic-testkit` does not encode Canic-internal runtime semantics
 * data-support layers do not accumulate orchestration or side-effect behavior
 
 Produce:
@@ -592,9 +601,8 @@ Explicitly validate:
 
 * facade crates do not re-export core internals accidentally
 * `canic` does not expose storage-owned or replay-owned representation types
-* `canic-testkit` exposes generic PocketIC/test helpers but not Canic-only root harness internals
 * demo canisters do not re-absorb test or audit helper surface
-* `canic-cdk` and `canic-memory` remain aligned to their support roles and do not become alternate runtime façades
+* role-specific published crates remain aligned to their support roles and do not become alternate runtime façades
 
 Produce:
 
@@ -631,7 +639,7 @@ Rules:
 For each high-coordination hub module or seam, include:
 
 * `crates/canic-core/src/access/expr/mod.rs` (or equivalent root if moved)
-* `crates/canic-testkit/src/pic/mod.rs`
+* `../ic-testkit/src/pic/mod.rs` when in scope
 * `crates/canic-testing-internal/src/pic/mod.rs`
 * any other current high-fan-in module surfaced by the audit
 
@@ -735,7 +743,7 @@ Purpose: prevent relitigating deliberate structural choices every run.
 Typical Canic examples:
 
 * `canic` facade re-exports of stable DTOs and macros
-* `canic-testkit` exposing generic PocketIC helpers
+* sibling `../ic-testkit` exposing generic PocketIC helpers
 * fleet canisters carrying tiny local role constants and no-op lifecycle hooks
 * `dto` types being publicly reachable where they are intended contract surface
 

@@ -1,5 +1,71 @@
 use super::*;
 
+/// Render a cross-deployment comparison report as passive operator text.
+#[must_use]
+pub fn deployment_comparison_report_text(report: &DeploymentComparisonReportV1) -> String {
+    let mut lines = vec![
+        "Deployment comparison report".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("status: {}", safety_status_label(report.status)),
+        format!("report_id: {}", report.report_id),
+        format!("report_digest: {}", report.report_digest),
+        format!("compared_at: {}", report.compared_at),
+        format!(
+            "left: {} check={} plan={} inventory={}",
+            report.left.label, report.left.check_id, report.left.plan_id, report.left.inventory_id
+        ),
+        format!(
+            "right: {} check={} plan={} inventory={}",
+            report.right.label,
+            report.right.check_id,
+            report.right.plan_id,
+            report.right.inventory_id
+        ),
+        String::new(),
+        "counts:".to_string(),
+        format!("  identity: {}", report.identity_diff.len()),
+        format!("  artifact: {}", report.artifact_diff.len()),
+        format!("  module_hash: {}", report.module_hash_diff.len()),
+        format!("  embedded_config: {}", report.embedded_config_diff.len()),
+        format!("  authority: {}", report.authority_diff.len()),
+        format!("  pool: {}", report.pool_diff.len()),
+        format!(
+            "  verifier_readiness: {}",
+            report.verifier_readiness_diff.len()
+        ),
+        format!(
+            "  external_lifecycle: {}",
+            report.external_lifecycle_diff.len()
+        ),
+        format!("  hard_failures: {}", report.hard_failures.len()),
+        format!("  warnings: {}", report.warnings.len()),
+    ];
+
+    append_comparison_diff_items(&mut lines, "identity_diff", &report.identity_diff);
+    append_comparison_diff_items(&mut lines, "artifact_diff", &report.artifact_diff);
+    append_comparison_diff_items(&mut lines, "module_hash_diff", &report.module_hash_diff);
+    append_comparison_diff_items(
+        &mut lines,
+        "embedded_config_diff",
+        &report.embedded_config_diff,
+    );
+    append_comparison_diff_items(&mut lines, "authority_diff", &report.authority_diff);
+    append_comparison_diff_items(&mut lines, "pool_diff", &report.pool_diff);
+    append_comparison_diff_items(
+        &mut lines,
+        "verifier_readiness_diff",
+        &report.verifier_readiness_diff,
+    );
+    append_comparison_diff_items(
+        &mut lines,
+        "external_lifecycle_diff",
+        &report.external_lifecycle_diff,
+    );
+    append_string_items(&mut lines, "next_actions", &report.next_actions);
+    lines.join("\n")
+}
+
 /// Render lifecycle authority projection as passive operator text.
 #[must_use]
 pub fn lifecycle_authority_report_text(report: &LifecycleAuthorityReportV1) -> String {
@@ -24,6 +90,29 @@ pub fn lifecycle_authority_report_text(report: &LifecycleAuthorityReportV1) -> S
 
     append_lifecycle_authority_items(&mut lines, &report.authorities);
     lines.join("\n")
+}
+
+fn append_comparison_diff_items(
+    lines: &mut Vec<String>,
+    label: &str,
+    items: &[DeploymentComparisonDiffV1],
+) {
+    if items.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push(format!("{label}:"));
+    for item in items {
+        lines.push(format!(
+            "  - {:?}: {} left={} right={} severity={:?}",
+            item.category,
+            item.subject,
+            item.left.as_deref().unwrap_or("missing"),
+            item.right.as_deref().unwrap_or("missing"),
+            item.severity
+        ));
+        lines.push(format!("    {}", item.message));
+    }
 }
 
 /// Render an external lifecycle plan as passive operator text.
@@ -459,12 +548,31 @@ pub fn external_upgrade_verification_check_text(
         format!("summary: {}", check.status_summary),
         String::new(),
         format!(
+            "observation.source: {}",
+            external_verification_observation_source_label(check.observation.source)
+        ),
+        format!(
+            "observation.deployment_check_id: {}",
+            optional_text(check.observation.deployment_check_id.as_deref())
+        ),
+        format!(
+            "observation.deployment_check_digest: {}",
+            optional_text(check.observation.deployment_check_digest.as_deref())
+        ),
+        format!(
             "observation.inventory_id: {}",
             optional_text(check.observation.inventory_id.as_deref())
         ),
         format!(
             "observation.observed_at: {}",
             optional_text(check.observation.observed_at.as_deref())
+        ),
+        format!(
+            "observation.observed_control_class: {}",
+            check
+                .observation
+                .observed_control_class
+                .map_or_else(|| "none".to_string(), |value| format!("{value:?}"))
         ),
     ];
     append_verification_check_requirement_items(&mut lines, &check.requirement_results);
@@ -500,6 +608,10 @@ pub fn external_upgrade_completion_report_text(
         format!(
             "verification_result: {}",
             external_upgrade_verification_result_label(report.verification_result)
+        ),
+        format!(
+            "verification_observation_source: {}",
+            external_verification_observation_source_label(report.verification_observation_source)
         ),
         format!(
             "completion_status: {}",
@@ -2096,9 +2208,23 @@ const fn external_upgrade_completion_status_label(
     match status {
         ExternalUpgradeCompletionStatusV1::AwaitingConsent => "awaiting_consent",
         ExternalUpgradeCompletionStatusV1::ConsentRefused => "consent_refused",
+        ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent => {
+            "supplied_evidence_consistent"
+        }
         ExternalUpgradeCompletionStatusV1::AwaitingVerification => "awaiting_verification",
         ExternalUpgradeCompletionStatusV1::VerifiedComplete => "verified_complete",
         ExternalUpgradeCompletionStatusV1::VerificationFailed => "verification_failed",
+    }
+}
+
+const fn external_verification_observation_source_label(
+    source: ExternalVerificationObservationSourceV1,
+) -> &'static str {
+    match source {
+        ExternalVerificationObservationSourceV1::SuppliedObservation => "supplied_observation",
+        ExternalVerificationObservationSourceV1::DeploymentTruthInventory => {
+            "deployment_truth_inventory"
+        }
     }
 }
 

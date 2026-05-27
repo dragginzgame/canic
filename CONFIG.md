@@ -99,6 +99,9 @@ Feature toggles tied to public standards.
 ## Subnets
 
 Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifier; `prime` is reserved for the main orchestrator subnet and should always be present.
+Canisters are declared as nested subnet canister tables such as
+`[subnets.prime.canisters.app]`; Canic does not use a flat `[[canisters]]`
+array.
 
 ### `[subnets.<name>]`
 

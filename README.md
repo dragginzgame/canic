@@ -82,11 +82,12 @@ From this checkout, use:
 make install
 ```
 
-Add Canic to each canister crate, both as a runtime dependency and as a
+Add the canister runtime dependencies to each canister crate, and add Canic as a
 `build.rs` dependency:
 
 ```bash
 cargo add canic
+cargo add candid ic-cdk
 cargo add canic --build
 ```
 
@@ -112,6 +113,8 @@ canic::start!(APP); // use canic::start_root!() for root
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
+
+canic::finish!();
 ```
 
 Define a fleet under `fleets/<fleet>/canic.toml`:
@@ -144,7 +147,9 @@ canic info list test
 
 For the full install guide, path dependency setup, split workspace flags, local
 replica notes, fleet management, and backup/restore operator flow, see
-[`INSTALLING.md`](INSTALLING.md).
+[`INSTALLING.md`](INSTALLING.md). For a copyable root-plus-two-children managed
+fleet, start with
+[`docs/getting-started/minimal-managed-fleet.md`](docs/getting-started/minimal-managed-fleet.md).
 
 ## Operator Commands
 

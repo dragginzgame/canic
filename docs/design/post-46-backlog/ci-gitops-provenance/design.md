@@ -1,19 +1,20 @@
-# 0.49 Design: CI, GitOps, And Provenance
+# Post-46 Backlog: CI, GitOps, And Provenance
 
 ## Status
 
 TBD.
 
-This is a post-0.46 design stub. It captures CI/CD, GitOps, and supply-chain
-needs that should build on the deployment truth, authority, execution,
-promotion, lifecycle, comparison, registry, and adoption foundations.
+This is a post-0.46 backlog topic. It captures CI/CD, GitOps, and
+supply-chain needs that should build on deployment truth, authority, execution,
+promotion, lifecycle, comparison, registry, and adoption foundations. It is
+not a promised numbered follow-on release.
 
 ---
 
 ## Goal
 
-0.49 makes deployment commands reliable automation inputs without weakening
-live-state validation.
+A future line may make deployment commands reliable automation inputs without
+weakening live-state validation.
 
 Core CI question:
 
@@ -24,9 +25,9 @@ machine-readable evidence?
 
 ---
 
-## Dependency On 0.41-0.48
+## Dependency On Completed Deployment Foundation
 
-0.49 consumes:
+This topic consumes:
 
 - 0.41 plans, inventories, safety reports, receipts, and artifact manifests;
 - 0.42 authority reconciliation;
@@ -34,13 +35,14 @@ machine-readable evidence?
 - 0.44 promotion reports;
 - 0.45 external lifecycle proposals and receipts;
 - 0.46 deployment comparisons;
-- 0.47 artifact registry metadata where available;
-- 0.48 adoption profiles where CI is onboarding or checking a project.
+- post-46 artifact registry metadata where available;
+- post-46 adoption profiles where CI is onboarding or checking a project.
 
 0.43 internal executor result shapes are not the public JSON contract.
 
-0.49 owns the stable public JSON schema, exit-code contract, CI wrappers,
-signed plans and receipts, and public project manifest contract.
+This topic would own the stable public JSON schema, exit-code contract, CI
+wrappers, signed plans and receipts, and public project manifest contract if it
+is promoted into a real release line.
 
 ---
 
@@ -83,8 +85,9 @@ ExitCodeClassV1 {
 }
 ```
 
-The JSON payload can carry 0.41 through 0.48 objects. The envelope makes command
-parsing stable without forcing every internal model to be frozen forever.
+The JSON payload can carry completed deployment foundation objects and any
+promoted post-46 backlog objects. The envelope makes command parsing stable
+without forcing every internal model to be frozen forever.
 
 ---
 
@@ -146,8 +149,8 @@ Apply phases must still verify current live state before mutation.
 
 ## Project Manifest
 
-0.49 owns the public project manifest contract for split repositories and CI
-roots.
+This topic would own the public project manifest contract for split
+repositories and CI roots if promoted into a real release line.
 
 Tentative shape:
 
@@ -168,7 +171,7 @@ should not make filesystem layout part of `DeploymentPlanV1`.
 
 ## Data Model
 
-Core 0.49 objects:
+Core objects:
 
 ```text
 JsonEnvelopeV1
@@ -204,7 +207,7 @@ classes, provenance, and lock model.
 
 ## Non-Goals
 
-0.49 should not:
+This future work should not:
 
 - make signed receipts truth;
 - let CI bypass live inventory;
@@ -250,7 +253,7 @@ Publish thin CI wrappers around the stable command contract.
 
 ## Exit Criterion
 
-0.49 is complete when:
+This topic is ready to promote into a real release line when:
 
 ```text
 CI can run plan, check, and diff with stable machine-readable output, policy

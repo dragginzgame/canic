@@ -424,12 +424,9 @@ kind = "singleton"
         assert!(execution_preflight.missing_capabilities.is_empty());
         assert_eq!(
             execution_preflight.status,
-            DeploymentExecutionPreflightStatusV1::Blocked
+            DeploymentExecutionPreflightStatusV1::Ready
         );
-        assert!(execution_preflight.blockers.iter().any(|finding| {
-            finding.code == "authority_observation_missing"
-                && finding.subject.as_deref() == Some("root")
-        }));
+        assert!(execution_preflight.blockers.is_empty());
         assert!(!root.join(".canic").exists());
 
         restore_env_var("CANIC_WORKSPACE_ROOT", previous_workspace_root);

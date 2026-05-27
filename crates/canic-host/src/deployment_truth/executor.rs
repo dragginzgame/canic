@@ -190,12 +190,13 @@ pub fn deployment_execution_preflight_from_check(
     required_capabilities: &[DeploymentExecutorCapabilityV1],
 ) -> DeploymentExecutionPreflightV1 {
     let authority_plan = build_authority_reconciliation_plan(check);
-    deployment_execution_preflight(
+    deployment_execution_preflight_with_unknown_authority_policy(
         &check.plan,
         &check.report,
         &authority_plan,
         executor,
         required_capabilities,
+        allow_initial_install_unknown_authority(check),
     )
 }
 
@@ -207,13 +208,35 @@ pub fn deployment_execution_preflight(
     executor: &impl DeploymentExecutor,
     required_capabilities: &[DeploymentExecutorCapabilityV1],
 ) -> DeploymentExecutionPreflightV1 {
+    deployment_execution_preflight_with_unknown_authority_policy(
+        plan,
+        safety_report,
+        authority_plan,
+        executor,
+        required_capabilities,
+        false,
+    )
+}
+
+fn deployment_execution_preflight_with_unknown_authority_policy(
+    plan: &DeploymentPlanV1,
+    safety_report: &SafetyReportV1,
+    authority_plan: &AuthorityReconciliationPlanV1,
+    executor: &impl DeploymentExecutor,
+    required_capabilities: &[DeploymentExecutorCapabilityV1],
+    allow_unknown_authority: bool,
+) -> DeploymentExecutionPreflightV1 {
     let execution_context = executor.execution_context();
     let missing_capabilities = missing_executor_capabilities(
         &execution_context.backend_capabilities,
         required_capabilities,
     );
-    let blockers =
-        deployment_execution_blockers(safety_report, authority_plan, &missing_capabilities);
+    let blockers = deployment_execution_blockers(
+        safety_report,
+        authority_plan,
+        &missing_capabilities,
+        allow_unknown_authority,
+    );
     let status = if blockers.is_empty() {
         DeploymentExecutionPreflightStatusV1::Ready
     } else {
@@ -285,6 +308,7 @@ fn deployment_execution_blockers(
     safety_report: &SafetyReportV1,
     authority_plan: &AuthorityReconciliationPlanV1,
     missing_capabilities: &[DeploymentExecutorCapabilityV1],
+    allow_unknown_authority: bool,
 ) -> Vec<SafetyFindingV1> {
     let mut blockers = Vec::new();
 
@@ -345,6 +369,9 @@ fn deployment_execution_blockers(
                 });
             }
             AuthorityReconciliationStateV1::Unknown => {
+                if allow_unknown_authority {
+                    continue;
+                }
                 blockers.push(SafetyFindingV1 {
                     code: "authority_observation_missing".to_string(),
                     message: action.reason.clone(),
@@ -369,6 +396,15 @@ fn deployment_execution_blockers(
     }
 
     blockers
+}
+
+fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {
+    check.plan.unresolved_assumptions.iter().any(|assumption| {
+        assumption.key == "local_state.root_canister_id"
+            && assumption
+                .description
+                .contains("no local install state exists")
+    })
 }
 
 fn ensure_preflight_field(

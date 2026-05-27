@@ -210,6 +210,8 @@ struct ExternalUpgradeVerificationPolicyDigestInput<'a> {
     policy_id: &'a str,
     proposal_id: &'a str,
     proposal_digest: &'a str,
+    deployment_plan_id: &'a str,
+    deployment_plan_digest: &'a str,
     subject: &'a str,
     canister_id: &'a Option<String>,
     role: &'a Option<String>,
@@ -249,6 +251,7 @@ struct ExternalUpgradeCompletionReportDigestInput<'a> {
     role: &'a Option<String>,
     consent_state: ExternalUpgradeConsentStateV1,
     verification_result: ExternalUpgradeVerificationResultV1,
+    verification_observation_source: ExternalVerificationObservationSourceV1,
     completion_status: ExternalUpgradeCompletionStatusV1,
     blockers: &'a [String],
     next_actions: &'a [String],
@@ -1097,6 +1100,8 @@ pub fn external_upgrade_verification_policy_from_proposal(
         policy_digest: String::new(),
         proposal_id: proposal.proposal_id.clone(),
         proposal_digest: proposal.proposal_digest.clone(),
+        deployment_plan_id: proposal.deployment_plan_id.clone(),
+        deployment_plan_digest: proposal.deployment_plan_digest.clone(),
         subject: proposal.subject.clone(),
         canister_id: proposal.canister_id.clone(),
         role: proposal.role.clone(),
@@ -1126,6 +1131,14 @@ pub fn validate_external_upgrade_verification_policy(
     ensure_external_verification_policy_field("policy_digest", policy.policy_digest.as_str())?;
     ensure_external_verification_policy_field("proposal_id", policy.proposal_id.as_str())?;
     ensure_external_verification_policy_field("proposal_digest", policy.proposal_digest.as_str())?;
+    ensure_external_verification_policy_field(
+        "deployment_plan_id",
+        policy.deployment_plan_id.as_str(),
+    )?;
+    ensure_external_verification_policy_field(
+        "deployment_plan_digest",
+        policy.deployment_plan_digest.as_str(),
+    )?;
     ensure_external_verification_policy_field("subject", policy.subject.as_str())?;
     ensure_external_verification_policy_field("status_summary", policy.status_summary.as_str())?;
     if policy.policy_digest != external_upgrade_verification_policy_digest(policy) {
@@ -1161,9 +1174,11 @@ pub fn external_upgrade_verification_check_from_policy(
     policy: &ExternalUpgradeVerificationPolicyV1,
     observation: ExternalUpgradeVerificationObservationV1,
 ) -> ExternalUpgradeVerificationCheckV1 {
+    let observation_source = observation.source;
     let requirement_results =
         external_upgrade_verification_check_requirements(policy, &observation);
-    let verification_result = external_upgrade_verification_check_result(&requirement_results);
+    let verification_result =
+        external_upgrade_verification_check_result(observation_source, &requirement_results);
     let mut check = ExternalUpgradeVerificationCheckV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         check_id: check_id.into(),
@@ -1178,11 +1193,50 @@ pub fn external_upgrade_verification_check_from_policy(
         observation,
         requirement_results,
         verification_result,
-        status_summary: external_upgrade_verification_check_summary(verification_result)
-            .to_string(),
+        status_summary: external_upgrade_verification_check_summary(
+            observation_source,
+            verification_result,
+        )
+        .to_string(),
     };
     check.check_digest = external_upgrade_verification_check_digest(&check);
     check
+}
+
+/// Build a verification observation from an existing deployment-truth check.
+///
+/// This does not crawl IC state. It reuses the inventory already carried by the
+/// deployment-truth check and binds the observation to that check's digest so
+/// stale archived inventory fails closed when validated against the policy.
+pub fn external_upgrade_verification_observation_from_check(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    check: &DeploymentCheckV1,
+) -> Result<ExternalUpgradeVerificationObservationV1, ExternalUpgradeVerificationCheckError> {
+    validate_external_upgrade_verification_policy(policy)
+        .map_err(|_| ExternalUpgradeVerificationCheckError::SourceMismatch { field: "policy" })?;
+    if policy.deployment_plan_id != check.plan.plan_id
+        || policy.deployment_plan_digest != stable_json_sha256_hex(&check.plan)
+    {
+        return Err(ExternalUpgradeVerificationCheckError::SourceMismatch {
+            field: "deployment_plan",
+        });
+    }
+
+    let observed = observed_canister_for_verification_policy(&check.inventory, policy);
+    Ok(ExternalUpgradeVerificationObservationV1 {
+        source: ExternalVerificationObservationSourceV1::DeploymentTruthInventory,
+        deployment_check_id: Some(check.check_id.clone()),
+        deployment_check_digest: Some(stable_json_sha256_hex(check)),
+        inventory_id: Some(check.inventory.inventory_id.clone()),
+        observed_at: Some(check.inventory.observed_at.clone()),
+        live_inventory_observed: true,
+        controller_observation_present: observed.is_some_and(|item| !item.controllers.is_empty()),
+        observed_control_class: observed.map(|item| item.control_class),
+        observed_module_hash: observed.and_then(|item| item.module_hash.clone()),
+        observed_canonical_embedded_config_sha256: observed
+            .and_then(|item| item.canonical_embedded_config_digest.clone()),
+        protected_call_ready: external_upgrade_protected_call_ready(policy, check),
+    })
 }
 
 /// Validate archived external-upgrade verification check consistency and
@@ -1206,12 +1260,35 @@ pub fn validate_external_upgrade_verification_check(
     ensure_external_verification_check_field("proposal_digest", check.proposal_digest.as_str())?;
     ensure_external_verification_check_field("subject", check.subject.as_str())?;
     ensure_external_verification_check_field("status_summary", check.status_summary.as_str())?;
+    if check.observation.source == ExternalVerificationObservationSourceV1::DeploymentTruthInventory
+    {
+        ensure_external_verification_check_option_field(
+            "observation.deployment_check_id",
+            check.observation.deployment_check_id.as_deref(),
+        )?;
+        ensure_external_verification_check_option_field(
+            "observation.deployment_check_digest",
+            check.observation.deployment_check_digest.as_deref(),
+        )?;
+        ensure_external_verification_check_option_field(
+            "observation.inventory_id",
+            check.observation.inventory_id.as_deref(),
+        )?;
+        ensure_external_verification_check_option_field(
+            "observation.observed_at",
+            check.observation.observed_at.as_deref(),
+        )?;
+    }
     validate_external_upgrade_verification_check_requirements(
+        check.observation.source,
         &check.requirement_results,
         check.verification_result,
     )?;
     if check.status_summary
-        != external_upgrade_verification_check_summary(check.verification_result)
+        != external_upgrade_verification_check_summary(
+            check.observation.source,
+            check.verification_result,
+        )
     {
         return Err(ExternalUpgradeVerificationCheckError::SourceMismatch {
             field: "status_summary",
@@ -1243,6 +1320,29 @@ pub fn validate_external_upgrade_verification_check_for_policy(
     Ok(())
 }
 
+/// Validate that a deployment-truth inventory verification check still matches
+/// the exact deployment check it claims to use.
+pub fn validate_external_upgrade_verification_check_for_deployment_check(
+    check: &ExternalUpgradeVerificationCheckV1,
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    deployment_check: &DeploymentCheckV1,
+) -> Result<(), ExternalUpgradeVerificationCheckError> {
+    validate_external_upgrade_verification_check_for_policy(check, policy)?;
+    let observation =
+        external_upgrade_verification_observation_from_check(policy, deployment_check)?;
+    let expected = external_upgrade_verification_check_from_policy(
+        check.check_id.clone(),
+        policy,
+        observation,
+    );
+    if check != &expected {
+        return Err(ExternalUpgradeVerificationCheckError::SourceMismatch {
+            field: "deployment_check",
+        });
+    }
+    Ok(())
+}
+
 /// Build a passive completion report for an external lifecycle proposal.
 ///
 /// This report only combines structural evidence. It does not deliver consent,
@@ -1261,6 +1361,7 @@ pub fn external_upgrade_completion_report_from_evidence(
     let completion_status = external_upgrade_completion_status(
         consent_evidence.consent_state,
         verification_check.verification_result,
+        verification_check.observation.source,
     );
     let blockers = external_upgrade_completion_blockers(completion_status);
     let next_actions = external_upgrade_completion_next_actions(completion_status);
@@ -1279,6 +1380,7 @@ pub fn external_upgrade_completion_report_from_evidence(
         role: proposal.role.clone(),
         consent_state: consent_evidence.consent_state,
         verification_result: verification_check.verification_result,
+        verification_observation_source: verification_check.observation.source,
         completion_status,
         blockers,
         next_actions,
@@ -1323,7 +1425,11 @@ pub fn validate_external_upgrade_completion_report(
     ensure_external_completion_report_field("subject", report.subject.as_str())?;
     ensure_external_completion_report_field("status_summary", report.status_summary.as_str())?;
     if report.completion_status
-        != external_upgrade_completion_status(report.consent_state, report.verification_result)
+        != external_upgrade_completion_status(
+            report.consent_state,
+            report.verification_result,
+            report.verification_observation_source,
+        )
     {
         return Err(ExternalUpgradeCompletionReportError::SourceMismatch {
             field: "completion_status",
@@ -2691,6 +2797,36 @@ fn observed_canister_for_authority<'a>(
         .find(|observed| observed.role == authority.role)
 }
 
+fn observed_canister_for_verification_policy<'a>(
+    inventory: &'a DeploymentInventoryV1,
+    policy: &ExternalUpgradeVerificationPolicyV1,
+) -> Option<&'a ObservedCanisterV1> {
+    if let Some(canister_id) = &policy.canister_id
+        && let Some(observed) = inventory
+            .observed_canisters
+            .iter()
+            .find(|observed| &observed.canister_id == canister_id)
+    {
+        return Some(observed);
+    }
+    inventory
+        .observed_canisters
+        .iter()
+        .find(|observed| observed.role == policy.role)
+}
+
+fn external_upgrade_protected_call_ready(
+    policy: &ExternalUpgradeVerificationPolicyV1,
+    check: &DeploymentCheckV1,
+) -> Option<bool> {
+    policy
+        .required_verification
+        .contains(&LifecycleVerificationRequirementV1::ProtectedCallReadiness)
+        .then_some(
+            check.inventory.observed_verifier_readiness.status == ObservationStatusV1::Observed,
+        )
+}
+
 fn target_artifact_for_authority<'a>(
     plan: &'a DeploymentPlanV1,
     authority: &LifecycleAuthorityV1,
@@ -3055,6 +3191,8 @@ fn external_upgrade_verification_policy_digest(
         policy_id: &policy.policy_id,
         proposal_id: &policy.proposal_id,
         proposal_digest: &policy.proposal_digest,
+        deployment_plan_id: &policy.deployment_plan_id,
+        deployment_plan_digest: &policy.deployment_plan_digest,
         subject: &policy.subject,
         canister_id: &policy.canister_id,
         role: &policy.role,
@@ -3098,6 +3236,7 @@ fn external_upgrade_completion_report_digest(report: &ExternalUpgradeCompletionR
         role: &report.role,
         consent_state: report.consent_state,
         verification_result: report.verification_result,
+        verification_observation_source: report.verification_observation_source,
         completion_status: report.completion_status,
         blockers: &report.blockers,
         next_actions: &report.next_actions,
@@ -3305,7 +3444,7 @@ fn external_upgrade_verification_policy_requirements(
         (LifecycleVerificationRequirementV1::LiveInventory, None),
         (
             LifecycleVerificationRequirementV1::ControllerObservation,
-            None,
+            Some(control_class_value(proposal.control_class)),
         ),
         (
             LifecycleVerificationRequirementV1::ModuleHash,
@@ -3376,7 +3515,7 @@ fn external_upgrade_verification_observed_value(
             Some(observation.live_inventory_observed.to_string())
         }
         LifecycleVerificationRequirementV1::ControllerObservation => {
-            Some(observation.controller_observation_present.to_string())
+            observation.observed_control_class.map(control_class_value)
         }
         LifecycleVerificationRequirementV1::ModuleHash => observation.observed_module_hash.clone(),
         LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig => observation
@@ -3398,6 +3537,7 @@ fn external_upgrade_verification_requirement_satisfied(
         LifecycleVerificationRequirementV1::LiveInventory => observation.live_inventory_observed,
         LifecycleVerificationRequirementV1::ControllerObservation => {
             observation.controller_observation_present
+                && expected_value.is_some_and(|expected| observed_value == Some(expected))
         }
         LifecycleVerificationRequirementV1::ModuleHash
         | LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig => {
@@ -3410,20 +3550,33 @@ fn external_upgrade_verification_requirement_satisfied(
 }
 
 fn external_upgrade_verification_check_result(
+    source: ExternalVerificationObservationSourceV1,
     requirements: &[ExternalUpgradeVerificationCheckRequirementV1],
 ) -> ExternalUpgradeVerificationResultV1 {
-    if requirements
+    if !requirements
         .iter()
         .filter(|row| row.status == ExternalUpgradeVerificationRequirementStatusV1::Required)
         .all(|row| row.satisfied == Some(true))
     {
-        ExternalUpgradeVerificationResultV1::Verified
-    } else {
-        ExternalUpgradeVerificationResultV1::Mismatch
+        return ExternalUpgradeVerificationResultV1::Mismatch;
+    }
+
+    match source {
+        ExternalVerificationObservationSourceV1::DeploymentTruthInventory => {
+            ExternalUpgradeVerificationResultV1::Verified
+        }
+        ExternalVerificationObservationSourceV1::SuppliedObservation => {
+            ExternalUpgradeVerificationResultV1::Pending
+        }
     }
 }
 
+fn control_class_value(control_class: CanisterControlClassV1) -> String {
+    format!("{control_class:?}")
+}
+
 fn validate_external_upgrade_verification_check_requirements(
+    source: ExternalVerificationObservationSourceV1,
     requirements: &[ExternalUpgradeVerificationCheckRequirementV1],
     result: ExternalUpgradeVerificationResultV1,
 ) -> Result<(), ExternalUpgradeVerificationCheckError> {
@@ -3464,7 +3617,7 @@ fn validate_external_upgrade_verification_check_requirements(
             }
         }
     }
-    if external_upgrade_verification_check_result(requirements) != result {
+    if external_upgrade_verification_check_result(source, requirements) != result {
         return Err(ExternalUpgradeVerificationCheckError::SourceMismatch {
             field: "verification_result",
         });
@@ -3475,6 +3628,7 @@ fn validate_external_upgrade_verification_check_requirements(
 const fn external_upgrade_completion_status(
     consent_state: ExternalUpgradeConsentStateV1,
     verification_result: ExternalUpgradeVerificationResultV1,
+    source: ExternalVerificationObservationSourceV1,
 ) -> ExternalUpgradeCompletionStatusV1 {
     match consent_state {
         ExternalUpgradeConsentStateV1::Pending => {
@@ -3483,9 +3637,14 @@ const fn external_upgrade_completion_status(
         ExternalUpgradeConsentStateV1::Refused => ExternalUpgradeCompletionStatusV1::ConsentRefused,
         ExternalUpgradeConsentStateV1::Delegated
         | ExternalUpgradeConsentStateV1::ExecutedExternally => match verification_result {
-            ExternalUpgradeVerificationResultV1::Verified => {
-                ExternalUpgradeCompletionStatusV1::VerifiedComplete
-            }
+            ExternalUpgradeVerificationResultV1::Verified => match source {
+                ExternalVerificationObservationSourceV1::DeploymentTruthInventory => {
+                    ExternalUpgradeCompletionStatusV1::VerifiedComplete
+                }
+                ExternalVerificationObservationSourceV1::SuppliedObservation => {
+                    ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent
+                }
+            },
             ExternalUpgradeVerificationResultV1::Mismatch => {
                 ExternalUpgradeCompletionStatusV1::VerificationFailed
             }
@@ -3504,6 +3663,9 @@ fn external_upgrade_completion_blockers(status: ExternalUpgradeCompletionStatusV
         }
         ExternalUpgradeCompletionStatusV1::ConsentRefused => {
             vec!["external consent was refused".to_string()]
+        }
+        ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent => {
+            vec!["supplied evidence is consistent but not live inventory proof".to_string()]
         }
         ExternalUpgradeCompletionStatusV1::AwaitingVerification => {
             vec!["external action requires verification against live inventory".to_string()]
@@ -3525,6 +3687,9 @@ fn external_upgrade_completion_next_actions(
         ExternalUpgradeCompletionStatusV1::ConsentRefused => {
             vec!["do not execute; supersede the proposal before retry".to_string()]
         }
+        ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent => {
+            vec!["collect deployment-truth inventory and run verification check".to_string()]
+        }
         ExternalUpgradeCompletionStatusV1::AwaitingVerification => {
             vec!["collect fresh inventory observations and run verification check".to_string()]
         }
@@ -3545,6 +3710,9 @@ const fn external_upgrade_completion_summary(
             "external lifecycle item is waiting for consent or external action"
         }
         ExternalUpgradeCompletionStatusV1::ConsentRefused => "external lifecycle item was refused",
+        ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent => {
+            "external lifecycle supplied evidence is consistent but awaits inventory verification"
+        }
         ExternalUpgradeCompletionStatusV1::AwaitingVerification => {
             "external lifecycle item needs verification before completion"
         }
@@ -3558,18 +3726,24 @@ const fn external_upgrade_completion_summary(
 }
 
 const fn external_upgrade_verification_check_summary(
+    source: ExternalVerificationObservationSourceV1,
     result: ExternalUpgradeVerificationResultV1,
 ) -> &'static str {
     match result {
         ExternalUpgradeVerificationResultV1::Verified => {
-            "supplied observation satisfies required verification postconditions"
+            "deployment-truth inventory satisfies required verification postconditions"
         }
         ExternalUpgradeVerificationResultV1::Mismatch => {
-            "supplied observation does not satisfy required verification postconditions"
+            "verification observation does not satisfy required verification postconditions"
         }
-        ExternalUpgradeVerificationResultV1::Pending => {
-            "external verification check is pending observation"
-        }
+        ExternalUpgradeVerificationResultV1::Pending => match source {
+            ExternalVerificationObservationSourceV1::SuppliedObservation => {
+                "supplied observation is consistent; deployment-truth inventory verification is required"
+            }
+            ExternalVerificationObservationSourceV1::DeploymentTruthInventory => {
+                "external verification check is pending inventory observation"
+            }
+        },
         ExternalUpgradeVerificationResultV1::Refused => {
             "external verification check reflects refused consent"
         }
@@ -3660,6 +3834,16 @@ fn ensure_external_verification_check_field(
     value: &str,
 ) -> Result<(), ExternalUpgradeVerificationCheckError> {
     if value.trim().is_empty() {
+        return Err(ExternalUpgradeVerificationCheckError::MissingRequiredField { field });
+    }
+    Ok(())
+}
+
+fn ensure_external_verification_check_option_field(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<(), ExternalUpgradeVerificationCheckError> {
+    if value.is_none_or(|value| value.trim().is_empty()) {
         return Err(ExternalUpgradeVerificationCheckError::MissingRequiredField { field });
     }
     Ok(())

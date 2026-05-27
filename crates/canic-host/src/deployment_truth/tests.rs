@@ -64,6 +64,97 @@ fn plan_round_trips_through_json() {
 }
 
 #[test]
+fn deployment_comparison_report_detects_cross_deployment_drift() {
+    let left = sample_check(sample_plan(), sample_matching_inventory());
+    let mut right_plan = sample_plan();
+    right_plan.plan_id = "plan-prod-root".to_string();
+    right_plan.deployment_identity.deployment_name = "prod".to_string();
+    right_plan.deployment_identity.network = "ic".to_string();
+    right_plan.trust_domain.root_trust_anchor = Some("prod-root".to_string());
+    right_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("b"));
+    let mut right_inventory = sample_matching_inventory();
+    right_inventory.inventory_id = "inventory-prod".to_string();
+    right_inventory.observed_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+    right_inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+    right_inventory.observed_canisters[0].module_hash = Some("prod-module".to_string());
+    right_inventory.observed_canisters[0].canonical_embedded_config_digest =
+        Some("prod-config".to_string());
+    let mut right = sample_check(right_plan, right_inventory);
+    right.check_id = "check-prod".to_string();
+
+    let report = deployment_comparison_report_from_checks(
+        "comparison-1",
+        "2026-05-26T00:00:00Z",
+        "staging",
+        "prod",
+        &left,
+        &right,
+    );
+
+    assert_eq!(report.schema_version, DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(report.report_id, "comparison-1");
+    assert_eq!(report.report_digest.len(), 64);
+    assert_eq!(report.left.label, "staging");
+    assert_eq!(report.right.label, "prod");
+    assert_eq!(report.status, SafetyStatusV1::Warning);
+    assert!(!report.identity_diff.is_empty());
+    assert!(!report.artifact_diff.is_empty());
+    assert!(!report.module_hash_diff.is_empty());
+    assert!(!report.embedded_config_diff.is_empty());
+    assert!(!report.authority_diff.is_empty());
+    assert!(!report.external_lifecycle_diff.is_empty());
+    assert!(report.hard_failures.is_empty());
+    assert_eq!(report.warnings.len(), 1);
+    validate_deployment_comparison_report(&report).expect("comparison should validate");
+}
+
+#[test]
+fn deployment_comparison_report_validation_rejects_digest_drift() {
+    let left = sample_check(sample_plan(), sample_matching_inventory());
+    let right = sample_check(sample_plan(), sample_matching_inventory());
+    let mut report = deployment_comparison_report_from_checks(
+        "comparison-1",
+        "2026-05-26T00:00:00Z",
+        "left",
+        "right",
+        &left,
+        &right,
+    );
+
+    report.next_actions.push("stale action".to_string());
+
+    let err = validate_deployment_comparison_report(&report)
+        .expect_err("stale comparison digest should fail");
+    assert_eq!(
+        err,
+        DeploymentComparisonReportError::DigestMismatch {
+            field: "report_digest"
+        }
+    );
+}
+
+#[test]
+fn deployment_comparison_report_text_is_passive() {
+    let left = sample_check(sample_plan(), sample_matching_inventory());
+    let right = sample_check(sample_plan(), sample_matching_inventory());
+    let report = deployment_comparison_report_from_checks(
+        "comparison-1",
+        "2026-05-26T00:00:00Z",
+        "left",
+        "right",
+        &left,
+        &right,
+    );
+
+    let text = deployment_comparison_report_text(&report);
+
+    assert!(text.contains("Deployment comparison report"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("execution: none"));
+    assert!(text.contains("external_lifecycle: 0"));
+}
+
+#[test]
 fn lifecycle_authority_report_projects_deployment_controlled_roles() {
     let check = sample_check(sample_plan(), sample_matching_inventory());
 
@@ -1212,6 +1303,15 @@ fn sample_external_lifecycle_pending_artifacts()
 
 fn sample_external_upgrade_proposal_and_receipt()
 -> (ExternalUpgradeProposalV1, ExternalUpgradeReceiptV1) {
+    let (proposal, receipt, _) = sample_external_upgrade_proposal_receipt_and_check();
+    (proposal, receipt)
+}
+
+fn sample_external_upgrade_proposal_receipt_and_check() -> (
+    ExternalUpgradeProposalV1,
+    ExternalUpgradeReceiptV1,
+    DeploymentCheckV1,
+) {
     let mut plan = sample_plan();
     plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
     let mut inventory = sample_matching_inventory();
@@ -1236,7 +1336,7 @@ fn sample_external_upgrade_proposal_and_receipt()
         Some("user-principal".to_string()),
         Some(&check.inventory.observed_canisters[0]),
     );
-    (proposal, receipt)
+    (proposal, receipt, check)
 }
 
 #[test]
@@ -1784,7 +1884,7 @@ fn external_upgrade_verification_policy_packages_proposal_requirements() {
     assert_required_policy_requirement(
         &policy,
         LifecycleVerificationRequirementV1::ControllerObservation,
-        None,
+        Some("UserControlled"),
     );
     assert_required_policy_requirement(
         &policy,
@@ -1820,6 +1920,8 @@ fn external_upgrade_verification_policy_json_shape_is_stable() {
             "policy_digest",
             "proposal_id",
             "proposal_digest",
+            "deployment_plan_id",
+            "deployment_plan_digest",
             "subject",
             "canister_id",
             "role",
@@ -1898,8 +2000,13 @@ fn external_upgrade_verification_check_evaluates_supplied_observation() {
     assert_eq!(check.policy_digest, policy.policy_digest);
     assert_eq!(
         check.verification_result,
-        ExternalUpgradeVerificationResultV1::Verified
+        ExternalUpgradeVerificationResultV1::Pending
     );
+    assert_eq!(
+        check.observation.source,
+        ExternalVerificationObservationSourceV1::SuppliedObservation
+    );
+    assert!(check.status_summary.contains("deployment-truth inventory"));
     assert!(check.requirement_results.iter().all(|row| {
         row.status == ExternalUpgradeVerificationRequirementStatusV1::NotRequired
             || row.satisfied == Some(true)
@@ -1909,6 +2016,174 @@ fn external_upgrade_verification_check_evaluates_supplied_observation() {
     validate_external_upgrade_verification_check_for_policy(&check, &policy)
         .expect("check should validate against policy");
     assert_json_round_trip(&check);
+}
+
+#[test]
+fn external_upgrade_verification_check_verifies_deployment_truth_inventory() {
+    let (proposal, _, deployment_check) = sample_external_upgrade_proposal_receipt_and_check();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let observation =
+        external_upgrade_verification_observation_from_check(&policy, &deployment_check)
+            .expect("deployment check should produce verification observation");
+
+    let check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        observation,
+    );
+
+    assert_eq!(
+        check.observation.source,
+        ExternalVerificationObservationSourceV1::DeploymentTruthInventory
+    );
+    assert_eq!(
+        check.observation.deployment_check_id.as_deref(),
+        Some(deployment_check.check_id.as_str())
+    );
+    assert_eq!(
+        check.verification_result,
+        ExternalUpgradeVerificationResultV1::Verified
+    );
+    validate_external_upgrade_verification_check_for_deployment_check(
+        &check,
+        &policy,
+        &deployment_check,
+    )
+    .expect("inventory-backed verification check should validate against deployment check");
+}
+
+#[test]
+fn external_upgrade_verification_check_rejects_stale_inventory_source() {
+    let (proposal, _, mut deployment_check) = sample_external_upgrade_proposal_receipt_and_check();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let observation =
+        external_upgrade_verification_observation_from_check(&policy, &deployment_check)
+            .expect("deployment check should produce verification observation");
+    let check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        observation,
+    );
+    deployment_check.inventory.observed_canisters[0].module_hash =
+        Some("stale-module-hash".to_string());
+
+    let err = validate_external_upgrade_verification_check_for_deployment_check(
+        &check,
+        &policy,
+        &deployment_check,
+    )
+    .expect_err("stale inventory should fail closed");
+
+    assert_eq!(
+        err,
+        ExternalUpgradeVerificationCheckError::SourceMismatch {
+            field: "deployment_check"
+        }
+    );
+}
+
+#[test]
+fn external_upgrade_verification_check_reports_inventory_fact_mismatches() {
+    assert_inventory_verification_mismatch(
+        |check| check.inventory.observed_canisters[0].module_hash = Some("wrong-module".into()),
+        LifecycleVerificationRequirementV1::ModuleHash,
+    );
+    assert_inventory_verification_mismatch(
+        |check| {
+            check.inventory.observed_canisters[0].canonical_embedded_config_digest =
+                Some("wrong-config".into());
+        },
+        LifecycleVerificationRequirementV1::CanonicalEmbeddedConfig,
+    );
+    assert_inventory_verification_mismatch(
+        |check| {
+            check.inventory.observed_canisters[0].control_class =
+                CanisterControlClassV1::DeploymentControlled;
+        },
+        LifecycleVerificationRequirementV1::ControllerObservation,
+    );
+    assert_inventory_verification_mismatch(
+        |check| {
+            check.inventory.observed_verifier_readiness.status = ObservationStatusV1::NotObserved;
+        },
+        LifecycleVerificationRequirementV1::ProtectedCallReadiness,
+    );
+}
+
+#[test]
+fn external_upgrade_verification_check_rejects_stale_inventory_links() {
+    let (proposal, _, deployment_check) = sample_external_upgrade_proposal_receipt_and_check();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let observation =
+        external_upgrade_verification_observation_from_check(&policy, &deployment_check)
+            .expect("deployment check should produce verification observation");
+    let check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        observation,
+    );
+
+    let mut stale_check_id = check.clone();
+    stale_check_id.observation.deployment_check_id = Some("other-check".to_string());
+    assert!(
+        validate_external_upgrade_verification_check_for_deployment_check(
+            &stale_check_id,
+            &policy,
+            &deployment_check,
+        )
+        .is_err()
+    );
+
+    let mut stale_check_digest = check.clone();
+    stale_check_digest.observation.deployment_check_digest = Some(sample_sha256("9"));
+    assert!(
+        validate_external_upgrade_verification_check_for_deployment_check(
+            &stale_check_digest,
+            &policy,
+            &deployment_check,
+        )
+        .is_err()
+    );
+
+    let mut stale_inventory_id = check;
+    stale_inventory_id.observation.inventory_id = Some("other-inventory".to_string());
+    assert!(
+        validate_external_upgrade_verification_check_for_deployment_check(
+            &stale_inventory_id,
+            &policy,
+            &deployment_check,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn external_upgrade_verification_observation_rejects_stale_deployment_plan() {
+    let (proposal, _, mut deployment_check) = sample_external_upgrade_proposal_receipt_and_check();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    deployment_check.plan.plan_id = "other-plan".to_string();
+
+    let err = external_upgrade_verification_observation_from_check(&policy, &deployment_check)
+        .expect_err("deployment plan drift should fail closed");
+
+    assert_eq!(
+        err,
+        ExternalUpgradeVerificationCheckError::SourceMismatch {
+            field: "deployment_plan"
+        }
+    );
 }
 
 #[test]
@@ -1982,11 +2257,15 @@ fn external_upgrade_verification_check_request_json_shape_is_stable() {
     let request = ExternalUpgradeVerificationCheckRequest {
         check_id: "external-upgrade-verification-check-1".to_string(),
         policy,
-        observation: matching_external_verification_observation(&proposal),
+        observation: Some(matching_external_verification_observation(&proposal)),
+        deployment_check: None,
     };
     let encoded = serde_json::to_value(&request).expect("request should encode");
 
-    assert_object_keys(&encoded, &["check_id", "policy", "observation"]);
+    assert_object_keys(
+        &encoded,
+        &["check_id", "policy", "observation", "deployment_check"],
+    );
     assert_json_round_trip(&request);
 }
 
@@ -2119,6 +2398,42 @@ fn external_upgrade_completion_report_marks_verified_completion() {
 }
 
 #[test]
+fn external_upgrade_completion_report_does_not_complete_from_supplied_observation() {
+    let (proposal, consent_evidence, _) = sample_external_completion_sources();
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let verification_check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        matching_external_verification_observation(&proposal),
+    );
+
+    let report = external_upgrade_completion_report_from_evidence(
+        "external-upgrade-completion-1",
+        &proposal,
+        &consent_evidence,
+        &verification_check,
+    )
+    .expect("completion report should build");
+
+    assert_eq!(
+        report.verification_observation_source,
+        ExternalVerificationObservationSourceV1::SuppliedObservation
+    );
+    assert_eq!(
+        report.completion_status,
+        ExternalUpgradeCompletionStatusV1::AwaitingVerification
+    );
+    assert_ne!(
+        report.completion_status,
+        ExternalUpgradeCompletionStatusV1::VerifiedComplete
+    );
+    assert!(!report.blockers.is_empty());
+}
+
+#[test]
 fn external_upgrade_completion_report_marks_verification_failed() {
     let (proposal, consent_evidence, _) = sample_external_completion_sources();
     let policy = external_upgrade_verification_policy_from_proposal(
@@ -2207,6 +2522,7 @@ fn external_upgrade_completion_report_json_shape_is_stable() {
             "role",
             "consent_state",
             "verification_result",
+            "verification_observation_source",
             "completion_status",
             "blockers",
             "next_actions",
@@ -11272,10 +11588,14 @@ fn matching_external_verification_observation(
     proposal: &ExternalUpgradeProposalV1,
 ) -> ExternalUpgradeVerificationObservationV1 {
     ExternalUpgradeVerificationObservationV1 {
+        source: ExternalVerificationObservationSourceV1::SuppliedObservation,
+        deployment_check_id: None,
+        deployment_check_digest: None,
         inventory_id: Some("inventory-verified".to_string()),
         observed_at: Some("2026-05-26T00:00:00Z".to_string()),
         live_inventory_observed: true,
         controller_observation_present: true,
+        observed_control_class: Some(proposal.control_class),
         observed_module_hash: proposal.target_installed_module_hash.clone(),
         observed_canonical_embedded_config_sha256: proposal
             .target_canonical_embedded_config_sha256
@@ -11289,7 +11609,8 @@ fn sample_external_completion_sources() -> (
     ExternalUpgradeConsentEvidenceV1,
     ExternalUpgradeVerificationCheckV1,
 ) {
-    let (proposal, receipt) = sample_external_upgrade_proposal_and_receipt();
+    let (proposal, receipt, deployment_check) =
+        sample_external_upgrade_proposal_receipt_and_check();
     let consent_evidence = external_upgrade_consent_evidence_from_receipt(
         "external-upgrade-consent-evidence-1",
         &proposal,
@@ -11300,12 +11621,55 @@ fn sample_external_completion_sources() -> (
         "external-upgrade-verification-policy-1",
         &proposal,
     );
+    let observation =
+        external_upgrade_verification_observation_from_check(&policy, &deployment_check)
+            .expect("sample deployment check should produce verification observation");
     let verification_check = external_upgrade_verification_check_from_policy(
         "external-upgrade-verification-check-1",
         &policy,
-        matching_external_verification_observation(&proposal),
+        observation,
     );
     (proposal, consent_evidence, verification_check)
+}
+
+fn assert_inventory_verification_mismatch(
+    mutate: impl FnOnce(&mut DeploymentCheckV1),
+    requirement: LifecycleVerificationRequirementV1,
+) {
+    let (proposal, _, mut deployment_check) = sample_external_upgrade_proposal_receipt_and_check();
+    mutate(&mut deployment_check);
+    let policy = external_upgrade_verification_policy_from_proposal(
+        "external-upgrade-verification-policy-1",
+        &proposal,
+    );
+    let observation =
+        external_upgrade_verification_observation_from_check(&policy, &deployment_check)
+            .expect("deployment check should still produce verification observation");
+    let check = external_upgrade_verification_check_from_policy(
+        "external-upgrade-verification-check-1",
+        &policy,
+        observation,
+    );
+
+    assert_eq!(
+        check.observation.source,
+        ExternalVerificationObservationSourceV1::DeploymentTruthInventory
+    );
+    assert_eq!(
+        check.verification_result,
+        ExternalUpgradeVerificationResultV1::Mismatch
+    );
+    assert!(check.requirement_results.iter().any(|row| {
+        row.requirement == requirement
+            && row.status == ExternalUpgradeVerificationRequirementStatusV1::Required
+            && row.satisfied == Some(false)
+    }));
+    validate_external_upgrade_verification_check_for_deployment_check(
+        &check,
+        &policy,
+        &deployment_check,
+    )
+    .expect("mismatch check should still validate against its source inventory");
 }
 
 fn sample_identity() -> DeploymentIdentityV1 {

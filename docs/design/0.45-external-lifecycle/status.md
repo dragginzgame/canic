@@ -10,20 +10,38 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-Started.
+Closed with documented caveats.
 
-0.45 now has passive lifecycle-authority projection over existing deployment
-truth, lifecycle plan partitioning, derived proposal/receipt/pending/check/
-handoff evidence, critical-fix residual exposure reporting, structural
-external verification reporting, verification policies, and supplied-observation
-verification checks. The line also has passive completion reports that combine
-proposal, consent-evidence, and verification-check artifacts without treating
-consent or reported action as completion proof. External or user-owned
-lifecycle flows remain explicit report data; no consent delivery, external
-execution, live re-inventory, or install mutation path has landed.
-Source-guard coverage pins 0.45 lifecycle projection to the canonical
-`CanisterControlClassV1` model so the line cannot silently introduce a second
-user/external control-class path.
+0.45 satisfies the passive external lifecycle release bar. Canic can represent
+user-owned or externally controlled lifecycle states without pretending it has
+unilateral deployment authority, and can verify externally completed work
+against deployment-truth inventory evidence when an existing
+`DeploymentCheckV1` artifact is supplied.
+
+The line intentionally remains passive: no consent delivery, external action
+execution, live inventory crawler, externally controlled install mutation, or
+wall-clock observation-age enforcement landed in 0.45.
+
+## Closeout
+
+Verdict: 0.45 CLOSED WITH DOCUMENTED CAVEATS.
+
+Final audit found no blocking issues. One release-bar hardening fix landed
+during audit: inventory-backed verification now binds observed
+`CanisterControlClassV1` / controller-control facts rather than accepting the
+mere presence of controller observation evidence.
+
+Final validation passed:
+
+- `cargo fmt --all --check`
+- `cargo test -p canic-cli external --locked`
+- `cargo test -p canic-host external --lib --offline`
+- `cargo test -p canic-host deployment_truth --lib --offline`
+- `cargo test -p canic-host install_root --lib --offline`
+- `cargo test -p canic --test changelog_governance --locked`
+- `cargo clippy -p canic-cli --all-targets --locked -- -D warnings`
+- `cargo clippy -p canic-host --all-targets --offline -- -D warnings`
+- `git diff --check`
 
 ## Implemented
 
@@ -96,14 +114,27 @@ user/external control-class path.
   be treated as complete. It records source proposal digests, required
   verification facts, expected module/config facts, protected-call readiness
   requirements, and passive status text.
-- `ExternalUpgradeVerificationCheckV1` evaluates supplied observation facts
-  against an `ExternalUpgradeVerificationPolicyV1`, recording per-requirement
-  expected/observed values and a verified/mismatch result without querying live
-  inventory itself.
+- `ExternalUpgradeVerificationCheckV1` evaluates supplied observation facts or
+  inventory facts derived from an existing `DeploymentCheckV1` against an
+  `ExternalUpgradeVerificationPolicyV1`, recording per-requirement
+  expected/observed values and source-aware verification results without
+  querying live inventory itself.
+- `ExternalVerificationObservationSourceV1` distinguishes supplied
+  observations from deployment-truth inventory observations. Supplied
+  observations can prove internal evidence consistency, but only
+  `DeploymentTruthInventory` observations can produce live verified-complete
+  external lifecycle status.
+- `external_upgrade_verification_observation_from_check(...)` and
+  `validate_external_upgrade_verification_check_for_deployment_check(...)`
+  bind external verification observations to a `DeploymentCheckV1` by check
+  ID/digest, deployment-plan ID/digest, inventory ID, observed timestamp,
+  module hash, canonical embedded config digest, controller observation,
+  observed control class, and protected-call readiness when required.
 - `ExternalUpgradeCompletionReportV1` combines proposal, consent-evidence, and
   verification-check artifacts into a passive completion status with blockers
   and next actions for awaiting-consent, refused, awaiting-verification,
-  verified-complete, and verification-failed cases.
+  supplied-evidence-consistent, verified-complete, and verification-failed
+  cases.
 - `ExternalLifecycleCheckV1` summarizes lifecycle plan, proposal, and pending
   evidence into one passive status artifact with direct, pending, blocked, and
   residual-exposure counts, source artifact digests, summary text, and next
@@ -126,8 +157,9 @@ user/external control-class path.
   external execution, install, or mutation.
 - `canic deploy external inspect verification-check --request <file>` reads an
   `ExternalUpgradeVerificationCheckRequest` JSON file and emits a passive
-  `ExternalUpgradeVerificationCheckV1` from supplied observation facts without
-  live lookup, consent delivery, external execution, install, or mutation.
+  `ExternalUpgradeVerificationCheckV1` from either supplied observation facts
+  or an embedded `DeploymentCheckV1` inventory artifact without live lookup,
+  consent delivery, external execution, install, or mutation.
 - `canic deploy external inspect completion --request <file>` reads an
   `ExternalUpgradeCompletionReportRequest` JSON file and emits a passive
   `ExternalUpgradeCompletionReportV1` from archived proposal, consent-evidence,
@@ -138,13 +170,17 @@ user/external control-class path.
   first external proposal, receipt, consent evidence, verification request,
   and verification report artifact shapes.
 
-## Not Implemented Yet
+## Deferred Beyond 0.45
 
 - Consent delivery and external action execution workflow.
 - Safe upgrade/install boundaries for externally controlled canisters.
-- Live re-inventory integration for external lifecycle verification. Current
-  verification reports, checks, and completion reports use supplied structural
-  evidence only.
+- A live re-inventory command/crawler for external lifecycle verification.
+  0.45 currently reuses existing deployment-truth check artifacts when
+  inventory-backed verification is requested.
+- Wall-clock `max_observation_age_seconds` enforcement. Inventory-backed
+  verification currently binds the check ID/digest, inventory ID, and
+  observed-at timestamp; active age evaluation requires a caller-supplied
+  verification time or a live inventory command.
 
 ## Drift Log
 
@@ -152,8 +188,13 @@ user/external control-class path.
   lifecycle authority is projected from existing `CanisterControlClassV1`
   observations instead of introducing a second user/external classification
   model.
+- Final audit hardened inventory-backed verification so controller/control-class
+  evidence is bound to the observed `CanisterControlClassV1`, not merely to the
+  presence of a controller observation.
 
 ## Release Bar
 
 0.45 should not close until Canic can represent user-owned or externally
-controlled lifecycle states without pretending Canic has unilateral authority.
+controlled lifecycle states without pretending Canic has unilateral authority,
+and can verify externally completed work against deployment-truth inventory
+evidence when an existing check artifact is supplied.

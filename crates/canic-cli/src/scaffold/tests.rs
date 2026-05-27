@@ -88,6 +88,9 @@ fn scaffold_project_writes_root_and_app_files() {
         fs::read_to_string(result.app_dir.join("Cargo.toml")).expect("read app manifest");
 
     fs::remove_dir_all(root).expect("remove scaffold temp root");
+    assert!(config.contains("controllers = []"));
+    assert!(config.contains("app_index = []"));
+    assert!(config.contains("[fleet]"));
     assert!(config.contains("name = \"my_app\""));
     assert!(config.contains("[auth.delegated_tokens]"));
     assert!(config.contains("enabled = false"));
@@ -95,15 +98,22 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(config.contains("subnet_index = [\"app\"]"));
     assert!(config.contains("[subnets.prime.canisters.root]"));
     assert!(config.contains("[subnets.prime.canisters.app]"));
+    assert!(!config.contains("app_directory"));
+    assert!(!config.contains("topup_policy"));
+    assert!(!config.contains("[[canisters]]"));
     assert!(root_manifest.contains("version = \"0.1.0\""));
     assert!(root_manifest.contains("canic = \""));
+    assert!(root_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!root_manifest.contains("workspace = true"));
     assert!(root_lib.contains("canic::start_root!();"));
+    assert!(root_lib.contains("canic::finish!();"));
     assert!(app_manifest.contains("name = \"canister_my_app_app\""));
     assert!(app_manifest.contains("canic = \""));
+    assert!(app_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!app_manifest.contains("workspace = true"));
     assert!(app_lib.contains("CanisterRole::new(\"app\")"));
     assert!(app_lib.contains("canic::start!(APP);"));
+    assert!(app_lib.contains("canic::finish!();"));
 }
 
 // Ensure scaffold refuses to overwrite an existing project directory.

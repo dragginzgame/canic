@@ -881,6 +881,75 @@ pub struct DeploymentCheckV1 {
 }
 
 ///
+/// DeploymentComparisonReportV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentComparisonReportV1 {
+    pub schema_version: u32,
+    pub report_id: String,
+    pub report_digest: String,
+    pub compared_at: String,
+    pub left: DeploymentComparisonTargetV1,
+    pub right: DeploymentComparisonTargetV1,
+    pub status: SafetyStatusV1,
+    pub identity_diff: Vec<DeploymentComparisonDiffV1>,
+    pub artifact_diff: Vec<DeploymentComparisonDiffV1>,
+    pub module_hash_diff: Vec<DeploymentComparisonDiffV1>,
+    pub embedded_config_diff: Vec<DeploymentComparisonDiffV1>,
+    pub authority_diff: Vec<DeploymentComparisonDiffV1>,
+    pub pool_diff: Vec<DeploymentComparisonDiffV1>,
+    pub verifier_readiness_diff: Vec<DeploymentComparisonDiffV1>,
+    pub external_lifecycle_diff: Vec<DeploymentComparisonDiffV1>,
+    pub hard_failures: Vec<SafetyFindingV1>,
+    pub warnings: Vec<SafetyFindingV1>,
+    pub next_actions: Vec<String>,
+}
+
+///
+/// DeploymentComparisonTargetV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentComparisonTargetV1 {
+    pub label: String,
+    pub check_id: String,
+    pub check_digest: String,
+    pub plan_id: String,
+    pub plan_digest: String,
+    pub inventory_id: String,
+    pub inventory_digest: String,
+    pub deployment_identity: DeploymentIdentityV1,
+}
+
+///
+/// DeploymentComparisonDiffV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeploymentComparisonDiffV1 {
+    pub category: DeploymentComparisonCategoryV1,
+    pub subject: String,
+    pub left: Option<String>,
+    pub right: Option<String>,
+    pub severity: SafetySeverityV1,
+    pub message: String,
+}
+
+///
+/// DeploymentComparisonCategoryV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum DeploymentComparisonCategoryV1 {
+    Identity,
+    TrustDomain,
+    Artifact,
+    ModuleHash,
+    EmbeddedConfig,
+    Authority,
+    Pool,
+    VerifierReadiness,
+    ExternalLifecycle,
+}
+
+///
 /// LifecycleAuthorityReportV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1347,6 +1416,8 @@ pub struct ExternalUpgradeVerificationPolicyV1 {
     pub policy_digest: String,
     pub proposal_id: String,
     pub proposal_digest: String,
+    pub deployment_plan_id: String,
+    pub deployment_plan_digest: String,
     pub subject: String,
     pub canister_id: Option<String>,
     pub role: Option<String>,
@@ -1389,13 +1460,26 @@ pub struct ExternalUpgradeVerificationPolicyRequest {
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ExternalUpgradeVerificationObservationV1 {
+    pub source: ExternalVerificationObservationSourceV1,
+    pub deployment_check_id: Option<String>,
+    pub deployment_check_digest: Option<String>,
     pub inventory_id: Option<String>,
     pub observed_at: Option<String>,
     pub live_inventory_observed: bool,
     pub controller_observation_present: bool,
+    pub observed_control_class: Option<CanisterControlClassV1>,
     pub observed_module_hash: Option<String>,
     pub observed_canonical_embedded_config_sha256: Option<String>,
     pub protected_call_ready: Option<bool>,
+}
+
+///
+/// ExternalVerificationObservationSourceV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum ExternalVerificationObservationSourceV1 {
+    SuppliedObservation,
+    DeploymentTruthInventory,
 }
 
 ///
@@ -1438,7 +1522,8 @@ pub struct ExternalUpgradeVerificationCheckRequirementV1 {
 pub struct ExternalUpgradeVerificationCheckRequest {
     pub check_id: String,
     pub policy: ExternalUpgradeVerificationPolicyV1,
-    pub observation: ExternalUpgradeVerificationObservationV1,
+    pub observation: Option<ExternalUpgradeVerificationObservationV1>,
+    pub deployment_check: Option<DeploymentCheckV1>,
 }
 
 ///
@@ -1460,6 +1545,7 @@ pub struct ExternalUpgradeCompletionReportV1 {
     pub role: Option<String>,
     pub consent_state: ExternalUpgradeConsentStateV1,
     pub verification_result: ExternalUpgradeVerificationResultV1,
+    pub verification_observation_source: ExternalVerificationObservationSourceV1,
     pub completion_status: ExternalUpgradeCompletionStatusV1,
     pub blockers: Vec<String>,
     pub next_actions: Vec<String>,
@@ -1473,6 +1559,7 @@ pub struct ExternalUpgradeCompletionReportV1 {
 pub enum ExternalUpgradeCompletionStatusV1 {
     AwaitingConsent,
     ConsentRefused,
+    SuppliedEvidenceConsistent,
     AwaitingVerification,
     VerifiedComplete,
     VerificationFailed,

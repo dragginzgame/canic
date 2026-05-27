@@ -5,8 +5,6 @@ env:
   CANIC_INTERNAL_TOOLCHAIN: 1.95.0
   POCKET_IC_VERSION: 13.0.0
   ACTIONLINT_VERSION: 1.7.8
-  ICP_CLI_VERSION: 0.2.5
-  ICP_WASM_VERSION: 0.9.10
 
 permissions:
   contents: read
@@ -70,7 +68,7 @@ jobs:
       - name: Install canister build tools
         run: cargo install --locked candid-extractor
       - name: Install ICP CLI tools
-        run: npm install -g "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+        run: npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
       - name: Check ICP CLI tools
         run: |
           icp --version
@@ -133,7 +131,7 @@ jobs:
       - name: Install canister build tools
         run: cargo install --locked candid-extractor
       - name: Install ICP CLI tools
-        run: npm install -g "@icp-sdk/icp-cli@$ICP_CLI_VERSION" "@icp-sdk/ic-wasm@$ICP_WASM_VERSION"
+        run: npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
       - name: Check ICP CLI tools
         run: |
           icp --version

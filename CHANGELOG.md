@@ -12,8 +12,39 @@ present.
 
 ## Unreleased
 
+- Added first-install documentation for a minimal managed fleet, including the
+  root/child lifecycle shape, subnet-scoped `canic.toml`, package-role mapping,
+  managed-fleet test path, Candid surface expectations, and common install
+  troubleshooting.
+- Made the missing `canic::finish!()` compiler marker more actionable so the
+  unresolved symbol tells canister authors to add `canic::finish!()` after all
+  endpoints.
+- Fixed current-install execution preflight so a fresh local fleet install is
+  not blocked merely because no prior local root authority observation exists.
+
+## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.0` starts passive multi-deployment comparison with
+  `DeploymentComparisonReportV1`, a `canic deploy compare` operator command,
+  current upstream ICP CLI/ic-wasm npm tooling instead of repo-pinned versions,
+  current scaffold/getting-started docs for the hard-cut fleet shape, and
+  post-46 backlog docs that no longer look like approved numbered follow-ons.
+
+```bash
+canic deploy compare --left staging-check.json --right prod-check.json
+```
+
+See detailed breakdown:
+[docs/changelog/0.46.md](docs/changelog/0.46.md)
 
 ## [0.45.x] - 2026-05-26 - External lifecycle
+
+- `0.45.9` adds inventory-backed external lifecycle verification checks that
+  can derive verification observations from existing `DeploymentCheckV1`
+  inventory artifacts, bind deployment-plan, check, inventory, module, config,
+  controller-control-class, and protected-call evidence, and keep supplied
+  observations as consistency-only evidence that cannot mark external work
+  live-verified.
 
 - `0.45.8` adds passive external upgrade completion reports that combine
   proposal, consent-evidence, and verification-check artifacts without

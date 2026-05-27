@@ -88,7 +88,8 @@ This audit exists to catch that drift before it becomes release surface.
 * adding a new workspace crate
 * publishing or productizing an internal helper crate
 * adding or removing Cargo features
-* moving code between `canic-testkit`, `canic-testing-internal`, and `canic-tests`
+* moving code between sibling `../ic-testkit`, `canic-testing-internal`, and
+  `canic-tests`
 * build/install/release tooling changes
 * public facade cleanup passes
 * pre-release packaging review windows
@@ -240,14 +241,16 @@ Use this map for top-level ownership and package judgment:
 | Crate / Area                           | Responsibility                              |
 | -------------------------------------- | ------------------------------------------- |
 | `crates/canic`                         | public facade and macro entry surface       |
+| `crates/canic-backup`                  | backup/restore primitives and layout checks |
+| `crates/canic-cli`                     | operator CLI and command presentation       |
 | `crates/canic-core`                    | core runtime/orchestration                  |
 | `crates/canic-control-plane`           | root/store control-plane runtime            |
+| `crates/canic-host`                    | host-side build/install/deployment support  |
+| `crates/canic-macros`                  | proc-macro support for the public facade    |
 | `crates/canic-wasm-store`              | canonical publishable `wasm_store` canister |
-| `crates/canic-cdk`                     | curated IC CDK facade                       |
-| `crates/canic-memory`                  | stable-memory/runtime helpers               |
-| `crates/canic-testkit`                 | public generic PocketIC/test infrastructure |
 | `crates/canic-testing-internal`        | Canic-only internal test harnesses          |
 | `crates/canic-tests`                   | integration test entrypoints                |
+| sibling `../ic-testkit`                | public generic PocketIC/test infrastructure |
 | `fleets/**`                            | config-defined operator fleets              |
 | `canisters/test/**`                    | internal correctness/integration fixtures   |
 | `canisters/audit/**`                   | internal audit/perf probe canisters         |
@@ -255,8 +258,7 @@ Use this map for top-level ownership and package judgment:
 
 Rules:
 
-* `canic`, `canic-cdk`, `canic-memory`, and `canic-testkit` are expected public
-  support crates.
+* `canic` is the only broad public facade.
 * `canic-testing-internal`, `canic-tests`, `canisters/test`, and
   `canisters/audit` are not public product API.
 * Fleet canisters are not generic reusable infrastructure.
@@ -349,7 +351,7 @@ Rules:
 
 Explicitly check:
 
-* `canic-testkit` does not depend on `canic-testing-internal`
+* sibling `../ic-testkit` does not depend on `canic-testing-internal` when in scope
 * published crates do not depend on `canic-tests`
 * demo canisters do not depend on test or audit canisters
 * support crates do not quietly become alternate facades for `canic-core`
@@ -448,7 +450,7 @@ Check for duplicate or overlapping crate roles, especially:
 
 * facade overlap (`canic` vs lower-level public crates)
 * memory/runtime helpers appearing in more than one public support crate
-* PocketIC/test helper duplication across `canic-testkit`,
+* PocketIC/test helper duplication across sibling `../ic-testkit`,
   `canic-testing-internal`, and `canic-tests`
 * installer/build/release tooling overlap
 * proc-macro or facade overlap that causes users to choose between multiple

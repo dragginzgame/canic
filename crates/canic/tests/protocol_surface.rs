@@ -191,3 +191,25 @@ fn memory_ledger_is_default_and_registry_is_removed() {
         "live memory registry diagnostic endpoint must be removed"
     );
 }
+
+#[test]
+fn missing_finish_marker_stays_actionable() {
+    let macro_path = workspace_root().join("crates/canic/src/macros/start.rs");
+    let source = read_text(&macro_path);
+    let marker = "__canic_missing_finish_macro__add_canic_finish_at_end_after_all_endpoints";
+
+    assert!(
+        source.contains(&format!("const _: fn() = {marker};")),
+        "lifecycle start macros must reference an actionable missing-finish marker"
+    );
+    assert!(
+        source.contains(&format!("fn {marker}()")),
+        "finish! must define the same missing-finish marker"
+    );
+    assert!(
+        marker.contains("missing_finish_macro")
+            && marker.contains("add_canic_finish")
+            && marker.contains("after_all_endpoints"),
+        "missing-finish marker should read like a compiler-error hint"
+    );
+}

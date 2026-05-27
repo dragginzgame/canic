@@ -1,10 +1,10 @@
 # Deployment Adoption Gap Inventory
 
-This is product-gap source material for the 0.41-0.50 roadmap. It is not
-itself a release contract.
+This is product-gap source material for the 0.41-0.46 roadmap and post-46
+backlog. It is not itself a release contract.
 
 The normative design is in the per-line design docs and
-`0.41-deployment-truth-model/0.41-0.50-deployment-roadmap.md`.
+`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`.
 
 ---
 
@@ -16,7 +16,9 @@ The normative design is in the per-line design docs and
 
 **Gap today:** One install name, one `.canic/<network>/fleets/<name>.json`, global `controllers = []`, rediscovery on every install. Reusing a root id **deletes** other fleet install records (`install_root/state.rs`).
 
-**Roadmap:** 0.41 truth model + 0.46 deployment groups partially target this. Still missing unless 0.46 ships operator commands people actually run daily, not only JSON schemas.
+**Roadmap:** 0.41 truth model plus the 0.46 deployment-target hard cut make
+this possible. Deployment groups/catalog UX is now a post-46 backlog topic, not
+part of the 0.46 release bar.
 
 **Still missing after roadmap (propose explicitly):**
 

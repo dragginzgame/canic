@@ -222,20 +222,16 @@ Use this map when judging intended downstream contract:
 | ---------------------------- | ------------------------------------------------------------------------- |
 | `crates/canic`               | main public facade and macro entry surface                                |
 | `crates/canic-backup`        | backup/restore domain primitives and durable layout contracts             |
-| `crates/canic-cdk`           | standalone curated IC CDK facade                                          |
 | `crates/canic-cli`           | published operator CLI package exposing the `canic` binary                |
 | `crates/canic-core`          | lower-level runtime/support crate, not the primary beginner entry surface |
 | `crates/canic-control-plane` | lower-level control-plane support crate                                   |
 | `crates/canic-host`          | host-side build/install/fleet/release-set support library                 |
 | `crates/canic-macros`        | proc-macro support crate, public but not a general facade                 |
-| `crates/canic-memory`        | standalone stable-memory helper/support crate                             |
-| `crates/canic-testkit`       | standalone generic PocketIC/test infrastructure crate                     |
 | `crates/canic-wasm-store`    | canonical published `wasm_store` canister crate                           |
 
 Rules:
 
 * `canic` is the primary broad facade.
-* `canic-memory`, `canic-cdk`, and `canic-testkit` are intended standalone support crates.
 * `canic-core`, `canic-control-plane`, and `canic-macros` may remain published while still being lower-level and thinner in documentation posture.
 * `canic-backup`, `canic-host`, `canic-cli`, and `canic-wasm-store` are published role-specific crates; their binary/README posture must clearly say so.
 * Lower-level published crates are allowed to be thinner than `canic`, but not allowed to be misleading about their role.

@@ -13,8 +13,6 @@ CARGO_ENV :=
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 
 ICP_ENVIRONMENT ?= local
-ICP_CLI_VERSION ?= 0.2.5
-ICP_WASM_VERSION ?= 0.9.10
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT) $(CARGO_ENV)
 ifneq ($(CANIC_WASM_PROFILE),)
@@ -94,7 +92,7 @@ install-dev:
 
 # Update the local Rust/Cargo/actionlint/ICP CLI development environment.
 update-dev:
-	CANIC_AUTO_BUMP_ICP_TOOLS=1 bash scripts/dev/install_dev.sh --update-prereqs
+	bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
 	cargo install --quiet \
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \

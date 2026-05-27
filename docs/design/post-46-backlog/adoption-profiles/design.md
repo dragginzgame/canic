@@ -1,20 +1,21 @@
-# 0.48 Design: Adoption Profiles
+# Post-46 Backlog: Adoption Profiles
 
 ## Status
 
 TBD.
 
-This is a post-0.46 design stub. It captures adoption paths that are important
-for real projects but should not expand the 0.41 through 0.46 deployment truth
-foundation.
+This is a post-0.46 backlog topic. It captures adoption paths that are
+important for real projects but should not expand the approved 0.41 through
+0.46 deployment truth foundation or imply a promised numbered follow-on
+release.
 
 ---
 
 ## Goal
 
-0.48 makes Canic usable for brownfield, partial, standalone, leaf-only, hybrid,
-and education-oriented projects without weakening deployment truth or authority
-rules.
+A future line may make Canic usable for brownfield, partial, standalone,
+leaf-only, hybrid, and education-oriented projects without weakening deployment
+truth or authority rules.
 
 Core operator question:
 
@@ -25,9 +26,9 @@ mutations are forbidden?
 
 ---
 
-## Dependency On 0.41-0.47
+## Dependency On Completed Deployment Foundation
 
-0.48 depends on:
+This topic depends on:
 
 - 0.41 inventory, safety reports, role artifact manifests, and materialization
   checks;
@@ -36,7 +37,8 @@ mutations are forbidden?
 - 0.44 digest-pinned artifact overrides for external wasm roles;
 - 0.45 external lifecycle classification;
 - 0.46 deployment comparison;
-- 0.47 registry metadata where artifact availability or retention matters.
+- post-46 artifact registry metadata where artifact availability or retention
+  matters.
 
 Adoption begins with observation. Mutation remains blocked until inventory and
 authority reconciliation prove it is safe.
@@ -150,7 +152,7 @@ model.
 
 ## Non-Goals
 
-0.48 should not:
+This future work should not:
 
 - perform destructive import by default;
 - hide controller takeover behind a profile;
@@ -195,7 +197,7 @@ Add profile-aware config linting and fleet checks.
 
 ## Exit Criterion
 
-0.48 is complete when:
+This topic is ready to promote into a real release line when:
 
 ```text
 A brownfield or small project can see a safe adoption plan before any mutation,

@@ -51,17 +51,22 @@ Inside each canister crate that uses Canic:
 
 ```bash
 cargo add canic
+cargo add candid ic-cdk
 cargo add canic --build
 ```
 
 `canic` is needed in `[dependencies]` for runtime macros and
-`[build-dependencies]` for `build.rs`.
+`[build-dependencies]` for `build.rs`. The `candid` and `ic-cdk` dependencies
+must also be visible to the canister crate because CDK attributes and Candid
+export expand against those crate names.
 
 For a path checkout:
 
 ```toml
 [dependencies]
+candid = { version = "<version>", default-features = false }
 canic = { path = "/path/to/canic/crates/canic" }
+ic-cdk = "<version>"
 
 [build-dependencies]
 canic = { path = "/path/to/canic/crates/canic" }
@@ -108,7 +113,25 @@ canic::start!(APP); // use canic::start_root!() for root
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
+
+canic::finish!();
 ```
+
+Root canisters use `canic::start_root!()` and root hook signatures:
+
+```rust
+canic::start_root!();
+
+async fn canic_setup() {}
+async fn canic_install() {}
+async fn canic_upgrade() {}
+
+canic::finish!();
+```
+
+Use `#[canic_query]` and `#[canic_update]` for Canic-managed application
+methods so endpoint dispatch, metrics, access checks, Candid export, and
+payload inspection stay on the same path as the runtime bundle.
 
 ## Define A Fleet
 
@@ -131,6 +154,9 @@ topup = {}
 ```
 
 The full schema lives in [`CONFIG.md`](CONFIG.md).
+
+For a complete root-plus-two-children example, see
+[`docs/getting-started/minimal-managed-fleet.md`](docs/getting-started/minimal-managed-fleet.md).
 
 ## Build And Install Locally
 
@@ -156,11 +182,15 @@ both paths explicitly:
 ```bash
 canic --network local build \
   --profile fast \
-  --workspace <cargo-workspace-dir> \
-  --icp-root <icp-project-dir> \
-  --config fleets/<fleet>/canic.toml \
+  --workspace /path/to/cargo-workspace \
+  --icp-root /path/to/icp-project \
+  --config /path/to/cargo-workspace/fleets/<fleet>/canic.toml \
   root
 ```
+
+When passing `--config` explicitly, prefer an absolute path. This keeps path
+dependencies and build scripts from interpreting a relative config path from
+their own crate directories.
 
 For build profiles, split workspace/ICP roots, custom canister roots, role
 metadata, and lower-level build/install commands, see
@@ -241,3 +271,30 @@ stay outside `root` and are staged after install. Visible canister Candid files
 are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in
 exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface
 for the implicit bootstrap `wasm_store` crate.
+
+Canic-managed Candid includes both application methods and Canic runtime
+methods such as readiness, metadata, topology, and management endpoints. When
+migrating a non-Canic canister, compare the application surface separately from
+Canic-owned methods.
+
+## First Install Troubleshooting
+
+- If `canic.toml` uses `[[canisters]]`, rewrite it under
+  `[subnets.<name>.canisters.<role>]`; Canic validates the subnet-shaped schema.
+- If a lifecycle macro reports
+  `__canic_missing_finish_macro__add_canic_finish_at_end_after_all_endpoints`,
+  add `canic::finish!()` at the end of the canister crate root after custom
+  endpoint definitions.
+- If a child cannot find its config at build time, check the path passed to
+  `canic::build!`; it is relative to the canister crate directory.
+- If the root canister does not compile or bootstrap delegated-auth material,
+  confirm the runtime dependency enables the `auth-crypto` and `control-plane`
+  features.
+- If host discovery cannot map a crate to a role, use a package name like
+  `canister_hub` or declare `[package.metadata.canic] role = "hub"`.
+- If `canic info list <fleet>` only shows `root`, the managed children were not
+  fully installed or the local replica lost state. Run `canic medic <fleet>` and
+  reinstall the local fleet.
+- If a test manually installs root and child canisters, it is not validating the
+  managed fleet path. A managed-fleet test should let root create/register
+  children and then resolve them from `canic_subnet_registry`.

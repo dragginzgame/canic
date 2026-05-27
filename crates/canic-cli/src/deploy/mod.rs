@@ -17,18 +17,18 @@ use canic_host::{
         ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
-        DeploymentCheckV1, DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
-        ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1,
-        ExternalLifecyclePlanV1, ExternalUpgradeCompletionReportRequest,
-        ExternalUpgradeCompletionReportV1, ExternalUpgradeConsentEvidenceRequest,
-        ExternalUpgradeConsentEvidenceV1, ExternalUpgradeProposalReportV1,
-        ExternalUpgradeVerificationCheckRequest, ExternalUpgradeVerificationCheckV1,
-        ExternalUpgradeVerificationPolicyRequest, ExternalUpgradeVerificationPolicyV1,
-        ExternalUpgradeVerificationReportRequest, ExternalUpgradeVerificationReportV1,
-        PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
-        PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
-        PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
-        PromotionPlanTransformRequest, PromotionPlanTransformV1,
+        DeploymentCheckV1, DeploymentComparisonReportV1, DeploymentExecutionPreflightV1,
+        DeploymentPlanV1, DeploymentReceiptV1, ExternalLifecycleCheckV1,
+        ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1,
+        ExternalUpgradeCompletionReportRequest, ExternalUpgradeCompletionReportV1,
+        ExternalUpgradeConsentEvidenceRequest, ExternalUpgradeConsentEvidenceV1,
+        ExternalUpgradeProposalReportV1, ExternalUpgradeVerificationCheckRequest,
+        ExternalUpgradeVerificationCheckV1, ExternalUpgradeVerificationPolicyRequest,
+        ExternalUpgradeVerificationPolicyV1, ExternalUpgradeVerificationReportRequest,
+        ExternalUpgradeVerificationReportV1, PromotionArtifactIdentityReportRequest,
+        PromotionArtifactIdentityReportV1, PromotionMaterializationIdentityReportRequest,
+        PromotionMaterializationIdentityReportV1, PromotionPlanTransformEvidenceRequest,
+        PromotionPlanTransformEvidenceV1, PromotionPlanTransformRequest, PromotionPlanTransformV1,
         PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
         PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessStatusV1,
         PromotionReadinessV1, PromotionTargetExecutionLineageRequest,
@@ -46,6 +46,7 @@ use canic_host::{
         authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
         check_promotion_readiness, compare_plan_inventory_and_receipt,
         critical_external_fix_report_from_pending, critical_external_fix_report_text,
+        deployment_comparison_report_from_checks, deployment_comparison_report_text,
         external_lifecycle_check_from_reports, external_lifecycle_check_text,
         external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
         external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
@@ -55,6 +56,7 @@ use canic_host::{
         external_upgrade_proposal_report_from_lifecycle_plan,
         external_upgrade_proposal_report_text, external_upgrade_verification_check_from_policy,
         external_upgrade_verification_check_text,
+        external_upgrade_verification_observation_from_check,
         external_upgrade_verification_policy_from_proposal,
         external_upgrade_verification_policy_text,
         external_upgrade_verification_report_from_receipt,
@@ -69,6 +71,9 @@ use canic_host::{
         promotion_wasm_store_catalog_verification_text,
         promotion_wasm_store_identity_report_from_staging,
         promotion_wasm_store_identity_report_text, validate_artifact_promotion_plan,
+        validate_deployment_comparison_report,
+        validate_external_upgrade_verification_check_for_deployment_check,
+        validate_external_upgrade_verification_check_for_policy,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -93,6 +98,7 @@ const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
   canic deploy inventory demo
+  canic deploy compare --left staging-check.json --right prod-check.json
   canic deploy diff demo
   canic deploy report demo
   canic deploy check demo
@@ -126,6 +132,13 @@ Deployment truth commands are read-only checks. Plan-mediated mutation flows
 through `canic deploy install --plan <file>` or the legacy `canic install`
 entrypoint. Authority commands are dry-run reconciliation reports and do not
 mutate controller state.";
+const DEPLOY_COMPARE_HELP_AFTER: &str = "\
+Examples:
+  canic deploy compare --left staging-check.json --right prod-check.json
+  canic deploy compare --left staging-check.json --right prod-check.json --format text
+
+Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
+state, install code, or mutate deployments.";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
@@ -224,9 +237,9 @@ Examples:
 
 Reads an ExternalUpgradeVerificationCheckRequest-shaped JSON file and prints
 ExternalUpgradeVerificationCheckV1 JSON by default, or host-owned passive text
-with --format text. Verification checks evaluate supplied observation facts
-against a verification policy; they do not query live inventory or execute
-external lifecycle work.";
+with --format text. Verification checks evaluate supplied observation facts or
+an embedded DeploymentCheckV1 inventory artifact against a verification policy;
+they do not query live inventory or execute external lifecycle work.";
 const DEPLOY_EXTERNAL_COMPLETION_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect completion --request external-completion.json
@@ -235,8 +248,8 @@ Examples:
 Reads an ExternalUpgradeCompletionReportRequest-shaped JSON file and prints
 ExternalUpgradeCompletionReportV1 JSON by default, or host-owned passive text
 with --format text. Completion reports combine proposal, consent evidence, and
-verification-check evidence; they do not deliver consent, query live inventory,
-or execute external lifecycle work.";
+verification-check evidence; only deployment-truth inventory verification can
+mark external lifecycle work verified complete.";
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic deploy install --plan promoted-plan.json
@@ -554,6 +567,18 @@ struct DeployInstallPlanInput {
     artifact_promotion_plan: Option<ArtifactPromotionPlanV1>,
 }
 
+///
+/// DeployCompareOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployCompareOptions {
+    left: PathBuf,
+    right: PathBuf,
+    left_label: Option<String>,
+    right_label: Option<String>,
+    format: CompareOutputFormat,
+}
+
 /// DeployAuthorityOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -632,6 +657,15 @@ enum ExternalOutputFormat {
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PromotionOutputFormat {
+    Json,
+    Text,
+}
+
+///
+/// CompareOutputFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CompareOutputFormat {
     Json,
     Text,
 }
@@ -745,6 +779,7 @@ where
             "external" => run_external(args),
             "promote" => run_promote(args),
             "install" => run_install(args),
+            "compare" => run_compare(args),
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
             "diff" => run_diff(args),
@@ -770,6 +805,25 @@ where
     let icp_root = resolve_current_canic_icp_root().ok();
     install_root(options.into_install_root_options(plan, icp_root))
         .map_err(DeployCommandError::from)
+}
+
+fn run_compare<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, compare_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployCompareOptions::parse(args)?;
+    let format = options.format;
+    let report = build_deployment_comparison_report(options)?;
+    match format {
+        CompareOutputFormat::Json => print_json(&report)?,
+        CompareOutputFormat::Text => println!("{}", deployment_comparison_report_text(&report)),
+    }
+    Ok(())
 }
 
 fn run_promote<I>(args: I) -> Result<(), DeployCommandError>
@@ -1693,16 +1747,47 @@ fn build_external_upgrade_verification_policy(
 fn build_external_upgrade_verification_check(
     request: ExternalUpgradeVerificationCheckRequest,
 ) -> Result<ExternalUpgradeVerificationCheckV1, DeployCommandError> {
+    let observation = match (request.observation, request.deployment_check) {
+        (Some(observation), None) => observation,
+        (None, Some(deployment_check)) => {
+            let observation = external_upgrade_verification_observation_from_check(
+                &request.policy,
+                &deployment_check,
+            )
+            .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
+            let check = external_upgrade_verification_check_from_policy(
+                request.check_id,
+                &request.policy,
+                observation,
+            );
+            validate_external_upgrade_verification_check_for_deployment_check(
+                &check,
+                &request.policy,
+                &deployment_check,
+            )
+            .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
+            return Ok(check);
+        }
+        (Some(_), Some(_)) => {
+            return Err(DeployCommandError::Blocked(
+                "external verification check request must provide either observation or deployment_check, not both"
+                    .to_string(),
+            ));
+        }
+        (None, None) => {
+            return Err(DeployCommandError::Blocked(
+                "external verification check request must provide observation or deployment_check"
+                    .to_string(),
+            ));
+        }
+    };
     let check = external_upgrade_verification_check_from_policy(
         request.check_id,
         &request.policy,
-        request.observation,
+        observation,
     );
-    canic_host::deployment_truth::validate_external_upgrade_verification_check_for_policy(
-        &check,
-        &request.policy,
-    )
-    .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
+    validate_external_upgrade_verification_check_for_policy(&check, &request.policy)
+        .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
     Ok(check)
 }
 
@@ -1914,6 +1999,45 @@ where
     Ok(())
 }
 
+fn build_deployment_comparison_report(
+    options: DeployCompareOptions,
+) -> Result<DeploymentComparisonReportV1, DeployCommandError> {
+    let left = read_json_file::<DeploymentCheckV1>(&options.left)?;
+    let right = read_json_file::<DeploymentCheckV1>(&options.right)?;
+    build_deployment_comparison_report_from_checks(
+        &left,
+        &right,
+        options.left_label.as_deref(),
+        options.right_label.as_deref(),
+    )
+}
+
+fn build_deployment_comparison_report_from_checks(
+    left: &DeploymentCheckV1,
+    right: &DeploymentCheckV1,
+    left_label: Option<&str>,
+    right_label: Option<&str>,
+) -> Result<DeploymentComparisonReportV1, DeployCommandError> {
+    let left_label = left_label.unwrap_or(left.plan.deployment_identity.deployment_name.as_str());
+    let right_label =
+        right_label.unwrap_or(right.plan.deployment_identity.deployment_name.as_str());
+    let report = deployment_comparison_report_from_checks(
+        local_deployment_comparison_report_id(left_label, right_label),
+        current_observed_at()?,
+        left_label,
+        right_label,
+        left,
+        right,
+    );
+    validate_deployment_comparison_report(&report)
+        .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
+    Ok(report)
+}
+
+fn local_deployment_comparison_report_id(left_label: &str, right_label: &str) -> String {
+    format!("local:{left_label}:{right_label}:deployment-comparison")
+}
+
 fn load_deployment_check(
     options: DeployTruthOptions,
 ) -> Result<DeploymentCheckV1, DeployCommandError> {
@@ -2070,6 +2194,26 @@ impl DeployInstallPlanOptions {
             deployment_plan_override: Some(plan.deployment_plan),
             artifact_promotion_plan_override: plan.artifact_promotion_plan,
         }
+    }
+}
+
+impl DeployCompareOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_compare_command(), args)
+            .map_err(|_| DeployCommandError::Usage(compare_usage()))?;
+        Ok(Self {
+            left: path_option(&matches, "left").expect("clap requires left"),
+            right: path_option(&matches, "right").expect("clap requires right"),
+            left_label: string_option(&matches, "left-label"),
+            right_label: string_option(&matches, "right-label"),
+            format: parse_compare_output_format(
+                string_option(&matches, "format").as_deref(),
+                compare_usage,
+            )?,
+        })
     }
 }
 
@@ -2289,6 +2433,11 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("compare")
+                .about("Compare two deployment truth check artifacts")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("check")
                 .about("Print the local deployment truth check JSON")
                 .disable_help_flag(true),
@@ -2447,6 +2596,42 @@ fn deploy_install_command() -> ClapCommand {
         )
         .arg(internal_network_arg())
         .after_help(DEPLOY_INSTALL_HELP_AFTER)
+}
+
+fn deploy_compare_command() -> ClapCommand {
+    ClapCommand::new("compare")
+        .bin_name("canic deploy compare")
+        .about("Compare two deployment truth check artifacts")
+        .disable_help_flag(true)
+        .override_usage("canic deploy compare --left <file> --right <file>")
+        .arg(
+            value_arg("left")
+                .long("left")
+                .value_name("file")
+                .required(true)
+                .help("Left DeploymentCheckV1 JSON artifact"),
+        )
+        .arg(
+            value_arg("right")
+                .long("right")
+                .value_name("file")
+                .required(true)
+                .help("Right DeploymentCheckV1 JSON artifact"),
+        )
+        .arg(
+            value_arg("left-label")
+                .long("left-label")
+                .value_name("label")
+                .help("Optional display label for the left artifact"),
+        )
+        .arg(
+            value_arg("right-label")
+                .long("right-label")
+                .value_name("label")
+                .help("Optional display label for the right artifact"),
+        )
+        .arg(compare_format_arg())
+        .after_help(DEPLOY_COMPARE_HELP_AFTER)
 }
 
 fn deploy_promote_inspect_command() -> ClapCommand {
@@ -2944,6 +3129,14 @@ fn promotion_format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn compare_format_arg() -> clap::Arg {
+    value_arg("format")
+        .long("format")
+        .value_name("json|text")
+        .num_args(1)
+        .help("Output format; defaults to json")
+}
+
 fn usage() -> String {
     let mut command = deploy_command();
     command.render_help().to_string()
@@ -2971,6 +3164,11 @@ fn report_usage() -> String {
 
 fn check_usage() -> String {
     let mut command = deploy_check_command();
+    command.render_help().to_string()
+}
+
+fn compare_usage() -> String {
+    let mut command = deploy_compare_command();
     command.render_help().to_string()
 }
 
@@ -3211,6 +3409,20 @@ fn parse_external_output_format(
     }
 }
 
+fn parse_compare_output_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<CompareOutputFormat, DeployCommandError> {
+    match value.unwrap_or("json") {
+        "json" => Ok(CompareOutputFormat::Json),
+        "text" => Ok(CompareOutputFormat::Text),
+        other => Err(DeployCommandError::Usage(format!(
+            "invalid deployment comparison output format: {other}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
 fn default_fleet_config_path(fleet: &str) -> String {
     format!("fleets/{fleet}/canic.toml")
 }
@@ -3231,12 +3443,13 @@ mod tests {
         DeploymentIdentityV1, DeploymentInventoryV1, DeploymentPlanV1, ExpectedCanisterV1,
         ExternalUpgradeCompletionStatusV1, ExternalUpgradeConsentStateV1,
         ExternalUpgradeVerificationObservationV1, ExternalUpgradeVerificationRequirementStatusV1,
-        ExternalUpgradeVerificationResultV1, LifecycleVerificationRequirementV1,
-        LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
-        PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
-        RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
-        TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
-        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
+        ExternalUpgradeVerificationResultV1, ExternalVerificationObservationSourceV1,
+        LifecycleVerificationRequirementV1, LocalDeploymentConfigV1, ObservationStatusV1,
+        ObservedCanisterV1, PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1,
+        ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
+        RolePromotionInputV1, TrustDomainV1, VerifierReadinessExpectationV1,
+        VerifierReadinessObservationV1, external_upgrade_receipt_from_observation,
+        promotion_readiness_from_inputs,
     };
 
     #[test]
@@ -3354,6 +3567,64 @@ mod tests {
         assert_eq!(report.fleet, "demo");
         assert_eq!(resume_report.truth.fleet, "demo");
         assert_eq!(resume_report.receipt, Some(PathBuf::from("receipt.json")));
+    }
+
+    #[test]
+    fn deploy_compare_parses_artifact_paths_and_text_format() {
+        let options = DeployCompareOptions::parse([
+            OsString::from("--left"),
+            OsString::from("staging-check.json"),
+            OsString::from("--right"),
+            OsString::from("prod-check.json"),
+            OsString::from("--left-label"),
+            OsString::from("staging"),
+            OsString::from("--right-label"),
+            OsString::from("prod"),
+            OsString::from("--format"),
+            OsString::from("text"),
+        ])
+        .expect("parse deploy compare");
+
+        assert_eq!(options.left, PathBuf::from("staging-check.json"));
+        assert_eq!(options.right, PathBuf::from("prod-check.json"));
+        assert_eq!(options.left_label.as_deref(), Some("staging"));
+        assert_eq!(options.right_label.as_deref(), Some("prod"));
+        assert_eq!(options.format, CompareOutputFormat::Text);
+    }
+
+    #[test]
+    fn deploy_compare_builder_uses_existing_check_artifacts() {
+        let left = sample_authority_check();
+        let mut right = sample_authority_check();
+        right.plan.deployment_identity.deployment_name = "prod".to_string();
+
+        let report =
+            build_deployment_comparison_report_from_checks(&left, &right, Some("stage"), None)
+                .expect("comparison report should build");
+
+        assert_eq!(report.report_id, "local:stage:prod:deployment-comparison");
+        assert_eq!(report.left.label, "stage");
+        assert_eq!(report.right.label, "prod");
+        assert!(!report.identity_diff.is_empty());
+        assert_eq!(report.report_digest.len(), 64);
+    }
+
+    #[test]
+    fn deploy_compare_rejects_unknown_format() {
+        let result = DeployCompareOptions::parse([
+            OsString::from("--left"),
+            OsString::from("staging-check.json"),
+            OsString::from("--right"),
+            OsString::from("prod-check.json"),
+            OsString::from("--format"),
+            OsString::from("yaml"),
+        ]);
+
+        assert!(matches!(
+            result,
+            Err(DeployCommandError::Usage(message))
+                if message.contains("invalid deployment comparison output format: yaml")
+        ));
     }
 
     #[test]
@@ -3842,10 +4113,57 @@ mod tests {
             verification_check_help.contains("ExternalUpgradeVerificationCheckRequest-shaped JSON")
         );
         assert!(verification_check_help.contains("supplied observation facts"));
+        assert!(verification_check_help.contains("DeploymentCheckV1 inventory artifact"));
         assert!(completion_help.contains("ExternalUpgradeCompletionReportRequest-shaped JSON"));
         assert!(completion_help.contains("proposal, consent evidence"));
+        assert!(completion_help.contains("only deployment-truth inventory verification"));
         assert!(verify_help.contains("ExternalUpgradeVerificationReportRequest-shaped JSON"));
         assert!(verify_help.contains("live inventory remains the source of truth"));
+    }
+
+    #[test]
+    fn deploy_compare_help_documents_passive_artifact_scope() {
+        let help = compare_usage();
+
+        assert!(help.contains("Compare two deployment truth check artifacts"));
+        assert!(help.contains("DeploymentCheckV1 JSON artifacts"));
+        assert!(help.contains("does not query live"));
+        assert!(help.contains("install code"));
+        assert!(help.contains("mutate deployments"));
+    }
+
+    #[test]
+    fn deploy_compare_path_has_no_live_lookup_or_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let compare_source = source_between(source, "fn run_compare<I>", "fn run_promote<I>");
+        let compare_builder_source = source_between(
+            source,
+            "fn build_deployment_comparison_report",
+            "fn load_deployment_check",
+        );
+
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+            "load_deployment_check",
+            "check_install_deployment_truth",
+            "resolve_current_canic_icp_root",
+        ] {
+            assert!(
+                !compare_source.contains(forbidden),
+                "deploy compare run path must stay passive; found forbidden token {forbidden}"
+            );
+            assert!(
+                !compare_builder_source.contains(forbidden),
+                "deploy compare builder must stay artifact-only; found forbidden token {forbidden}"
+            );
+        }
     }
 
     #[test]
@@ -4217,6 +4535,37 @@ mod tests {
 
         let options = DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");
         assert_eq!(options.plan, PathBuf::from("promoted-plan.json"));
+    }
+
+    #[test]
+    fn deploy_compare_command_dispatches_compare() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("compare"),
+                OsString::from("--left"),
+                OsString::from("staging-check.json"),
+                OsString::from("--right"),
+                OsString::from("prod-check.json"),
+            ],
+        )
+        .expect("parse deploy compare")
+        .expect("compare command");
+
+        assert_eq!(parsed.0, "compare");
+        assert_eq!(
+            parsed.1,
+            vec![
+                OsString::from("--left"),
+                OsString::from("staging-check.json"),
+                OsString::from("--right"),
+                OsString::from("prod-check.json")
+            ]
+        );
+
+        let options = DeployCompareOptions::parse(parsed.1).expect("parse compare options");
+        assert_eq!(options.left, PathBuf::from("staging-check.json"));
+        assert_eq!(options.right, PathBuf::from("prod-check.json"));
     }
 
     #[test]
@@ -4604,16 +4953,21 @@ mod tests {
             build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
                 check_id: "external-upgrade-verification-check-1".to_string(),
                 policy,
-                observation: ExternalUpgradeVerificationObservationV1 {
+                observation: Some(ExternalUpgradeVerificationObservationV1 {
+                    source: ExternalVerificationObservationSourceV1::SuppliedObservation,
+                    deployment_check_id: None,
+                    deployment_check_digest: None,
                     inventory_id: Some("inventory-verified".to_string()),
                     observed_at: Some("2026-05-26T00:00:00Z".to_string()),
                     live_inventory_observed: true,
                     controller_observation_present: true,
+                    observed_control_class: Some(proposal.control_class),
                     observed_module_hash: proposal.target_installed_module_hash,
                     observed_canonical_embedded_config_sha256: proposal
                         .target_canonical_embedded_config_sha256,
                     protected_call_ready: Some(true),
-                },
+                }),
+                deployment_check: None,
             })
             .expect("verification check should build");
 
@@ -4623,9 +4977,113 @@ mod tests {
         );
         assert_eq!(
             verification_check.verification_result,
-            ExternalUpgradeVerificationResultV1::Verified
+            ExternalUpgradeVerificationResultV1::Pending
         );
         assert_eq!(verification_check.check_digest.len(), 64);
+    }
+
+    #[test]
+    fn external_verification_check_builder_verifies_deployment_truth_inventory() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+        check.inventory.observed_canisters[0].module_hash = Some("module".to_string());
+        check.inventory.observed_canisters[0].canonical_embedded_config_digest =
+            Some(sample_sha256("c"));
+        check.inventory.observed_verifier_readiness.status = ObservationStatusV1::Observed;
+
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let proposal = proposal_report.proposals[0].clone();
+        let policy =
+            build_external_upgrade_verification_policy(ExternalUpgradeVerificationPolicyRequest {
+                policy_id: "external-upgrade-verification-policy-1".to_string(),
+                proposal,
+            });
+        let verification_check =
+            build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
+                check_id: "external-upgrade-verification-check-1".to_string(),
+                policy,
+                observation: None,
+                deployment_check: Some(check.clone()),
+            })
+            .expect("inventory-backed verification check should build");
+
+        assert_eq!(
+            verification_check.observation.source,
+            ExternalVerificationObservationSourceV1::DeploymentTruthInventory
+        );
+        assert_eq!(
+            verification_check
+                .observation
+                .deployment_check_id
+                .as_deref(),
+            Some(check.check_id.as_str())
+        );
+        assert!(
+            verification_check.requirement_results.iter().all(|row| {
+                row.status == ExternalUpgradeVerificationRequirementStatusV1::NotRequired
+                    || row.satisfied == Some(true)
+            }),
+            "{:?}",
+            verification_check.requirement_results
+        );
+        assert_eq!(
+            verification_check.verification_result,
+            ExternalUpgradeVerificationResultV1::Verified
+        );
+    }
+
+    #[test]
+    fn external_verification_check_builder_rejects_ambiguous_observation_sources() {
+        let mut check = sample_authority_check();
+        check.plan.expected_canisters[0].control_class = CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].control_class =
+            CanisterControlClassV1::UserControlled;
+        check.inventory.observed_canisters[0].controllers = vec!["user-principal".to_string()];
+
+        let proposal_report = build_external_upgrade_proposal_report(&check);
+        let proposal = proposal_report.proposals[0].clone();
+        let policy =
+            build_external_upgrade_verification_policy(ExternalUpgradeVerificationPolicyRequest {
+                policy_id: "external-upgrade-verification-policy-1".to_string(),
+                proposal: proposal.clone(),
+            });
+        let observation = ExternalUpgradeVerificationObservationV1 {
+            source: ExternalVerificationObservationSourceV1::SuppliedObservation,
+            deployment_check_id: None,
+            deployment_check_digest: None,
+            inventory_id: Some("inventory-verified".to_string()),
+            observed_at: Some("2026-05-26T00:00:00Z".to_string()),
+            live_inventory_observed: true,
+            controller_observation_present: true,
+            observed_control_class: Some(proposal.control_class),
+            observed_module_hash: proposal.target_installed_module_hash,
+            observed_canonical_embedded_config_sha256: proposal
+                .target_canonical_embedded_config_sha256,
+            protected_call_ready: Some(true),
+        };
+
+        let both_err =
+            build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
+                check_id: "external-upgrade-verification-check-1".to_string(),
+                policy: policy.clone(),
+                observation: Some(observation),
+                deployment_check: Some(check.clone()),
+            })
+            .expect_err("both observation sources should be rejected");
+        assert!(matches!(both_err, DeployCommandError::Blocked(_)));
+
+        let neither_err =
+            build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
+                check_id: "external-upgrade-verification-check-1".to_string(),
+                policy,
+                observation: None,
+                deployment_check: None,
+            })
+            .expect_err("missing observation source should be rejected");
+        assert!(matches!(neither_err, DeployCommandError::Blocked(_)));
     }
 
     #[test]
@@ -4661,17 +5119,22 @@ mod tests {
             build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
                 check_id: "external-upgrade-verification-check-1".to_string(),
                 policy,
-                observation: ExternalUpgradeVerificationObservationV1 {
+                observation: Some(ExternalUpgradeVerificationObservationV1 {
+                    source: ExternalVerificationObservationSourceV1::SuppliedObservation,
+                    deployment_check_id: None,
+                    deployment_check_digest: None,
                     inventory_id: Some("inventory-verified".to_string()),
                     observed_at: Some("2026-05-26T00:00:00Z".to_string()),
                     live_inventory_observed: true,
                     controller_observation_present: true,
+                    observed_control_class: Some(proposal.control_class),
                     observed_module_hash: proposal.target_installed_module_hash.clone(),
                     observed_canonical_embedded_config_sha256: proposal
                         .target_canonical_embedded_config_sha256
                         .clone(),
                     protected_call_ready: Some(true),
-                },
+                }),
+                deployment_check: None,
             })
             .expect("verification check should build");
 

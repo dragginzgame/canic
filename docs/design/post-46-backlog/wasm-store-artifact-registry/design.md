@@ -1,18 +1,19 @@
-# 0.47 Design: Wasm Store Artifact Registry And Retention
+# Post-46 Backlog: Wasm Store Artifact Registry And Retention
 
 ## Status
 
 TBD.
 
-This is a post-0.46 design stub. It is intentionally outside the 0.41 through
-0.46 deployment truth foundation.
+This is a post-0.46 backlog topic. It is intentionally outside the approved
+0.41 through 0.46 deployment truth foundation and is not a promised numbered
+follow-on release.
 
 ---
 
 ## Goal
 
-0.47 is the possible line where `wasm_store` becomes a provenance-rich artifact
-registry with safe retention behavior.
+A future line may make `wasm_store` a provenance-rich artifact registry with
+safe retention behavior.
 
 Core operator question:
 
@@ -23,7 +24,7 @@ carry, and what can be collected safely?
 
 ---
 
-## Dependency On 0.41-0.46
+## Dependency On Completed Deployment Foundation
 
 0.41 through 0.46 make `wasm_store` observable deployment infrastructure:
 
@@ -34,8 +35,8 @@ carry, and what can be collected safely?
 - receipted through staging;
 - comparable as artifact availability evidence.
 
-0.47 builds on those facts. It should not backfill missing deployment truth
-semantics into the store.
+This topic builds on those facts. It should not backfill missing deployment
+truth semantics into the store.
 
 ---
 
@@ -204,7 +205,7 @@ model.
 
 ## Non-Goals
 
-0.47 should not:
+This future work should not:
 
 - make `wasm_store` deployment truth;
 - make `wasm_store` controller authority;
@@ -250,7 +251,7 @@ metadata where safe.
 
 ## Exit Criterion
 
-0.47 is complete when:
+This topic is ready to promote into a real release line when:
 
 ```text
 Operators can answer which artifacts are present, why they are retained, what
