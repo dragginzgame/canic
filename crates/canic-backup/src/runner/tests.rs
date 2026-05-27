@@ -490,7 +490,7 @@ fn root_omitted_deployment_plan() -> BackupPlan {
         network: "local".to_string(),
         root_canister_id: ROOT.to_string(),
         selected_canister_id: None,
-        selected_scope_kind: BackupScopeKind::NonRootFleet,
+        selected_scope_kind: BackupScopeKind::NonRootDeployment,
         include_descendants: true,
         topology_hash_before_quiesce: HASH.to_string(),
         registry: &[

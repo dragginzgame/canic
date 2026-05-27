@@ -1,6 +1,6 @@
 # canic-host
 
-Host-side build, install, fleet, and thin-root staging tooling for Canic workspaces.
+Host-side build, install, deployment, fleet-template, and thin-root staging tooling for Canic workspaces.
 
 ## When to use it
 
@@ -15,7 +15,7 @@ For normal local setup, prefer the root
 script directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.46.16/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.46.19/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal

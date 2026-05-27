@@ -144,13 +144,16 @@ fn rejects_mutation_before_preflights() {
 #[test]
 fn rejects_root_omitted_deployment_scope_with_selected_root() {
     let mut plan = subtree_plan();
-    plan.selected_scope_kind = BackupScopeKind::NonRootFleet;
+    plan.selected_scope_kind = BackupScopeKind::NonRootDeployment;
 
     let err = plan
         .validate()
         .expect_err("root-omitted deployment scope should not name one root");
 
-    assert!(matches!(err, BackupPlanError::NonRootFleetHasSelectedRoot));
+    assert!(matches!(
+        err,
+        BackupPlanError::NonRootDeploymentHasSelectedRoot
+    ));
 }
 
 // Ensure journals can rely on stable contiguous operation ordering.
@@ -217,7 +220,7 @@ fn builds_subtree_plan_from_registry() {
 fn builds_root_omitted_deployment_plan_without_root_target() {
     let plan = build_backup_plan(BackupPlanBuildInput {
         selected_canister_id: None,
-        selected_scope_kind: BackupScopeKind::NonRootFleet,
+        selected_scope_kind: BackupScopeKind::NonRootDeployment,
         registry: &registry(),
         ..plan_input()
     })

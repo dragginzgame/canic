@@ -146,6 +146,16 @@ inspect only the files needed for the current task.
   `DeploymentSection`, and `DeploymentMember`, manifest JSON uses
   `deployment` plus `deployment_checks`, and crate metadata/docs plus test-only
   helpers use deployment backup wording.
+- Backup artifact persistence now writes `deployment-backup-manifest.json`
+  instead of the stale fleet-named manifest file, full non-root backup plans
+  serialize scope as `non-root-deployment`, and manifest validation errors use
+  deployment member/role wording.
+- Canic no longer declares `pocket-ic` directly in the workspace or test fleet
+  manifests; PocketIC now enters the dependency graph only through
+  `ic-testkit`, keeping version ownership centralized in the testkit package.
+- `canic-host` package metadata now describes host ownership around
+  deployment and fleet-template workflows instead of presenting the crate as a
+  fleet-owned live-state library.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

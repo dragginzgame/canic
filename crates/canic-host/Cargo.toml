@@ -4,7 +4,7 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
-description = "Host-side build, install, fleet, and release-set library for Canic workspaces"
+description = "Host-side build, install, deployment, and fleet-template library for Canic workspaces"
 readme = "README.md"
 documentation = "https://docs.rs/canic-host"
 homepage = { workspace = true }

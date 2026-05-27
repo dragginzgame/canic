@@ -33,7 +33,7 @@ pub struct BackupPlan {
 pub enum BackupScopeKind {
     Member,
     Subtree,
-    NonRootFleet,
+    NonRootDeployment,
     MaintenanceRoot,
 }
 

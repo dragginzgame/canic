@@ -24,7 +24,7 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-const MANIFEST_FILE_NAME: &str = "fleet-backup-manifest.json";
+const MANIFEST_FILE_NAME: &str = "deployment-backup-manifest.json";
 const BACKUP_PLAN_FILE_NAME: &str = "backup-plan.json";
 const JOURNAL_FILE_NAME: &str = "download-journal.json";
 const EXECUTION_JOURNAL_FILE_NAME: &str = "backup-execution-journal.json";

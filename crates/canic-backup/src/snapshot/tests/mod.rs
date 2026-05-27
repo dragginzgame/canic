@@ -170,7 +170,7 @@ fn dry_run_returns_planned_commands_without_writing_manifest() {
             "icp canister start aaaaa-aa"
         ]
     );
-    assert!(!out.join("fleet-backup-manifest.json").exists());
+    assert!(!out.join("deployment-backup-manifest.json").exists());
 }
 
 ///

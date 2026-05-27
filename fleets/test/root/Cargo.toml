@@ -20,8 +20,5 @@ ic-cdk = { workspace = true }
 canic = { workspace = true }
 sha2 = { workspace = true }
 
-[dev-dependencies]
-pocket-ic = { workspace = true }
-
 [lints]
 workspace = true

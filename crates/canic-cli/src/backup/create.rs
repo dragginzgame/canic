@@ -65,7 +65,7 @@ pub(super) fn backup_create(
     let selected_scope_kind = if selected_canister_id.is_some() {
         BackupScopeKind::Subtree
     } else {
-        BackupScopeKind::NonRootFleet
+        BackupScopeKind::NonRootDeployment
     };
     let planned = build_backup_plan(BackupPlanBuildInput {
         plan_id,

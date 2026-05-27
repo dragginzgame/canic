@@ -45,13 +45,13 @@ pub enum ManifestValidationError {
     #[error("backup unit {unit_id} repeats role {role}")]
     DuplicateBackupUnitRole { unit_id: String, role: String },
 
-    #[error("fleet member {0} has no concrete verification checks")]
+    #[error("deployment member {0} has no concrete verification checks")]
     MissingMemberVerificationChecks(String),
 
     #[error("backup unit {unit_id} references unknown role {role}")]
     UnknownBackupUnitRole { unit_id: String, role: String },
 
-    #[error("fleet role {role} is not covered by any backup unit")]
+    #[error("deployment role {role} is not covered by any backup unit")]
     BackupUnitCoverageMissingRole { role: String },
 
     #[error("verification plan references unknown role {role}")]

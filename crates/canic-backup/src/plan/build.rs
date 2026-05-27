@@ -112,7 +112,7 @@ fn selected_subtree_root(
     input: &BackupPlanBuildInput<'_>,
 ) -> Result<Option<String>, BackupPlanError> {
     match input.selected_scope_kind {
-        BackupScopeKind::NonRootFleet => Ok(None),
+        BackupScopeKind::NonRootDeployment => Ok(None),
         BackupScopeKind::Member | BackupScopeKind::Subtree | BackupScopeKind::MaintenanceRoot => {
             input
                 .selected_canister_id
@@ -138,7 +138,7 @@ fn snapshot_targets(
             targets_from_registry(input.registry, selected, recursive)
                 .map_err(BackupPlanError::from)
         }
-        BackupScopeKind::NonRootFleet => Ok(input
+        BackupScopeKind::NonRootDeployment => Ok(input
             .registry
             .iter()
             .filter(|entry| entry.pid != input.root_canister_id)

@@ -14,6 +14,20 @@ present.
 
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
+- `0.46.19` updates `canic-host` package metadata, README, and crate docs so
+  the host crate describes deployment and fleet-template ownership instead of
+  stale fleet-owned live state wording.
+
+- `0.46.18` removes Canic's direct `pocket-ic` dependency edge: the workspace
+  and test fleet now depend on PocketIC only through `ic-testkit`, leaving the
+  lockfile with the single transitive `pocket-ic` version owned by that
+  package.
+
+- `0.46.17` completes the backup artifact hard cut by renaming the persisted
+  manifest file to `deployment-backup-manifest.json`, serializing full non-root
+  backup plans as `non-root-deployment`, and updating manifest validation
+  errors to deployment member/role wording.
+
 - `0.46.16` hard-cuts the `canic-backup` manifest boundary to deployment
   vocabulary: public Rust types are now `DeploymentBackupManifest`,
   `DeploymentSection`, and `DeploymentMember`, manifest JSON now uses

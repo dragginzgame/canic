@@ -117,9 +117,9 @@ pub(super) fn validate_control_authority(
 
 fn validate_selected_scope(plan: &BackupPlan) -> Result<(), BackupPlanError> {
     match plan.selected_scope_kind {
-        BackupScopeKind::NonRootFleet => {
+        BackupScopeKind::NonRootDeployment => {
             if plan.selected_subtree_root.is_some() {
-                return Err(BackupPlanError::NonRootFleetHasSelectedRoot);
+                return Err(BackupPlanError::NonRootDeploymentHasSelectedRoot);
             }
             Ok(())
         }

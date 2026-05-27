@@ -47,8 +47,8 @@ pub enum BackupPlanError {
     #[error("selected scope root {0} is not present in plan targets")]
     SelectedRootNotInTargets(String),
 
-    #[error("non-root-fleet scope must not declare a selected subtree root")]
-    NonRootFleetHasSelectedRoot,
+    #[error("non-root-deployment scope must not declare a selected subtree root")]
+    NonRootDeploymentHasSelectedRoot,
 
     #[error("target {0} has no proven control authority")]
     UnprovenControlAuthority(String),

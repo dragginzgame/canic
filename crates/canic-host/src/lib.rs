@@ -1,4 +1,4 @@
-//! Host-side build, install, fleet, and release-set helpers for Canic workspaces.
+//! Host-side build, install, deployment, fleet-template, and release-set helpers for Canic workspaces.
 
 use std::process::Command;
 

@@ -226,7 +226,7 @@ fn deployment_verification_roles_must_exist_in_deployment() {
 
     let err = manifest
         .validate()
-        .expect_err("unknown fleet verification role should fail");
+        .expect_err("unknown deployment verification role should fail");
 
     assert!(matches!(
         err,
