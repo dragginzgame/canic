@@ -55,11 +55,11 @@ pub use config_selection::{
 };
 use readiness::wait_for_root_ready;
 use state::{
-    INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, validate_network_name, write_install_state,
+    INSTALL_STATE_SCHEMA_VERSION, validate_network_name, validate_state_name, write_install_state,
 };
 pub use state::{
-    InstallState, RootVerificationStatus, read_named_fleet_install_state,
-    read_named_fleet_install_state_from_root,
+    InstallState, RootVerificationStatus, read_named_deployment_install_state,
+    read_named_deployment_install_state_from_root,
 };
 
 #[cfg(test)]
@@ -70,7 +70,9 @@ use config_selection::config_selection_error;
 #[cfg(test)]
 use readiness::{parse_bootstrap_status_value, parse_root_ready_value};
 #[cfg(test)]
-use state::{deployment_install_state_path, fleet_install_state_path, read_fleet_install_state};
+use state::{
+    deployment_install_state_path, legacy_fleet_install_state_path, read_deployment_install_state,
+};
 
 ///
 /// InstallRootOptions
@@ -161,14 +163,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.interactive_config_selection,
     )?;
     let _install_env = BuildEnvGuard::apply(&options.network, &config_path, &icp_root);
-    let fleet_name = configured_fleet_name(&config_path)?;
-    validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, &config_path)?;
-    validate_fleet_name(&fleet_name)?;
-    let deployment_name = options
-        .deployment_name
-        .clone()
-        .unwrap_or_else(|| fleet_name.clone());
-    validate_fleet_name(&deployment_name)?;
+    let (fleet_name, deployment_name) = resolve_install_identity(&options, &config_path)?;
     let total_started_at = Instant::now();
     let mut timings = InstallTimingSummary::default();
     let network = options.network.as_str();
@@ -202,7 +197,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         InstallReceiptScope {
             icp_root: &icp_root,
             network,
-            fleet_name: &deployment_name,
+            deployment_name: &deployment_name,
             check: &prepared.deployment_truth_check,
             execution_context: Some(&execution_context),
         },
@@ -232,7 +227,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         InstallReceiptScope {
             icp_root: &icp_root,
             network,
-            fleet_name: &deployment_name,
+            deployment_name: &deployment_name,
             check: &prepared.deployment_truth_check,
             execution_context: Some(&execution_context),
         },
@@ -247,8 +242,28 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &prepared.deployment_truth_check,
         &execution_context,
     )?;
-    print_install_result_summary(&options.network, &state.fleet, &state_path);
+    print_install_result_summary(
+        &options.network,
+        &state.deployment_name,
+        &state.fleet_template,
+        &state_path,
+    );
     Ok(())
+}
+
+fn resolve_install_identity(
+    options: &InstallRootOptions,
+    config_path: &Path,
+) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let fleet_name = configured_fleet_name(config_path)?;
+    validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, config_path)?;
+    validate_state_name(&fleet_name)?;
+    let deployment_name = options
+        .deployment_name
+        .clone()
+        .unwrap_or_else(|| fleet_name.clone());
+    validate_state_name(&deployment_name)?;
+    Ok((fleet_name, deployment_name))
 }
 
 /// Register minimal local deployment-target state for an existing root canister.
@@ -259,8 +274,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
 pub fn register_deployment_state(
     options: RegisterDeploymentStateOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_fleet_name(&options.deployment_name)?;
-    validate_fleet_name(&options.fleet_template)?;
+    validate_state_name(&options.deployment_name)?;
+    validate_state_name(&options.fleet_template)?;
     validate_network_name(&options.network)?;
     Principal::from_text(&options.root_canister_id).map_err(|err| {
         format!(
@@ -290,7 +305,6 @@ pub fn register_deployment_state(
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: options.deployment_name,
         fleet_template: options.fleet_template.clone(),
-        fleet: options.fleet_template.clone(),
         installed_at_unix_secs: current_unix_secs()?,
         network: options.network.clone(),
         root_target: options.root_canister_id.clone(),
@@ -354,7 +368,7 @@ fn prepare_install_deployment_truth(
     let receipt_scope = InstallReceiptScope {
         icp_root,
         network: &options.network,
-        fleet_name: deployment_name,
+        deployment_name,
         check: &deployment_truth_check,
         execution_context: Some(execution_context),
     };
@@ -724,7 +738,7 @@ fn root_wasm_for_install_plan(
 struct InstallReceiptScope<'a> {
     icp_root: &'a Path,
     network: &'a str,
-    fleet_name: &'a str,
+    deployment_name: &'a str,
     check: &'a DeploymentCheckV1,
     execution_context: Option<&'a DeploymentExecutionContextV1>,
 }
@@ -1140,7 +1154,7 @@ fn write_artifact_promotion_execution_receipt_for_install(
     options: &InstallRootOptions,
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
     check: &DeploymentCheckV1,
     execution_context: &DeploymentExecutionContextV1,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
@@ -1162,7 +1176,8 @@ fn write_artifact_promotion_execution_receipt_for_install(
         provenance_report,
         deployment_receipt,
     })?;
-    let path = write_artifact_promotion_execution_receipt(icp_root, network, fleet_name, &receipt)?;
+    let path =
+        write_artifact_promotion_execution_receipt(icp_root, network, deployment_name, &receipt)?;
     println!(
         "Artifact promotion execution receipt JSON: {}",
         path.display()
@@ -1294,7 +1309,7 @@ impl InstallReceiptScope<'_> {
         let path = write_install_deployment_truth_receipt(
             self.icp_root,
             self.network,
-            self.fleet_name,
+            self.deployment_name,
             receipt,
         )?;
         println!("Deployment truth receipt JSON: {}", path.display());
@@ -1397,25 +1412,57 @@ fn resolve_current_install_truth_inputs(
         Some(path) => path.canonicalize()?,
         None => icp_root()?,
     };
-    let config_path = resolve_install_config_path(
-        &icp_root,
-        options.config_path.as_deref(),
-        options.interactive_config_selection,
-    )?;
-    let fleet_name = configured_fleet_name(&config_path)?;
-    validate_expected_fleet_name(options.expected_fleet.as_deref(), &fleet_name, &config_path)?;
-    validate_fleet_name(&fleet_name)?;
+    let state = match options.deployment_name.as_deref() {
+        Some(deployment) => {
+            read_named_deployment_install_state_from_root(&icp_root, &options.network, deployment)?
+        }
+        None => None,
+    };
+    let config_path = match (options.config_path.as_deref(), state.as_ref()) {
+        (Some(path), _) => resolve_install_config_path(
+            &icp_root,
+            Some(path),
+            options.interactive_config_selection,
+        )?,
+        (None, Some(state)) => resolve_install_config_path(
+            &icp_root,
+            Some(&state.config_path),
+            options.interactive_config_selection,
+        )?,
+        (None, None) => {
+            let default_config = options
+                .deployment_name
+                .as_ref()
+                .map(|deployment| default_config_path_for_deployment(deployment));
+            resolve_install_config_path(
+                &icp_root,
+                default_config.as_deref(),
+                options.interactive_config_selection,
+            )?
+        }
+    };
+    let fleet_template = configured_fleet_name(&config_path)?;
+    let expected_fleet = options
+        .expected_fleet
+        .as_deref()
+        .or_else(|| state.as_ref().map(|state| state.fleet_template.as_str()));
+    validate_expected_fleet_name(expected_fleet, &fleet_template, &config_path)?;
+    validate_state_name(&fleet_template)?;
     let deployment_name = options
         .deployment_name
         .clone()
-        .unwrap_or_else(|| fleet_name.clone());
-    validate_fleet_name(&deployment_name)?;
+        .unwrap_or_else(|| fleet_template.clone());
+    validate_state_name(&deployment_name)?;
     Ok(CurrentInstallTruthInputs {
         workspace_root,
         icp_root,
         config_path,
         deployment_name,
     })
+}
+
+fn default_config_path_for_deployment(deployment: &str) -> String {
+    format!("fleets/{deployment}/canic.toml")
 }
 
 fn current_install_deployment_truth_check_at(
@@ -1495,7 +1542,7 @@ fn current_install_deployment_truth_check_for_plan(
 fn validate_current_install_plan_override(
     plan: &DeploymentPlanV1,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if plan.schema_version != crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION {
         return Err(format!(
@@ -1512,9 +1559,9 @@ fn validate_current_install_plan_override(
         )
         .into());
     }
-    if plan.deployment_identity.deployment_name != fleet_name {
+    if plan.deployment_identity.deployment_name != deployment_name {
         return Err(format!(
-            "deployment plan target mismatch: install deployment {fleet_name}, plan deployment {}",
+            "deployment plan target mismatch: install deployment {deployment_name}, plan deployment {}",
             plan.deployment_identity.deployment_name
         )
         .into());
@@ -1744,7 +1791,7 @@ fn install_deployment_truth_gate_receipt(
 fn write_current_install_execution_preflight_receipt(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
     check: &DeploymentCheckV1,
     execution_context: &DeploymentExecutionContextV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -1796,7 +1843,8 @@ fn write_current_install_execution_preflight_receipt(
         ),
         execution_context,
     );
-    let path = write_install_deployment_truth_receipt(icp_root, network, fleet_name, &receipt)?;
+    let path =
+        write_install_deployment_truth_receipt(icp_root, network, deployment_name, &receipt)?;
     println!("Deployment truth receipt JSON: {}", path.display());
     if !blockers.is_empty() {
         let details = blockers
@@ -2007,10 +2055,10 @@ struct PhaseReceiptInput<'a> {
 fn write_install_deployment_truth_receipt(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path = install_deployment_truth_receipt_path(icp_root, network, fleet_name, receipt)?;
+    let path = install_deployment_truth_receipt_path(icp_root, network, deployment_name, receipt)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -2023,10 +2071,11 @@ fn write_install_deployment_truth_receipt(
 fn write_artifact_promotion_execution_receipt(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
     receipt: &ArtifactPromotionExecutionReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path = artifact_promotion_execution_receipt_path(icp_root, network, fleet_name, receipt)?;
+    let path =
+        artifact_promotion_execution_receipt_path(icp_root, network, deployment_name, receipt)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -2039,18 +2088,18 @@ fn write_artifact_promotion_execution_receipt(
 fn artifact_promotion_execution_receipt_path(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
     receipt: &ArtifactPromotionExecutionReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(fleet_name)?;
+    validate_state_name(deployment_name)?;
     let file_stem = format!(
         "{}-{}",
         safe_deployment_truth_path_label(&receipt.started_at),
         safe_deployment_truth_path_label(&receipt.receipt_id)
     );
     Ok(
-        artifact_promotion_execution_receipts_dir(icp_root, network, fleet_name)?
+        artifact_promotion_execution_receipts_dir(icp_root, network, deployment_name)?
             .join(format!("{file_stem}.json")),
     )
 }
@@ -2058,43 +2107,43 @@ fn artifact_promotion_execution_receipt_path(
 fn artifact_promotion_execution_receipts_dir(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(fleet_name)?;
+    validate_state_name(deployment_name)?;
     Ok(icp_root
         .join(".canic")
         .join(network)
         .join("artifact-promotion-execution-receipts")
-        .join(fleet_name))
+        .join(deployment_name))
 }
 
 fn install_deployment_truth_receipt_path(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(fleet_name)?;
+    validate_state_name(deployment_name)?;
     let file_stem = format!(
         "{}-{}",
         safe_deployment_truth_path_label(&receipt.started_at),
         safe_deployment_truth_path_label(&receipt.operation_id)
     );
     Ok(
-        install_deployment_truth_receipts_dir(icp_root, network, fleet_name)?
+        install_deployment_truth_receipts_dir(icp_root, network, deployment_name)?
             .join(format!("{file_stem}.json")),
     )
 }
 
-/// Find the latest persisted deployment-truth receipt for one local fleet.
+/// Find the latest persisted deployment-truth receipt for one local deployment target.
 pub fn latest_deployment_truth_receipt_path_from_root(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let dir = install_deployment_truth_receipts_dir(icp_root, network, fleet_name)?;
+    let dir = install_deployment_truth_receipts_dir(icp_root, network, deployment_name)?;
     if !dir.is_dir() {
         return Ok(None);
     }
@@ -2119,15 +2168,15 @@ pub fn latest_deployment_truth_receipt_path_from_root(
 fn install_deployment_truth_receipts_dir(
     icp_root: &Path,
     network: &str,
-    fleet_name: &str,
+    deployment_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(fleet_name)?;
+    validate_state_name(deployment_name)?;
     Ok(icp_root
         .join(".canic")
         .join(network)
         .join("deployment-receipts")
-        .join(fleet_name))
+        .join(deployment_name))
 }
 
 fn safe_deployment_truth_path_label(value: &str) -> String {
@@ -2308,7 +2357,6 @@ fn build_install_state(
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: deployment_name.to_string(),
         fleet_template: fleet_name.to_string(),
-        fleet: fleet_name.to_string(),
         installed_at_unix_secs: current_unix_secs()?,
         network: options.network.clone(),
         root_target: options.root_canister.clone(),
@@ -2675,14 +2723,20 @@ fn timing_row(label: &str, duration: Duration) -> [String; 2] {
 }
 
 // Print the final install result as a compact whitespace table.
-fn print_install_result_summary(network: &str, fleet: &str, state_path: &Path) {
+fn print_install_result_summary(
+    network: &str,
+    deployment: &str,
+    fleet_template: &str,
+    state_path: &Path,
+) {
     println!("Install result:");
     println!("{:<14} success", "status");
-    println!("{:<14} {}", "fleet", fleet);
+    println!("{:<14} {}", "deployment", deployment);
+    println!("{:<14} {}", "fleet_template", fleet_template);
     println!("{:<14} {}", "install_state", state_path.display());
     println!(
         "{:<14} canic list {} --network {}",
-        "smoke_check", fleet, network
+        "smoke_check", deployment, network
     );
 }
 

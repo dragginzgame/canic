@@ -97,20 +97,20 @@ pub enum BackupCommandError {
     BackupLayoutIncomplete { missing: &'static str },
 
     #[error(
-        "fleet {fleet} is not installed on network {network}; run `canic install {fleet}` before planning a backup"
+        "deployment target {fleet} is not installed on network {network}; run `canic install {fleet}` before planning a backup"
     )]
-    NoInstalledFleet { network: String, fleet: String },
+    NoInstalledDeployment { network: String, fleet: String },
 
     #[error(
-        "fleet {fleet} points to root {root}, but that canister is not present on local network {network}. Local ICP CLI replica state is not persistent; run `canic install {fleet}` to recreate it."
+        "deployment target {fleet} points to root {root}, but that canister is not present on local network {network}. Local ICP CLI replica state is not persistent; run `canic install {fleet}` to recreate it."
     )]
-    LostLocalFleet {
+    LostLocalDeployment {
         network: String,
         fleet: String,
         root: String,
     },
 
-    #[error("failed to read canic fleet state: {0}")]
+    #[error("failed to read canic deployment state: {0}")]
     InstallState(String),
 
     #[error("local replica query failed: {0}")]

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Purpose
 
@@ -54,6 +54,12 @@ inspect only the files needed for the current task.
   `root_verification`; state writes no longer delete other deployments sharing
   a root, and legacy fleet-state files now produce a clear fail-closed recovery
   error instead of being projected into deployment truth.
+- The deployment-target install-state API no longer uses fleet-owned reader
+  names, and persisted state no longer carries a duplicate `fleet` field beside
+  `fleet_template`. The shared host lookup boundary is now
+  `canic-host::installed_deployment`, and deployment-target state that still
+  contains the stale duplicate field fails closed instead of being accepted as
+  current state.
 - Local deployment plan and inventory collection now resolve root identity from
   deployment-target state using `deployment_name`, not the configured fleet
   template name. `canic deploy install <deployment> --plan <file>` validation
@@ -96,9 +102,9 @@ inspect only the files needed for the current task.
   reports, lifecycle plans, proposal reports, and external completion receipts
   validate archived drift and render host-owned passive text that explicitly
   reports no execution.
-- `canic deploy external plan <fleet>` and
-  `canic deploy external proposals <fleet>` now expose the first passive 0.45
-  CLI surface. `canic deploy external pending <fleet>` adds a passive pending
+- `canic deploy external plan <deployment>` and
+  `canic deploy external proposals <deployment>` now expose the first passive 0.45
+  CLI surface. `canic deploy external pending <deployment>` adds a passive pending
   external lifecycle report over the same local deployment truth. They default
   to JSON, support `--format text`, and do not request consent, execute
   external upgrades, install code, or mutate deployment state.
@@ -112,7 +118,7 @@ inspect only the files needed for the current task.
   affected roles/canisters, directly patchable roles, externally blocked roles,
   required external actions, protected-call implications, residual exposure,
   and operator next steps without claiming deployment completion or mutating
-  external canisters. `canic deploy external critical-fix <fleet>` exposes that
+  external canisters. `canic deploy external critical-fix <deployment>` exposes that
   report as JSON by default or host-owned text with `--format text`.
 - `ExternalUpgradeVerificationReportV1` now packages a validated
   proposal/receipt pair into a digest-pinned passive verification artifact. It
@@ -143,14 +149,14 @@ inspect only the files needed for the current task.
 - `ExternalLifecycleCheckV1` now summarizes lifecycle plan, proposal, and
   pending evidence into one passive status artifact with direct, pending,
   blocked, and residual-exposure counts plus operator next actions.
-  `canic deploy external check <fleet>` exposes that check as JSON by default
+  `canic deploy external check <deployment>` exposes that check as JSON by default
   or host-owned text with `--format text`, without consent delivery, external
   execution, live lookup, install, or mutation.
 - `ExternalLifecycleHandoffV1` now packages pending external proposals into
   passive operator coordination instructions. It carries proposal/check/pending
   digests, consent channel/subject facts, target verification facts, blocked
   subjects, and residual exposure while preserving the boundary that handoff is
-  not consent delivery or execution. `canic deploy external handoff <fleet>`
+  not consent delivery or execution. `canic deploy external handoff <deployment>`
   exposes the packet as JSON by default or host-owned text with
   `--format text`.
 - 0.44 has started with passive role artifact source DTOs and validation for
@@ -567,7 +573,7 @@ inspect only the files needed for the current task.
   findings, receipts preserve them, and blocked reports emit specific next
   actions for unsafe canister findings versus hard authority findings.
 - `0.42.2` adds passive authority dry-run receipts and read-only
-  `canic deploy authority receipt|evidence <fleet>` JSON output. Receipts
+  `canic deploy authority receipt|evidence <deployment>` JSON output. Receipts
   preserve verified controller observations and unresolved external actions
   while explicitly recording that no controller mutations were attempted.
 - `0.42.1` adds the read-only authority report/evidence surface. It includes
@@ -579,7 +585,7 @@ inspect only the files needed for the current task.
 - Started `0.42.0` authority reconciliation with a passive
   `AuthorityReconciliationPlanV1` model, dry-run planner over the existing
   `DeploymentCheckV1`, and read-only
-  `canic deploy authority check <fleet>` JSON output. The first planner
+  `canic deploy authority check <deployment>` JSON output. The first planner
   classifies already-correct controller sets, deployment-controlled controller
   deltas that could be applied automatically later, external-action cases for
   non-exclusive control classes, and unsafe unknown canisters, without mutating
@@ -676,8 +682,9 @@ inspect only the files needed for the current task.
   hand-picked blocker-code allowlist. Warnings remain report-only.
 - Current-install deployment truth gates now persist the lightweight
   `DeploymentReceiptV1` artifact-gate receipt as machine-readable JSON under
-  `.canic/<network>/deployment-receipts/<fleet>/` before any installer mutation.
-- `canic deploy resume-report <fleet>` can now discover the latest persisted
+  `.canic/<network>/deployment-receipts/<deployment>/` before any installer
+  mutation.
+- `canic deploy resume-report <deployment>` can now discover the latest persisted
   local deployment receipt automatically; `--receipt <file>` remains available
   for explicit comparisons.
 - Added passive pool-canister comparison to deployment truth diffs. Planned
@@ -691,7 +698,7 @@ inspect only the files needed for the current task.
 - Local deployment plans now populate `expected_pool` from configured
   scaling, sharding, and directory pool identities, so pool expectations appear
   in passive deployment truth reports instead of staying empty.
-- Local deployment inventory can now map installed fleet registry entries into
+- Local deployment inventory can now map installed deployment registry entries into
   `observed_pool` for configured pool roles. Ambiguous role-to-pool mappings
   are reported as observation gaps rather than guessed.
 - Added receipt-aware deployment truth comparison for resume reporting. It
@@ -702,7 +709,7 @@ inspect only the files needed for the current task.
 - Current-install deployment truth gates now construct and print a lightweight
   `DeploymentReceiptV1` with explicit `Complete` or `FailedBeforeMutation`
   operation status for the artifact materialization gate.
-- Added read-only `canic deploy resume-report <fleet> --receipt <file>` to
+- Added read-only `canic deploy resume-report <deployment> --receipt <file>` to
   print passive `ResumeSafetyV1` JSON from the current deployment truth check
   and a prior `DeploymentReceiptV1`, without resuming or mutating state.
 - Extended local deployment truth plans with installed root identity from
@@ -762,13 +769,13 @@ inspect only the files needed for the current task.
   recipe identity is distinct from target-specific materialization input and
   target materialization result because embedded config can intentionally
   change output bytes.
-- Added `canic deploy diff <fleet>` and `canic deploy report <fleet>` so the
+- Added `canic deploy diff <deployment>` and `canic deploy report <deployment>` so the
   normalized deployment diff and safety report are directly inspectable without
   parsing the full deployment check JSON.
 - Added local deployment config SHA-256 evidence to the deployment truth plan
   and inventory, and made the diff fail closed when the observed deployment
   manifest digest disagrees with the plan.
-- Made `canic deploy check <fleet>` usable as a read-only automation gate: it
+- Made `canic deploy check <deployment>` usable as a read-only automation gate: it
   still prints the full `DeploymentCheckV1` JSON, but now exits non-zero when
   the derived `SafetyReportV1` is blocked.
 - Tightened local artifact consistency checks: if the plan and inventory both
@@ -777,7 +784,7 @@ inspect only the files needed for the current task.
 - Added a read-only current-install deployment truth preflight helper. It
   adapts `InstallRootOptions` into the existing local deployment truth check
   pipeline without calling installer mutation steps.
-- Added `canic deploy plan|inventory|check <fleet>` as the first read-only
+- Added `canic deploy plan|inventory|check <deployment>` as the first read-only
   operator-facing deployment truth commands. They print local deployment truth
   JSON and do not replace `canic install`.
 - Added the first current-install deployment truth safety gate. After the build
@@ -1233,7 +1240,7 @@ inspect only the files needed for the current task.
   parsing, response parsing primitives, and major CLI command modules gained
   clearer owners.
 - Applied a small dry-consolidation follow-up: `snapshot download` now uses the
-  host installed-fleet resolver/cache for installed fleets, and `medic` reads
+  host installed-fleet resolver/cache for installed deployments, and `medic` reads
   installed-fleet state through the host installed-fleet boundary.
 - Added the proposed 0.36 backup/restore v1 design at
   `docs/design/0.36-backup-restore/0.36-design.md`. The 0.36 release focus is
@@ -1727,10 +1734,10 @@ inspect only the files needed for the current task.
   import the host-owned helpers directly.
 - Moved the live subnet registry DTO/parser from `canic-backup::discovery` to
   `canic-host::registry`.
-- Promoted the shared installed-fleet resolver to
-  `canic-host::installed_fleet`; CLI list/cycles/metrics/endpoints now consume
-  host-owned install-state lookup, local replica preference, ICP CLI fallback,
-  registry parsing, and topology projection.
+- Promoted the shared installed-fleet resolver to `canic-host::installed_fleet`;
+  CLI list/cycles/metrics/endpoints now consume host-owned install-state
+  lookup, local replica preference, ICP CLI fallback, registry parsing, and
+  topology projection.
 - Split the old `canic-cli::args` module into the `canic-cli::cli` directory
   with `clap`, `defaults`, `help`, and `globals` modules, removing the broad
   argument-helper drawer while preserving command behavior.

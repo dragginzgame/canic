@@ -1,7 +1,8 @@
 use crate::{
     icp::{IcpCli, IcpCommandError},
     install_root::{
-        InstallState, read_named_fleet_install_state, read_named_fleet_install_state_from_root,
+        InstallState, read_named_deployment_install_state,
+        read_named_deployment_install_state_from_root,
     },
     registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
     replica_query,
@@ -10,70 +11,70 @@ use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
 
 ///
-/// InstalledFleetRequest
+/// InstalledDeploymentRequest
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstalledFleetRequest {
-    pub fleet: String,
+pub struct InstalledDeploymentRequest {
+    pub deployment: String,
     pub network: String,
     pub icp: String,
     pub detect_lost_local_root: bool,
 }
 
 ///
-/// InstalledFleetResolution
+/// InstalledDeploymentResolution
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstalledFleetResolution {
-    pub source: InstalledFleetSource,
+pub struct InstalledDeploymentResolution {
+    pub source: InstalledDeploymentSource,
     pub state: InstallState,
-    pub registry: InstalledFleetRegistry,
-    pub topology: ResolvedFleetTopology,
+    pub registry: InstalledDeploymentRegistry,
+    pub topology: ResolvedDeploymentTopology,
 }
 
 ///
-/// InstalledFleetSource
+/// InstalledDeploymentSource
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InstalledFleetSource {
+pub enum InstalledDeploymentSource {
     LocalReplica,
     IcpCli,
 }
 
 ///
-/// InstalledFleetRegistry
+/// InstalledDeploymentRegistry
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InstalledFleetRegistry {
+pub struct InstalledDeploymentRegistry {
     pub root_canister_id: String,
     pub entries: Vec<RegistryEntry>,
 }
 
 ///
-/// ResolvedFleetTopology
+/// ResolvedDeploymentTopology
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ResolvedFleetTopology {
+pub struct ResolvedDeploymentTopology {
     pub root_canister_id: String,
     pub children_by_parent: BTreeMap<Option<String>, Vec<String>>,
     pub roles_by_canister: BTreeMap<String, String>,
 }
 
 ///
-/// InstalledFleetError
+/// InstalledDeploymentError
 ///
 
 #[derive(Debug, ThisError)]
-pub enum InstalledFleetError {
-    #[error("fleet {fleet} is not installed on network {network}")]
-    NoInstalledFleet { network: String, fleet: String },
+pub enum InstalledDeploymentError {
+    #[error("deployment target {deployment} is not installed on network {network}")]
+    NoInstalledDeployment { network: String, deployment: String },
 
-    #[error("failed to read canic fleet state: {0}")]
+    #[error("failed to read canic deployment state: {0}")]
     InstallState(String),
 
     #[error("local replica query failed: {0}")]
@@ -83,10 +84,10 @@ pub enum InstalledFleetError {
     IcpFailed { command: String, stderr: String },
 
     #[error(
-        "fleet {fleet} points to root {root}, but that canister is not present on network {network}"
+        "deployment target {deployment} points to root {root}, but that canister is not present on network {network}"
     )]
-    LostLocalFleet {
-        fleet: String,
+    LostLocalDeployment {
+        deployment: String,
         network: String,
         root: String,
     },
@@ -98,37 +99,38 @@ pub enum InstalledFleetError {
     Io(#[from] std::io::Error),
 }
 
-pub fn resolve_installed_fleet(
-    request: &InstalledFleetRequest,
-) -> Result<InstalledFleetResolution, InstalledFleetError> {
-    let state = read_installed_fleet_state(&request.network, &request.fleet)?;
+pub fn resolve_installed_deployment(
+    request: &InstalledDeploymentRequest,
+) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
+    let state = read_installed_deployment_state(&request.network, &request.deployment)?;
     let (source, registry_json) = query_registry(request, &state.root_canister_id)?;
-    installed_fleet_resolution(request, state, source, registry_json)
+    installed_deployment_resolution(request, state, source, registry_json)
 }
 
-pub fn resolve_installed_fleet_from_root(
-    request: &InstalledFleetRequest,
+pub fn resolve_installed_deployment_from_root(
+    request: &InstalledDeploymentRequest,
     icp_root: &Path,
-) -> Result<InstalledFleetResolution, InstalledFleetError> {
-    let state = read_installed_fleet_state_from_root(&request.network, &request.fleet, icp_root)?;
+) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
+    let state =
+        read_installed_deployment_state_from_root(&request.network, &request.deployment, icp_root)?;
     let (source, registry_json) =
         query_registry_from_root(request, &state.root_canister_id, icp_root)?;
-    installed_fleet_resolution(request, state, source, registry_json)
+    installed_deployment_resolution(request, state, source, registry_json)
 }
 
-fn installed_fleet_resolution(
-    _request: &InstalledFleetRequest,
+fn installed_deployment_resolution(
+    _request: &InstalledDeploymentRequest,
     state: InstallState,
-    source: InstalledFleetSource,
+    source: InstalledDeploymentSource,
     registry_json: String,
-) -> Result<InstalledFleetResolution, InstalledFleetError> {
+) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
     let entries = parse_registry_entries(&registry_json)?;
-    let registry = InstalledFleetRegistry {
+    let registry = InstalledDeploymentRegistry {
         root_canister_id: state.root_canister_id.clone(),
         entries,
     };
-    let topology = ResolvedFleetTopology::from_registry(&registry);
-    Ok(InstalledFleetResolution {
+    let topology = ResolvedDeploymentTopology::from_registry(&registry);
+    Ok(InstalledDeploymentResolution {
         source,
         state,
         registry,
@@ -136,33 +138,33 @@ fn installed_fleet_resolution(
     })
 }
 
-pub fn read_installed_fleet_state(
+pub fn read_installed_deployment_state(
     network: &str,
-    fleet: &str,
-) -> Result<InstallState, InstalledFleetError> {
-    read_named_fleet_install_state(network, fleet)
-        .map_err(|err| InstalledFleetError::InstallState(err.to_string()))?
-        .ok_or_else(|| InstalledFleetError::NoInstalledFleet {
+    deployment: &str,
+) -> Result<InstallState, InstalledDeploymentError> {
+    read_named_deployment_install_state(network, deployment)
+        .map_err(|err| InstalledDeploymentError::InstallState(err.to_string()))?
+        .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
             network: network.to_string(),
-            fleet: fleet.to_string(),
+            deployment: deployment.to_string(),
         })
 }
 
-pub fn read_installed_fleet_state_from_root(
+pub fn read_installed_deployment_state_from_root(
     network: &str,
-    fleet: &str,
+    deployment: &str,
     icp_root: &Path,
-) -> Result<InstallState, InstalledFleetError> {
-    read_named_fleet_install_state_from_root(icp_root, network, fleet)
-        .map_err(|err| InstalledFleetError::InstallState(err.to_string()))?
-        .ok_or_else(|| InstalledFleetError::NoInstalledFleet {
+) -> Result<InstallState, InstalledDeploymentError> {
+    read_named_deployment_install_state_from_root(icp_root, network, deployment)
+        .map_err(|err| InstalledDeploymentError::InstallState(err.to_string()))?
+        .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
             network: network.to_string(),
-            fleet: fleet.to_string(),
+            deployment: deployment.to_string(),
         })
 }
 
-impl ResolvedFleetTopology {
-    fn from_registry(registry: &InstalledFleetRegistry) -> Self {
+impl ResolvedDeploymentTopology {
+    fn from_registry(registry: &InstalledDeploymentRegistry) -> Self {
         let mut children_by_parent = BTreeMap::<Option<String>, Vec<String>>::new();
         let mut roles_by_canister = BTreeMap::new();
         for entry in &registry.entries {
@@ -186,75 +188,75 @@ impl ResolvedFleetTopology {
 }
 
 fn query_registry(
-    request: &InstalledFleetRequest,
+    request: &InstalledDeploymentRequest,
     root: &str,
-) -> Result<(InstalledFleetSource, String), InstalledFleetError> {
+) -> Result<(InstalledDeploymentSource, String), InstalledDeploymentError> {
     if replica_query::should_use_local_replica_query(Some(&request.network)) {
         return replica_query::query_subnet_registry_json(Some(&request.network), root)
-            .map(|registry| (InstalledFleetSource::LocalReplica, registry))
+            .map(|registry| (InstalledDeploymentSource::LocalReplica, registry))
             .map_err(|err| local_registry_error(request, root, err.to_string()));
     }
 
     IcpCli::new(&request.icp, None, Some(request.network.clone()))
         .canister_query_output(root, "canic_subnet_registry", Some("json"))
-        .map(|registry| (InstalledFleetSource::IcpCli, registry))
-        .map_err(installed_fleet_icp_error)
+        .map(|registry| (InstalledDeploymentSource::IcpCli, registry))
+        .map_err(installed_deployment_icp_error)
 }
 
 fn query_registry_from_root(
-    request: &InstalledFleetRequest,
+    request: &InstalledDeploymentRequest,
     root: &str,
     icp_root: &Path,
-) -> Result<(InstalledFleetSource, String), InstalledFleetError> {
+) -> Result<(InstalledDeploymentSource, String), InstalledDeploymentError> {
     if replica_query::should_use_local_replica_query(Some(&request.network)) {
         return replica_query::query_subnet_registry_json_from_root(
             Some(&request.network),
             root,
             icp_root,
         )
-        .map(|registry| (InstalledFleetSource::LocalReplica, registry))
+        .map(|registry| (InstalledDeploymentSource::LocalReplica, registry))
         .map_err(|err| local_registry_error(request, root, err.to_string()));
     }
 
     IcpCli::new(&request.icp, None, Some(request.network.clone()))
         .with_cwd(icp_root)
         .canister_query_output(root, "canic_subnet_registry", Some("json"))
-        .map(|registry| (InstalledFleetSource::IcpCli, registry))
-        .map_err(installed_fleet_icp_error)
+        .map(|registry| (InstalledDeploymentSource::IcpCli, registry))
+        .map_err(installed_deployment_icp_error)
 }
 
 fn local_registry_error(
-    request: &InstalledFleetRequest,
+    request: &InstalledDeploymentRequest,
     root: &str,
     error: String,
-) -> InstalledFleetError {
+) -> InstalledDeploymentError {
     if request.detect_lost_local_root && is_canister_not_found_error(&error) {
-        return InstalledFleetError::LostLocalFleet {
-            fleet: request.fleet.clone(),
+        return InstalledDeploymentError::LostLocalDeployment {
+            deployment: request.deployment.clone(),
             network: request.network.clone(),
             root: root.to_string(),
         };
     }
-    InstalledFleetError::ReplicaQuery(error)
+    InstalledDeploymentError::ReplicaQuery(error)
 }
 
 fn is_canister_not_found_error(error: &str) -> bool {
     error.contains("Canister ") && error.contains(" not found")
 }
 
-fn installed_fleet_icp_error(error: IcpCommandError) -> InstalledFleetError {
+fn installed_deployment_icp_error(error: IcpCommandError) -> InstalledDeploymentError {
     match error {
-        IcpCommandError::Io(err) => InstalledFleetError::Io(err),
+        IcpCommandError::Io(err) => InstalledDeploymentError::Io(err),
         IcpCommandError::Failed { command, stderr } => {
-            InstalledFleetError::IcpFailed { command, stderr }
+            InstalledDeploymentError::IcpFailed { command, stderr }
         }
         IcpCommandError::Json {
             command, output, ..
-        } => InstalledFleetError::IcpFailed {
+        } => InstalledDeploymentError::IcpFailed {
             command,
             stderr: output,
         },
-        IcpCommandError::SnapshotIdUnavailable { output } => InstalledFleetError::IcpFailed {
+        IcpCommandError::SnapshotIdUnavailable { output } => InstalledDeploymentError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,
         },
@@ -268,7 +270,7 @@ mod tests {
     // Ensure the resolved topology gives command code parent/role projections without reparsing.
     #[test]
     fn topology_indexes_registry_entries() {
-        let registry = InstalledFleetRegistry {
+        let registry = InstalledDeploymentRegistry {
             root_canister_id: "root-id".to_string(),
             entries: vec![
                 RegistryEntry {
@@ -295,7 +297,7 @@ mod tests {
             ],
         };
 
-        let topology = ResolvedFleetTopology::from_registry(&registry);
+        let topology = ResolvedDeploymentTopology::from_registry(&registry);
 
         assert_eq!(
             topology

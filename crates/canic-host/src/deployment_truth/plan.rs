@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    install_root::{RootVerificationStatus, read_named_fleet_install_state_from_root},
+    install_root::{RootVerificationStatus, read_named_deployment_install_state_from_root},
     release_set::{
         ConfiguredPoolExpectation, configured_controllers, configured_fleet_name,
         configured_fleet_roles, configured_pool_expectations,
@@ -171,7 +171,7 @@ fn local_root_canister_id(
     request: &LocalDeploymentPlanRequest,
     assumptions: &mut Vec<DeploymentAssumptionV1>,
 ) -> Option<String> {
-    match read_named_fleet_install_state_from_root(
+    match read_named_deployment_install_state_from_root(
         &request.icp_root,
         &request.network,
         &request.deployment_name,

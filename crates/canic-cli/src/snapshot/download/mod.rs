@@ -17,8 +17,9 @@ use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
     install_root::InstallState,
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentRequest,
+        resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
     replica_query,
@@ -83,7 +84,7 @@ fn snapshot_download_command() -> ClapCommand {
             value_arg("fleet")
                 .value_name("fleet")
                 .required(true)
-                .help("Installed fleet name to snapshot"),
+                .help("Installed deployment name to snapshot"),
         )
         .arg(value_arg("canister").long("canister").value_name("id"))
         .arg(
@@ -165,9 +166,9 @@ fn resolve_snapshot_download_request(
     let network = state_network(options.network.as_deref());
     let icp_root = resolve_current_canic_icp_root()
         .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
-    let installed = match resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
+    let installed = match resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: options.fleet.clone(),
             network,
             icp: options.icp.clone(),
             detect_lost_local_root: false,
@@ -175,8 +176,8 @@ fn resolve_snapshot_download_request(
         &icp_root,
     ) {
         Ok(installed) => Some(installed),
-        Err(InstalledFleetError::NoInstalledFleet { .. }) => None,
-        Err(err) => return Err(snapshot_installed_fleet_error(err)),
+        Err(InstalledDeploymentError::NoInstalledDeployment { .. }) => None,
+        Err(err) => return Err(snapshot_installed_deployment_error(err)),
     };
     let state = installed.as_ref().map(|installed| &installed.state);
     let explicit_canister = options.canister.is_some();
@@ -185,7 +186,10 @@ fn resolve_snapshot_download_request(
         .clone()
         .or_else(|| state.map(|state| state.root_canister_id.clone()))
         .ok_or(SnapshotCommandError::MissingSnapshotSource)?;
-    let fleet = state.map_or_else(|| options.fleet.clone(), |state| state.fleet.clone());
+    let fleet = state.map_or_else(
+        || options.fleet.clone(),
+        |state| state.deployment_name.clone(),
+    );
     let root = resolved_snapshot_root(options, state)?;
     let recursive = if !explicit_canister && state.is_some() {
         true
@@ -392,19 +396,19 @@ fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
     }
 }
 
-fn snapshot_installed_fleet_error(error: InstalledFleetError) -> SnapshotCommandError {
+fn snapshot_installed_deployment_error(error: InstalledDeploymentError) -> SnapshotCommandError {
     match error {
-        InstalledFleetError::NoInstalledFleet { .. }
-        | InstalledFleetError::InstallState(_)
-        | InstalledFleetError::ReplicaQuery(_)
-        | InstalledFleetError::LostLocalFleet { .. } => {
+        InstalledDeploymentError::NoInstalledDeployment { .. }
+        | InstalledDeploymentError::InstallState(_)
+        | InstalledDeploymentError::ReplicaQuery(_)
+        | InstalledDeploymentError::LostLocalDeployment { .. } => {
             SnapshotCommandError::InstallState(error.to_string())
         }
-        InstalledFleetError::IcpFailed { command, stderr } => {
+        InstalledDeploymentError::IcpFailed { command, stderr } => {
             SnapshotCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::Registry(err) => SnapshotCommandError::Registry(err),
-        InstalledFleetError::Io(err) => SnapshotCommandError::Io(err),
+        InstalledDeploymentError::Registry(err) => SnapshotCommandError::Registry(err),
+        InstalledDeploymentError::Io(err) => SnapshotCommandError::Io(err),
     }
 }
 

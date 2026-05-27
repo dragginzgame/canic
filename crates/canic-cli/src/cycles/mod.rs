@@ -28,11 +28,11 @@ pub enum CyclesCommandError {
     Usage(String),
 
     #[error(
-        "fleet {fleet} is not installed on network {network}; run `canic install {fleet}` before querying cycles"
+        "deployment target {fleet} is not installed on network {network}; run `canic install {fleet}` before querying cycles"
     )]
-    NoInstalledFleet { network: String, fleet: String },
+    NoInstalledDeployment { network: String, fleet: String },
 
-    #[error("failed to read canic fleet state: {0}")]
+    #[error("failed to read canic deployment state: {0}")]
     InstallState(String),
 
     #[error("local replica query failed: {0}")]

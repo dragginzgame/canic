@@ -12228,7 +12228,6 @@ fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> Instal
         schema_version: 2,
         deployment_name: deployment_name.to_string(),
         fleet_template: "demo".to_string(),
-        fleet: "demo".to_string(),
         installed_at_unix_secs: 1,
         network: "local".to_string(),
         root_target: "root".to_string(),

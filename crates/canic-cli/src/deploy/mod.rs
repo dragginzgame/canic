@@ -522,7 +522,7 @@ Examples:
 
 Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
 and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
-latest local receipt under .canic/<network>/deployment-receipts/<fleet>. It
+latest local receipt under .canic/<network>/deployment-receipts/<deployment>. It
 does not resume, install, or mutate state.";
 
 ///
@@ -545,7 +545,7 @@ pub enum DeployCommandError {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeployTruthOptions {
-    fleet: String,
+    deployment: String,
     network: String,
     profile: Option<CanisterBuildProfile>,
 }
@@ -2181,19 +2181,19 @@ impl DeployResumeReportOptions {
         latest_deployment_truth_receipt_path_from_root(
             &icp_root,
             &self.truth.network,
-            &self.truth.fleet,
+            &self.truth.deployment,
         )
         .map_err(DeployCommandError::from)?
         .ok_or_else(|| {
             DeployCommandError::Usage(format!(
-                "no deployment receipt found under {} for fleet {}; pass --receipt <file>",
+                "no deployment receipt found under {} for deployment {}; pass --receipt <file>",
                 icp_root
                     .join(".canic")
                     .join(&self.truth.network)
                     .join("deployment-receipts")
-                    .join(&self.truth.fleet)
+                    .join(&self.truth.deployment)
                     .display(),
-                self.truth.fleet
+                self.truth.deployment
             ))
         })
     }
@@ -2452,7 +2452,7 @@ impl DeployTruthOptions {
         usage: fn() -> String,
     ) -> Result<Self, DeployCommandError> {
         Ok(Self {
-            fleet: string_option(matches, "fleet").expect("clap requires fleet"),
+            deployment: string_option(matches, "deployment").expect("clap requires deployment"),
             network: string_option(matches, "network").unwrap_or_else(local_network),
             profile: string_option(matches, "profile")
                 .as_deref()
@@ -2469,12 +2469,12 @@ impl DeployTruthOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
-            deployment_name: None,
+            deployment_name: Some(self.deployment),
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
-            config_path: Some(default_fleet_config_path(&self.fleet)),
-            expected_fleet: Some(self.fleet),
+            config_path: None,
+            expected_fleet: None,
             interactive_config_selection: false,
             deployment_plan_override: None,
             artifact_promotion_plan_override: None,
@@ -3206,10 +3206,10 @@ fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> ClapCom
         .about(about)
         .disable_help_flag(true)
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("deployment")
+                .value_name("deployment")
                 .required(true)
-                .help("Config-defined fleet name to check"),
+                .help("Deployment target name to check"),
         )
         .arg(
             value_arg("profile")
@@ -3574,12 +3574,12 @@ mod tests {
     };
 
     #[test]
-    fn deploy_check_parses_required_fleet() {
+    fn deploy_check_parses_required_deployment() {
         let options =
             DeployTruthOptions::parse([OsString::from("demo")], deploy_check_command, check_usage)
                 .expect("parse deploy check");
 
-        assert_eq!(options.fleet, "demo");
+        assert_eq!(options.deployment, "demo");
         assert_eq!(options.network, "local");
         assert_eq!(options.profile, None);
     }
@@ -3682,11 +3682,11 @@ mod tests {
         ])
         .expect("parse deploy resume-report");
 
-        assert_eq!(plan.fleet, "demo");
-        assert_eq!(inventory.fleet, "demo");
-        assert_eq!(diff.fleet, "demo");
-        assert_eq!(report.fleet, "demo");
-        assert_eq!(resume_report.truth.fleet, "demo");
+        assert_eq!(plan.deployment, "demo");
+        assert_eq!(inventory.deployment, "demo");
+        assert_eq!(diff.deployment, "demo");
+        assert_eq!(report.deployment, "demo");
+        assert_eq!(resume_report.truth.deployment, "demo");
         assert_eq!(resume_report.receipt, Some(PathBuf::from("receipt.json")));
     }
 
@@ -3781,7 +3781,7 @@ mod tests {
             authority_report,
             authority_receipt,
         ] {
-            assert_eq!(options.truth.fleet, "demo");
+            assert_eq!(options.truth.deployment, "demo");
             assert_eq!(options.format, AuthorityOutputFormat::Json);
         }
     }
@@ -3829,13 +3829,13 @@ mod tests {
         )
         .expect("parse deploy authority receipt text");
 
-        assert_eq!(authority_check.truth.fleet, "demo");
+        assert_eq!(authority_check.truth.deployment, "demo");
         assert_eq!(authority_check.format, AuthorityOutputFormat::Text);
-        assert_eq!(authority_evidence.truth.fleet, "demo");
+        assert_eq!(authority_evidence.truth.deployment, "demo");
         assert_eq!(authority_evidence.format, AuthorityOutputFormat::Text);
-        assert_eq!(authority_report.truth.fleet, "demo");
+        assert_eq!(authority_report.truth.deployment, "demo");
         assert_eq!(authority_report.format, AuthorityOutputFormat::Text);
-        assert_eq!(authority_receipt.truth.fleet, "demo");
+        assert_eq!(authority_receipt.truth.deployment, "demo");
         assert_eq!(authority_receipt.format, AuthorityOutputFormat::Text);
     }
 
@@ -3879,7 +3879,7 @@ mod tests {
             external_proposals,
             external_pending,
         ] {
-            assert_eq!(options.truth.fleet, "demo");
+            assert_eq!(options.truth.deployment, "demo");
             assert_eq!(options.format, ExternalOutputFormat::Json);
         }
         let critical_fix = DeployExternalCriticalFixOptions::parse(
@@ -3894,7 +3894,7 @@ mod tests {
             external_critical_fix_usage,
         )
         .expect("parse deploy external critical-fix");
-        assert_eq!(critical_fix.truth.fleet, "demo");
+        assert_eq!(critical_fix.truth.deployment, "demo");
         assert_eq!(critical_fix.format, ExternalOutputFormat::Json);
         assert_eq!(critical_fix.fix_id, "fix-2026-05");
         assert_eq!(critical_fix.severity, "critical");
@@ -3975,15 +3975,15 @@ mod tests {
         )
         .expect("parse deploy external pending text");
 
-        assert_eq!(external_plan.truth.fleet, "demo");
+        assert_eq!(external_plan.truth.deployment, "demo");
         assert_eq!(external_plan.format, ExternalOutputFormat::Text);
-        assert_eq!(external_check.truth.fleet, "demo");
+        assert_eq!(external_check.truth.deployment, "demo");
         assert_eq!(external_check.format, ExternalOutputFormat::Text);
-        assert_eq!(external_handoff.truth.fleet, "demo");
+        assert_eq!(external_handoff.truth.deployment, "demo");
         assert_eq!(external_handoff.format, ExternalOutputFormat::Text);
-        assert_eq!(external_proposals.truth.fleet, "demo");
+        assert_eq!(external_proposals.truth.deployment, "demo");
         assert_eq!(external_proposals.format, ExternalOutputFormat::Text);
-        assert_eq!(external_pending.truth.fleet, "demo");
+        assert_eq!(external_pending.truth.deployment, "demo");
         assert_eq!(external_pending.format, ExternalOutputFormat::Text);
     }
 
@@ -4003,7 +4003,7 @@ mod tests {
             external_critical_fix_usage,
         )
         .expect("parse deploy external critical-fix text");
-        assert_eq!(critical_fix.truth.fleet, "demo");
+        assert_eq!(critical_fix.truth.deployment, "demo");
         assert_eq!(critical_fix.format, ExternalOutputFormat::Text);
         assert_eq!(critical_fix.fix_id, "fix-2026-05");
         assert_eq!(critical_fix.severity, "critical");
@@ -5633,14 +5633,14 @@ mod tests {
         let resume_report = DeployResumeReportOptions::parse([OsString::from("demo")])
             .expect("parse deploy resume-report");
 
-        assert_eq!(resume_report.truth.fleet, "demo");
+        assert_eq!(resume_report.truth.deployment, "demo");
         assert_eq!(resume_report.receipt, None);
     }
 
     #[test]
     fn deploy_check_builds_current_install_options() {
         let options = DeployTruthOptions {
-            fleet: "demo".to_string(),
+            deployment: "demo".to_string(),
             network: "local".to_string(),
             profile: Some(CanisterBuildProfile::Fast),
         }
@@ -5650,11 +5650,9 @@ mod tests {
         assert_eq!(options.root_build_target, "root");
         assert_eq!(options.network, "local");
         assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
-        assert_eq!(
-            options.config_path.as_deref(),
-            Some("fleets/demo/canic.toml")
-        );
-        assert_eq!(options.expected_fleet.as_deref(), Some("demo"));
+        assert_eq!(options.deployment_name.as_deref(), Some("demo"));
+        assert_eq!(options.config_path, None);
+        assert_eq!(options.expected_fleet, None);
     }
 
     #[test]

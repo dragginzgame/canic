@@ -44,21 +44,21 @@ pub enum ListCommandError {
     ReplicaQuery(String),
 
     #[error(
-        "fleet {fleet} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install {fleet}` to recreate it."
+        "deployment target {fleet} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install {fleet}` to recreate it."
     )]
-    LostLocalFleet {
+    LostLocalDeployment {
         fleet: String,
         network: String,
         root: String,
     },
 
-    #[error("failed to read canic fleet state: {0}")]
+    #[error("failed to read canic deployment state: {0}")]
     InstallState(String),
 
     #[error(
-        "fleet {fleet} is not installed on network {network}; run `canic install {fleet}` to deploy it or `canic config {fleet}` to inspect its config"
+        "deployment target {fleet} is not installed on network {network}; run `canic install {fleet}` to deploy it or `canic config {fleet}` to inspect its config"
     )]
-    NoInstalledFleet { network: String, fleet: String },
+    NoInstalledDeployment { network: String, fleet: String },
 
     #[error("fleet {0} is not declared by any config under fleets; run `canic fleet list`")]
     UnknownFleet(String),

@@ -22,7 +22,7 @@ pub enum SnapshotCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("snapshot download needs an installed fleet name")]
+    #[error("snapshot download needs an installed deployment name")]
     MissingSnapshotSource,
 
     #[error("cannot combine fleet root {fleet_root} with --root {root}")]
@@ -34,7 +34,7 @@ pub enum SnapshotCommandError {
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },
 
-    #[error("failed to read canic fleet state: {0}")]
+    #[error("failed to read canic deployment state: {0}")]
     InstallState(String),
 
     #[error("could not parse snapshot id from icp output: {0}")]

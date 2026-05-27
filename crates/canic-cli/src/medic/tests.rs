@@ -37,26 +37,26 @@ fn renders_medic_report() {
     let report = render_medic_report(&[
         MedicCheck::ok("network", "local", "-"),
         MedicCheck::warn(
-            "fleet state",
-            "no installed fleet found",
+            "deployment state",
+            "no installed deployment found",
             "run canic install",
         ),
     ]);
 
     assert!(report.starts_with("CHECK"));
     assert!(report.contains("network"));
-    assert!(report.contains("fleet state"));
+    assert!(report.contains("deployment state"));
     assert!(report.contains("warn"));
 }
 
-// Ensure host installed-fleet missing-state errors remain warnings, not failures.
+// Ensure host installed-deployment missing-state errors remain warnings, not failures.
 #[test]
-fn missing_installed_fleet_error_is_warnable() {
-    assert!(is_missing_installed_fleet(
-        "fleet demo is not installed on network local"
+fn missing_installed_deployment_error_is_warnable() {
+    assert!(is_missing_installed_deployment(
+        "deployment target demo is not installed on network local"
     ));
-    assert!(!is_missing_installed_fleet(
-        "failed to read canic fleet state: bad json"
+    assert!(!is_missing_installed_deployment(
+        "failed to read canic deployment state: bad json"
     ));
 }
 

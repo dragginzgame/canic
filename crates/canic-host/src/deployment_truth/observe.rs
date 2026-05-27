@@ -1,8 +1,8 @@
 use super::*;
 use crate::{
     icp::{IcpCanisterStatusReport, IcpCli},
-    install_root::read_named_fleet_install_state_from_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
+    install_root::read_named_deployment_install_state_from_root,
+    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
     release_set::{
         ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE, configured_fleet_name,
@@ -94,7 +94,7 @@ pub fn collect_local_deployment_inventory(
         Vec::new()
     });
 
-    let install_state = read_named_fleet_install_state_from_root(
+    let install_state = read_named_deployment_install_state_from_root(
         &request.icp_root,
         &request.network,
         &request.deployment_name,
@@ -602,9 +602,9 @@ fn install_state_registry_observations(
     observed_canisters: &mut Vec<ObservedCanisterV1>,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedPoolCanisterV1> {
-    match resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet_name.to_string(),
+    match resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: fleet_name.to_string(),
             network: request.network.clone(),
             icp: "icp".to_string(),
             detect_lost_local_root: false,

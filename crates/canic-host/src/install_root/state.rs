@@ -20,11 +20,11 @@ pub enum RootVerificationStatus {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct InstallState {
     pub schema_version: u32,
     pub deployment_name: String,
     pub fleet_template: String,
-    pub fleet: String,
     pub installed_at_unix_secs: u64,
     pub network: String,
     pub root_target: String,
@@ -38,13 +38,13 @@ pub struct InstallState {
 }
 
 /// Read deployment-target install state for one project/network when present.
-pub(super) fn read_fleet_install_state(
+pub(super) fn read_deployment_install_state(
     icp_root: &Path,
     network: &str,
     deployment: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(deployment)?;
+    validate_state_name(deployment)?;
     let path = deployment_install_state_path(icp_root, network, deployment);
     if !path.is_file() {
         reject_legacy_fleet_state(icp_root, network, deployment)?;
@@ -57,26 +57,30 @@ pub(super) fn read_fleet_install_state(
 }
 
 /// Read deployment-target install state for the discovered current project.
-pub fn read_named_fleet_install_state(
+pub fn read_named_deployment_install_state(
     network: &str,
     deployment: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     let icp_root = icp_root()?;
-    read_fleet_install_state(&icp_root, network, deployment)
+    read_deployment_install_state(&icp_root, network, deployment)
 }
 
 /// Read deployment-target install state for an explicit ICP project root.
-pub fn read_named_fleet_install_state_from_root(
+pub fn read_named_deployment_install_state_from_root(
     icp_root: &Path,
     network: &str,
     deployment: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    read_fleet_install_state(icp_root, network, deployment)
+    read_deployment_install_state(icp_root, network, deployment)
 }
 
 /// Return the legacy project-local fleet state path.
 #[must_use]
-pub(super) fn fleet_install_state_path(icp_root: &Path, network: &str, fleet: &str) -> PathBuf {
+pub(super) fn legacy_fleet_install_state_path(
+    icp_root: &Path,
+    network: &str,
+    fleet: &str,
+) -> PathBuf {
     fleets_dir(icp_root, network).join(format!("{fleet}.json"))
 }
 
@@ -107,7 +111,7 @@ pub(super) fn write_install_state(
     state: &InstallState,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(&state.deployment_name)?;
+    validate_state_name(&state.deployment_name)?;
     if state.network != network {
         return Err(format!(
             "deployment state network mismatch: state is for {}, requested {network}",
@@ -128,7 +132,7 @@ fn reject_legacy_fleet_state(
     network: &str,
     deployment: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let path = fleet_install_state_path(icp_root, network, deployment);
+    let path = legacy_fleet_install_state_path(icp_root, network, deployment);
     if path.exists() {
         return Err(format!(
             "legacy fleet install state found: {}\n\nCanic 0.46 stores live deployment state by deployment target, not fleet template.\nCreate explicit deployment state with:\n  canic deploy register {deployment} --fleet-template {deployment} --root <principal>\n\nOr reinstall the deployment with a 0.46 install path that writes deployment-target state:\n  canic install {deployment}\n\nIf the old state is obsolete, remove:\n  {}",
@@ -140,8 +144,8 @@ fn reject_legacy_fleet_state(
     Ok(())
 }
 
-// Keep fleet names filesystem-safe and easy to type in commands.
-pub(super) fn validate_fleet_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+// Keep deployment and template names filesystem-safe and easy to type.
+pub(super) fn validate_state_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let valid = !name.is_empty()
         && name
             .bytes()
@@ -149,7 +153,10 @@ pub(super) fn validate_fleet_name(name: &str) -> Result<(), Box<dyn std::error::
     if valid {
         Ok(())
     } else {
-        Err(format!("invalid fleet name {name:?}; use letters, numbers, '-' or '_'").into())
+        Err(
+            format!("invalid deployment/template name {name:?}; use letters, numbers, '-' or '_'")
+                .into(),
+        )
     }
 }
 

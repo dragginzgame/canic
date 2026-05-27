@@ -25,8 +25,9 @@ use canic_backup::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, resolve_installed_fleet_from_root,
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentRequest,
+        resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
     replica_query,
@@ -38,16 +39,16 @@ pub(super) fn backup_create(
 ) -> Result<BackupCreateReport, BackupCommandError> {
     let icp_root = resolve_current_canic_icp_root()
         .map_err(|err| BackupCommandError::InstallState(err.to_string()))?;
-    let installed = resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
+    let installed = resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: options.fleet.clone(),
             network: options.network.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
         },
         &icp_root,
     )
-    .map_err(backup_installed_fleet_error)?;
+    .map_err(backup_installed_deployment_error)?;
     let registry = backup_registry_entries(&installed.registry.entries);
     let topology_hash = registry_topology_hash(&registry)?;
     let plan_id = backup_plan_id(&options.fleet);
@@ -490,27 +491,31 @@ fn runner_icp_error(error: IcpCommandError) -> BackupRunnerCommandError {
     BackupRunnerCommandError::failed("icp", error.to_string())
 }
 
-fn backup_installed_fleet_error(error: InstalledFleetError) -> BackupCommandError {
+fn backup_installed_deployment_error(error: InstalledDeploymentError) -> BackupCommandError {
     match error {
-        InstalledFleetError::NoInstalledFleet { network, fleet } => {
-            BackupCommandError::NoInstalledFleet { network, fleet }
-        }
-        InstalledFleetError::InstallState(error) => BackupCommandError::InstallState(error),
-        InstalledFleetError::ReplicaQuery(error) => BackupCommandError::ReplicaQuery(error),
-        InstalledFleetError::IcpFailed { command, stderr } => {
+        InstalledDeploymentError::NoInstalledDeployment {
+            network,
+            deployment,
+        } => BackupCommandError::NoInstalledDeployment {
+            network,
+            fleet: deployment,
+        },
+        InstalledDeploymentError::InstallState(error) => BackupCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => BackupCommandError::ReplicaQuery(error),
+        InstalledDeploymentError::IcpFailed { command, stderr } => {
             BackupCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::LostLocalFleet {
+        InstalledDeploymentError::LostLocalDeployment {
             network,
-            fleet,
+            deployment,
             root,
-        } => BackupCommandError::LostLocalFleet {
+        } => BackupCommandError::LostLocalDeployment {
             network,
-            fleet,
+            fleet: deployment,
             root,
         },
-        InstalledFleetError::Registry(error) => BackupCommandError::Registry(error),
-        InstalledFleetError::Io(error) => BackupCommandError::Io(error),
+        InstalledDeploymentError::Registry(error) => BackupCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => BackupCommandError::Io(error),
     }
 }
 

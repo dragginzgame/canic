@@ -12,9 +12,9 @@ use canic_host::{
         inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
     install_root::discover_project_canic_config_choices,
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, read_installed_fleet_state_from_root,
-        resolve_installed_fleet_from_root,
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentRequest,
+        read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
     release_set::{
@@ -225,7 +225,8 @@ fn status_fleet_row(
             root: "-".to_string(),
         };
     };
-    let install_state = read_installed_fleet_state_from_root(&options.network, &fleet, icp_root);
+    let install_state =
+        read_installed_deployment_state_from_root(&options.network, &fleet, icp_root);
     let configured_roles = configured_fleet_roles(path);
     let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
@@ -241,7 +242,9 @@ fn status_fleet_row(
             ),
             state.root_canister_id,
         ),
-        Err(InstalledFleetError::NoInstalledFleet { .. }) => ("no".to_string(), "-".to_string()),
+        Err(InstalledDeploymentError::NoInstalledDeployment { .. }) => {
+            ("no".to_string(), "-".to_string())
+        }
         Err(_) => ("error".to_string(), "-".to_string()),
     };
 
@@ -271,9 +274,9 @@ fn deployed_label(
         return "unknown".to_string();
     }
 
-    match resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: fleet.to_string(),
+    match resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: fleet.to_string(),
             network: network.to_string(),
             icp: icp.to_string(),
             detect_lost_local_root: true,
@@ -283,7 +286,9 @@ fn deployed_label(
         Ok(resolution) if resolution.state.root_canister_id == root => {
             classify_local_deployment(configured_roles, &resolution.registry.entries).to_string()
         }
-        Err(InstalledFleetError::LostLocalFleet { .. }) => LOCAL_LOST_DEPLOYMENT.to_string(),
+        Err(InstalledDeploymentError::LostLocalDeployment { .. }) => {
+            LOCAL_LOST_DEPLOYMENT.to_string()
+        }
         Ok(_) | Err(_) => "error".to_string(),
     }
 }

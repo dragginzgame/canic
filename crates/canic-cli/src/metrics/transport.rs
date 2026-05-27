@@ -7,9 +7,9 @@ use crate::metrics::{
 use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        resolve_installed_fleet_from_root,
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
+        resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
 };
@@ -144,41 +144,45 @@ fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<Metr
 
 fn resolve_metrics_fleet(
     options: &MetricsOptions,
-) -> Result<InstalledFleetResolution, MetricsCommandError> {
+) -> Result<InstalledDeploymentResolution, MetricsCommandError> {
     let root = resolve_metrics_icp_root().ok_or_else(|| {
         MetricsCommandError::InstallState("could not resolve ICP root".to_string())
     })?;
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
+    resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: options.fleet.clone(),
             network: options.network.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,
         },
         &root,
     )
-    .map_err(metrics_installed_fleet_error)
+    .map_err(metrics_installed_deployment_error)
 }
 
 fn resolve_metrics_icp_root() -> Option<PathBuf> {
     resolve_current_canic_icp_root().ok()
 }
 
-fn metrics_installed_fleet_error(error: InstalledFleetError) -> MetricsCommandError {
+fn metrics_installed_deployment_error(error: InstalledDeploymentError) -> MetricsCommandError {
     match error {
-        InstalledFleetError::NoInstalledFleet { network, fleet } => {
-            MetricsCommandError::NoInstalledFleet { network, fleet }
-        }
-        InstalledFleetError::InstallState(error) => MetricsCommandError::InstallState(error),
-        InstalledFleetError::ReplicaQuery(error) => MetricsCommandError::ReplicaQuery(error),
-        InstalledFleetError::IcpFailed { command, stderr } => {
+        InstalledDeploymentError::NoInstalledDeployment {
+            network,
+            deployment,
+        } => MetricsCommandError::NoInstalledDeployment {
+            network,
+            fleet: deployment,
+        },
+        InstalledDeploymentError::InstallState(error) => MetricsCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => MetricsCommandError::ReplicaQuery(error),
+        InstalledDeploymentError::IcpFailed { command, stderr } => {
             MetricsCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::LostLocalFleet { root, .. } => {
+        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             MetricsCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
-        InstalledFleetError::Registry(error) => MetricsCommandError::Registry(error),
-        InstalledFleetError::Io(error) => MetricsCommandError::Io(error),
+        InstalledDeploymentError::Registry(error) => MetricsCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => MetricsCommandError::Io(error),
     }
 }
 

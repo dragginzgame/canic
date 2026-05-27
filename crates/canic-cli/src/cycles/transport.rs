@@ -16,9 +16,9 @@ use crate::{
 use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        resolve_installed_fleet_from_root,
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
+        resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
     response_parse::parse_cycle_balance_response,
@@ -384,40 +384,44 @@ fn current_unix_seconds() -> u64 {
 
 fn resolve_cycles_fleet(
     options: &CyclesOptions,
-) -> Result<InstalledFleetResolution, CyclesCommandError> {
+) -> Result<InstalledDeploymentResolution, CyclesCommandError> {
     let root = resolve_cycles_icp_root().ok_or_else(|| {
         CyclesCommandError::InstallState("could not resolve ICP root".to_string())
     })?;
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
+    resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: options.fleet.clone(),
             network: options.network.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,
         },
         &root,
     )
-    .map_err(cycles_installed_fleet_error)
+    .map_err(cycles_installed_deployment_error)
 }
 
 fn resolve_cycles_icp_root() -> Option<PathBuf> {
     resolve_current_canic_icp_root().ok()
 }
 
-fn cycles_installed_fleet_error(error: InstalledFleetError) -> CyclesCommandError {
+fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesCommandError {
     match error {
-        InstalledFleetError::NoInstalledFleet { network, fleet } => {
-            CyclesCommandError::NoInstalledFleet { network, fleet }
-        }
-        InstalledFleetError::InstallState(error) => CyclesCommandError::InstallState(error),
-        InstalledFleetError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
-        InstalledFleetError::IcpFailed { command, stderr } => {
+        InstalledDeploymentError::NoInstalledDeployment {
+            network,
+            deployment,
+        } => CyclesCommandError::NoInstalledDeployment {
+            network,
+            fleet: deployment,
+        },
+        InstalledDeploymentError::InstallState(error) => CyclesCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
+        InstalledDeploymentError::IcpFailed { command, stderr } => {
             CyclesCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::LostLocalFleet { root, .. } => {
+        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             CyclesCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
-        InstalledFleetError::Registry(error) => CyclesCommandError::Registry(error),
-        InstalledFleetError::Io(error) => CyclesCommandError::Io(error),
+        InstalledDeploymentError::Registry(error) => CyclesCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => CyclesCommandError::Io(error),
     }
 }

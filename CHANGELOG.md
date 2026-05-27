@@ -12,16 +12,27 @@ present.
 
 ## Unreleased
 
-- `canic deploy install` now requires an explicit deployment target argument
-  when installing from a supplied plan, making the target identity visible at
-  the command boundary and rejecting plans whose `deployment_name` does not
-  match that target.
+- Removed stale fleet-owned naming from the deployment-target install-state
+  API and state shape. Local install state now stores `deployment_name` and
+  `fleet_template` without a duplicate `fleet` field, and host readers are
+  named for deployment install state. The shared host lookup boundary is now
+  `installed_deployment`, and deployment-target state that still contains the
+  stale `fleet` field now fails closed instead of being accepted as current
+  state.
+
+## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.2` makes plan-mediated deploy install and read-only deploy truth
+  commands target-explicit. `canic deploy install <deployment> --plan <file>`
+  rejects plans whose `deployment_name` does not match the requested target,
+  and `canic deploy check <deployment>` resolves registered deployment state to
+  the correct fleet-template config without falling back to stale fleet-named
+  live state.
 
 ```bash
 canic deploy install demo-local --plan promoted-plan.json
+canic deploy check demo-local
 ```
-
-## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
 - `0.46.1` begins the deployment-target state hard cut: local install state now
   writes under `.canic/<network>/deployments/<deployment>.json`, deployment
@@ -256,9 +267,9 @@ See detailed breakdown:
   preflight readiness.
 
 ```bash
-canic deploy plan <fleet>
-canic deploy check <fleet>
-canic deploy authority check <fleet>
+canic deploy plan <deployment>
+canic deploy check <deployment>
+canic deploy authority check <deployment>
 ```
 
 See detailed breakdown:
@@ -306,10 +317,10 @@ See detailed breakdown:
   dry-run commands while preserving JSON as the default automation format.
 
 ```bash
-canic deploy authority check <fleet> --format text
-canic deploy authority evidence <fleet> --format text
-canic deploy authority report <fleet> --format text
-canic deploy authority receipt <fleet> --format text
+canic deploy authority check <deployment> --format text
+canic deploy authority evidence <deployment> --format text
+canic deploy authority report <deployment> --format text
+canic deploy authority receipt <deployment> --format text
 ```
 
 - `0.42.6` hardens authority dry-run evidence: reports and receipts now carry
@@ -335,13 +346,13 @@ canic deploy authority receipt <fleet> --format text
   actions for unsafe canister findings versus hard authority findings.
 
 - `0.42.2` adds evidence-only authority dry-run receipts and read-only
-  `canic deploy authority receipt|evidence <fleet>` JSON surfaces, preserving
+  `canic deploy authority receipt|evidence <deployment>` JSON surfaces, preserving
   controller observations and unresolved external actions without attempting
   controller mutation.
 
 ```bash
-canic deploy authority receipt <fleet>
-canic deploy authority evidence <fleet>
+canic deploy authority receipt <deployment>
+canic deploy authority evidence <deployment>
 ```
 
 - `0.42.1` adds the read-only authority report surface and completes the first
@@ -351,16 +362,16 @@ canic deploy authority evidence <fleet>
   changes.
 
 ```bash
-canic deploy authority report <fleet>
+canic deploy authority report <deployment>
 ```
 
 - `0.42.0` starts dry-run authority reconciliation with
   `AuthorityReconciliationPlanV1`, a passive planner over the 0.41 deployment
-  truth check, and read-only `canic deploy authority check <fleet>` output for
+  truth check, and read-only `canic deploy authority check <deployment>` output for
   controller-state classification without IC controller mutation.
 
 ```bash
-canic deploy authority check <fleet>
+canic deploy authority check <deployment>
 ```
 
 See detailed breakdown:
@@ -411,7 +422,7 @@ See detailed breakdown:
   default.
 
 ```bash
-canic deploy resume-report <fleet>
+canic deploy resume-report <deployment>
 ```
 
 - `0.41.10` expands passive deployment truth coverage for pool and verifier
@@ -422,11 +433,11 @@ canic deploy resume-report <fleet>
 - `0.41.9` adds receipt-aware deployment truth comparison for passive resume
   reporting, prints explicit `Complete` or `FailedBeforeMutation` receipt
   status from the current-install artifact gate, and introduces read-only
-  `canic deploy resume-report <fleet> --receipt <file>` to render
+  `canic deploy resume-report <deployment> --receipt <file>` to render
   `ResumeSafetyV1` without resuming or mutating state.
 
 ```bash
-canic deploy resume-report <fleet> --receipt <file>
+canic deploy resume-report <deployment> --receipt <file>
 ```
 
 - `0.41.8` extends local deployment truth plans with installed root identity
@@ -457,20 +468,20 @@ canic deploy resume-report <fleet> --receipt <file>
   drift.
 
 ```bash
-canic deploy diff <fleet>
-canic deploy report <fleet>
-canic deploy check <fleet>
+canic deploy diff <deployment>
+canic deploy report <deployment>
+canic deploy check <deployment>
 ```
 
-- `0.41.3` adds read-only `canic deploy plan|inventory|check <fleet>` JSON
+- `0.41.3` adds read-only `canic deploy plan|inventory|check <deployment>` JSON
   surfaces, adapts current install inputs into deployment truth checks, and
   blocks installer continuation after build when configured role artifacts are
   missing.
 
 ```bash
-canic deploy plan <fleet>
-canic deploy inventory <fleet>
-canic deploy check <fleet>
+canic deploy plan <deployment>
+canic deploy inventory <deployment>
+canic deploy check <deployment>
 ```
 
 - `0.41.2` adds the read-only local deployment truth check pipeline: local

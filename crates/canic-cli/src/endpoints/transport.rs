@@ -9,7 +9,7 @@ use crate::{
 use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{InstalledFleetRequest, resolve_installed_fleet_from_root},
+    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
 };
 use std::{
@@ -94,14 +94,14 @@ fn resolve_endpoint_target(
 fn load_fleet_registry(
     options: &EndpointsOptions,
 ) -> Result<Vec<RegistryEntry>, Box<dyn std::error::Error>> {
-    let request = InstalledFleetRequest {
-        fleet: options.fleet.clone(),
+    let request = InstalledDeploymentRequest {
+        deployment: options.fleet.clone(),
         network: state_network(options),
         icp: options.icp.clone(),
         detect_lost_local_root: false,
     };
     let root = resolve_endpoint_icp_root()?;
-    Ok(resolve_installed_fleet_from_root(&request, &root)?
+    Ok(resolve_installed_deployment_from_root(&request, &root)?
         .registry
         .entries)
 }

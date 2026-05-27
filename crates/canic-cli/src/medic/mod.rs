@@ -9,7 +9,7 @@ use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     install_root::InstallState,
-    installed_fleet::read_installed_fleet_state_from_root,
+    installed_deployment::read_installed_deployment_state_from_root,
     replica_query,
     table::{ColumnAlign, render_table},
 };
@@ -86,7 +86,7 @@ fn medic_command() -> ClapCommand {
             value_arg("fleet")
                 .value_name("fleet")
                 .required(true)
-                .help("Installed fleet name to inspect"),
+                .help("Installed deployment name to inspect"),
         )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
@@ -106,29 +106,29 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let state = match icp_root.as_deref().map_or_else(
         || Err("could not resolve ICP project root".to_string()),
         |root| {
-            read_installed_fleet_state_from_root(&options.network, &options.fleet, root)
+            read_installed_deployment_state_from_root(&options.network, &options.fleet, root)
                 .map_err(|err| err.to_string())
         },
     ) {
         Ok(state) => {
             checks.push(MedicCheck::ok(
-                "fleet state",
-                format!("{} installed", state.fleet),
+                "deployment state",
+                format!("{} installed", state.deployment_name),
                 "run canic fleet list",
             ));
             Some(state)
         }
-        Err(err) if is_missing_installed_fleet(&err) => {
+        Err(err) if is_missing_installed_deployment(&err) => {
             checks.push(MedicCheck::warn(
-                "fleet state",
-                "no installed fleet found",
+                "deployment state",
+                "no installed deployment found",
                 "run canic install <name>",
             ));
             None
         }
         Err(err) => {
             checks.push(MedicCheck::error(
-                "fleet state",
+                "deployment state",
                 err,
                 "reinstall from a config with [fleet].name",
             ));
@@ -144,8 +144,8 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     checks
 }
 
-fn is_missing_installed_fleet(error: &str) -> bool {
-    error.starts_with("fleet ") && error.contains(" is not installed on network ")
+fn is_missing_installed_deployment(error: &str) -> bool {
+    error.starts_with("deployment target ") && error.contains(" is not installed on network ")
 }
 
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {

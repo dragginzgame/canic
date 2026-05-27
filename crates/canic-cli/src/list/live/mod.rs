@@ -7,9 +7,9 @@ use canic_host::{
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
-    installed_fleet::{
-        InstalledFleetError, InstalledFleetRequest, InstalledFleetResolution,
-        read_installed_fleet_state_from_root, resolve_installed_fleet_from_root,
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
+        read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
     replica_query,
@@ -255,33 +255,37 @@ fn query_canic_metadata_version(
 
 fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
     let icp_root = resolve_live_icp_root(options)?;
-    if let Ok(state) =
-        read_installed_fleet_state_from_root(&state_network(options), &options.fleet, &icp_root)
-    {
+    if let Ok(state) = read_installed_deployment_state_from_root(
+        &state_network(options),
+        &options.fleet,
+        &icp_root,
+    ) {
         return Some(PathBuf::from(state.icp_root));
     }
     Some(icp_root)
 }
 
-fn resolve_list_fleet(options: &ListOptions) -> Result<InstalledFleetResolution, ListCommandError> {
+fn resolve_list_fleet(
+    options: &ListOptions,
+) -> Result<InstalledDeploymentResolution, ListCommandError> {
     let icp_root = resolve_live_icp_root(options)
         .ok_or_else(|| ListCommandError::InstallState("could not resolve ICP root".to_string()))?;
-    resolve_installed_fleet_from_root(
-        &InstalledFleetRequest {
-            fleet: options.fleet.clone(),
+    resolve_installed_deployment_from_root(
+        &InstalledDeploymentRequest {
+            deployment: options.fleet.clone(),
             network: state_network(options),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
         },
         &icp_root,
     )
-    .map_err(list_installed_fleet_error)
+    .map_err(list_installed_deployment_error)
     .map_err(add_root_registry_hint)
 }
 
 fn resolve_live_icp_root(options: &ListOptions) -> Option<PathBuf> {
     resolve_current_canic_icp_root().ok().or_else(|| {
-        read_installed_fleet_state_from_root(
+        read_installed_deployment_state_from_root(
             &state_network(options),
             &options.fleet,
             &std::env::current_dir().ok()?,
@@ -291,27 +295,31 @@ fn resolve_live_icp_root(options: &ListOptions) -> Option<PathBuf> {
     })
 }
 
-fn list_installed_fleet_error(error: InstalledFleetError) -> ListCommandError {
+fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListCommandError {
     match error {
-        InstalledFleetError::NoInstalledFleet { network, fleet } => {
-            ListCommandError::NoInstalledFleet { network, fleet }
-        }
-        InstalledFleetError::InstallState(error) => ListCommandError::InstallState(error),
-        InstalledFleetError::ReplicaQuery(error) => ListCommandError::ReplicaQuery(error),
-        InstalledFleetError::IcpFailed { command, stderr } => {
+        InstalledDeploymentError::NoInstalledDeployment {
+            network,
+            deployment,
+        } => ListCommandError::NoInstalledDeployment {
+            network,
+            fleet: deployment,
+        },
+        InstalledDeploymentError::InstallState(error) => ListCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => ListCommandError::ReplicaQuery(error),
+        InstalledDeploymentError::IcpFailed { command, stderr } => {
             ListCommandError::IcpFailed { command, stderr }
         }
-        InstalledFleetError::LostLocalFleet {
-            fleet,
+        InstalledDeploymentError::LostLocalDeployment {
+            deployment,
             network,
             root,
-        } => ListCommandError::LostLocalFleet {
-            fleet,
+        } => ListCommandError::LostLocalDeployment {
+            fleet: deployment,
             network,
             root,
         },
-        InstalledFleetError::Registry(error) => ListCommandError::Registry(error),
-        InstalledFleetError::Io(error) => ListCommandError::Io(error),
+        InstalledDeploymentError::Registry(error) => ListCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => ListCommandError::Io(error),
     }
 }
 
