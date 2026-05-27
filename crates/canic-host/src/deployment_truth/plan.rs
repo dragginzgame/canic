@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    install_root::read_named_fleet_install_state_from_root,
+    install_root::{RootVerificationStatus, read_named_fleet_install_state_from_root},
     release_set::{
         ConfiguredPoolExpectation, configured_controllers, configured_fleet_name,
         configured_fleet_roles, configured_pool_expectations,
@@ -74,8 +74,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         },
         local_expected_pool,
     );
-    let root_canister_id =
-        local_root_canister_id(request, &fleet_template, &mut unresolved_assumptions);
+    let root_canister_id = local_root_canister_id(request, &mut unresolved_assumptions);
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let canonical_runtime_config_digest =
         canonical_runtime_config_assumption(&config, &mut unresolved_assumptions);
@@ -170,21 +169,35 @@ fn local_plan_identity(
 
 fn local_root_canister_id(
     request: &LocalDeploymentPlanRequest,
-    fleet_template: &str,
     assumptions: &mut Vec<DeploymentAssumptionV1>,
 ) -> Option<String> {
     match read_named_fleet_install_state_from_root(
         &request.icp_root,
         &request.network,
-        fleet_template,
+        &request.deployment_name,
     ) {
-        Ok(Some(state)) if state.network == request.network => Some(state.root_canister_id),
+        Ok(Some(state))
+            if state.network == request.network
+                && state.root_verification == RootVerificationStatus::Verified =>
+        {
+            Some(state.root_canister_id)
+        }
+        Ok(Some(state)) if state.network == request.network => {
+            assumptions.push(assumption(
+                "local_state.root_canister_id",
+                format!(
+                    "deployment state for {} records root {}, but root verification is {:?}; run deploy check/verification before mutation authority is trusted",
+                    request.deployment_name, state.root_canister_id, state.root_verification
+                ),
+            ));
+            None
+        }
         Ok(Some(state)) => {
             assumptions.push(assumption(
                 "local_state.root_canister_id",
                 format!(
-                    "install state for fleet {fleet_template} has network {}, expected {}",
-                    state.network, request.network
+                    "deployment state for {} has network {}, expected {}",
+                    request.deployment_name, state.network, request.network
                 ),
             ));
             None
@@ -193,7 +206,8 @@ fn local_root_canister_id(
             assumptions.push(assumption(
                 "local_state.root_canister_id",
                 format!(
-                    "no local install state exists for fleet {fleet_template}; root identity is unknown until install"
+                    "no local deployment state exists for {}; root identity is unknown until install or deploy register",
+                    request.deployment_name
                 ),
             ));
             None
@@ -201,7 +215,10 @@ fn local_root_canister_id(
         Err(err) => {
             assumptions.push(assumption(
                 "local_state.root_canister_id",
-                format!("could not read install state for fleet {fleet_template}: {err}"),
+                format!(
+                    "could not read deployment state for {}: {err}",
+                    request.deployment_name
+                ),
             ));
             None
         }

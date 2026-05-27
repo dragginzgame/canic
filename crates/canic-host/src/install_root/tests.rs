@@ -2,25 +2,26 @@ use super::{
     BuildInstallTargetsOperation, CompletedInstallPhase, EmitRootManifestOperation,
     EnsureRootCyclesOperation, INSTALL_STATE_SCHEMA_VERSION, InstallPhaseOperation,
     InstallReceiptScope, InstallRootOptions, InstallRootWasmOperation, InstallState,
-    InstallTimingSummary, ResolveRootCanisterOperation, ResumeBootstrapOperation,
-    StageReleaseSetOperation, WaitRootReadyOperation, add_create_root_target,
-    add_icp_environment_target, add_local_root_create_cycles_arg, check_install_deployment_truth,
+    InstallTimingSummary, RegisterDeploymentStateOptions, ResolveRootCanisterOperation,
+    ResumeBootstrapOperation, RootVerificationStatus, StageReleaseSetOperation,
+    WaitRootReadyOperation, add_create_root_target, add_icp_environment_target,
+    add_local_root_create_cycles_arg, check_install_deployment_truth,
     check_install_execution_preflight, config_selection_error,
     current_install_deployment_truth_check_at, current_install_execution_context,
     current_install_executor_missing_capabilities, current_install_staging_evidence,
-    discover_canic_config_choices, discover_project_canic_config_choices,
-    enforce_install_deployment_truth_gate, fleet_install_state_path,
-    icp_canister_command_in_network, install_deployment_truth_gate_lines,
+    deployment_install_state_path, discover_canic_config_choices,
+    discover_project_canic_config_choices, enforce_install_deployment_truth_gate,
+    fleet_install_state_path, icp_canister_command_in_network, install_deployment_truth_gate_lines,
     install_deployment_truth_gate_receipt, install_deployment_truth_phase_receipt,
     install_deployment_truth_receipt_path, is_missing_canister_id_error,
     latest_deployment_truth_receipt_path_from_root, parse_bootstrap_status_value,
     parse_canister_id_json, parse_created_canister_id, parse_cycle_balance_response,
-    parse_root_ready_value, read_fleet_install_state, render_install_timing_summary,
-    resolve_install_config_path, root_init_args, validate_expected_fleet_name,
-    validate_plan_artifacts_with_phase, write_artifact_promotion_execution_receipt_for_install,
-    write_completed_install_phase_receipt, write_current_install_execution_preflight_receipt,
-    write_install_deployment_truth_receipt, write_install_state,
-    write_install_state_with_deployment_truth_receipt,
+    parse_root_ready_value, read_fleet_install_state, register_deployment_state,
+    render_install_timing_summary, resolve_install_config_path, root_init_args,
+    validate_expected_fleet_name, validate_plan_artifacts_with_phase,
+    write_artifact_promotion_execution_receipt_for_install, write_completed_install_phase_receipt,
+    write_current_install_execution_preflight_receipt, write_install_deployment_truth_receipt,
+    write_install_state, write_install_state_with_deployment_truth_receipt,
 };
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
@@ -2251,40 +2252,109 @@ fn install_rejects_config_identity_mismatch() {
 }
 
 #[test]
-fn install_state_path_is_scoped_by_network() {
+fn deployment_state_path_is_scoped_by_network() {
     assert_eq!(
-        fleet_install_state_path(&PathBuf::from("/tmp/canic-project"), "local", "demo"),
-        PathBuf::from("/tmp/canic-project/.canic/local/fleets/demo.json")
+        deployment_install_state_path(&PathBuf::from("/tmp/canic-project"), "local", "demo"),
+        PathBuf::from("/tmp/canic-project/.canic/local/deployments/demo.json")
     );
 }
 
 #[test]
 fn install_state_round_trips_from_project_state_dir() {
     let root = temp_dir("canic-install-state");
-    let state = InstallState {
-        schema_version: INSTALL_STATE_SCHEMA_VERSION,
-        fleet: "demo".to_string(),
-        installed_at_unix_secs: 42,
-        network: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        root_build_target: "root".to_string(),
-        workspace_root: root.display().to_string(),
-        icp_root: root.display().to_string(),
-        config_path: root.join("fleets/canic.toml").display().to_string(),
-        release_set_manifest_path: root
-            .join(".icp/local/canisters/root/root.release-set.json")
-            .display()
-            .to_string(),
-    };
+    let state = sample_install_state(&root, "demo", "demo");
 
     let path = write_install_state(&root, "local", &state).expect("write state");
     let named = read_fleet_install_state(&root, "local", "demo")
-        .expect("read named fleet")
-        .expect("named fleet exists");
+        .expect("read named deployment")
+        .expect("named deployment exists");
 
-    assert_eq!(path, root.join(".canic/local/fleets/demo.json"));
+    assert_eq!(path, root.join(".canic/local/deployments/demo.json"));
     assert_eq!(named, state);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn deploy_register_writes_minimal_unverified_deployment_state() {
+    let root = temp_dir("canic-register-state");
+    let path = register_deployment_state(RegisterDeploymentStateOptions {
+        deployment_name: "demo-local".to_string(),
+        fleet_template: "demo".to_string(),
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(root.clone()),
+        workspace_root: Some(root.clone()),
+    })
+    .expect("register deployment state");
+    let state = read_fleet_install_state(&root, "local", "demo-local")
+        .expect("read registered state")
+        .expect("state exists");
+
+    assert_eq!(path, root.join(".canic/local/deployments/demo-local.json"));
+    assert_eq!(state.deployment_name, "demo-local");
+    assert_eq!(state.fleet_template, "demo");
+    assert_eq!(state.fleet, "demo");
+    assert_eq!(state.root_canister_id, "uxrrr-q7777-77774-qaaaq-cai");
+    assert_eq!(state.root_verification, RootVerificationStatus::NotVerified);
+    assert!(state.config_path.ends_with("fleets/demo/canic.toml"));
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn unverified_registered_root_is_not_used_as_plan_authority() {
+    let root = temp_dir("canic-register-unverified-plan");
+    let workspace_root = root.join("workspace");
+    let icp_root = root.join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(
+        config_dir.join("canic.toml"),
+        r#"
+app_index = []
+
+[fleet]
+name = "demo"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+    register_deployment_state(RegisterDeploymentStateOptions {
+        deployment_name: "demo-local".to_string(),
+        fleet_template: "demo".to_string(),
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        network: "local".to_string(),
+        icp_root: Some(icp_root.clone()),
+        workspace_root: Some(workspace_root.clone()),
+    })
+    .expect("register deployment state");
+
+    let plan = crate::deployment_truth::build_local_deployment_plan(
+        &crate::deployment_truth::LocalDeploymentPlanRequest {
+            deployment_name: "demo-local".to_string(),
+            network: "local".to_string(),
+            workspace_root,
+            icp_root,
+            config_path: None,
+            runtime_variant: "local".to_string(),
+            build_profile: "fast".to_string(),
+        },
+    );
+
+    assert_eq!(plan.trust_domain.root_trust_anchor, None);
+    assert!(plan.unresolved_assumptions.iter().any(|assumption| {
+        assumption.key == "local_state.root_canister_id"
+            && assumption
+                .description
+                .contains("root verification is NotVerified")
+    }));
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -2292,22 +2362,7 @@ fn install_state_round_trips_from_project_state_dir() {
 #[test]
 fn install_truth_state_write_receipt_records_local_state_path() {
     let (root, check) = demo_install_deployment_truth_check("canic-install-state-receipt");
-    let state = InstallState {
-        schema_version: INSTALL_STATE_SCHEMA_VERSION,
-        fleet: "demo".to_string(),
-        installed_at_unix_secs: 42,
-        network: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        root_build_target: "root".to_string(),
-        workspace_root: root.display().to_string(),
-        icp_root: root.display().to_string(),
-        config_path: root.join("fleets/demo/canic.toml").display().to_string(),
-        release_set_manifest_path: root
-            .join(".icp/local/canisters/root/root.release-set.json")
-            .display()
-            .to_string(),
-    };
+    let state = sample_install_state(&root, "demo", "demo");
     let execution_context = current_install_execution_context(&root, &root, "local");
     let scope = InstallReceiptScope {
         icp_root: &root,
@@ -2332,7 +2387,7 @@ fn install_truth_state_write_receipt_records_local_state_path() {
         .find(|receipt| receipt.operation_id.ends_with(":write_install_state"))
         .expect("write install state receipt");
 
-    assert_eq!(state_path, root.join(".canic/local/fleets/demo.json"));
+    assert_eq!(state_path, root.join(".canic/local/deployments/demo.json"));
     assert_eq!(
         receipt.operation_status,
         DeploymentExecutionStatusV1::Complete
@@ -2344,51 +2399,90 @@ fn install_truth_state_write_receipt_records_local_state_path() {
             .evidence
             .contains(&format!("install_state:{}", state_path.display()))
     );
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .contains(&"deployment:demo".to_string())
+    );
+    assert!(
+        receipt.phase_receipts[0]
+            .verified_postcondition
+            .evidence
+            .contains(&"fleet_template:demo".to_string())
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
-fn install_state_replaces_other_fleets_that_share_root() {
-    let root = temp_dir("canic-install-state-replace");
-    let demo = InstallState {
-        schema_version: INSTALL_STATE_SCHEMA_VERSION,
-        fleet: "demo".to_string(),
-        installed_at_unix_secs: 42,
-        network: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        root_build_target: "root".to_string(),
-        workspace_root: root.display().to_string(),
-        icp_root: root.display().to_string(),
-        config_path: root.join("fleets/demo/canic.toml").display().to_string(),
-        release_set_manifest_path: root
-            .join(".icp/local/canisters/root/root.release-set.json")
-            .display()
-            .to_string(),
-    };
-    let test = InstallState {
-        fleet: "test".to_string(),
-        config_path: root.join("fleets/test/canic.toml").display().to_string(),
-        ..demo.clone()
-    };
+fn deployment_state_allows_distinct_targets_that_share_root() {
+    let root = temp_dir("canic-install-state-targets");
+    let demo = sample_install_state(&root, "demo-local", "demo");
+    let test = sample_install_state(&root, "demo-staging", "demo");
 
     write_install_state(&root, "local", &demo).expect("write demo state");
     write_install_state(&root, "local", &test).expect("write test state");
 
-    assert!(
-        read_fleet_install_state(&root, "local", "demo")
+    assert_eq!(
+        read_fleet_install_state(&root, "local", "demo-local")
             .expect("read demo")
-            .is_none()
+            .expect("demo state exists"),
+        demo
     );
     assert_eq!(
-        read_fleet_install_state(&root, "local", "test")
+        read_fleet_install_state(&root, "local", "demo-staging")
             .expect("read test")
             .expect("test state exists"),
         test
     );
 
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn legacy_fleet_state_is_rejected_as_deployment_truth() {
+    let root = temp_dir("canic-install-state-legacy");
+    let legacy_path = fleet_install_state_path(&root, "local", "demo");
+    fs::create_dir_all(legacy_path.parent().expect("legacy parent")).expect("create legacy dir");
+    fs::write(&legacy_path, b"{}").expect("write legacy state");
+
+    let err = read_fleet_install_state(&root, "local", "demo")
+        .expect_err("legacy fleet state must fail closed");
+    let message = err.to_string();
+
+    assert!(message.contains("legacy fleet install state found"));
+    assert!(
+        message.contains("canic deploy register demo --fleet-template demo --root <principal>")
+    );
+    assert!(message.contains(".canic/local/fleets/demo.json"));
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str) -> InstallState {
+    InstallState {
+        schema_version: INSTALL_STATE_SCHEMA_VERSION,
+        deployment_name: deployment_name.to_string(),
+        fleet_template: fleet_template.to_string(),
+        fleet: fleet_template.to_string(),
+        installed_at_unix_secs: 42,
+        network: "local".to_string(),
+        root_target: "root".to_string(),
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        root_verification: RootVerificationStatus::Verified,
+        root_build_target: "root".to_string(),
+        workspace_root: root.display().to_string(),
+        icp_root: root.display().to_string(),
+        config_path: root
+            .join(format!("fleets/{fleet_template}/canic.toml"))
+            .display()
+            .to_string(),
+        release_set_manifest_path: root
+            .join(".icp/local/canisters/root/root.release-set.json")
+            .display()
+            .to_string(),
+    }
 }
 
 fn write_temp_workspace_config(config_source: &str) -> PathBuf {

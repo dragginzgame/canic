@@ -12,6 +12,22 @@ present.
 
 ## Unreleased
 
+- Began the 0.46 deployment-target state hard cut: local install state now
+  writes under `.canic/<network>/deployments/<deployment>.json`, deployment
+  truth reads target-named state instead of fleet-template state, old
+  `.canic/<network>/fleets/*.json` live state fails closed with explicit
+  recovery guidance, and supplied install plans must match the exact deployment
+  identity.
+
+```bash
+canic deploy register demo-local --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai
+```
+
+- Added `canic deploy register` as the explicit 0.46 recovery path for known
+  live roots. It writes only minimal deployment-target state, marks the root
+  `not_verified`, and does not migrate fleet state, query live inventory, copy
+  receipts, record artifact/controller truth, install code, or mutate
+  canisters.
 - Added first-install documentation for a minimal managed fleet, including the
   root/child lifecycle shape, subnet-scoped `canic.toml`, package-role mapping,
   managed-fleet test path, Candid surface expectations, and common install

@@ -403,7 +403,7 @@ fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {
         assumption.key == "local_state.root_canister_id"
             && assumption
                 .description
-                .contains("no local install state exists")
+                .contains("no local deployment state exists")
     })
 }
 

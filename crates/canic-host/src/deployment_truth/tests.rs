@@ -5,7 +5,7 @@ use crate::deployment_truth::observe::{
     registry_entries_to_observed_pool,
 };
 use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
-use crate::install_root::InstallState;
+use crate::install_root::{InstallState, RootVerificationStatus};
 use crate::registry::RegistryEntry;
 use crate::release_set::{ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE};
 use crate::test_support::temp_dir;
@@ -7545,7 +7545,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
 
 #[test]
 fn live_root_status_observation_maps_status_controllers_and_module_hash() {
-    let state = sample_install_state("aaaaa-aa");
+    let state = sample_install_state("demo", "aaaaa-aa");
     let report = IcpCanisterStatusReport {
         id: "aaaaa-aa".to_string(),
         name: Some("root".to_string()),
@@ -8117,11 +8117,12 @@ fn local_plan_uses_install_state_root_as_expected_canister() {
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     write_release_set_manifest(&icp_root);
-    let state_path = icp_root.join(".canic/local/fleets/demo.json");
+    let state_path = icp_root.join(".canic/local/deployments/demo-local.json");
     fs::create_dir_all(state_path.parent().expect("state parent")).expect("create state dir");
     fs::write(
         state_path,
-        serde_json::to_vec_pretty(&sample_install_state("aaaaa-aa")).expect("encode state"),
+        serde_json::to_vec_pretty(&sample_install_state("demo-local", "aaaaa-aa"))
+            .expect("encode state"),
     )
     .expect("write install state");
 
@@ -12222,14 +12223,17 @@ fn write_release_set_manifest(icp_root: &Path) {
     .expect("write manifest");
 }
 
-fn sample_install_state(root_canister_id: &str) -> InstallState {
+fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> InstallState {
     InstallState {
-        schema_version: 1,
+        schema_version: 2,
+        deployment_name: deployment_name.to_string(),
+        fleet_template: "demo".to_string(),
         fleet: "demo".to_string(),
         installed_at_unix_secs: 1,
         network: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: root_canister_id.to_string(),
+        root_verification: RootVerificationStatus::Verified,
         root_build_target: "root".to_string(),
         workspace_root: "/workspace".to_string(),
         icp_root: "/workspace".to_string(),

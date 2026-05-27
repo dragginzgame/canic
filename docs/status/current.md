@@ -20,15 +20,15 @@ inspect only the files needed for the current task.
   evidence without querying live state or mutating deployments. `canic deploy
   compare --left <file> --right <file>` exposes that artifact as the first
   0.46 operator command over archived deployment-truth checks.
-- The next required 0.46 correction is the deployment-target local state hard
-  cut: fleet templates are reusable desired topology, deployments are concrete
-  live targets, old `.canic/<network>/fleets/<fleet>.json` state must not be
-  read as deployment truth, and supplied-plan install must require exact
-  deployment target identity. Any recovery path must be explicit operator
-  registration, not automatic migration. Registered state should stay minimal
-  and carry root verification status; unverified roots must not allow mutation.
-  `deploy check` must stay observational and must not silently rewrite local
-  state.
+- The 0.46 deployment-target local state hard cut has started: local install
+  state now writes to `.canic/<network>/deployments/<deployment>.json`,
+  deployment truth reads state by deployment target name, old
+  `.canic/<network>/fleets/<fleet>.json` live state fails closed instead of
+  being read as deployment truth, and supplied-plan install now requires exact
+  deployment identity. The explicit `deploy register` recovery command remains
+  intentionally minimal: it writes target state for a known root, marks that
+  root `not_verified`, and does not migrate old state or claim live deployment
+  truth. No automatic migration or silent fallback exists.
 - 0.46 must preserve the 0.45 external lifecycle handoff: supplied
   observations, consent evidence, reported external action, and passive
   completion reports are evidence, not live deployment truth.
@@ -49,6 +49,21 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Local install state moved from fleet-template storage to deployment-target
+  storage. New state records `deployment_name`, `fleet_template`, and
+  `root_verification`; state writes no longer delete other deployments sharing
+  a root, and legacy fleet-state files now produce a clear fail-closed recovery
+  error instead of being projected into deployment truth.
+- Local deployment plan and inventory collection now resolve root identity from
+  deployment-target state using `deployment_name`, not the configured fleet
+  template name. `canic deploy install --plan` validation now requires the
+  supplied plan deployment identity to match the install target exactly rather
+  than accepting a fleet-template fallback.
+- `canic deploy register <deployment> --fleet-template <fleet> --root
+  <principal>` now writes minimal deployment-target state for explicit operator
+  recovery. Registered roots are marked `not_verified`; plan generation does
+  not use them as trusted root authority until verification evidence is
+  recorded.
 - 0.46 has started with passive `DeploymentComparisonReportV1` comparison over
   two existing `DeploymentCheckV1` artifacts. It binds check/plan/inventory
   digests for both sides, compares normalized identity/artifact/module/config/

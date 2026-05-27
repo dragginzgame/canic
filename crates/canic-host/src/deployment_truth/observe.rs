@@ -94,9 +94,12 @@ pub fn collect_local_deployment_inventory(
         Vec::new()
     });
 
-    let install_state =
-        read_named_fleet_install_state_from_root(&request.icp_root, &request.network, &fleet_name)
-            .map_err(|err| DeploymentTruthError::LocalState(err.to_string()))?;
+    let install_state = read_named_fleet_install_state_from_root(
+        &request.icp_root,
+        &request.network,
+        &request.deployment_name,
+    )
+    .map_err(|err| DeploymentTruthError::LocalState(err.to_string()))?;
     let raw_config_sha256 = observe_config_sha256(&config, &mut unresolved_observations);
     let canonical_runtime_config_digest =
         observe_canonical_runtime_config_digest(&config, &mut unresolved_observations);
@@ -135,7 +138,7 @@ pub fn collect_local_deployment_inventory(
 
     Ok(DeploymentInventoryV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        inventory_id: format!("local:{}:{fleet_name}", request.network),
+        inventory_id: format!("local:{}:{}", request.network, request.deployment_name),
         observed_at: request.observed_at.clone(),
         observed_identity,
         local_config: LocalDeploymentConfigV1 {

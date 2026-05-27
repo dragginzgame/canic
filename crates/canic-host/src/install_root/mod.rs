@@ -58,7 +58,8 @@ use state::{
     INSTALL_STATE_SCHEMA_VERSION, validate_fleet_name, validate_network_name, write_install_state,
 };
 pub use state::{
-    InstallState, read_named_fleet_install_state, read_named_fleet_install_state_from_root,
+    InstallState, RootVerificationStatus, read_named_fleet_install_state,
+    read_named_fleet_install_state_from_root,
 };
 
 #[cfg(test)]
@@ -69,7 +70,7 @@ use config_selection::config_selection_error;
 #[cfg(test)]
 use readiness::{parse_bootstrap_status_value, parse_root_ready_value};
 #[cfg(test)]
-use state::{fleet_install_state_path, read_fleet_install_state};
+use state::{deployment_install_state_path, fleet_install_state_path, read_fleet_install_state};
 
 ///
 /// InstallRootOptions
@@ -88,6 +89,20 @@ pub struct InstallRootOptions {
     pub interactive_config_selection: bool,
     pub deployment_plan_override: Option<DeploymentPlanV1>,
     pub artifact_promotion_plan_override: Option<ArtifactPromotionPlanV1>,
+}
+
+///
+/// RegisterDeploymentStateOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegisterDeploymentStateOptions {
+    pub deployment_name: String,
+    pub fleet_template: String,
+    pub root_canister_id: String,
+    pub network: String,
+    pub icp_root: Option<PathBuf>,
+    pub workspace_root: Option<PathBuf>,
 }
 
 ///
@@ -227,6 +242,66 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     )?;
     print_install_result_summary(&options.network, &state.fleet, &state_path);
     Ok(())
+}
+
+/// Register minimal local deployment-target state for an existing root canister.
+///
+/// Registration is an explicit operator recovery path after the 0.46 hard cut.
+/// It does not migrate legacy fleet state, verify live inventory, copy receipts,
+/// or claim artifact/controller truth.
+pub fn register_deployment_state(
+    options: RegisterDeploymentStateOptions,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_fleet_name(&options.deployment_name)?;
+    validate_fleet_name(&options.fleet_template)?;
+    validate_network_name(&options.network)?;
+    Principal::from_text(&options.root_canister_id).map_err(|err| {
+        format!(
+            "invalid root principal for deployment {}: {err}",
+            options.deployment_name
+        )
+    })?;
+
+    let workspace_root = match options.workspace_root {
+        Some(path) => path,
+        None => workspace_root()?,
+    };
+    let icp_root = match options.icp_root {
+        Some(path) => path,
+        None => icp_root()?,
+    };
+    let artifact_root = resolve_artifact_root(&icp_root, &options.network).unwrap_or_else(|_| {
+        icp_root
+            .join(".icp")
+            .join(&options.network)
+            .join("canisters")
+    });
+    let release_set_manifest_path =
+        crate::release_set::root_release_set_manifest_path(&artifact_root)
+            .unwrap_or_else(|_| artifact_root.join("root").join("root.release-set.json"));
+    let state = InstallState {
+        schema_version: INSTALL_STATE_SCHEMA_VERSION,
+        deployment_name: options.deployment_name,
+        fleet_template: options.fleet_template.clone(),
+        fleet: options.fleet_template.clone(),
+        installed_at_unix_secs: current_unix_secs()?,
+        network: options.network.clone(),
+        root_target: options.root_canister_id.clone(),
+        root_canister_id: options.root_canister_id,
+        root_verification: RootVerificationStatus::NotVerified,
+        root_build_target: "root".to_string(),
+        workspace_root: workspace_root.display().to_string(),
+        icp_root: icp_root.display().to_string(),
+        config_path: workspace_root
+            .join("fleets")
+            .join(&options.fleet_template)
+            .join("canic.toml")
+            .display()
+            .to_string(),
+        release_set_manifest_path: release_set_manifest_path.display().to_string(),
+    };
+
+    write_install_state(&icp_root, &options.network, &state)
 }
 
 struct PreparedInstallTruth {
@@ -1044,7 +1119,8 @@ fn write_install_state_with_deployment_truth_receipt(
         finished_at: Some(current_unix_timestamp_label()?),
         evidence: vec![
             format!("install_state:{}", state_path.display()),
-            format!("fleet:{}", state.fleet),
+            format!("deployment:{}", state.deployment_name),
+            format!("fleet_template:{}", state.fleet_template),
             format!("root_canister:{}", state.root_canister_id),
         ],
         role_names: Vec::new(),
@@ -1424,10 +1500,10 @@ fn validate_current_install_plan_override(
         )
         .into());
     }
-    if plan.deployment_identity.deployment_name != fleet_name && plan.fleet_template != fleet_name {
+    if plan.deployment_identity.deployment_name != fleet_name {
         return Err(format!(
-            "deployment plan target mismatch: install fleet {fleet_name}, plan deployment {} / template {}",
-            plan.deployment_identity.deployment_name, plan.fleet_template
+            "deployment plan target mismatch: install deployment {fleet_name}, plan deployment {}",
+            plan.deployment_identity.deployment_name
         )
         .into());
     }
@@ -2217,11 +2293,14 @@ fn build_install_state(
 ) -> Result<InstallState, Box<dyn std::error::Error>> {
     Ok(InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
+        deployment_name: fleet_name.to_string(),
+        fleet_template: fleet_name.to_string(),
         fleet: fleet_name.to_string(),
         installed_at_unix_secs: current_unix_secs()?,
         network: options.network.clone(),
         root_target: options.root_canister.clone(),
         root_canister_id: root_canister_id.to_string(),
+        root_verification: RootVerificationStatus::Verified,
         root_build_target: options.root_build_target.clone(),
         workspace_root: workspace_root.display().to_string(),
         icp_root: icp_root.display().to_string(),

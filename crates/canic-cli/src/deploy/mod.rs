@@ -77,8 +77,8 @@ use canic_host::{
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
-        InstallRootOptions, check_install_deployment_truth, install_root,
-        latest_deployment_truth_receipt_path_from_root,
+        InstallRootOptions, RegisterDeploymentStateOptions, check_install_deployment_truth,
+        install_root, latest_deployment_truth_receipt_path_from_root, register_deployment_state,
     },
 };
 use clap::Command as ClapCommand;
@@ -98,6 +98,7 @@ const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
   canic deploy inventory demo
+  canic deploy register demo --fleet-template demo --root aaaaa-aa
   canic deploy compare --left staging-check.json --right prod-check.json
   canic deploy diff demo
   canic deploy report demo
@@ -139,6 +140,16 @@ Examples:
 
 Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
 state, install code, or mutate deployments.";
+const DEPLOY_REGISTER_HELP_AFTER: &str = "\
+Examples:
+  canic deploy register demo --fleet-template demo --root aaaaa-aa
+  canic --network local deploy register demo --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai
+
+Registers minimal deployment-target local state for an existing root canister.
+This is an explicit 0.46 hard-cut recovery path. It does not migrate legacy
+fleet state, query live inventory, copy receipts, record artifact/controller
+truth, install code, or mutate canisters. Registered roots are marked
+not_verified until a later verification path records live evidence.";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
@@ -559,6 +570,17 @@ struct DeployInstallPlanOptions {
 }
 
 ///
+/// DeployRegisterOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployRegisterOptions {
+    deployment: String,
+    fleet_template: String,
+    root: String,
+    network: String,
+}
+
+///
 /// DeployInstallPlanInput
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -779,6 +801,7 @@ where
             "external" => run_external(args),
             "promote" => run_promote(args),
             "install" => run_install(args),
+            "register" => run_register(args),
             "compare" => run_compare(args),
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
@@ -805,6 +828,23 @@ where
     let icp_root = resolve_current_canic_icp_root().ok();
     install_root(options.into_install_root_options(plan, icp_root))
         .map_err(DeployCommandError::from)
+}
+
+fn run_register<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, deploy_register_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployRegisterOptions::parse(args)?;
+    let state_path = register_deployment_state(options.into_register_options(None))
+        .map_err(DeployCommandError::from)?;
+    println!("Registered deployment state: {}", state_path.display());
+    println!("root_verification: not_verified");
+    Ok(())
 }
 
 fn run_compare<I>(args: I) -> Result<(), DeployCommandError>
@@ -2197,6 +2237,37 @@ impl DeployInstallPlanOptions {
     }
 }
 
+impl DeployRegisterOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_register_command(), args)
+            .map_err(|_| DeployCommandError::Usage(deploy_register_usage()))?;
+        Ok(Self {
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
+            fleet_template: string_option(&matches, "fleet-template")
+                .expect("clap requires fleet-template"),
+            root: string_option(&matches, "root").expect("clap requires root"),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
+        })
+    }
+
+    fn into_register_options(
+        self,
+        icp_root: Option<std::path::PathBuf>,
+    ) -> RegisterDeploymentStateOptions {
+        RegisterDeploymentStateOptions {
+            deployment_name: self.deployment,
+            fleet_template: self.fleet_template,
+            root_canister_id: self.root,
+            network: self.network,
+            icp_root,
+            workspace_root: None,
+        }
+    }
+}
+
 impl DeployCompareOptions {
     fn parse<I>(args: I) -> Result<Self, DeployCommandError>
     where
@@ -2433,6 +2504,11 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("register")
+                .about("Register minimal deployment-target state")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("compare")
                 .about("Compare two deployment truth check artifacts")
                 .disable_help_flag(true),
@@ -2596,6 +2672,37 @@ fn deploy_install_command() -> ClapCommand {
         )
         .arg(internal_network_arg())
         .after_help(DEPLOY_INSTALL_HELP_AFTER)
+}
+
+fn deploy_register_command() -> ClapCommand {
+    ClapCommand::new("register")
+        .bin_name("canic deploy register")
+        .about("Register minimal deployment-target state")
+        .disable_help_flag(true)
+        .override_usage(
+            "canic deploy register <deployment> --fleet-template <fleet> --root <principal>",
+        )
+        .arg(
+            value_arg("deployment")
+                .required(true)
+                .help("Deployment target name to register"),
+        )
+        .arg(
+            value_arg("fleet-template")
+                .long("fleet-template")
+                .value_name("fleet")
+                .required(true)
+                .help("Reusable fleet template this deployment target uses"),
+        )
+        .arg(
+            value_arg("root")
+                .long("root")
+                .value_name("principal")
+                .required(true)
+                .help("Existing root canister principal for this deployment"),
+        )
+        .arg(internal_network_arg())
+        .after_help(DEPLOY_REGISTER_HELP_AFTER)
 }
 
 fn deploy_compare_command() -> ClapCommand {
@@ -3244,6 +3351,11 @@ fn external_verify_usage() -> String {
 
 fn deploy_install_usage() -> String {
     let mut command = deploy_install_command();
+    command.render_help().to_string()
+}
+
+fn deploy_register_usage() -> String {
+    let mut command = deploy_register_command();
     command.render_help().to_string()
 }
 
@@ -4535,6 +4647,48 @@ mod tests {
 
         let options = DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");
         assert_eq!(options.plan, PathBuf::from("promoted-plan.json"));
+    }
+
+    #[test]
+    fn deploy_register_command_dispatches_register() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("register"),
+                OsString::from("demo-local"),
+                OsString::from("--fleet-template"),
+                OsString::from("demo"),
+                OsString::from("--root"),
+                OsString::from("uxrrr-q7777-77774-qaaaq-cai"),
+            ],
+        )
+        .expect("parse deploy register")
+        .expect("register command");
+
+        assert_eq!(parsed.0, "register");
+
+        let options = DeployRegisterOptions::parse(parsed.1).expect("parse register options");
+        assert_eq!(options.deployment, "demo-local");
+        assert_eq!(options.fleet_template, "demo");
+        assert_eq!(options.root, "uxrrr-q7777-77774-qaaaq-cai");
+    }
+
+    #[test]
+    fn deploy_register_builds_minimal_registration_options() {
+        let options = DeployRegisterOptions {
+            deployment: "demo-local".to_string(),
+            fleet_template: "demo".to_string(),
+            root: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+            network: "local".to_string(),
+        }
+        .into_register_options(Some(PathBuf::from("/tmp/icp")));
+
+        assert_eq!(options.deployment_name, "demo-local");
+        assert_eq!(options.fleet_template, "demo");
+        assert_eq!(options.root_canister_id, "uxrrr-q7777-77774-qaaaq-cai");
+        assert_eq!(options.network, "local");
+        assert_eq!(options.icp_root, Some(PathBuf::from("/tmp/icp")));
+        assert_eq!(options.workspace_root, None);
     }
 
     #[test]

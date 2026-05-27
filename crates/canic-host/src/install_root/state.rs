@@ -2,7 +2,18 @@ use crate::release_set::icp_root;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, path::PathBuf};
 
-pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 1;
+pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 2;
+
+///
+/// RootVerificationStatus
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RootVerificationStatus {
+    Verified,
+    NotVerified,
+}
 
 ///
 /// InstallState
@@ -11,11 +22,14 @@ pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 1;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstallState {
     pub schema_version: u32,
+    pub deployment_name: String,
+    pub fleet_template: String,
     pub fleet: String,
     pub installed_at_unix_secs: u64,
     pub network: String,
     pub root_target: String,
     pub root_canister_id: String,
+    pub root_verification: RootVerificationStatus,
     pub root_build_target: String,
     pub workspace_root: String,
     pub icp_root: String,
@@ -23,16 +37,17 @@ pub struct InstallState {
     pub release_set_manifest_path: String,
 }
 
-/// Read a named fleet install state for one project/network when present.
+/// Read deployment-target install state for one project/network when present.
 pub(super) fn read_fleet_install_state(
     icp_root: &Path,
     network: &str,
-    fleet: &str,
+    deployment: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(fleet)?;
-    let path = fleet_install_state_path(icp_root, network, fleet);
+    validate_fleet_name(deployment)?;
+    let path = deployment_install_state_path(icp_root, network, deployment);
     if !path.is_file() {
+        reject_legacy_fleet_state(icp_root, network, deployment)?;
         return Ok(None);
     }
 
@@ -41,33 +56,48 @@ pub(super) fn read_fleet_install_state(
     Ok(Some(state))
 }
 
-/// Read a named fleet state for the discovered current project.
+/// Read deployment-target install state for the discovered current project.
 pub fn read_named_fleet_install_state(
     network: &str,
-    fleet: &str,
+    deployment: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
     let icp_root = icp_root()?;
-    read_fleet_install_state(&icp_root, network, fleet)
+    read_fleet_install_state(&icp_root, network, deployment)
 }
 
-/// Read a named fleet state for an explicit ICP project root.
+/// Read deployment-target install state for an explicit ICP project root.
 pub fn read_named_fleet_install_state_from_root(
     icp_root: &Path,
     network: &str,
-    fleet: &str,
+    deployment: &str,
 ) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    read_fleet_install_state(icp_root, network, fleet)
+    read_fleet_install_state(icp_root, network, deployment)
 }
 
-/// Return the project-local state path for one named fleet.
+/// Return the legacy project-local fleet state path.
 #[must_use]
 pub(super) fn fleet_install_state_path(icp_root: &Path, network: &str, fleet: &str) -> PathBuf {
     fleets_dir(icp_root, network).join(format!("{fleet}.json"))
 }
 
+/// Return the project-local state path for one deployment target.
+#[must_use]
+pub(super) fn deployment_install_state_path(
+    icp_root: &Path,
+    network: &str,
+    deployment: &str,
+) -> PathBuf {
+    deployments_dir(icp_root, network).join(format!("{deployment}.json"))
+}
+
 // Return the directory that owns named fleet state files.
 fn fleets_dir(icp_root: &Path, network: &str) -> PathBuf {
     icp_root.join(".canic").join(network).join("fleets")
+}
+
+// Return the directory that owns deployment-target state files.
+fn deployments_dir(icp_root: &Path, network: &str) -> PathBuf {
+    icp_root.join(".canic").join(network).join("deployments")
 }
 
 // Persist the completed install state under the project-local `.canic` directory.
@@ -77,50 +107,36 @@ pub(super) fn write_install_state(
     state: &InstallState,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_network_name(network)?;
-    validate_fleet_name(&state.fleet)?;
-    let path = fleet_install_state_path(icp_root, network, &state.fleet);
+    validate_fleet_name(&state.deployment_name)?;
+    if state.network != network {
+        return Err(format!(
+            "deployment state network mismatch: state is for {}, requested {network}",
+            state.network
+        )
+        .into());
+    }
+    let path = deployment_install_state_path(icp_root, network, &state.deployment_name);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    remove_conflicting_fleet_states(icp_root, network, state)?;
     fs::write(&path, serde_json::to_vec_pretty(state)?)?;
     Ok(path)
 }
 
-// A named ICP canister belongs to one installed fleet at a time. When a new
-// install reuses that root, older fleet state would otherwise point at the new
-// deployment and make `canic list <old-fleet>` show the wrong topology.
-fn remove_conflicting_fleet_states(
+fn reject_legacy_fleet_state(
     icp_root: &Path,
     network: &str,
-    state: &InstallState,
+    deployment: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let dir = fleets_dir(icp_root, network);
-    if !dir.is_dir() {
-        return Ok(());
+    let path = fleet_install_state_path(icp_root, network, deployment);
+    if path.exists() {
+        return Err(format!(
+            "legacy fleet install state found: {}\n\nCanic 0.46 stores live deployment state by deployment target, not fleet template.\nCreate explicit deployment state with:\n  canic deploy register {deployment} --fleet-template {deployment} --root <principal>\n\nOr reinstall the deployment with a 0.46 install path that writes deployment-target state:\n  canic install {deployment}\n\nIf the old state is obsolete, remove:\n  {}",
+            path.display(),
+            path.display()
+        )
+        .into());
     }
-
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_file() || path == fleet_install_state_path(icp_root, network, &state.fleet) {
-            continue;
-        }
-
-        let Ok(bytes) = fs::read(&path) else {
-            continue;
-        };
-        let Ok(existing) = serde_json::from_slice::<InstallState>(&bytes) else {
-            continue;
-        };
-        if existing.network == state.network
-            && (existing.root_target == state.root_target
-                || existing.root_canister_id == state.root_canister_id)
-        {
-            fs::remove_file(path)?;
-        }
-    }
-
     Ok(())
 }
 
