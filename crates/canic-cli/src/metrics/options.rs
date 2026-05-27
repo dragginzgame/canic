@@ -15,7 +15,7 @@ const DEFAULT_LIMIT: u64 = 1_000;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct MetricsOptions {
-    pub(super) fleet: String,
+    pub(super) deployment: String,
     pub(super) kind: MetricsKind,
     pub(super) role: Option<String>,
     pub(super) canister: Option<String>,
@@ -44,7 +44,7 @@ impl MetricsOptions {
             .unwrap_or(DEFAULT_LIMIT);
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
             kind,
             role: string_option(&matches, "role"),
             canister: string_option(&matches, "canister"),
@@ -81,10 +81,10 @@ fn metrics_command() -> ClapCommand {
         .about("Query Canic runtime telemetry")
         .disable_help_flag(true)
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("deployment")
+                .value_name("deployment")
                 .required(true)
-                .help("Installed fleet name to inspect"),
+                .help("Installed deployment target name to inspect"),
         )
         .arg(
             value_arg("kind")

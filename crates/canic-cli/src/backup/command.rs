@@ -44,7 +44,7 @@ pub(super) fn backup_command() -> ClapCommand {
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("create")
-                .about("Plan a topology-aware fleet backup")
+                .about("Plan a topology-aware deployment backup")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(

@@ -48,13 +48,13 @@ impl BackupCreateOptions {
 pub(super) fn backup_create_command() -> ClapCommand {
     ClapCommand::new("create")
         .bin_name("canic backup create")
-        .about("Create a topology-aware fleet backup")
+        .about("Create a topology-aware deployment backup")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")
-                .value_name("fleet")
+                .value_name("deployment")
                 .required(true)
-                .help("Installed fleet name to back up"),
+                .help("Installed deployment target name to back up"),
         )
         .arg(
             value_arg("subtree")

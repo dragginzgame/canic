@@ -105,7 +105,7 @@ pub(super) fn missing_config_roles(
 }
 
 pub(super) fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
-    let fleet = &options.fleet;
+    let fleet = &options.target;
     let choices = load_config_value(discover_current_canic_config_choices)?;
     let matches = matching_fleet_config_paths(&choices, fleet);
 

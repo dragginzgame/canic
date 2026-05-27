@@ -49,7 +49,7 @@ fn parses_live_list_options() {
     .expect("parse list options");
 
     assert_eq!(options.source, ListSource::RootRegistry);
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.target, "demo");
     assert_eq!(options.subtree, Some(APP.to_string()));
     assert_eq!(options.network, Some("local".to_string()));
     assert_eq!(options.icp, "/bin/icp");
@@ -80,7 +80,7 @@ fn parses_config_options() {
     .expect("parse config options");
 
     assert_eq!(options.source, ListSource::Config);
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.target, "demo");
     assert_eq!(options.subtree, None);
     assert_eq!(options.network, Some("local".to_string()));
     assert_eq!(options.icp, "icp");
@@ -120,15 +120,17 @@ fn list_rejects_removed_root_and_from_options() {
     assert!(matches!(from_err, ListCommandError::Usage(_)));
 }
 
-// Ensure list and config help explain fleet selection and subtree rendering.
+// Ensure list and config help keep deployment-target and fleet-template selection separate.
 #[test]
 fn list_and_config_usage_explain_fleet_and_subtree_options() {
     let list = info_usage();
     let config = config_usage();
 
-    assert!(list.contains("List canisters registered by the deployed root"));
-    assert!(list.contains("Usage: canic info list [OPTIONS] <fleet>"));
-    assert!(list.contains("<fleet>"));
+    assert!(list.contains("List canisters registered by an installed deployment root"));
+    assert!(list.contains("Usage: canic info list [OPTIONS] <deployment>"));
+    assert!(list.contains("<deployment>"));
+    assert!(list.contains("Installed deployment target name to inspect"));
+    assert!(!list.contains("<fleet>"));
     assert!(!list.contains("--fleet <name>"));
     assert!(list.contains("--subtree <name-or-principal>"));
     assert!(list.contains("--verbose"));
@@ -383,12 +385,13 @@ fn selected_subtree_rejects_ambiguous_role_name() {
     ));
 }
 
-// Ensure the full list output names the selected fleet before the tree table.
+// Ensure the full list output names the selected deployment before the tree table.
 #[test]
-fn renders_list_output_with_fleet_title() {
+fn renders_list_output_with_deployment_title() {
     let registry = parse_registry_entries(&registry_json()).expect("parse registry");
     let title = ListTitle {
-        fleet: "demo".to_string(),
+        source: ListTitleSource::Deployment,
+        name: "demo".to_string(),
         network: "local".to_string(),
     };
     let readiness = readiness_map();
@@ -406,7 +409,7 @@ fn renders_list_output_with_fleet_title() {
     let output = render_list_output(&title, &registry, Some(APP), &columns, &[])
         .expect("render list output");
 
-    assert!(output.starts_with("Fleet: demo (network local)\n\nROLE"));
+    assert!(output.starts_with("Deployment: demo (network local)\n\nROLE"));
     assert!(output.contains("CANISTER_ID"));
 }
 
@@ -414,7 +417,8 @@ fn renders_list_output_with_fleet_title() {
 fn renders_list_output_with_wasm_size_and_missing_roles() {
     let registry = parse_registry_entries(&registry_json()).expect("parse registry");
     let title = ListTitle {
-        fleet: "demo".to_string(),
+        source: ListTitleSource::Deployment,
+        name: "demo".to_string(),
         network: "local".to_string(),
     };
     let canic_versions = BTreeMap::from([(APP.to_string(), "0.33.6".to_string())]);
@@ -447,7 +451,8 @@ fn renders_list_output_with_wasm_size_and_missing_roles() {
 #[test]
 fn renders_config_output_with_fleet_roles() {
     let title = ListTitle {
-        fleet: "test_me".to_string(),
+        source: ListTitleSource::FleetTemplate,
+        name: "test_me".to_string(),
         network: "local".to_string(),
     };
     let rows = vec![
@@ -479,7 +484,7 @@ fn renders_config_output_with_fleet_roles() {
     assert_eq!(
         output,
         [
-            "Fleet: test_me (network local)",
+            "Fleet template: test_me (network local)",
             "",
             "ROLE   KIND        AUTO   CAPS             METRICS   TOPUP",
             "----   ---------   ----   --------------   -------   ------------------",

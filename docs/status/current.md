@@ -118,6 +118,11 @@ inspect only the files needed for the current task.
   the required `canic deploy register ... --allow-unverified` acknowledgement,
   keeping explicit recovery guidance aligned with the deployment-target hard
   cut.
+- `canic info list`, `canic info cycles`, `canic metrics`, and
+  `canic backup create` now present live positional inputs as installed
+  deployment targets, not fleets. Live list/metrics/cycles text output renders
+  `Deployment:`, config-only output keeps `Fleet template:`, and metrics/cycle
+  reports serialize `deployment` instead of `fleet`.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

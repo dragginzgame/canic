@@ -9,9 +9,9 @@ use std::ffi::OsString;
 
 const INFO_LIST_HELP_AFTER: &str = "\
 Examples:
-  canic info list test
-  canic info list test --subtree user_hub
-  canic info list test --verbose";
+  canic info list demo-local
+  canic info list demo-local --subtree user_hub
+  canic info list demo-local --verbose";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
   canic config test
@@ -24,7 +24,7 @@ Examples:
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ListOptions {
     pub(super) source: ListSource,
-    pub(super) fleet: String,
+    pub(super) target: String,
     pub(super) subtree: Option<String>,
     pub(super) network: Option<String>,
     pub(super) icp: String,
@@ -38,7 +38,11 @@ impl ListOptions {
     {
         let matches = parse_matches(info_list_command(), args)
             .map_err(|_| ListCommandError::Usage(info_usage()))?;
-        Ok(Self::from_matches(&matches, ListSource::RootRegistry))
+        Ok(Self::from_matches(
+            &matches,
+            ListSource::RootRegistry,
+            "deployment",
+        ))
     }
 
     pub(super) fn parse_config<I>(args: I) -> Result<Self, ListCommandError>
@@ -47,13 +51,13 @@ impl ListOptions {
     {
         let matches = parse_matches(config_command(), args)
             .map_err(|_| ListCommandError::Usage(config_usage()))?;
-        Ok(Self::from_matches(&matches, ListSource::Config))
+        Ok(Self::from_matches(&matches, ListSource::Config, "fleet"))
     }
 
-    fn from_matches(matches: &clap::ArgMatches, source: ListSource) -> Self {
+    fn from_matches(matches: &clap::ArgMatches, source: ListSource, target_arg: &str) -> Self {
         Self {
             source,
-            fleet: optional_string(matches, "fleet").expect("clap requires fleet"),
+            target: optional_string(matches, target_arg).expect("clap requires target"),
             subtree: optional_string(matches, "subtree"),
             network: optional_string(matches, "network"),
             icp: optional_string(matches, "icp").unwrap_or_else(default_icp),
@@ -87,12 +91,12 @@ pub(super) enum ListSource {
 
 fn list_command(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     base_list_options(ClapCommand::new("list").bin_name(bin_name))
-        .about("List canisters registered by the deployed root")
+        .about("List canisters registered by an installed deployment root")
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("deployment")
+                .value_name("deployment")
                 .required(true)
-                .help("Fleet name to inspect"),
+                .help("Installed deployment target name to inspect"),
         )
         .arg(
             value_arg("subtree")

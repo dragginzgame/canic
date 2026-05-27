@@ -16,7 +16,7 @@ const DEFAULT_LIMIT: u64 = 1_000;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct CyclesOptions {
-    pub(super) fleet: String,
+    pub(super) deployment: String,
     pub(super) subtree: Option<String>,
     pub(super) since_seconds: u64,
     pub(super) limit: u64,
@@ -48,7 +48,7 @@ impl CyclesOptions {
             .unwrap_or(DEFAULT_LIMIT);
 
         Ok(Self {
-            fleet: string_option(matches, "fleet").expect("clap requires fleet"),
+            deployment: string_option(matches, "deployment").expect("clap requires deployment"),
             subtree: string_option(matches, "subtree"),
             since_seconds,
             limit,
@@ -96,13 +96,13 @@ fn info_cycles_command() -> ClapCommand {
 fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
     ClapCommand::new("cycles")
         .bin_name(bin_name)
-        .about("Summarize fleet cycle history")
+        .about("Summarize installed deployment cycle history")
         .disable_help_flag(true)
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("deployment")
+                .value_name("deployment")
                 .required(true)
-                .help("Installed fleet name to inspect"),
+                .help("Installed deployment target name to inspect"),
         )
         .arg(
             value_arg("since")

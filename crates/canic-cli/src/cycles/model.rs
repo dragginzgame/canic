@@ -6,7 +6,7 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct CyclesReport {
-    pub(super) fleet: String,
+    pub(super) deployment: String,
     pub(super) network: String,
     pub(super) since_seconds: u64,
     pub(super) generated_at_secs: u64,

@@ -12,11 +12,18 @@ present.
 
 ## Unreleased
 
-- Aligns backup, cycles, metrics, and list recovery guidance with the 0.46
-  hard cut by showing the required `canic deploy register ... --allow-unverified`
-  acknowledgement wherever missing deployment-target state is reported.
-
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.11` tightens live operator surfaces as installed-deployment surfaces:
+  `canic info list`, `canic info cycles`, `canic metrics`, and
+  `canic backup create` help/output now refer to deployment targets instead of
+  deployed fleets, metrics/cycle JSON reports serialize `deployment`, and
+  `canic config` remains explicitly fleet-template-facing.
+
+- `0.46.10` aligns installed-deployment recovery and help text with the 0.46
+  hard cut, making backup, cycles, metrics, list, medic, `info`, and
+  deployment-plan assumptions consistently describe deployment targets and the
+  required `canic deploy register ... --allow-unverified` acknowledgement.
 
 - `0.46.9` adds automated coverage for the release-index guard and tightens it
   so release commits fail when the index is empty, includes staged deletions or

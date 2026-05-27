@@ -40,7 +40,7 @@ pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, Cyc
         collect_cycle_tracker_reports(options, &registry, requested_since_secs, generated_at_secs)?;
 
     Ok(CyclesReport {
-        fleet: options.fleet.clone(),
+        deployment: options.deployment.clone(),
         network: options.network.clone(),
         since_seconds: options.since_seconds,
         generated_at_secs,
@@ -390,7 +390,7 @@ fn resolve_cycles_deployment(
     })?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: options.fleet.clone(),
+            deployment: options.deployment.clone(),
             network: options.network.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,

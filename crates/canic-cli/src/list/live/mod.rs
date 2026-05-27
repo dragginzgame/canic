@@ -257,7 +257,7 @@ fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
     let icp_root = resolve_live_icp_root(options)?;
     if let Ok(state) = read_installed_deployment_state_from_root(
         &state_network(options),
-        &options.fleet,
+        &options.target,
         &icp_root,
     ) {
         return Some(PathBuf::from(state.icp_root));
@@ -272,7 +272,7 @@ fn resolve_list_deployment(
         .ok_or_else(|| ListCommandError::InstallState("could not resolve ICP root".to_string()))?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: options.fleet.clone(),
+            deployment: options.target.clone(),
             network: state_network(options),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -287,7 +287,7 @@ fn resolve_live_icp_root(options: &ListOptions) -> Option<PathBuf> {
     resolve_current_canic_icp_root().ok().or_else(|| {
         read_installed_deployment_state_from_root(
             &state_network(options),
-            &options.fleet,
+            &options.target,
             &std::env::current_dir().ok()?,
         )
         .ok()
@@ -341,7 +341,7 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     if stderr.contains("Cannot find canister id") {
         return Some(
-            "no root canister id exists for this fleet. Use `canic config <name>` for the selected fleet config, or run `canic install <name>` before querying the root registry.",
+            "no root canister id exists for this deployment target. Use `canic config <fleet-template>` for the selected fleet config, or run `canic install <fleet-template>` before querying the root registry.",
         );
     }
 

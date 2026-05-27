@@ -18,7 +18,7 @@ use render::RegistryColumnData;
 use render::render_config_output;
 #[cfg(test)]
 use render::{ConfigRoleRow, render_config_output, render_registry_tree};
-use render::{ListTitle, render_list_output};
+use render::{ListTitle, ListTitleSource, render_list_output};
 use std::{
     ffi::OsString,
     io::{self, IsTerminal},
@@ -140,8 +140,13 @@ where
 }
 
 fn list_title(options: &ListOptions) -> ListTitle {
+    let source = match options.source {
+        options::ListSource::Config => ListTitleSource::FleetTemplate,
+        options::ListSource::RootRegistry => ListTitleSource::Deployment,
+    };
     ListTitle {
-        fleet: options.fleet.clone(),
+        source,
+        name: options.target.clone(),
         network: state_network(options),
     }
 }

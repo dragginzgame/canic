@@ -89,6 +89,10 @@ fleet-named install state is refused as deployment truth.
   deployment-target registration hard cut. Every recovery hint that suggests
   `canic deploy register` now includes the required `--allow-unverified`
   acknowledgement.
+- Updated `canic info list`, `canic info cycles`, `canic metrics`, and
+  `canic backup create` so installed-deployment help, usage, text output, and
+  live-query JSON no longer expose deployed-fleet wording. Config inspection
+  remains fleet-template-facing.
 
 ## Not Implemented Yet
 

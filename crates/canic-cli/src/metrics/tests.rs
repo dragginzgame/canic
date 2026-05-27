@@ -1,6 +1,6 @@
 use super::*;
 use crate::metrics::{
-    model::{MetricValue, MetricsKind},
+    model::{MetricValue, MetricsKind, MetricsReport},
     parse::parse_metrics_page,
 };
 
@@ -8,6 +8,7 @@ use crate::metrics::{
 #[test]
 fn parses_metric_kind_selectors() {
     let options = MetricsOptions::parse([OsString::from("test")]).expect("default metrics kind");
+    assert_eq!(options.deployment, "test");
     assert_eq!(options.kind, MetricsKind::Core);
 
     let options = MetricsOptions::parse([
@@ -26,6 +27,30 @@ fn parses_metric_kind_selectors() {
         ]),
         Err(MetricsCommandError::InvalidKind(_))
     ));
+}
+
+#[test]
+fn metrics_usage_uses_deployment_target_wording() {
+    let text = usage();
+
+    assert!(text.contains("Usage: canic metrics [OPTIONS] <deployment>"));
+    assert!(text.contains("Installed deployment target name to inspect"));
+    assert!(!text.contains("<fleet>"));
+    assert!(!text.contains("Installed fleet"));
+}
+
+#[test]
+fn metrics_report_json_uses_deployment_identity_field() {
+    let value = serde_json::to_value(MetricsReport {
+        deployment: "demo-local".to_string(),
+        network: "local".to_string(),
+        kind: MetricsKind::Core,
+        canisters: Vec::new(),
+    })
+    .expect("serialize metrics report");
+
+    assert_eq!(value["deployment"], "demo-local");
+    assert!(value.get("fleet").is_none());
 }
 
 #[test]

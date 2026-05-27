@@ -50,8 +50,8 @@ fn render_metrics_report(report: &MetricsReport) -> String {
 
     [
         format!(
-            "Fleet: {} (network {}, metrics {})",
-            report.fleet,
+            "Deployment: {} (network {}, metrics {})",
+            report.deployment,
             report.network,
             metrics_kind_label(report.kind)
         ),

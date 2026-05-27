@@ -68,8 +68,15 @@ const REGISTRY_ALIGNMENTS: [ColumnAlign; 7] = [
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ListTitle {
-    pub(super) fleet: String,
+    pub(super) source: ListTitleSource,
+    pub(super) name: String,
     pub(super) network: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ListTitleSource {
+    Deployment,
+    FleetTemplate,
 }
 
 ///
@@ -117,7 +124,7 @@ pub(super) fn render_registry_tree(
     Ok(render_registry_table(&rows, columns))
 }
 
-/// Render a named list view with a fleet/source title above the registry table.
+/// Render a named list view with a deployment/source title above the registry table.
 pub(super) fn render_list_output(
     title: &ListTitle,
     registry: &[RegistryEntry],
@@ -151,7 +158,11 @@ pub(super) fn render_config_output(
 }
 
 fn render_list_title(title: &ListTitle) -> String {
-    format!("Fleet: {} (network {})", title.fleet, title.network)
+    let label = match title.source {
+        ListTitleSource::Deployment => "Deployment",
+        ListTitleSource::FleetTemplate => "Fleet template",
+    };
+    format!("{label}: {} (network {})", title.name, title.network)
 }
 
 ///

@@ -22,7 +22,7 @@ pub(super) fn metrics_report(
     let canisters = collect_metrics_reports(options, &registry);
 
     Ok(MetricsReport {
-        fleet: options.fleet.clone(),
+        deployment: options.deployment.clone(),
         network: options.network.clone(),
         kind: options.kind,
         canisters,
@@ -150,7 +150,7 @@ fn resolve_metrics_deployment(
     })?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: options.fleet.clone(),
+            deployment: options.deployment.clone(),
             network: options.network.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,

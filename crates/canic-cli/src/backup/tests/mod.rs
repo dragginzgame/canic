@@ -34,6 +34,16 @@ fn backup_usage_lists_commands_without_nested_flag_dump() {
 }
 
 #[test]
+fn backup_create_usage_uses_deployment_target_wording() {
+    let text = create_usage();
+
+    assert!(text.contains("Usage: canic backup create [OPTIONS] <deployment>"));
+    assert!(text.contains("Create a topology-aware deployment backup"));
+    assert!(text.contains("Installed deployment target name to back up"));
+    assert!(!text.contains("Installed fleet"));
+}
+
+#[test]
 fn missing_backup_deployment_mentions_unverified_registration_acknowledgement() {
     let message = BackupCommandError::NoInstalledDeployment {
         network: "local".to_string(),
