@@ -139,7 +139,9 @@ Examples:
   canic deploy compare --left staging-check.json --right prod-check.json --format text
 
 Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
-state, install code, or mutate deployments.";
+state, install code, or mutate deployments. Each input check's embedded
+diff/report is revalidated against its plan and inventory before comparison
+status is rendered.";
 const DEPLOY_REGISTER_HELP_AFTER: &str = "\
 Examples:
   canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
@@ -4263,6 +4265,8 @@ mod tests {
         assert!(help.contains("does not query live"));
         assert!(help.contains("install code"));
         assert!(help.contains("mutate deployments"));
+        assert!(help.contains("embedded"));
+        assert!(help.contains("revalidated"));
     }
 
     #[test]

@@ -67,6 +67,21 @@ fleet-named install state is refused as deployment truth.
 - Added source-guard coverage keeping `canic deploy check` and host
   deployment-truth check/preflight paths read-only, so checks cannot silently
   update `root_verification`.
+- Deployment comparison now preserves blocked/warning input check status, so a
+  comparison between matching unsafe `DeploymentCheckV1` artifacts cannot be
+  rendered as safe just because no cross-target drift was found.
+- Comparison report validation now requires each archived target to retain its
+  deployment name and network, keeping comparison artifacts aligned with the
+  deployment-target identity hard cut.
+- Comparison now treats stale or tampered input `DeploymentCheckV1` diff/report
+  content as a hard failure before summarizing drift, so archived check
+  artifacts cannot hide unsafe state by carrying a forged safe report.
+- `canic deploy compare` help and text-rendering coverage now make that
+  revalidation boundary visible to operators.
+- Release commits now use a release-index guard that rejects staged
+  non-release files and partially staged release files before creating the
+  release commit/tag. This keeps code slices separate from version-only release
+  commits.
 
 ## Not Implemented Yet
 

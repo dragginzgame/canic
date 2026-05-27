@@ -51,6 +51,8 @@ pub fn deployment_comparison_report_from_checks(
     left: &DeploymentCheckV1,
     right: &DeploymentCheckV1,
 ) -> DeploymentComparisonReportV1 {
+    let left_label = left_label.into();
+    let right_label = right_label.into();
     let mut identity_diff = Vec::new();
     let mut artifact_diff = Vec::new();
     let mut module_hash_diff = Vec::new();
@@ -69,7 +71,17 @@ pub fn deployment_comparison_report_from_checks(
     compare_verifier_readiness_evidence(left, right, &mut verifier_readiness_diff);
     compare_external_lifecycle_evidence(left, right, &mut external_lifecycle_diff);
 
-    let hard_failures = Vec::new();
+    let mut hard_failures = Vec::new();
+    let mut warnings = Vec::new();
+    compare_input_check_consistency(&left_label, left, &mut hard_failures);
+    compare_input_check_consistency(&right_label, right, &mut hard_failures);
+    compare_input_check_status(&left_label, &left.report, &mut hard_failures, &mut warnings);
+    compare_input_check_status(
+        &right_label,
+        &right.report,
+        &mut hard_failures,
+        &mut warnings,
+    );
     let diff_groups = [
         identity_diff.as_slice(),
         artifact_diff.as_slice(),
@@ -80,7 +92,7 @@ pub fn deployment_comparison_report_from_checks(
         verifier_readiness_diff.as_slice(),
         external_lifecycle_diff.as_slice(),
     ];
-    let warnings = comparison_warnings(&diff_groups);
+    warnings.extend(comparison_warnings(&diff_groups));
     let status = comparison_status(&hard_failures, &warnings);
     let next_actions = comparison_next_actions(status);
 
@@ -89,8 +101,8 @@ pub fn deployment_comparison_report_from_checks(
         report_id: report_id.into(),
         report_digest: String::new(),
         compared_at: compared_at.into(),
-        left: comparison_target(left_label.into(), left),
-        right: comparison_target(right_label.into(), right),
+        left: comparison_target(left_label, left),
+        right: comparison_target(right_label, right),
         status,
         identity_diff,
         artifact_diff,
@@ -576,6 +588,77 @@ fn comparison_warnings(diff_groups: &[&[DeploymentComparisonDiffV1]]) -> Vec<Saf
     }]
 }
 
+fn compare_input_check_status(
+    label: &str,
+    report: &SafetyReportV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    match report.status {
+        SafetyStatusV1::Safe => {}
+        SafetyStatusV1::Warning => warnings.push(SafetyFindingV1 {
+            code: "deployment_comparison_input_warning".to_string(),
+            message: "input deployment check has warnings; comparison is drift evidence, not whole-deployment safety".to_string(),
+            severity: SafetySeverityV1::Warning,
+            subject: Some(format!("{label}:{}", report.report_id)),
+        }),
+        SafetyStatusV1::Blocked => hard_failures.push(SafetyFindingV1 {
+            code: "deployment_comparison_input_blocked".to_string(),
+            message: "input deployment check is blocked; comparison cannot be used as ready deployment evidence".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("{label}:{}", report.report_id)),
+        }),
+        SafetyStatusV1::NotEvaluated => hard_failures.push(SafetyFindingV1 {
+            code: "deployment_comparison_input_not_evaluated".to_string(),
+            message: "input deployment check was not evaluated; comparison cannot establish deployment safety".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("{label}:{}", report.report_id)),
+        }),
+    }
+}
+
+fn compare_input_check_consistency(
+    label: &str,
+    check: &DeploymentCheckV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+) {
+    if check.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        hard_failures.push(SafetyFindingV1 {
+            code: "deployment_comparison_input_schema_mismatch".to_string(),
+            message: "input deployment check schema version is unsupported".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("{label}:{}", check.check_id)),
+        });
+        return;
+    }
+
+    let expected_diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+    if check.diff != expected_diff {
+        hard_failures.push(SafetyFindingV1 {
+            code: "deployment_comparison_input_diff_stale".to_string(),
+            message: "input deployment check diff does not match its plan and inventory"
+                .to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("{label}:{}", check.check_id)),
+        });
+        return;
+    }
+
+    let expected_report = safety_report_from_diff(
+        &check.report.report_id,
+        check.report.diff_id.clone(),
+        &check.diff,
+    );
+    if check.report != expected_report {
+        hard_failures.push(SafetyFindingV1 {
+            code: "deployment_comparison_input_report_stale".to_string(),
+            message: "input deployment check report does not match its diff".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(format!("{label}:{}", check.check_id)),
+        });
+    }
+}
+
 const fn comparison_status(
     hard_failures: &[SafetyFindingV1],
     warnings: &[SafetyFindingV1],
@@ -646,6 +729,14 @@ fn validate_comparison_target(
         field_name(prefix, "inventory_digest"),
         target.inventory_digest.as_str(),
     )?;
+    ensure_comparison_field(
+        field_name(prefix, "deployment_name"),
+        target.deployment_identity.deployment_name.as_str(),
+    )?;
+    ensure_comparison_field(
+        field_name(prefix, "network"),
+        target.deployment_identity.network.as_str(),
+    )?;
     Ok(())
 }
 
@@ -658,6 +749,8 @@ fn field_name(prefix: &'static str, field: &'static str) -> &'static str {
         ("left", "plan_digest") => "left.plan_digest",
         ("left", "inventory_id") => "left.inventory_id",
         ("left", "inventory_digest") => "left.inventory_digest",
+        ("left", "deployment_name") => "left.deployment_identity.deployment_name",
+        ("left", "network") => "left.deployment_identity.network",
         ("right", "label") => "right.label",
         ("right", "check_id") => "right.check_id",
         ("right", "check_digest") => "right.check_digest",
@@ -665,6 +758,8 @@ fn field_name(prefix: &'static str, field: &'static str) -> &'static str {
         ("right", "plan_digest") => "right.plan_digest",
         ("right", "inventory_id") => "right.inventory_id",
         ("right", "inventory_digest") => "right.inventory_digest",
+        ("right", "deployment_name") => "right.deployment_identity.deployment_name",
+        ("right", "network") => "right.deployment_identity.network",
         _ => field,
     }
 }

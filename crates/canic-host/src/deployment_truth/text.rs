@@ -62,6 +62,8 @@ pub fn deployment_comparison_report_text(report: &DeploymentComparisonReportV1) 
         "external_lifecycle_diff",
         &report.external_lifecycle_diff,
     );
+    append_hard_failure_items(&mut lines, "hard_failures", &report.hard_failures);
+    append_warning_items(&mut lines, "warnings", &report.warnings);
     append_string_items(&mut lines, "next_actions", &report.next_actions);
     lines.join("\n")
 }

@@ -14,6 +14,15 @@ present.
 
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
+- `0.46.8` adds a release-index guard so `make release-commit` refuses staged
+  non-release files or partially staged release files before creating a release
+  commit and tag.
+
+- `0.46.7` hardens passive deployment comparison so blocked, warning, stale,
+  or tampered `DeploymentCheckV1` inputs cannot render as safe comparison
+  evidence, archived targets retain deployment identity, and release-version
+  bump scripts no longer run unrelated protocol/install tests internally.
+
 - `0.46.6` cleans installed-deployment CLI wording across backup, cycles,
   metrics, list, status, medic, and top-level help surfaces so missing/lost
   live-state messages consistently describe deployment targets and explicit

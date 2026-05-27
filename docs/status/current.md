@@ -97,6 +97,20 @@ inspect only the files needed for the current task.
   `DeploymentCheckV1` JSON artifacts and prints a passive comparison report as
   JSON by default or host-owned text with `--format text`; it does not query
   live state, install code, apply authority, or mutate deployments.
+- Deployment comparison now preserves each input check's safety status. A pair
+  of matching blocked or warning `DeploymentCheckV1` artifacts no longer
+  renders as safe solely because there is no cross-target drift.
+- Archived comparison targets now require explicit deployment names and
+  networks, so comparison evidence cannot erase the deployment-target identity
+  that 0.46 is hardening.
+- Comparison now re-checks each input `DeploymentCheckV1` diff/report against
+  its embedded plan and inventory. Stale or tampered input checks are rendered
+  as hard comparison failures, not as reusable readiness evidence.
+- `canic deploy compare` help now calls out that archived input checks are
+  revalidated before comparison status is rendered.
+- Release commits now run a dedicated release-index guard before tagging. The
+  guard refuses staged non-release files and release files that also have
+  unstaged edits, preventing accidental mixed code/version release commits.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

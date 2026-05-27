@@ -40,9 +40,9 @@ help:
 	@echo "Version Management:"
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
-	@echo "  patch            Bump patch version (0.0.x)"
-	@echo "  minor            Bump minor version (0.x.0)"
-	@echo "  major            Bump major version (x.0.0)"
+	@echo "  patch            Run release gate, then bump patch version files (0.0.x)"
+	@echo "  minor            Run release gate, then bump minor version files (0.x.0)"
+	@echo "  major            Run full release gate, then bump major version files (x.0.0)"
 	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
 	@echo "  release-minor    Bump, stage, commit, tag, and push a minor release"
 	@echo "  release-major    Bump, stage, commit, tag, and push a major release"
@@ -146,6 +146,7 @@ release-stage:
 		scripts/ci/sync-release-surface-version.sh $$(git ls-files -m -- '*/Cargo.toml' || true)
 
 release-commit:
+	@scripts/ci/check-release-index.sh
 	@version="$$(cargo get workspace.package.version)"; \
 	if git rev-parse "v$$version" >/dev/null 2>&1; then \
 		echo "❌ Tag v$$version already exists. Aborting." >&2; \
