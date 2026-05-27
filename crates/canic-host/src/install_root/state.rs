@@ -136,7 +136,7 @@ fn reject_legacy_fleet_state(
     let path = legacy_fleet_install_state_path(icp_root, network, deployment);
     if path.exists() {
         return Err(format!(
-            "legacy fleet install state found: {}\n\nCanic 0.46 stores live deployment state by deployment target, not fleet template.\nCreate explicit deployment state with:\n  canic deploy register {deployment} --fleet-template {deployment} --root <principal> --allow-unverified\n\nOr reinstall the deployment with a 0.46 install path that writes deployment-target state:\n  canic install {deployment}\n\nIf the old state is obsolete, remove:\n  {}",
+            "legacy fleet install state found: {}\n\nCanic 0.46 stores live deployment state by deployment target, not fleet template.\nCreate explicit deployment state with the fleet template that owns this target:\n  canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified\n\nOr reinstall using the fleet template/config that should produce this deployment:\n  canic install <fleet-template>\n\nIf the old state is obsolete, remove:\n  {}",
             path.display(),
             path.display()
         )

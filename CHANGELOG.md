@@ -12,18 +12,24 @@ present.
 
 ## Unreleased
 
-- Aligned deployment-target state timestamps with the 0.46 hard-cut model:
-  local state now stores `created_at_unix_secs` and `updated_at_unix_secs`, and
-  stale state containing the old `installed_at_unix_secs` field fails closed.
-- Tightened explicit deployment registration so `canic deploy register` now
-  requires `--allow-unverified` before writing minimal local state for a root
-  that has not been live-verified.
+## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.5` hardens the deployment-target recovery path so unverified
+  registered roots are install safety blockers, not warnings. Legacy
+  fleet-state recovery guidance now requires operators to provide the owning
+  fleet template explicitly, and source guards keep `canic deploy check` plus
+  host check/preflight paths read-only so they cannot silently rewrite
+  `root_verification`.
+
+- `0.46.4` tightens deployment-target state as hard-cut state: local state now
+  records `created_at_unix_secs` and `updated_at_unix_secs`, stale state with
+  the old `installed_at_unix_secs` field fails closed, and explicit recovery
+  registration requires `--allow-unverified` before writing a root that has not
+  been live-verified.
 
 ```bash
 canic deploy register demo-local --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai --allow-unverified
 ```
-
-## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
 - `0.46.3` removes stale fleet-owned naming from the deployment-target
   install-state API and state shape. Local install state now stores

@@ -75,6 +75,15 @@ inspect only the files needed for the current task.
   required because registered roots are marked `not_verified`; plan generation
   does not use them as trusted root authority until verification evidence is
   recorded.
+- Unverified registered roots are install safety blockers, not ordinary plan
+  warnings. The deployment-truth gate now refuses current-install mutation when
+  local deployment state records a root that has not been explicitly verified.
+- Legacy fleet-state recovery guidance now requires operators to provide the
+  owning fleet template explicitly; it no longer suggests that deployment
+  target and fleet-template names are interchangeable.
+- Source-guard coverage now keeps `canic deploy check` and the host
+  deployment-truth check/preflight path read-only so checks cannot silently
+  rewrite `root_verification`.
 - 0.46 has started with passive `DeploymentComparisonReportV1` comparison over
   two existing `DeploymentCheckV1` artifacts. It binds check/plan/inventory
   digests for both sides, compares normalized identity/artifact/module/config/

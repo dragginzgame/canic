@@ -58,6 +58,15 @@ fleet-named install state is refused as deployment truth.
   `not_verified`, and cannot make the root trusted deployment authority.
 - Stale deployment-target state that still contains the old duplicate `fleet`
   field or pre-cut `installed_at_unix_secs` timestamp field fails closed.
+- Unverified registered roots now produce an install safety blocker instead of
+  an ordinary plan-assumption warning, so recovery state cannot authorize
+  mutation before explicit verification evidence is recorded.
+- Legacy fleet-state recovery guidance now keeps deployment target and
+  fleet-template identity separate by requiring the operator to supply the
+  owning `<fleet-template>` explicitly.
+- Added source-guard coverage keeping `canic deploy check` and host
+  deployment-truth check/preflight paths read-only, so checks cannot silently
+  update `root_verification`.
 
 ## Not Implemented Yet
 

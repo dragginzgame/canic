@@ -4300,6 +4300,29 @@ mod tests {
     }
 
     #[test]
+    fn deploy_check_path_has_no_local_state_write_primitives() {
+        let source = include_str!("mod.rs");
+        let check_source = source_between(source, "fn run_check<I>", "fn run_resume_report<I>");
+        let loader_source = source_between(source, "fn load_deployment_check", "fn print_json<T>");
+
+        for forbidden in [
+            "register_deployment_state",
+            "write_install_state",
+            "install_root(",
+            "run_install(",
+        ] {
+            assert!(
+                !check_source.contains(forbidden),
+                "deploy check path must stay read-only; found forbidden token {forbidden}"
+            );
+            assert!(
+                !loader_source.contains(forbidden),
+                "deployment check loader must stay read-only; found forbidden token {forbidden}"
+            );
+        }
+    }
+
+    #[test]
     fn deploy_authority_path_has_no_controller_mutation_primitives() {
         let source = include_str!("mod.rs");
         let authority_source = source_between(source, "fn run_authority<I>", "fn run_plan<I>");

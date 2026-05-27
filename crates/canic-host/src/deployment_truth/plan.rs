@@ -184,7 +184,7 @@ fn local_root_canister_id(
         }
         Ok(Some(state)) if state.network == request.network => {
             assumptions.push(assumption(
-                "local_state.root_canister_id",
+                "local_state.unverified_root_canister_id",
                 format!(
                     "deployment state for {} records root {}, but root verification is {:?}; run deploy check/verification before mutation authority is trusted",
                     request.deployment_name, state.root_canister_id, state.root_verification

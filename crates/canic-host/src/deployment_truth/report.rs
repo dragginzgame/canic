@@ -145,14 +145,7 @@ pub fn compare_plan_to_inventory(
         &mut hard_failures,
         &mut warnings,
     );
-    for assumption in &plan.unresolved_assumptions {
-        warnings.push(SafetyFindingV1 {
-            code: "plan_assumption".to_string(),
-            message: assumption.description.clone(),
-            severity: SafetySeverityV1::Warning,
-            subject: Some(assumption.key.clone()),
-        });
-    }
+    record_plan_assumptions(plan, &mut hard_failures, &mut warnings);
     for gap in &inventory.unresolved_observations {
         warnings.push(SafetyFindingV1 {
             code: "observation_gap".to_string(),
@@ -180,6 +173,30 @@ pub fn compare_plan_to_inventory(
         hard_failures,
         warnings,
         resumable_phases: Vec::new(),
+    }
+}
+
+fn record_plan_assumptions(
+    plan: &DeploymentPlanV1,
+    hard_failures: &mut Vec<SafetyFindingV1>,
+    warnings: &mut Vec<SafetyFindingV1>,
+) {
+    for assumption in &plan.unresolved_assumptions {
+        if assumption.key == "local_state.unverified_root_canister_id" {
+            hard_failures.push(SafetyFindingV1 {
+                code: "unverified_deployment_root".to_string(),
+                message: assumption.description.clone(),
+                severity: SafetySeverityV1::HardFailure,
+                subject: Some(assumption.key.clone()),
+            });
+        } else {
+            warnings.push(SafetyFindingV1 {
+                code: "plan_assumption".to_string(),
+                message: assumption.description.clone(),
+                severity: SafetySeverityV1::Warning,
+                subject: Some(assumption.key.clone()),
+            });
+        }
     }
 }
 
