@@ -3,13 +3,13 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const INFO_USAGE: &str = "\
-Group read-only deployed-fleet information commands
+Group read-only installed-deployment information commands
 
 Usage: canic info <command> [OPTIONS]
 
 Commands:
-  list     List deployed fleet canisters
-  cycles   Summarize fleet cycle history
+  list     List installed deployment canisters
+  cycles   Summarize deployment cycle history
   help     Print this message or the help of the given subcommand(s)
 
 Examples:
@@ -32,7 +32,7 @@ pub enum InfoCommandError {
     Cycles(#[from] cycles::CyclesCommandError),
 }
 
-/// Run the deployed-fleet information command group.
+/// Run the installed-deployment information command group.
 pub fn run<I>(args: I) -> Result<(), InfoCommandError>
 where
     I: IntoIterator<Item = OsString>,

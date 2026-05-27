@@ -33,6 +33,18 @@ fn parses_duration_selectors() {
     ));
 }
 
+#[test]
+fn missing_cycles_deployment_mentions_unverified_registration_acknowledgement() {
+    let message = CyclesCommandError::NoInstalledDeployment {
+        network: "local".to_string(),
+        deployment: "demo-local".to_string(),
+    }
+    .to_string();
+
+    assert!(message.contains("canic deploy register demo-local"));
+    assert!(message.contains("--allow-unverified"));
+}
+
 // Ensure cycle summaries can target one deployed subtree by role or principal.
 #[test]
 fn parses_cycles_subtree_option() {

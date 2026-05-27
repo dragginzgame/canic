@@ -1,5 +1,8 @@
 use super::*;
-use crate::cli::globals::{INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION};
+use crate::{
+    cli::globals::{INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION},
+    info::InfoCommandError,
+};
 
 fn strip_ansi(text: &str) -> String {
     let mut plain = String::new();
@@ -133,6 +136,19 @@ fn top_level_info_aliases_are_removed() {
         run([OsString::from("cycles"), OsString::from("help")]),
         Err(CliError::Usage(_))
     ));
+}
+
+#[test]
+fn info_help_uses_deployment_target_wording() {
+    let err = run([OsString::from("info")]).expect_err("info needs a subcommand");
+    let CliError::Info(InfoCommandError::Usage(text)) = err else {
+        panic!("expected info usage error");
+    };
+
+    assert!(text.contains("installed-deployment information commands"));
+    assert!(text.contains("List installed deployment canisters"));
+    assert!(!text.contains("deployed-fleet"));
+    assert!(!text.contains("deployed fleet"));
 }
 
 // Ensure the old fleet sync command is removed in favor of fleet check.

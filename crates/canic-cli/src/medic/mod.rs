@@ -130,7 +130,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
             checks.push(MedicCheck::error(
                 "deployment state",
                 err,
-                "reinstall from the owning fleet template or re-register the deployment target",
+                "reinstall from the owning fleet template or re-register the deployment target with --allow-unverified",
             ));
             None
         }

@@ -85,6 +85,10 @@ fleet-named install state is refused as deployment truth.
 - Added automated regression coverage for the release-index guard's accepted
   release-only case and its empty-index, staged-deletion,
   staged-non-release-file, and partially-staged-release-file failures.
+- Aligned backup, cycles, metrics, and list missing-state diagnostics with the
+  deployment-target registration hard cut. Every recovery hint that suggests
+  `canic deploy register` now includes the required `--allow-unverified`
+  acknowledgement.
 
 ## Not Implemented Yet
 

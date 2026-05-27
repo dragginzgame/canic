@@ -114,6 +114,10 @@ inspect only the files needed for the current task.
 - The release-index guard now has focused regression coverage for empty
   release indexes, staged deletions, staged non-release files, partially staged
   release files, and clean release-only indexes.
+- Backup, cycles, metrics, and list missing-state diagnostics now all include
+  the required `canic deploy register ... --allow-unverified` acknowledgement,
+  keeping explicit recovery guidance aligned with the deployment-target hard
+  cut.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

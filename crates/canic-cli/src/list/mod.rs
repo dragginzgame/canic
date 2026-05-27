@@ -44,7 +44,7 @@ pub enum ListCommandError {
     ReplicaQuery(String),
 
     #[error(
-        "deployment target {deployment} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install <fleet-template>` to recreate it or re-register {deployment} with a reachable root."
+        "deployment target {deployment} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install <fleet-template>` to recreate it or re-register {deployment} with `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified`."
     )]
     LostLocalDeployment {
         deployment: String,
@@ -56,7 +56,7 @@ pub enum ListCommandError {
     InstallState(String),
 
     #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal>` to register existing state, or `canic config <fleet-template>` to inspect its config"
+        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` to register existing state, or `canic config <fleet-template>` to inspect its config"
     )]
     NoInstalledDeployment { network: String, deployment: String },
 

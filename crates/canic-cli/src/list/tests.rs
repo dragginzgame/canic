@@ -56,6 +56,18 @@ fn parses_live_list_options() {
     assert!(!options.verbose);
 }
 
+#[test]
+fn missing_list_deployment_mentions_unverified_registration_acknowledgement() {
+    let message = ListCommandError::NoInstalledDeployment {
+        network: "local".to_string(),
+        deployment: "demo-local".to_string(),
+    }
+    .to_string();
+
+    assert!(message.contains("canic deploy register demo-local"));
+    assert!(message.contains("--allow-unverified"));
+}
+
 // Ensure config options parse declared fleet inspection.
 #[test]
 fn parses_config_options() {

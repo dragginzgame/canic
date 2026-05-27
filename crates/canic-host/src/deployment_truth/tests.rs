@@ -8186,11 +8186,12 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
             .collect::<Vec<_>>(),
         vec!["root", "wasm_store", "user_hub"]
     );
-    assert!(
-        plan.unresolved_assumptions
-            .iter()
-            .any(|assumption| assumption.key == "local_state.root_canister_id")
-    );
+    let root_assumption = plan
+        .unresolved_assumptions
+        .iter()
+        .find(|assumption| assumption.key == "local_state.root_canister_id")
+        .expect("missing root identity should be recorded");
+    assert!(root_assumption.description.contains("--allow-unverified"));
 }
 
 fn assert_plan_has_implicit_wasm_store_artifact(plan: &DeploymentPlanV1) {
@@ -8266,11 +8267,12 @@ kind = "root"
     );
     assert!(plan.authority_profile.staging_controllers.is_empty());
     assert!(plan.authority_profile.emergency_controllers.is_empty());
-    assert!(
-        plan.unresolved_assumptions
-            .iter()
-            .any(|assumption| assumption.key == "local_state.root_canister_id")
-    );
+    let root_assumption = plan
+        .unresolved_assumptions
+        .iter()
+        .find(|assumption| assumption.key == "local_state.root_canister_id")
+        .expect("missing root identity should be recorded");
+    assert!(root_assumption.description.contains("--allow-unverified"));
 }
 
 #[test]

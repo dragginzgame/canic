@@ -33,6 +33,18 @@ fn backup_usage_lists_commands_without_nested_flag_dump() {
     assert!(text.contains("status"));
 }
 
+#[test]
+fn missing_backup_deployment_mentions_unverified_registration_acknowledgement() {
+    let message = BackupCommandError::NoInstalledDeployment {
+        network: "local".to_string(),
+        deployment: "demo-local".to_string(),
+    }
+    .to_string();
+
+    assert!(message.contains("canic deploy register demo-local"));
+    assert!(message.contains("--allow-unverified"));
+}
+
 // Ensure backup create options parse planning and live-execution controls.
 #[test]
 fn parses_backup_create_options() {

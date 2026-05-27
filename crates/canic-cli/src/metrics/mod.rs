@@ -30,7 +30,7 @@ pub enum MetricsCommandError {
     Usage(String),
 
     #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal>` before querying metrics"
+        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before querying metrics"
     )]
     NoInstalledDeployment { network: String, deployment: String },
 

@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Aligns backup, cycles, metrics, and list recovery guidance with the 0.46
+  hard cut by showing the required `canic deploy register ... --allow-unverified`
+  acknowledgement wherever missing deployment-target state is reported.
+
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
 - `0.46.9` adds automated coverage for the release-index guard and tightens it
