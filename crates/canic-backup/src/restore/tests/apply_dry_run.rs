@@ -24,7 +24,7 @@ fn apply_dry_run_renders_ordered_member_operations() {
     assert_eq!(dry_run.operation_counts.snapshot_uploads, 2);
     assert_eq!(dry_run.operation_counts.snapshot_loads, 2);
     assert_eq!(dry_run.operation_counts.member_verifications, 2);
-    assert_eq!(dry_run.operation_counts.fleet_verifications, 0);
+    assert_eq!(dry_run.operation_counts.deployment_verifications, 0);
     assert_eq!(dry_run.operation_counts.verification_operations, 2);
 
     let operations = &dry_run.operations;
@@ -65,9 +65,9 @@ fn apply_dry_run_renders_ordered_member_operations() {
     );
 }
 
-// Ensure apply dry-runs append fleet verification after member operations.
+// Ensure apply dry-runs append deployment verification after member operations.
 #[test]
-fn apply_dry_run_renders_fleet_verification_operations() {
+fn apply_dry_run_renders_deployment_verification_operations() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
     manifest.verification.fleet_checks.push(VerificationCheck {
         kind: "status".to_string(),
@@ -82,12 +82,15 @@ fn apply_dry_run_renders_fleet_verification_operations() {
     let operation = dry_run
         .operations
         .last()
-        .expect("fleet verification operation should be rendered");
+        .expect("deployment verification operation should be rendered");
     assert_eq!(operation.sequence, 10);
-    assert_eq!(operation.operation, RestoreApplyOperationKind::VerifyFleet);
+    assert_eq!(
+        operation.operation,
+        RestoreApplyOperationKind::VerifyDeployment
+    );
     assert_eq!(operation.source_canister, ROOT);
     assert_eq!(operation.target_canister, ROOT);
-    assert_eq!(operation.role, "fleet");
+    assert_eq!(operation.role, "deployment");
     assert_eq!(operation.snapshot_id, None);
     assert_eq!(operation.artifact_path, None);
     assert_eq!(operation.verification_kind, Some("status".to_string()));

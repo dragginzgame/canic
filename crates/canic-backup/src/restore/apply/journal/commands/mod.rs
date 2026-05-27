@@ -156,7 +156,8 @@ impl RestoreApplyRunnerCommand {
                     note: "loads the uploaded snapshot into the target canister".to_string(),
                 })
             }
-            RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
+            RestoreApplyOperationKind::VerifyMember
+            | RestoreApplyOperationKind::VerifyDeployment => {
                 match operation.verification_kind.as_deref() {
                     Some("status") => Some(Self {
                         program: config.program.clone(),
@@ -173,7 +174,7 @@ impl RestoreApplyRunnerCommand {
                         note: verification_command_note(
                             &operation.operation,
                             "checks target canister status",
-                            "checks target fleet root canister status",
+                            "checks target deployment root canister status",
                         )
                         .to_string(),
                     }),
@@ -184,14 +185,14 @@ impl RestoreApplyRunnerCommand {
     }
 }
 
-// Return an operator note for member-level or fleet-level verification commands.
+// Return an operator note for member-level or deployment-level verification commands.
 const fn verification_command_note(
     operation: &RestoreApplyOperationKind,
     member_note: &'static str,
-    fleet_note: &'static str,
+    deployment_note: &'static str,
 ) -> &'static str {
     match operation {
-        RestoreApplyOperationKind::VerifyFleet => fleet_note,
+        RestoreApplyOperationKind::VerifyDeployment => deployment_note,
         RestoreApplyOperationKind::StopCanister
         | RestoreApplyOperationKind::StartCanister
         | RestoreApplyOperationKind::UploadSnapshot

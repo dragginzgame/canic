@@ -147,7 +147,7 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
     assert_eq!(dry_run["operation_counts"]["snapshot_uploads"], 2);
     assert_eq!(dry_run["operation_counts"]["snapshot_loads"], 2);
     assert_eq!(dry_run["operation_counts"]["member_verifications"], 2);
-    assert_eq!(dry_run["operation_counts"]["fleet_verifications"], 0);
+    assert_eq!(dry_run["operation_counts"]["deployment_verifications"], 0);
     assert_eq!(dry_run["operation_counts"]["verification_operations"], 2);
     assert_eq!(dry_run["progress"]["operation_count"], 10);
     assert_eq!(dry_run["progress"]["completed_operations"], 0);

@@ -57,7 +57,7 @@ impl RestorePlanner {
             readiness_summary,
             operation_summary,
             ordering_summary,
-            fleet_verification_checks: manifest.verification.fleet_checks.clone(),
+            deployment_verification_checks: manifest.verification.fleet_checks.clone(),
             members,
         })
     }

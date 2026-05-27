@@ -47,7 +47,7 @@ pub struct RestoreApplyOperationKindCounts {
     pub snapshot_uploads: usize,
     pub snapshot_loads: usize,
     pub member_verifications: usize,
-    pub fleet_verifications: usize,
+    pub deployment_verifications: usize,
     pub verification_operations: usize,
 }
 
@@ -90,9 +90,9 @@ impl RestoreApplyOperationKindCounts {
             expected.member_verifications,
         )?;
         validate_apply_journal_count(
-            "operation_counts.fleet_verifications",
-            self.fleet_verifications,
-            expected.fleet_verifications,
+            "operation_counts.deployment_verifications",
+            self.deployment_verifications,
+            expected.deployment_verifications,
         )?;
         validate_apply_journal_count(
             "operation_counts.verification_operations",
@@ -122,8 +122,8 @@ impl RestoreApplyOperationKindCounts {
                 self.member_verifications += 1;
                 self.verification_operations += 1;
             }
-            RestoreApplyOperationKind::VerifyFleet => {
-                self.fleet_verifications += 1;
+            RestoreApplyOperationKind::VerifyDeployment => {
+                self.deployment_verifications += 1;
                 self.verification_operations += 1;
             }
         }

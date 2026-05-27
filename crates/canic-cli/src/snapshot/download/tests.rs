@@ -75,7 +75,7 @@ fn deployment_membership_rejects_unknown_canister() {
         ]
     })
     .to_string();
-    let err = validate_fleet_membership_json("demo", "missing-cai", &registry)
+    let err = validate_deployment_membership_json("demo", "missing-cai", &registry)
         .expect_err("missing canister should reject");
 
     assert!(matches!(
@@ -96,7 +96,7 @@ fn deployment_membership_entries_accept_known_canister() {
         module_hash: None,
     }];
 
-    validate_fleet_membership_entries("demo", ROOT, &entries).expect("root is a member");
+    validate_deployment_membership_entries("demo", ROOT, &entries).expect("root is a member");
 }
 
 // Ensure generated default path labels are filesystem-friendly.

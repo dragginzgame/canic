@@ -86,7 +86,7 @@ pub(super) fn restore_verification_summary(
     manifest: &FleetBackupManifest,
     members: &[RestorePlanMember],
 ) -> RestoreVerificationSummary {
-    let fleet_checks = manifest.verification.fleet_checks.len();
+    let deployment_checks = manifest.verification.fleet_checks.len();
     let member_check_groups = manifest.verification.member_checks.len();
     let member_checks = members
         .iter()
@@ -100,11 +100,11 @@ pub(super) fn restore_verification_summary(
     RestoreVerificationSummary {
         verification_required: true,
         all_members_have_checks: members_with_checks == members.len(),
-        fleet_checks,
+        deployment_checks,
         member_check_groups,
         member_checks,
         members_with_checks,
-        total_checks: fleet_checks + member_checks,
+        total_checks: deployment_checks + member_checks,
     }
 }
 

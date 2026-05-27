@@ -22,7 +22,7 @@ fn in_place_plan_orders_parent_before_child() {
     assert!(plan.verification_summary.all_members_have_checks);
     assert!(plan.readiness_summary.ready);
     assert!(plan.readiness_summary.reasons.is_empty());
-    assert_eq!(plan.verification_summary.fleet_checks, 0);
+    assert_eq!(plan.verification_summary.deployment_checks, 0);
     assert_eq!(plan.verification_summary.member_check_groups, 0);
     assert_eq!(plan.verification_summary.member_checks, 2);
     assert_eq!(plan.verification_summary.members_with_checks, 2);
@@ -199,9 +199,9 @@ fn plan_includes_verification_summary() {
         .find(|member| member.role == "app")
         .expect("app member should be planned");
     assert_eq!(app.verification_checks.len(), 2);
-    assert_eq!(plan.fleet_verification_checks.len(), 1);
-    assert_eq!(plan.fleet_verification_checks[0].kind, "status");
-    assert_eq!(plan.verification_summary.fleet_checks, 1);
+    assert_eq!(plan.deployment_verification_checks.len(), 1);
+    assert_eq!(plan.deployment_verification_checks[0].kind, "status");
+    assert_eq!(plan.verification_summary.deployment_checks, 1);
     assert_eq!(plan.verification_summary.member_check_groups, 1);
     assert_eq!(plan.verification_summary.member_checks, 3);
     assert_eq!(plan.verification_summary.members_with_checks, 2);
@@ -246,7 +246,7 @@ fn plan_expands_role_verification_checks_per_matching_member() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
-    assert_eq!(plan.verification_summary.fleet_checks, 0);
+    assert_eq!(plan.verification_summary.deployment_checks, 0);
     assert_eq!(plan.verification_summary.member_check_groups, 1);
     assert_eq!(plan.verification_summary.member_checks, 5);
     assert_eq!(plan.verification_summary.members_with_checks, 3);

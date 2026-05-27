@@ -270,7 +270,7 @@ fn apply_journal_report_exposes_progress_and_next_transition() {
     assert_eq!(report.operation_counts.snapshot_uploads, 2);
     assert_eq!(report.operation_counts.snapshot_loads, 2);
     assert_eq!(report.operation_counts.member_verifications, 2);
-    assert_eq!(report.operation_counts.fleet_verifications, 0);
+    assert_eq!(report.operation_counts.deployment_verifications, 0);
     assert_eq!(report.operation_counts.verification_operations, 2);
     assert_eq!(journal.operation_counts, report.operation_counts);
     assert_eq!(report.progress.operation_count, 10);
@@ -667,10 +667,11 @@ fn apply_journal_command_preview_rejects_unsupported_verification_command() {
     assert!(preview.command.is_none());
 }
 
-// Ensure fleet verification previews check target root status.
+// Ensure deployment verification previews check target root status.
 #[test]
-fn apply_journal_command_preview_reports_fleet_verification_command() {
-    let journal = command_preview_journal(RestoreApplyOperationKind::VerifyFleet, Some("status"));
+fn apply_journal_command_preview_reports_deployment_verification_command() {
+    let journal =
+        command_preview_journal(RestoreApplyOperationKind::VerifyDeployment, Some("status"));
     let preview = journal.next_command_preview();
 
     assert!(preview.command_available);
@@ -686,7 +687,10 @@ fn apply_journal_command_preview_reports_fleet_verification_command() {
     );
     assert!(!command.mutates);
     assert!(!command.requires_stopped_canister);
-    assert_eq!(command.note, "checks target fleet root canister status");
+    assert_eq!(
+        command.note,
+        "checks target deployment root canister status"
+    );
 }
 
 // Ensure unsupported verification rows are rejected before execution.
@@ -765,7 +769,7 @@ fn apply_journal_validation_rejects_operation_kind_count_mismatch() {
         snapshot_uploads: 0,
         snapshot_loads: 1,
         member_verifications: 0,
-        fleet_verifications: 0,
+        deployment_verifications: 0,
         verification_operations: 0,
     };
 

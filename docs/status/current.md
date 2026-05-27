@@ -132,6 +132,15 @@ inspect only the files needed for the current task.
   boundary: it parses an installed deployment target, defaults output to
   `backups/deployment-...`, uses deployment-root/membership wording in errors,
   and restore help examples now point at deployment-prefixed backup layouts.
+  Its explicit canister membership validation helpers now use deployment
+  terminology instead of stale fleet-selection naming.
+- Restore apply dry-run and journal artifacts now use deployment-level
+  verification vocabulary at the restore-plan boundary: plan JSON uses
+  `deployment_verification_checks`, verification summaries use
+  `deployment_checks`, operation counts use `deployment_verifications`, and
+  journal operation kinds serialize as `verify-deployment`. Command previews
+  also describe deployment-root verification instead of fleet-root
+  verification.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

@@ -98,7 +98,7 @@ impl RestoreApplyDryRun {
             &mut next_sequence,
             &ordered_members,
         );
-        append_fleet_verification_operations(plan, &mut operations, &mut next_sequence);
+        append_deployment_verification_operations(plan, &mut operations, &mut next_sequence);
         let rendered_operations = operations.len();
         let operation_counts =
             RestoreApplyOperationKindCounts::from_dry_run_operations(&operations);
@@ -334,13 +334,13 @@ fn operation_artifact_path(
     .then(|| member.source_snapshot.artifact_path.clone())
 }
 
-// Append fleet-level verification checks after all member operations.
-fn append_fleet_verification_operations(
+// Append deployment-level verification checks after all member operations.
+fn append_deployment_verification_operations(
     plan: &RestorePlan,
     operations: &mut Vec<RestoreApplyDryRunOperation>,
     next_sequence: &mut usize,
 ) {
-    if plan.fleet_verification_checks.is_empty() {
+    if plan.deployment_verification_checks.is_empty() {
         return;
     }
 
@@ -356,8 +356,8 @@ fn append_fleet_verification_operations(
         || plan.source_root_canister.clone(),
         |member| member.target_canister.clone(),
     );
-    for check in &plan.fleet_verification_checks {
-        push_fleet_operation(
+    for check in &plan.deployment_verification_checks {
+        push_deployment_operation(
             operations,
             next_sequence,
             &source_canister,
@@ -367,8 +367,8 @@ fn append_fleet_verification_operations(
     }
 }
 
-// Append one fleet-level dry-run verification operation.
-fn push_fleet_operation(
+// Append one deployment-level dry-run verification operation.
+fn push_deployment_operation(
     operations: &mut Vec<RestoreApplyDryRunOperation>,
     next_sequence: &mut usize,
     source_canister: &str,
@@ -381,11 +381,11 @@ fn push_fleet_operation(
 
     operations.push(RestoreApplyDryRunOperation {
         sequence,
-        operation: RestoreApplyOperationKind::VerifyFleet,
+        operation: RestoreApplyOperationKind::VerifyDeployment,
         member_order,
         source_canister: source_canister.to_string(),
         target_canister: target_canister.to_string(),
-        role: "fleet".to_string(),
+        role: "deployment".to_string(),
         snapshot_id: None,
         artifact_path: None,
         verification_kind: Some(check.kind.clone()),

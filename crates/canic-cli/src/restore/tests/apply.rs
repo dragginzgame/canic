@@ -48,7 +48,10 @@ fn run_restore_apply_dry_run_writes_operations() {
     assert_eq!(dry_run_json["operation_counts"]["snapshot_uploads"], 2);
     assert_eq!(dry_run_json["operation_counts"]["snapshot_loads"], 2);
     assert_eq!(dry_run_json["operation_counts"]["member_verifications"], 2);
-    assert_eq!(dry_run_json["operation_counts"]["fleet_verifications"], 0);
+    assert_eq!(
+        dry_run_json["operation_counts"]["deployment_verifications"],
+        0
+    );
     assert_eq!(
         dry_run_json["operation_counts"]["verification_operations"],
         2
@@ -114,7 +117,10 @@ fn run_restore_apply_dry_run_validates_backup_dir_artifacts() {
     assert_eq!(journal_json["operation_counts"]["snapshot_uploads"], 2);
     assert_eq!(journal_json["operation_counts"]["snapshot_loads"], 2);
     assert_eq!(journal_json["operation_counts"]["member_verifications"], 2);
-    assert_eq!(journal_json["operation_counts"]["fleet_verifications"], 0);
+    assert_eq!(
+        journal_json["operation_counts"]["deployment_verifications"],
+        0
+    );
     assert_eq!(
         journal_json["operation_counts"]["verification_operations"],
         2

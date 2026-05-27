@@ -110,7 +110,7 @@ pub(super) fn download_snapshots(
     options: &SnapshotDownloadOptions,
 ) -> Result<SnapshotDownloadResult, SnapshotCommandError> {
     let request = resolve_snapshot_download_request(options)?;
-    validate_fleet_selection_if_needed(&request)?;
+    validate_deployment_selection_if_needed(&request)?;
 
     let config = SnapshotDownloadConfig {
         canister: request.canister.clone(),
@@ -238,7 +238,7 @@ fn resolved_snapshot_root(
     Ok(Some(state.root_canister_id.clone()))
 }
 
-fn validate_fleet_selection_if_needed(
+fn validate_deployment_selection_if_needed(
     request: &ResolvedSnapshotDownload,
 ) -> Result<(), SnapshotCommandError> {
     if !request.explicit_canister {
@@ -252,14 +252,14 @@ fn validate_fleet_selection_if_needed(
     };
 
     if let Some(entries) = &request.registry_entries {
-        return validate_fleet_membership_entries(deployment, &request.canister, entries);
+        return validate_deployment_membership_entries(deployment, &request.canister, entries);
     }
 
     let registry_json = call_subnet_registry(request, root)?;
-    validate_fleet_membership_json(deployment, &request.canister, &registry_json)
+    validate_deployment_membership_json(deployment, &request.canister, &registry_json)
 }
 
-fn validate_fleet_membership_json(
+fn validate_deployment_membership_json(
     deployment: &str,
     canister: &str,
     registry_json: &str,
@@ -275,7 +275,7 @@ fn validate_fleet_membership_json(
     })
 }
 
-fn validate_fleet_membership_entries(
+fn validate_deployment_membership_entries(
     deployment: &str,
     canister: &str,
     entries: &[HostRegistryEntry],

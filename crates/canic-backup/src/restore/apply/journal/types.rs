@@ -97,7 +97,8 @@ impl RestoreApplyJournalOperation {
             RestoreApplyOperationKind::StopCanister | RestoreApplyOperationKind::StartCanister => {
                 Ok(())
             }
-            RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyFleet => {
+            RestoreApplyOperationKind::VerifyMember
+            | RestoreApplyOperationKind::VerifyDeployment => {
                 let kind = self.validate_required_field(
                     "operations[].verification_kind",
                     self.verification_kind.as_ref(),
@@ -279,7 +280,7 @@ pub enum RestoreApplyOperationKind {
     UploadSnapshot,
     LoadSnapshot,
     VerifyMember,
-    VerifyFleet,
+    VerifyDeployment,
 }
 
 // Validate the supported restore apply journal format version.

@@ -48,7 +48,7 @@ pub struct RestorePlan {
     pub operation_summary: RestoreOperationSummary,
     pub ordering_summary: RestoreOrderingSummary,
     #[serde(default)]
-    pub fleet_verification_checks: Vec<VerificationCheck>,
+    pub deployment_verification_checks: Vec<VerificationCheck>,
     pub members: Vec<RestorePlanMember>,
 }
 
@@ -97,7 +97,7 @@ pub struct RestoreSnapshotSummary {
 pub struct RestoreVerificationSummary {
     pub verification_required: bool,
     pub all_members_have_checks: bool,
-    pub fleet_checks: usize,
+    pub deployment_checks: usize,
     pub member_check_groups: usize,
     pub member_checks: usize,
     pub members_with_checks: usize,
