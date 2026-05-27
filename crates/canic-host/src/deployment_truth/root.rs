@@ -69,8 +69,14 @@ pub enum DeploymentRootVerificationReportError {
     #[error("deployment root verification report field `{field}` is required")]
     MissingRequiredField { field: &'static str },
 
+    #[error("deployment root verification report field `{field}` must be lowercase SHA-256 hex")]
+    InvalidSha256Digest { field: &'static str },
+
     #[error("deployment root verification report field `{field}` digest is stale")]
     DigestMismatch { field: &'static str },
+
+    #[error("deployment root verification report check `{check}` is inconsistent")]
+    CheckMismatch { check: String },
 
     #[error("deployment root verification report status is inconsistent")]
     StatusMismatch,
@@ -88,6 +94,9 @@ pub enum DeploymentRootVerificationReceiptError {
 
     #[error("deployment root verification receipt field `{field}` is required")]
     MissingRequiredField { field: &'static str },
+
+    #[error("deployment root verification receipt field `{field}` must be lowercase SHA-256 hex")]
+    InvalidSha256Digest { field: &'static str },
 
     #[error("deployment root verification receipt field `{field}` digest is stale")]
     DigestMismatch { field: &'static str },
@@ -171,7 +180,7 @@ pub fn validate_deployment_root_verification_report(
         );
     }
     ensure_root_verification_field("report_id", report.report_id.as_str())?;
-    ensure_root_verification_field("report_digest", report.report_digest.as_str())?;
+    ensure_root_verification_sha256("report_digest", report.report_digest.as_str())?;
     ensure_root_verification_field("requested_at", report.requested_at.as_str())?;
     ensure_root_verification_field("deployment_name", report.deployment_name.as_str())?;
     ensure_root_verification_field("network", report.network.as_str())?;
@@ -184,17 +193,17 @@ pub fn validate_deployment_root_verification_report(
         report.expected_root_principal.as_str(),
     )?;
     ensure_root_verification_field("source_check_id", report.source_check_id.as_str())?;
-    ensure_root_verification_field("source_check_digest", report.source_check_digest.as_str())?;
+    ensure_root_verification_sha256("source_check_digest", report.source_check_digest.as_str())?;
     ensure_root_verification_field(
         "source_deployment_plan_id",
         report.source_deployment_plan_id.as_str(),
     )?;
-    ensure_root_verification_field(
+    ensure_root_verification_sha256(
         "source_deployment_plan_digest",
         report.source_deployment_plan_digest.as_str(),
     )?;
     ensure_root_verification_field("source_inventory_id", report.source_inventory_id.as_str())?;
-    ensure_root_verification_field(
+    ensure_root_verification_sha256(
         "source_inventory_digest",
         report.source_inventory_digest.as_str(),
     )?;
@@ -203,6 +212,7 @@ pub fn validate_deployment_root_verification_report(
     {
         return Err(DeploymentRootVerificationReportError::StatusMismatch);
     }
+    ensure_root_verification_report_checks_consistent(report)?;
     if report.report_digest != deployment_root_verification_report_digest(report) {
         return Err(DeploymentRootVerificationReportError::DigestMismatch {
             field: "report_digest",
@@ -256,18 +266,18 @@ pub fn validate_deployment_root_verification_receipt(
         );
     }
     ensure_root_verification_receipt_field("receipt_id", receipt.receipt_id.as_str())?;
-    ensure_root_verification_receipt_field("receipt_digest", receipt.receipt_digest.as_str())?;
+    ensure_root_verification_receipt_sha256("receipt_digest", receipt.receipt_digest.as_str())?;
     ensure_root_verification_receipt_field("deployment_name", receipt.deployment_name.as_str())?;
     ensure_root_verification_receipt_field("network", receipt.network.as_str())?;
     ensure_root_verification_receipt_field("fleet_template", receipt.fleet_template.as_str())?;
     ensure_root_verification_receipt_field("root_principal", receipt.root_principal.as_str())?;
     ensure_root_verification_receipt_field("source_report_id", receipt.source_report_id.as_str())?;
-    ensure_root_verification_receipt_field(
+    ensure_root_verification_receipt_sha256(
         "source_report_digest",
         receipt.source_report_digest.as_str(),
     )?;
     ensure_root_verification_receipt_field("source_check_id", receipt.source_check_id.as_str())?;
-    ensure_root_verification_receipt_field(
+    ensure_root_verification_receipt_sha256(
         "source_check_digest",
         receipt.source_check_digest.as_str(),
     )?;
@@ -275,7 +285,7 @@ pub fn validate_deployment_root_verification_receipt(
         "source_deployment_plan_id",
         receipt.source_deployment_plan_id.as_str(),
     )?;
-    ensure_root_verification_receipt_field(
+    ensure_root_verification_receipt_sha256(
         "source_deployment_plan_digest",
         receipt.source_deployment_plan_digest.as_str(),
     )?;
@@ -283,16 +293,16 @@ pub fn validate_deployment_root_verification_receipt(
         "source_inventory_id",
         receipt.source_inventory_id.as_str(),
     )?;
-    ensure_root_verification_receipt_field(
+    ensure_root_verification_receipt_sha256(
         "source_inventory_digest",
         receipt.source_inventory_digest.as_str(),
     )?;
     ensure_root_verification_receipt_field("local_state_path", receipt.local_state_path.as_str())?;
-    ensure_root_verification_receipt_field(
+    ensure_root_verification_receipt_sha256(
         "local_state_digest_before",
         receipt.local_state_digest_before.as_str(),
     )?;
-    ensure_root_verification_receipt_field(
+    ensure_root_verification_receipt_sha256(
         "local_state_digest_after",
         receipt.local_state_digest_after.as_str(),
     )?;
@@ -532,6 +542,101 @@ const fn report_state_transition(
     root_verification_transition(report.evidence_status, report.current_root_verification)
 }
 
+fn ensure_root_verification_report_checks_consistent(
+    report: &DeploymentRootVerificationReportV1,
+) -> Result<(), DeploymentRootVerificationReportError> {
+    for check in report.identity_checks.iter().chain(&report.evidence_checks) {
+        if check.satisfied != (check.expected == check.observed) {
+            return Err(DeploymentRootVerificationReportError::CheckMismatch {
+                check: check.name.clone(),
+            });
+        }
+    }
+
+    ensure_report_check_value(
+        &report.identity_checks,
+        "deployment_name",
+        Some(report.deployment_name.as_str()),
+        report.observed_deployment_name.as_deref(),
+    )?;
+    ensure_report_check_value(
+        &report.identity_checks,
+        "network",
+        Some(report.network.as_str()),
+        report.observed_network.as_deref(),
+    )?;
+    ensure_report_check_value(
+        &report.identity_checks,
+        "fleet_template",
+        Some(report.expected_fleet_template.as_str()),
+        report.observed_fleet_template.as_deref(),
+    )?;
+    ensure_report_check_value(
+        &report.identity_checks,
+        "root_principal",
+        Some(report.expected_root_principal.as_str()),
+        report.observed_root_principal.as_deref(),
+    )?;
+    let observed_root_present = report.observed_deployment_name.is_some()
+        && report.observed_network.is_some()
+        && report.observed_fleet_template.is_some()
+        && report.observed_root_principal.is_some();
+    ensure_report_check_value(
+        &report.evidence_checks,
+        "explicit_observed_root",
+        Some("present"),
+        observed_root_present.then_some("present"),
+    )?;
+    ensure_report_check_value(
+        &report.evidence_checks,
+        "observed_root_canister_id",
+        Some(report.expected_root_principal.as_str()),
+        report.observed_root_principal.as_deref(),
+    )?;
+    ensure_report_check_value(
+        &report.evidence_checks,
+        "source_check_id",
+        Some("present"),
+        present_value(report.source_check_id.as_str()),
+    )?;
+    ensure_report_check_value(
+        &report.evidence_checks,
+        "source_deployment_plan_id",
+        Some("present"),
+        present_value(report.source_deployment_plan_id.as_str()),
+    )?;
+    ensure_report_check_value(
+        &report.evidence_checks,
+        "source_inventory_id",
+        Some("present"),
+        present_value(report.source_inventory_id.as_str()),
+    )?;
+    Ok(())
+}
+
+fn ensure_report_check_value(
+    checks: &[DeploymentRootVerificationCheckV1],
+    name: &'static str,
+    expected: Option<&str>,
+    observed: Option<&str>,
+) -> Result<(), DeploymentRootVerificationReportError> {
+    let Some(check) = checks.iter().find(|check| check.name == name) else {
+        return Err(DeploymentRootVerificationReportError::CheckMismatch {
+            check: name.to_string(),
+        });
+    };
+    if check.expected.as_deref() == expected
+        && check.observed.as_deref() == observed
+        && check.satisfied == (expected == observed)
+    {
+        Ok(())
+    } else {
+        Err(DeploymentRootVerificationReportError::CheckMismatch {
+            check: name.to_string(),
+        })
+    }
+}
+
 const fn receipt_state_transition(
     receipt: &DeploymentRootVerificationReceiptV1,
 ) -> DeploymentRootVerificationStateTransitionV1 {
@@ -604,6 +709,20 @@ const fn ensure_root_verification_field(
     }
 }
 
+fn ensure_root_verification_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), DeploymentRootVerificationReportError> {
+    if value.is_empty() {
+        return Err(DeploymentRootVerificationReportError::MissingRequiredField { field });
+    }
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(DeploymentRootVerificationReportError::InvalidSha256Digest { field })
+    }
+}
+
 const fn ensure_root_verification_receipt_field(
     field: &'static str,
     value: &str,
@@ -613,4 +732,25 @@ const fn ensure_root_verification_receipt_field(
     } else {
         Ok(())
     }
+}
+
+fn ensure_root_verification_receipt_sha256(
+    field: &'static str,
+    value: &str,
+) -> Result<(), DeploymentRootVerificationReceiptError> {
+    if value.is_empty() {
+        return Err(DeploymentRootVerificationReceiptError::MissingRequiredField { field });
+    }
+    if is_lower_hex_sha256(value) {
+        Ok(())
+    } else {
+        Err(DeploymentRootVerificationReceiptError::InvalidSha256Digest { field })
+    }
+}
+
+fn is_lower_hex_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }

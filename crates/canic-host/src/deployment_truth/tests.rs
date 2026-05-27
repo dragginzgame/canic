@@ -9444,7 +9444,9 @@ fn root_verification_report_validation_rejects_digest_drift() {
     let check = sample_root_verification_check();
     let mut report =
         deployment_root_verification_report_from_check(sample_root_verification_request(check));
-    report.observed_root_principal = Some("other-root".to_string());
+    report
+        .recommended_next_actions
+        .push("stale next action".to_string());
 
     let err = validate_deployment_root_verification_report(&report)
         .expect_err("digest drift should fail");
@@ -9453,6 +9455,61 @@ fn root_verification_report_validation_rejects_digest_drift() {
         err,
         DeploymentRootVerificationReportError::DigestMismatch {
             field: "report_digest"
+        }
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_bad_digest_shape() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.source_check_digest = "NOT-A-DIGEST".to_string();
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("malformed source check digest should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::InvalidSha256Digest {
+            field: "source_check_digest"
+        }
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_check_row_drift() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.identity_checks[0].observed = Some("other-deployment".to_string());
+    report.identity_checks[0].satisfied = true;
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("forged check row should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::CheckMismatch {
+            check: "deployment_name".to_string()
+        }
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_displayed_field_drift() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.observed_root_principal = None;
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("displayed root evidence drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::CheckMismatch {
+            check: "root_principal".to_string()
         }
     );
 }
@@ -9530,6 +9587,22 @@ fn root_verification_receipt_validation_rejects_digest_drift() {
         err,
         DeploymentRootVerificationReceiptError::DigestMismatch {
             field: "receipt_digest"
+        }
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_bad_digest_shape() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_check_digest = "NOT-A-DIGEST".to_string();
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("malformed source check digest should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::InvalidSha256Digest {
+            field: "source_check_digest"
         }
     );
 }

@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Root-verification report and receipt validation now rejects malformed
+  SHA-256 digest fields and forged report check rows before archived artifacts
+  can be treated as stable root-verification evidence.
+
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)

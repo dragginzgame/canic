@@ -77,6 +77,12 @@ inspect only the files needed for the current task.
   requires local-state digest changes to match the claimed transition: promotion
   must change state, while `NoStateChange` must not. The receipt artifact now
   has JSON round-trip and schema-shape coverage.
+- Root-verification report and receipt validators now reject malformed SHA-256
+  digest fields up front, so archived root-verification artifacts cannot carry
+  non-digest source-check, plan, inventory, report, receipt, or local-state
+  digest strings while still passing validation. Report validation also rejects
+  forged check rows whose displayed expected/observed fields no longer match
+  the check-row evidence.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing
