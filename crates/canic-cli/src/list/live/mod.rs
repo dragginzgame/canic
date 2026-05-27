@@ -29,7 +29,7 @@ pub(super) fn load_registry_entries(
     options: &ListOptions,
 ) -> Result<Vec<RegistryEntry>, ListCommandError> {
     let registry = match options.source {
-        ListSource::RootRegistry => resolve_list_fleet(options)?.registry.entries,
+        ListSource::RootRegistry => resolve_list_deployment(options)?.registry.entries,
         ListSource::Config => {
             unreachable!("config source does not use registry entries")
         }
@@ -265,7 +265,7 @@ fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
     Some(icp_root)
 }
 
-fn resolve_list_fleet(
+fn resolve_list_deployment(
     options: &ListOptions,
 ) -> Result<InstalledDeploymentResolution, ListCommandError> {
     let icp_root = resolve_live_icp_root(options)
@@ -302,7 +302,7 @@ fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListComma
             deployment,
         } => ListCommandError::NoInstalledDeployment {
             network,
-            fleet: deployment,
+            deployment,
         },
         InstalledDeploymentError::InstallState(error) => ListCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => ListCommandError::ReplicaQuery(error),
@@ -314,7 +314,7 @@ fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListComma
             network,
             root,
         } => ListCommandError::LostLocalDeployment {
-            fleet: deployment,
+            deployment,
             network,
             root,
         },

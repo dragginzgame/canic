@@ -14,6 +14,11 @@ present.
 
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
+- `0.46.6` cleans installed-deployment CLI wording across backup, cycles,
+  metrics, list, status, medic, and top-level help surfaces so missing/lost
+  live-state messages consistently describe deployment targets and explicit
+  `deploy register` recovery instead of stale fleet-owned placeholders.
+
 - `0.46.5` hardens the deployment-target recovery path so unverified
   registered roots are install safety blockers, not warnings. Legacy
   fleet-state recovery guidance now requires operators to provide the owning

@@ -28,20 +28,20 @@ use clap::Command as ClapCommand;
 use std::{collections::BTreeSet, ffi::OsString, path::Path};
 use thiserror::Error as ThisError;
 
-const FLEET_HEADER: &str = "FLEET";
+const DEPLOYMENT_HEADER: &str = "DEPLOYMENT";
 const DEPLOYED_HEADER: &str = "DEPLOYED";
 const CONFIG_HEADER: &str = "CONFIG";
 const CANISTERS_HEADER: &str = "CANISTERS";
 const ROOT_HEADER: &str = "ROOT";
 const LOCAL_LOST_DEPLOYMENT: &str = "lost";
-const LOCAL_LOST_NOTE: &str = "Note: local ICP CLI replica state is not persistent; a lost local fleet means the recorded root is gone. Run `canic install <fleet>` to recreate it.";
+const LOCAL_LOST_NOTE: &str = "Note: local ICP CLI replica state is not persistent; a lost local deployment target means the recorded root is gone. Run `canic install <fleet-template>` to recreate it.";
 const STATUS_HELP_AFTER: &str = "\
 Examples:
   canic status
 
 Note:
   The local ICP CLI replica does not persist canister state across stop/start.
-  If a local fleet is shown as lost, run `canic install <fleet>` to recreate it.";
+  If a local deployment target is shown as lost, run `canic install <fleet-template>` to recreate it.";
 
 ///
 /// StatusCommandError
@@ -77,7 +77,7 @@ struct StatusReport {
     replica_port: String,
     icp_cli: String,
     icp_project: String,
-    fleets: Vec<StatusFleetRow>,
+    deployments: Vec<StatusDeploymentRow>,
 }
 
 ///
@@ -93,12 +93,12 @@ enum ReplicaStatus {
 }
 
 ///
-/// StatusFleetRow
+/// StatusDeploymentRow
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct StatusFleetRow {
-    fleet: String,
+struct StatusDeploymentRow {
+    deployment: String,
     deployed: String,
     config: String,
     canisters: String,
@@ -147,11 +147,11 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
             replica,
             ReplicaStatus::Running | ReplicaStatus::RunningHttpFallback
         );
-    let mut fleets = choices
+    let mut deployments = choices
         .iter()
-        .map(|path| status_fleet_row(&icp_root, &icp_root, path, options, verify_local_roots))
+        .map(|path| status_deployment_row(&icp_root, &icp_root, path, options, verify_local_roots))
         .collect::<Vec<_>>();
-    fleets.sort_by(|left, right| left.fleet.cmp(&right.fleet));
+    deployments.sort_by(|left, right| left.deployment.cmp(&right.deployment));
 
     Ok(StatusReport {
         network: options.network.clone(),
@@ -159,7 +159,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
         replica_port: load_replica_port(&icp_root),
         icp_cli,
         icp_project,
-        fleets,
+        deployments,
     })
 }
 
@@ -209,16 +209,16 @@ fn load_icp_project_config_status(icp_root: &Path, choices: &[std::path::PathBuf
     }
 }
 
-fn status_fleet_row(
+fn status_deployment_row(
     workspace_root: &Path,
     icp_root: &Path,
     path: &Path,
     options: &StatusOptions,
     verify_local_root: bool,
-) -> StatusFleetRow {
-    let Ok(fleet) = configured_fleet_name(path) else {
-        return StatusFleetRow {
-            fleet: "invalid config".to_string(),
+) -> StatusDeploymentRow {
+    let Ok(deployment) = configured_fleet_name(path) else {
+        return StatusDeploymentRow {
+            deployment: "invalid config".to_string(),
             deployed: "error".to_string(),
             config: display_workspace_path(workspace_root, path),
             canisters: "invalid".to_string(),
@@ -226,13 +226,13 @@ fn status_fleet_row(
         };
     };
     let install_state =
-        read_installed_deployment_state_from_root(&options.network, &fleet, icp_root);
+        read_installed_deployment_state_from_root(&options.network, &deployment, icp_root);
     let configured_roles = configured_fleet_roles(path);
     let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
         Ok(state) => (
             deployed_label(
-                &fleet,
+                &deployment,
                 &options.network,
                 &options.icp,
                 icp_root,
@@ -248,18 +248,18 @@ fn status_fleet_row(
         Err(_) => ("error".to_string(), "-".to_string()),
     };
 
-    StatusFleetRow {
+    StatusDeploymentRow {
         canisters: configured_roles
             .map_or_else(|_| "invalid".to_string(), |roles| roles.len().to_string()),
         config: display_workspace_path(workspace_root, path),
         deployed,
-        fleet,
+        deployment,
         root,
     }
 }
 
 fn deployed_label(
-    fleet: &str,
+    deployment: &str,
     network: &str,
     icp: &str,
     icp_root: &Path,
@@ -276,7 +276,7 @@ fn deployed_label(
 
     match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: fleet.to_string(),
+            deployment: deployment.to_string(),
             network: network.to_string(),
             icp: icp.to_string(),
             detect_lost_local_root: true,
@@ -313,8 +313,8 @@ fn classify_local_deployment(
 }
 
 fn render_status_report(report: &StatusReport) -> String {
-    let configured = report.fleets.len();
-    let deployed = deployed_count(&report.fleets);
+    let configured = report.deployments.len();
+    let deployed = deployed_count(&report.deployments);
     let mut lines = vec![
         format!(
             "Replica: {}",
@@ -323,16 +323,16 @@ fn render_status_report(report: &StatusReport) -> String {
         format!("ICP CLI: {}", report.icp_cli),
         format!("ICP project: {}", report.icp_project),
         format!(
-            "Fleets:  {deployed}/{configured} deployed (network {})",
+            "Deployments: {deployed}/{configured} deployed (network {})",
             report.network
         ),
     ];
 
-    if !report.fleets.is_empty() {
+    if !report.deployments.is_empty() {
         lines.push(String::new());
-        lines.push(render_fleet_table(&report.fleets));
+        lines.push(render_deployment_table(&report.deployments));
     }
-    if has_lost_local_fleet(report) {
+    if has_lost_local_deployment_target(report) {
         lines.push(String::new());
         lines.push(LOCAL_LOST_NOTE.to_string());
     }
@@ -340,37 +340,37 @@ fn render_status_report(report: &StatusReport) -> String {
     lines.join("\n")
 }
 
-fn has_lost_local_fleet(report: &StatusReport) -> bool {
+fn has_lost_local_deployment_target(report: &StatusReport) -> bool {
     report.network == "local"
         && report
-            .fleets
+            .deployments
             .iter()
-            .any(|fleet| fleet.deployed == LOCAL_LOST_DEPLOYMENT)
+            .any(|deployment| deployment.deployed == LOCAL_LOST_DEPLOYMENT)
 }
 
-fn deployed_count(fleets: &[StatusFleetRow]) -> usize {
-    fleets
+fn deployed_count(deployments: &[StatusDeploymentRow]) -> usize {
+    deployments
         .iter()
-        .filter(|fleet| fleet.deployed == "yes")
+        .filter(|deployment| deployment.deployed == "yes")
         .count()
 }
 
-fn render_fleet_table(fleets: &[StatusFleetRow]) -> String {
-    let rows = fleets
+fn render_deployment_table(deployments: &[StatusDeploymentRow]) -> String {
+    let rows = deployments
         .iter()
-        .map(|fleet| {
+        .map(|deployment| {
             [
-                fleet.fleet.clone(),
-                fleet.deployed.clone(),
-                fleet.config.clone(),
-                fleet.canisters.clone(),
-                fleet.root.clone(),
+                deployment.deployment.clone(),
+                deployment.deployed.clone(),
+                deployment.config.clone(),
+                deployment.canisters.clone(),
+                deployment.root.clone(),
             ]
         })
         .collect::<Vec<_>>();
     render_table(
         &[
-            FLEET_HEADER,
+            DEPLOYMENT_HEADER,
             DEPLOYED_HEADER,
             CONFIG_HEADER,
             CANISTERS_HEADER,

@@ -147,8 +147,8 @@ Examples:
 
 Registers minimal deployment-target local state for an existing root canister.
 This is an explicit 0.46 hard-cut recovery path. It does not migrate legacy
-fleet state, query live inventory, copy receipts, record artifact/controller
-truth, install code, or mutate canisters. Registered roots are marked
+fleet-template state, query live inventory, copy receipts, record
+artifact/controller truth, install code, or mutate canisters. Registered roots are marked
 not_verified until a later verification path records live evidence. The
 --allow-unverified flag is required so unverified registration remains an
 explicit operator acknowledgement.";

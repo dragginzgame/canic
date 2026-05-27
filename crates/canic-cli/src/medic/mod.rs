@@ -41,7 +41,7 @@ pub enum MedicCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct MedicOptions {
-    fleet: String,
+    deployment: String,
     network: String,
     icp: String,
 }
@@ -55,7 +55,7 @@ impl MedicOptions {
             parse_matches(medic_command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
         })
@@ -80,11 +80,11 @@ where
 fn medic_command() -> ClapCommand {
     ClapCommand::new("medic")
         .bin_name("canic medic")
-        .about("Diagnose local Canic fleet setup")
+        .about("Diagnose local Canic deployment target setup")
         .disable_help_flag(true)
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("deployment")
+                .value_name("deployment")
                 .required(true)
                 .help("Installed deployment name to inspect"),
         )
@@ -106,7 +106,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let state = match icp_root.as_deref().map_or_else(
         || Err("could not resolve ICP project root".to_string()),
         |root| {
-            read_installed_deployment_state_from_root(&options.network, &options.fleet, root)
+            read_installed_deployment_state_from_root(&options.network, &options.deployment, root)
                 .map_err(|err| err.to_string())
         },
     ) {
@@ -122,7 +122,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
             checks.push(MedicCheck::warn(
                 "deployment state",
                 "no installed deployment found",
-                "run canic install <name>",
+                "run canic install <fleet-template> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
             ));
             None
         }
@@ -130,7 +130,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
             checks.push(MedicCheck::error(
                 "deployment state",
                 err,
-                "reinstall from a config with [fleet].name",
+                "reinstall from the owning fleet template or re-register the deployment target",
             ));
             None
         }
@@ -197,7 +197,7 @@ fn check_root_ready(
         Ok(true) => MedicCheck::ok(
             "root ready",
             "canic_ready=true",
-            format!("run canic info list {}", options.fleet),
+            format!("run canic info list {}", options.deployment),
         ),
         Ok(false) => MedicCheck::warn(
             "root ready",

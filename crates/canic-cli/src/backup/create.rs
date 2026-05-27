@@ -498,7 +498,7 @@ fn backup_installed_deployment_error(error: InstalledDeploymentError) -> BackupC
             deployment,
         } => BackupCommandError::NoInstalledDeployment {
             network,
-            fleet: deployment,
+            deployment,
         },
         InstalledDeploymentError::InstallState(error) => BackupCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => BackupCommandError::ReplicaQuery(error),
@@ -511,7 +511,7 @@ fn backup_installed_deployment_error(error: InstalledDeploymentError) -> BackupC
             root,
         } => BackupCommandError::LostLocalDeployment {
             network,
-            fleet: deployment,
+            deployment,
             root,
         },
         InstalledDeploymentError::Registry(error) => BackupCommandError::Registry(error),

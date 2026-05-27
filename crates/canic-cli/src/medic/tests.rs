@@ -1,6 +1,6 @@
 use super::*;
 
-// Ensure medic options parse the fleet, network, and ICP CLI selectors.
+// Ensure medic options parse the deployment target, network, and ICP CLI selectors.
 #[test]
 fn parses_medic_options() {
     let options = MedicOptions::parse([
@@ -12,7 +12,7 @@ fn parses_medic_options() {
     ])
     .expect("parse medic options");
 
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.deployment, "demo");
     assert_eq!(options.network, "local");
     assert_eq!(options.icp, "/tmp/icp");
 }
@@ -22,9 +22,9 @@ fn parses_medic_options() {
 fn medic_usage_includes_examples() {
     let text = usage();
 
-    assert!(text.contains("Diagnose local Canic fleet setup"));
-    assert!(text.contains("Usage: canic medic <fleet>"));
-    assert!(text.contains("<fleet>"));
+    assert!(text.contains("Diagnose local Canic deployment target setup"));
+    assert!(text.contains("Usage: canic medic <deployment>"));
+    assert!(text.contains("<deployment>"));
     assert!(!text.contains("--fleet <name>"));
     assert!(!text.contains("--network"));
     assert!(!text.contains("--icp"));

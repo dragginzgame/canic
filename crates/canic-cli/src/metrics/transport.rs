@@ -30,7 +30,7 @@ pub(super) fn metrics_report(
 }
 
 fn load_registry(options: &MetricsOptions) -> Result<Vec<RegistryEntry>, MetricsCommandError> {
-    let mut registry = resolve_metrics_fleet(options)?.registry.entries;
+    let mut registry = resolve_metrics_deployment(options)?.registry.entries;
     registry.retain(|entry| matches_metrics_filter(options, entry));
     Ok(registry)
 }
@@ -142,7 +142,7 @@ fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<Metr
     parse_metrics_page(&output).ok_or_else(|| "could not parse canic_metrics response".to_string())
 }
 
-fn resolve_metrics_fleet(
+fn resolve_metrics_deployment(
     options: &MetricsOptions,
 ) -> Result<InstalledDeploymentResolution, MetricsCommandError> {
     let root = resolve_metrics_icp_root().ok_or_else(|| {
@@ -171,7 +171,7 @@ fn metrics_installed_deployment_error(error: InstalledDeploymentError) -> Metric
             deployment,
         } => MetricsCommandError::NoInstalledDeployment {
             network,
-            fleet: deployment,
+            deployment,
         },
         InstalledDeploymentError::InstallState(error) => MetricsCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => MetricsCommandError::ReplicaQuery(error),

@@ -49,7 +49,7 @@ pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, Cyc
 }
 
 fn load_registry(options: &CyclesOptions) -> Result<Vec<RegistryEntry>, CyclesCommandError> {
-    Ok(resolve_cycles_fleet(options)?.registry.entries)
+    Ok(resolve_cycles_deployment(options)?.registry.entries)
 }
 
 fn collect_cycle_tracker_reports(
@@ -382,7 +382,7 @@ fn current_unix_seconds() -> u64 {
         .map_or(0, |duration| duration.as_secs())
 }
 
-fn resolve_cycles_fleet(
+fn resolve_cycles_deployment(
     options: &CyclesOptions,
 ) -> Result<InstalledDeploymentResolution, CyclesCommandError> {
     let root = resolve_cycles_icp_root().ok_or_else(|| {
@@ -411,7 +411,7 @@ fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesC
             deployment,
         } => CyclesCommandError::NoInstalledDeployment {
             network,
-            fleet: deployment,
+            deployment,
         },
         InstalledDeploymentError::InstallState(error) => CyclesCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),

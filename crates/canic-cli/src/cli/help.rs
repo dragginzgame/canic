@@ -79,7 +79,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "info",
-        about: "Query deployed fleet information",
+        about: "Query deployed canister information",
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
@@ -89,7 +89,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "medic",
-        about: "Diagnose local Canic fleet setup",
+        about: "Diagnose local Canic deployment target setup",
         scope: CommandScope::FleetContext,
     },
     CommandSpec {

@@ -28,9 +28,9 @@ pub enum CyclesCommandError {
     Usage(String),
 
     #[error(
-        "deployment target {fleet} is not installed on network {network}; run `canic install {fleet}` before querying cycles"
+        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal>` before querying cycles"
     )]
-    NoInstalledDeployment { network: String, fleet: String },
+    NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to read canic deployment state: {0}")]
     InstallState(String),

@@ -84,7 +84,7 @@ fn fleet_membership_rejects_unknown_canister() {
     ));
 }
 
-// Ensure cached installed-fleet registry entries can validate membership without reparsing.
+// Ensure cached installed-deployment registry entries can validate membership without reparsing.
 #[test]
 fn fleet_membership_entries_accept_known_canister() {
     let entries = vec![HostRegistryEntry {

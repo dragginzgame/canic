@@ -78,6 +78,10 @@ inspect only the files needed for the current task.
 - Unverified registered roots are install safety blockers, not ordinary plan
   warnings. The deployment-truth gate now refuses current-install mutation when
   local deployment state records a root that has not been explicitly verified.
+- Installed-deployment CLI diagnostics for backup, cycles, metrics, list,
+  status, and medic paths now describe missing or lost live state as
+  deployment-target state and point operators at explicit `deploy register`
+  recovery instead of stale fleet-owned placeholders.
 - Legacy fleet-state recovery guidance now requires operators to provide the
   owning fleet template explicitly; it no longer suggests that deployment
   target and fleet-template names are interchangeable.

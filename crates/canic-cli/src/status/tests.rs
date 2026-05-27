@@ -29,16 +29,16 @@ fn renders_status_report() {
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
         icp_project: "ok (icp.yaml)".to_string(),
-        fleets: vec![
-            StatusFleetRow {
-                fleet: "demo".to_string(),
+        deployments: vec![
+            StatusDeploymentRow {
+                deployment: "demo".to_string(),
                 deployed: "no".to_string(),
                 config: "fleets/demo/canic.toml".to_string(),
                 canisters: "2".to_string(),
                 root: "-".to_string(),
             },
-            StatusFleetRow {
-                fleet: "test".to_string(),
+            StatusDeploymentRow {
+                deployment: "test".to_string(),
                 deployed: "yes".to_string(),
                 config: "fleets/test/canic.toml".to_string(),
                 canisters: "7".to_string(),
@@ -53,12 +53,12 @@ fn renders_status_report() {
             "Replica: running (local, port 8000)",
             "ICP CLI: icp 0.2.5",
             "ICP project: ok (icp.yaml)",
-            "Fleets:  1/2 deployed (network local)",
+            "Deployments: 1/2 deployed (network local)",
             "",
-            "FLEET   DEPLOYED   CONFIG                   CANISTERS   ROOT",
-            "-----   --------   ----------------------   ---------   --------",
-            "demo    no         fleets/demo/canic.toml   2           -",
-            "test    yes        fleets/test/canic.toml   7           aaaaa-aa",
+            "DEPLOYMENT   DEPLOYED   CONFIG                   CANISTERS   ROOT",
+            "----------   --------   ----------------------   ---------   --------",
+            "demo         no         fleets/demo/canic.toml   2           -",
+            "test         yes        fleets/test/canic.toml   7           aaaaa-aa",
         ]
         .join("\n")
     );
@@ -73,12 +73,12 @@ fn renders_empty_status_report() {
         replica_port: "8001".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
         icp_project: "not checked (no Canic fleet configs)".to_string(),
-        fleets: Vec::new(),
+        deployments: Vec::new(),
     };
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic fleet configs)\nFleets:  0/0 deployed (network local)"
+        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic fleet configs)\nDeployments: 0/0 deployed (network local)"
     );
 }
 
@@ -92,26 +92,26 @@ fn renders_http_fallback_replica_status() {
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
         icp_project: "ok (icp.yaml)".to_string(),
-        fleets: Vec::new(),
+        deployments: Vec::new(),
     };
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP project: ok (icp.yaml)\nFleets:  0/0 deployed (network local)"
+        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP project: ok (icp.yaml)\nDeployments: 0/0 deployed (network local)"
     );
 }
 
 // Ensure local missing-root rows explain the non-persistent local ICP CLI replica.
 #[test]
-fn renders_lost_local_fleet_note() {
+fn renders_lost_local_deployment_target_note() {
     let report = StatusReport {
         network: "local".to_string(),
         replica: ReplicaStatus::Running,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
         icp_project: "incomplete (missing canisters: app)".to_string(),
-        fleets: vec![StatusFleetRow {
-            fleet: "test".to_string(),
+        deployments: vec![StatusDeploymentRow {
+            deployment: "test".to_string(),
             deployed: LOCAL_LOST_DEPLOYMENT.to_string(),
             config: "fleets/test/canic.toml".to_string(),
             canisters: "6".to_string(),
@@ -124,12 +124,13 @@ fn renders_lost_local_fleet_note() {
     assert!(rendered.contains("test"));
     assert!(rendered.contains("lost"));
     assert!(rendered.contains("local ICP CLI replica state is not persistent"));
-    assert!(rendered.contains("canic install <fleet>"));
+    assert!(rendered.contains("lost local deployment target"));
+    assert!(rendered.contains("canic install <fleet-template>"));
 }
 
 // Ensure status renders config paths relative to the resolved Canic project root.
 #[test]
-fn status_fleet_row_uses_project_root_for_config_paths() {
+fn status_deployment_row_uses_project_root_for_config_paths() {
     let root = temp_dir("canic-status-project-root");
     let config = root.join("fleets/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
@@ -152,10 +153,10 @@ kind = "singleton"
         icp: "icp".to_string(),
     };
 
-    let row = status_fleet_row(&root, &root, &config, &options, false);
+    let row = status_deployment_row(&root, &root, &config, &options, false);
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(row.fleet, "toko");
+    assert_eq!(row.deployment, "toko");
     assert_eq!(row.config, "fleets/toko/canic.toml");
     assert_eq!(row.canisters, "2");
 }
