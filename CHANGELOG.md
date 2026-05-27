@@ -12,15 +12,15 @@ present.
 
 ## Unreleased
 
-- Removed stale fleet-owned naming from the deployment-target install-state
-  API and state shape. Local install state now stores `deployment_name` and
-  `fleet_template` without a duplicate `fleet` field, and host readers are
-  named for deployment install state. The shared host lookup boundary is now
-  `installed_deployment`, and deployment-target state that still contains the
-  stale `fleet` field now fails closed instead of being accepted as current
-  state.
-
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.3` removes stale fleet-owned naming from the deployment-target
+  install-state API and state shape. Local install state now stores
+  `deployment_name` and `fleet_template` without a duplicate `fleet` field, the
+  shared host lookup boundary is now `installed_deployment`, receipt paths and
+  deployment-state readers use deployment-target terminology, and
+  deployment-target state that still contains the stale `fleet` field fails
+  closed instead of being accepted as current state.
 
 - `0.46.2` makes plan-mediated deploy install and read-only deploy truth
   commands target-explicit. `canic deploy install <deployment> --plan <file>`
