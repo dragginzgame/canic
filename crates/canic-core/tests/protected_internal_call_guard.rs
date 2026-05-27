@@ -422,7 +422,7 @@ fn protected_internal_method_guard_includes_shared_protocol_descriptors() {
 
 #[test]
 fn canic_call_dispatches_protected_envelope_as_raw_ingress_bytes() {
-    let source = read_workspace_file("crates/canic-core/src/api/ic/call.rs");
+    let source = read_workspace_file("crates/canic-core/src/api/ic/canic.rs");
 
     assert!(
         source.contains(".with_raw_args(encode_internal_call_envelope_raw(envelope)?)"),

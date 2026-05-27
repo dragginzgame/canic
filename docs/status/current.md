@@ -56,9 +56,9 @@ inspect only the files needed for the current task.
   error instead of being projected into deployment truth.
 - Local deployment plan and inventory collection now resolve root identity from
   deployment-target state using `deployment_name`, not the configured fleet
-  template name. `canic deploy install --plan` validation now requires the
-  supplied plan deployment identity to match the install target exactly rather
-  than accepting a fleet-template fallback.
+  template name. `canic deploy install <deployment> --plan <file>` validation
+  now requires the supplied plan deployment identity to match the explicit
+  install target exactly rather than accepting a fleet-template fallback.
 - `canic deploy register <deployment> --fleet-template <fleet> --root
   <principal>` now writes minimal deployment-target state for explicit operator
   recovery. Registered roots are marked `not_verified`; plan generation does
@@ -157,14 +157,14 @@ inspect only the files needed for the current task.
   digest-pinned override inputs. Receipt-backed artifact sources are limited to
   deployment/staging receipt evidence and do not accept authority dry-run
   artifacts as artifact sources.
-- `canic deploy install --plan <file>` now accepts a raw `DeploymentPlanV1` or
-  an `ArtifactPromotionPlanV1` envelope and routes the supplied plan through
-  the current install deployment-truth/preflight gate plus activation operation
-  runner. Blocked promotion plan envelopes are rejected before mutation, and
-  the path now has focused coverage for raw and ready promotion plan input,
-  blocked promotion envelopes, supplied-plan network mismatch rejection,
-  missing root wasm artifact validation before mutation, and CLI source-guard
-  mediation through `install_root`.
+- `canic deploy install <deployment> --plan <file>` accepts a raw
+  `DeploymentPlanV1` or an `ArtifactPromotionPlanV1` envelope and routes the
+  supplied plan through the current install deployment-truth/preflight gate
+  plus activation operation runner. Blocked promotion plan envelopes are
+  rejected before mutation, and the path now has focused coverage for raw and
+  ready promotion plan input, blocked promotion envelopes, supplied-plan
+  network/target mismatch rejection, missing root wasm artifact validation
+  before mutation, and CLI source-guard mediation through `install_root`.
 - Ready `ArtifactPromotionPlanV1` envelope installs now write an artifact
   promotion execution receipt wrapper after successful current install. The
   wrapper links promotion plan/provenance evidence to the nested deployment

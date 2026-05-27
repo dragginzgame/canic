@@ -1,0 +1,21 @@
+# Canic
+
+Canic is a Rust toolkit and `canic` operator CLI for Internet Computer
+canister fleets. It provides lifecycle/build macros, topology config,
+stable-memory helpers, endpoint guards, thin-root artifact builds, and local
+install, snapshot, backup, and restore workflows.
+
+Install the published operator binary:
+
+```bash
+cargo install --locked canic-cli --version <same-version-as-canic>
+canic --version
+```
+
+From this checkout:
+
+```bash
+make install
+```
+
+Full setup details live in `README.md` and `INSTALLING.md`.

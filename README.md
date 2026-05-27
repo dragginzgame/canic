@@ -2,7 +2,7 @@
   <img src="assets/canic_logo.svg" alt="Canic logo" width="360" />
 </p>
 
-# 🧑‍🔧 Canic 🧑‍🔧 – Internet Computer Orchestration
+# Canic - Internet Computer Orchestration
 
 [![Crates.io](https://img.shields.io/crates/v/canic.svg)](https://crates.io/crates/canic)
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
@@ -15,8 +15,7 @@ It gives canister crates lifecycle macros, validated topology config,
 stable-memory helpers, endpoint guards, thin-root artifact builds, local fleet
 install, snapshot, backup, and restore workflows.
 
-Install the operator binary with Cargo, or see the full setup guide in
-[`INSTALLING.md`](INSTALLING.md):
+Install the published operator binary:
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
@@ -29,114 +28,35 @@ When working from this checkout:
 make install
 ```
 
+See [INSTALLING.md](INSTALLING.md) for the complete setup guide, local replica
+notes, fleet management flow, path dependency setup, and backup/restore operator
+walkthrough.
+
 ## Highlights
 
-* **Lifecycle and build macros**: `canic::start!`, `canic::start_root!`, `canic::build!`, `canic::build_root!`, and `canic::build_standalone!` wire IC hooks, endpoint bundles, and compile-time config validation.
-* **Topology-aware config**: `canic.toml` describes subnets, roles, singleton/replica/shard/instance placement, warm pools, scaling pools, sharding pools, and directory pools.
-* **Self-validating delegated auth**: root signs shard certificates, shards mint user tokens, and verifiers validate token + embedded proof with local root/shard key material. Verifiers do not require proof fanout or proof caches.
-* **Stable memory helpers**: `ic_memory_key!` and `eager_static!` wrap stable structures with explicit stable-key allocation.
-* **Thin-root install flow**: the `canic` CLI builds child WASMs, stages ordinary fleet artifacts through the implicit `wasm_store`, and keeps child artifacts out of the root Wasm.
-* **Operator CLI**: the `canic` binary builds artifacts, manages local fleet configs and replica status, installs fleets, captures topology-aware snapshots, validates backup manifests, and drives guarded restore planning/journals.
-
-## 📁 Repository Layout
-
-All Rust workspace crates live under `crates/`:
-
-**Canister author/runtime crates**
-
-* `crates/canic/` – public facade crate, macros, endpoint bundles, and protocol constants.
-* `crates/canic-core/` – shared canister runtime foundation: config, lifecycle, ingress limits, auth, storage, workflow, DTOs, and IDs.
-* `crates/canic-macros/` – proc macros behind the public `canic` facade.
-
-**Control-plane canister crates**
-
-* `crates/canic-control-plane/` – root/control-plane runtime support built on `canic-core`.
-* `crates/canic-wasm-store/` – canonical implicit bootstrap `wasm_store` canister crate.
-
-**Host/operator crates**
-
-* `crates/canic-cli/` – published `canic` operator binary for install, fleet, replica/status, snapshot, backup, manifest, and restore workflows.
-* `crates/canic-host/` – host-side build, install, fleet, and thin-root staging library used by `canic` and scripts.
-* `crates/canic-backup/` – backup/restore domain library for manifests, journals, topology snapshots, layout verification, and restore planning.
-* sibling `../ic-testkit/` – reusable PocketIC helpers for downstream tests.
-* `crates/canic-testing-internal/` and `crates/canic-tests/` – repo-only PocketIC harnesses and integration tests.
-
-* `fleets/test/` – config-defined reference topology used by local ICP CLI, CI wasm builds, and repo tests.
-* `fleets/demo/` – minimal root-plus-app fleet for quick experiments.
-* `canisters/audit/`, `canisters/sandbox/`, and `canisters/test/` – runnable canisters that are not Canic fleets. See `TESTING.md` for placement rules.
-* `scripts/` – dev setup, CI, release, wasm, and audit helpers.
-* `assets/`, `docs/`, `.github/workflows/` – documentation assets, design/audit notes, and CI.
+* **Lifecycle and build macros:** `canic::start!`, `canic::start_root!`,
+  `canic::build!`, `canic::build_root!`, and `canic::build_standalone!` wire IC
+  hooks, endpoint bundles, and compile-time config validation.
+* **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
+  subnets, roles, singleton/replica/shard/instance placement, warm pools,
+  scaling pools, sharding pools, and directory pools.
+* **Delegated auth:** Root signs shard certificates, shards mint user tokens,
+  and verifiers validate token plus embedded proof with local root/shard key
+  material. See
+  [AUTH_DELEGATED_SIGNATURES.md](docs/contracts/AUTH_DELEGATED_SIGNATURES.md).
+* **Thin-root install flow:** The CLI stages ordinary child artifacts through
+  the implicit `wasm_store` and keeps child artifacts out of the root Wasm. See
+  [build-artifacts.md](docs/architecture/build-artifacts.md).
+* **Operator workflows:** The `canic` binary builds artifacts, manages local
+  fleet configs and replica status, installs fleets, captures topology-aware
+  snapshots, validates backup manifests, and drives guarded restore planning.
 
 ## Quick Start
 
-Install the CLI, then start from a conventional root-plus-app fleet:
+For a copyable root-plus-two-children managed fleet, start with
+[minimal-managed-fleet.md](docs/getting-started/minimal-managed-fleet.md).
 
-```bash
-cargo install --locked canic-cli --version <same-version-as-canic>
-canic --version
-```
-
-From this checkout, use:
-
-```bash
-make install
-```
-
-Add the canister runtime dependencies to each canister crate, and add Canic as a
-`build.rs` dependency:
-
-```bash
-cargo add canic
-cargo add candid ic-cdk
-cargo add canic --build
-```
-
-Use `canic::build_root!` for the root canister and `canic::build!` for child
-canisters:
-
-```rust
-fn main() {
-    canic::build_root!("../canic.toml");
-}
-```
-
-Bootstrap the canister in `lib.rs`:
-
-```rust
-use canic::prelude::*;
-use canic::ids::CanisterRole;
-
-const APP: CanisterRole = CanisterRole::new("app");
-
-canic::start!(APP); // use canic::start_root!() for root
-
-async fn canic_setup() {}
-async fn canic_install(_: Option<Vec<u8>>) {}
-async fn canic_upgrade() {}
-
-canic::finish!();
-```
-
-Define a fleet under `fleets/<fleet>/canic.toml`:
-
-```toml
-[fleet]
-name = "test"
-
-[subnets.prime]
-auto_create = ["app"]
-subnet_index = ["app"]
-
-[subnets.prime.canisters.root]
-kind = "root"
-
-[subnets.prime.canisters.app]
-kind = "singleton"
-topup = {}
-```
-
-Make sure `icp.yaml` contains the matching canisters and local environment, then
-build and install locally:
+The short local loop is:
 
 ```bash
 canic status
@@ -145,162 +65,85 @@ canic install --profile fast test
 canic info list test
 ```
 
-For the full install guide, path dependency setup, split workspace flags, local
-replica notes, fleet management, and backup/restore operator flow, see
-[`INSTALLING.md`](INSTALLING.md). For a copyable root-plus-two-children managed
-fleet, start with
-[`docs/getting-started/minimal-managed-fleet.md`](docs/getting-started/minimal-managed-fleet.md).
+Useful next reads:
 
-## Operator Commands
+* [INSTALLING.md](INSTALLING.md) - end-to-end installation and local operation.
+* [crates/canic-cli/README.md](crates/canic-cli/README.md) - operator command
+  guide, including backup and restore.
+* [crates/canic-host/README.md](crates/canic-host/README.md) - build profiles,
+  split workspace/ICP roots, custom canister roots, and lower-level install
+  commands.
+* [TESTING.md](TESTING.md) - canister placement and test expectations.
 
-Build one artifact:
+## Repository Layout
 
-```bash
-canic build --profile fast app
-```
+The workspace keeps Rust crates under [crates/](crates/) and fleet fixtures under
+[fleets/](fleets/). Detailed ownership and layering rules live in
+[AGENTS.md](AGENTS.md).
 
-The local ICP CLI replica does not persist canister state across stop/start.
-If `canic status` shows a local fleet as `lost`, the recorded root canister is
-gone from the restarted local replica; run `canic install <fleet>` to recreate
-the local deployment.
-
-Use `canic fleet list` to list config-defined fleets. Use `canic config <fleet>`
-for declared config, and pass `<fleet>` as the first argument to deployed-fleet
-commands. Use `canic fleet delete <fleet>` to remove a config-defined fleet
-directory after confirming the exact fleet name:
-
-```bash
-canic config test
-canic info list test
-canic status
-canic --network local fleet list
-canic fleet create demo --yes
-canic fleet delete demo
-```
-
-Use `canic medic` when the local project state, replica, or named fleet does
-not look right:
-
-```bash
-canic medic test
-```
-
-Named-fleet commands default to the local ICP CLI environment. Pass top-level
-`--network <name>` for one command against another configured ICP CLI
-environment. Nonlocal targets must be managed externally.
-
-`root` embeds only the bootstrap `wasm_store.wasm.gz`; ordinary child releases
-stay outside `root` and are staged after install. Visible canister Candid files
-are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in
-exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface
-for the implicit bootstrap `wasm_store` crate.
-
-For build profiles, split workspace/ICP roots, custom canister roots, role
-metadata, and lower-level build/install commands, see
-`crates/canic-host/README.md`.
-
-### Backup and Restore
-
-The `canic` binary is the operator entry point for fleet backup/restore work.
-It uses ICP CLI for live IC snapshot operations, while Canic owns the higher-level
-topology selection, manifests, journals, backup verification, and restore
-planning.
-
-Show local test-fleet canisters:
-
-```bash
-canic --network local info list test
-```
-
-If this only prints the `root` row, ICP CLI has reserved the root id but the Canic
-tree is not installed yet. Run `canic install test`, then query the installed
-registry with `canic --network local info list test`.
-
-Use `--subtree` to render one live subtree with the selected node as the
-displayed root:
-
-```bash
-canic --network local info list test --subtree app
-```
-
-The CLI calls `canic_ready` on each listed canister and includes a `READY`
-column without failing the whole list for one unavailable canister.
-
-Plan or capture a topology-aware fleet backup:
-
-```bash
-canic backup create test
-canic backup list
-```
-
-Non-dry-run backup creation recomputes the selected topology immediately before
-snapshot creation and fails if the topology hash changed since discovery.
-Because ICP CLI creates snapshots only for stopped canisters, Canic quiesces the
-selected members, captures snapshots, restarts them, downloads artifacts,
-verifies checksums, and writes the backup manifest plus execution journal.
-
-Validate a captured backup before restore planning:
-
-```bash
-canic backup verify 1
-```
-
-Restore work is backup-row and journal driven. `restore prepare 1` writes the
-default plan and apply journal inside the backup layout, `restore status 1`
-checks progress and gates, and `restore run 1 --execute` advances the durable
-journal through upload, stop, snapshot load, start, and verification operations.
-
-```bash
-canic restore prepare 1 --require-verified --require-restore-ready
-canic restore status 1 --require-no-attention
-canic restore run 1 --execute --max-steps 1 --require-no-attention
-canic restore status 1 --require-complete --require-no-attention
-```
-
-See `crates/canic-cli/README.md` for the operator guide and
-`docs/operations/0.31-backup-restore-checklist.md` for the current
-backup/restore checklist.
-
-If you are writing host-side PocketIC tests against Canic, prefer
-the sibling `../ic-testkit/` crate for the reusable wrapper surface. The
-unpublished `crates/canic-testing-internal/` crate owns Canic's heavier
-root/auth harnesses and other repo-only fixtures.
+* [crates/canic/](crates/canic/) - public facade crate, lifecycle/build macros,
+  endpoint bundles, and protocol constants.
+* [crates/canic-core/](crates/canic-core/) - shared canister runtime foundation:
+  config, lifecycle, ingress limits, auth, storage, workflow, DTOs, and IDs.
+* [crates/canic-macros/](crates/canic-macros/) - proc macros behind the public
+  facade.
+* [crates/canic-control-plane/](crates/canic-control-plane/) - root/control-plane
+  runtime support built on `canic-core`.
+* [crates/canic-wasm-store/](crates/canic-wasm-store/) - canonical implicit
+  bootstrap `wasm_store` canister crate.
+* [crates/canic-cli/](crates/canic-cli/) - published `canic` operator binary.
+* [crates/canic-host/](crates/canic-host/) - host-side build, install, fleet,
+  and thin-root staging library.
+* [crates/canic-backup/](crates/canic-backup/) - backup/restore domain library.
+* [crates/canic-testing-internal/](crates/canic-testing-internal/) and
+  [crates/canic-tests/](crates/canic-tests/) - repo-only PocketIC harnesses and
+  integration tests.
+* [fleets/test/](fleets/test/) and [fleets/demo/](fleets/demo/) - local reference
+  fleet configs.
+* [canisters/](canisters/) - runnable canisters that are not Canic fleets.
+* [scripts/](scripts/) - dev setup, CI, release, Wasm, and audit helpers.
+* [docs/](docs/) and [.github/workflows/](.github/workflows/) - design notes,
+  operational docs, audits, and CI.
 
 ## Architecture And Contracts
 
-Canic follows the layering rules in `AGENTS.md`: endpoints authenticate and
-delegate, workflow orchestrates, policy decides, ops performs approved state or
-platform actions, and model/storage own invariants.
+Canic follows the layering rules in [AGENTS.md](AGENTS.md): endpoints
+authenticate and delegate, workflow orchestrates, policy decides, ops performs
+approved state or platform actions, and model/storage own invariants.
 
 Reference docs:
 
-* Config schema: `CONFIG.md`
-* Build artifacts: `docs/architecture/build-artifacts.md`
-* Delegated auth: `docs/contracts/AUTH_DELEGATED_SIGNATURES.md`
-* Access architecture: `docs/contracts/ACCESS_ARCHITECTURE.md`
-* Authentication overview: `docs/architecture/authentication.md`
+* [docs/architecture/README.md](docs/architecture/README.md)
+* [docs/architecture/build-artifacts.md](docs/architecture/build-artifacts.md)
+* [docs/architecture/authentication.md](docs/architecture/authentication.md)
+* [docs/contracts/AUTH_DELEGATED_SIGNATURES.md](docs/contracts/AUTH_DELEGATED_SIGNATURES.md)
+* [docs/contracts/ACCESS_ARCHITECTURE.md](docs/contracts/ACCESS_ARCHITECTURE.md)
 
-## Tooling & DX
+## Development
 
-* Format: `cargo fmt --all` (or `make fmt`)
-* Fmt check: `make fmt-check`
-* Check (type‑check only): `make check`
-* Lint: `make clippy`
-* Test: `make test`
-* Build workspace release artifacts: `make build`
-* Build local canister artifacts: `canic build --profile fast <role>`
-* Build example targets: `cargo build -p canic --examples`
-* Role-attestation PocketIC flow: `cargo test -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --nocapture --test-threads=1`
-* Root replay dispatcher coverage: `cargo test -p canic-tests --test root_suite upgrade_routes_through_dispatcher_non_skip_path -- --nocapture --test-threads=1`
+Common local checks:
 
-`rust-toolchain.toml` pins the internal toolchain so CI and local builds stay in sync.
-Published crates declare MSRV `1.88.0` separately through `workspace.package.rust-version`.
+```bash
+cargo fmt --all
+make fmt-check
+make check
+make clippy
+make test
+```
+
+[rust-toolchain.toml](rust-toolchain.toml) pins the internal toolchain so CI and
+local builds stay in sync. Published crates declare MSRV `1.88.0` separately in
+[Cargo.toml](Cargo.toml).
+
+Follow [docs/governance/ci-deployment.md](docs/governance/ci-deployment.md) for
+CI, git, deployment, and automation rules. Follow
+[docs/governance/changelog.md](docs/governance/changelog.md) and
+[CHANGELOG.md](CHANGELOG.md) for changelog policy.
 
 ## Examples
 
-Explore the runnable example under `crates/canic/examples/`:
-
-* `minimal_root.rs` – bootstrap a bare‑bones orchestrator.
+Explore the runnable example under
+[crates/canic/examples/](crates/canic/examples/):
 
 ```bash
 cargo run -p canic --example minimal_root --features control-plane
@@ -308,8 +151,11 @@ cargo run -p canic --example minimal_root --features control-plane
 
 ## Project Status & Contributing
 
-Canic is the successor to the internal ICU toolkit. The repository is in the process of being opened for wider use; issues and PRs are currently limited to the core team. Follow `AGENTS.md`, `CONFIG.md`, and the CI scripts under `scripts/ci/` for workflow expectations.
+Canic is the successor to the internal ICU toolkit. The repository is in the
+process of being opened for wider use; issues and PRs are currently limited to
+the core team. Follow [AGENTS.md](AGENTS.md), [CONFIG.md](CONFIG.md), and
+[scripts/ci/](scripts/ci/) for workflow expectations.
 
 ## License
 
-MIT. See `LICENSE` for details.
+MIT. See [LICENSE](LICENSE) for details.

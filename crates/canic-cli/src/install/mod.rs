@@ -90,6 +90,7 @@ impl InstallOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
+            deployment_name: None,
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,

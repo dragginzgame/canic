@@ -121,7 +121,7 @@ Examples:
   canic deploy promote plan --request promotion-plan.json
   canic deploy promote check --request promotion-check.json
   canic deploy promote diff --request promotion-diff.json
-  canic deploy install --plan promoted-plan.json
+  canic deploy install demo-local --plan promoted-plan.json
   canic deploy promote inspect readiness --request promotion-readiness.json
   canic deploy promote inspect artifact-identity --request promotion-artifacts.json
   canic deploy promote inspect provenance --request promotion-provenance.json
@@ -130,7 +130,7 @@ Examples:
   canic deploy check --profile fast demo
 
 Deployment truth commands are read-only checks. Plan-mediated mutation flows
-through `canic deploy install --plan <file>` or the legacy `canic install`
+through `canic deploy install <deployment> --plan <file>` or the legacy `canic install`
 entrypoint. Authority commands are dry-run reconciliation reports and do not
 mutate controller state.";
 const DEPLOY_COMPARE_HELP_AFTER: &str = "\
@@ -263,8 +263,8 @@ verification-check evidence; only deployment-truth inventory verification can
 mark external lifecycle work verified complete.";
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
-  canic deploy install --plan promoted-plan.json
-  canic --network local deploy install --plan promoted-plan.json --profile fast
+  canic deploy install demo-local --plan promoted-plan.json
+  canic --network local deploy install demo-local --plan promoted-plan.json --profile fast
 
 Installs through the current install runner using a supplied DeploymentPlanV1
 or ArtifactPromotionPlanV1. The deployment-truth/preflight gate runs before
@@ -564,6 +564,7 @@ struct DeployResumeReportOptions {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeployInstallPlanOptions {
+    deployment: String,
     plan: PathBuf,
     network: String,
     profile: Option<CanisterBuildProfile>,
@@ -2206,6 +2207,7 @@ impl DeployInstallPlanOptions {
         let matches = parse_matches(deploy_install_command(), args)
             .map_err(|_| DeployCommandError::Usage(deploy_install_usage()))?;
         Ok(Self {
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
             plan: path_option(&matches, "plan").expect("clap requires plan"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
             profile: string_option(&matches, "profile")
@@ -2225,6 +2227,7 @@ impl DeployInstallPlanOptions {
             root_canister: root_canister_for_plan(&plan.deployment_plan),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
+            deployment_name: Some(self.deployment),
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
@@ -2466,6 +2469,7 @@ impl DeployTruthOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             network: self.network,
+            deployment_name: None,
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
@@ -2655,7 +2659,12 @@ fn deploy_install_command() -> ClapCommand {
         .bin_name("canic deploy install")
         .about("Install through the current runner using a supplied deployment plan")
         .disable_help_flag(true)
-        .override_usage("canic deploy install --plan <file>")
+        .override_usage("canic deploy install <deployment> --plan <file>")
+        .arg(
+            value_arg("deployment")
+                .required(true)
+                .help("Deployment target name that must match the supplied plan"),
+        )
         .arg(
             value_arg("plan")
                 .long("plan")
@@ -4629,6 +4638,7 @@ mod tests {
             deploy_command(),
             [
                 OsString::from("install"),
+                OsString::from("demo-local"),
                 OsString::from("--plan"),
                 OsString::from("promoted-plan.json"),
             ],
@@ -4640,12 +4650,14 @@ mod tests {
         assert_eq!(
             parsed.1,
             vec![
+                OsString::from("demo-local"),
                 OsString::from("--plan"),
                 OsString::from("promoted-plan.json")
             ]
         );
 
         let options = DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");
+        assert_eq!(options.deployment, "demo-local");
         assert_eq!(options.plan, PathBuf::from("promoted-plan.json"));
     }
 
@@ -5655,6 +5667,7 @@ mod tests {
             artifact_promotion_plan: None,
         };
         let options = DeployInstallPlanOptions {
+            deployment: "demo-local".to_string(),
             plan: PathBuf::from("promoted-plan.json"),
             network: "local".to_string(),
             profile: Some(CanisterBuildProfile::Fast),
@@ -5664,6 +5677,7 @@ mod tests {
         assert_eq!(options.root_canister, "aaaaa-aa");
         assert_eq!(options.root_build_target, "root");
         assert_eq!(options.network, "local");
+        assert_eq!(options.deployment_name.as_deref(), Some("demo-local"));
         assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
         assert_eq!(
             options.config_path.as_deref(),

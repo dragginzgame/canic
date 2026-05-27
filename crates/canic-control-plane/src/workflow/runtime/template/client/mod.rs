@@ -7,7 +7,7 @@ use crate::{
 };
 use candid::{CandidType, utils::ArgumentEncoder};
 use canic_core::{
-    api::ic::call::{CanicInternalClient, ProtectedInternalEndpoint},
+    api::ic::{CanicInternalClient, ProtectedInternalEndpoint},
     control_plane_support::{
         cdk::types::Principal, error::InternalError, ops::ic::call::CallOps, protocol,
     },

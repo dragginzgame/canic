@@ -1,7 +1,7 @@
 /// Runtime wire-level endpoint names used by `canic-core` for inter-canister calls.
 ///
 /// Keep these synchronized with the macro-defined endpoints.
-use crate::{api::ic::call::ProtectedInternalEndpoint, ids::CanisterRole};
+use crate::{api::ic::ProtectedInternalEndpoint, ids::CanisterRole};
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_REQUEST_DELEGATION: &str = "canic_request_delegation";

@@ -12,33 +12,30 @@ present.
 
 ## Unreleased
 
-- Began the 0.46 deployment-target state hard cut: local install state now
+- `canic deploy install` now requires an explicit deployment target argument
+  when installing from a supplied plan, making the target identity visible at
+  the command boundary and rejecting plans whose `deployment_name` does not
+  match that target.
+
+```bash
+canic deploy install demo-local --plan promoted-plan.json
+```
+
+## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.1` begins the deployment-target state hard cut: local install state now
   writes under `.canic/<network>/deployments/<deployment>.json`, deployment
-  truth reads target-named state instead of fleet-template state, old
-  `.canic/<network>/fleets/*.json` live state fails closed with explicit
-  recovery guidance, and supplied install plans must match the exact deployment
-  identity.
+  truth reads target-named state instead of fleet-template state, legacy
+  `.canic/<network>/fleets/*.json` live state fails closed, supplied install
+  plans require exact deployment identity, and `canic deploy register` provides
+  the explicit minimal recovery path for known roots. It also refreshes the
+  first-install guide, improves missing `canic::finish!()` guidance, and keeps
+  first-install execution preflight from blocking on absent prior root
+  authority observation.
 
 ```bash
 canic deploy register demo-local --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai
 ```
-
-- Added `canic deploy register` as the explicit 0.46 recovery path for known
-  live roots. It writes only minimal deployment-target state, marks the root
-  `not_verified`, and does not migrate fleet state, query live inventory, copy
-  receipts, record artifact/controller truth, install code, or mutate
-  canisters.
-- Added first-install documentation for a minimal managed fleet, including the
-  root/child lifecycle shape, subnet-scoped `canic.toml`, package-role mapping,
-  managed-fleet test path, Candid surface expectations, and common install
-  troubleshooting.
-- Made the missing `canic::finish!()` compiler marker more actionable so the
-  unresolved symbol tells canister authors to add `canic::finish!()` after all
-  endpoints.
-- Fixed current-install execution preflight so a fresh local fleet install is
-  not blocked merely because no prior local root authority observation exists.
-
-## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
 - `0.46.0` starts passive multi-deployment comparison with
   `DeploymentComparisonReportV1`, a `canic deploy compare` operator command,
@@ -1101,7 +1098,7 @@ See detailed breakdown:
 - `0.28.4` pushes still-valid delegated-auth proofs to newly created verifier canisters, so tokens issued before a topology change keep working on the new verifier.
 - `0.28.3` removes obsolete delegated-auth signer-proof and admin verifier-prewarm flows now that signer lifecycle prewarm uses canonical root issuance.
 - `0.28.2` adds focused lifecycle-gap regression coverage for verifier proof-cache loss, moves the reinstall/upgrade mechanics into the test harness, and fixes the reconcile root harness so staged releases match configured initial shards.
-- `0.28.1` forces delegated signer lifecycle prewarm to refresh verifier fanout even when the signer already has a reusable proof, aligns init/post-upgrade readiness on the same auth bootstrap flow, makes root own verifier fanout derivation, success, and root-local proof caching, and adds a signed-off delegated-auth lifecycle design note: [docs/design/0.28-delegated-auth-lifecycle/0.28-design.md](docs/design/0.28-delegated-auth-lifecycle/0.28-design.md).
+- `0.28.1` forces delegated signer lifecycle prewarm to refresh verifier fanout even when the signer already has a reusable proof, aligns init/post-upgrade readiness on the same auth bootstrap flow, makes root own verifier fanout derivation, success, and root-local proof caching, and adds a signed-off delegated-auth lifecycle design note: [docs/design/archive/0.28-delegated-auth-lifecycle/0.28-design.md](docs/design/archive/0.28-delegated-auth-lifecycle/0.28-design.md).
 - `0.28.0` hard-cuts delegated auth onto `DelegationAudience` and required shard public keys, so stale-audience token refresh and verifier proof installation use explicit, non-optional auth material.
 
 ```rust

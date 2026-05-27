@@ -387,6 +387,7 @@ kind = "singleton"
             root_canister: "root".to_string(),
             root_build_target: "root".to_string(),
             network: "local".to_string(),
+            deployment_name: None,
             icp_root: Some(root.clone()),
             build_profile: Some(CanisterBuildProfile::Fast),
             ready_timeout_seconds: 30,
@@ -468,6 +469,7 @@ kind = "singleton"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -512,6 +514,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -546,6 +549,7 @@ fn install_truth_check_rejects_supplied_plan_network_mismatch() {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -567,6 +571,41 @@ fn install_truth_check_rejects_supplied_plan_network_mismatch() {
     .expect_err("network mismatch should fail");
 
     assert!(err.to_string().contains("deployment plan network mismatch"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
+    let (root, mut check) =
+        demo_install_deployment_truth_check("canic-install-truth-plan-target-mismatch");
+    check.plan.deployment_identity.deployment_name = "prod".to_string();
+    let config_path = root.join("fleets/demo/canic.toml");
+    let options = InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        deployment_name: None,
+        icp_root: Some(root.clone()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+        deployment_plan_override: Some(check.plan),
+        artifact_promotion_plan_override: None,
+    };
+
+    let err = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-05-22T00:00:00Z".to_string(),
+    )
+    .expect_err("deployment target mismatch should fail");
+
+    assert!(err.to_string().contains("deployment plan target mismatch"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -605,6 +644,7 @@ fn install_writes_artifact_promotion_execution_receipt_for_promotion_plan() {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -678,6 +718,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -747,6 +788,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -851,6 +893,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -934,6 +977,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -999,6 +1043,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -1089,6 +1134,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -1719,6 +1765,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -1799,6 +1846,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
@@ -2530,6 +2578,7 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
+        deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,

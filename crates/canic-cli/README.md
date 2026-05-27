@@ -90,12 +90,13 @@ The selected install config must include a fleet identity:
 name = "test"
 ```
 
-Successful installs write `.canic/<network>/fleets/<fleet>.json` with the root
-target, resolved root principal, build target, config path, and staging
-manifest path. `canic config <name>` shows the selected fleet declaration,
-including opt-in role features such as auth, sharding, and scaling,
-while `canic info list <name>` queries the deployed root registry for that
-fleet.
+Successful installs write
+`.canic/<network>/deployments/<deployment>.json` with the deployment name, fleet
+template, root target, resolved root principal, build target, config path, root
+verification state, and staging manifest path. `canic config <name>` shows the
+selected fleet declaration, including opt-in role features such as auth,
+sharding, and scaling, while `canic info list <name>` queries the deployed root
+registry for that target.
 Commands use network `local` unless you pass
 `--network <name>`.
 
@@ -115,7 +116,7 @@ List saved fleet configs:
 ```bash
 canic fleet list
 canic fleet delete demo
-canic fleet list --network ic
+canic --network ic fleet list
 ```
 
 Create a new root-plus-app fleet:
@@ -234,20 +235,18 @@ guarded runner.
 Preview the maintained runner path without calling `icp`:
 
 ```bash
-canic restore run \
+canic --network local restore run \
   1 \
   --dry-run \
-  --network local \
   --out restore-run-dry-run.json
 ```
 
 Execute a cautious one-step batch:
 
 ```bash
-canic restore run \
+canic --network local restore run \
   1 \
   --execute \
-  --network local \
   --max-steps 1 \
   --out restore-run.json \
   --require-no-attention

@@ -23,7 +23,7 @@ Detailed change breakdowns belong in:
 
 `docs/changelog/<major>.<minor>.md`
 
-For example: [docs/changelog/0.33.md](docs/changelog/0.33.md)
+For example: [docs/changelog/0.33.md](../changelog/0.33.md)
 
 Every finalized patch entry must have both views:
 
@@ -77,7 +77,7 @@ shape changes, and operational nuance.
   and outputs.
 
 All patch releases in the same minor line share one detailed notes file.
-Example: `0.33.0`, `0.33.1`, and `0.33.2` all map to [docs/changelog/0.33.md](docs/changelog/0.33.md).
+Example: `0.33.0`, `0.33.1`, and `0.33.2` all map to [docs/changelog/0.33.md](../changelog/0.33.md).
 
 Within a detailed minor notes file, patch sections must also be ordered chronologically newest first.
 
