@@ -31,7 +31,7 @@ pub(super) fn write_create_report(report: &BackupCreateReport) {
 
 fn render_create_report(report: &BackupCreateReport) -> String {
     let rows = [[
-        report.fleet.clone(),
+        report.deployment.clone(),
         report.network.clone(),
         report.mode.clone(),
         report.layout.clone(),
@@ -44,7 +44,7 @@ fn render_create_report(report: &BackupCreateReport) -> String {
     ]];
     render_table(
         &[
-            "FLEET",
+            "DEPLOYMENT",
             "NETWORK",
             "MODE",
             "LAYOUT",
@@ -156,7 +156,7 @@ fn render_prune_report(report: &BackupPruneReport) -> String {
 fn render_inspect_report(report: &BackupInspectReport) -> String {
     let summary_rows = [[
         report.layout_status.clone(),
-        report.fleet.clone(),
+        report.deployment.clone(),
         report.network.clone(),
         report.scope.clone(),
         report.targets.len().to_string(),
@@ -202,7 +202,7 @@ fn render_inspect_report(report: &BackupInspectReport) -> String {
         render_table(
             &[
                 "STATUS",
-                "FLEET",
+                "DEPLOYMENT",
                 "NETWORK",
                 "SCOPE",
                 "TARGETS",
@@ -261,7 +261,7 @@ mod tests {
     #[test]
     fn render_backup_create_report_shows_layout_source() {
         let report = BackupCreateReport {
-            fleet: "demo".to_string(),
+            deployment: "demo".to_string(),
             network: "local".to_string(),
             out: PathBuf::from("backups/demo"),
             plan_id: "plan-demo".to_string(),
@@ -269,7 +269,7 @@ mod tests {
             mode: "dry-run".to_string(),
             layout: "existing".to_string(),
             status: "planned".to_string(),
-            scope: "fleet".to_string(),
+            scope: "non-root-deployment".to_string(),
             targets: 2,
             operations: 3,
             executed_operations: 0,
@@ -277,6 +277,8 @@ mod tests {
 
         let text = render_create_report(&report);
 
+        assert!(text.contains("DEPLOYMENT"));
+        assert!(!text.contains("FLEET"));
         assert!(text.contains("LAYOUT"));
         assert!(text.contains("existing"));
     }
@@ -285,7 +287,7 @@ mod tests {
     #[test]
     fn render_backup_list_formats_unix_created_at() {
         let entries = vec![BackupListEntry {
-            dir: PathBuf::from("backups/fleet-demo-20240507-140000"),
+            dir: PathBuf::from("backups/deployment-demo-20240507-140000"),
             backup_id: "backup".to_string(),
             created_at: "unix:1715090400".to_string(),
             members: 7,
@@ -303,13 +305,37 @@ mod tests {
     // Ensure backup inspect text includes summary, target, and operation sections.
     #[test]
     fn render_backup_inspect_report_shows_layout_sections() {
-        let report = BackupInspectReport {
+        let report = inspect_report();
+
+        let rendered = render_inspect_report(&report);
+
+        assert!(rendered.contains("DEPLOYMENT"));
+        assert!(!rendered.contains("FLEET"));
+        assert!(rendered.contains("Plan: plan-test"));
+        assert!(rendered.contains("Targets"));
+        assert!(rendered.contains("Operations"));
+        assert!(rendered.contains("child"));
+        assert!(rendered.contains("MODULE_HASH"));
+        assert!(rendered.contains("hash-test"));
+    }
+
+    // Ensure backup inspect JSON exposes deployment identity, not stale fleet identity.
+    #[test]
+    fn backup_inspect_report_json_uses_deployment_identity_field() {
+        let value = serde_json::to_value(inspect_report()).expect("serialize inspect report");
+
+        assert_eq!(value["deployment"], "demo");
+        assert!(value.get("fleet").is_none());
+    }
+
+    fn inspect_report() -> BackupInspectReport {
+        BackupInspectReport {
             layout_status: "dry-run".to_string(),
             plan_id: "plan-test".to_string(),
             run_id: "run-test".to_string(),
-            fleet: "demo".to_string(),
+            deployment: "demo".to_string(),
             network: "local".to_string(),
-            scope: "fleet".to_string(),
+            scope: "non-root-deployment".to_string(),
             targets: vec![BackupInspectTarget {
                 role: "child".to_string(),
                 canister_id: "aaaaa-aa".to_string(),
@@ -341,15 +367,6 @@ mod tests {
                 skipped_operations: 0,
                 next_operation: None,
             },
-        };
-
-        let rendered = render_inspect_report(&report);
-
-        assert!(rendered.contains("Plan: plan-test"));
-        assert!(rendered.contains("Targets"));
-        assert!(rendered.contains("Operations"));
-        assert!(rendered.contains("child"));
-        assert!(rendered.contains("MODULE_HASH"));
-        assert!(rendered.contains("hash-test"));
+        }
     }
 }

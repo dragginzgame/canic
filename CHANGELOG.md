@@ -12,6 +12,13 @@ present.
 
 ## Unreleased
 
+- Tightens backup create/status/inspect as deployment-target surfaces:
+  `canic backup create` now uses deployment identity internally, defaults new
+  backup directories to `backups/deployment-...`, renders `DEPLOYMENT` in
+  create/inspect tables, serializes dry-run status and inspect JSON with
+  `deployment`, and maps the legacy lower-level backup plan `fleet` field only
+  at the CLI boundary.
+
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
 
 - `0.46.11` tightens live operator surfaces as installed-deployment surfaces:

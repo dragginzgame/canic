@@ -123,6 +123,11 @@ inspect only the files needed for the current task.
   deployment targets, not fleets. Live list/metrics/cycles text output renders
   `Deployment:`, config-only output keeps `Fleet template:`, and metrics/cycle
   reports serialize `deployment` instead of `fleet`.
+- Backup create/status/inspect now keep the CLI boundary deployment-target
+  shaped: create options use `deployment`, default output directories use
+  `backups/deployment-...`, create/inspect tables render `DEPLOYMENT`, dry-run
+  status and inspect JSON serialize `deployment`, and the lower-level backup
+  plan `fleet` field is mapped only at the CLI boundary.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

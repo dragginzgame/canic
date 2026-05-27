@@ -25,7 +25,7 @@ pub(super) const fn execution_is_complete(execution: &BackupExecutionResumeSumma
 
 pub(super) fn backup_scope_label(plan: &BackupPlan) -> String {
     match plan.selected_scope_kind {
-        BackupScopeKind::NonRootFleet => "non-root-fleet".to_string(),
+        BackupScopeKind::NonRootFleet => "non-root-deployment".to_string(),
         BackupScopeKind::Subtree => plan
             .selected_subtree_root
             .as_ref()

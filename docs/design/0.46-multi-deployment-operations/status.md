@@ -93,6 +93,11 @@ fleet-named install state is refused as deployment truth.
   `canic backup create` so installed-deployment help, usage, text output, and
   live-query JSON no longer expose deployed-fleet wording. Config inspection
   remains fleet-template-facing.
+- Tightened backup create/status/inspect reporting around deployment-target
+  identity: default create output directories now use
+  `backups/deployment-...`, create/inspect text tables render `DEPLOYMENT`,
+  and dry-run status plus inspect JSON serialize `deployment` instead of
+  exposing stale `fleet` fields from the lower-level backup plan model.
 
 ## Not Implemented Yet
 

@@ -32,7 +32,7 @@ pub(super) fn backup_inspect(
         layout_status: execution_layout_status(&journal, layout.manifest_path().is_file()),
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
-        fleet: plan.fleet.clone(),
+        deployment: plan.fleet.clone(),
         network: plan.network.clone(),
         scope: backup_scope_label(&plan),
         targets: plan.targets.iter().map(inspect_target).collect(),

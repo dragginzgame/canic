@@ -19,7 +19,7 @@ const BACKUP_REF: &str = "backup-ref";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct BackupCreateOptions {
-    pub(super) fleet: String,
+    pub(super) deployment: String,
     pub(super) subtree: Option<String>,
     pub(super) out: Option<PathBuf>,
     pub(super) dry_run: bool,
@@ -35,7 +35,7 @@ impl BackupCreateOptions {
         let matches = parse_backup_options(backup_create_command(), create_usage, args)?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
             subtree: string_option(&matches, "subtree"),
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
@@ -51,7 +51,7 @@ pub(super) fn backup_create_command() -> ClapCommand {
         .about("Create a topology-aware deployment backup")
         .disable_help_flag(true)
         .arg(
-            value_arg("fleet")
+            value_arg("deployment")
                 .value_name("deployment")
                 .required(true)
                 .help("Installed deployment target name to back up"),
@@ -63,10 +63,9 @@ pub(super) fn backup_create_command() -> ClapCommand {
                 .help("Plan only one connected subtree"),
         )
         .arg(
-            value_arg("out")
-                .long("out")
-                .value_name("dir")
-                .help("Backup output directory; defaults to backups/fleet-<name>-YYYYMMDD-HHMMSS"),
+            value_arg("out").long("out").value_name("dir").help(
+                "Backup output directory; defaults to backups/deployment-<name>-YYYYMMDD-HHMMSS",
+            ),
         )
         .arg(
             flag_arg("dry-run")

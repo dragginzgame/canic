@@ -40,6 +40,8 @@ fn backup_create_usage_uses_deployment_target_wording() {
     assert!(text.contains("Usage: canic backup create [OPTIONS] <deployment>"));
     assert!(text.contains("Create a topology-aware deployment backup"));
     assert!(text.contains("Installed deployment target name to back up"));
+    assert!(text.contains("backups/deployment-<name>-YYYYMMDD-HHMMSS"));
+    assert!(!text.contains("backups/fleet-<name>"));
     assert!(!text.contains("Installed fleet"));
 }
 
@@ -72,7 +74,7 @@ fn parses_backup_create_options() {
     ])
     .expect("parse options");
 
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.deployment, "demo");
     assert_eq!(options.subtree, Some("app".to_string()));
     assert_eq!(options.out, Some(PathBuf::from("backups/plan")));
     assert!(options.dry_run);
@@ -553,9 +555,9 @@ fn backup_inspect_rejects_manifest_layout_missing_execution_journal() {
 #[test]
 fn backup_list_reads_backup_directories() {
     let root = temp_dir("canic-cli-backup-list");
-    let first = root.join("fleet-demo-20260507-120000");
-    let second = root.join("fleet-demo-20260507-130000");
-    let planned = root.join("fleet-demo-20260511-001234");
+    let first = root.join("deployment-demo-20260507-120000");
+    let second = root.join("deployment-demo-20260507-130000");
+    let planned = root.join("deployment-demo-20260511-001234");
     let ignored = root.join("not-a-backup");
 
     BackupLayout::new(first)
@@ -601,10 +603,10 @@ fn backup_list_reads_backup_directories() {
 #[test]
 fn backup_list_reports_execution_backed_manifest_status() {
     let root = temp_dir("canic-cli-backup-list-execution-status");
-    let running = root.join("fleet-demo-20260507-140000");
-    let complete = root.join("fleet-demo-20260507-150000");
-    let invalid = root.join("fleet-demo-20260507-160000");
-    let missing_journal = root.join("fleet-demo-20260507-170000");
+    let running = root.join("deployment-demo-20260507-140000");
+    let complete = root.join("deployment-demo-20260507-150000");
+    let invalid = root.join("deployment-demo-20260507-160000");
+    let missing_journal = root.join("deployment-demo-20260507-170000");
     let checksum = write_artifact(&complete, b"root artifact");
 
     write_manifest_plan_journal(&running, accepted_execution_journal());
@@ -653,8 +655,8 @@ fn backup_list_reports_execution_backed_manifest_status() {
 #[test]
 fn backup_reference_resolves_rows_and_backup_ids() {
     let root = temp_dir("canic-cli-backup-reference");
-    let first = root.join("fleet-demo-20260507-120000");
-    let second = root.join("fleet-demo-20260507-130000");
+    let first = root.join("deployment-demo-20260507-120000");
+    let second = root.join("deployment-demo-20260507-130000");
 
     BackupLayout::new(first.clone())
         .write_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
@@ -680,8 +682,8 @@ fn backup_reference_resolves_rows_and_backup_ids() {
 #[test]
 fn backup_reference_rejects_ambiguous_backup_ids() {
     let root = temp_dir("canic-cli-backup-reference-ambiguous");
-    let first = root.join("fleet-demo-20260507-120000");
-    let second = root.join("fleet-demo-20260507-130000");
+    let first = root.join("deployment-demo-20260507-120000");
+    let second = root.join("deployment-demo-20260507-130000");
 
     BackupLayout::new(first)
         .write_manifest(&valid_manifest_with("backup-same", "2026-05-07T12:00:00Z"))
@@ -703,7 +705,7 @@ fn backup_reference_rejects_ambiguous_backup_ids() {
 #[test]
 fn backup_list_uses_execution_journal_timestamp_for_planned_layouts() {
     let root = temp_dir("canic-cli-backup-list-created-at-journal");
-    let planned = root.join("fleet-demo-20260511-001234");
+    let planned = root.join("deployment-demo-20260511-001234");
     let mut plan = valid_backup_plan();
     plan.plan_id = "plan-demo-20260511-001234".to_string();
     plan.run_id = "run-demo-20260511-001234".to_string();
@@ -728,8 +730,8 @@ fn backup_list_uses_execution_journal_timestamp_for_planned_layouts() {
 #[test]
 fn backup_prune_removes_failed_layouts() {
     let root = temp_dir("canic-cli-backup-prune-failed");
-    let failed = root.join("fleet-demo-20260511-001234");
-    let complete = root.join("fleet-demo-20260511-010000");
+    let failed = root.join("deployment-demo-20260511-001234");
+    let complete = root.join("deployment-demo-20260511-010000");
     let failed_layout = BackupLayout::new(failed.clone());
     let mut journal = accepted_execution_journal();
     fail_execution_operation(&mut journal, 4, "simulated failure");
@@ -776,9 +778,9 @@ fn backup_prune_removes_failed_layouts() {
 #[test]
 fn backup_prune_keep_removes_older_entries() {
     let root = temp_dir("canic-cli-backup-prune-keep");
-    let newest = root.join("fleet-demo-20260511-020000");
-    let middle = root.join("fleet-demo-20260511-010000");
-    let oldest = root.join("fleet-demo-20260511-000000");
+    let newest = root.join("deployment-demo-20260511-020000");
+    let middle = root.join("deployment-demo-20260511-010000");
+    let oldest = root.join("deployment-demo-20260511-000000");
     BackupLayout::new(newest.clone())
         .write_manifest(&valid_manifest_with("backup-newest", "unix:1778464800"))
         .expect("write newest manifest");
@@ -860,7 +862,7 @@ fn require_complete_rejects_dry_run_status() {
         layout_status: "dry-run".to_string(),
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
-        fleet: plan.fleet.clone(),
+        deployment: plan.fleet.clone(),
         network: plan.network.clone(),
         targets: plan.targets.len(),
         operations: plan.phases.len(),
@@ -876,6 +878,29 @@ fn require_complete_rejects_dry_run_status() {
         err,
         BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
     ));
+}
+
+// Ensure dry-run status JSON exposes deployment identity, not stale fleet identity.
+#[test]
+fn backup_dry_run_status_json_uses_deployment_identity_field() {
+    let plan = valid_backup_plan();
+    let report = BackupDryRunStatusReport {
+        layout_status: "dry-run".to_string(),
+        plan_id: plan.plan_id.clone(),
+        run_id: plan.run_id.clone(),
+        deployment: plan.fleet.clone(),
+        network: plan.network.clone(),
+        targets: plan.targets.len(),
+        operations: plan.phases.len(),
+        execution: BackupExecutionJournal::from_plan(&plan)
+            .expect("execution journal")
+            .resume_summary(),
+    };
+
+    let value = serde_json::to_value(&report).expect("serialize status report");
+
+    assert_eq!(value["deployment"], "demo");
+    assert!(value.get("fleet").is_none());
 }
 
 // Ensure verification rejects dry-run plans with a backup-specific error.

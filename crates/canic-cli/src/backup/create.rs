@@ -41,7 +41,7 @@ pub(super) fn backup_create(
         .map_err(|err| BackupCommandError::InstallState(err.to_string()))?;
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
-            deployment: options.fleet.clone(),
+            deployment: options.deployment.clone(),
             network: options.network.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
@@ -51,12 +51,12 @@ pub(super) fn backup_create(
     .map_err(backup_installed_deployment_error)?;
     let registry = backup_registry_entries(&installed.registry.entries);
     let topology_hash = registry_topology_hash(&registry)?;
-    let plan_id = backup_plan_id(&options.fleet);
+    let plan_id = backup_plan_id(&options.deployment);
     let run_id = plan_id.replace("plan-", "run-");
     let out = options
         .out
         .clone()
-        .unwrap_or_else(|| default_backup_output_path(&options.fleet));
+        .unwrap_or_else(|| default_backup_output_path(&options.deployment));
     let selected_canister_id = options
         .subtree
         .as_deref()
@@ -70,7 +70,7 @@ pub(super) fn backup_create(
     let planned = build_backup_plan(BackupPlanBuildInput {
         plan_id,
         run_id,
-        fleet: options.fleet.clone(),
+        fleet: options.deployment.clone(),
         network: options.network.clone(),
         root_canister_id: installed.state.root_canister_id,
         selected_canister_id,
@@ -109,7 +109,7 @@ pub(super) fn backup_create(
     };
 
     Ok(BackupCreateReport {
-        fleet: plan.fleet.clone(),
+        deployment: plan.fleet.clone(),
         network: plan.network.clone(),
         out,
         plan_id: plan.plan_id.clone(),
@@ -188,7 +188,7 @@ fn ensure_resume_plan_compatible(
     existing: &BackupPlan,
     requested: &BackupPlan,
 ) -> Result<(), BackupCommandError> {
-    compare_resume_field("fleet", &existing.fleet, &requested.fleet)?;
+    compare_resume_field("deployment", &existing.fleet, &requested.fleet)?;
     compare_resume_field("network", &existing.network, &requested.network)?;
     compare_resume_field(
         "root_canister_id",
@@ -598,18 +598,41 @@ fn registry_topology_hash(registry: &[BackupRegistryEntry]) -> Result<String, Ba
     Ok(TopologyHasher::hash(&records).hash)
 }
 
-fn backup_plan_id(fleet: &str) -> String {
+fn backup_plan_id(deployment: &str) -> String {
     format!(
         "plan-{}-{}",
-        file_safe_component(fleet),
+        file_safe_component(deployment),
         current_backup_directory_stamp()
     )
 }
 
-fn default_backup_output_path(fleet: &str) -> PathBuf {
+fn default_backup_output_path(deployment: &str) -> PathBuf {
     PathBuf::from("backups").join(format!(
-        "fleet-{}-{}",
-        file_safe_component(fleet),
+        "deployment-{}-{}",
+        file_safe_component(deployment),
         current_backup_directory_stamp()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ensure generated backup layout paths use deployment-target naming.
+    #[test]
+    fn default_backup_output_path_uses_deployment_prefix() {
+        let path = default_backup_output_path("demo local");
+        let rendered = path.display().to_string();
+
+        assert!(rendered.starts_with("backups/deployment-demo-local-"));
+        assert!(!rendered.contains("fleet-demo"));
+    }
+
+    // Ensure generated plan ids are derived from the deployment target.
+    #[test]
+    fn backup_plan_id_uses_deployment_target() {
+        let plan_id = backup_plan_id("demo local");
+
+        assert!(plan_id.starts_with("plan-demo-local-"));
+    }
 }
