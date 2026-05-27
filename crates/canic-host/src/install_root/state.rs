@@ -25,7 +25,8 @@ pub struct InstallState {
     pub schema_version: u32,
     pub deployment_name: String,
     pub fleet_template: String,
-    pub installed_at_unix_secs: u64,
+    pub created_at_unix_secs: u64,
+    pub updated_at_unix_secs: u64,
     pub network: String,
     pub root_target: String,
     pub root_canister_id: String,
@@ -135,7 +136,7 @@ fn reject_legacy_fleet_state(
     let path = legacy_fleet_install_state_path(icp_root, network, deployment);
     if path.exists() {
         return Err(format!(
-            "legacy fleet install state found: {}\n\nCanic 0.46 stores live deployment state by deployment target, not fleet template.\nCreate explicit deployment state with:\n  canic deploy register {deployment} --fleet-template {deployment} --root <principal>\n\nOr reinstall the deployment with a 0.46 install path that writes deployment-target state:\n  canic install {deployment}\n\nIf the old state is obsolete, remove:\n  {}",
+            "legacy fleet install state found: {}\n\nCanic 0.46 stores live deployment state by deployment target, not fleet template.\nCreate explicit deployment state with:\n  canic deploy register {deployment} --fleet-template {deployment} --root <principal> --allow-unverified\n\nOr reinstall the deployment with a 0.46 install path that writes deployment-target state:\n  canic install {deployment}\n\nIf the old state is obsolete, remove:\n  {}",
             path.display(),
             path.display()
         )

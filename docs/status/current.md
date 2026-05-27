@@ -60,15 +60,20 @@ inspect only the files needed for the current task.
   `canic-host::installed_deployment`, and deployment-target state that still
   contains the stale duplicate field fails closed instead of being accepted as
   current state.
+- Deployment-target state now records `created_at_unix_secs` and
+  `updated_at_unix_secs`; stale state containing the pre-cut
+  `installed_at_unix_secs` field fails closed instead of being accepted as
+  current state.
 - Local deployment plan and inventory collection now resolve root identity from
   deployment-target state using `deployment_name`, not the configured fleet
   template name. `canic deploy install <deployment> --plan <file>` validation
   now requires the supplied plan deployment identity to match the explicit
   install target exactly rather than accepting a fleet-template fallback.
 - `canic deploy register <deployment> --fleet-template <fleet> --root
-  <principal>` now writes minimal deployment-target state for explicit operator
-  recovery. Registered roots are marked `not_verified`; plan generation does
-  not use them as trusted root authority until verification evidence is
+  <principal> --allow-unverified` now writes minimal deployment-target state
+  for explicit operator recovery. The `--allow-unverified` acknowledgement is
+  required because registered roots are marked `not_verified`; plan generation
+  does not use them as trusted root authority until verification evidence is
   recorded.
 - 0.46 has started with passive `DeploymentComparisonReportV1` comparison over
   two existing `DeploymentCheckV1` artifacts. It binds check/plan/inventory

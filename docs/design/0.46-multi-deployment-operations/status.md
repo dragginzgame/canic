@@ -1,6 +1,6 @@
 # 0.46 Status: Multi-Deployment Operations
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Purpose
 
@@ -16,10 +16,9 @@ In progress.
 multiple deployment targets can be compared and operated without conflating
 template identity with live deployment identity.
 
-The next required correction is the deployment-target local state hard cut:
-fleet templates remain reusable topology inputs, deployments become the only
-live target state, and old fleet-named install state must not be used as
-deployment truth.
+The deployment-target local state hard cut is underway: fleet templates remain
+reusable topology inputs, deployments are the only live target state, and old
+fleet-named install state is refused as deployment truth.
 
 ## Implemented
 
@@ -44,19 +43,27 @@ deployment truth.
   artifacts, emits `DeploymentComparisonReportV1` JSON by default or passive
   text with `--format text`, and does not query live state or mutate
   deployments.
+- Moved local install state to
+  `.canic/<network>/deployments/<deployment>.json`; persisted state now records
+  `deployment_name`, `fleet_template`, `created_at_unix_secs`,
+  `updated_at_unix_secs`, and `root_verification`.
+- Deployment truth now reads deployment-target state by deployment name, and
+  supplied-plan install requires exact deployment identity instead of accepting
+  a fleet-template fallback.
+- Legacy `.canic/<network>/fleets/<fleet>.json` state is rejected with explicit
+  recovery guidance instead of being projected into deployment truth.
+- Added `canic deploy register <deployment> --fleet-template <fleet> --root
+  <principal> --allow-unverified` as the explicit operator recovery path for
+  known live roots. Registration writes minimal state only, marks the root
+  `not_verified`, and cannot make the root trusted deployment authority.
+- Stale deployment-target state that still contains the old duplicate `fleet`
+  field or pre-cut `installed_at_unix_secs` timestamp field fails closed.
 
 ## Not Implemented Yet
 
-- Deployment-target local state under
-  `.canic/<network>/deployments/<deployment>.json`.
-- Exact deployment target identity enforcement for supplied-plan install.
-- Old `.canic/<network>/fleets/<fleet>.json` state refusal with recovery
-  guidance.
-- Explicit operator deployment registration, such as
-  `canic deploy register <deployment> --fleet-template <fleet> --root
-  <principal>`, with minimal state and root verification status.
 - Passive comparison beyond the current two-check artifact command.
 - Live inventory crawling for comparison inputs.
+- Verified-root registration that can write `root_verification = "verified"`.
 
 ## Drift Log
 

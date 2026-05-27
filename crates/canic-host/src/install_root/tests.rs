@@ -2335,7 +2335,8 @@ fn install_state_rejects_stale_duplicate_fleet_field() {
             "fleet": "demo",
             "deployment_name": "demo-local",
             "fleet_template": "demo",
-            "installed_at_unix_secs": 42,
+            "created_at_unix_secs": 42,
+            "updated_at_unix_secs": 42,
             "network": "local",
             "root_target": "root",
             "root_canister_id": "uxrrr-q7777-77774-qaaaq-cai",
@@ -2363,6 +2364,44 @@ fn install_state_rejects_stale_duplicate_fleet_field() {
 }
 
 #[test]
+fn install_state_rejects_stale_installed_timestamp_field() {
+    let root = temp_dir("canic-install-state-stale-installed-at");
+    let path = deployment_install_state_path(&root, "local", "demo-local");
+    fs::create_dir_all(path.parent().expect("state parent")).expect("create state dir");
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&json!({
+            "schema_version": INSTALL_STATE_SCHEMA_VERSION,
+            "deployment_name": "demo-local",
+            "fleet_template": "demo",
+            "installed_at_unix_secs": 42,
+            "network": "local",
+            "root_target": "root",
+            "root_canister_id": "uxrrr-q7777-77774-qaaaq-cai",
+            "root_verification": "verified",
+            "root_build_target": "root",
+            "workspace_root": root.display().to_string(),
+            "icp_root": root.display().to_string(),
+            "config_path": root.join("fleets/demo/canic.toml").display().to_string(),
+            "release_set_manifest_path": root
+                .join(".icp/local/canisters/root/root.release-set.json")
+                .display()
+                .to_string()
+        }))
+        .expect("encode stale state"),
+    )
+    .expect("write stale state");
+
+    let err = read_deployment_install_state(&root, "local", "demo-local")
+        .expect_err("stale installed timestamp field must fail closed");
+    let message = err.to_string();
+
+    assert!(message.contains("unknown field `installed_at_unix_secs`"));
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn deploy_register_writes_minimal_unverified_deployment_state() {
     let root = temp_dir("canic-register-state");
     let path = register_deployment_state(RegisterDeploymentStateOptions {
@@ -2370,6 +2409,7 @@ fn deploy_register_writes_minimal_unverified_deployment_state() {
         fleet_template: "demo".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
         network: "local".to_string(),
+        allow_unverified: true,
         icp_root: Some(root.clone()),
         workspace_root: Some(root.clone()),
     })
@@ -2383,9 +2423,31 @@ fn deploy_register_writes_minimal_unverified_deployment_state() {
     assert_eq!(state.fleet_template, "demo");
     assert_eq!(state.root_canister_id, "uxrrr-q7777-77774-qaaaq-cai");
     assert_eq!(state.root_verification, RootVerificationStatus::NotVerified);
+    assert_eq!(state.created_at_unix_secs, state.updated_at_unix_secs);
     assert!(state.config_path.ends_with("fleets/demo/canic.toml"));
 
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn deploy_register_requires_explicit_unverified_acknowledgement() {
+    let root = temp_dir("canic-register-state-requires-ack");
+    let err = register_deployment_state(RegisterDeploymentStateOptions {
+        deployment_name: "demo-local".to_string(),
+        fleet_template: "demo".to_string(),
+        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
+        network: "local".to_string(),
+        allow_unverified: false,
+        icp_root: Some(root.clone()),
+        workspace_root: Some(root.clone()),
+    })
+    .expect_err("registration without acknowledgement must fail");
+
+    assert!(err.to_string().contains("--allow-unverified"));
+
+    if root.exists() {
+        fs::remove_dir_all(root).expect("clean temp dir");
+    }
 }
 
 #[test]
@@ -2417,6 +2479,7 @@ kind = "root"
         fleet_template: "demo".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
         network: "local".to_string(),
+        allow_unverified: true,
         icp_root: Some(icp_root.clone()),
         workspace_root: Some(workspace_root.clone()),
     })
@@ -2592,9 +2655,9 @@ fn legacy_fleet_state_is_rejected_as_deployment_truth() {
     let message = err.to_string();
 
     assert!(message.contains("legacy fleet install state found"));
-    assert!(
-        message.contains("canic deploy register demo --fleet-template demo --root <principal>")
-    );
+    assert!(message.contains(
+        "canic deploy register demo --fleet-template demo --root <principal> --allow-unverified"
+    ));
     assert!(message.contains(".canic/local/fleets/demo.json"));
 
     fs::remove_dir_all(root).expect("clean temp dir");
@@ -2605,7 +2668,8 @@ fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: deployment_name.to_string(),
         fleet_template: fleet_template.to_string(),
-        installed_at_unix_secs: 42,
+        created_at_unix_secs: 42,
+        updated_at_unix_secs: 42,
         network: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),

@@ -104,6 +104,7 @@ pub struct RegisterDeploymentStateOptions {
     pub fleet_template: String,
     pub root_canister_id: String,
     pub network: String,
+    pub allow_unverified: bool,
     pub icp_root: Option<PathBuf>,
     pub workspace_root: Option<PathBuf>,
 }
@@ -277,6 +278,12 @@ pub fn register_deployment_state(
     validate_state_name(&options.deployment_name)?;
     validate_state_name(&options.fleet_template)?;
     validate_network_name(&options.network)?;
+    if !options.allow_unverified {
+        return Err(
+            "deployment registration requires explicit unverified-root acknowledgement; pass --allow-unverified"
+                .into(),
+        );
+    }
     Principal::from_text(&options.root_canister_id).map_err(|err| {
         format!(
             "invalid root principal for deployment {}: {err}",
@@ -301,11 +308,13 @@ pub fn register_deployment_state(
     let release_set_manifest_path =
         crate::release_set::root_release_set_manifest_path(&artifact_root)
             .unwrap_or_else(|_| artifact_root.join("root").join("root.release-set.json"));
+    let timestamp = current_unix_secs()?;
     let state = InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: options.deployment_name,
         fleet_template: options.fleet_template.clone(),
-        installed_at_unix_secs: current_unix_secs()?,
+        created_at_unix_secs: timestamp,
+        updated_at_unix_secs: timestamp,
         network: options.network.clone(),
         root_target: options.root_canister_id.clone(),
         root_canister_id: options.root_canister_id,
@@ -2353,11 +2362,13 @@ fn build_install_state(
     root_canister_id: &str,
 ) -> Result<InstallState, Box<dyn std::error::Error>> {
     let (deployment_name, fleet_name) = identity;
+    let timestamp = current_unix_secs()?;
     Ok(InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: deployment_name.to_string(),
         fleet_template: fleet_name.to_string(),
-        installed_at_unix_secs: current_unix_secs()?,
+        created_at_unix_secs: timestamp,
+        updated_at_unix_secs: timestamp,
         network: options.network.clone(),
         root_target: options.root_canister.clone(),
         root_canister_id: root_canister_id.to_string(),

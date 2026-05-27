@@ -81,7 +81,7 @@ use canic_host::{
         install_root, latest_deployment_truth_receipt_path_from_root, register_deployment_state,
     },
 };
-use clap::Command as ClapCommand;
+use clap::{ArgAction, Command as ClapCommand};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::{
@@ -98,7 +98,7 @@ const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
   canic deploy inventory demo
-  canic deploy register demo --fleet-template demo --root aaaaa-aa
+  canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
   canic deploy compare --left staging-check.json --right prod-check.json
   canic deploy diff demo
   canic deploy report demo
@@ -142,14 +142,16 @@ Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
 state, install code, or mutate deployments.";
 const DEPLOY_REGISTER_HELP_AFTER: &str = "\
 Examples:
-  canic deploy register demo --fleet-template demo --root aaaaa-aa
-  canic --network local deploy register demo --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai
+  canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
+  canic --network local deploy register demo --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai --allow-unverified
 
 Registers minimal deployment-target local state for an existing root canister.
 This is an explicit 0.46 hard-cut recovery path. It does not migrate legacy
 fleet state, query live inventory, copy receipts, record artifact/controller
 truth, install code, or mutate canisters. Registered roots are marked
-not_verified until a later verification path records live evidence.";
+not_verified until a later verification path records live evidence. The
+--allow-unverified flag is required so unverified registration remains an
+explicit operator acknowledgement.";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
@@ -579,6 +581,7 @@ struct DeployRegisterOptions {
     fleet_template: String,
     root: String,
     network: String,
+    allow_unverified: bool,
 }
 
 ///
@@ -2253,6 +2256,7 @@ impl DeployRegisterOptions {
                 .expect("clap requires fleet-template"),
             root: string_option(&matches, "root").expect("clap requires root"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
+            allow_unverified: matches.get_flag("allow-unverified"),
         })
     }
 
@@ -2265,6 +2269,7 @@ impl DeployRegisterOptions {
             fleet_template: self.fleet_template,
             root_canister_id: self.root,
             network: self.network,
+            allow_unverified: self.allow_unverified,
             icp_root,
             workspace_root: None,
         }
@@ -2689,7 +2694,7 @@ fn deploy_register_command() -> ClapCommand {
         .about("Register minimal deployment-target state")
         .disable_help_flag(true)
         .override_usage(
-            "canic deploy register <deployment> --fleet-template <fleet> --root <principal>",
+            "canic deploy register <deployment> --fleet-template <fleet> --root <principal> --allow-unverified",
         )
         .arg(
             value_arg("deployment")
@@ -2709,6 +2714,13 @@ fn deploy_register_command() -> ClapCommand {
                 .value_name("principal")
                 .required(true)
                 .help("Existing root canister principal for this deployment"),
+        )
+        .arg(
+            clap::Arg::new("allow-unverified")
+                .long("allow-unverified")
+                .action(ArgAction::SetTrue)
+                .required(true)
+                .help("Acknowledge that the registered root is not live-verified"),
         )
         .arg(internal_network_arg())
         .after_help(DEPLOY_REGISTER_HELP_AFTER)
@@ -4672,6 +4684,7 @@ mod tests {
                 OsString::from("demo"),
                 OsString::from("--root"),
                 OsString::from("uxrrr-q7777-77774-qaaaq-cai"),
+                OsString::from("--allow-unverified"),
             ],
         )
         .expect("parse deploy register")
@@ -4683,6 +4696,7 @@ mod tests {
         assert_eq!(options.deployment, "demo-local");
         assert_eq!(options.fleet_template, "demo");
         assert_eq!(options.root, "uxrrr-q7777-77774-qaaaq-cai");
+        assert!(options.allow_unverified);
     }
 
     #[test]
@@ -4692,6 +4706,7 @@ mod tests {
             fleet_template: "demo".to_string(),
             root: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
             network: "local".to_string(),
+            allow_unverified: true,
         }
         .into_register_options(Some(PathBuf::from("/tmp/icp")));
 
@@ -4699,8 +4714,23 @@ mod tests {
         assert_eq!(options.fleet_template, "demo");
         assert_eq!(options.root_canister_id, "uxrrr-q7777-77774-qaaaq-cai");
         assert_eq!(options.network, "local");
+        assert!(options.allow_unverified);
         assert_eq!(options.icp_root, Some(PathBuf::from("/tmp/icp")));
         assert_eq!(options.workspace_root, None);
+    }
+
+    #[test]
+    fn deploy_register_requires_unverified_acknowledgement_flag() {
+        let err = DeployRegisterOptions::parse([
+            OsString::from("demo-local"),
+            OsString::from("--fleet-template"),
+            OsString::from("demo"),
+            OsString::from("--root"),
+            OsString::from("uxrrr-q7777-77774-qaaaq-cai"),
+        ])
+        .expect_err("register without acknowledgement should fail usage");
+
+        assert!(matches!(err, DeployCommandError::Usage(_)));
     }
 
     #[test]
