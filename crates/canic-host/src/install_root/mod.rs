@@ -376,6 +376,8 @@ pub fn verify_registered_deployment_root(
                     options.deployment_name
                 )
             })?;
+    let state_fleet_template = state.fleet_template.clone();
+    let state_root_canister_id = state.root_canister_id.clone();
     let local_state_digest_before = file_sha256_hex(&state_path)?;
     let previous_root_verification = deployment_root_verification_state(&state.root_verification);
     let report =
@@ -403,22 +405,20 @@ pub fn verify_registered_deployment_root(
         .into());
     }
 
-    let mut verified_state = state.clone();
-    verified_state.root_verification = RootVerificationStatus::Verified;
-    verified_state.updated_at_unix_secs = verified_at_unix_secs;
-    let local_state_digest_after = write_verified_root_state_if_unchanged(
-        &icp_root,
-        &options.network,
-        &verified_state,
-        &local_state_digest_before,
-    )?;
-    let state_transition = match previous_root_verification {
+    let state_transition = verified_root_state_transition(previous_root_verification);
+    let local_state_digest_after = match previous_root_verification {
         DeploymentRootVerificationStateV1::NotVerified => {
-            DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified
+            let mut verified_state = state;
+            verified_state.root_verification = RootVerificationStatus::Verified;
+            verified_state.updated_at_unix_secs = verified_at_unix_secs;
+            write_verified_root_state_if_unchanged(
+                &icp_root,
+                &options.network,
+                &verified_state,
+                &local_state_digest_before,
+            )?
         }
-        DeploymentRootVerificationStateV1::Verified => {
-            DeploymentRootVerificationStateTransitionV1::NoStateChange
-        }
+        DeploymentRootVerificationStateV1::Verified => file_sha256_hex(&state_path)?,
     };
 
     let mut receipt = DeploymentRootVerificationReceiptV1 {
@@ -430,8 +430,8 @@ pub fn verify_registered_deployment_root(
         receipt_digest: String::new(),
         deployment_name: options.deployment_name,
         network: options.network,
-        fleet_template: state.fleet_template,
-        root_principal: state.root_canister_id,
+        fleet_template: state_fleet_template,
+        root_principal: state_root_canister_id,
         previous_root_verification,
         new_root_verification: DeploymentRootVerificationStateV1::Verified,
         state_transition,
@@ -2535,6 +2535,19 @@ const fn deployment_root_verification_state(
     match status {
         RootVerificationStatus::Verified => DeploymentRootVerificationStateV1::Verified,
         RootVerificationStatus::NotVerified => DeploymentRootVerificationStateV1::NotVerified,
+    }
+}
+
+const fn verified_root_state_transition(
+    previous: DeploymentRootVerificationStateV1,
+) -> DeploymentRootVerificationStateTransitionV1 {
+    match previous {
+        DeploymentRootVerificationStateV1::NotVerified => {
+            DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified
+        }
+        DeploymentRootVerificationStateV1::Verified => {
+            DeploymentRootVerificationStateTransitionV1::NoStateChange
+        }
     }
 }
 

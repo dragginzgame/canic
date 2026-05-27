@@ -2650,6 +2650,103 @@ fn verify_registered_deployment_root_promotes_unverified_state() {
 }
 
 #[test]
+fn verify_registered_deployment_root_reverifies_same_root_without_state_write() {
+    let (root, mut check) = demo_unverified_registered_root_check("canic-root-verify-reverify");
+    let mut verified_state = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read state")
+        .expect("state exists");
+    verified_state.root_verification = RootVerificationStatus::Verified;
+    verified_state.updated_at_unix_secs = 100;
+    write_install_state(&root, "local", &verified_state).expect("write verified state");
+    check.report.hard_failures.clear();
+    check.report.status = SafetyStatusV1::Safe;
+    let state_before = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read before")
+        .expect("state before");
+
+    let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        deployment_check: check,
+        verified_at_unix_secs: Some(200),
+        icp_root: Some(root.clone()),
+    })
+    .expect("reverify registered root");
+    let state_after = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read after")
+        .expect("state after");
+
+    assert_eq!(
+        state_after.root_verification,
+        RootVerificationStatus::Verified
+    );
+    assert_eq!(
+        state_after.updated_at_unix_secs,
+        state_before.updated_at_unix_secs
+    );
+    assert_eq!(
+        receipt.state_transition,
+        crate::deployment_truth::DeploymentRootVerificationStateTransitionV1::NoStateChange
+    );
+    assert_eq!(receipt.verified_at_unix_secs, 200);
+    assert_eq!(
+        receipt.local_state_digest_before,
+        receipt.local_state_digest_after
+    );
+    assert!(validate_deployment_root_verification_receipt(&receipt).is_ok());
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn verify_registered_deployment_root_rejects_verified_root_replacement() {
+    let (root, mut check) = demo_unverified_registered_root_check("canic-root-verify-replace");
+    let mut verified_state = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read state")
+        .expect("state exists");
+    verified_state.root_verification = RootVerificationStatus::Verified;
+    verified_state.updated_at_unix_secs = 100;
+    write_install_state(&root, "local", &verified_state).expect("write verified state");
+    check.report.hard_failures.clear();
+    check.report.status = SafetyStatusV1::Safe;
+    let observed_root = check
+        .inventory
+        .observed_root
+        .as_mut()
+        .expect("observed root");
+    observed_root.root_principal = "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string();
+    observed_root.observed_canister_id = "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string();
+
+    let err = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+        deployment_name: "demo-local".to_string(),
+        network: "local".to_string(),
+        deployment_check: check,
+        verified_at_unix_secs: Some(200),
+        icp_root: Some(root.clone()),
+    })
+    .expect_err("root replacement must fail");
+    let state_after = read_deployment_install_state(&root, "local", "demo-local")
+        .expect("read after")
+        .expect("state after");
+
+    assert!(
+        err.to_string()
+            .contains("deployment root verification failed")
+    );
+    assert_eq!(
+        state_after.root_canister_id,
+        verified_state.root_canister_id
+    );
+    assert_eq!(
+        state_after.root_verification,
+        RootVerificationStatus::Verified
+    );
+    assert_eq!(state_after.updated_at_unix_secs, 100);
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
     let (root, mut check) = demo_unverified_registered_root_check("canic-root-verify-local-only");
     let observed_root = check
@@ -2678,6 +2775,26 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
     assert_eq!(state.root_verification, RootVerificationStatus::NotVerified);
 
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn verified_root_state_writes_stay_on_explicit_install_or_verify_paths() {
+    let source = include_str!("mod.rs");
+
+    assert_eq!(
+        source
+            .matches("root_verification: RootVerificationStatus::Verified")
+            .count(),
+        1,
+        "only install-created state may initialize verified root state"
+    );
+    assert_eq!(
+        source
+            .matches("root_verification = RootVerificationStatus::Verified")
+            .count(),
+        1,
+        "only explicit root verification may promote existing registered state"
+    );
 }
 
 #[test]

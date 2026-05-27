@@ -12,17 +12,20 @@ present.
 
 ## Unreleased
 
-- 0.47 continues verified deployment registration by adding the receipt-backed
-  local-state transition for registered roots whose deployment-truth evidence
-  is satisfied.
-
-```bash
-canic deploy root verify demo-local --from-check deployment-check.json
-```
+- 0.47 hardens verified deployment registration by making same-root
+  re-verification a receipt-emitting no-op state transition and adding source
+  guards around verified root-state writes and root-replacement attempts.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.1` adds the explicit receipt-backed state transition for registered
+  deployment roots whose deployment-truth evidence is satisfied.
+
+```bash
+canic deploy root verify demo-local --from-check deployment-check.json
+```
 
 - `0.47.0` starts verified deployment registration with explicit
   deployment-root observation evidence, passive root-verification reports, and

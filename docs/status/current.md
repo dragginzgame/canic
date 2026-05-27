@@ -71,7 +71,9 @@ inspect only the files needed for the current task.
   validates a `DeploymentCheckV1` with explicit root evidence, writes
   `root_verification = verified` only after a state-digest compare-and-swap
   check, and emits a `DeploymentRootVerificationReceiptV1`. The command does
-  not install code or mutate IC/controller state.
+  not install code or mutate IC/controller state. Re-verifying an already
+  verified same root emits a `NoStateChange` receipt without rewriting local
+  state, and verified root replacement remains blocked.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing
