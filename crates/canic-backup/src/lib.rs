@@ -1,4 +1,4 @@
-//! Host-side fleet backup and restore primitives for Canic.
+//! Host-side deployment backup and restore primitives for Canic.
 //!
 //! This crate intentionally keeps backup-run provenance and restore contracts
 //! outside canister runtime state. Root registry storage, topology cascade DTOs,

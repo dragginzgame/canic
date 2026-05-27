@@ -4,8 +4,8 @@ use canic_backup::{
     execution::{BackupExecutionJournal, BackupExecutionOperationReceipt},
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
-        FleetSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
+        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+        DeploymentSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
         VerificationCheck, VerificationPlan,
     },
     plan::BackupOperationKind,
@@ -1050,13 +1050,13 @@ fn verify_backup_reads_layout_and_artifacts() {
 }
 
 // Build one valid manifest for CLI verification tests.
-fn valid_manifest() -> FleetBackupManifest {
+fn valid_manifest() -> DeploymentBackupManifest {
     valid_manifest_with("backup-test", "2026-05-03T00:00:00Z")
 }
 
 // Build one valid manifest with caller-provided summary fields.
-fn valid_manifest_with(backup_id: &str, created_at: &str) -> FleetBackupManifest {
-    FleetBackupManifest {
+fn valid_manifest_with(backup_id: &str, created_at: &str) -> DeploymentBackupManifest {
+    DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: backup_id.to_string(),
         created_at: created_at.to_string(),
@@ -1070,26 +1070,26 @@ fn valid_manifest_with(backup_id: &str, created_at: &str) -> FleetBackupManifest
         },
         consistency: ConsistencySection {
             backup_units: vec![BackupUnit {
-                unit_id: "fleet".to_string(),
+                unit_id: "deployment".to_string(),
                 kind: BackupUnitKind::Single,
                 roles: vec!["root".to_string()],
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
             discovery_topology_hash: HASH.to_string(),
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
-            members: vec![fleet_member()],
+            members: vec![deployment_member()],
         },
         verification: VerificationPlan::default(),
     }
 }
 
 // Build one valid manifest member.
-fn fleet_member() -> FleetMember {
-    FleetMember {
+fn deployment_member() -> DeploymentMember {
+    DeploymentMember {
         role: "root".to_string(),
         canister_id: ROOT.to_string(),
         parent_canister_id: None,

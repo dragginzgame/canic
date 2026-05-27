@@ -58,11 +58,11 @@ fn topology_record(
     target: &SnapshotTarget,
 ) -> Result<TopologyRecord, SnapshotManifestError> {
     Ok(TopologyRecord {
-        pid: parse_principal("fleet.members[].canister_id", &target.canister_id)?,
+        pid: parse_principal("deployment.members[].canister_id", &target.canister_id)?,
         parent_pid: target
             .parent_canister_id
             .as_deref()
-            .map(|parent| parse_principal("fleet.members[].parent_canister_id", parent))
+            .map(|parent| parse_principal("deployment.members[].parent_canister_id", parent))
             .transpose()?,
         role: target_role(selected_canister, index, target),
         module_hash: target.module_hash.clone(),

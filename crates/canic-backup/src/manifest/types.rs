@@ -1,18 +1,18 @@
 use serde::{Deserialize, Serialize};
 
 ///
-/// FleetBackupManifest
+/// DeploymentBackupManifest
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FleetBackupManifest {
+pub struct DeploymentBackupManifest {
     pub manifest_version: u16,
     pub backup_id: String,
     pub created_at: String,
     pub tool: ToolMetadata,
     pub source: SourceMetadata,
     pub consistency: ConsistencySection,
-    pub fleet: FleetSection,
+    pub deployment: DeploymentSection,
     pub verification: VerificationPlan,
 }
 
@@ -68,25 +68,25 @@ pub enum BackupUnitKind {
 }
 
 ///
-/// FleetSection
+/// DeploymentSection
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FleetSection {
+pub struct DeploymentSection {
     pub topology_hash_algorithm: String,
     pub topology_hash_input: String,
     pub discovery_topology_hash: String,
     pub pre_snapshot_topology_hash: String,
     pub topology_hash: String,
-    pub members: Vec<FleetMember>,
+    pub members: Vec<DeploymentMember>,
 }
 
 ///
-/// FleetMember
+/// DeploymentMember
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FleetMember {
+pub struct DeploymentMember {
     pub role: String,
     pub canister_id: String,
     pub parent_canister_id: Option<String>,
@@ -129,7 +129,7 @@ pub struct SourceSnapshot {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct VerificationPlan {
-    pub fleet_checks: Vec<VerificationCheck>,
+    pub deployment_checks: Vec<VerificationCheck>,
     pub member_checks: Vec<MemberVerificationChecks>,
 }
 

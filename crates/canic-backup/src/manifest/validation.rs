@@ -1,7 +1,7 @@
 use super::{
-    BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember, FleetSection,
-    ManifestValidationError, MemberVerificationChecks, SourceMetadata, SourceSnapshot,
-    ToolMetadata, VerificationCheck, VerificationPlan,
+    BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+    DeploymentSection, ManifestValidationError, MemberVerificationChecks, SourceMetadata,
+    SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
 };
 use candid::Principal;
 use std::{
@@ -12,7 +12,7 @@ use std::{
 const SUPPORTED_MANIFEST_VERSION: u16 = 1;
 const SHA256_ALGORITHM: &str = "sha256";
 
-impl FleetBackupManifest {
+impl DeploymentBackupManifest {
     /// Validate the manifest-level contract before backup finalization or restore planning.
     pub fn validate(&self) -> Result<(), ManifestValidationError> {
         validate_manifest_version(self.manifest_version)?;
@@ -21,10 +21,10 @@ impl FleetBackupManifest {
         self.tool.validate()?;
         self.source.validate()?;
         self.consistency.validate()?;
-        self.fleet.validate()?;
+        self.deployment.validate()?;
         self.verification.validate()?;
-        validate_consistency_against_fleet(&self.consistency, &self.fleet)?;
-        validate_verification_against_fleet(&self.verification, &self.fleet)?;
+        validate_consistency_against_deployment(&self.consistency, &self.deployment)?;
+        validate_verification_against_deployment(&self.verification, &self.deployment)?;
         Ok(())
     }
 }
@@ -89,10 +89,10 @@ impl BackupUnit {
     }
 }
 
-impl FleetSection {
+impl DeploymentSection {
     pub(crate) fn validate(&self) -> Result<(), ManifestValidationError> {
         validate_nonempty(
-            "fleet.topology_hash_algorithm",
+            "deployment.topology_hash_algorithm",
             &self.topology_hash_algorithm,
         )?;
         if self.topology_hash_algorithm != SHA256_ALGORITHM {
@@ -101,16 +101,16 @@ impl FleetSection {
             ));
         }
 
-        validate_nonempty("fleet.topology_hash_input", &self.topology_hash_input)?;
+        validate_nonempty("deployment.topology_hash_input", &self.topology_hash_input)?;
         validate_hash(
-            "fleet.discovery_topology_hash",
+            "deployment.discovery_topology_hash",
             &self.discovery_topology_hash,
         )?;
         validate_hash(
-            "fleet.pre_snapshot_topology_hash",
+            "deployment.pre_snapshot_topology_hash",
             &self.pre_snapshot_topology_hash,
         )?;
-        validate_hash("fleet.topology_hash", &self.topology_hash)?;
+        validate_hash("deployment.topology_hash", &self.topology_hash)?;
 
         if self.discovery_topology_hash != self.pre_snapshot_topology_hash {
             return Err(ManifestValidationError::TopologyHashMismatch {
@@ -127,7 +127,9 @@ impl FleetSection {
         }
 
         if self.members.is_empty() {
-            return Err(ManifestValidationError::EmptyCollection("fleet.members"));
+            return Err(ManifestValidationError::EmptyCollection(
+                "deployment.members",
+            ));
         }
 
         let mut canister_ids = BTreeSet::new();
@@ -144,20 +146,20 @@ impl FleetSection {
     }
 }
 
-impl FleetMember {
+impl DeploymentMember {
     fn validate(&self) -> Result<(), ManifestValidationError> {
-        validate_nonempty("fleet.members[].role", &self.role)?;
-        validate_principal("fleet.members[].canister_id", &self.canister_id)?;
+        validate_nonempty("deployment.members[].role", &self.role)?;
+        validate_principal("deployment.members[].canister_id", &self.canister_id)?;
         validate_optional_principal(
-            "fleet.members[].parent_canister_id",
+            "deployment.members[].parent_canister_id",
             self.parent_canister_id.as_deref(),
         )?;
         validate_optional_principal(
-            "fleet.members[].subnet_canister_id",
+            "deployment.members[].subnet_canister_id",
             self.subnet_canister_id.as_deref(),
         )?;
         validate_optional_principal(
-            "fleet.members[].controller_hint",
+            "deployment.members[].controller_hint",
             self.controller_hint.as_deref(),
         )?;
 
@@ -178,23 +180,23 @@ impl FleetMember {
 impl SourceSnapshot {
     fn validate(&self) -> Result<(), ManifestValidationError> {
         validate_nonempty(
-            "fleet.members[].source_snapshot.snapshot_id",
+            "deployment.members[].source_snapshot.snapshot_id",
             &self.snapshot_id,
         )?;
         validate_optional_nonempty(
-            "fleet.members[].source_snapshot.module_hash",
+            "deployment.members[].source_snapshot.module_hash",
             self.module_hash.as_deref(),
         )?;
         validate_optional_nonempty(
-            "fleet.members[].source_snapshot.code_version",
+            "deployment.members[].source_snapshot.code_version",
             self.code_version.as_deref(),
         )?;
         validate_nonempty(
-            "fleet.members[].source_snapshot.artifact_path",
+            "deployment.members[].source_snapshot.artifact_path",
             &self.artifact_path,
         )?;
         validate_nonempty(
-            "fleet.members[].source_snapshot.checksum_algorithm",
+            "deployment.members[].source_snapshot.checksum_algorithm",
             &self.checksum_algorithm,
         )?;
         if self.checksum_algorithm != SHA256_ALGORITHM {
@@ -203,7 +205,7 @@ impl SourceSnapshot {
             ));
         }
         validate_optional_hash(
-            "fleet.members[].source_snapshot.checksum",
+            "deployment.members[].source_snapshot.checksum",
             self.checksum.as_deref(),
         )?;
         Ok(())
@@ -212,7 +214,7 @@ impl SourceSnapshot {
 
 impl VerificationPlan {
     fn validate(&self) -> Result<(), ManifestValidationError> {
-        for check in &self.fleet_checks {
+        for check in &self.deployment_checks {
             check.validate()?;
         }
         for member in &self.member_checks {
@@ -258,11 +260,11 @@ impl VerificationCheck {
     }
 }
 
-fn validate_consistency_against_fleet(
+fn validate_consistency_against_deployment(
     consistency: &ConsistencySection,
-    fleet: &FleetSection,
+    deployment: &DeploymentSection,
 ) -> Result<(), ManifestValidationError> {
-    let fleet_roles = fleet
+    let deployment_roles = deployment
         .members
         .iter()
         .map(|member| member.role.as_str())
@@ -271,7 +273,7 @@ fn validate_consistency_against_fleet(
 
     for unit in &consistency.backup_units {
         for role in &unit.roles {
-            if !fleet_roles.contains(role.as_str()) {
+            if !deployment_roles.contains(role.as_str()) {
                 return Err(ManifestValidationError::UnknownBackupUnitRole {
                     unit_id: unit.unit_id.clone(),
                     role: role.clone(),
@@ -280,10 +282,10 @@ fn validate_consistency_against_fleet(
             covered_roles.insert(role.as_str());
         }
 
-        validate_backup_unit_topology(unit, fleet)?;
+        validate_backup_unit_topology(unit, deployment)?;
     }
 
-    for role in &fleet_roles {
+    for role in &deployment_roles {
         if !covered_roles.contains(role) {
             return Err(ManifestValidationError::BackupUnitCoverageMissingRole {
                 role: (*role).to_string(),
@@ -294,29 +296,29 @@ fn validate_consistency_against_fleet(
     Ok(())
 }
 
-fn validate_verification_against_fleet(
+fn validate_verification_against_deployment(
     verification: &VerificationPlan,
-    fleet: &FleetSection,
+    deployment: &DeploymentSection,
 ) -> Result<(), ManifestValidationError> {
-    let fleet_roles = fleet
+    let deployment_roles = deployment
         .members
         .iter()
         .map(|member| member.role.as_str())
         .collect::<BTreeSet<_>>();
 
-    for check in &verification.fleet_checks {
-        validate_verification_check_roles(check, &fleet_roles)?;
+    for check in &verification.deployment_checks {
+        validate_verification_check_roles(check, &deployment_roles)?;
     }
 
-    for member in &fleet.members {
+    for member in &deployment.members {
         for check in &member.verification_checks {
-            validate_verification_check_roles(check, &fleet_roles)?;
+            validate_verification_check_roles(check, &deployment_roles)?;
         }
     }
 
     let mut member_check_roles = BTreeSet::new();
     for member in &verification.member_checks {
-        if !fleet_roles.contains(member.role.as_str()) {
+        if !deployment_roles.contains(member.role.as_str()) {
             return Err(ManifestValidationError::UnknownVerificationRole {
                 role: member.role.clone(),
             });
@@ -327,7 +329,7 @@ fn validate_verification_against_fleet(
             ));
         }
         for check in &member.checks {
-            validate_verification_check_roles(check, &fleet_roles)?;
+            validate_verification_check_roles(check, &deployment_roles)?;
         }
     }
 
@@ -336,10 +338,10 @@ fn validate_verification_against_fleet(
 
 fn validate_verification_check_roles(
     check: &VerificationCheck,
-    fleet_roles: &BTreeSet<&str>,
+    deployment_roles: &BTreeSet<&str>,
 ) -> Result<(), ManifestValidationError> {
     for role in &check.roles {
-        if !fleet_roles.contains(role.as_str()) {
+        if !deployment_roles.contains(role.as_str()) {
             return Err(ManifestValidationError::UnknownVerificationRole { role: role.clone() });
         }
     }
@@ -349,36 +351,36 @@ fn validate_verification_check_roles(
 
 fn validate_backup_unit_topology(
     unit: &BackupUnit,
-    fleet: &FleetSection,
+    deployment: &DeploymentSection,
 ) -> Result<(), ManifestValidationError> {
     match &unit.kind {
-        BackupUnitKind::Subtree => validate_subtree_unit(unit, fleet),
+        BackupUnitKind::Subtree => validate_subtree_unit(unit, deployment),
         BackupUnitKind::Single => Ok(()),
     }
 }
 
 fn validate_subtree_unit(
     unit: &BackupUnit,
-    fleet: &FleetSection,
+    deployment: &DeploymentSection,
 ) -> Result<(), ManifestValidationError> {
     let unit_roles = unit
         .roles
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    let members_by_id = fleet
+    let members_by_id = deployment
         .members
         .iter()
         .map(|member| (member.canister_id.as_str(), member))
         .collect::<BTreeMap<_, _>>();
-    let unit_member_ids = fleet
+    let unit_member_ids = deployment
         .members
         .iter()
         .filter(|member| unit_roles.contains(member.role.as_str()))
         .map(|member| member.canister_id.as_str())
         .collect::<BTreeSet<_>>();
 
-    let root_count = fleet
+    let root_count = deployment
         .members
         .iter()
         .filter(|member| unit_member_ids.contains(member.canister_id.as_str()))
@@ -395,7 +397,7 @@ fn validate_subtree_unit(
         });
     }
 
-    for member in &fleet.members {
+    for member in &deployment.members {
         if unit_member_ids.contains(member.canister_id.as_str()) {
             continue;
         }
@@ -415,8 +417,8 @@ fn validate_subtree_unit(
 }
 
 fn first_unit_ancestor<'a>(
-    member: &'a FleetMember,
-    members_by_id: &BTreeMap<&'a str, &'a FleetMember>,
+    member: &'a DeploymentMember,
+    members_by_id: &BTreeMap<&'a str, &'a DeploymentMember>,
     unit_member_ids: &BTreeSet<&'a str>,
 ) -> Option<&'a str> {
     let mut visited = BTreeSet::new();

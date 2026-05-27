@@ -12,8 +12,8 @@ use canic_backup::{
     artifacts::ArtifactChecksum,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
-        FleetSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
+        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+        DeploymentSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
         VerificationCheck, VerificationPlan,
     },
     persistence::BackupLayout,
@@ -154,8 +154,8 @@ fn ready_apply_journal() -> RestoreApplyJournal {
 }
 
 // Build one valid manifest for restore planning tests.
-fn valid_manifest() -> FleetBackupManifest {
-    FleetBackupManifest {
+fn valid_manifest() -> DeploymentBackupManifest {
+    DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: "backup-test".to_string(),
         created_at: "2026-05-03T00:00:00Z".to_string(),
@@ -169,20 +169,20 @@ fn valid_manifest() -> FleetBackupManifest {
         },
         consistency: ConsistencySection {
             backup_units: vec![BackupUnit {
-                unit_id: "fleet".to_string(),
+                unit_id: "deployment".to_string(),
                 kind: BackupUnitKind::Subtree,
                 roles: vec!["root".to_string(), "app".to_string()],
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
             discovery_topology_hash: HASH.to_string(),
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
             members: vec![
-                fleet_member("root", ROOT, None, IdentityMode::Fixed),
-                fleet_member("app", CHILD, Some(ROOT), IdentityMode::Relocatable),
+                deployment_member("root", ROOT, None, IdentityMode::Fixed),
+                deployment_member("app", CHILD, Some(ROOT), IdentityMode::Relocatable),
             ],
         },
         verification: VerificationPlan::default(),
@@ -190,9 +190,9 @@ fn valid_manifest() -> FleetBackupManifest {
 }
 
 // Build one manifest whose restore readiness metadata is complete.
-fn restore_ready_manifest() -> FleetBackupManifest {
+fn restore_ready_manifest() -> DeploymentBackupManifest {
     let mut manifest = valid_manifest();
-    for member in &mut manifest.fleet.members {
+    for member in &mut manifest.deployment.members {
         member.source_snapshot.module_hash = Some(HASH.to_string());
         member.source_snapshot.checksum = Some(HASH.to_string());
     }
@@ -200,13 +200,13 @@ fn restore_ready_manifest() -> FleetBackupManifest {
 }
 
 // Build one valid manifest member.
-fn fleet_member(
+fn deployment_member(
     role: &str,
     canister_id: &str,
     parent_canister_id: Option<&str>,
     identity_mode: IdentityMode,
-) -> FleetMember {
-    FleetMember {
+) -> DeploymentMember {
+    DeploymentMember {
         role: role.to_string(),
         canister_id: canister_id.to_string(),
         parent_canister_id: parent_canister_id.map(str::to_string),
@@ -229,11 +229,11 @@ fn fleet_member(
 }
 
 // Write a canonical backup layout whose journal checksums match the artifacts.
-fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &FleetBackupManifest) {
+fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &DeploymentBackupManifest) {
     layout.write_manifest(manifest).expect("write manifest");
 
     let artifacts = manifest
-        .fleet
+        .deployment
         .members
         .iter()
         .map(|member| {
@@ -262,8 +262,10 @@ fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &FleetBac
         .write_journal(&DownloadJournal {
             journal_version: 1,
             backup_id: manifest.backup_id.clone(),
-            discovery_topology_hash: Some(manifest.fleet.discovery_topology_hash.clone()),
-            pre_snapshot_topology_hash: Some(manifest.fleet.pre_snapshot_topology_hash.clone()),
+            discovery_topology_hash: Some(manifest.deployment.discovery_topology_hash.clone()),
+            pre_snapshot_topology_hash: Some(
+                manifest.deployment.pre_snapshot_topology_hash.clone(),
+            ),
             operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
             artifacts,
         })
@@ -271,8 +273,8 @@ fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &FleetBac
 }
 
 // Write artifact bytes and update the manifest checksums for apply validation.
-fn write_manifest_artifacts(root: &Path, manifest: &mut FleetBackupManifest) {
-    for member in &mut manifest.fleet.members {
+fn write_manifest_artifacts(root: &Path, manifest: &mut DeploymentBackupManifest) {
+    for member in &mut manifest.deployment.members {
         let bytes = format!("{} apply artifact", member.role);
         let artifact_path = root.join(&member.source_snapshot.artifact_path);
         if let Some(parent) = artifact_path.parent() {

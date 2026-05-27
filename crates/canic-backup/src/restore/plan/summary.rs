@@ -2,7 +2,7 @@ use super::{
     RestoreIdentitySummary, RestoreOperationSummary, RestorePlanMember, RestoreReadinessSummary,
     RestoreSnapshotSummary, RestoreVerificationSummary,
 };
-use crate::manifest::{FleetBackupManifest, IdentityMode};
+use crate::manifest::{DeploymentBackupManifest, IdentityMode};
 
 pub(super) fn restore_identity_summary(
     members: &[RestorePlanMember],
@@ -83,10 +83,10 @@ pub(super) fn restore_readiness_summary(
 }
 
 pub(super) fn restore_verification_summary(
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
     members: &[RestorePlanMember],
 ) -> RestoreVerificationSummary {
-    let deployment_checks = manifest.verification.fleet_checks.len();
+    let deployment_checks = manifest.verification.deployment_checks.len();
     let member_check_groups = manifest.verification.member_checks.len();
     let member_checks = members
         .iter()

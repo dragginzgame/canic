@@ -1,6 +1,6 @@
 # canic-backup
 
-Host-side manifest and orchestration primitives for Canic fleet backup and
+Host-side manifest and orchestration primitives for Canic deployment backup and
 restore workflows.
 
 The crate owns the host-side contracts behind the `canic` backup CLI:

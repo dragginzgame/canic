@@ -60,16 +60,16 @@ fn snapshot_manifest_includes_selection_and_artifacts() {
     .expect("snapshot manifest should build");
 
     assert_eq!(manifest.backup_id, "backup-test");
-    assert_eq!(manifest.fleet.members.len(), 2);
+    assert_eq!(manifest.deployment.members.len(), 2);
     assert_eq!(
-        manifest.fleet.members[1]
+        manifest.deployment.members[1]
             .source_snapshot
             .checksum
             .as_deref(),
         Some(HASH)
     );
     assert_eq!(
-        manifest.fleet.members[1]
+        manifest.deployment.members[1]
             .source_snapshot
             .module_hash
             .as_deref(),
@@ -132,14 +132,14 @@ fn download_snapshots_writes_manifest_and_durable_journal() {
     assert_eq!(journal.artifacts[0].state, ArtifactState::Durable);
     assert!(journal.artifacts[0].checksum.is_some());
     assert_eq!(manifest.backup_id, journal.backup_id);
-    assert_eq!(manifest.fleet.members.len(), 1);
-    assert_eq!(manifest.fleet.members[0].canister_id, ROOT);
+    assert_eq!(manifest.deployment.members.len(), 1);
+    assert_eq!(manifest.deployment.members[0].canister_id, ROOT);
     assert_eq!(
-        manifest.fleet.members[0].source_snapshot.snapshot_id,
+        manifest.deployment.members[0].source_snapshot.snapshot_id,
         "snapshot-aaaaa-aa"
     );
     assert_eq!(
-        manifest.fleet.members[0]
+        manifest.deployment.members[0]
             .source_snapshot
             .checksum
             .as_deref(),

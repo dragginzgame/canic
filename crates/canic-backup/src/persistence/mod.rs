@@ -12,7 +12,7 @@ use crate::{
     artifacts::ArtifactChecksumError,
     execution::{BackupExecutionJournal, BackupExecutionJournalError},
     journal::DownloadJournal,
-    manifest::{FleetBackupManifest, ManifestValidationError},
+    manifest::{DeploymentBackupManifest, ManifestValidationError},
     plan::{BackupPlan, BackupPlanError},
 };
 use serde::Serialize;
@@ -76,15 +76,18 @@ impl BackupLayout {
     }
 
     /// Write a validated manifest with atomic replace semantics.
-    pub fn write_manifest(&self, manifest: &FleetBackupManifest) -> Result<(), PersistenceError> {
+    pub fn write_manifest(
+        &self,
+        manifest: &DeploymentBackupManifest,
+    ) -> Result<(), PersistenceError> {
         manifest.validate()?;
         write_json_atomic(&self.manifest_path(), manifest)
     }
 
     /// Read and validate a manifest from this backup layout.
-    pub fn read_manifest(&self) -> Result<FleetBackupManifest, PersistenceError> {
+    pub fn read_manifest(&self) -> Result<DeploymentBackupManifest, PersistenceError> {
         let manifest = read_json(&self.manifest_path())?;
-        FleetBackupManifest::validate(&manifest)?;
+        DeploymentBackupManifest::validate(&manifest)?;
         Ok(manifest)
     }
 

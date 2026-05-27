@@ -120,7 +120,7 @@ fn manifest_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupList
         dir,
         backup_id: manifest.backup_id,
         created_at: manifest.created_at,
-        members: manifest.fleet.members.len(),
+        members: manifest.deployment.members.len(),
         status,
     }
 }

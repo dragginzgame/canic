@@ -1,17 +1,17 @@
-use super::{BackupUnitKind, FleetBackupManifest};
+use super::{BackupUnitKind, DeploymentBackupManifest};
 use serde_json::json;
 
 /// Build the manifest validation summary emitted by the CLI.
 #[must_use]
-pub fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json::Value {
+pub fn manifest_validation_summary(manifest: &DeploymentBackupManifest) -> serde_json::Value {
     json!({
         "status": "valid",
         "backup_id": manifest.backup_id,
-        "members": manifest.fleet.members.len(),
+        "members": manifest.deployment.members.len(),
         "backup_unit_count": manifest.consistency.backup_units.len(),
-        "topology_hash": manifest.fleet.topology_hash,
-        "topology_hash_algorithm": manifest.fleet.topology_hash_algorithm,
-        "topology_hash_input": manifest.fleet.topology_hash_input,
+        "topology_hash": manifest.deployment.topology_hash,
+        "topology_hash_algorithm": manifest.deployment.topology_hash_algorithm,
+        "topology_hash_input": manifest.deployment.topology_hash_input,
         "topology_validation_status": "validated",
         "backup_unit_kinds": backup_unit_kind_counts(manifest),
         "backup_units": manifest
@@ -27,7 +27,7 @@ pub fn manifest_validation_summary(manifest: &FleetBackupManifest) -> serde_json
     })
 }
 
-fn backup_unit_kind_counts(manifest: &FleetBackupManifest) -> serde_json::Value {
+fn backup_unit_kind_counts(manifest: &DeploymentBackupManifest) -> serde_json::Value {
     let mut single = 0;
     let mut subtree = 0;
     for unit in &manifest.consistency.backup_units {

@@ -5,17 +5,17 @@ use super::{
 use crate::{
     discovery::SnapshotTarget,
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
-        FleetSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
+        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+        DeploymentSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
         VerificationCheck, VerificationPlan,
     },
 };
 use std::collections::BTreeSet;
 
-/// Build a validated fleet backup manifest for one successful snapshot run.
+/// Build a validated backup manifest for one successful snapshot run.
 pub fn build_snapshot_manifest(
     input: SnapshotManifestInput<'_>,
-) -> Result<FleetBackupManifest, SnapshotManifestError> {
+) -> Result<DeploymentBackupManifest, SnapshotManifestError> {
     let roles = input
         .targets
         .iter()
@@ -25,7 +25,7 @@ pub fn build_snapshot_manifest(
         .into_iter()
         .collect::<Vec<_>>();
 
-    let manifest = FleetBackupManifest {
+    let manifest = DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: input.backup_id,
         created_at: input.created_at,
@@ -48,7 +48,7 @@ pub fn build_snapshot_manifest(
                 roles,
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: input.discovery_topology_hash.algorithm,
             topology_hash_input: input.discovery_topology_hash.input,
             discovery_topology_hash: input.discovery_topology_hash.hash.clone(),
@@ -59,7 +59,7 @@ pub fn build_snapshot_manifest(
                 .iter()
                 .enumerate()
                 .map(|(index, target)| {
-                    fleet_member(
+                    deployment_member(
                         &input.selected_canister,
                         Some(input.root_canister.as_str()).filter(|_| input.include_children),
                         index,
@@ -76,13 +76,13 @@ pub fn build_snapshot_manifest(
     Ok(manifest)
 }
 
-fn fleet_member(
+fn deployment_member(
     selected_canister: &str,
     subnet_canister_id: Option<&str>,
     index: usize,
     target: &SnapshotTarget,
     artifacts: &[SnapshotArtifact],
-) -> Result<FleetMember, SnapshotManifestError> {
+) -> Result<DeploymentMember, SnapshotManifestError> {
     let Some(artifact) = artifacts
         .iter()
         .find(|artifact| artifact.canister_id == target.canister_id)
@@ -93,7 +93,7 @@ fn fleet_member(
     };
     let role = target_role(selected_canister, index, target);
 
-    Ok(FleetMember {
+    Ok(DeploymentMember {
         role: role.clone(),
         canister_id: target.canister_id.clone(),
         parent_canister_id: target.parent_canister_id.clone(),

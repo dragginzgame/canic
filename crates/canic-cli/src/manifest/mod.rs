@@ -4,7 +4,7 @@ use crate::{
     output, version_text,
 };
 use canic_backup::manifest::{
-    FleetBackupManifest, ManifestValidationError, manifest_validation_summary,
+    DeploymentBackupManifest, ManifestValidationError, manifest_validation_summary,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, fs, path::PathBuf};
@@ -101,16 +101,16 @@ where
 /// Read and validate a backup manifest from disk.
 fn validate_manifest(
     options: &ManifestValidateOptions,
-) -> Result<FleetBackupManifest, ManifestCommandError> {
+) -> Result<DeploymentBackupManifest, ManifestCommandError> {
     let data = fs::read_to_string(&options.manifest)?;
-    let manifest: FleetBackupManifest = serde_json::from_str(&data)?;
+    let manifest: DeploymentBackupManifest = serde_json::from_str(&data)?;
     manifest.validate()?;
     Ok(manifest)
 }
 
 fn write_validation_summary(
     options: &ManifestValidateOptions,
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
 ) -> Result<(), ManifestCommandError> {
     let summary = manifest_validation_summary(manifest);
 

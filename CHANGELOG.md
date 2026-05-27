@@ -12,17 +12,22 @@ present.
 
 ## Unreleased
 
-- Renames the snapshot-download membership helpers around deployment targets:
-  the CLI path now validates explicit canister selections with
-  deployment-membership naming instead of stale fleet-selection terminology.
-- Hard-cuts restore apply dry-run and journal operation vocabulary from
-  fleet-level verification to deployment-level verification: restore plan JSON
-  now uses `deployment_verification_checks`, verification summaries use
-  `deployment_checks`, operation counts use `deployment_verifications`, and
-  journal operation kinds serialize as `verify-deployment`; command previews
-  now describe deployment-root verification instead of fleet-root verification.
-
 ## [0.46.x] - 2026-05-26 - Multi-deployment operations
+
+- `0.46.16` hard-cuts the `canic-backup` manifest boundary to deployment
+  vocabulary: public Rust types are now `DeploymentBackupManifest`,
+  `DeploymentSection`, and `DeploymentMember`, manifest JSON now uses
+  `deployment` and `deployment_checks`, and crate metadata/docs plus test-only
+  helpers use deployment backup wording.
+
+- `0.46.15` hard-cuts restore and snapshot internals around deployment-target
+  vocabulary: snapshot download validates explicit canister selections with
+  deployment-membership naming, restore plan JSON now uses
+  `deployment_verification_checks`, restore verification summaries use
+  `deployment_checks`, restore operation counts use
+  `deployment_verifications`, journal operation kinds serialize as
+  `verify-deployment`, and command previews describe deployment-root
+  verification instead of fleet-root verification.
 
 - `0.46.14` cleans remaining backup/restore manifest help around backup
   artifacts: `canic manifest` / `canic manifest validate` now describe backup

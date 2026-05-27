@@ -58,12 +58,12 @@ fn runner_executes_plan_and_finalizes_manifest() {
     );
 }
 
-// Ensure root-omitted fleet backups describe each disconnected branch separately.
+// Ensure root-omitted deployment backups describe each disconnected branch separately.
 #[test]
-fn runner_finalizes_non_root_fleet_plan_as_multiple_backup_units() {
-    let root = temp_dir("canic-backup-runner-non-root-fleet");
+fn runner_finalizes_root_omitted_deployment_plan_as_multiple_backup_units() {
+    let root = temp_dir("canic-backup-runner-root-omitted-deployment");
     let layout = BackupLayout::new(root.clone());
-    let plan = non_root_fleet_plan();
+    let plan = root_omitted_deployment_plan();
     let journal = BackupExecutionJournal::from_plan(&plan).expect("execution journal");
     layout.write_backup_plan(&plan).expect("write plan");
     layout
@@ -482,7 +482,7 @@ fn plan() -> BackupPlan {
     .expect("backup plan")
 }
 
-fn non_root_fleet_plan() -> BackupPlan {
+fn root_omitted_deployment_plan() -> BackupPlan {
     build_backup_plan(BackupPlanBuildInput {
         plan_id: "plan-test".to_string(),
         run_id: "run-test".to_string(),

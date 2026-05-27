@@ -13,9 +13,9 @@ fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
 
-// Ensure discovery projections produce valid manifest fleet sections.
+// Ensure discovery projections produce valid manifest deployment sections.
 #[test]
-fn discovery_projects_to_valid_fleet_section() {
+fn discovery_projects_to_valid_deployment_section() {
     let fleet = DiscoveredFleet {
         topology_records: vec![
             topology_record(ROOT, None, "root"),
@@ -28,10 +28,12 @@ fn discovery_projects_to_valid_fleet_section() {
     };
 
     let section = fleet
-        .into_fleet_section()
+        .into_deployment_section()
         .expect("discovery should project");
 
-    section.validate().expect("fleet section should validate");
+    section
+        .validate()
+        .expect("deployment section should validate");
     assert_eq!(section.discovery_topology_hash, section.topology_hash);
     assert_eq!(section.members.len(), 2);
 }
@@ -48,7 +50,7 @@ fn discovery_rejects_duplicate_canisters() {
     };
 
     let err = fleet
-        .into_fleet_section()
+        .into_deployment_section()
         .expect_err("duplicate canisters should fail");
 
     assert!(matches!(err, DiscoveryError::DuplicateCanisterId(_)));
@@ -65,7 +67,7 @@ fn discovery_requires_verification_checks() {
     };
 
     let err = fleet
-        .into_fleet_section()
+        .into_deployment_section()
         .expect_err("missing verification should fail");
 
     assert!(matches!(err, DiscoveryError::MissingVerificationChecks(_)));

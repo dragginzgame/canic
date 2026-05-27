@@ -6,8 +6,9 @@ use crate::{
     },
     journal::{ArtifactJournalEntry, ArtifactState},
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
-        SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentMember, DeploymentSection,
+        IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
+        VerificationPlan,
     },
     plan::{
         AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
@@ -314,7 +315,7 @@ fn invalid_manifest_is_not_written() {
     let root = temp_dir("canic-backup-invalid-manifest");
     let layout = BackupLayout::new(root.clone());
     let mut manifest = valid_manifest();
-    manifest.fleet.discovery_topology_hash = "bad".to_string();
+    manifest.deployment.discovery_topology_hash = "bad".to_string();
 
     let err = layout
         .write_manifest(&manifest)
@@ -453,7 +454,7 @@ fn integrity_rejects_manifest_journal_checksum_mismatch() {
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
     let mut manifest = valid_manifest();
-    manifest.fleet.members[0].source_snapshot.checksum =
+    manifest.deployment.members[0].source_snapshot.checksum =
         Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
 
     layout.write_manifest(&manifest).expect("write manifest");
@@ -479,7 +480,7 @@ fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
     let mut manifest = valid_manifest();
-    manifest.fleet.members[0].source_snapshot.artifact_path =
+    manifest.deployment.members[0].source_snapshot.artifact_path =
         "artifacts/different-root".to_string();
 
     layout.write_manifest(&manifest).expect("write manifest");
@@ -499,8 +500,8 @@ fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
 }
 
 // Build one valid manifest for persistence tests.
-fn valid_manifest() -> FleetBackupManifest {
-    FleetBackupManifest {
+fn valid_manifest() -> DeploymentBackupManifest {
+    DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: "fbk_test_001".to_string(),
         created_at: "2026-04-10T12:00:00Z".to_string(),
@@ -519,13 +520,13 @@ fn valid_manifest() -> FleetBackupManifest {
                 roles: vec!["root".to_string()],
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
             discovery_topology_hash: HASH.to_string(),
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
-            members: vec![FleetMember {
+            members: vec![DeploymentMember {
                 role: "root".to_string(),
                 canister_id: ROOT.to_string(),
                 parent_canister_id: None,
@@ -547,7 +548,7 @@ fn valid_manifest() -> FleetBackupManifest {
             }],
         },
         verification: VerificationPlan {
-            fleet_checks: Vec::new(),
+            deployment_checks: Vec::new(),
             member_checks: Vec::new(),
         },
     }

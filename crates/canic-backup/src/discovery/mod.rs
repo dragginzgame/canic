@@ -1,5 +1,7 @@
 use crate::{
-    manifest::{FleetMember, FleetSection, IdentityMode, SourceSnapshot, VerificationCheck},
+    manifest::{
+        DeploymentMember, DeploymentSection, IdentityMode, SourceSnapshot, VerificationCheck,
+    },
     registry::RegistryEntry,
     topology::{TopologyHasher, TopologyRecord},
 };
@@ -18,17 +20,17 @@ pub struct DiscoveredFleet {
 
 impl DiscoveredFleet {
     /// Convert discovered topology and member policy into a manifest fleet section.
-    pub fn into_fleet_section(self) -> Result<FleetSection, DiscoveryError> {
+    pub fn into_deployment_section(self) -> Result<DeploymentSection, DiscoveryError> {
         validate_discovered_members(&self.members)?;
 
         let topology_hash = TopologyHasher::hash(&self.topology_records);
         let members = self
             .members
             .into_iter()
-            .map(DiscoveredMember::into_fleet_member)
+            .map(DiscoveredMember::into_deployment_member)
             .collect();
 
-        Ok(FleetSection {
+        Ok(DeploymentSection {
             topology_hash_algorithm: topology_hash.algorithm,
             topology_hash_input: topology_hash.input,
             discovery_topology_hash: topology_hash.hash.clone(),
@@ -57,8 +59,8 @@ pub struct DiscoveredMember {
 
 impl DiscoveredMember {
     /// Project this discovery member into the manifest restore contract.
-    fn into_fleet_member(self) -> FleetMember {
-        FleetMember {
+    fn into_deployment_member(self) -> DeploymentMember {
+        DeploymentMember {
             role: self.role,
             canister_id: self.canister_id,
             parent_canister_id: self.parent_canister_id,

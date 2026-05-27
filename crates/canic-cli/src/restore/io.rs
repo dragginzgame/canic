@@ -1,6 +1,6 @@
 use crate::{backup::resolve_backup_reference, output};
 use canic_backup::{
-    manifest::FleetBackupManifest,
+    manifest::DeploymentBackupManifest,
     persistence::BackupLayout,
     restore::{
         RestoreApplyDryRun, RestoreApplyJournal, RestoreMapping, RestorePlan, RestoreRunResponse,
@@ -52,7 +52,7 @@ pub(super) fn verify_backup_layout_if_required(
 // Read the manifest from a direct path or canonical backup layout.
 pub(super) fn read_manifest_source(
     options: &RestorePlanOptions,
-) -> Result<FleetBackupManifest, RestoreCommandError> {
+) -> Result<DeploymentBackupManifest, RestoreCommandError> {
     if let Some(path) = &options.manifest {
         return read_manifest(path);
     }
@@ -222,8 +222,8 @@ fn restore_backup_dir(
 }
 
 // Read and decode a backup manifest from disk.
-fn read_manifest(path: &PathBuf) -> Result<FleetBackupManifest, RestoreCommandError> {
-    output::read_json_file::<FleetBackupManifest, RestoreCommandError>(path)
+fn read_manifest(path: &PathBuf) -> Result<DeploymentBackupManifest, RestoreCommandError> {
+    output::read_json_file::<DeploymentBackupManifest, RestoreCommandError>(path)
 }
 
 // Read and decode an optional source-to-target restore mapping from disk.

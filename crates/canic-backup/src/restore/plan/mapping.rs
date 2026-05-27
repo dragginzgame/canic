@@ -1,5 +1,5 @@
 use super::{RestoreMapping, RestorePlanError};
-use crate::manifest::FleetBackupManifest;
+use crate::manifest::DeploymentBackupManifest;
 use candid::Principal;
 use std::{collections::BTreeSet, str::FromStr};
 
@@ -28,11 +28,11 @@ pub(super) fn validate_mapping(mapping: &RestoreMapping) -> Result<(), RestorePl
 }
 
 pub(super) fn validate_mapping_sources(
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
     mapping: &RestoreMapping,
 ) -> Result<(), RestorePlanError> {
     let sources = manifest
-        .fleet
+        .deployment
         .members
         .iter()
         .map(|member| member.canister_id.as_str())

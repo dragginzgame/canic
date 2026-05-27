@@ -5,8 +5,8 @@ const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 // Build one valid manifest for validation tests.
-fn valid_manifest() -> FleetBackupManifest {
-    FleetBackupManifest {
+fn valid_manifest() -> DeploymentBackupManifest {
+    DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: "fbk_test_001".to_string(),
         created_at: "2026-04-10T12:00:00Z".to_string(),
@@ -25,19 +25,19 @@ fn valid_manifest() -> FleetBackupManifest {
                 roles: vec!["root".to_string(), "app".to_string()],
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
             discovery_topology_hash: HASH.to_string(),
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
             members: vec![
-                fleet_member("root", ROOT, None, IdentityMode::Fixed),
-                fleet_member("app", CHILD, Some(ROOT), IdentityMode::Relocatable),
+                deployment_member("root", ROOT, None, IdentityMode::Fixed),
+                deployment_member("app", CHILD, Some(ROOT), IdentityMode::Relocatable),
             ],
         },
         verification: VerificationPlan {
-            fleet_checks: vec![VerificationCheck {
+            deployment_checks: vec![VerificationCheck {
                 kind: "status".to_string(),
                 roles: Vec::new(),
             }],
@@ -57,17 +57,17 @@ fn valid_manifest_passes_validation() {
 #[test]
 fn legacy_wasm_hash_field_is_ignored() {
     let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
-    value["fleet"]["members"][0]["source_snapshot"]["wasm_hash"] =
+    value["deployment"]["members"][0]["source_snapshot"]["wasm_hash"] =
         serde_json::Value::String(HASH.to_string());
 
-    let manifest: FleetBackupManifest =
+    let manifest: DeploymentBackupManifest =
         serde_json::from_value(value).expect("deserialize legacy manifest");
 
     manifest
         .validate()
         .expect("legacy manifest should validate");
     assert_eq!(
-        manifest.fleet.members[0]
+        manifest.deployment.members[0]
             .source_snapshot
             .module_hash
             .as_deref(),
@@ -79,7 +79,7 @@ fn legacy_wasm_hash_field_is_ignored() {
 #[test]
 fn invalid_snapshot_checksum_fails_validation() {
     let mut manifest = valid_manifest();
-    manifest.fleet.members[0].source_snapshot.checksum = Some("not-a-sha".to_string());
+    manifest.deployment.members[0].source_snapshot.checksum = Some("not-a-sha".to_string());
 
     let err = manifest
         .validate()
@@ -87,18 +87,18 @@ fn invalid_snapshot_checksum_fails_validation() {
 
     assert!(matches!(
         err,
-        ManifestValidationError::InvalidHash("fleet.members[].source_snapshot.checksum")
+        ManifestValidationError::InvalidHash("deployment.members[].source_snapshot.checksum")
     ));
 }
 
-// Build one valid fleet member for manifest validation tests.
-fn fleet_member(
+// Build one valid deployment member for manifest validation tests.
+fn deployment_member(
     role: &str,
     canister_id: &str,
     parent_canister_id: Option<&str>,
     identity_mode: IdentityMode,
-) -> FleetMember {
-    FleetMember {
+) -> DeploymentMember {
+    DeploymentMember {
         role: role.to_string(),
         canister_id: canister_id.to_string(),
         parent_canister_id: parent_canister_id.map(str::to_string),
@@ -123,7 +123,7 @@ fn fleet_member(
 #[test]
 fn topology_hash_mismatch_fails_validation() {
     let mut manifest = valid_manifest();
-    manifest.fleet.pre_snapshot_topology_hash =
+    manifest.deployment.pre_snapshot_topology_hash =
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
 
     let err = manifest.validate().expect_err("mismatch should fail");
@@ -137,7 +137,7 @@ fn topology_hash_mismatch_fails_validation() {
 #[test]
 fn missing_member_verification_checks_fail_validation() {
     let mut manifest = valid_manifest();
-    manifest.fleet.members[0].verification_checks.clear();
+    manifest.deployment.members[0].verification_checks.clear();
 
     let err = manifest
         .validate()
@@ -150,7 +150,7 @@ fn missing_member_verification_checks_fail_validation() {
 }
 
 #[test]
-fn backup_unit_roles_must_exist_in_fleet() {
+fn backup_unit_roles_must_exist_in_deployment() {
     let mut manifest = valid_manifest();
     manifest.consistency.backup_units[0]
         .roles
@@ -202,7 +202,7 @@ fn backup_unit_roles_must_be_unique() {
 }
 
 #[test]
-fn every_fleet_role_must_be_covered_by_a_backup_unit() {
+fn every_deployment_role_must_be_covered_by_a_backup_unit() {
     let mut manifest = valid_manifest();
     manifest.consistency.backup_units[0].kind = BackupUnitKind::Single;
     manifest.consistency.backup_units[0].roles = vec!["root".to_string()];
@@ -218,9 +218,9 @@ fn every_fleet_role_must_be_covered_by_a_backup_unit() {
 }
 
 #[test]
-fn fleet_verification_roles_must_exist_in_fleet() {
+fn deployment_verification_roles_must_exist_in_deployment() {
     let mut manifest = valid_manifest();
-    manifest.verification.fleet_checks[0]
+    manifest.verification.deployment_checks[0]
         .roles
         .push("missing-role".to_string());
 
@@ -235,9 +235,9 @@ fn fleet_verification_roles_must_exist_in_fleet() {
 }
 
 #[test]
-fn member_verification_check_roles_must_exist_in_fleet() {
+fn member_verification_check_roles_must_exist_in_deployment() {
     let mut manifest = valid_manifest();
-    manifest.fleet.members[0].verification_checks[0]
+    manifest.deployment.members[0].verification_checks[0]
         .roles
         .push("missing-role".to_string());
 
@@ -254,10 +254,10 @@ fn member_verification_check_roles_must_exist_in_fleet() {
 #[test]
 fn verification_check_roles_must_be_unique() {
     let mut manifest = valid_manifest();
-    manifest.verification.fleet_checks[0]
+    manifest.verification.deployment_checks[0]
         .roles
         .push("root".to_string());
-    manifest.verification.fleet_checks[0]
+    manifest.verification.deployment_checks[0]
         .roles
         .push("root".to_string());
 
@@ -272,7 +272,7 @@ fn verification_check_roles_must_be_unique() {
 }
 
 #[test]
-fn member_verification_group_roles_must_exist_in_fleet() {
+fn member_verification_group_roles_must_exist_in_deployment() {
     let mut manifest = valid_manifest();
     manifest
         .verification
@@ -318,7 +318,7 @@ fn member_verification_group_roles_must_be_unique() {
 }
 
 #[test]
-fn nested_member_verification_roles_must_exist_in_fleet() {
+fn nested_member_verification_roles_must_exist_in_deployment() {
     let mut manifest = valid_manifest();
     let mut checks = member_verification_checks("root");
     checks.checks[0].roles.push("missing-role".to_string());
@@ -353,7 +353,7 @@ fn subtree_unit_must_be_closed_under_descendants() {
 #[test]
 fn subtree_unit_must_be_connected() {
     let mut manifest = valid_manifest();
-    manifest.fleet.members.push(fleet_member(
+    manifest.deployment.members.push(deployment_member(
         "worker",
         "r7inp-6aaaa-aaaaa-aaabq-cai",
         None,
@@ -377,7 +377,7 @@ fn manifest_round_trips_through_json() {
     let manifest = valid_manifest();
 
     let encoded = serde_json::to_string(&manifest).expect("serialize manifest");
-    let decoded: FleetBackupManifest =
+    let decoded: DeploymentBackupManifest =
         serde_json::from_str(&encoded).expect("deserialize manifest");
 
     decoded

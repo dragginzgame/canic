@@ -6,7 +6,7 @@ use crate::{
         BackupExecutionOperationState,
     },
     journal::{ArtifactState, DownloadJournal},
-    manifest::{FleetBackupManifest, FleetMember},
+    manifest::{DeploymentBackupManifest, DeploymentMember},
     plan::{BackupOperationKind, BackupPlan},
 };
 use serde::{Deserialize, Serialize};
@@ -68,7 +68,7 @@ struct TopologyReceiptMismatch {
 // Verify cross-file backup layout consistency and artifact checksums.
 pub(super) fn verify_layout_integrity(
     layout: &BackupLayout,
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
     journal: &DownloadJournal,
 ) -> Result<BackupIntegrityReport, PersistenceError> {
     verify_manifest_journal_binding(manifest, journal)?;
@@ -84,14 +84,14 @@ pub(super) fn verify_layout_integrity(
     }
 
     let mut artifacts = Vec::with_capacity(journal.artifacts.len());
-    for member in &manifest.fleet.members {
+    for member in &manifest.deployment.members {
         artifacts.push(verify_member_artifact(layout, journal, member)?);
     }
 
     Ok(BackupIntegrityReport {
         backup_id: manifest.backup_id.clone(),
         verified: true,
-        manifest_members: manifest.fleet.members.len(),
+        manifest_members: manifest.deployment.members.len(),
         journal_artifacts: journal.artifacts.len(),
         durable_artifacts: artifacts.len(),
         artifacts,
@@ -99,7 +99,7 @@ pub(super) fn verify_layout_integrity(
 }
 
 fn verify_manifest_journal_binding(
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
     journal: &DownloadJournal,
 ) -> Result<(), PersistenceError> {
     if manifest.backup_id != journal.backup_id {
@@ -123,9 +123,9 @@ fn verify_manifest_journal_binding(
     Ok(())
 }
 
-fn expected_artifact_keys(manifest: &FleetBackupManifest) -> BTreeSet<(&str, &str)> {
+fn expected_artifact_keys(manifest: &DeploymentBackupManifest) -> BTreeSet<(&str, &str)> {
     manifest
-        .fleet
+        .deployment
         .members
         .iter()
         .map(|member| {
@@ -140,7 +140,7 @@ fn expected_artifact_keys(manifest: &FleetBackupManifest) -> BTreeSet<(&str, &st
 fn verify_member_artifact(
     layout: &BackupLayout,
     journal: &DownloadJournal,
-    member: &FleetMember,
+    member: &DeploymentMember,
 ) -> Result<ArtifactIntegrityReport, PersistenceError> {
     let Some(entry) = journal.artifacts.iter().find(|entry| {
         entry.canister_id == member.canister_id
@@ -186,7 +186,7 @@ fn verify_member_artifact(
 }
 
 fn validate_member_artifact_metadata(
-    member: &FleetMember,
+    member: &DeploymentMember,
     entry: &crate::journal::ArtifactJournalEntry,
     expected_hash: &str,
 ) -> Result<(), PersistenceError> {
@@ -362,20 +362,20 @@ fn receipt_outcome_for_state(
 
 // Compare manifest and journal topology receipts for fail-closed verification.
 fn topology_receipt_mismatches(
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
     journal: &DownloadJournal,
 ) -> Vec<TopologyReceiptMismatch> {
     let mut mismatches = Vec::new();
     record_topology_receipt_mismatch(
         &mut mismatches,
         "discovery_topology_hash",
-        &manifest.fleet.discovery_topology_hash,
+        &manifest.deployment.discovery_topology_hash,
         journal.discovery_topology_hash.as_deref(),
     );
     record_topology_receipt_mismatch(
         &mut mismatches,
         "pre_snapshot_topology_hash",
-        &manifest.fleet.pre_snapshot_topology_hash,
+        &manifest.deployment.pre_snapshot_topology_hash,
         journal.pre_snapshot_topology_hash.as_deref(),
     );
     mismatches

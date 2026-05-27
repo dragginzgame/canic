@@ -1,8 +1,9 @@
 use super::*;
 use crate::test_support::temp_dir;
 use canic_backup::manifest::{
-    BackupUnit, BackupUnitKind, ConsistencySection, FleetMember, FleetSection, IdentityMode,
-    SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck, VerificationPlan,
+    BackupUnit, BackupUnitKind, ConsistencySection, DeploymentMember, DeploymentSection,
+    IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
+    VerificationPlan,
 };
 
 const ROOT: &str = "aaaaa-aa";
@@ -67,7 +68,7 @@ fn validate_manifest_reads_and_validates_manifest() {
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(manifest.backup_id, "backup-test");
-    assert_eq!(manifest.fleet.members.len(), 1);
+    assert_eq!(manifest.deployment.members.len(), 1);
 }
 
 // Ensure manifest validation summaries can be written for automation.
@@ -92,14 +93,14 @@ fn write_validation_summary_writes_out_file() {
     assert_eq!(summary["backup_unit_count"], 1);
     assert_eq!(summary["topology_validation_status"], "validated");
     assert_eq!(summary["backup_unit_kinds"]["subtree"], 1);
-    assert_eq!(summary["backup_units"][0]["unit_id"], "fleet");
+    assert_eq!(summary["backup_units"][0]["unit_id"], "deployment");
     assert_eq!(summary["backup_units"][0]["kind"], "subtree");
     assert_eq!(summary["backup_units"][0]["role_count"], 1);
 }
 
 // Build one valid manifest for validation tests.
-fn valid_manifest() -> FleetBackupManifest {
-    FleetBackupManifest {
+fn valid_manifest() -> DeploymentBackupManifest {
+    DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: "backup-test".to_string(),
         created_at: "2026-05-03T00:00:00Z".to_string(),
@@ -113,26 +114,26 @@ fn valid_manifest() -> FleetBackupManifest {
         },
         consistency: ConsistencySection {
             backup_units: vec![BackupUnit {
-                unit_id: "fleet".to_string(),
+                unit_id: "deployment".to_string(),
                 kind: BackupUnitKind::Subtree,
                 roles: vec!["root".to_string()],
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
             discovery_topology_hash: HASH.to_string(),
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
-            members: vec![fleet_member()],
+            members: vec![deployment_member()],
         },
         verification: VerificationPlan::default(),
     }
 }
 
 // Build one valid manifest member.
-fn fleet_member() -> FleetMember {
-    FleetMember {
+fn deployment_member() -> DeploymentMember {
+    DeploymentMember {
         role: "root".to_string(),
         canister_id: ROOT.to_string(),
         parent_canister_id: None,

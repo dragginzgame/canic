@@ -2,8 +2,8 @@ use super::{BackupRunnerConfig, BackupRunnerError, support::state_updated_at};
 use crate::{
     journal::{ArtifactState, DownloadJournal},
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember,
-        FleetSection, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
+        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+        DeploymentSection, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
         VerificationPlan,
     },
     plan::{BackupPlan, BackupTarget, ControlAuthoritySource},
@@ -14,8 +14,8 @@ pub(super) fn build_manifest(
     config: &BackupRunnerConfig,
     plan: &BackupPlan,
     journal: &DownloadJournal,
-) -> Result<FleetBackupManifest, BackupRunnerError> {
-    let manifest = FleetBackupManifest {
+) -> Result<DeploymentBackupManifest, BackupRunnerError> {
+    let manifest = DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: plan.run_id.clone(),
         created_at: state_updated_at(config.updated_at.as_ref()),
@@ -30,7 +30,7 @@ pub(super) fn build_manifest(
         consistency: ConsistencySection {
             backup_units: build_backup_units(plan),
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: format!("canic-backup-plan:{}", plan.plan_id),
             discovery_topology_hash: plan.topology_hash_before_quiesce.clone(),
@@ -151,7 +151,7 @@ fn manifest_member(
     target: &BackupTarget,
     plan: &BackupPlan,
     journal: &DownloadJournal,
-) -> Result<FleetMember, BackupRunnerError> {
+) -> Result<DeploymentMember, BackupRunnerError> {
     let role = target_role(index, target.role.as_deref());
     let entry = journal
         .artifacts
@@ -163,7 +163,7 @@ fn manifest_member(
             sequence: usize::MAX,
             target_canister_id: target.canister_id.clone(),
         })?;
-    Ok(FleetMember {
+    Ok(DeploymentMember {
         role: role.clone(),
         canister_id: target.canister_id.clone(),
         parent_canister_id: target.parent_canister_id.clone(),

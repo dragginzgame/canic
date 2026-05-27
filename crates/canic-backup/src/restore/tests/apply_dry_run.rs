@@ -69,10 +69,13 @@ fn apply_dry_run_renders_ordered_member_operations() {
 #[test]
 fn apply_dry_run_renders_deployment_verification_operations() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.verification.fleet_checks.push(VerificationCheck {
-        kind: "status".to_string(),
-        roles: Vec::new(),
-    });
+    manifest
+        .verification
+        .deployment_checks
+        .push(VerificationCheck {
+            kind: "status".to_string(),
+            roles: Vec::new(),
+        });
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan);
@@ -153,7 +156,7 @@ fn apply_dry_run_rejects_missing_artifacts() {
     let root = temp_dir("canic-restore-apply-artifacts-missing");
     fs::create_dir_all(&root).expect("create temp root");
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[0].source_snapshot.artifact_path = "missing-child".to_string();
+    manifest.deployment.members[0].source_snapshot.artifact_path = "missing-child".to_string();
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
@@ -172,7 +175,7 @@ fn apply_dry_run_rejects_artifact_path_traversal() {
     let root = temp_dir("canic-restore-apply-artifacts-traversal");
     fs::create_dir_all(&root).expect("create temp root");
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[1].source_snapshot.artifact_path = "../outside".to_string();
+    manifest.deployment.members[1].source_snapshot.artifact_path = "../outside".to_string();
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let err = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)

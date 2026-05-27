@@ -1,18 +1,18 @@
 use super::{RestoreMapping, RestorePlanError, RestorePlanMember};
 use crate::manifest::{
-    FleetBackupManifest, FleetMember, IdentityMode, VerificationCheck, VerificationPlan,
+    DeploymentBackupManifest, DeploymentMember, IdentityMode, VerificationCheck, VerificationPlan,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn resolve_members(
-    manifest: &FleetBackupManifest,
+    manifest: &DeploymentBackupManifest,
     mapping: Option<&RestoreMapping>,
 ) -> Result<Vec<RestorePlanMember>, RestorePlanError> {
-    let mut plan_members = Vec::with_capacity(manifest.fleet.members.len());
+    let mut plan_members = Vec::with_capacity(manifest.deployment.members.len());
     let mut targets = BTreeSet::new();
     let mut source_to_target = BTreeMap::new();
 
-    for member in &manifest.fleet.members {
+    for member in &manifest.deployment.members {
         let target = resolve_target(member, mapping)?;
         if !targets.insert(target.clone()) {
             return Err(RestorePlanError::DuplicatePlanTarget(target));
@@ -48,7 +48,7 @@ pub(super) fn resolve_members(
 }
 
 fn concrete_member_verification_checks(
-    member: &FleetMember,
+    member: &DeploymentMember,
     verification: &VerificationPlan,
 ) -> Vec<VerificationCheck> {
     let mut checks = member
@@ -80,7 +80,7 @@ fn verification_check_applies_to_role(check: &VerificationCheck, role: &str) -> 
 }
 
 fn resolve_target(
-    member: &FleetMember,
+    member: &DeploymentMember,
     mapping: Option<&RestoreMapping>,
 ) -> Result<String, RestorePlanError> {
     let target = match mapping {

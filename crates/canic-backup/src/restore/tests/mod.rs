@@ -1,9 +1,9 @@
 use super::*;
 use crate::artifacts::ArtifactChecksum;
 use crate::manifest::{
-    BackupUnit, BackupUnitKind, ConsistencySection, FleetBackupManifest, FleetMember, FleetSection,
-    IdentityMode, MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata,
-    VerificationCheck, VerificationPlan,
+    BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+    DeploymentSection, IdentityMode, MemberVerificationChecks, SourceMetadata, SourceSnapshot,
+    ToolMetadata, VerificationCheck, VerificationPlan,
 };
 use crate::test_support::temp_dir;
 use std::{fs, path::Path};
@@ -56,8 +56,8 @@ fn command_preview_journal(
 }
 
 // Build one valid manifest with a parent and child that restore in topology order.
-fn valid_manifest(identity_mode: IdentityMode) -> FleetBackupManifest {
-    FleetBackupManifest {
+fn valid_manifest(identity_mode: IdentityMode) -> DeploymentBackupManifest {
+    DeploymentBackupManifest {
         manifest_version: 1,
         backup_id: "fbk_test_001".to_string(),
         created_at: "2026-04-10T12:00:00Z".to_string(),
@@ -76,32 +76,32 @@ fn valid_manifest(identity_mode: IdentityMode) -> FleetBackupManifest {
                 roles: vec!["root".to_string(), "app".to_string()],
             }],
         },
-        fleet: FleetSection {
+        deployment: DeploymentSection {
             topology_hash_algorithm: "sha256".to_string(),
             topology_hash_input: "sorted(pid,parent_pid,role,module_hash)".to_string(),
             discovery_topology_hash: HASH.to_string(),
             pre_snapshot_topology_hash: HASH.to_string(),
             topology_hash: HASH.to_string(),
             members: vec![
-                fleet_member("app", CHILD, Some(ROOT), identity_mode),
-                fleet_member("root", ROOT, None, IdentityMode::Fixed),
+                deployment_member("app", CHILD, Some(ROOT), identity_mode),
+                deployment_member("root", ROOT, None, IdentityMode::Fixed),
             ],
         },
         verification: VerificationPlan {
-            fleet_checks: Vec::new(),
+            deployment_checks: Vec::new(),
             member_checks: Vec::new(),
         },
     }
 }
 
 // Build one manifest member for restore planning tests.
-fn fleet_member(
+fn deployment_member(
     role: &str,
     canister_id: &str,
     parent_canister_id: Option<&str>,
     identity_mode: IdentityMode,
-) -> FleetMember {
-    FleetMember {
+) -> DeploymentMember {
+    DeploymentMember {
         role: role.to_string(),
         canister_id: canister_id.to_string(),
         parent_canister_id: parent_canister_id.map(str::to_string),
@@ -124,7 +124,7 @@ fn fleet_member(
 }
 // Write one artifact and record its path and checksum in the test manifest.
 fn set_member_artifact(
-    manifest: &mut FleetBackupManifest,
+    manifest: &mut DeploymentBackupManifest,
     canister_id: &str,
     root: &Path,
     artifact_path: &str,
@@ -135,7 +135,7 @@ fn set_member_artifact(
     fs::write(&full_path, bytes).expect("write artifact");
     let checksum = ArtifactChecksum::from_bytes(bytes);
     let member = manifest
-        .fleet
+        .deployment
         .members
         .iter_mut()
         .find(|member| member.canister_id == canister_id)

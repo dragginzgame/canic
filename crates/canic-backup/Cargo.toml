@@ -4,7 +4,7 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
-description = "Manifest and orchestration primitives for Canic fleet backup and restore"
+description = "Manifest and orchestration primitives for Canic deployment backup and restore"
 readme = "README.md"
 documentation = "https://docs.rs/canic-backup"
 homepage = { workspace = true }

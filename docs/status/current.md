@@ -141,6 +141,11 @@ inspect only the files needed for the current task.
   journal operation kinds serialize as `verify-deployment`. Command previews
   also describe deployment-root verification instead of fleet-root
   verification.
+- `canic-backup` now hard-cuts the backup manifest boundary to deployment
+  vocabulary: public Rust types are `DeploymentBackupManifest`,
+  `DeploymentSection`, and `DeploymentMember`, manifest JSON uses
+  `deployment` plus `deployment_checks`, and crate metadata/docs plus test-only
+  helpers use deployment backup wording.
 - 0.45 has started with passive `LifecycleAuthorityReportV1` /
   `LifecycleAuthorityV1` projection from `DeploymentCheckV1`. The projection
   consumes existing `CanisterControlClassV1` values, reports direct,

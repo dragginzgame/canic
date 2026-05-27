@@ -140,15 +140,15 @@ fn rejects_mutation_before_preflights() {
     ));
 }
 
-// Ensure whole non-root-fleet plans do not pretend to have a unique subtree root.
+// Ensure whole root-omitted deployment plans do not pretend to have a unique subtree root.
 #[test]
-fn rejects_non_root_fleet_with_selected_root() {
+fn rejects_root_omitted_deployment_scope_with_selected_root() {
     let mut plan = subtree_plan();
     plan.selected_scope_kind = BackupScopeKind::NonRootFleet;
 
     let err = plan
         .validate()
-        .expect_err("non-root fleet scope should not name one root");
+        .expect_err("root-omitted deployment scope should not name one root");
 
     assert!(matches!(err, BackupPlanError::NonRootFleetHasSelectedRoot));
 }
@@ -212,16 +212,16 @@ fn builds_subtree_plan_from_registry() {
     );
 }
 
-// Ensure non-root fleet scope expands every managed member while leaving root running.
+// Ensure root-omitted deployment scope expands every managed member while leaving root running.
 #[test]
-fn builds_non_root_fleet_plan_without_root_target() {
+fn builds_root_omitted_deployment_plan_without_root_target() {
     let plan = build_backup_plan(BackupPlanBuildInput {
         selected_canister_id: None,
         selected_scope_kind: BackupScopeKind::NonRootFleet,
         registry: &registry(),
         ..plan_input()
     })
-    .expect("build non-root fleet plan");
+    .expect("build root-omitted deployment plan");
 
     assert_eq!(plan.selected_subtree_root, None);
     assert!(!plan.root_included);

@@ -152,8 +152,8 @@ fn plan_includes_mapping_summary() {
 #[test]
 fn plan_includes_snapshot_summary() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[1].source_snapshot.module_hash = None;
-    manifest.fleet.members[1].source_snapshot.checksum = None;
+    manifest.deployment.members[1].source_snapshot.module_hash = None;
+    manifest.deployment.members[1].source_snapshot.checksum = None;
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
@@ -174,10 +174,13 @@ fn plan_includes_snapshot_summary() {
 #[test]
 fn plan_includes_verification_summary() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.verification.fleet_checks.push(VerificationCheck {
-        kind: "status".to_string(),
-        roles: Vec::new(),
-    });
+    manifest
+        .verification
+        .deployment_checks
+        .push(VerificationCheck {
+            kind: "status".to_string(),
+            roles: Vec::new(),
+        });
     manifest
         .verification
         .member_checks
@@ -227,7 +230,7 @@ fn plan_includes_operation_summary() {
 #[test]
 fn plan_expands_role_verification_checks_per_matching_member() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members.push(fleet_member(
+    manifest.deployment.members.push(deployment_member(
         "app",
         CHILD_TWO,
         Some(ROOT),
@@ -257,7 +260,7 @@ fn plan_expands_role_verification_checks_per_matching_member() {
 #[test]
 fn plan_applies_member_verification_role_filters() {
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
-    manifest.fleet.members[0]
+    manifest.deployment.members[0]
         .verification_checks
         .push(VerificationCheck {
             kind: "status".to_string(),

@@ -8,7 +8,7 @@ mod types;
 pub use error::RestorePlanError;
 pub use types::*;
 
-use crate::manifest::FleetBackupManifest;
+use crate::manifest::DeploymentBackupManifest;
 use mapping::{validate_mapping, validate_mapping_sources};
 use members::resolve_members;
 use ordering::{order_members, restore_ordering_summary};
@@ -26,7 +26,7 @@ pub struct RestorePlanner;
 impl RestorePlanner {
     /// Build a no-mutation restore plan from the manifest and optional target mapping.
     pub fn plan(
-        manifest: &FleetBackupManifest,
+        manifest: &DeploymentBackupManifest,
         mapping: Option<&RestoreMapping>,
     ) -> Result<RestorePlan, RestorePlanError> {
         manifest.validate()?;
@@ -43,21 +43,21 @@ impl RestorePlanner {
         let members = order_members(members)?;
         let ordering_summary = restore_ordering_summary(&members);
         let operation_summary =
-            restore_operation_summary(manifest.fleet.members.len(), &verification_summary);
+            restore_operation_summary(manifest.deployment.members.len(), &verification_summary);
 
         Ok(RestorePlan {
             backup_id: manifest.backup_id.clone(),
             source_environment: manifest.source.environment.clone(),
             source_root_canister: manifest.source.root_canister.clone(),
-            topology_hash: manifest.fleet.topology_hash.clone(),
-            member_count: manifest.fleet.members.len(),
+            topology_hash: manifest.deployment.topology_hash.clone(),
+            member_count: manifest.deployment.members.len(),
             identity_summary,
             snapshot_summary,
             verification_summary,
             readiness_summary,
             operation_summary,
             ordering_summary,
-            deployment_verification_checks: manifest.verification.fleet_checks.clone(),
+            deployment_verification_checks: manifest.verification.deployment_checks.clone(),
             members,
         })
     }
