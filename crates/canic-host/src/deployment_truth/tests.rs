@@ -9465,6 +9465,60 @@ fn root_verification_receipt_validation_accepts_state_transition() {
 }
 
 #[test]
+fn root_verification_receipt_round_trips_through_json() {
+    let receipt = sample_root_verification_receipt();
+
+    assert_json_round_trip(&receipt);
+}
+
+#[test]
+fn root_verification_receipt_json_shape_is_stable() {
+    let receipt = sample_root_verification_receipt();
+    let value = serde_json::to_value(&receipt).expect("encode root verification receipt");
+
+    assert_object_keys(
+        &value,
+        &[
+            "schema_version",
+            "receipt_id",
+            "receipt_digest",
+            "deployment_name",
+            "network",
+            "fleet_template",
+            "root_principal",
+            "previous_root_verification",
+            "new_root_verification",
+            "state_transition",
+            "source_report_id",
+            "source_report_digest",
+            "source_check_id",
+            "source_check_digest",
+            "source_deployment_plan_id",
+            "source_deployment_plan_digest",
+            "source_inventory_id",
+            "source_inventory_digest",
+            "verified_at_unix_secs",
+            "local_state_path",
+            "local_state_digest_before",
+            "local_state_digest_after",
+            "warnings",
+        ],
+    );
+    assert_eq!(value["schema_version"], DEPLOYMENT_TRUTH_SCHEMA_VERSION);
+    assert_eq!(value["deployment_name"], "demo");
+    assert_eq!(value["network"], "local");
+    assert_eq!(value["fleet_template"], "root");
+    assert_eq!(value["root_principal"], "aaaaa-aa");
+    assert_eq!(value["previous_root_verification"], "NotVerified");
+    assert_eq!(value["new_root_verification"], "Verified");
+    assert_eq!(value["state_transition"], "PromotedNotVerifiedToVerified");
+    assert_eq!(value["source_check_id"], "check-1");
+    assert_eq!(value["source_deployment_plan_id"], "plan-local-root");
+    assert_eq!(value["source_inventory_id"], "inventory-1");
+    assert_eq!(value["receipt_digest"].as_str().expect("digest").len(), 64);
+}
+
+#[test]
 fn root_verification_receipt_validation_rejects_digest_drift() {
     let mut receipt = sample_root_verification_receipt();
     receipt.root_principal = "other-root".to_string();
@@ -9492,6 +9546,37 @@ fn root_verification_receipt_validation_rejects_bad_transition() {
     assert_eq!(
         err,
         DeploymentRootVerificationReceiptError::StateTransitionMismatch
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_noop_digest_change() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.previous_root_verification = DeploymentRootVerificationStateV1::Verified;
+    receipt.state_transition = DeploymentRootVerificationStateTransitionV1::NoStateChange;
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("no-op receipt with changed state digest should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::LocalStateDigestMismatch
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_promotion_without_digest_change() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.local_state_digest_after = receipt.local_state_digest_before.clone();
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("promotion receipt without state digest change should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::LocalStateDigestMismatch
     );
 }
 

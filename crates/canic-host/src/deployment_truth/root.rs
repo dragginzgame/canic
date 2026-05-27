@@ -94,6 +94,9 @@ pub enum DeploymentRootVerificationReceiptError {
 
     #[error("deployment root verification receipt state transition is inconsistent")]
     StateTransitionMismatch,
+
+    #[error("deployment root verification receipt local state digests are inconsistent")]
+    LocalStateDigestMismatch,
 }
 
 /// Build a passive 0.47 root-verification report from an existing
@@ -298,6 +301,9 @@ pub fn validate_deployment_root_verification_receipt(
         || receipt.state_transition != receipt_state_transition(receipt)
     {
         return Err(DeploymentRootVerificationReceiptError::StateTransitionMismatch);
+    }
+    if !receipt_local_state_digest_transition_is_valid(receipt) {
+        return Err(DeploymentRootVerificationReceiptError::LocalStateDigestMismatch);
     }
     if receipt.receipt_digest != deployment_root_verification_receipt_digest(receipt) {
         return Err(DeploymentRootVerificationReceiptError::DigestMismatch {
@@ -536,6 +542,22 @@ const fn receipt_state_transition(
         DeploymentRootVerificationStateV1::Verified => {
             DeploymentRootVerificationStateTransitionV1::NoStateChange
         }
+    }
+}
+
+fn receipt_local_state_digest_transition_is_valid(
+    receipt: &DeploymentRootVerificationReceiptV1,
+) -> bool {
+    match receipt.state_transition {
+        DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified => {
+            receipt.local_state_digest_before != receipt.local_state_digest_after
+        }
+        DeploymentRootVerificationStateTransitionV1::NoStateChange => {
+            receipt.local_state_digest_before == receipt.local_state_digest_after
+        }
+        DeploymentRootVerificationStateTransitionV1::NotAttempted
+        | DeploymentRootVerificationStateTransitionV1::Blocked
+        | DeploymentRootVerificationStateTransitionV1::WouldPromoteNotVerifiedToVerified => false,
     }
 }
 

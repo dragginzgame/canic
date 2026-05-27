@@ -12,13 +12,17 @@ present.
 
 ## Unreleased
 
-- 0.47 hardens verified deployment registration by making same-root
-  re-verification a receipt-emitting no-op state transition and adding source
-  guards around verified root-state writes and root-replacement attempts.
-
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.3` tightens root-verification receipt validation so local-state digest
+  transitions must match the claimed root-verification state transition, and
+  adds JSON shape coverage for the root-verification receipt artifact.
+
+- `0.47.2` hardens root verification by making already verified same-root
+  verification a receipt-emitting no-op, preserving local state unchanged, and
+  blocking verified root-replacement attempts.
 
 - `0.47.1` adds the explicit receipt-backed state transition for registered
   deployment roots whose deployment-truth evidence is satisfied.
