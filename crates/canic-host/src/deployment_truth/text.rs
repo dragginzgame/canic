@@ -88,6 +88,13 @@ pub fn deployment_root_verification_report_text(
         format!("fleet_template: {}", report.expected_fleet_template),
         format!("root_principal: {}", report.expected_root_principal),
         format!(
+            "observed_root_canister_id: {}",
+            report
+                .observed_root_canister_id
+                .as_deref()
+                .unwrap_or("missing")
+        ),
+        format!(
             "observed_root_observation_source: {}",
             report
                 .observed_root_observation_source
@@ -144,6 +151,14 @@ pub fn deployment_root_verification_receipt_text(
         format!("new_root_verification: {:?}", receipt.new_root_verification),
         format!("source_report_id: {}", receipt.source_report_id),
         format!("source_report_digest: {}", receipt.source_report_digest),
+        format!(
+            "source_report_evidence_status: {:?}",
+            receipt.source_report_evidence_status
+        ),
+        format!(
+            "source_root_observation_source: {:?}",
+            receipt.source_root_observation_source
+        ),
         format!("source_check_id: {}", receipt.source_check_id),
         format!("source_check_digest: {}", receipt.source_check_digest),
         format!("source_inventory_id: {}", receipt.source_inventory_id),

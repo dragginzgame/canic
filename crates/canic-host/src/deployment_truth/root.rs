@@ -16,6 +16,7 @@ struct DeploymentRootVerificationReportDigestInput<'a> {
     observed_network: &'a Option<String>,
     observed_fleet_template: &'a Option<String>,
     observed_root_principal: &'a Option<String>,
+    observed_root_canister_id: &'a Option<String>,
     observed_root_observation_source: &'a Option<DeploymentRootObservationSourceV1>,
     source: DeploymentRootVerificationSourceV1,
     source_check_id: &'a str,
@@ -44,6 +45,8 @@ struct DeploymentRootVerificationReceiptDigestInput<'a> {
     state_transition: DeploymentRootVerificationStateTransitionV1,
     source_report_id: &'a str,
     source_report_digest: &'a str,
+    source_report_evidence_status: DeploymentRootVerificationEvidenceStatusV1,
+    source_root_observation_source: DeploymentRootObservationSourceV1,
     source_check_id: &'a str,
     source_check_digest: &'a str,
     source_deployment_plan_id: &'a str,
@@ -107,6 +110,9 @@ pub enum DeploymentRootVerificationReceiptError {
 
     #[error("deployment root verification receipt local state digests are inconsistent")]
     LocalStateDigestMismatch,
+
+    #[error("deployment root verification receipt source evidence is inconsistent")]
+    SourceEvidenceMismatch,
 }
 
 /// Build a passive 0.47 root-verification report from an existing
@@ -147,6 +153,7 @@ pub fn deployment_root_verification_report_from_check(
         observed_network: observed_root.map(|root| root.network.clone()),
         observed_fleet_template: observed_root.map(|root| root.fleet_template.clone()),
         observed_root_principal: observed_root.map(|root| root.root_principal.clone()),
+        observed_root_canister_id: observed_root.map(|root| root.observed_canister_id.clone()),
         observed_root_observation_source: observed_root.map(|root| root.observation_source),
         source: request.source,
         source_check_id: check.check_id.clone(),
@@ -240,6 +247,8 @@ pub fn deployment_root_verification_receipt_digest(
         state_transition: receipt.state_transition,
         source_report_id: &receipt.source_report_id,
         source_report_digest: &receipt.source_report_digest,
+        source_report_evidence_status: receipt.source_report_evidence_status,
+        source_root_observation_source: receipt.source_root_observation_source,
         source_check_id: &receipt.source_check_id,
         source_check_digest: &receipt.source_check_digest,
         source_deployment_plan_id: &receipt.source_deployment_plan_id,
@@ -278,6 +287,13 @@ pub fn validate_deployment_root_verification_receipt(
         "source_report_digest",
         receipt.source_report_digest.as_str(),
     )?;
+    if receipt.source_report_evidence_status
+        != DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied
+        || receipt.source_root_observation_source
+            != DeploymentRootObservationSourceV1::IcpCanisterStatus
+    {
+        return Err(DeploymentRootVerificationReceiptError::SourceEvidenceMismatch);
+    }
     ensure_root_verification_receipt_field("source_check_id", receipt.source_check_id.as_str())?;
     ensure_root_verification_receipt_sha256(
         "source_check_digest",
@@ -653,6 +669,7 @@ fn ensure_root_verification_report_checks_consistent(
         && report.observed_network.is_some()
         && report.observed_fleet_template.is_some()
         && report.observed_root_principal.is_some()
+        && report.observed_root_canister_id.is_some()
         && report.observed_root_observation_source.is_some();
     ensure_report_check_value(
         &report.evidence_checks,
@@ -673,7 +690,7 @@ fn ensure_root_verification_report_checks_consistent(
         &report.evidence_checks,
         "observed_root_canister_id",
         Some(report.expected_root_principal.as_str()),
-        report.observed_root_principal.as_deref(),
+        report.observed_root_canister_id.as_deref(),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
@@ -790,6 +807,7 @@ fn deployment_root_verification_report_digest(
         observed_network: &report.observed_network,
         observed_fleet_template: &report.observed_fleet_template,
         observed_root_principal: &report.observed_root_principal,
+        observed_root_canister_id: &report.observed_root_canister_id,
         observed_root_observation_source: &report.observed_root_observation_source,
         source: report.source,
         source_check_id: &report.source_check_id,

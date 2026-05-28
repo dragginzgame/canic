@@ -404,6 +404,9 @@ pub fn verify_registered_deployment_root(
         )
         .into());
     }
+    let source_root_observation_source = report.observed_root_observation_source.ok_or(
+        "deployment root verification report did not preserve observed root source evidence",
+    )?;
 
     let state_transition = verified_root_state_transition(previous_root_verification);
     let local_state_digest_after = match previous_root_verification {
@@ -437,6 +440,8 @@ pub fn verify_registered_deployment_root(
         state_transition,
         source_report_id: report.report_id,
         source_report_digest: report.report_digest,
+        source_report_evidence_status: report.evidence_status,
+        source_root_observation_source,
         source_check_id: report.source_check_id,
         source_check_digest: report.source_check_digest,
         source_deployment_plan_id: report.source_deployment_plan_id,

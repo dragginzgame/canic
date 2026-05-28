@@ -12,17 +12,22 @@ present.
 
 ## Unreleased
 
-- Root-verification reports now carry `observed_root_observation_source` as an
-  explicit archived evidence field, and report validation binds the
-  `root_observation_source` check row to that field instead of accepting the
-  row as self-contained evidence.
-- Root-verification report text now renders the observed root source so
-  operators can distinguish `IcpCanisterStatus` evidence from local-state echo
-  when reviewing archived reports.
+- Root-verification receipts now preserve the source report evidence status
+  and source root observation source, and receipt validation requires
+  `EvidenceSatisfied` plus `IcpCanisterStatus` so standalone receipts cannot
+  obscure whether verified state came from accepted deployment-truth evidence.
+- Root-verification reports now archive `observed_root_canister_id`
+  explicitly, render it in text output, and validate the
+  `observed_root_canister_id` evidence row against that archived field instead
+  of relying on adjacent root-principal display state.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.6` makes archived root-verification reports carry and render
+  `observed_root_observation_source`, and binds the `root_observation_source`
+  check row to that field during validation.
 
 - `0.47.5` cleans up 0.47 closeout wording by making `canic deploy root`
   describe inspection and explicit verification, updating the design status to

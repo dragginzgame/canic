@@ -101,6 +101,14 @@ inspect only the files needed for the current task.
   explicitly and validate the `root_observation_source` check row against that
   archived field. Report text renders the source so operators can tell
   deployment-truth `IcpCanisterStatus` evidence from local-state echo.
+- Root-verification receipts now preserve the source report evidence status
+  and source root observation source, and receipt validation requires
+  `EvidenceSatisfied` plus `IcpCanisterStatus` before accepting the receipt as
+  self-consistent.
+- Root-verification reports now preserve `observed_root_canister_id` as an
+  archived evidence field and validate the matching evidence row against that
+  field directly, so root-canister evidence is not inferred from the adjacent
+  root-principal display field.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

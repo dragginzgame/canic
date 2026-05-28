@@ -9306,6 +9306,10 @@ fn root_verification_report_accepts_bound_root_evidence() {
     assert_eq!(report.expected_root_principal, "aaaaa-aa");
     assert_eq!(report.observed_root_principal.as_deref(), Some("aaaaa-aa"));
     assert_eq!(
+        report.observed_root_canister_id.as_deref(),
+        Some("aaaaa-aa")
+    );
+    assert_eq!(
         report.observed_root_observation_source,
         Some(DeploymentRootObservationSourceV1::IcpCanisterStatus)
     );
@@ -9326,6 +9330,7 @@ fn root_verification_report_json_shape_includes_observed_root_source() {
         value["observed_root_observation_source"],
         "IcpCanisterStatus"
     );
+    assert_eq!(value["observed_root_canister_id"], "aaaaa-aa");
 }
 
 #[test]
@@ -9337,6 +9342,7 @@ fn root_verification_report_text_renders_observed_root_source() {
 
     assert!(text.contains("mode: passive"));
     assert!(text.contains("local_state_write: none"));
+    assert!(text.contains("observed_root_canister_id: aaaaa-aa"));
     assert!(text.contains("observed_root_observation_source: IcpCanisterStatus"));
 }
 
@@ -9604,6 +9610,24 @@ fn root_verification_report_validation_rejects_observed_source_drift() {
 }
 
 #[test]
+fn root_verification_report_validation_rejects_observed_root_canister_id_drift() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.observed_root_canister_id = Some("other-root".to_string());
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("observed root canister id drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::CheckMismatch {
+            check: "observed_root_canister_id".to_string()
+        }
+    );
+}
+
+#[test]
 fn root_verification_report_validation_rejects_duplicate_check_row() {
     let check = sample_root_verification_check();
     let mut report =
@@ -9693,6 +9717,8 @@ fn root_verification_receipt_json_shape_is_stable() {
             "state_transition",
             "source_report_id",
             "source_report_digest",
+            "source_report_evidence_status",
+            "source_root_observation_source",
             "source_check_id",
             "source_check_digest",
             "source_deployment_plan_id",
@@ -9714,6 +9740,8 @@ fn root_verification_receipt_json_shape_is_stable() {
     assert_eq!(value["previous_root_verification"], "NotVerified");
     assert_eq!(value["new_root_verification"], "Verified");
     assert_eq!(value["state_transition"], "PromotedNotVerifiedToVerified");
+    assert_eq!(value["source_report_evidence_status"], "EvidenceSatisfied");
+    assert_eq!(value["source_root_observation_source"], "IcpCanisterStatus");
     assert_eq!(value["source_check_id"], "check-1");
     assert_eq!(value["source_deployment_plan_id"], "plan-local-root");
     assert_eq!(value["source_inventory_id"], "inventory-1");
@@ -9728,6 +9756,8 @@ fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_
     assert!(text.contains("mode: local-state-write"));
     assert!(text.contains("canister_execution: none"));
     assert!(text.contains("local_state_write: recorded"));
+    assert!(text.contains("source_report_evidence_status: EvidenceSatisfied"));
+    assert!(text.contains("source_root_observation_source: IcpCanisterStatus"));
     assert!(!text.lines().any(|line| line == "execution: none"));
 }
 
@@ -9760,6 +9790,38 @@ fn root_verification_receipt_validation_rejects_bad_digest_shape() {
         DeploymentRootVerificationReceiptError::InvalidSha256Digest {
             field: "source_check_digest"
         }
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_unsatisfied_source_report_status() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_evidence_status =
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed;
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("receipt source report status drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::SourceEvidenceMismatch
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_local_state_root_source() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_root_observation_source =
+        DeploymentRootObservationSourceV1::LocalDeploymentState;
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("receipt source root observation source drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::SourceEvidenceMismatch
     );
 }
 
@@ -12915,6 +12977,10 @@ fn sample_root_verification_receipt() -> DeploymentRootVerificationReceiptV1 {
             DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified,
         source_report_id: report.report_id,
         source_report_digest: report.report_digest,
+        source_report_evidence_status: report.evidence_status,
+        source_root_observation_source: report
+            .observed_root_observation_source
+            .expect("observed source"),
         source_check_id: report.source_check_id,
         source_check_digest: report.source_check_digest,
         source_deployment_plan_id: report.source_deployment_plan_id,

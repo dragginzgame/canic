@@ -2651,15 +2651,14 @@ fn verify_registered_deployment_root_promotes_unverified_state() {
 
 #[test]
 fn verify_registered_deployment_root_reverifies_same_root_without_state_write() {
-    let (root, mut check) = demo_unverified_registered_root_check("canic-root-verify-reverify");
+    let (root, _) = demo_unverified_registered_root_check("canic-root-verify-reverify");
     let mut verified_state = read_deployment_install_state(&root, "local", "demo-local")
         .expect("read state")
         .expect("state exists");
     verified_state.root_verification = RootVerificationStatus::Verified;
     verified_state.updated_at_unix_secs = 100;
     write_install_state(&root, "local", &verified_state).expect("write verified state");
-    check.report.hard_failures.clear();
-    check.report.status = SafetyStatusV1::Safe;
+    let check = demo_registered_root_check_from_state(&root);
     let state_before = read_deployment_install_state(&root, "local", "demo-local")
         .expect("read before")
         .expect("state before");
@@ -3091,16 +3090,23 @@ kind = "root"
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
     let mut state = sample_install_state(&root, "demo-local", "demo");
     state.root_verification = RootVerificationStatus::NotVerified;
     write_install_state(&root, "local", &state).expect("write unverified state");
 
+    let check = demo_registered_root_check_from_state(&root);
+    (root, check)
+}
+
+fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
+    let config_path = root.join("fleets/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         network: "local".to_string(),
         deployment_name: Some("demo-local".to_string()),
-        icp_root: Some(root.clone()),
+        icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
         config_path: Some("fleets/demo/canic.toml".to_string()),
@@ -3111,8 +3117,8 @@ kind = "root"
     };
     let mut check = current_install_deployment_truth_check_at(
         &options,
-        &root,
-        &root,
+        root,
+        root,
         &config_path,
         "demo-local",
         "2026-05-27T00:00:00Z".to_string(),
@@ -3124,13 +3130,16 @@ kind = "root"
         .as_mut()
         .expect("observed root");
     observed_root.observation_source = DeploymentRootObservationSourceV1::IcpCanisterStatus;
+    observed_root.control_class = CanisterControlClassV1::DeploymentControlled;
     observed_root.role_assignment_source = Some("icp_canister_status".to_string());
+    for observed_canister in &mut check.inventory.observed_canisters {
+        if observed_canister.role.as_deref() == Some("root") {
+            observed_canister.control_class = CanisterControlClassV1::DeploymentControlled;
+        }
+    }
+    check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+    check.report = safety_report_from_diff("report-1", Some("diff-1".to_string()), &check.diff);
     check
-        .report
-        .hard_failures
-        .retain(|finding| finding.code == "unverified_deployment_root");
-    check.report.warnings.clear();
-    (root, check)
 }
 
 fn sample_artifact_promotion_plan_for_install(
