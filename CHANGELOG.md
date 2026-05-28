@@ -15,6 +15,11 @@ present.
 - Root-verification report and receipt validation now rejects malformed
   SHA-256 digest fields and forged report check rows before archived artifacts
   can be treated as stable root-verification evidence.
+- Root verification now rejects stale or tampered source `DeploymentCheckV1`
+  artifacts whose schema is unsupported or whose embedded diff/report no
+  longer match their plan and inventory.
+- Root-verification report validation now rejects duplicate or unexpected
+  check rows, keeping archived root evidence schema-stable.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 

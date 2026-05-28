@@ -426,6 +426,7 @@ fn root_verification_blockers(
 ) -> Vec<SafetyFindingV1> {
     let mut blockers = failed_checks("identity", identity_checks);
     blockers.extend(failed_checks("evidence", evidence_checks));
+    blockers.extend(source_check_consistency_blockers(check));
     blockers.extend(source_check_blockers(check));
     blockers
 }
@@ -484,6 +485,46 @@ fn source_check_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFindingV1> {
         return Vec::new();
     }
     hard_failures.clone()
+}
+
+fn source_check_consistency_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFindingV1> {
+    let mut blockers = Vec::new();
+    if check.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
+        blockers.push(SafetyFindingV1 {
+            code: "root_verification_source_check_schema_mismatch".to_string(),
+            message: "source deployment check schema version is unsupported".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(check.check_id.clone()),
+        });
+        return blockers;
+    }
+
+    let expected_diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+    if check.diff != expected_diff {
+        blockers.push(SafetyFindingV1 {
+            code: "root_verification_source_check_diff_stale".to_string(),
+            message: "source deployment check diff does not match its plan and inventory"
+                .to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(check.check_id.clone()),
+        });
+        return blockers;
+    }
+
+    let expected_report = safety_report_from_diff(
+        &check.report.report_id,
+        check.report.diff_id.clone(),
+        &check.diff,
+    );
+    if check.report != expected_report {
+        blockers.push(SafetyFindingV1 {
+            code: "root_verification_source_check_report_stale".to_string(),
+            message: "source deployment check report does not match its diff".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some(check.check_id.clone()),
+        });
+    }
+    blockers
 }
 
 fn is_expected_unverified_root_finding(finding: &SafetyFindingV1) -> bool {
@@ -545,6 +586,29 @@ const fn report_state_transition(
 fn ensure_root_verification_report_checks_consistent(
     report: &DeploymentRootVerificationReportV1,
 ) -> Result<(), DeploymentRootVerificationReportError> {
+    ensure_report_check_names(
+        &report.identity_checks,
+        &[
+            "deployment_name",
+            "network",
+            "fleet_template",
+            "root_principal",
+            "plan_deployment_name",
+            "plan_network",
+            "plan_fleet_template",
+        ],
+    )?;
+    ensure_report_check_names(
+        &report.evidence_checks,
+        &[
+            "explicit_observed_root",
+            "root_observation_source",
+            "observed_root_canister_id",
+            "source_check_id",
+            "source_deployment_plan_id",
+            "source_inventory_id",
+        ],
+    )?;
     for check in report.identity_checks.iter().chain(&report.evidence_checks) {
         if check.satisfied != (check.expected == check.observed) {
             return Err(DeploymentRootVerificationReportError::CheckMismatch {
@@ -611,6 +675,32 @@ fn ensure_root_verification_report_checks_consistent(
         Some("present"),
         present_value(report.source_inventory_id.as_str()),
     )?;
+    Ok(())
+}
+
+fn ensure_report_check_names(
+    checks: &[DeploymentRootVerificationCheckV1],
+    expected: &[&'static str],
+) -> Result<(), DeploymentRootVerificationReportError> {
+    for check in checks {
+        if !expected.contains(&check.name.as_str()) {
+            return Err(DeploymentRootVerificationReportError::CheckMismatch {
+                check: check.name.clone(),
+            });
+        }
+    }
+    for expected_name in expected {
+        if checks
+            .iter()
+            .filter(|check| check.name == *expected_name)
+            .count()
+            != 1
+        {
+            return Err(DeploymentRootVerificationReportError::CheckMismatch {
+                check: (*expected_name).to_string(),
+            });
+        }
+    }
     Ok(())
 }
 

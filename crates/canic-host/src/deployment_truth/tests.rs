@@ -9440,6 +9440,65 @@ fn root_verification_report_rejects_unrelated_source_check_blocker() {
 }
 
 #[test]
+fn root_verification_report_rejects_stale_source_check_diff() {
+    let mut check = sample_root_verification_check();
+    check.diff.warnings.push(SafetyFindingV1 {
+        code: "tampered_diff".to_string(),
+        message: "tampered diff".to_string(),
+        severity: SafetySeverityV1::Warning,
+        subject: Some("diff".to_string()),
+    });
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "root_verification_source_check_diff_stale"
+            && finding.subject.as_deref() == Some("check-1")
+    }));
+}
+
+#[test]
+fn root_verification_report_rejects_unsupported_source_check_schema() {
+    let mut check = sample_root_verification_check();
+    check.schema_version = DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1;
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "root_verification_source_check_schema_mismatch"
+            && finding.subject.as_deref() == Some("check-1")
+    }));
+}
+
+#[test]
+fn root_verification_report_rejects_stale_source_check_report() {
+    let mut check = sample_root_verification_check();
+    check
+        .report
+        .next_actions
+        .push("tampered next action".to_string());
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+
+    assert_eq!(
+        report.evidence_status,
+        DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
+    );
+    assert!(report.blockers.iter().any(|finding| {
+        finding.code == "root_verification_source_check_report_stale"
+            && finding.subject.as_deref() == Some("check-1")
+    }));
+}
+
+#[test]
 fn root_verification_report_validation_rejects_digest_drift() {
     let check = sample_root_verification_check();
     let mut report =
@@ -9492,6 +9551,44 @@ fn root_verification_report_validation_rejects_check_row_drift() {
         err,
         DeploymentRootVerificationReportError::CheckMismatch {
             check: "deployment_name".to_string()
+        }
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_duplicate_check_row() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report
+        .identity_checks
+        .push(report.identity_checks[0].clone());
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("duplicate check row should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::CheckMismatch {
+            check: "deployment_name".to_string()
+        }
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_unexpected_check_row() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.evidence_checks[0].name = "unexpected_check".to_string();
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("unexpected check row should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::CheckMismatch {
+            check: "unexpected_check".to_string()
         }
     );
 }

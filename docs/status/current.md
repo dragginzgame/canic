@@ -83,6 +83,13 @@ inspect only the files needed for the current task.
   digest strings while still passing validation. Report validation also rejects
   forged check rows whose displayed expected/observed fields no longer match
   the check-row evidence.
+- Root verification now rejects stale or tampered source `DeploymentCheckV1`
+  artifacts before they can satisfy root evidence. The source check's embedded
+  schema must be supported, its diff must still match its plan and inventory,
+  and its safety report must still match that diff.
+- Root-verification report validation now rejects duplicate or unexpected
+  identity/evidence check rows, keeping archived root-verification evidence
+  schema-stable instead of accepting arbitrary check-row additions.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing
