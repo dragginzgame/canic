@@ -6,7 +6,6 @@ enabled = true
 ecdsa_key_name = "key_1"
 
 [subnets.prime]
-auto_create = ["signer"]
 
 [subnets.prime.canisters.root]
 kind = "root"
