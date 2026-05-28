@@ -1,9 +1,7 @@
 #![expect(clippy::unused_async)]
-use canic::{Error, ids::CanisterRole, prelude::*};
+use canic::{Error, prelude::*};
 
-const TEST_ROLE: CanisterRole = CanisterRole::new("test");
-
-canic::start!(TEST_ROLE);
+canic::start!();
 canic::finish!();
 
 // Provide an empty setup hook so `start!` can schedule user lifecycle work.

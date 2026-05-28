@@ -35,8 +35,8 @@ walkthrough.
 ## Highlights
 
 * **Lifecycle and build macros:** `canic::start!`, `canic::start_root!`,
-  `canic::build!`, `canic::build_root!`, and `canic::build_standalone!` wire IC
-  hooks, endpoint bundles, and compile-time config validation.
+  and `canic::build!` wire IC hooks, endpoint bundles, and compile-time config
+  validation.
 * **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
   subnets, roles, singleton/replica/shard/instance placement, warm pools,
   scaling pools, sharding pools, and directory pools.

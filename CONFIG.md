@@ -9,7 +9,7 @@ At a high level the file describes:
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
 - Subnet-local wasm-store topology and capacity policy for chunk-store-backed installs.
 
-All fields are validated when `canic::build!` or `canic::build_root!` run, so configuration drift fails fast at compile time.
+All fields are validated when `canic::build!` runs, so configuration drift fails fast at compile time.
 
 ---
 

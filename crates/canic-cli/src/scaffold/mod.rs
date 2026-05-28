@@ -299,6 +299,9 @@ rust-version = "1.88.0"
 version = "0.1.0"
 publish = false
 
+[package.metadata.canic]
+role = "root"
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -323,6 +326,9 @@ rust-version = "1.88.0"
 version = "0.1.0"
 publish = false
 
+[package.metadata.canic]
+role = "app"
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -338,7 +344,7 @@ canic = "{canic_version}"
 }
 
 const ROOT_BUILD_RS: &str = r#"fn main() {
-    canic::build_root!("../canic.toml");
+    canic::build!("../canic.toml");
 }
 "#;
 
@@ -356,36 +362,32 @@ const ROOT_LIB_RS: &str = r"#![expect(clippy::unused_async)]
 canic::start_root!();
 
 /// Run no-op setup for this scaffolded root.
-pub async fn canic_setup() {}
+async fn canic_setup() {}
 
 /// Run no-op install handling for this scaffolded root.
-pub async fn canic_install() {}
+async fn canic_install() {}
 
 /// Run no-op upgrade handling for this scaffolded root.
-pub async fn canic_upgrade() {}
+async fn canic_upgrade() {}
 
 canic::finish!();
 ";
 
-const APP_LIB_RS: &str = r#"#![expect(clippy::unused_async)]
-
-use canic::ids::CanisterRole;
-
-const APP: CanisterRole = CanisterRole::new("app");
+const APP_LIB_RS: &str = r"#![expect(clippy::unused_async)]
 
 /// Run no-op setup for this scaffolded app.
-pub async fn canic_setup() {}
+async fn canic_setup() {}
 
 /// Accept no install payload for this scaffolded app.
-pub async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_install(_: Option<Vec<u8>>) {}
 
 /// Run no-op upgrade handling for this scaffolded app.
-pub async fn canic_upgrade() {}
+async fn canic_upgrade() {}
 
-canic::start!(APP);
+canic::start!();
 
 canic::finish!();
-"#;
+";
 
 #[cfg(test)]
 mod tests;

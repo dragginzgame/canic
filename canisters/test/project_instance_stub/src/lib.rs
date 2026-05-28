@@ -3,9 +3,8 @@
 #![expect(clippy::unused_async)]
 
 use canic::{Error, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap, prelude::*};
-use project_protocol_stub::PROJECT_INSTANCE;
 
-canic::start!(PROJECT_INSTANCE);
+canic::start!();
 
 // Keep the test instance setup hook empty.
 async fn canic_setup() {}

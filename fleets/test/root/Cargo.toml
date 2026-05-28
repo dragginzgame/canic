@@ -4,9 +4,13 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 publish = false
+build = "../build.rs"
 
 [package.metadata.cargo-machete]
 ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+role = "root"
 
 [lib]
 crate-type = ["cdylib"]

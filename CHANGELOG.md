@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.1` simplifies downstream canister setup by making
+  `[package.metadata.canic] role = "..."` the single source of truth for
+  `canic::build!` and `canic::start!()`, while removing the old build macro
+  variants and redundant checked-in fleet scaffolding.
+
 - `0.48.0` removes authored subnet `auto_create` and `subnet_index` config
   lists, deriving both from configured singleton canister roles so fleet setup
   has one source of truth for stable subnet services.

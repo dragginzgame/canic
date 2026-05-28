@@ -4,6 +4,9 @@ edition = { workspace = true }
 version = { workspace = true }
 publish = false
 
+[package.metadata.canic]
+role = "root"
+
 [lib]
 crate-type = ["cdylib"]
 

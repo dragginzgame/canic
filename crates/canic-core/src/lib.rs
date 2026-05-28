@@ -2,7 +2,7 @@
 //!
 //! Most users should depend on the `canic` facade crate, which re-exports this crate
 //! under `canic::core` and exposes the common entrypoint macros:
-//! - `canic::build!` / `canic::build_root!` (in `build.rs`) to validate/embed `canic.toml`
+//! - `canic::build!` (in `build.rs`) to validate/embed `canic.toml`
 //! - `canic::start!` / `canic::start_root!` (in `lib.rs`) to wire lifecycle hooks and export endpoints
 //!
 //! ## Layering

@@ -1,15 +1,9 @@
 #![expect(clippy::unused_async)]
 
-use canic::ids::CanisterRole;
+canic::start!();
 
-const APP: CanisterRole = CanisterRole::new("app");
-
-pub async fn canic_setup() {}
-
-pub async fn canic_install(_: Option<Vec<u8>>) {}
-
-pub async fn canic_upgrade() {}
-
-canic::start!(APP);
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
 
 canic::finish!();

@@ -10,7 +10,7 @@ fn main() {
         env::var("CARGO_TARGET_DIR").map_or_else(|_| workspace_root.join("target"), PathBuf::from);
 
     build_bootstrap_wasm_store(&workspace_root, &manifest_dir, &outer_target_dir);
-    canic::build_root!("canic.toml");
+    canic::build!("canic.toml");
     build_embedded_test_canisters(&workspace_root, &outer_target_dir, &out_dir);
     emit_rerun_inputs(&workspace_root);
 }
@@ -25,7 +25,7 @@ fn configure_cfg() {
     }
 }
 
-// Build the implicit bootstrap wasm_store artifact so `build_root!` can embed it.
+// Build the implicit bootstrap wasm_store artifact so root `build!` can embed it.
 fn build_bootstrap_wasm_store(
     workspace_root: &std::path::Path,
     manifest_dir: &std::path::Path,

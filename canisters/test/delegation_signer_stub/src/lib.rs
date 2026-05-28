@@ -7,13 +7,11 @@ use canic::{
     api::auth::AuthApi,
     cdk::candid::Principal,
     dto::auth::{DelegatedToken, DelegatedTokenMintRequest, SignedRoleAttestation},
-    ids::{CanisterRole, cap},
+    ids::cap,
     prelude::*,
 };
 
-const USER_SHARD: CanisterRole = CanisterRole::new("user_shard");
-
-canic::start!(USER_SHARD);
+canic::start!();
 
 /// Run no-op setup for the delegation signer stub.
 async fn canic_setup() {}

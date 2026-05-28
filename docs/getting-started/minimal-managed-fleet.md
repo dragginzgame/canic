@@ -33,9 +33,7 @@ fleets/example/
     └── src/lib.rs
 ```
 
-Package names may follow the `canister_<role>` convention, such as
-`canister_root`, `canister_hub`, and `canister_registry`. If a package uses a
-different name, declare the role explicitly in that package manifest:
+Every canister package must declare the Canic role it implements:
 
 ```toml
 [package.metadata.canic]
@@ -129,7 +127,7 @@ Root:
 
 ```rust
 fn main() {
-    canic::build_root!("../canic.toml");
+    canic::build!("../canic.toml");
 }
 ```
 
@@ -149,6 +147,9 @@ example `../../canic.toml`.
 The root crate needs Canic's control-plane and auth-crypto features.
 
 ```toml
+[package.metadata.canic]
+role = "root"
+
 [dependencies]
 candid = "<version>"
 canic = { version = "<same-version-as-canic-cli>", features = ["auth-crypto", "control-plane"] }
@@ -172,10 +173,13 @@ canic::finish!();
 
 ## Child Canister
 
-Child canisters declare their role with `CanisterRole` and use Canic endpoint
+Child canisters declare their role in Cargo metadata and use Canic endpoint
 macros for application methods.
 
 ```toml
+[package.metadata.canic]
+role = "hub"
+
 [dependencies]
 candid = "<version>"
 canic = "<same-version-as-canic-cli>"
@@ -189,11 +193,9 @@ canic = "<same-version-as-canic-cli>"
 #![expect(clippy::unused_async)]
 
 use candid::Principal;
-use canic::{Error, ids::CanisterRole, prelude::*};
+use canic::{Error, prelude::*};
 
-const HUB: CanisterRole = CanisterRole::new("hub");
-
-canic::start!(HUB);
+canic::start!();
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
@@ -212,11 +214,12 @@ fn whoami_update() -> Result<Principal, Error> {
 canic::finish!();
 ```
 
-Use another role constant for `registry`:
+Use the same `lib.rs` shape for `registry`; set its role in that crate's
+`Cargo.toml` instead:
 
-```rust
-const REGISTRY: CanisterRole = CanisterRole::new("registry");
-canic::start!(REGISTRY);
+```toml
+[package.metadata.canic]
+role = "registry"
 ```
 
 ## Install And Inspect

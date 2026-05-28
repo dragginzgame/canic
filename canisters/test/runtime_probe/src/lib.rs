@@ -1,16 +1,9 @@
 #![expect(clippy::unused_async)]
 
-use canic::{
-    Error,
-    dto::auth::DelegatedToken,
-    ids::{CanisterRole, cap},
-    prelude::*,
-};
+use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
 use std::time::Duration;
 
-const TEST: CanisterRole = CanisterRole::new("test");
-
-canic::start!(TEST);
+canic::start!();
 
 /// Run no-op setup for the runtime probe.
 async fn canic_setup() {}

@@ -1,15 +1,6 @@
-//!
-//! Root demo canister that orchestrates the sample canisters in the reference
-//! topology.
-//!
-
 #![expect(clippy::unused_async)]
 
 use canic::api::auth::AuthApi;
-
-//
-// CANIC
-//
 
 canic::start_root!();
 

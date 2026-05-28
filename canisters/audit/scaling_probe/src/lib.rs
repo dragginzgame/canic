@@ -4,14 +4,12 @@ use canic::{
     Error,
     api::{canister::placement::ScalingApi, metrics::MetricsQuery},
     dto::metrics::QueryPerfSample,
-    ids::CanisterRole,
     prelude::*,
 };
 
 const POOL_NAME: &str = "scales";
-const SCALE_HUB: CanisterRole = CanisterRole::new("scale_hub");
 
-canic::start!(SCALE_HUB);
+canic::start!();
 
 /// Run no-op setup for the audit scaling probe.
 async fn canic_setup() {}

@@ -8,24 +8,22 @@
 
 #![expect(clippy::unused_async)]
 
-use canic::{Error, ids::CanisterRole, prelude::*};
-
-const SANDBOX_MINIMAL: CanisterRole = CanisterRole::new("sandbox_minimal");
+use canic::{Error, prelude::*};
 
 /// Run no-op setup for the local sandbox shell.
-pub async fn canic_setup() {}
+async fn canic_setup() {}
 
 /// Accept no install payload for the local sandbox shell.
-pub async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_install(_: Option<Vec<u8>>) {}
 
 /// Run no-op upgrade handling for the local sandbox shell.
-pub async fn canic_upgrade() {}
+async fn canic_upgrade() {}
 
 //
 // CANIC
 //
 
-canic::start_local!(SANDBOX_MINIMAL);
+canic::start_local!();
 
 /// Return a small liveness response for quick manual calls.
 #[canic_query]

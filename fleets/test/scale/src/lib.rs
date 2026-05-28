@@ -1,33 +1,13 @@
-//!
-//! Scaling worker demo canister used to exercise the ops scaling helpers.
-//! Part of the `fleets` showcase suite.
-//!
-//! Test-only helper: this canister is intended for local/dev flows and is not
-//! a public-facing deployment target.
-//!
-
 #![expect(clippy::unused_async)]
 
-use canic::{Error, api::rpc::RpcApi, ids::CanisterRole, prelude::*};
+use canic::{Error, api::rpc::RpcApi, prelude::*};
 
-const SCALE_REPLICA: CanisterRole = CanisterRole::new("scale_replica");
+async fn canic_setup() {}
+async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_upgrade() {}
 
-/// Run no-op setup for the scaling worker shell.
-pub async fn canic_setup() {}
+canic::start!();
 
-/// Accept no install payload for the scaling worker shell.
-pub async fn canic_install(_: Option<Vec<u8>>) {}
-
-/// Run no-op upgrade handling for the scaling worker shell.
-pub async fn canic_upgrade() {}
-
-//
-// CANIC
-//
-
-canic::start!(SCALE_REPLICA);
-
-/// request_cycles_from_parent
 /// Ask the configured parent for a direct cycles top-up.
 #[canic_update]
 async fn request_cycles_from_parent(cycles: u128) -> Result<u128, Error> {

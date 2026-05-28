@@ -14,11 +14,11 @@ use canic::{
     ids::cap,
     prelude::*,
 };
-use project_protocol_stub::{PROJECT_HUB, project_instance_record_visit_endpoint};
+use project_protocol_stub::project_instance_record_visit_endpoint;
 
 const PROJECTS_POOL: &str = "projects";
 
-canic::start!(PROJECT_HUB);
+canic::start!();
 
 canic::canic_internal_client! {
     struct ProjectInstanceInternalClient {

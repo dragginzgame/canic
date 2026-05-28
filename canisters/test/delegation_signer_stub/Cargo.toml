@@ -7,6 +7,9 @@ publish = false
 [package.metadata.cargo-machete]
 ignored = ["candid", "ic-cdk"]
 
+[package.metadata.canic]
+role = "user_shard"
+
 [lib]
 crate-type = ["cdylib"]
 

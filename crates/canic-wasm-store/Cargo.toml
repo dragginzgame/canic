@@ -16,6 +16,9 @@ publish = true
 [package.metadata.cargo-machete]
 ignored = ["candid", "ic-cdk"]
 
+[package.metadata.canic]
+role = "wasm_store"
+
 [lib]
 name = "canister_wasm_store"
 crate-type = ["cdylib", "rlib"]

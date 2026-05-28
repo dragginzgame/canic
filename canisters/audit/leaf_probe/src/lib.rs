@@ -11,13 +11,10 @@ use canic::{
         metrics::QueryPerfSample,
         page::{Page, PageRequest},
     },
-    ids::CanisterRole,
     prelude::*,
 };
 
-const APP: CanisterRole = CanisterRole::new("app");
-
-canic::start!(APP);
+canic::start!();
 
 /// Run no-op setup for the audit leaf probe.
 async fn canic_setup() {}

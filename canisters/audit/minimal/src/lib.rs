@@ -8,23 +8,19 @@
 
 #![expect(clippy::unused_async)]
 
-use canic::ids::CanisterRole;
-
-const MINIMAL: CanisterRole = CanisterRole::new("minimal");
-
 /// Run no-op setup for the minimal reference shell.
-pub async fn canic_setup() {}
+async fn canic_setup() {}
 
 /// Accept no install payload for the minimal reference shell.
-pub async fn canic_install(_: Option<Vec<u8>>) {}
+async fn canic_install(_: Option<Vec<u8>>) {}
 
 /// Run no-op upgrade handling for the minimal reference shell.
-pub async fn canic_upgrade() {}
+async fn canic_upgrade() {}
 
 //
 // CANIC
 //
 
-canic::start!(MINIMAL);
+canic::start!();
 
 canic::finish!();

@@ -3,7 +3,7 @@
 Core orchestration logic for Canic canisters: config handling, ops layer, registries, and IC interface helpers.
 
 Most canister projects should depend on `canic` (the facade crate) and use:
-- `canic::build!` / `canic::build_root!` from `build.rs` to validate/embed `canic.toml`
+- `canic::build!` from `build.rs` to validate/embed `canic.toml`
 - `canic::start!` / `canic::start_root!` from `lib.rs` to wire init/upgrade and export endpoints
 
 `canic-core` is still published because it holds the underlying building blocks:
@@ -51,11 +51,8 @@ In `src/lib.rs`:
 
 ```rust
 use canic::prelude::*;
-use canic::ids::CanisterRole;
 
-const APP: CanisterRole = CanisterRole::new("app");
-
-canic::start!(APP);
+canic::start!();
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}

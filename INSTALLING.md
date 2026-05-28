@@ -78,7 +78,7 @@ Root canister:
 
 ```rust
 fn main() {
-    canic::build_root!("../canic.toml");
+    canic::build!("../canic.toml");
 }
 ```
 
@@ -94,7 +94,7 @@ Standalone probe:
 
 ```rust
 fn main() {
-    canic::build_standalone!("sandbox_minimal");
+    canic::build!("canic.toml");
 }
 ```
 
@@ -103,12 +103,9 @@ fn main() {
 In `lib.rs`:
 
 ```rust
-use canic::ids::CanisterRole;
 use canic::prelude::*;
 
-const APP: CanisterRole = CanisterRole::new("app");
-
-canic::start!(APP); // use canic::start_root!() for root
+canic::start!(); // use canic::start_root!() for root
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
@@ -290,8 +287,8 @@ Canic-owned methods.
 - If the root canister does not compile or bootstrap delegated-auth material,
   confirm the runtime dependency enables the `auth-crypto` and `control-plane`
   features.
-- If host discovery cannot map a crate to a role, use a package name like
-  `canister_hub` or declare `[package.metadata.canic] role = "hub"`.
+- Each canister crate must declare its role with
+  `[package.metadata.canic] role = "hub"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not
   fully installed or the local replica lost state. Run `canic medic <fleet>` and
   reinstall the local fleet.

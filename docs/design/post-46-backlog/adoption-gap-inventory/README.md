@@ -92,7 +92,8 @@ Still open backlog:
 **Status after 0.46:** Open backlog.
 
 - Docs and scaffold push `fleets/<name>/root` + `app` + `canic install`.
-- `build_standalone!` exists but is framed for probes/sandbox, not “production single canister.”
+- `build!` can generate a default one-role config, but that path is framed for
+  probes/sandbox, not “production single canister.”
 - No published pattern for “Canic runtime without control-plane feature.”
 
 **Propose:**

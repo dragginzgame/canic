@@ -98,7 +98,7 @@ to avoid PocketIC startup races under parallel harness execution.
 - Audit and measurement probe canisters live under `canisters/audit/`.
 - Manual sandbox canisters live under `canisters/sandbox/`.
 - These canisters are not Canic fleets and must not use fleet install logic.
-- Their `build.rs` MUST embed static config via `canic::build!` or `canic::build_root!`.
+- Their `build.rs` MUST embed static config via `canic::build!`.
 - Test canisters MUST NOT use `ConfigTestBuilder` or private `canic-core` config internals.
 - No test canister build script may rely on environment-based config overrides.
 

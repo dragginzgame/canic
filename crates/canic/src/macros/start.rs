@@ -2,6 +2,15 @@
 // Start macros
 // -----------------------------------------------------------------------------
 
+// Compile-time role selected by the canister package metadata.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_declared_package_role {
+    () => {
+        $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+    };
+}
+
 // Lifecycle core for non-root Canic canisters.
 #[doc(hidden)]
 #[macro_export]
@@ -385,6 +394,9 @@ macro_rules! finish {
 
 /// Configure lifecycle hooks for **non-root** Canic canisters.
 ///
+/// The canister role comes from `[package.metadata.canic] role = "..."` in the
+/// crate manifest and is emitted by `canic::build!` at compile time.
+///
 /// This macro defines the IC-required `init` and `post_upgrade` entry points
 /// at the crate root and immediately delegates lifecycle semantics to runtime
 /// adapters after performing minimal bootstrap.
@@ -399,15 +411,20 @@ macro_rules! finish {
 /// Its sole responsibility is to bridge IC lifecycle hooks to runtime code.
 #[macro_export]
 macro_rules! start {
-    ($canister_role:expr $(, init = $init:block)? $(,)?) => {
+    ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
-        $crate::__canic_start_nonroot_lifecycle_core!($canister_role $(, $init)?);
+        #[cfg(canic_is_root)]
+        compile_error!("canic::start!() cannot be used for root canisters; use canic::start_root!()");
+        $crate::__canic_start_nonroot_lifecycle_core!($crate::__canic_declared_package_role!() $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_nonroot_capability_bundles!();
     };
 }
 
 /// Configure a local-only non-root Canic canister for manual development.
+///
+/// The canister role comes from `[package.metadata.canic] role = "..."` in the
+/// crate manifest and is emitted by `canic::build!` at compile time.
 ///
 /// `start_local!` is intentionally for standalone dev canisters such as a
 /// sandbox. It synthesizes a minimal local environment during `init`, so
@@ -419,9 +436,11 @@ macro_rules! start {
 /// metadata. Those should use [`start!`] and receive explicit lifecycle args.
 #[macro_export]
 macro_rules! start_local {
-    ($canister_role:expr $(, init = $init:block)? $(,)?) => {
+    ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
-        $crate::__canic_start_local_lifecycle_core!($canister_role $(, $init)?);
+        #[cfg(canic_is_root)]
+        compile_error!("canic::start_local!() cannot be used for root canisters; use canic::start_root!()");
+        $crate::__canic_start_local_lifecycle_core!($crate::__canic_declared_package_role!() $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!();
         $crate::__canic_start_nonroot_capability_bundles!();
     };

@@ -111,8 +111,8 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(app_manifest.contains("canic = \""));
     assert!(app_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!app_manifest.contains("workspace = true"));
-    assert!(app_lib.contains("CanisterRole::new(\"app\")"));
-    assert!(app_lib.contains("canic::start!(APP);"));
+    assert!(!app_lib.contains("CanisterRole::new"));
+    assert!(app_lib.contains("canic::start!();"));
     assert!(app_lib.contains("canic::finish!();"));
 }
 
