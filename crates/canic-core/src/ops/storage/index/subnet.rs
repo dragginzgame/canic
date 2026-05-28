@@ -55,7 +55,7 @@ impl SubnetIndexOps {
     pub fn import(data: SubnetIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "subnet")?;
         let subnet_cfg = ConfigOps::current_subnet()?;
-        ensure_required_roles(&data.entries, "subnet", &subnet_cfg.subnet_index)?;
+        ensure_required_roles(&data.entries, "subnet", &subnet_cfg.subnet_index_roles())?;
         SubnetIndex::import(data);
 
         Ok(())

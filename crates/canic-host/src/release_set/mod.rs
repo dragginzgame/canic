@@ -384,10 +384,6 @@ name = "demo"
 init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime]
-auto_create = ["user_hub"]
-subnet_index = ["scale_hub"]
-
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -496,7 +492,6 @@ app_index = []
 name = "demo"
 
 [subnets.prime]
-auto_create = ["app", "user_hub"]
 pool.minimum_size = 2
 
 [subnets.prime.canisters.root]
@@ -516,7 +511,7 @@ kind = "singleton"
     }
 
     #[test]
-    fn configured_role_auto_create_lists_subnet_auto_create_roles() {
+    fn configured_role_auto_create_lists_derived_singleton_roles() {
         let config = r#"
 controllers = []
 app_index = []
@@ -527,9 +522,6 @@ name = "demo"
 [app]
 init_mode = "enabled"
 [app.whitelist]
-
-[subnets.prime]
-auto_create = ["app", "user_hub"]
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -560,9 +552,6 @@ name = "demo"
 [app]
 init_mode = "enabled"
 [app.whitelist]
-
-[subnets.prime]
-auto_create = ["app", "user_hub"]
 
 [subnets.prime.canisters.root]
 kind = "root"

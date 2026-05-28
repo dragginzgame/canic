@@ -25,9 +25,10 @@ impl ProvisionWorkflow {
         let subnet_cfg = ConfigOps::current_subnet()?;
         let registry = SubnetRegistryOps::data();
         let allow_incomplete = updated_role.is_some();
+        let subnet_index_roles = subnet_cfg.subnet_index_roles();
 
         let include_app = updated_role.is_none_or(|role| cfg.app_index.contains(role));
-        let include_subnet = updated_role.is_none_or(|role| subnet_cfg.subnet_index.contains(role));
+        let include_subnet = updated_role.is_none_or(|role| subnet_index_roles.contains(role));
 
         let mut builder = StateSnapshotBuilder::new()?;
 
@@ -43,7 +44,7 @@ impl ProvisionWorkflow {
         }
 
         if include_subnet {
-            let subnet_data = RootSubnetIndexBuilder::build(&registry, &subnet_cfg.subnet_index)?;
+            let subnet_data = RootSubnetIndexBuilder::build(&registry, &subnet_index_roles)?;
 
             if allow_incomplete {
                 SubnetIndexOps::import_allow_incomplete(subnet_data)?;

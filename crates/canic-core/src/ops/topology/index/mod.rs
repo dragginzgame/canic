@@ -55,7 +55,7 @@ impl SubnetIndexResolver {
             let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::current_subnet()?;
 
-            RootSubnetIndexBuilder::build(&registry, &cfg.subnet_index)
+            RootSubnetIndexBuilder::build(&registry, &cfg.subnet_index_roles())
         } else {
             Ok(SubnetIndexOps::data())
         }

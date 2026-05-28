@@ -14,8 +14,6 @@ ecdsa_key_name = "key_1"
 icrc21 = true
 
 [subnets.prime]
-auto_create = ["app", "scale_hub", "test"]
-subnet_index = ["app", "scale_hub", "test"]
 pool.minimum_size = 3
 
 [subnets.prime.canisters.root]

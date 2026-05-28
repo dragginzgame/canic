@@ -69,26 +69,6 @@ impl ConfigTestBuilder {
     }
 
     #[must_use]
-    pub fn with_prime_auto_create(self, role: impl Into<CanisterRole>) -> Self {
-        self.with_subnet_auto_create(SubnetRole::PRIME, role)
-    }
-
-    #[must_use]
-    pub fn with_subnet_auto_create(
-        mut self,
-        subnet: impl Into<SubnetRole>,
-        role: impl Into<CanisterRole>,
-    ) -> Self {
-        let subnet = subnet.into();
-        let role = role.into();
-        let entry = self.model.subnets.entry(subnet).or_default();
-
-        entry.auto_create.insert(role);
-
-        self
-    }
-
-    #[must_use]
     pub fn build(self) -> ConfigModel {
         self.model
     }

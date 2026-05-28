@@ -38,8 +38,6 @@ icrc21 = true # Enable ICRC-21 capability
 #  PRIME SUBNET
 # ================================================================
 [subnets.prime]
-auto_create = ["app", "user_hub", "scale_hub"]
-subnet_index = ["app", "user_hub", "scale_hub"]
 pool.minimum_size = 3
 
 # --- Root ---

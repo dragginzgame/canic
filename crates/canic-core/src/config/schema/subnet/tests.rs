@@ -1,7 +1,7 @@
 use super::*;
 use crate::cdk::types::TC;
 use crate::config::schema::{NAME_MAX_BYTES, Validate};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
     CanisterConfig {
@@ -139,21 +139,6 @@ fn root_canister_rejects_configured_auth_roles() {
 }
 
 #[test]
-fn auto_create_entries_must_exist_in_subnet() {
-    let mut auto_create = BTreeSet::new();
-    auto_create.insert(CanisterRole::from("missing_auto_canister"));
-
-    let subnet = SubnetConfig {
-        auto_create,
-        ..Default::default()
-    };
-
-    subnet
-        .validate()
-        .expect_err("expected missing auto-create role to fail");
-}
-
-#[test]
 fn sharding_pool_references_must_exist_in_subnet() {
     let managing_role: CanisterRole = "shard_hub".into();
     let mut canisters = BTreeMap::new();
@@ -182,6 +167,46 @@ fn sharding_pool_references_must_exist_in_subnet() {
     subnet
         .validate()
         .expect_err("expected missing replica role to fail");
+}
+
+#[test]
+fn singleton_roles_are_derived_for_auto_create_and_subnet_index() {
+    let mut subnet = SubnetConfig::default();
+    subnet.canisters.insert(
+        CanisterRole::from("app"),
+        base_canister_config(CanisterKind::Singleton),
+    );
+    subnet.canisters.insert(
+        CanisterRole::from("worker"),
+        base_canister_config(CanisterKind::Replica),
+    );
+
+    let auto_create = subnet.auto_create_roles();
+    let subnet_index = subnet.subnet_index_roles();
+
+    assert!(auto_create.contains("app"));
+    assert!(!auto_create.contains("worker"));
+    assert_eq!(auto_create, subnet_index);
+}
+
+#[test]
+fn authored_auto_create_and_subnet_index_fields_are_rejected() {
+    let err = toml::from_str::<SubnetConfig>(
+        r#"
+auto_create = ["app"]
+subnet_index = ["app"]
+
+[canisters.app]
+kind = "singleton"
+"#,
+    )
+    .expect_err("removed subnet role-list fields must not parse");
+
+    let message = err.to_string();
+    assert!(
+        message.contains("auto_create") || message.contains("subnet_index"),
+        "expected unknown field error for removed keys, got: {err}"
+    );
 }
 
 #[test]

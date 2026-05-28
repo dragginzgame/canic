@@ -38,12 +38,6 @@ pub struct SubnetConfig {
     pub canisters: BTreeMap<CanisterRole, CanisterConfig>,
 
     #[serde(default)]
-    pub auto_create: BTreeSet<CanisterRole>,
-
-    #[serde(default)]
-    pub subnet_index: BTreeSet<CanisterRole>,
-
-    #[serde(default)]
     pub pool: CanisterPool,
 }
 
@@ -58,6 +52,31 @@ impl SubnetConfig {
                 None
             }
         })
+    }
+
+    /// Roles that root creates automatically during subnet bootstrap.
+    ///
+    /// In the hard-cut config model, configured singleton roles are the stable
+    /// subnet services. Shards, replicas, and instances are created by their
+    /// placement managers instead.
+    #[must_use]
+    pub fn auto_create_roles(&self) -> BTreeSet<CanisterRole> {
+        self.singleton_roles()
+    }
+
+    /// Roles exposed through the subnet index.
+    #[must_use]
+    pub fn subnet_index_roles(&self) -> BTreeSet<CanisterRole> {
+        self.singleton_roles()
+    }
+
+    fn singleton_roles(&self) -> BTreeSet<CanisterRole> {
+        self.canisters
+            .iter()
+            .filter_map(|(role, canister)| {
+                (canister.kind == CanisterKind::Singleton).then(|| role.clone())
+            })
+            .collect()
     }
 }
 

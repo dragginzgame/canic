@@ -12,6 +12,14 @@ present.
 
 ## Unreleased
 
+## [0.48.x] - 2026-05-28 - Derived singleton topology
+
+Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
+
+- `0.48.0` removes authored subnet `auto_create` and `subnet_index` config
+  lists, deriving both from configured singleton canister roles so fleet setup
+  has one source of truth for stable subnet services.
+
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)

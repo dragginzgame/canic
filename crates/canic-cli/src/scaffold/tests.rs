@@ -94,8 +94,8 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(config.contains("name = \"my_app\""));
     assert!(config.contains("[auth.delegated_tokens]"));
     assert!(config.contains("enabled = false"));
-    assert!(config.contains("auto_create = [\"app\"]"));
-    assert!(config.contains("subnet_index = [\"app\"]"));
+    assert!(!config.contains("auto_create"));
+    assert!(!config.contains("subnet_index"));
     assert!(config.contains("[subnets.prime.canisters.root]"));
     assert!(config.contains("[subnets.prime.canisters.app]"));
     assert!(!config.contains("app_directory"));

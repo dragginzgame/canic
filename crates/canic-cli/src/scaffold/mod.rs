@@ -280,10 +280,6 @@ name = "{name}"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime]
-auto_create = ["app"]
-subnet_index = ["app"]
-
 [subnets.prime.canisters.root]
 kind = "root"
 

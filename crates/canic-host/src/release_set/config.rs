@@ -135,7 +135,7 @@ pub fn configured_role_capabilities(
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
-// Enumerate roles declared in subnet auto_create sets.
+// Enumerate roles derived for root auto-create.
 pub fn configured_role_auto_create(
     config_path: &Path,
 ) -> Result<BTreeSet<String>, Box<dyn std::error::Error>> {
@@ -237,7 +237,7 @@ pub(super) fn configured_role_capabilities_from_source(
         .collect())
 }
 
-// Enumerate auto-created roles from raw config source.
+// Enumerate derived auto-created singleton roles from raw config source.
 pub(super) fn configured_role_auto_create_from_source(
     config_source: &str,
 ) -> Result<BTreeSet<String>, Box<dyn std::error::Error>> {
@@ -247,7 +247,7 @@ pub(super) fn configured_role_auto_create_from_source(
     for subnet in config.subnets.values() {
         auto_create.extend(
             subnet
-                .auto_create
+                .auto_create_roles()
                 .iter()
                 .map(|role| role.as_str().to_string()),
         );
@@ -334,8 +334,8 @@ pub(super) fn configured_local_root_create_cycles_from_source(
     let mut cycles = subnet
         .get_canister(&CanisterRole::WASM_STORE)
         .map_or(DEFAULT_INITIAL_CYCLES, |cfg| cfg.initial_cycles.to_u128());
-    for role in &subnet.auto_create {
-        if let Some(cfg) = subnet.get_canister(role) {
+    for role in subnet.auto_create_roles() {
+        if let Some(cfg) = subnet.get_canister(&role) {
             cycles = cycles.saturating_add(cfg.initial_cycles.to_u128());
         }
     }
@@ -361,13 +361,13 @@ pub(super) fn configured_role_details_from_source(
     }
 
     for subnet in config.subnets.values() {
-        for role in &subnet.auto_create {
+        for role in subnet.auto_create_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
                 .insert("auto_create".to_string());
         }
-        for role in &subnet.subnet_index {
+        for role in subnet.subnet_index_roles() {
             details
                 .entry(role.as_str().to_string())
                 .or_default()
@@ -615,13 +615,13 @@ pub(super) fn configured_bootstrap_roles_from_source(
     roles.insert(CanisterRole::ROOT.as_str().to_string());
     roles.extend(
         subnet
-            .auto_create
+            .auto_create_roles()
             .iter()
             .map(|role| role.as_str().to_string()),
     );
 
-    for role in &subnet.auto_create {
-        let Some(canister) = subnet.get_canister(role) else {
+    for role in subnet.auto_create_roles() {
+        let Some(canister) = subnet.get_canister(&role) else {
             continue;
         };
 

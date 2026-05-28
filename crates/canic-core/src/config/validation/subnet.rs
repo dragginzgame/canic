@@ -18,30 +18,6 @@ fn validate_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSch
 
 impl Validate for SubnetConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        for role in &self.auto_create {
-            validate_role_len(role, "auto-create canister")?;
-            if !self.canisters.contains_key(role) {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "auto-create canister '{role}' is not defined in subnet",
-                )));
-            }
-        }
-
-        for role in &self.subnet_index {
-            validate_role_len(role, "subnet index canister")?;
-            let cfg = self.canisters.get(role).ok_or_else(|| {
-                ConfigSchemaError::ValidationError(format!(
-                    "subnet index canister '{role}' is not defined in subnet",
-                ))
-            })?;
-
-            if cfg.kind != CanisterKind::Singleton {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "subnet index canister '{role}' must have kind = \"singleton\"",
-                )));
-            }
-        }
-
         if self.canisters.contains_key(&CanisterRole::WASM_STORE) {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "{} is implicit and must not be configured under subnets.<name>.canisters",

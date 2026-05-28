@@ -3869,11 +3869,12 @@ mod tests {
         ExternalUpgradeConsentStateV1, ExternalUpgradeVerificationObservationV1,
         ExternalUpgradeVerificationRequirementStatusV1, ExternalUpgradeVerificationResultV1,
         ExternalVerificationObservationSourceV1, LifecycleVerificationRequirementV1,
-        LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
+        LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1,
         PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
         RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
         TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
-        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
+        compare_plan_to_inventory, external_upgrade_receipt_from_observation,
+        promotion_readiness_from_inputs, safety_report_from_diff,
     };
 
     #[test]
@@ -6314,6 +6315,25 @@ mod tests {
             status: Some("running".to_string()),
             role_assignment_source: Some("icp_canister_status".to_string()),
         });
+        check.inventory.observed_artifacts = vec![ObservedArtifactV1 {
+            role: "root".to_string(),
+            artifact_path: "artifacts/root.wasm.gz".to_string(),
+            file_sha256: Some(sample_sha256("a")),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: None,
+            payload_size_bytes: Some(123),
+            source: ArtifactSourceV1::LocalBuild,
+        }];
+        if let Some(root) = check.inventory.observed_canisters.first_mut() {
+            root.module_hash = Some("module".to_string());
+            root.canonical_embedded_config_digest = Some(sample_sha256("c"));
+        }
+        check.diff = compare_plan_to_inventory(&check.plan, &check.inventory);
+        check.report = safety_report_from_diff(
+            &check.report.report_id,
+            check.report.diff_id.clone(),
+            &check.diff,
+        );
         DeploymentRootVerificationRequestV1 {
             report_id: "root-verification-report-1".to_string(),
             requested_at: "2026-05-27T00:00:00Z".to_string(),

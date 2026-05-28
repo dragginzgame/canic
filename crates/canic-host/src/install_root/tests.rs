@@ -1915,9 +1915,6 @@ kind = "root"
 fn local_root_create_adds_configured_cycle_funding() {
     let workspace_root = write_temp_workspace_config(
         r#"
-[subnets.prime]
-auto_create = ["app"]
-
 [subnets.prime.canisters.root]
 kind = "root"
 

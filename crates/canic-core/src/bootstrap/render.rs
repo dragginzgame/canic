@@ -284,15 +284,11 @@ fn render_subnet_config(config: &SubnetConfig) -> TokenStream {
         render_canister_role,
         render_canister_config,
     );
-    let auto_create = render_btree_set(config.auto_create.iter(), render_canister_role);
-    let subnet_index = render_btree_set(config.subnet_index.iter(), render_canister_role);
     let pool = render_canister_pool(&config.pool);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::SubnetConfig {
             canisters: #canisters,
-            auto_create: #auto_create,
-            subnet_index: #subnet_index,
             pool: #pool,
         }
     }

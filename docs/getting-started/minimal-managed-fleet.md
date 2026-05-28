@@ -108,10 +108,6 @@ app_index = []
 [fleet]
 name = "example"
 
-[subnets.prime]
-auto_create = ["hub", "registry"]
-subnet_index = ["hub", "registry"]
-
 [subnets.prime.canisters.root]
 kind = "root"
 

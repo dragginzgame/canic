@@ -129,13 +129,13 @@ fn root_missing_staged_release_roles(
 ) -> Result<Vec<CanisterRole>, InternalError> {
     let mut missing = Vec::new();
 
-    for role in &data.subnet_cfg.auto_create {
+    for role in data.subnet_cfg.auto_create_roles() {
         if role.is_wasm_store() {
             continue;
         }
 
-        if !TemplateChunkedOps::has_publishable_chunked_approved_for_role(role)? {
-            missing.push(role.clone());
+        if !TemplateChunkedOps::has_publishable_chunked_approved_for_role(&role)? {
+            missing.push(role);
         }
     }
 
@@ -422,7 +422,7 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
         Topic::Init,
         Info,
         "auto_create: {:?}",
-        data.subnet_cfg.auto_create
+        data.subnet_cfg.auto_create_roles()
     );
 
     ensure_required_wasm_store_canister().await?;
@@ -495,7 +495,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         );
     }
 
-    if initial_limit == 0 && !data.subnet_cfg.auto_create.is_empty() {
+    if initial_limit == 0 && !data.subnet_cfg.auto_create_roles().is_empty() {
         log!(
             Topic::CanisterPool,
             Warn,
@@ -687,12 +687,12 @@ fn log_pool_import_result(stats: &PoolImportStats, wait_for_queued_imports: bool
 }
 
 async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), InternalError> {
-    for role in &data.subnet_cfg.auto_create {
+    for role in data.subnet_cfg.auto_create_roles() {
         // ALWAYS re-check live registry
-        if SubnetRegistryOps::has_role(role) {
+        if SubnetRegistryOps::has_role(&role) {
             CanisterOpsMetricsApi::record(
                 CanisterOpsMetricOperation::Create,
-                role,
+                &role,
                 CanisterOpsMetricOutcome::Skipped,
                 CanisterOpsMetricReason::AlreadyExists,
             );
@@ -700,10 +700,10 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
             continue;
         }
 
-        if !TemplateManifestOps::has_approved_for_role(role)? {
+        if !TemplateManifestOps::has_approved_for_role(&role)? {
             CanisterOpsMetricsApi::record(
                 CanisterOpsMetricOperation::Create,
-                role,
+                &role,
                 CanisterOpsMetricOutcome::Skipped,
                 CanisterOpsMetricReason::MissingWasm,
             );
@@ -715,7 +715,7 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
             continue;
         }
 
-        let manifest = TemplateManifestOps::approved_for_role_response(role)?;
+        let manifest = TemplateManifestOps::approved_for_role_response(&role)?;
         log!(
             Topic::Init,
             Info,
