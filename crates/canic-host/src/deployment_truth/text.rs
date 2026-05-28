@@ -87,6 +87,12 @@ pub fn deployment_root_verification_report_text(
         format!("network: {}", report.network),
         format!("fleet_template: {}", report.expected_fleet_template),
         format!("root_principal: {}", report.expected_root_principal),
+        format!(
+            "observed_root_observation_source: {}",
+            report
+                .observed_root_observation_source
+                .map_or_else(|| "missing".to_string(), |source| format!("{source:?}"))
+        ),
         format!("source_check_id: {}", report.source_check_id),
         format!("source_check_digest: {}", report.source_check_digest),
         format!("source_inventory_id: {}", report.source_inventory_id),

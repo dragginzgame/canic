@@ -12,18 +12,23 @@ present.
 
 ## Unreleased
 
-- Root-verification CLI help now describes the `canic deploy root` namespace as
-  inspection or explicit verification, not a passive-only report surface.
-- Root-verification receipt text now says `canister_execution: none` and
-  `local_state_write: recorded`, avoiding the misleading impression that no
-  local state transition happened.
-- The 0.47 design status now reflects that the explicit root-verification
-  command, receipt artifact, and state transition have landed; remaining work
-  is closeout hardening and audit rather than the main functional gate.
+- Root-verification reports now carry `observed_root_observation_source` as an
+  explicit archived evidence field, and report validation binds the
+  `root_observation_source` check row to that field instead of accepting the
+  row as self-contained evidence.
+- Root-verification report text now renders the observed root source so
+  operators can distinguish `IcpCanisterStatus` evidence from local-state echo
+  when reviewing archived reports.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.5` cleans up 0.47 closeout wording by making `canic deploy root`
+  describe inspection and explicit verification, updating the design status to
+  reflect that the main root-verification gate landed, and clarifying
+  root-verification receipt text as local-state mutation without canister
+  execution.
 
 - `0.47.4` hardens archived root-verification evidence by rejecting malformed
   digest fields, forged check rows, unsupported or stale source

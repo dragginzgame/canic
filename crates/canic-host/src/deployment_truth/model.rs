@@ -943,6 +943,7 @@ pub struct DeploymentRootVerificationReportV1 {
     pub observed_network: Option<String>,
     pub observed_fleet_template: Option<String>,
     pub observed_root_principal: Option<String>,
+    pub observed_root_observation_source: Option<DeploymentRootObservationSourceV1>,
     pub source: DeploymentRootVerificationSourceV1,
     pub source_check_id: String,
     pub source_check_digest: String,

@@ -16,6 +16,7 @@ struct DeploymentRootVerificationReportDigestInput<'a> {
     observed_network: &'a Option<String>,
     observed_fleet_template: &'a Option<String>,
     observed_root_principal: &'a Option<String>,
+    observed_root_observation_source: &'a Option<DeploymentRootObservationSourceV1>,
     source: DeploymentRootVerificationSourceV1,
     source_check_id: &'a str,
     source_check_digest: &'a str,
@@ -146,6 +147,7 @@ pub fn deployment_root_verification_report_from_check(
         observed_network: observed_root.map(|root| root.network.clone()),
         observed_fleet_template: observed_root.map(|root| root.fleet_template.clone()),
         observed_root_principal: observed_root.map(|root| root.root_principal.clone()),
+        observed_root_observation_source: observed_root.map(|root| root.observation_source),
         source: request.source,
         source_check_id: check.check_id.clone(),
         source_check_digest: stable_json_sha256_hex(check),
@@ -454,7 +456,13 @@ const fn present_value(value: &str) -> Option<&'static str> {
 }
 
 const fn root_observation_source_label(root: &DeploymentRootObservationV1) -> &str {
-    match root.observation_source {
+    root_observation_source_label_from_source(&root.observation_source)
+}
+
+const fn root_observation_source_label_from_source(
+    source: &DeploymentRootObservationSourceV1,
+) -> &str {
+    match *source {
         DeploymentRootObservationSourceV1::IcpCanisterStatus => "IcpCanisterStatus",
         DeploymentRootObservationSourceV1::LocalDeploymentState => "LocalDeploymentState",
     }
@@ -644,12 +652,22 @@ fn ensure_root_verification_report_checks_consistent(
     let observed_root_present = report.observed_deployment_name.is_some()
         && report.observed_network.is_some()
         && report.observed_fleet_template.is_some()
-        && report.observed_root_principal.is_some();
+        && report.observed_root_principal.is_some()
+        && report.observed_root_observation_source.is_some();
     ensure_report_check_value(
         &report.evidence_checks,
         "explicit_observed_root",
         Some("present"),
         observed_root_present.then_some("present"),
+    )?;
+    ensure_report_check_value(
+        &report.evidence_checks,
+        "root_observation_source",
+        Some("IcpCanisterStatus"),
+        report
+            .observed_root_observation_source
+            .as_ref()
+            .map(root_observation_source_label_from_source),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
@@ -772,6 +790,7 @@ fn deployment_root_verification_report_digest(
         observed_network: &report.observed_network,
         observed_fleet_template: &report.observed_fleet_template,
         observed_root_principal: &report.observed_root_principal,
+        observed_root_observation_source: &report.observed_root_observation_source,
         source: report.source,
         source_check_id: &report.source_check_id,
         source_check_digest: &report.source_check_digest,

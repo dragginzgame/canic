@@ -97,6 +97,10 @@ inspect only the files needed for the current task.
 - Root-verification receipt text now distinguishes local-state mutation from
   canister execution by rendering `canister_execution: none` and
   `local_state_write: recorded`.
+- Root-verification reports now carry `observed_root_observation_source`
+  explicitly and validate the `root_observation_source` check row against that
+  archived field. Report text renders the source so operators can tell
+  deployment-truth `IcpCanisterStatus` evidence from local-state echo.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

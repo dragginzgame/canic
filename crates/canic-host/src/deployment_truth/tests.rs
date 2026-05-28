@@ -9305,10 +9305,39 @@ fn root_verification_report_accepts_bound_root_evidence() {
     assert_eq!(report.expected_fleet_template, "root");
     assert_eq!(report.expected_root_principal, "aaaaa-aa");
     assert_eq!(report.observed_root_principal.as_deref(), Some("aaaaa-aa"));
+    assert_eq!(
+        report.observed_root_observation_source,
+        Some(DeploymentRootObservationSourceV1::IcpCanisterStatus)
+    );
     assert!(report.blockers.is_empty());
     assert_eq!(report.source_deployment_plan_id, "plan-local-root");
     assert_eq!(report.source_inventory_id, "inventory-1");
     assert!(validate_deployment_root_verification_report(&report).is_ok());
+}
+
+#[test]
+fn root_verification_report_json_shape_includes_observed_root_source() {
+    let check = sample_root_verification_check();
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    let value = serde_json::to_value(&report).expect("encode root verification report");
+
+    assert_eq!(
+        value["observed_root_observation_source"],
+        "IcpCanisterStatus"
+    );
+}
+
+#[test]
+fn root_verification_report_text_renders_observed_root_source() {
+    let check = sample_root_verification_check();
+    let report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    let text = deployment_root_verification_report_text(&report);
+
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("local_state_write: none"));
+    assert!(text.contains("observed_root_observation_source: IcpCanisterStatus"));
 }
 
 #[test]
@@ -9551,6 +9580,25 @@ fn root_verification_report_validation_rejects_check_row_drift() {
         err,
         DeploymentRootVerificationReportError::CheckMismatch {
             check: "deployment_name".to_string()
+        }
+    );
+}
+
+#[test]
+fn root_verification_report_validation_rejects_observed_source_drift() {
+    let check = sample_root_verification_check();
+    let mut report =
+        deployment_root_verification_report_from_check(sample_root_verification_request(check));
+    report.observed_root_observation_source =
+        Some(DeploymentRootObservationSourceV1::LocalDeploymentState);
+
+    let err = validate_deployment_root_verification_report(&report)
+        .expect_err("observed source drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReportError::CheckMismatch {
+            check: "root_observation_source".to_string()
         }
     );
 }
