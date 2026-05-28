@@ -156,6 +156,10 @@ pub fn deployment_root_verification_receipt_text(
             receipt.source_report_evidence_status
         ),
         format!(
+            "source_report_current_root_verification: {:?}",
+            receipt.source_report_current_root_verification
+        ),
+        format!(
             "source_report_state_transition: {:?}",
             receipt.source_report_state_transition
         ),

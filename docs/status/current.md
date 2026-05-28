@@ -116,6 +116,10 @@ inspect only the files needed for the current task.
 - Root-verification receipts now also preserve the source report's passive
   state transition and validate it against the receipt transition, preserving
   whether the accepted report predicted promotion or same-root re-verification.
+- Root-verification receipts now preserve the source report's current
+  root-verification state and validate it against the receipt's previous
+  local-state trust state, so a standalone receipt cannot pair a successful
+  write with a source report built from a different root-verification state.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

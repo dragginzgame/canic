@@ -12,17 +12,18 @@ present.
 
 ## Unreleased
 
-- Root-verification receipts now preserve `source_observed_root_canister_id`
-  and validate it against the verified root principal, so standalone receipts
-  cannot omit or drift from the exact root canister evidence accepted by the
-  source report.
 - Root-verification receipts now preserve and validate the source report's
-  passive state transition, so standalone receipts distinguish an accepted
-  `WouldPromoteNotVerifiedToVerified` report from same-root re-verification.
+  current root-verification state, so a standalone receipt cannot pair a
+  promotion or re-verification write with a source report that was built from a
+  different local-state trust state.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.8` makes root-verification receipts preserve the source report's
+  observed root canister ID and passive state transition, binding standalone
+  receipt evidence to the exact report path accepted before local-state write.
 
 - `0.47.7` makes root-verification receipts preserve source report evidence
   status and source root observation source, and makes reports archive

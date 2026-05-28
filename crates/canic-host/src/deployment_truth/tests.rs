@@ -9718,6 +9718,7 @@ fn root_verification_receipt_json_shape_is_stable() {
             "source_report_id",
             "source_report_digest",
             "source_report_evidence_status",
+            "source_report_current_root_verification",
             "source_report_state_transition",
             "source_root_observation_source",
             "source_observed_root_canister_id",
@@ -9744,6 +9745,10 @@ fn root_verification_receipt_json_shape_is_stable() {
     assert_eq!(value["state_transition"], "PromotedNotVerifiedToVerified");
     assert_eq!(value["source_report_evidence_status"], "EvidenceSatisfied");
     assert_eq!(
+        value["source_report_current_root_verification"],
+        "NotVerified"
+    );
+    assert_eq!(
         value["source_report_state_transition"],
         "WouldPromoteNotVerifiedToVerified"
     );
@@ -9764,6 +9769,7 @@ fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_
     assert!(text.contains("canister_execution: none"));
     assert!(text.contains("local_state_write: recorded"));
     assert!(text.contains("source_report_evidence_status: EvidenceSatisfied"));
+    assert!(text.contains("source_report_current_root_verification: NotVerified"));
     assert!(text.contains("source_report_state_transition: WouldPromoteNotVerifiedToVerified"));
     assert!(text.contains("source_root_observation_source: IcpCanisterStatus"));
     assert!(text.contains("source_observed_root_canister_id: aaaaa-aa"));
@@ -9835,6 +9841,21 @@ fn root_verification_receipt_validation_rejects_wrong_source_report_transition()
 }
 
 #[test]
+fn root_verification_receipt_validation_rejects_source_report_current_state_mismatch() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_current_root_verification = DeploymentRootVerificationStateV1::Verified;
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("receipt source report current state mismatch should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::SourceEvidenceMismatch
+    );
+}
+
+#[test]
 fn root_verification_receipt_validation_rejects_local_state_root_source() {
     let mut receipt = sample_root_verification_receipt();
     receipt.source_root_observation_source =
@@ -9885,6 +9906,7 @@ fn root_verification_receipt_validation_rejects_noop_digest_change() {
     let mut receipt = sample_root_verification_receipt();
     receipt.previous_root_verification = DeploymentRootVerificationStateV1::Verified;
     receipt.state_transition = DeploymentRootVerificationStateTransitionV1::NoStateChange;
+    receipt.source_report_current_root_verification = DeploymentRootVerificationStateV1::Verified;
     receipt.source_report_state_transition =
         DeploymentRootVerificationStateTransitionV1::NoStateChange;
     receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
@@ -13020,6 +13042,7 @@ fn sample_root_verification_receipt() -> DeploymentRootVerificationReceiptV1 {
         source_report_id: report.report_id,
         source_report_digest: report.report_digest,
         source_report_evidence_status: report.evidence_status,
+        source_report_current_root_verification: report.current_root_verification,
         source_report_state_transition: report.state_transition,
         source_root_observation_source: report
             .observed_root_observation_source

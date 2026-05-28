@@ -46,6 +46,7 @@ struct DeploymentRootVerificationReceiptDigestInput<'a> {
     source_report_id: &'a str,
     source_report_digest: &'a str,
     source_report_evidence_status: DeploymentRootVerificationEvidenceStatusV1,
+    source_report_current_root_verification: DeploymentRootVerificationStateV1,
     source_report_state_transition: DeploymentRootVerificationStateTransitionV1,
     source_root_observation_source: DeploymentRootObservationSourceV1,
     source_observed_root_canister_id: &'a str,
@@ -250,6 +251,7 @@ pub fn deployment_root_verification_receipt_digest(
         source_report_id: &receipt.source_report_id,
         source_report_digest: &receipt.source_report_digest,
         source_report_evidence_status: receipt.source_report_evidence_status,
+        source_report_current_root_verification: receipt.source_report_current_root_verification,
         source_report_state_transition: receipt.source_report_state_transition,
         source_root_observation_source: receipt.source_root_observation_source,
         source_observed_root_canister_id: &receipt.source_observed_root_canister_id,
@@ -297,6 +299,7 @@ pub fn validate_deployment_root_verification_receipt(
     )?;
     if receipt.source_report_evidence_status
         != DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied
+        || receipt.source_report_current_root_verification != receipt.previous_root_verification
         || receipt.source_root_observation_source
             != DeploymentRootObservationSourceV1::IcpCanisterStatus
         || receipt.source_observed_root_canister_id != receipt.root_principal
