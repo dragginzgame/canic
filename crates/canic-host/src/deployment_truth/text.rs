@@ -156,8 +156,16 @@ pub fn deployment_root_verification_receipt_text(
             receipt.source_report_evidence_status
         ),
         format!(
+            "source_report_state_transition: {:?}",
+            receipt.source_report_state_transition
+        ),
+        format!(
             "source_root_observation_source: {:?}",
             receipt.source_root_observation_source
+        ),
+        format!(
+            "source_observed_root_canister_id: {}",
+            receipt.source_observed_root_canister_id
         ),
         format!("source_check_id: {}", receipt.source_check_id),
         format!("source_check_digest: {}", receipt.source_check_digest),

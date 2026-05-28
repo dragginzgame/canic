@@ -9718,7 +9718,9 @@ fn root_verification_receipt_json_shape_is_stable() {
             "source_report_id",
             "source_report_digest",
             "source_report_evidence_status",
+            "source_report_state_transition",
             "source_root_observation_source",
+            "source_observed_root_canister_id",
             "source_check_id",
             "source_check_digest",
             "source_deployment_plan_id",
@@ -9741,7 +9743,12 @@ fn root_verification_receipt_json_shape_is_stable() {
     assert_eq!(value["new_root_verification"], "Verified");
     assert_eq!(value["state_transition"], "PromotedNotVerifiedToVerified");
     assert_eq!(value["source_report_evidence_status"], "EvidenceSatisfied");
+    assert_eq!(
+        value["source_report_state_transition"],
+        "WouldPromoteNotVerifiedToVerified"
+    );
     assert_eq!(value["source_root_observation_source"], "IcpCanisterStatus");
+    assert_eq!(value["source_observed_root_canister_id"], "aaaaa-aa");
     assert_eq!(value["source_check_id"], "check-1");
     assert_eq!(value["source_deployment_plan_id"], "plan-local-root");
     assert_eq!(value["source_inventory_id"], "inventory-1");
@@ -9757,14 +9764,16 @@ fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_
     assert!(text.contains("canister_execution: none"));
     assert!(text.contains("local_state_write: recorded"));
     assert!(text.contains("source_report_evidence_status: EvidenceSatisfied"));
+    assert!(text.contains("source_report_state_transition: WouldPromoteNotVerifiedToVerified"));
     assert!(text.contains("source_root_observation_source: IcpCanisterStatus"));
+    assert!(text.contains("source_observed_root_canister_id: aaaaa-aa"));
     assert!(!text.lines().any(|line| line == "execution: none"));
 }
 
 #[test]
 fn root_verification_receipt_validation_rejects_digest_drift() {
     let mut receipt = sample_root_verification_receipt();
-    receipt.root_principal = "other-root".to_string();
+    receipt.network = "other-network".to_string();
 
     let err = validate_deployment_root_verification_receipt(&receipt)
         .expect_err("receipt digest drift should fail");
@@ -9810,6 +9819,22 @@ fn root_verification_receipt_validation_rejects_unsatisfied_source_report_status
 }
 
 #[test]
+fn root_verification_receipt_validation_rejects_wrong_source_report_transition() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_state_transition =
+        DeploymentRootVerificationStateTransitionV1::NoStateChange;
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("receipt source report transition mismatch should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::SourceEvidenceMismatch
+    );
+}
+
+#[test]
 fn root_verification_receipt_validation_rejects_local_state_root_source() {
     let mut receipt = sample_root_verification_receipt();
     receipt.source_root_observation_source =
@@ -9818,6 +9843,21 @@ fn root_verification_receipt_validation_rejects_local_state_root_source() {
 
     let err = validate_deployment_root_verification_receipt(&receipt)
         .expect_err("receipt source root observation source drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::SourceEvidenceMismatch
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_observed_root_canister_id_mismatch() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_observed_root_canister_id = "other-root".to_string();
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("receipt source observed root canister id mismatch should fail");
 
     assert_eq!(
         err,
@@ -9845,6 +9885,8 @@ fn root_verification_receipt_validation_rejects_noop_digest_change() {
     let mut receipt = sample_root_verification_receipt();
     receipt.previous_root_verification = DeploymentRootVerificationStateV1::Verified;
     receipt.state_transition = DeploymentRootVerificationStateTransitionV1::NoStateChange;
+    receipt.source_report_state_transition =
+        DeploymentRootVerificationStateTransitionV1::NoStateChange;
     receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
 
     let err = validate_deployment_root_verification_receipt(&receipt)
@@ -12978,9 +13020,13 @@ fn sample_root_verification_receipt() -> DeploymentRootVerificationReceiptV1 {
         source_report_id: report.report_id,
         source_report_digest: report.report_digest,
         source_report_evidence_status: report.evidence_status,
+        source_report_state_transition: report.state_transition,
         source_root_observation_source: report
             .observed_root_observation_source
             .expect("observed source"),
+        source_observed_root_canister_id: report
+            .observed_root_canister_id
+            .expect("observed root canister id"),
         source_check_id: report.source_check_id,
         source_check_digest: report.source_check_digest,
         source_deployment_plan_id: report.source_deployment_plan_id,

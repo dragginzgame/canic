@@ -46,7 +46,9 @@ struct DeploymentRootVerificationReceiptDigestInput<'a> {
     source_report_id: &'a str,
     source_report_digest: &'a str,
     source_report_evidence_status: DeploymentRootVerificationEvidenceStatusV1,
+    source_report_state_transition: DeploymentRootVerificationStateTransitionV1,
     source_root_observation_source: DeploymentRootObservationSourceV1,
+    source_observed_root_canister_id: &'a str,
     source_check_id: &'a str,
     source_check_digest: &'a str,
     source_deployment_plan_id: &'a str,
@@ -248,7 +250,9 @@ pub fn deployment_root_verification_receipt_digest(
         source_report_id: &receipt.source_report_id,
         source_report_digest: &receipt.source_report_digest,
         source_report_evidence_status: receipt.source_report_evidence_status,
+        source_report_state_transition: receipt.source_report_state_transition,
         source_root_observation_source: receipt.source_root_observation_source,
+        source_observed_root_canister_id: &receipt.source_observed_root_canister_id,
         source_check_id: &receipt.source_check_id,
         source_check_digest: &receipt.source_check_digest,
         source_deployment_plan_id: &receipt.source_deployment_plan_id,
@@ -287,10 +291,16 @@ pub fn validate_deployment_root_verification_receipt(
         "source_report_digest",
         receipt.source_report_digest.as_str(),
     )?;
+    ensure_root_verification_receipt_field(
+        "source_observed_root_canister_id",
+        receipt.source_observed_root_canister_id.as_str(),
+    )?;
     if receipt.source_report_evidence_status
         != DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied
         || receipt.source_root_observation_source
             != DeploymentRootObservationSourceV1::IcpCanisterStatus
+        || receipt.source_observed_root_canister_id != receipt.root_principal
+        || receipt.source_report_state_transition != source_report_transition_for_receipt(receipt)
     {
         return Err(DeploymentRootVerificationReceiptError::SourceEvidenceMismatch);
     }
@@ -768,6 +778,19 @@ const fn receipt_state_transition(
     match receipt.previous_root_verification {
         DeploymentRootVerificationStateV1::NotVerified => {
             DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified
+        }
+        DeploymentRootVerificationStateV1::Verified => {
+            DeploymentRootVerificationStateTransitionV1::NoStateChange
+        }
+    }
+}
+
+const fn source_report_transition_for_receipt(
+    receipt: &DeploymentRootVerificationReceiptV1,
+) -> DeploymentRootVerificationStateTransitionV1 {
+    match receipt.previous_root_verification {
+        DeploymentRootVerificationStateV1::NotVerified => {
+            DeploymentRootVerificationStateTransitionV1::WouldPromoteNotVerifiedToVerified
         }
         DeploymentRootVerificationStateV1::Verified => {
             DeploymentRootVerificationStateTransitionV1::NoStateChange

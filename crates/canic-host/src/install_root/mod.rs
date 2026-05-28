@@ -9,12 +9,13 @@ use crate::deployment_truth::{
     DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1,
     DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentPlanV1, DeploymentReceiptV1,
     DeploymentRootVerificationEvidenceStatusV1, DeploymentRootVerificationReceiptV1,
-    DeploymentRootVerificationRequestV1, DeploymentRootVerificationSourceV1,
-    DeploymentRootVerificationStateTransitionV1, DeploymentRootVerificationStateV1,
-    LocalDeploymentCheckRequest, LocalInventoryRequest, ObservationStatusV1, SafetyFindingV1,
-    StagingReceiptV1, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    artifact_promotion_execution_receipt, artifact_promotion_provenance_report,
-    check_local_deployment, collect_local_deployment_inventory, compare_plan_to_inventory,
+    DeploymentRootVerificationReportV1, DeploymentRootVerificationRequestV1,
+    DeploymentRootVerificationSourceV1, DeploymentRootVerificationStateTransitionV1,
+    DeploymentRootVerificationStateV1, LocalDeploymentCheckRequest, LocalInventoryRequest,
+    ObservationStatusV1, SafetyFindingV1, StagingReceiptV1, artifact_gate_phase_receipt,
+    artifact_gate_role_phase_receipts, artifact_promotion_execution_receipt,
+    artifact_promotion_provenance_report, check_local_deployment,
+    collect_local_deployment_inventory, compare_plan_to_inventory,
     deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
     deployment_root_verification_receipt_digest, deployment_root_verification_report_from_check,
     missing_executor_capabilities, phase_receipt, safety_report_from_diff,
@@ -404,10 +405,6 @@ pub fn verify_registered_deployment_root(
         )
         .into());
     }
-    let source_root_observation_source = report.observed_root_observation_source.ok_or(
-        "deployment root verification report did not preserve observed root source evidence",
-    )?;
-
     let state_transition = verified_root_state_transition(previous_root_verification);
     let local_state_digest_after = match previous_root_verification {
         DeploymentRootVerificationStateV1::NotVerified => {
@@ -424,35 +421,77 @@ pub fn verify_registered_deployment_root(
         DeploymentRootVerificationStateV1::Verified => file_sha256_hex(&state_path)?,
     };
 
-    let mut receipt = DeploymentRootVerificationReceiptV1 {
-        schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        receipt_id: format!(
-            "local:{}:{}:root-verification-receipt",
-            options.network, options.deployment_name
-        ),
-        receipt_digest: String::new(),
+    root_verification_receipt_from_report(RootVerificationReceiptInput {
         deployment_name: options.deployment_name,
         network: options.network,
         fleet_template: state_fleet_template,
         root_principal: state_root_canister_id,
         previous_root_verification,
-        new_root_verification: DeploymentRootVerificationStateV1::Verified,
         state_transition,
-        source_report_id: report.report_id,
-        source_report_digest: report.report_digest,
-        source_report_evidence_status: report.evidence_status,
-        source_root_observation_source,
-        source_check_id: report.source_check_id,
-        source_check_digest: report.source_check_digest,
-        source_deployment_plan_id: report.source_deployment_plan_id,
-        source_deployment_plan_digest: report.source_deployment_plan_digest,
-        source_inventory_id: report.source_inventory_id,
-        source_inventory_digest: report.source_inventory_digest,
+        report,
         verified_at_unix_secs,
         local_state_path: state_path.display().to_string(),
         local_state_digest_before,
         local_state_digest_after,
-        warnings: report.warnings,
+    })
+}
+
+struct RootVerificationReceiptInput {
+    deployment_name: String,
+    network: String,
+    fleet_template: String,
+    root_principal: String,
+    previous_root_verification: DeploymentRootVerificationStateV1,
+    state_transition: DeploymentRootVerificationStateTransitionV1,
+    report: DeploymentRootVerificationReportV1,
+    verified_at_unix_secs: u64,
+    local_state_path: String,
+    local_state_digest_before: String,
+    local_state_digest_after: String,
+}
+
+fn root_verification_receipt_from_report(
+    input: RootVerificationReceiptInput,
+) -> Result<DeploymentRootVerificationReceiptV1, Box<dyn std::error::Error>> {
+    let source_root_observation_source = input.report.observed_root_observation_source.ok_or(
+        "deployment root verification report did not preserve observed root source evidence",
+    )?;
+    let source_observed_root_canister_id =
+        input.report.observed_root_canister_id.clone().ok_or(
+            "deployment root verification report did not preserve observed root canister id",
+        )?;
+
+    let mut receipt = DeploymentRootVerificationReceiptV1 {
+        schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        receipt_id: format!(
+            "local:{}:{}:root-verification-receipt",
+            input.network, input.deployment_name
+        ),
+        receipt_digest: String::new(),
+        deployment_name: input.deployment_name,
+        network: input.network,
+        fleet_template: input.fleet_template,
+        root_principal: input.root_principal,
+        previous_root_verification: input.previous_root_verification,
+        new_root_verification: DeploymentRootVerificationStateV1::Verified,
+        state_transition: input.state_transition,
+        source_report_id: input.report.report_id,
+        source_report_digest: input.report.report_digest,
+        source_report_evidence_status: input.report.evidence_status,
+        source_report_state_transition: input.report.state_transition,
+        source_root_observation_source,
+        source_observed_root_canister_id,
+        source_check_id: input.report.source_check_id,
+        source_check_digest: input.report.source_check_digest,
+        source_deployment_plan_id: input.report.source_deployment_plan_id,
+        source_deployment_plan_digest: input.report.source_deployment_plan_digest,
+        source_inventory_id: input.report.source_inventory_id,
+        source_inventory_digest: input.report.source_inventory_digest,
+        verified_at_unix_secs: input.verified_at_unix_secs,
+        local_state_path: input.local_state_path,
+        local_state_digest_before: input.local_state_digest_before,
+        local_state_digest_after: input.local_state_digest_after,
+        warnings: input.report.warnings,
     };
     receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
     validate_deployment_root_verification_receipt(&receipt)?;

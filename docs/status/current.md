@@ -109,6 +109,13 @@ inspect only the files needed for the current task.
   archived evidence field and validate the matching evidence row against that
   field directly, so root-canister evidence is not inferred from the adjacent
   root-principal display field.
+- Root-verification receipts now preserve `source_observed_root_canister_id`
+  and require it to match the verified root principal, keeping standalone
+  receipt evidence bound to the exact root canister ID accepted by the source
+  report.
+- Root-verification receipts now also preserve the source report's passive
+  state transition and validate it against the receipt transition, preserving
+  whether the accepted report predicted promotion or same-root re-verification.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing
