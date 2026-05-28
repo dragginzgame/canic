@@ -73,9 +73,8 @@ impl SubnetConfig {
     fn singleton_roles(&self) -> BTreeSet<CanisterRole> {
         self.canisters
             .iter()
-            .filter_map(|(role, canister)| {
-                (canister.kind == CanisterKind::Singleton).then(|| role.clone())
-            })
+            .filter(|&(_role, canister)| canister.kind == CanisterKind::Singleton)
+            .map(|(role, _canister)| role.clone())
             .collect()
     }
 }
