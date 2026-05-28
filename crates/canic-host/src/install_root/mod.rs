@@ -477,6 +477,7 @@ fn root_verification_receipt_from_report(
         state_transition: input.state_transition,
         source_report_id: input.report.report_id,
         source_report_digest: input.report.report_digest,
+        source_report_source: input.report.source,
         source_report_evidence_status: input.report.evidence_status,
         source_report_current_root_verification: input.report.current_root_verification,
         source_report_state_transition: input.report.state_transition,

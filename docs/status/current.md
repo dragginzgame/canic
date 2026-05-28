@@ -120,6 +120,9 @@ inspect only the files needed for the current task.
   root-verification state and validate it against the receipt's previous
   local-state trust state, so a standalone receipt cannot pair a successful
   write with a source report built from a different root-verification state.
+- Root-verification receipts now also preserve the source report source enum
+  in JSON, text, and digest input, keeping standalone receipts explicit that
+  accepted root evidence came from a deployment-truth check artifact.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

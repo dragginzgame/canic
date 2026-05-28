@@ -45,6 +45,7 @@ struct DeploymentRootVerificationReceiptDigestInput<'a> {
     state_transition: DeploymentRootVerificationStateTransitionV1,
     source_report_id: &'a str,
     source_report_digest: &'a str,
+    source_report_source: DeploymentRootVerificationSourceV1,
     source_report_evidence_status: DeploymentRootVerificationEvidenceStatusV1,
     source_report_current_root_verification: DeploymentRootVerificationStateV1,
     source_report_state_transition: DeploymentRootVerificationStateTransitionV1,
@@ -250,6 +251,7 @@ pub fn deployment_root_verification_receipt_digest(
         state_transition: receipt.state_transition,
         source_report_id: &receipt.source_report_id,
         source_report_digest: &receipt.source_report_digest,
+        source_report_source: receipt.source_report_source,
         source_report_evidence_status: receipt.source_report_evidence_status,
         source_report_current_root_verification: receipt.source_report_current_root_verification,
         source_report_state_transition: receipt.source_report_state_transition,
@@ -299,6 +301,7 @@ pub fn validate_deployment_root_verification_receipt(
     )?;
     if receipt.source_report_evidence_status
         != DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied
+        || receipt.source_report_source != DeploymentRootVerificationSourceV1::DeploymentTruthCheck
         || receipt.source_report_current_root_verification != receipt.previous_root_verification
         || receipt.source_root_observation_source
             != DeploymentRootObservationSourceV1::IcpCanisterStatus

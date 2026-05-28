@@ -151,6 +151,7 @@ pub fn deployment_root_verification_receipt_text(
         format!("new_root_verification: {:?}", receipt.new_root_verification),
         format!("source_report_id: {}", receipt.source_report_id),
         format!("source_report_digest: {}", receipt.source_report_digest),
+        format!("source_report_source: {:?}", receipt.source_report_source),
         format!(
             "source_report_evidence_status: {:?}",
             receipt.source_report_evidence_status

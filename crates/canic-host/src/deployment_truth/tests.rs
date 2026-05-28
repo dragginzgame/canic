@@ -9717,6 +9717,7 @@ fn root_verification_receipt_json_shape_is_stable() {
             "state_transition",
             "source_report_id",
             "source_report_digest",
+            "source_report_source",
             "source_report_evidence_status",
             "source_report_current_root_verification",
             "source_report_state_transition",
@@ -9743,6 +9744,7 @@ fn root_verification_receipt_json_shape_is_stable() {
     assert_eq!(value["previous_root_verification"], "NotVerified");
     assert_eq!(value["new_root_verification"], "Verified");
     assert_eq!(value["state_transition"], "PromotedNotVerifiedToVerified");
+    assert_eq!(value["source_report_source"], "DeploymentTruthCheck");
     assert_eq!(value["source_report_evidence_status"], "EvidenceSatisfied");
     assert_eq!(
         value["source_report_current_root_verification"],
@@ -9768,6 +9770,7 @@ fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_
     assert!(text.contains("mode: local-state-write"));
     assert!(text.contains("canister_execution: none"));
     assert!(text.contains("local_state_write: recorded"));
+    assert!(text.contains("source_report_source: DeploymentTruthCheck"));
     assert!(text.contains("source_report_evidence_status: EvidenceSatisfied"));
     assert!(text.contains("source_report_current_root_verification: NotVerified"));
     assert!(text.contains("source_report_state_transition: WouldPromoteNotVerifiedToVerified"));
@@ -13041,6 +13044,7 @@ fn sample_root_verification_receipt() -> DeploymentRootVerificationReceiptV1 {
             DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified,
         source_report_id: report.report_id,
         source_report_digest: report.report_digest,
+        source_report_source: report.source,
         source_report_evidence_status: report.evidence_status,
         source_report_current_root_verification: report.current_root_verification,
         source_report_state_transition: report.state_transition,

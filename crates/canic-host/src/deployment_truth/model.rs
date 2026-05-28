@@ -977,6 +977,7 @@ pub struct DeploymentRootVerificationReceiptV1 {
     pub state_transition: DeploymentRootVerificationStateTransitionV1,
     pub source_report_id: String,
     pub source_report_digest: String,
+    pub source_report_source: DeploymentRootVerificationSourceV1,
     pub source_report_evidence_status: DeploymentRootVerificationEvidenceStatusV1,
     pub source_report_current_root_verification: DeploymentRootVerificationStateV1,
     pub source_report_state_transition: DeploymentRootVerificationStateTransitionV1,

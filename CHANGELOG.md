@@ -12,14 +12,17 @@ present.
 
 ## Unreleased
 
-- Root-verification receipts now preserve and validate the source report's
-  current root-verification state, so a standalone receipt cannot pair a
-  promotion or re-verification write with a source report that was built from a
-  different local-state trust state.
+- Root-verification receipts now preserve the source report source enum in
+  JSON, text, and digest input, keeping standalone receipts explicit that their
+  accepted evidence came from a deployment-truth check artifact.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.9` makes root-verification receipts preserve the source report's
+  current root-verification state and validate it against the receipt's
+  previous local-state trust state.
 
 - `0.47.8` makes root-verification receipts preserve the source report's
   observed root canister ID and passive state transition, binding standalone
