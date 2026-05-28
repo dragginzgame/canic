@@ -359,7 +359,7 @@ const ROOT_LIB_RS: &str = r"#![expect(clippy::unused_async)]
 // CANIC
 //
 
-canic::start_root!();
+canic::start!();
 
 /// Run no-op setup for this scaffolded root.
 async fn canic_setup() {}

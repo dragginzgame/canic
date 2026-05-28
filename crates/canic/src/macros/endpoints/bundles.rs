@@ -4,7 +4,7 @@
 
 // Macros that generate public IC endpoints for Canic canisters.
 // These emitters and bundles define the compile-time capability surface for
-// `start!` and `start_root!`. The default compositions intentionally preserve
+// `start!`. The default compositions intentionally preserve
 // the current feature set; bundle boundaries exist to make linker policy
 // explicit.
 

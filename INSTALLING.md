@@ -1,7 +1,7 @@
 # Installing Canic
 
-This guide covers the normal operator setup and the first local fleet install.
-The short version is:
+This guide covers the normal operator setup and the smallest managed canister
+shape. The short version is:
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
@@ -60,6 +60,20 @@ cargo add canic --build
 must also be visible to the canister crate because CDK attributes and Candid
 export expand against those crate names.
 
+Each canister crate must also declare the Canic role it implements. This is the
+single source of truth for both `canic::build!` and `canic::start!()`:
+
+```toml
+[package.metadata.canic]
+role = "app"
+```
+
+Use `role = "root"` for the root canister. Ordinary child roles use their
+configured fleet role name, such as `app`, `hub`, or `registry`.
+Root canisters also need the `control-plane` feature on their runtime `canic`
+dependency. Enable `auth-crypto` too when delegated token material is enabled
+for the fleet.
+
 For a path checkout:
 
 ```toml
@@ -70,11 +84,14 @@ ic-cdk = "<version>"
 
 [build-dependencies]
 canic = { path = "/path/to/canic/crates/canic" }
+
+[package.metadata.canic]
+role = "app"
 ```
 
 ## Configure `build.rs`
 
-Root canister:
+Every Canic-managed canister crate has a small `build.rs`:
 
 ```rust
 fn main() {
@@ -82,15 +99,8 @@ fn main() {
 }
 ```
 
-Child canister:
-
-```rust
-fn main() {
-    canic::build!("../canic.toml");
-}
-```
-
-Standalone probe:
+The path is relative to the canister crate directory. A standalone probe with a
+crate-local config can use:
 
 ```rust
 fn main() {
@@ -98,14 +108,20 @@ fn main() {
 }
 ```
 
-## Bootstrap A Canister
+## Minimal Canister Shapes
 
-In `lib.rs`:
+Every normal fleet canister uses `canic::start!()`. Root vs non-root behavior
+comes from `[package.metadata.canic] role = "..."` and the validated fleet
+config.
+
+Non-root `lib.rs`:
 
 ```rust
+#![expect(clippy::unused_async)]
+
 use canic::prelude::*;
 
-canic::start!(); // use canic::start_root!() for root
+canic::start!();
 
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
@@ -114,16 +130,33 @@ async fn canic_upgrade() {}
 canic::finish!();
 ```
 
-Root canisters use `canic::start_root!()` and root hook signatures:
+Root `lib.rs`:
 
 ```rust
-canic::start_root!();
+#![expect(clippy::unused_async)]
+
+canic::start!();
 
 async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
 
 canic::finish!();
+```
+
+`start_local!()` is only for local/dev standalone canisters that synthesize a
+minimal local environment. `start_wasm_store!()` is only for the canonical
+`wasm_store` runtime.
+
+Add application endpoints after `canic::start!()` and before `canic::finish!()`:
+
+```rust
+use canic::{Error, prelude::*};
+
+#[canic_query]
+fn health() -> Result<String, Error> {
+    Ok("ok".to_string())
+}
 ```
 
 Use `#[canic_query]` and `#[canic_update]` for Canic-managed application
@@ -135,12 +168,11 @@ payload inspection stay on the same path as the runtime bundle.
 Create `fleets/<fleet>/canic.toml`:
 
 ```toml
+controllers = []
+app_index = ["app"]
+
 [fleet]
 name = "test"
-
-[subnets.prime]
-auto_create = ["app"]
-subnet_index = ["app"]
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -149,6 +181,10 @@ kind = "root"
 kind = "singleton"
 topup = {}
 ```
+
+Every role named in package metadata must exist in this config. `role = "root"`
+selects the root lifecycle and root endpoint bundle; all other roles select the
+ordinary fleet lifecycle and non-root endpoint bundle.
 
 The full schema lives in [`CONFIG.md`](CONFIG.md).
 

@@ -11,9 +11,9 @@
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.95.0-orange.svg)](rust-toolchain.toml)
 
 Canic is a Rust toolkit and operator CLI for Internet Computer canister fleets.
-It gives canister crates lifecycle macros, validated topology config,
-stable-memory helpers, endpoint guards, thin-root artifact builds, local fleet
-install, snapshot, backup, and restore workflows.
+It gives canister crates metadata-driven lifecycle macros, validated topology
+config, stable-memory helpers, endpoint guards, thin-root artifact builds,
+local fleet install, snapshot, backup, and restore workflows.
 
 Install the published operator binary:
 
@@ -34,9 +34,9 @@ walkthrough.
 
 ## Highlights
 
-* **Lifecycle and build macros:** `canic::start!`, `canic::start_root!`,
-  and `canic::build!` wire IC hooks, endpoint bundles, and compile-time config
-  validation.
+* **Lifecycle and build macros:** `canic::start!()` and `canic::build!` wire IC
+  hooks, endpoint bundles, and compile-time config validation from
+  `[package.metadata.canic] role = "..."`.
 * **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
   subnets, roles, singleton/replica/shard/instance placement, warm pools,
   scaling pools, sharding pools, and directory pools.
@@ -55,8 +55,9 @@ walkthrough.
 
 For a copyable root-plus-two-children managed fleet, start with
 [minimal-managed-fleet.md](docs/getting-started/minimal-managed-fleet.md).
+For the compact setup checklist, use [INSTALLING.md](INSTALLING.md).
 
-The short local loop is:
+The short local loop from this checkout, using the checked-in `test` fleet, is:
 
 ```bash
 canic status
@@ -139,15 +140,6 @@ Follow [docs/governance/ci-deployment.md](docs/governance/ci-deployment.md) for
 CI, git, deployment, and automation rules. Follow
 [docs/governance/changelog.md](docs/governance/changelog.md) and
 [CHANGELOG.md](CHANGELOG.md) for changelog policy.
-
-## Examples
-
-Explore the runnable example under
-[crates/canic/examples/](crates/canic/examples/):
-
-```bash
-cargo run -p canic --example minimal_root --features control-plane
-```
 
 ## Project Status & Contributing
 

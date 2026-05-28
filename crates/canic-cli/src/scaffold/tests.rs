@@ -105,7 +105,7 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(root_manifest.contains("canic = \""));
     assert!(root_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!root_manifest.contains("workspace = true"));
-    assert!(root_lib.contains("canic::start_root!();"));
+    assert!(root_lib.contains("canic::start!();"));
     assert!(root_lib.contains("canic::finish!();"));
     assert!(app_manifest.contains("name = \"canister_my_app_app\""));
     assert!(app_manifest.contains("canic = \""));

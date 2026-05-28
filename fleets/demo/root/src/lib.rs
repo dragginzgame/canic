@@ -1,6 +1,6 @@
 #![expect(clippy::unused_async)]
 
-canic::start_root!();
+canic::start!();
 
 async fn canic_setup() {}
 

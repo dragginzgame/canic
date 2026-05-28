@@ -33,7 +33,8 @@ fleets/example/
     └── src/lib.rs
 ```
 
-Every canister package must declare the Canic role it implements:
+Every canister package must declare the Canic role it implements. The role must
+match one canister table in `canic.toml`:
 
 ```toml
 [package.metadata.canic]
@@ -120,18 +121,8 @@ topup = {}
 
 ## Build Scripts
 
-Each canister crate needs a `build.rs`. The path is relative to the canister
-crate directory, so adjust it if your layout differs.
-
-Root:
-
-```rust
-fn main() {
-    canic::build!("../canic.toml");
-}
-```
-
-Child:
+Each canister crate needs the same small `build.rs`. The path is relative to
+the canister crate directory, so adjust it if your layout differs.
 
 ```rust
 fn main() {
@@ -144,7 +135,8 @@ example `../../canic.toml`.
 
 ## Root Canister
 
-The root crate needs Canic's control-plane and auth-crypto features.
+The root crate needs Canic's `control-plane` feature. Add `auth-crypto` too
+when the fleet enables delegated-token material.
 
 ```toml
 [package.metadata.canic]
@@ -162,7 +154,7 @@ canic = "<same-version-as-canic-cli>"
 ```rust
 #![expect(clippy::unused_async)]
 
-canic::start_root!();
+canic::start!();
 
 async fn canic_setup() {}
 async fn canic_install() {}

@@ -9,6 +9,25 @@ interfaces after the 0.33 ICP CLI hard cut.
 - `.canic/` is Canic operator state. Deployment-target install state lives under
   `.canic/<network>/deployments/<deployment>.json`.
 
+## Canister Build Contract
+
+Every Canic-managed canister package declares its runtime role in Cargo
+metadata:
+
+```toml
+[package.metadata.canic]
+role = "app"
+```
+
+The package role is the single source of truth for the build and startup
+macros. `canic::build!("<path-to-canic.toml>")` validates that the metadata role
+exists in the fleet config and emits the compile-time role/config environment
+consumed by `canic::start!()`.
+
+`role = "root"` emits the root build cfgs and selects the root lifecycle and
+root endpoint bundle. Every other configured role selects the non-root
+lifecycle and endpoint bundle. There is no separate public root startup macro.
+
 ## Canister Artifacts
 
 - Direct Cargo canister builds emit raw wasm under

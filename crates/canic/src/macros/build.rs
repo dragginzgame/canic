@@ -27,15 +27,8 @@ macro_rules! __canic_build_internal {
     ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
         let manifest_dir =
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
-        let manifest_path = std::path::PathBuf::from(&manifest_dir).join("Cargo.toml");
         let __canic_role_name =
-            $crate::__build::declared_package_role(std::path::Path::new(&manifest_dir))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "missing Canic package role metadata in {}; add [package.metadata.canic] role = \"<role>\"",
-                        manifest_path.display()
-                    )
-                });
+            $crate::__build::required_package_role(std::path::Path::new(&manifest_dir));
         let default_cfg_path = std::path::PathBuf::from(&manifest_dir).join($file);
         let env_cfg = std::env::var("CANIC_CONFIG_PATH").ok();
         let mut $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
@@ -120,7 +113,6 @@ macro_rules! __canic_build_internal {
         }
 
         let role_name = __canic_role_name.as_str();
-        let mut role_found = false;
         let mut role_attestation_refresh = false;
         let mut has_icrc21 = false;
         let mut has_scaling = false;
@@ -132,10 +124,16 @@ macro_rules! __canic_build_internal {
         let mut metrics_security = false;
         let mut metrics_storage = false;
         let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
+        if !$crate::__build::config_contains_role($cfg.as_ref(), role_name) {
+            panic!(
+                "canister role '{}' from [package.metadata.canic] was not found in {}",
+                role_name,
+                $cfg_path.display()
+            );
+        }
 
         for subnet in $cfg.subnets.values() {
             if let Some(canister_cfg) = subnet.get_canister(&role_id) {
-                role_found = true;
                 role_attestation_refresh |= canister_cfg.auth.role_attestation_cache;
                 has_icrc21 |= canister_cfg.standards.icrc21;
                 has_scaling |= canister_cfg.scaling.is_some();
@@ -149,14 +147,6 @@ macro_rules! __canic_build_internal {
                 metrics_security |= tier_mask & $crate::__build::METRICS_TIER_SECURITY != 0;
                 metrics_storage |= tier_mask & $crate::__build::METRICS_TIER_STORAGE != 0;
             }
-        }
-
-        if !role_found {
-            panic!(
-                "canister role '{}' from [package.metadata.canic] was not found in {}",
-                role_name,
-                $cfg_path.display()
-            );
         }
 
         if role_name == "root" {

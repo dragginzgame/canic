@@ -2,7 +2,7 @@
 
 use canic::api::auth::AuthApi;
 
-canic::start_root!();
+canic::start!();
 
 // Publish root auth material before the first live delegated-auth request path.
 async fn canic_setup() {

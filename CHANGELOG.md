@@ -16,10 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.2` refreshes active setup, configuration, architecture, and crate docs
+  so they consistently describe metadata-driven canister roles, derived
+  singleton topology, and the single normal `canic::start!()` startup surface.
+
 - `0.48.1` simplifies downstream canister setup by making
   `[package.metadata.canic] role = "..."` the single source of truth for
-  `canic::build!` and `canic::start!()`, while removing the old build macro
-  variants and redundant checked-in fleet scaffolding.
+  `canic::build!` and `canic::start!()`, while removing the old build/root
+  macro variants and redundant checked-in fleet scaffolding.
 
 - `0.48.0` removes authored subnet `auto_create` and `subnet_index` config
   lists, deriving both from configured singleton canister roles so fleet setup

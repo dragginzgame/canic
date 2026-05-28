@@ -1,5 +1,6 @@
 use std::{fmt::Write as _, fs, path::Path};
 
+use canic_core::{bootstrap::compiled::ConfigModel, ids::CanisterRole};
 use toml::Value as TomlValue;
 
 /// Read a Canic config source, or generate a minimal standalone config when allowed.
@@ -39,6 +40,29 @@ pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
         .get("role")?
         .as_str()
         .map(str::to_string)
+}
+
+/// Read the required Canic role declared in package manifest metadata.
+#[must_use]
+pub fn required_package_role(manifest_dir: &Path) -> String {
+    let manifest_path = manifest_dir.join("Cargo.toml");
+    declared_package_role(manifest_dir).unwrap_or_else(|| {
+        panic!(
+            "missing Canic package role metadata in {}; add [package.metadata.canic] role = \"<role>\"",
+            manifest_path.display()
+        )
+    })
+}
+
+/// Return whether a validated config contains the requested canister role.
+#[must_use]
+pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
+    let role_id = CanisterRole::owned(role_name.to_string());
+
+    config
+        .subnets
+        .values()
+        .any(|subnet| subnet.get_canister(&role_id).is_some())
 }
 
 /// Render the minimal topology needed by a standalone non-root canister.
@@ -161,5 +185,69 @@ role = "scale_replica"
             Some("scale_replica")
         );
         fs::remove_dir_all(&dir).expect("remove temp manifest dir");
+    }
+
+    #[test]
+    fn required_package_role_rejects_missing_canic_metadata() {
+        let dir = std::env::temp_dir().join(format!(
+            "canic-missing-role-metadata-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("create temp manifest dir");
+        fs::write(
+            dir.join("Cargo.toml"),
+            r#"[package]
+name = "canister_missing"
+version = "0.1.0"
+edition = "2024"
+"#,
+        )
+        .expect("write manifest");
+
+        let panic = std::panic::catch_unwind(|| required_package_role(&dir))
+            .expect_err("missing metadata should panic");
+        let message = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .expect("panic should include a message");
+
+        assert!(message.contains("missing Canic package role metadata"));
+        fs::remove_dir_all(&dir).expect("remove temp manifest dir");
+    }
+
+    #[test]
+    fn config_contains_role_accepts_exact_metadata_role() {
+        let cfg = parse_config_model(
+            r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+        )
+        .expect("config parses");
+
+        assert!(config_contains_role(&cfg, "root"));
+        assert!(config_contains_role(&cfg, "app"));
+    }
+
+    #[test]
+    fn config_contains_role_rejects_role_typos() {
+        let cfg = parse_config_model(
+            r#"
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+        )
+        .expect("config parses");
+
+        assert!(!config_contains_role(&cfg, "Root"));
+        assert!(!config_contains_role(&cfg, "roots"));
+        assert!(!config_contains_role(&cfg, "missing"));
     }
 }

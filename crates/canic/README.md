@@ -16,31 +16,39 @@ Use the explicit module paths for the larger bundled surfaces:
 - `canic::cdk::*` for curated IC CDK helpers
 - `canic::memory::*` for stable-memory helpers and macros
 
-## Default surface
+## Default Surface
 
-The pre-1.0 default feature set includes the standard Canic runtime bundle:
+The default feature set is intentionally small:
 
-- `metrics` — exports `canic_metrics` in ordinary builds unless you opt out
-- `control-plane` — enables root/`wasm_store` control-plane support
-- `sharding` — enables sharding-oriented runtime support from `canic-core`
-- `auth-crypto` — enables crypto-backed auth/runtime helpers from `canic-core`
+- `metrics` - exports `canic_metrics` in ordinary builds unless you opt out
 
-Disable default features in `Cargo.toml` when you need a narrower facade
-dependency and want to opt out of the standard runtime bundle.
+Disable default features in `Cargo.toml` when you need an even narrower facade
+dependency.
 
-## Optional features
+## Optional Features
 
 These features can also be selected explicitly when default features are off:
 
 - `metrics`
-- `control-plane`
-- `sharding`
-- `auth-crypto`
+- `control-plane` - enables root control-plane support
+- `sharding` - enables sharding-oriented runtime support from `canic-core`
+- `auth-crypto` - enables crypto-backed auth/runtime helpers from `canic-core`
 
-## Typical use
+## Typical Use
 
 Use `canic` in both `[dependencies]` and `[build-dependencies]` so the build
 macros and runtime macros come from the same facade crate.
+
+Each canister crate declares its role in package metadata:
+
+```toml
+[package.metadata.canic]
+role = "app"
+```
+
+Use `canic::build!("../canic.toml")` from `build.rs` and `canic::start!()` from
+`lib.rs`. `role = "root"` selects the root lifecycle and root endpoint bundle;
+ordinary roles select the non-root lifecycle and endpoint bundle.
 
 This crate lives in the Canic workspace. See the workspace guide at
 `../../README.md` for full setup, topology, and example canisters.

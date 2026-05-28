@@ -52,7 +52,7 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 - Cross-layer data should use named structs/enums, not boundary type aliases.
 
 ## Lifecycle
-- `canic::start!` and `canic::start_root!` must stay thin.
+- `canic::start!` must stay thin.
 - Lifecycle adapters restore synchronously and schedule async work; no `await`.
 - User hooks run after Canic invariants are restored, via zero-delay timers, and
   should be idempotent.

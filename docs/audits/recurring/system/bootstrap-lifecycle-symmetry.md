@@ -102,7 +102,7 @@ Optional supporting scope:
 
 * lifecycle-related tests in `crates/canic-tests/tests`
 * lifecycle-related tests in `crates/canic-core/tests`
-* root fixture uses of `start_root!(init = { ... })`
+* root fixture uses of `start!(init = { ... })`
 
 ---
 
@@ -213,7 +213,7 @@ rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' \
 #### Root fixture coverage
 
 ```bash
-rg -n 'start_root!\(|init = \{' canisters crates/canic-tests -g '*.rs'
+rg -n 'start!\(|init = \{' canisters crates/canic-tests -g '*.rs'
 ```
 
 ---
@@ -590,7 +590,7 @@ Any confirmed red flag must appear in findings and affect score:
 * lifecycle layer importing policy or storage mutation paths
 * lifecycle hook performing direct bootstrap orchestration
 * init/post-upgrade using materially different runtime initialization paths without documented rationale
-* `start_root!(init = { ... })` or `start!(init = { ... })` user code running
+* `start!(init = { ... })` user code running
   synchronously inside generated IC lifecycle hooks
 * root control-plane lifecycle scheduling bootstrap before `canic-core`
   restoration completes

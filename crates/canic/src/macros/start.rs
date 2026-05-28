@@ -2,15 +2,6 @@
 // Start macros
 // -----------------------------------------------------------------------------
 
-// Compile-time role selected by the canister package metadata.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_declared_package_role {
-    () => {
-        $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
-    };
-}
-
 // Lifecycle core for non-root Canic canisters.
 #[doc(hidden)]
 #[macro_export]
@@ -45,7 +36,14 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 "canic:user:init_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
-                    $crate::__canic_start_nonroot_user_timers!(args);
+                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                        ::std::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_install(args).await;
+                        },
+                    );
                 }
                 $(, $init)?
             );
@@ -67,7 +65,14 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 "canic:user:post_upgrade_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-                    $crate::__canic_start_nonroot_upgrade_timers!();
+                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_upgrade().await;
+                        },
+                    );
                 }
                 $(, $init)?
             );
@@ -136,7 +141,14 @@ macro_rules! __canic_start_local_lifecycle_core {
                 "canic:user:init_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
-                    $crate::__canic_start_nonroot_user_timers!(args);
+                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                        ::std::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_install(args).await;
+                        },
+                    );
                 }
                 $(, $init)?
             );
@@ -158,7 +170,14 @@ macro_rules! __canic_start_local_lifecycle_core {
                 "canic:user:post_upgrade_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-                    $crate::__canic_start_nonroot_upgrade_timers!();
+                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_upgrade().await;
+                        },
+                    );
                 }
                 $(, $init)?
             );
@@ -169,7 +188,7 @@ macro_rules! __canic_start_local_lifecycle_core {
 // Lifecycle core for the root Canic canister.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __canic_start_root_lifecycle_core {
+macro_rules! __canic_root_lifecycle_core {
     ($( $init:block )?) => {
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
@@ -215,7 +234,14 @@ macro_rules! __canic_start_root_lifecycle_core {
                 "canic:user:init_block",
                 {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
-                    $crate::__canic_start_root_user_timers!();
+                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_install().await;
+                        },
+                    );
                 }
                 $(, $init)?
             );
@@ -238,7 +264,14 @@ macro_rules! __canic_start_root_lifecycle_core {
                 "canic:user:post_upgrade_block",
                 {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
-                    $crate::__canic_start_root_upgrade_timers!();
+                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:init",
+                        async move {
+                            canic_setup().await;
+                            canic_upgrade().await;
+                        },
+                    );
                 }
                 $(, $init)?
             );
@@ -263,90 +296,6 @@ macro_rules! __canic_after_optional_start_init_hook {
             },
         );
     }};
-}
-
-// User lifecycle timer bundle for non-root init.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_start_nonroot_user_timers {
-    ($args:expr) => {
-        $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
-            ::std::time::Duration::ZERO,
-            "canic:user:init",
-            async move {
-                canic_setup().await;
-                canic_install($args).await;
-            },
-        );
-    };
-}
-
-// User lifecycle timer bundle for non-root upgrades.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_start_nonroot_upgrade_timers {
-    () => {
-        $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
-            ::core::time::Duration::ZERO,
-            "canic:user:init",
-            async move {
-                canic_setup().await;
-                canic_upgrade().await;
-            },
-        );
-    };
-}
-
-// User lifecycle timer bundle for root init.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_start_root_user_timers {
-    () => {
-        $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
-            ::core::time::Duration::ZERO,
-            "canic:user:init",
-            async move {
-                canic_setup().await;
-                canic_install().await;
-            },
-        );
-    };
-}
-
-// User lifecycle timer bundle for root upgrades.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_start_root_upgrade_timers {
-    () => {
-        $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
-            ::core::time::Duration::ZERO,
-            "canic:user:init",
-            async move {
-                canic_setup().await;
-                canic_upgrade().await;
-            },
-        );
-    };
-}
-
-// Default non-root capability bundle composition.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_start_nonroot_capability_bundles {
-    () => {
-        $crate::canic_bundle_shared_runtime_endpoints!();
-        $crate::canic_bundle_nonroot_only_endpoints!();
-    };
-}
-
-// Default root capability bundle composition.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_start_root_capability_bundles {
-    () => {
-        $crate::canic_bundle_shared_runtime_endpoints!();
-        $crate::canic_bundle_root_only_endpoints!();
-    };
 }
 
 // Ingress inspect-message hook shared by Canic-managed canisters.
@@ -376,7 +325,7 @@ macro_rules! __canic_require_finish {
 /// Finish a Canic canister module.
 ///
 /// Place this macro at the end of the canister's crate root after
-/// `start!`, `start_root!`, or `start_wasm_store!` and after any extra
+/// `start!`, `start_local!`, or `start_wasm_store!` and after any extra
 /// endpoint definitions. In debug builds it exports Candid for local `.did`
 /// generation; in non-debug builds it only satisfies the required Canic finish
 /// marker.
@@ -392,10 +341,12 @@ macro_rules! finish {
     };
 }
 
-/// Configure lifecycle hooks for **non-root** Canic canisters.
+/// Configure lifecycle hooks for Canic canisters.
 ///
 /// The canister role comes from `[package.metadata.canic] role = "..."` in the
 /// crate manifest and is emitted by `canic::build!` at compile time.
+/// `role = "root"` selects root lifecycle adapters and endpoint bundles;
+/// every other role selects non-root lifecycle adapters and endpoint bundles.
 ///
 /// This macro defines the IC-required `init` and `post_upgrade` entry points
 /// at the crate root and immediately delegates lifecycle semantics to runtime
@@ -413,11 +364,25 @@ macro_rules! finish {
 macro_rules! start {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
+
         #[cfg(canic_is_root)]
-        compile_error!("canic::start!() cannot be used for root canisters; use canic::start_root!()");
-        $crate::__canic_start_nonroot_lifecycle_core!($crate::__canic_declared_package_role!() $(, $init)?);
+        $crate::__canic_root_lifecycle_core!($($init)?);
+
+        #[cfg(not(canic_is_root))]
+        $crate::__canic_start_nonroot_lifecycle_core!(
+            $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+            $(, $init)?
+        );
+
         $crate::__canic_start_ingress_payload_inspect!();
-        $crate::__canic_start_nonroot_capability_bundles!();
+
+        $crate::canic_bundle_shared_runtime_endpoints!();
+
+        #[cfg(not(canic_is_root))]
+        $crate::canic_bundle_nonroot_only_endpoints!();
+
+        #[cfg(canic_is_root)]
+        $crate::canic_bundle_root_only_endpoints!();
     };
 }
 
@@ -439,31 +404,14 @@ macro_rules! start_local {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
         #[cfg(canic_is_root)]
-        compile_error!("canic::start_local!() cannot be used for root canisters; use canic::start_root!()");
-        $crate::__canic_start_local_lifecycle_core!($crate::__canic_declared_package_role!() $(, $init)?);
+        compile_error!("canic::start_local!() cannot be used for root canisters; use canic::start!()");
+        $crate::__canic_start_local_lifecycle_core!(
+            $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+            $(, $init)?
+        );
         $crate::__canic_start_ingress_payload_inspect!();
-        $crate::__canic_start_nonroot_capability_bundles!();
-    };
-}
-
-/// Configure lifecycle hooks for the **root orchestrator** canister.
-///
-/// This macro behaves like [`start!`], but delegates to root-specific
-/// lifecycle adapters.
-///
-/// IMPORTANT:
-/// - The macro does NOT perform root orchestration
-/// - The macro does NOT import WASMs
-/// - The macro does NOT create canisters
-/// - The macro may schedule async hooks via timers, but must never await them
-///
-#[macro_export]
-macro_rules! start_root {
-    ($(init = $init:block)? $(,)?) => {
-        $crate::__canic_require_finish!();
-        $crate::__canic_start_root_lifecycle_core!($($init)?);
-        $crate::__canic_start_ingress_payload_inspect!();
-        $crate::__canic_start_root_capability_bundles!();
+        $crate::canic_bundle_shared_runtime_endpoints!();
+        $crate::canic_bundle_nonroot_only_endpoints!();
     };
 }
 

@@ -9,7 +9,7 @@ use canic::{
     prelude::*,
 };
 
-canic::start_root!();
+canic::start!();
 
 async fn canic_setup() {}
 async fn canic_install() {}

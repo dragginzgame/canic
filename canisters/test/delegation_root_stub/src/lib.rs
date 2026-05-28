@@ -29,7 +29,7 @@ const TEST_ATTESTATION_KEY_SEED: [u8; 32] = [7u8; 32];
 const TEST_ATTESTATION_KEY_NAME: &str = "key_1";
 type TestAttestationKeyEntry = (u32, u8, AttestationKeyStatus, Option<u64>, Option<u64>);
 
-canic::start_root!(
+canic::start!(
     init = {
         seed_chunked_bootstrap_release_set(CHUNKED_BOOTSTRAP_RELEASE_SET);
     }

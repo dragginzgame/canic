@@ -4,7 +4,7 @@
 //! re-exports the public Canic runtime surface and provides the common macro entry points:
 //!
 //! - `build!` for configured canisters and generated local sandbox/probe config
-//! - `start!` / `start_root!` for `lib.rs` (wire lifecycle hooks and export endpoints)
+//! - `start!` for `lib.rs` (wire lifecycle hooks and export endpoints)
 //!
 //! For lower-level access, use the `api`, `cdk`, and `memory` modules.
 //! Direct access to internal core modules is intentionally unsupported.
@@ -39,9 +39,9 @@ pub mod __internal {
 pub mod __build {
     pub use crate::build_support::{
         METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM, METRICS_TIER_RUNTIME,
-        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, declared_package_role,
+        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, config_contains_role, declared_package_role,
         emit_root_wasm_store_bootstrap_release_set, metrics_profile_tier_mask,
-        read_config_source_or_default,
+        read_config_source_or_default, required_package_role,
     };
 }
 

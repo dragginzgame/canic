@@ -100,7 +100,7 @@ Still open backlog:
 
 - First-class **standalone fleet profile** in docs and `canic fleet create --profile standalone`.
 - Explicit **feature matrix** in `INSTALLING.md`: which crates/features are required for which topology (root / hub / leaf / standalone).
-- Cargo feature preset `canic = { features = ["leaf-only"] }` with compile-time guard that rejects `start_root!` in the same crate.
+- Cargo feature preset `canic = { features = ["leaf-only"] }` with compile-time guard that rejects root-only endpoint bundles in the same crate.
 
 ---
 

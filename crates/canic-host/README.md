@@ -60,8 +60,13 @@ When the Rust workspace root and ICP CLI/project root differ, set both:
 - `CANIC_ICP_ROOT` for `icp.yaml`, `.icp`, and emitted artifacts
 
 If canister crates live outside the default `fleets/` directory, host
-discovery first tries Cargo workspace metadata. No extra config is needed when
-package names follow `canister_<role>`, even in nested paths.
+discovery first tries Cargo workspace metadata. Every Canic-managed canister
+package must declare the role it implements in Cargo metadata:
+
+```toml
+[package.metadata.canic]
+role = "project_ledger"
+```
 
 If you need to override discovery explicitly, set:
 
@@ -74,11 +79,3 @@ For `canic install`, the implicit network default is always `local`; use
 `--network <name>` for one command against another network. The public CLI
 requires the fleet name as the first positional argument and uses
 `fleets/<name>/canic.toml`.
-
-If a package name does not follow `canister_<role>`, declare the role mapping
-in `Cargo.toml`:
-
-```toml
-[package.metadata.canic]
-role = "project_ledger"
-```

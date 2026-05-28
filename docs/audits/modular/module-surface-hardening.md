@@ -101,8 +101,7 @@ Apply these before classifying any finding.
 * Conversions between DTOs, views, records, and external protocol shapes belong
   in `ops::*` or the owning boundary adapter, not in workflow orchestration.
 * `export()` and `import()` are reserved for canonical `*Data` snapshots.
-* `canic::start!`, `canic::start_root!`, and `build!` must stay thin macro
-  entry points.
+* `canic::start!` and `build!` must stay thin macro entry points.
 * Generated and macro-expanded code may use narrow hidden boundaries such as
   `canic::__internal`, `canic::__build`, `canic_core::__reexports`, and
   `canic_core::api`. Normal public facade surface must not be widened only for

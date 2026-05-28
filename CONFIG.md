@@ -7,9 +7,20 @@ At a high level the file describes:
 - Global cluster settings (`controllers`, `app_index`, `standards`, `app`).
 - Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
 - Per-canister policies inside each subnet, with optional scaling and sharding pools.
-- Subnet-local wasm-store topology and capacity policy for chunk-store-backed installs.
+- The implicit wasm-store behavior used by chunk-store-backed installs.
 
-All fields are validated when `canic::build!` runs, so configuration drift fails fast at compile time.
+All fields are validated when `canic::build!` runs, so configuration drift fails
+fast at compile time. Every canister crate also declares the role it implements
+in `Cargo.toml`:
+
+```toml
+[package.metadata.canic]
+role = "app"
+```
+
+That package role must exist in `canic.toml`. `role = "root"` selects the root
+lifecycle and root endpoint bundle; every other role selects the ordinary
+non-root lifecycle and endpoint bundle.
 
 ---
 
@@ -60,7 +71,8 @@ Controls the warm canister pool for a subnet.
 - `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=local` (also used when unset).
 - `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=ic`.
   Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
-If `pool.import.initial` is `0` and `auto_create` is non-empty, root bootstrap may create new canisters before queued imports are ready.
+If `pool.import.initial` is `0` and the subnet declares singleton roles, root
+bootstrap may create new singleton canisters before queued imports are ready.
 
 ### `[log]`
 
@@ -105,9 +117,12 @@ array.
 
 ### `[subnets.<name>]`
 
-- `auto_create = ["role_a", ...]` – canister roles that root should ensure exist during bootstrap (must exist in `canisters`).
-- `subnet_index = ["role_a", ...]` – canister roles exposed through `canic_subnet_index()`. Entries must have `kind = "singleton"`.
 - `canisters.*` – nested tables describing per-role policies (see below).
+
+Configured `kind = "singleton"` roles are derived as the stable subnet
+services. Root ensures those singleton roles exist during bootstrap and exposes
+them through `canic_subnet_index()`. Shards, replicas, and tenants are created
+by their placement managers instead.
 
 ### Implicit `wasm_store`
 
@@ -224,12 +239,13 @@ enabled = true
 icrc21 = true
 
 [subnets.prime]
-auto_create = ["app", "user_hub", "scale_hub"]
-subnet_index = ["app", "user_hub", "scale_hub"]
 pool.minimum_size = 3
 pool.import.initial = 3
 pool.import.local = ["aaaaa-aa"]
 pool.import.ic = ["aaaaa-aa"]
+
+[subnets.prime.canisters.root]
+kind = "root"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
@@ -282,7 +298,8 @@ It does not enumerate every published template release.
 Static config owns:
 
 - user-defined canister roles and policies
-- subnet bootstrap/directory policy
+- configured singleton roles that root bootstraps and exposes through the subnet index
+- the explicit app index exported by the prime root
 
 Root-authoritative runtime state owns:
 

@@ -4,7 +4,9 @@ Core orchestration logic for Canic canisters: config handling, ops layer, regist
 
 Most canister projects should depend on `canic` (the facade crate) and use:
 - `canic::build!` from `build.rs` to validate/embed `canic.toml`
-- `canic::start!` / `canic::start_root!` from `lib.rs` to wire init/upgrade and export endpoints
+- `canic::start!` from `lib.rs` to wire init/upgrade and export endpoints
+- `[package.metadata.canic] role = "..."` in `Cargo.toml` to select the
+  canister role
 
 `canic-core` is still published because it holds the underlying building blocks:
 typed config, auth/decision helpers, storage/view layers, and the workflow and
@@ -39,6 +41,13 @@ The default flow is: endpoints → workflow → domain/decision helpers → ops 
 
 Make sure `canic` is available in both `[dependencies]` and `[build-dependencies]`, because the `build!` macros run inside `build.rs`.
 
+In `Cargo.toml`:
+
+```toml
+[package.metadata.canic]
+role = "app"
+```
+
 In `build.rs`:
 
 ```rust
@@ -57,4 +66,6 @@ canic::start!();
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
+
+canic::finish!();
 ```
