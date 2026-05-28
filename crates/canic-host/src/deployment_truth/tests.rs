@@ -9717,6 +9717,7 @@ fn root_verification_receipt_json_shape_is_stable() {
             "state_transition",
             "source_report_id",
             "source_report_digest",
+            "source_report_requested_at",
             "source_report_source",
             "source_report_evidence_status",
             "source_report_current_root_verification",
@@ -9744,6 +9745,7 @@ fn root_verification_receipt_json_shape_is_stable() {
     assert_eq!(value["previous_root_verification"], "NotVerified");
     assert_eq!(value["new_root_verification"], "Verified");
     assert_eq!(value["state_transition"], "PromotedNotVerifiedToVerified");
+    assert_eq!(value["source_report_requested_at"], "2026-05-27T00:00:00Z");
     assert_eq!(value["source_report_source"], "DeploymentTruthCheck");
     assert_eq!(value["source_report_evidence_status"], "EvidenceSatisfied");
     assert_eq!(
@@ -9770,6 +9772,7 @@ fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_
     assert!(text.contains("mode: local-state-write"));
     assert!(text.contains("canister_execution: none"));
     assert!(text.contains("local_state_write: recorded"));
+    assert!(text.contains("source_report_requested_at: 2026-05-27T00:00:00Z"));
     assert!(text.contains("source_report_source: DeploymentTruthCheck"));
     assert!(text.contains("source_report_evidence_status: EvidenceSatisfied"));
     assert!(text.contains("source_report_current_root_verification: NotVerified"));
@@ -9820,6 +9823,64 @@ fn root_verification_receipt_validation_rejects_unsatisfied_source_report_status
 
     let err = validate_deployment_root_verification_receipt(&receipt)
         .expect_err("receipt source report status drift should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::SourceEvidenceMismatch
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_missing_source_report_timestamp() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_requested_at.clear();
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("missing source report timestamp should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::MissingRequiredField {
+            field: "source_report_requested_at"
+        }
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_bad_source_report_timestamp() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_requested_at = "not-a-timestamp".to_string();
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("bad source report timestamp should fail");
+
+    assert_eq!(
+        err,
+        DeploymentRootVerificationReceiptError::InvalidTimestampLabel {
+            field: "source_report_requested_at"
+        }
+    );
+}
+
+#[test]
+fn root_verification_receipt_validation_accepts_unix_source_report_timestamp() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_requested_at = "unix:100".to_string();
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    assert!(validate_deployment_root_verification_receipt(&receipt).is_ok());
+}
+
+#[test]
+fn root_verification_receipt_validation_rejects_unix_source_timestamp_mismatch() {
+    let mut receipt = sample_root_verification_receipt();
+    receipt.source_report_requested_at = "unix:101".to_string();
+    receipt.receipt_digest = deployment_root_verification_receipt_digest(&receipt);
+
+    let err = validate_deployment_root_verification_receipt(&receipt)
+        .expect_err("unix source report timestamp mismatch should fail");
 
     assert_eq!(
         err,
@@ -13044,6 +13105,7 @@ fn sample_root_verification_receipt() -> DeploymentRootVerificationReceiptV1 {
             DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified,
         source_report_id: report.report_id,
         source_report_digest: report.report_digest,
+        source_report_requested_at: report.requested_at,
         source_report_source: report.source,
         source_report_evidence_status: report.evidence_status,
         source_report_current_root_verification: report.current_root_verification,

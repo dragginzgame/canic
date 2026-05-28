@@ -196,7 +196,7 @@ fn memory_ledger_is_default_and_registry_is_removed() {
 fn missing_finish_marker_stays_actionable() {
     let macro_path = workspace_root().join("crates/canic/src/macros/start.rs");
     let source = read_text(&macro_path);
-    let marker = "__canic_missing_finish_macro__add_canic_finish_at_end_after_all_endpoints";
+    let marker = "__canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints";
 
     assert!(
         source.contains(&format!("const _: fn() = {marker};")),

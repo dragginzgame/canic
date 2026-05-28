@@ -282,7 +282,7 @@ Canic-owned methods.
 - If `canic.toml` uses `[[canisters]]`, rewrite it under
   `[subnets.<name>.canisters.<role>]`; Canic validates the subnet-shaped schema.
 - If a lifecycle macro reports
-  `__canic_missing_finish_macro__add_canic_finish_at_end_after_all_endpoints`,
+  `__canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints`,
   add `canic::finish!()` at the end of the canister crate root after custom
   endpoint definitions.
 - If a child cannot find its config at build time, check the path passed to

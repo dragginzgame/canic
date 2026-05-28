@@ -12,13 +12,23 @@ present.
 
 ## Unreleased
 
-- Root-verification receipts now preserve the source report source enum in
-  JSON, text, and digest input, keeping standalone receipts explicit that their
-  accepted evidence came from a deployment-truth check artifact.
+- Root-verification receipts now preserve the source report `requested_at`
+  timestamp in JSON, text, and digest input, keeping standalone receipts tied
+  to when the accepted passive evidence report was generated.
+- Root-verification receipt validation now rejects unsupported source report
+  timestamp labels while accepting the RFC3339-style labels used by request
+  artifacts and the `unix:<seconds>` labels emitted by root verification.
+- Root-verification receipt validation now requires `unix:<seconds>` source
+  report timestamps to match the receipt `verified_at_unix_secs`, preserving
+  the verify path's single local write timestamp.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.10` makes root-verification receipts preserve the source report source
+  enum in JSON, text, and digest input, keeping standalone receipts explicit
+  that accepted evidence came from a deployment-truth check artifact.
 
 - `0.47.9` makes root-verification receipts preserve the source report's
   current root-verification state and validate it against the receipt's

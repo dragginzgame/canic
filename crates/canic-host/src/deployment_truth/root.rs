@@ -45,6 +45,7 @@ struct DeploymentRootVerificationReceiptDigestInput<'a> {
     state_transition: DeploymentRootVerificationStateTransitionV1,
     source_report_id: &'a str,
     source_report_digest: &'a str,
+    source_report_requested_at: &'a str,
     source_report_source: DeploymentRootVerificationSourceV1,
     source_report_evidence_status: DeploymentRootVerificationEvidenceStatusV1,
     source_report_current_root_verification: DeploymentRootVerificationStateV1,
@@ -105,6 +106,11 @@ pub enum DeploymentRootVerificationReceiptError {
 
     #[error("deployment root verification receipt field `{field}` must be lowercase SHA-256 hex")]
     InvalidSha256Digest { field: &'static str },
+
+    #[error(
+        "deployment root verification receipt field `{field}` must be a supported timestamp label"
+    )]
+    InvalidTimestampLabel { field: &'static str },
 
     #[error("deployment root verification receipt field `{field}` digest is stale")]
     DigestMismatch { field: &'static str },
@@ -251,6 +257,7 @@ pub fn deployment_root_verification_receipt_digest(
         state_transition: receipt.state_transition,
         source_report_id: &receipt.source_report_id,
         source_report_digest: &receipt.source_report_digest,
+        source_report_requested_at: &receipt.source_report_requested_at,
         source_report_source: receipt.source_report_source,
         source_report_evidence_status: receipt.source_report_evidence_status,
         source_report_current_root_verification: receipt.source_report_current_root_verification,
@@ -296,6 +303,14 @@ pub fn validate_deployment_root_verification_receipt(
         receipt.source_report_digest.as_str(),
     )?;
     ensure_root_verification_receipt_field(
+        "source_report_requested_at",
+        receipt.source_report_requested_at.as_str(),
+    )?;
+    ensure_root_verification_receipt_timestamp(
+        "source_report_requested_at",
+        receipt.source_report_requested_at.as_str(),
+    )?;
+    ensure_root_verification_receipt_field(
         "source_observed_root_canister_id",
         receipt.source_observed_root_canister_id.as_str(),
     )?;
@@ -307,6 +322,7 @@ pub fn validate_deployment_root_verification_receipt(
             != DeploymentRootObservationSourceV1::IcpCanisterStatus
         || receipt.source_observed_root_canister_id != receipt.root_principal
         || receipt.source_report_state_transition != source_report_transition_for_receipt(receipt)
+        || !source_report_timestamp_matches_receipt(receipt)
     {
         return Err(DeploymentRootVerificationReceiptError::SourceEvidenceMismatch);
     }
@@ -902,6 +918,34 @@ fn ensure_root_verification_receipt_sha256(
     } else {
         Err(DeploymentRootVerificationReceiptError::InvalidSha256Digest { field })
     }
+}
+
+fn ensure_root_verification_receipt_timestamp(
+    field: &'static str,
+    value: &str,
+) -> Result<(), DeploymentRootVerificationReceiptError> {
+    if value.is_empty() {
+        return Err(DeploymentRootVerificationReceiptError::MissingRequiredField { field });
+    }
+    if is_supported_root_verification_timestamp_label(value) {
+        Ok(())
+    } else {
+        Err(DeploymentRootVerificationReceiptError::InvalidTimestampLabel { field })
+    }
+}
+
+fn is_supported_root_verification_timestamp_label(value: &str) -> bool {
+    if let Some(unix_value) = value.strip_prefix("unix:") {
+        return !unix_value.is_empty() && unix_value.bytes().all(|byte| byte.is_ascii_digit());
+    }
+    value.len() >= "1970-01-01T00:00:00Z".len() && value.contains('T') && value.ends_with('Z')
+}
+
+fn source_report_timestamp_matches_receipt(receipt: &DeploymentRootVerificationReceiptV1) -> bool {
+    let Some(unix_value) = receipt.source_report_requested_at.strip_prefix("unix:") else {
+        return true;
+    };
+    unix_value.parse::<u64>() == Ok(receipt.verified_at_unix_secs)
 }
 
 fn is_lower_hex_sha256(value: &str) -> bool {

@@ -123,6 +123,16 @@ inspect only the files needed for the current task.
 - Root-verification receipts now also preserve the source report source enum
   in JSON, text, and digest input, keeping standalone receipts explicit that
   accepted root evidence came from a deployment-truth check artifact.
+- Root-verification receipts now preserve the source report `requested_at`
+  timestamp in JSON, text, and digest input, tying standalone receipts to when
+  the accepted passive root evidence report was generated.
+- Root-verification receipt validation now rejects unsupported source report
+  timestamp labels while accepting the RFC3339-style labels used by request
+  artifacts and the `unix:<seconds>` labels emitted by the explicit verify
+  path.
+- For verify-path receipts, `unix:<seconds>` source report timestamps must
+  match `verified_at_unix_secs`, preserving the single local write timestamp
+  used to build the accepted report and receipt.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing
