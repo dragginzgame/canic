@@ -2797,6 +2797,49 @@ fn verified_root_state_writes_stay_on_explicit_install_or_verify_paths() {
 }
 
 #[test]
+fn verify_registered_root_validates_and_writes_before_receipt() {
+    let source = include_str!("mod.rs");
+    let start = source
+        .find("pub fn verify_registered_deployment_root(")
+        .expect("verify function start");
+    let end = source[start..]
+        .find("struct RootVerificationReceiptInput")
+        .map(|offset| start + offset)
+        .expect("verify function end");
+    let body = &source[start..end];
+
+    let validate_report = body
+        .find("validate_deployment_root_verification_report(&report)?")
+        .expect("report validation");
+    let state_assignment = body
+        .find("verified_state.root_verification = RootVerificationStatus::Verified")
+        .expect("verified state assignment");
+    let compare_and_swap_write = body
+        .find("write_verified_root_state_if_unchanged(")
+        .expect("compare-and-swap write");
+    let receipt_creation = body
+        .find("root_verification_receipt_from_report(")
+        .expect("receipt creation");
+
+    assert!(
+        validate_report < state_assignment,
+        "root verification must validate deployment-truth evidence before changing local state"
+    );
+    assert!(
+        state_assignment < compare_and_swap_write,
+        "root verification must prepare verified state before the guarded write"
+    );
+    assert!(
+        compare_and_swap_write < receipt_creation,
+        "root verification must create receipts only after the guarded write"
+    );
+    assert!(
+        !body.contains("write_install_state("),
+        "root verification must write through write_verified_root_state_if_unchanged"
+    );
+}
+
+#[test]
 fn verify_registered_deployment_root_rejects_state_digest_race() {
     let root = temp_dir("canic-root-verify-state-race");
     let state = sample_install_state(&root, "demo-local", "demo");

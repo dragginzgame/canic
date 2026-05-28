@@ -133,6 +133,10 @@ inspect only the files needed for the current task.
 - For verify-path receipts, `unix:<seconds>` source report timestamps must
   match `verified_at_unix_secs`, preserving the single local write timestamp
   used to build the accepted report and receipt.
+- Source-guard coverage now verifies explicit root verification validates
+  deployment-truth evidence before local-state mutation, writes verified state
+  only through the compare-and-swap helper, and creates the receipt after the
+  guarded write.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing
