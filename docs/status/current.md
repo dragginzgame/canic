@@ -90,6 +90,13 @@ inspect only the files needed for the current task.
 - Root-verification report validation now rejects duplicate or unexpected
   identity/evidence check rows, keeping archived root-verification evidence
   schema-stable instead of accepting arbitrary check-row additions.
+- `canic deploy root` help now describes the namespace as inspection or
+  explicit verification rather than a passive-only report surface, and the
+  0.47 design status has been updated to show that the root verify command,
+  receipt artifact, and state transition have landed.
+- Root-verification receipt text now distinguishes local-state mutation from
+  canister execution by rendering `canister_execution: none` and
+  `local_state_write: recorded`.
 - Local install state moved from fleet-template storage to deployment-target
   storage. New state records `deployment_name`, `fleet_template`, and
   `root_verification`; state writes no longer delete other deployments sharing

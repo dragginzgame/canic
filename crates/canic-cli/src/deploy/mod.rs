@@ -2690,7 +2690,7 @@ fn deploy_command() -> ClapCommand {
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("root")
-                .about("Build passive deployment-root verification reports")
+                .about("Inspect or verify deployment-root evidence")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -2744,7 +2744,7 @@ fn deploy_command() -> ClapCommand {
 fn deploy_root_command() -> ClapCommand {
     ClapCommand::new("root")
         .bin_name("canic deploy root")
-        .about("Build passive deployment-root verification reports")
+        .about("Inspect or verify deployment-root evidence")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("inspect")
@@ -4425,6 +4425,7 @@ mod tests {
         let inspect_help = root_inspect_usage();
         let verify_help = root_verify_usage();
 
+        assert!(help.contains("Inspect or verify deployment-root evidence"));
         assert!(help.contains("deployment-root scoped"));
         assert!(help.contains("Verify records verified root"));
         assert!(inspect_help.contains("DeploymentRootVerificationRequestV1-shaped JSON"));

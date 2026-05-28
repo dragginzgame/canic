@@ -12,18 +12,22 @@ present.
 
 ## Unreleased
 
-- Root-verification report and receipt validation now rejects malformed
-  SHA-256 digest fields and forged report check rows before archived artifacts
-  can be treated as stable root-verification evidence.
-- Root verification now rejects stale or tampered source `DeploymentCheckV1`
-  artifacts whose schema is unsupported or whose embedded diff/report no
-  longer match their plan and inventory.
-- Root-verification report validation now rejects duplicate or unexpected
-  check rows, keeping archived root evidence schema-stable.
+- Root-verification CLI help now describes the `canic deploy root` namespace as
+  inspection or explicit verification, not a passive-only report surface.
+- Root-verification receipt text now says `canister_execution: none` and
+  `local_state_write: recorded`, avoiding the misleading impression that no
+  local state transition happened.
+- The 0.47 design status now reflects that the explicit root-verification
+  command, receipt artifact, and state transition have landed; remaining work
+  is closeout hardening and audit rather than the main functional gate.
 
 ## [0.47.x] - 2026-05-27 - Verified deployment registration
 
 Detailed patch breakdown: [docs/changelog/0.47.md](docs/changelog/0.47.md)
+
+- `0.47.4` hardens archived root-verification evidence by rejecting malformed
+  digest fields, forged check rows, unsupported or stale source
+  `DeploymentCheckV1` artifacts, and duplicate or unexpected report check rows.
 
 - `0.47.3` tightens root-verification receipt validation so local-state digest
   transitions must match the claimed root-verification state transition, and

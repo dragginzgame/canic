@@ -122,7 +122,8 @@ pub fn deployment_root_verification_receipt_text(
     let mut lines = vec![
         "Deployment root verification receipt".to_string(),
         "mode: local-state-write".to_string(),
-        "execution: none".to_string(),
+        "canister_execution: none".to_string(),
+        "local_state_write: recorded".to_string(),
         format!("state_transition: {:?}", receipt.state_transition),
         format!("receipt_id: {}", receipt.receipt_id),
         format!("receipt_digest: {}", receipt.receipt_digest),

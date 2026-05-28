@@ -9673,6 +9673,17 @@ fn root_verification_receipt_json_shape_is_stable() {
 }
 
 #[test]
+fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_execution() {
+    let receipt = sample_root_verification_receipt();
+    let text = deployment_root_verification_receipt_text(&receipt);
+
+    assert!(text.contains("mode: local-state-write"));
+    assert!(text.contains("canister_execution: none"));
+    assert!(text.contains("local_state_write: recorded"));
+    assert!(!text.lines().any(|line| line == "execution: none"));
+}
+
+#[test]
 fn root_verification_receipt_validation_rejects_digest_drift() {
     let mut receipt = sample_root_verification_receipt();
     receipt.root_principal = "other-root".to_string();
