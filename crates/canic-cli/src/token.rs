@@ -31,8 +31,9 @@ Commands:
 Examples:
   canic token balance
   canic token icp balance
-  canic token transfer 1.25 --to-deployment demo
-  canic token icp transfer 1.25 --to-deployment demo --to-role app";
+  canic token transfer 1.25 aaaaa-aa
+  canic token transfer 1.25 demo/root
+  canic token icp transfer 1.25 demo/app";
 
 ///
 /// TokenCommandError
@@ -57,11 +58,8 @@ pub enum TokenCommandError {
     #[error("icp command failed: {command}\n{stderr}")]
     IcpFailed { command: String, stderr: String },
 
-    #[error("recipient must be either a positional receiver or --to-deployment")]
+    #[error("recipient must be a principal/account or <deployment>/<role-or-canister>")]
     InvalidRecipient,
-
-    #[error("--to-role requires --to-deployment")]
-    RoleWithoutDeployment,
 
     #[error("deployment target {deployment} has no canister or role named {target}")]
     UnknownTarget { deployment: String, target: String },
@@ -122,9 +120,7 @@ struct TokenTransferOptions {
     target: IcpTargetOptions,
     token: String,
     amount: String,
-    receiver: Option<String>,
-    to_deployment: Option<String>,
-    to_role: Option<String>,
+    receiver: String,
     to_subaccount: Option<String>,
     from_subaccount: Option<String>,
     json: bool,
@@ -221,20 +217,13 @@ impl TokenTransferOptions {
             target: IcpTargetOptions::parse(&matches),
             token,
             amount: string_option(&matches, "amount").expect("clap requires amount"),
-            receiver: string_option(&matches, "receiver"),
-            to_deployment: string_option(&matches, "to-deployment"),
-            to_role: string_option(&matches, "to-role"),
+            receiver: string_option(&matches, "receiver").expect("clap requires receiver"),
             to_subaccount: string_option(&matches, "to-subaccount"),
             from_subaccount: string_option(&matches, "from-subaccount"),
             json: matches.get_flag("json"),
             quiet: matches.get_flag("quiet"),
             dry_run: matches.get_flag("dry-run"),
         };
-        validate_recipient(
-            options.receiver.as_ref(),
-            options.to_deployment.as_ref(),
-            options.to_role.as_ref(),
-        )?;
         Ok(options)
     }
 }
@@ -259,13 +248,7 @@ fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
 fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError> {
     let root = resolve_current_canic_icp_root()
         .map_err(|err| TokenCommandError::InstallState(err.to_string()))?;
-    let receiver = transfer_receiver(
-        &options.target,
-        &root,
-        options.receiver.as_deref(),
-        options.to_deployment.as_deref(),
-        options.to_role.as_deref(),
-    )?;
+    let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["token", &options.token, "transfer"]);
     command.arg(&options.amount);
@@ -289,14 +272,11 @@ fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError>
 fn transfer_receiver(
     target: &IcpTargetOptions,
     root: &Path,
-    receiver: Option<&str>,
-    deployment: Option<&str>,
-    role: Option<&str>,
+    receiver: &str,
 ) -> Result<String, TokenCommandError> {
-    if let Some(receiver) = receiver {
+    let Some((deployment, canister_or_role)) = split_deployment_target(receiver)? else {
         return Ok(receiver.to_string());
-    }
-    let deployment = deployment.ok_or(TokenCommandError::InvalidRecipient)?;
+    };
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
@@ -307,24 +287,37 @@ fn transfer_receiver(
         root,
     )
     .map_err(token_installed_deployment_error)?;
-    if let Some(role) = role {
-        return resolve_role_principal(deployment, role, &installed.registry.entries);
-    }
-    Ok(installed.state.root_canister_id)
+    resolve_canister_or_role(
+        deployment,
+        canister_or_role,
+        &installed.state.root_canister_id,
+        &installed.registry.entries,
+    )
 }
 
-const fn validate_recipient(
-    receiver: Option<&String>,
-    deployment: Option<&String>,
-    role: Option<&String>,
-) -> Result<(), TokenCommandError> {
-    if role.is_some() && deployment.is_none() {
-        return Err(TokenCommandError::RoleWithoutDeployment);
-    }
-    if receiver.is_some() == deployment.is_some() {
+fn split_deployment_target(receiver: &str) -> Result<Option<(&str, &str)>, TokenCommandError> {
+    let Some((deployment, canister_or_role)) = receiver.split_once('/') else {
+        return Ok(None);
+    };
+    if deployment.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
         return Err(TokenCommandError::InvalidRecipient);
     }
-    Ok(())
+    Ok(Some((deployment, canister_or_role)))
+}
+
+fn resolve_canister_or_role(
+    deployment: &str,
+    target: &str,
+    root_canister_id: &str,
+    registry: &[RegistryEntry],
+) -> Result<String, TokenCommandError> {
+    if target == "root" || target == root_canister_id {
+        return Ok(root_canister_id.to_string());
+    }
+    if registry.iter().any(|entry| entry.pid == target) {
+        return Ok(target.to_string());
+    }
+    resolve_role_principal(deployment, target, registry)
 }
 
 fn resolve_role_principal(
@@ -411,14 +404,18 @@ fn transfer_command() -> ClapCommand {
         .bin_name("canic token transfer")
         .about("Transfer tokens to an account, principal, or Canic deployment target")
         .disable_help_flag(true)
-        .arg(value_arg("amount").value_name("amount").required(true))
-        .arg(value_arg("receiver").value_name("receiver"))
         .arg(
-            value_arg("to-deployment")
-                .long("to-deployment")
-                .value_name("deployment"),
+            value_arg("amount")
+                .value_name("amount")
+                .required(true)
+                .help("Token amount to transfer"),
         )
-        .arg(value_arg("to-role").long("to-role").value_name("role"))
+        .arg(
+            value_arg("receiver")
+                .value_name("receiver-or-deployment-target")
+                .required(true)
+                .help("Raw receiver, or Canic selector like <deployment>/<role-or-canister>"),
+        )
         .arg(
             value_arg("to-subaccount")
                 .long("to-subaccount")
@@ -515,22 +512,57 @@ mod tests {
 
     // Avoid guessing between raw accounts and Canic deployment names.
     #[test]
-    fn transfer_requires_one_recipient_source() {
+    fn transfer_requires_receiver() {
         std::assert_matches!(
             TokenTransferOptions::parse("icp".to_string(), vec![OsString::from("1")]),
-            Err(TokenCommandError::InvalidRecipient)
+            Err(TokenCommandError::Usage(_))
+        );
+    }
+
+    #[test]
+    fn parses_compact_deployment_target_receiver() {
+        assert_eq!(
+            split_deployment_target("demo/app").expect("split target"),
+            Some(("demo", "app"))
+        );
+        assert_eq!(
+            split_deployment_target("aaaaa-aa").expect("split raw receiver"),
+            None
         );
         std::assert_matches!(
-            TokenTransferOptions::parse(
-                "icp".to_string(),
-                vec![
-                    OsString::from("1"),
-                    OsString::from("aaaaa-aa"),
-                    OsString::from("--to-deployment"),
-                    OsString::from("demo")
-                ]
-            ),
+            split_deployment_target("demo/app/extra"),
             Err(TokenCommandError::InvalidRecipient)
         );
+    }
+
+    #[test]
+    fn resolves_compact_deployment_target_receiver() {
+        let registry = vec![registry_entry("child-principal", "app")];
+
+        assert_eq!(
+            resolve_canister_or_role("demo", "root", "root-principal", &registry)
+                .expect("resolve root"),
+            "root-principal"
+        );
+        assert_eq!(
+            resolve_canister_or_role("demo", "child-principal", "root-principal", &registry)
+                .expect("resolve child principal"),
+            "child-principal"
+        );
+        assert_eq!(
+            resolve_canister_or_role("demo", "app", "root-principal", &registry)
+                .expect("resolve role"),
+            "child-principal"
+        );
+    }
+
+    fn registry_entry(pid: &str, role: &str) -> RegistryEntry {
+        RegistryEntry {
+            pid: pid.to_string(),
+            role: Some(role.to_string()),
+            kind: None,
+            parent_pid: None,
+            module_hash: None,
+        }
     }
 }

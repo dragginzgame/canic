@@ -1,6 +1,16 @@
 controllers = []
 app_index = []
 
+[fleet]
+name = "delegation_signer_stub"
+
+[roles.root]
+kind = "root"
+
+[roles.user_shard]
+kind = "canister"
+package = "."
+
 [auth.delegated_tokens]
 enabled = true
 ecdsa_key_name = "key_1"

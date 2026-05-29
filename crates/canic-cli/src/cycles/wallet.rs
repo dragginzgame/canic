@@ -33,8 +33,9 @@ Commands:
 
 Examples:
   canic cycles balance
-  canic cycles transfer 4T --to-deployment demo
-  canic cycles transfer 4T --to-deployment demo --to-role app
+  canic cycles transfer 4T aaaaa-aa
+  canic cycles transfer 4T demo/root
+  canic cycles transfer 4T demo/app
   canic cycles topup demo app 4T";
 
 ///
@@ -82,9 +83,7 @@ struct MintOptions {
 struct TransferOptions {
     target: IcpTargetOptions,
     amount: String,
-    receiver: Option<String>,
-    to_deployment: Option<String>,
-    to_role: Option<String>,
+    receiver: String,
     to_subaccount: Option<String>,
     from_subaccount: Option<String>,
     json: bool,
@@ -228,20 +227,13 @@ impl TransferOptions {
         let options = Self {
             target: IcpTargetOptions::parse(&matches),
             amount: string_option(&matches, "amount").expect("clap requires amount"),
-            receiver: string_option(&matches, "receiver"),
-            to_deployment: string_option(&matches, "to-deployment"),
-            to_role: string_option(&matches, "to-role"),
+            receiver: string_option(&matches, "receiver").expect("clap requires receiver"),
             to_subaccount: string_option(&matches, "to-subaccount"),
             from_subaccount: string_option(&matches, "from-subaccount"),
             json: matches.get_flag("json"),
             quiet: matches.get_flag("quiet"),
             dry_run: matches.get_flag("dry-run"),
         };
-        validate_recipient(
-            options.receiver.as_ref(),
-            options.to_deployment.as_ref(),
-            options.to_role.as_ref(),
-        )?;
         Ok(options)
     }
 }
@@ -308,13 +300,7 @@ fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
 fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root()
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
-    let receiver = transfer_receiver(
-        &options.target,
-        &root,
-        options.receiver.as_deref(),
-        options.to_deployment.as_deref(),
-        options.to_role.as_deref(),
-    )?;
+    let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["cycles", "transfer"]);
     command.arg(&options.amount);
@@ -386,33 +372,43 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
 fn transfer_receiver(
     target: &IcpTargetOptions,
     root: &Path,
-    receiver: Option<&str>,
-    deployment: Option<&str>,
-    role: Option<&str>,
+    receiver: &str,
 ) -> Result<String, CyclesCommandError> {
-    if let Some(receiver) = receiver {
+    let Some((deployment, canister_or_role)) = split_deployment_target(receiver)? else {
         return Ok(receiver.to_string());
-    }
-    let deployment = deployment.ok_or(CyclesCommandError::InvalidRecipient)?;
+    };
     let installed = resolve_deployment(target, root, deployment)?;
-    if let Some(role) = role {
-        return resolve_role_principal(deployment, role, &installed.registry.entries);
-    }
-    Ok(installed.state.root_canister_id)
+    resolve_canister_or_role(
+        deployment,
+        canister_or_role,
+        &installed.state.root_canister_id,
+        &installed.registry.entries,
+    )
 }
 
-const fn validate_recipient(
-    receiver: Option<&String>,
-    deployment: Option<&String>,
-    role: Option<&String>,
-) -> Result<(), CyclesCommandError> {
-    if role.is_some() && deployment.is_none() {
-        return Err(CyclesCommandError::RoleWithoutDeployment);
-    }
-    if receiver.is_some() == deployment.is_some() {
+fn split_deployment_target(receiver: &str) -> Result<Option<(&str, &str)>, CyclesCommandError> {
+    let Some((deployment, canister_or_role)) = receiver.split_once('/') else {
+        return Ok(None);
+    };
+    if deployment.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
         return Err(CyclesCommandError::InvalidRecipient);
     }
-    Ok(())
+    Ok(Some((deployment, canister_or_role)))
+}
+
+fn resolve_canister_or_role(
+    deployment: &str,
+    target: &str,
+    root_canister_id: &str,
+    registry: &[RegistryEntry],
+) -> Result<String, CyclesCommandError> {
+    if target == "root" || target == root_canister_id {
+        return Ok(root_canister_id.to_string());
+    }
+    if registry.iter().any(|entry| entry.pid == target) {
+        return Ok(target.to_string());
+    }
+    resolve_role_principal(deployment, target, registry)
 }
 
 fn resolve_deployment(
@@ -602,14 +598,18 @@ fn transfer_command() -> ClapCommand {
         .bin_name("canic cycles transfer")
         .about("Transfer cycles to a principal or Canic deployment target")
         .disable_help_flag(true)
-        .arg(value_arg("amount").value_name("amount").required(true))
-        .arg(value_arg("receiver").value_name("receiver"))
         .arg(
-            value_arg("to-deployment")
-                .long("to-deployment")
-                .value_name("deployment"),
+            value_arg("amount")
+                .value_name("amount")
+                .required(true)
+                .help("Cycles amount to transfer"),
         )
-        .arg(value_arg("to-role").long("to-role").value_name("role"))
+        .arg(
+            value_arg("receiver")
+                .value_name("receiver-or-deployment-target")
+                .required(true)
+                .help("Raw principal, or Canic selector like <deployment>/<role-or-canister>"),
+        )
         .arg(
             value_arg("to-subaccount")
                 .long("to-subaccount")
@@ -716,46 +716,62 @@ mod tests {
 
     // Keep the public cycles namespace ICP-shaped while adding Canic target selectors.
     #[test]
-    fn parses_cycles_transfer_to_deployment_role() {
+    fn parses_cycles_transfer_to_deployment_target() {
         let options = TransferOptions::parse([
             OsString::from("4T"),
-            OsString::from("--to-deployment"),
-            OsString::from("demo"),
-            OsString::from("--to-role"),
-            OsString::from("app"),
+            OsString::from("demo/app"),
             OsString::from("--dry-run"),
         ])
         .expect("parse transfer");
 
         assert_eq!(options.amount, "4T");
-        assert_eq!(options.to_deployment.as_deref(), Some("demo"));
-        assert_eq!(options.to_role.as_deref(), Some("app"));
+        assert_eq!(options.receiver, "demo/app");
         assert!(options.dry_run);
     }
 
-    // Avoid guessing between raw principals/accounts and Canic deployment names.
+    // Avoid guessing between raw principals and Canic deployment names.
     #[test]
-    fn transfer_requires_one_recipient_source() {
+    fn transfer_requires_receiver() {
         std::assert_matches!(
             TransferOptions::parse([OsString::from("4T")]),
-            Err(CyclesCommandError::InvalidRecipient)
+            Err(CyclesCommandError::Usage(_))
+        );
+    }
+
+    #[test]
+    fn parses_compact_deployment_target_receiver() {
+        assert_eq!(
+            split_deployment_target("demo/app").expect("split target"),
+            Some(("demo", "app"))
+        );
+        assert_eq!(
+            split_deployment_target("aaaaa-aa").expect("split raw receiver"),
+            None
         );
         std::assert_matches!(
-            TransferOptions::parse([
-                OsString::from("4T"),
-                OsString::from("aaaaa-aa"),
-                OsString::from("--to-deployment"),
-                OsString::from("demo")
-            ]),
+            split_deployment_target("demo/app/extra"),
             Err(CyclesCommandError::InvalidRecipient)
         );
-        std::assert_matches!(
-            TransferOptions::parse([
-                OsString::from("4T"),
-                OsString::from("--to-role"),
-                OsString::from("app")
-            ]),
-            Err(CyclesCommandError::RoleWithoutDeployment)
+    }
+
+    #[test]
+    fn resolves_compact_deployment_target_receiver() {
+        let registry = vec![registry_entry("child-principal", "app")];
+
+        assert_eq!(
+            resolve_canister_or_role("demo", "root", "root-principal", &registry)
+                .expect("resolve root"),
+            "root-principal"
+        );
+        assert_eq!(
+            resolve_canister_or_role("demo", "child-principal", "root-principal", &registry)
+                .expect("resolve child principal"),
+            "child-principal"
+        );
+        assert_eq!(
+            resolve_canister_or_role("demo", "app", "root-principal", &registry)
+                .expect("resolve role"),
+            "child-principal"
         );
     }
 

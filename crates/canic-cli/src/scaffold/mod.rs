@@ -280,6 +280,14 @@ name = "{name}"
 [auth.delegated_tokens]
 enabled = false
 
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -300,6 +308,7 @@ version = "0.1.0"
 publish = false
 
 [package.metadata.canic]
+fleet = "{name}"
 role = "root"
 
 [lib]
@@ -327,6 +336,7 @@ version = "0.1.0"
 publish = false
 
 [package.metadata.canic]
+fleet = "{name}"
 role = "app"
 
 [lib]

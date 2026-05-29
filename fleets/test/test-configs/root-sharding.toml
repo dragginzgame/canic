@@ -1,6 +1,25 @@
 controllers = []
 app_index = ["user_hub"]
 
+[fleet]
+name = "test"
+
+[roles.root]
+kind = "root"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.test]
+kind = "canister"
+package = "../test"
+
+[roles.minimal]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 

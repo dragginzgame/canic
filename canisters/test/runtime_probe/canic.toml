@@ -1,6 +1,16 @@
 controllers = []
 app_index = []
 
+[fleet]
+name = "runtime_probe"
+
+[roles.root]
+kind = "root"
+
+[roles.test]
+kind = "canister"
+package = "."
+
 [app]
 init_mode = "enabled"
 

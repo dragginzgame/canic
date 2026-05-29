@@ -218,6 +218,28 @@ impl CanisterConfig {
 
         MetricsProfile::Leaf
     }
+
+    /// Return child roles referenced by exact role-bearing placement fields.
+    #[must_use]
+    pub fn role_bearing_child_roles(&self) -> Vec<&CanisterRole> {
+        let scaling_roles = self
+            .scaling
+            .iter()
+            .flat_map(|scaling| scaling.pools.values().map(|pool| &pool.canister_role));
+        let sharding_roles = self
+            .sharding
+            .iter()
+            .flat_map(|sharding| sharding.pools.values().map(|pool| &pool.canister_role));
+        let directory_roles = self
+            .directory
+            .iter()
+            .flat_map(|directory| directory.pools.values().map(|pool| &pool.canister_role));
+
+        scaling_roles
+            .chain(sharding_roles)
+            .chain(directory_roles)
+            .collect()
+    }
 }
 
 ///

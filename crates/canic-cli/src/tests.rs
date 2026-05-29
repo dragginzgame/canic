@@ -34,8 +34,9 @@ fn usage_lists_command_families() {
     )));
     assert!(plain.contains("Usage: canic [OPTIONS] <COMMAND>"));
     assert!(plain.contains("\nCommands:\n"));
-    assert!(plain.contains("Global commands"));
-    assert!(plain.contains("Fleet commands"));
+    assert!(plain.contains("Project commands"));
+    assert!(plain.contains("Deployment commands"));
+    assert!(plain.contains("ICP wallet commands"));
     assert!(plain.contains("Backup and restore commands"));
     assert!(plain.find("    status") < plain.find("    fleet"));
     assert!(plain.find("    fleet") < plain.find("    replica"));
@@ -43,12 +44,12 @@ fn usage_lists_command_families() {
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    config"));
-    assert!(plain.find("    config") < plain.find("    cycles"));
-    assert!(plain.find("    cycles") < plain.find("    token"));
-    assert!(plain.find("    token") < plain.find("    info"));
+    assert!(plain.find("    config") < plain.find("    info"));
     assert!(plain.find("    info") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
     assert!(plain.find("    medic") < plain.find("    metrics"));
+    assert!(plain.find("    metrics") < plain.find("    cycles"));
+    assert!(plain.find("    cycles") < plain.find("    token"));
     assert!(plain.find("    metrics") < plain.find("    snapshot"));
     assert!(plain.find("    snapshot") < plain.find("    backup"));
     assert!(plain.find("    backup") < plain.find("    manifest"));

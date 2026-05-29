@@ -94,6 +94,8 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(config.contains("name = \"my_app\""));
     assert!(config.contains("[auth.delegated_tokens]"));
     assert!(config.contains("enabled = false"));
+    assert!(config.contains("[roles.root]"));
+    assert!(config.contains("[roles.app]"));
     assert!(!config.contains("auto_create"));
     assert!(!config.contains("subnet_index"));
     assert!(config.contains("[subnets.prime.canisters.root]"));
@@ -102,12 +104,16 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(!config.contains("topup_policy"));
     assert!(!config.contains("[[canisters]]"));
     assert!(root_manifest.contains("version = \"0.1.0\""));
+    assert!(root_manifest.contains("fleet = \"my_app\""));
+    assert!(root_manifest.contains("role = \"root\""));
     assert!(root_manifest.contains("canic = \""));
     assert!(root_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!root_manifest.contains("workspace = true"));
     assert!(root_lib.contains("canic::start!();"));
     assert!(root_lib.contains("canic::finish!();"));
     assert!(app_manifest.contains("name = \"canister_my_app_app\""));
+    assert!(app_manifest.contains("fleet = \"my_app\""));
+    assert!(app_manifest.contains("role = \"app\""));
     assert!(app_manifest.contains("canic = \""));
     assert!(app_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!app_manifest.contains("workspace = true"));

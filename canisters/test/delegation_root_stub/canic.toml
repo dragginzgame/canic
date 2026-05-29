@@ -1,6 +1,22 @@
 controllers = []
 app_index = []
 
+[fleet]
+name = "delegation_root_stub"
+
+[roles.root]
+kind = "root"
+package = "."
+
+[roles.signer]
+kind = "canister"
+
+[roles.project_hub]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
 [auth.delegated_tokens]
 enabled = true
 ecdsa_key_name = "key_1"

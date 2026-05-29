@@ -19,7 +19,19 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
 
 #[test]
 fn root_canister_must_exist_in_prime_subnet() {
-    let mut cfg = ConfigModel::default();
+    let mut cfg = ConfigModel {
+        fleet: Some(FleetConfig {
+            name: Some("test".to_string()),
+        }),
+        ..Default::default()
+    };
+    cfg.roles.insert(
+        CanisterRole::ROOT,
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Root,
+            package: None,
+        },
+    );
     cfg.subnets
         .insert(SubnetRole::PRIME, SubnetConfig::default());
 
@@ -45,6 +57,109 @@ fn fleet_name_must_be_filesystem_safe() {
     });
 
     cfg.validate().expect_err("fleet name should fail");
+}
+
+#[test]
+fn fleet_name_is_required() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.fleet = None;
+
+    let err = cfg.validate().expect_err("fleet name should be required");
+
+    assert!(
+        err.to_string().contains("fleet config is required"),
+        "expected fleet error, got: {err}"
+    );
+}
+
+#[test]
+fn topology_roles_must_be_declared() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.subnets
+        .get_mut(&SubnetRole::PRIME)
+        .unwrap()
+        .canisters
+        .insert(
+            CanisterRole::from("app"),
+            base_canister_config(CanisterKind::Singleton),
+        );
+
+    let err = cfg
+        .validate()
+        .expect_err("topology role should need declaration");
+
+    assert!(
+        err.to_string().contains("is not declared"),
+        "expected role declaration error, got: {err}"
+    );
+}
+
+#[test]
+fn non_root_role_declaration_may_be_declared_only() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.roles.insert(
+        CanisterRole::from("store"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: Some("crates/store".to_string()),
+        },
+    );
+
+    cfg.validate()
+        .expect("declared-only non-root role should be valid");
+
+    assert!(cfg.declares_role(&CanisterRole::from("store")));
+    assert!(!cfg.attached_roles().contains("store"));
+}
+
+#[test]
+fn attached_fleet_roles_include_role_bearing_pool_targets() {
+    let mut cfg = ConfigModel::test_default();
+    let mut hub = base_canister_config(CanisterKind::Singleton);
+    let mut sharding = ShardingConfig::default();
+    sharding.pools.insert(
+        "users".to_string(),
+        ShardPool {
+            canister_role: CanisterRole::from("user_shard"),
+            policy: ShardPoolPolicy::default(),
+        },
+    );
+    hub.sharding = Some(sharding);
+
+    let prime = cfg.subnets.get_mut(&SubnetRole::PRIME).unwrap();
+    prime.canisters.insert(CanisterRole::from("user_hub"), hub);
+    prime.canisters.insert(
+        CanisterRole::from("user_shard"),
+        base_canister_config(CanisterKind::Shard),
+    );
+    cfg.roles.insert(
+        CanisterRole::from("user_hub"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: None,
+        },
+    );
+    cfg.roles.insert(
+        CanisterRole::from("user_shard"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: None,
+        },
+    );
+
+    cfg.validate().expect("config should validate");
+    let attached = cfg.attached_fleet_roles();
+
+    assert!(
+        attached
+            .iter()
+            .any(|role| role.to_string() == "test.user_hub")
+    );
+    assert!(
+        attached
+            .iter()
+            .any(|role| role.to_string() == "test.user_shard")
+    );
 }
 
 #[test]

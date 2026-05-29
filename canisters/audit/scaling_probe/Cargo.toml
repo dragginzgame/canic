@@ -9,6 +9,7 @@ publish = false
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
+fleet = "scaling_probe"
 role = "scale_hub"
 
 [lib]

@@ -1,6 +1,13 @@
 controllers = []
 app_index = []
 
+[fleet]
+name = "root_probe"
+
+[roles.root]
+kind = "root"
+package = "."
+
 [subnets.prime]
 
 [subnets.prime.canisters.root]

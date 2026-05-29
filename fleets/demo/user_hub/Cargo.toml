@@ -10,6 +10,7 @@ build = "../build.rs"
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
+fleet = "demo"
 role = "user_hub"
 
 [lib]

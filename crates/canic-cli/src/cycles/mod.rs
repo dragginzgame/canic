@@ -46,11 +46,8 @@ pub enum CyclesCommandError {
     #[error("invalid duration {0}; use values like 1h, 6h, 24h, 7d, or 30m")]
     InvalidDuration(String),
 
-    #[error("recipient must be either a positional receiver or --to-deployment")]
+    #[error("recipient must be a principal or <deployment>/<role-or-canister>")]
     InvalidRecipient,
-
-    #[error("--to-role requires --to-deployment")]
-    RoleWithoutDeployment,
 
     #[error("deployment target {deployment} has no canister or role named {target}")]
     UnknownTarget { deployment: String, target: String },

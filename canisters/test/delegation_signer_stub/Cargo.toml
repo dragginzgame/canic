@@ -8,6 +8,7 @@ publish = false
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
+fleet = "delegation_signer_stub"
 role = "user_shard"
 
 [lib]

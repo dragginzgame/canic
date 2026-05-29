@@ -4,7 +4,9 @@ mod fleet;
 mod subnet;
 
 use crate::{
-    config::schema::{CanisterKind, ConfigModel, ConfigSchemaError, NAME_MAX_BYTES, Validate},
+    config::schema::{
+        CanisterKind, ConfigModel, ConfigSchemaError, NAME_MAX_BYTES, RoleDeclarationKind, Validate,
+    },
     ids::{CanisterRole, SubnetRole},
 };
 
@@ -37,9 +39,19 @@ impl Validate for ConfigModel {
         self.log.validate()?;
         self.auth.validate()?;
         self.app.validate()?;
-        if let Some(fleet) = &self.fleet {
-            fleet.validate()?;
+        let fleet = self.fleet.as_ref().ok_or_else(|| {
+            ConfigSchemaError::ValidationError(
+                "fleet config is required; add [fleet] name = \"<fleet>\"".into(),
+            )
+        })?;
+        fleet.validate()?;
+        if fleet.name.is_none() {
+            return Err(ConfigSchemaError::ValidationError(
+                "fleet name is required; add [fleet] name = \"<fleet>\"".into(),
+            ));
         }
+
+        validate_role_declarations(self)?;
 
         let prime = SubnetRole::PRIME;
         let prime_subnet = self
@@ -94,6 +106,90 @@ impl Validate for ConfigModel {
             subnet.validate()?;
         }
 
+        validate_topology_roles_are_declared(self)?;
+
         Ok(())
     }
+}
+
+fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaError> {
+    if config.roles.is_empty() {
+        return Err(ConfigSchemaError::ValidationError(
+            "role declarations are required; add [roles.<role>] entries".into(),
+        ));
+    }
+
+    for (role, declaration) in &config.roles {
+        validate_canister_role_len(role, "role declaration")?;
+
+        if role.is_root() && declaration.kind != RoleDeclarationKind::Root {
+            return Err(ConfigSchemaError::ValidationError(
+                "role declaration 'root' must have kind = \"root\"".into(),
+            ));
+        }
+
+        if !role.is_root() && declaration.kind == RoleDeclarationKind::Root {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "role declaration '{role}' cannot have kind = \"root\"",
+            )));
+        }
+
+        if let Some(package) = declaration.package.as_deref()
+            && package.trim().is_empty()
+        {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "role declaration '{role}' package must not be empty",
+            )));
+        }
+    }
+
+    if !config.roles.contains_key(&CanisterRole::ROOT) {
+        return Err(ConfigSchemaError::ValidationError(
+            "root role declaration missing; add [roles.root] kind = \"root\"".into(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_topology_roles_are_declared(config: &ConfigModel) -> Result<(), ConfigSchemaError> {
+    let attached_roles = config.attached_roles();
+
+    for role in &attached_roles {
+        if !config.roles.contains_key(role) {
+            let display = config
+                .fleet_role_ref(role)
+                .map_or_else(|| role.to_string(), |role_ref| role_ref.to_string());
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "topology role '{display}' is not declared; add [roles.{role}]",
+            )));
+        }
+    }
+
+    for (role, declaration) in &config.roles {
+        if declaration.kind == RoleDeclarationKind::Root && !attached_roles.contains(role) {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "root role declaration '{role}' must be attached to topology",
+            )));
+        }
+    }
+
+    for subnet in config.subnets.values() {
+        for (role, canister) in &subnet.canisters {
+            let declaration = config.roles.get(role).ok_or_else(|| {
+                ConfigSchemaError::ValidationError(format!(
+                    "topology role '{role}' is not declared; add [roles.{role}]",
+                ))
+            })?;
+
+            if canister.kind == CanisterKind::Root && declaration.kind != RoleDeclarationKind::Root
+            {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "topology role '{role}' has kind = \"root\" but [roles.{role}] is not kind = \"root\"",
+                )));
+            }
+        }
+    }
+
+    Ok(())
 }

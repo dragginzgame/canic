@@ -12,13 +12,21 @@ present.
 
 ## Unreleased
 
+- Started the 0.49 role-lifecycle foundation: Canic configs now declare
+  fleet-scoped `[roles.<role>]`, package metadata includes `fleet`, and
+  `canic::build!` validates package `fleet.role` against declarations while
+  tracking attached-vs-declared role state.
+
 ## [0.48.x] - 2026-05-28 - Clean up & Audits
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
 - `0.48.11` hard-cuts delegated-token audiences to singular role/principal
   targets and sets the published MSRV to Rust `1.91.0` while keeping the
-  internal toolchain on Rust `1.96.0`.
+  internal toolchain on Rust `1.96.0`. It also regroups top-level CLI help so
+  ICP token/cycles wrappers are presented as wallet commands rather than fleet
+  commands, and tightens wallet transfer selectors to use
+  `<deployment>/<role-or-canister>` for Canic-resolved recipients.
 
 - `0.48.10` adds ICP-shaped `canic cycles` and `canic token` wrappers with
   explicit Canic deployment/role recipient resolution.

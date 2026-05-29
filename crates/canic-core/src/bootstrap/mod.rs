@@ -12,9 +12,10 @@ pub mod compiled {
             AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
             CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
             FleetConfig, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-            RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
-            ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-            StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+            RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
+            RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
+            ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
+            TopupPolicy, Whitelist,
         },
         ids::{CanisterRole, SubnetRole},
     };

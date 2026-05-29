@@ -4,9 +4,9 @@ use crate::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
         CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
         FleetConfig, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-        RandomnessConfig, RandomnessSource, RoleAttestationConfig, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
+        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
+        ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -29,6 +29,11 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     let auth = render_auth_config(&config.auth);
     let app = render_app_config(&config.app);
     let app_index = render_btree_set(config.app_index.iter(), render_canister_role);
+    let roles = render_btree_map(
+        config.roles.iter(),
+        render_canister_role,
+        render_role_declaration,
+    );
     let subnets = render_btree_map(
         config.subnets.iter(),
         render_subnet_role,
@@ -44,6 +49,7 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
             auth: #auth,
             app: #app,
             app_index: #app_index,
+            roles: #roles,
             subnets: #subnets,
         }
     }
@@ -55,6 +61,33 @@ fn render_fleet_config(config: &FleetConfig) -> TokenStream {
     quote! {
         ::canic::__internal::core::bootstrap::compiled::FleetConfig {
             name: #name,
+        }
+    }
+}
+
+// Render a fleet role declaration.
+fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
+    let kind = render_role_declaration_kind(declaration.kind);
+    let package = render_option(declaration.package.as_ref(), |package| {
+        render_owned_string(package)
+    });
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::RoleDeclaration {
+            kind: #kind,
+            package: #package,
+        }
+    }
+}
+
+// Render role declaration kind.
+fn render_role_declaration_kind(kind: RoleDeclarationKind) -> TokenStream {
+    match kind {
+        RoleDeclarationKind::Root => {
+            quote!(::canic::__internal::core::bootstrap::compiled::RoleDeclarationKind::Root)
+        }
+        RoleDeclarationKind::Canister => {
+            quote!(::canic::__internal::core::bootstrap::compiled::RoleDeclarationKind::Canister)
         }
     }
 }

@@ -1,6 +1,19 @@
 controllers = []
 app_index = []
 
+[fleet]
+name = "scaling_probe"
+
+[roles.root]
+kind = "root"
+
+[roles.scale_hub]
+kind = "canister"
+package = "."
+
+[roles.scale_replica]
+kind = "canister"
+
 [subnets.prime]
 
 [subnets.prime.canisters.root]

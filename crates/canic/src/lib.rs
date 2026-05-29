@@ -39,9 +39,10 @@ pub mod __internal {
 pub mod __build {
     pub use crate::build_support::{
         METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM, METRICS_TIER_RUNTIME,
-        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, config_contains_role, declared_package_role,
+        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, config_attaches_role, config_contains_role,
+        config_declares_role, config_fleet_name, declared_package_metadata, declared_package_role,
         emit_root_wasm_store_bootstrap_release_set, metrics_profile_tier_mask,
-        read_config_source_or_default, required_package_role,
+        read_config_source_or_default, required_package_metadata, required_package_role,
     };
 }
 

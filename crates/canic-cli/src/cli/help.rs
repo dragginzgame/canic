@@ -15,16 +15,18 @@ const COLOR_TIP: &str = "\x1b[38;5;245m";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CommandScope {
-    Global,
-    FleetContext,
+    Project,
+    Deployment,
+    IcpWallet,
     BackupRestore,
 }
 
 impl CommandScope {
     const fn heading(self) -> &'static str {
         match self {
-            Self::Global => "Global commands",
-            Self::FleetContext => "Fleet commands",
+            Self::Project => "Project commands",
+            Self::Deployment => "Deployment commands",
+            Self::IcpWallet => "ICP wallet commands",
             Self::BackupRestore => "Backup and restore commands",
         }
     }
@@ -45,67 +47,67 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "status",
         about: "Show quick Canic project status",
-        scope: CommandScope::Global,
+        scope: CommandScope::Project,
     },
     CommandSpec {
         name: "fleet",
-        about: "Manage Canic fleets",
-        scope: CommandScope::Global,
+        about: "Manage fleet templates",
+        scope: CommandScope::Project,
     },
     CommandSpec {
         name: "replica",
         about: "Manage the local ICP replica",
-        scope: CommandScope::Global,
+        scope: CommandScope::Project,
     },
     CommandSpec {
         name: "install",
         about: "Install and bootstrap a Canic fleet",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "build",
         about: "Build one Canic canister artifact",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "deploy",
         about: "Check deployment truth before mutation",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "config",
         about: "Inspect selected fleet config",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "cycles",
         about: "Wrap ICP cycles balance and transfer commands",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::IcpWallet,
     },
     CommandSpec {
         name: "token",
         about: "Wrap ICP token balance and transfer commands",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::IcpWallet,
     },
     CommandSpec {
         name: "info",
         about: "Query deployed canister information",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "endpoints",
         about: "List canister Candid endpoints",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "medic",
         about: "Diagnose local Canic deployment target setup",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "metrics",
         about: "Query Canic runtime telemetry",
-        scope: CommandScope::FleetContext,
+        scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "snapshot",
@@ -221,8 +223,9 @@ pub fn usage() -> String {
 fn grouped_command_section(specs: &[CommandSpec]) -> Vec<String> {
     let mut lines = Vec::new();
     let scopes = [
-        CommandScope::Global,
-        CommandScope::FleetContext,
+        CommandScope::Project,
+        CommandScope::Deployment,
+        CommandScope::IcpWallet,
         CommandScope::BackupRestore,
     ];
     for scope in scopes {

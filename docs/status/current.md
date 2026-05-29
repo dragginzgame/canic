@@ -32,11 +32,17 @@ inspect only the files needed for the current task.
   production `ICP_ENVIRONMENT=ic` builds avoid debug Candid sidecars/metadata
   bloat.
 - Treat the rest of 0.48 as miscellaneous cleanup, docs, audits, and focused
-  fixes. The next substantive continuation of the 0.41-0.47 deployment-truth
-  theme should start in 0.49 rather than being expanded inside 0.48.
+  fixes. 0.49 should continue setup/build/fleet-role workflow by separating
+  role declaration from topology attachment. It must preserve deployment-truth
+  strictness, but it is not a new deployment-truth verification line.
 
 ## Recent Work
 
+- 0.49 implementation has started with the role-lifecycle foundation:
+  `canic.toml` accepts explicit `[roles.<role>]` declarations under a required
+  `[fleet] name`, canister package metadata now carries both `fleet` and
+  `role`, and `canic::build!` validates declared `fleet.role` identity while
+  emitting attached-vs-declared role state.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.

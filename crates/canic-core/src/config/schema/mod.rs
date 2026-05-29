@@ -1,7 +1,9 @@
 mod log;
+mod role;
 mod subnet;
 
 pub use log::*;
+pub use role::*;
 pub use subnet::*;
 
 use crate::{
@@ -128,6 +130,11 @@ pub struct ConfigModel {
     #[serde(default)]
     pub app_index: BTreeSet<CanisterRole>,
 
+    /// Fleet-scoped role declarations. Topology attachment is derived from
+    /// `subnets`; this table declares which package-backed roles exist.
+    #[serde(default)]
+    pub roles: BTreeMap<CanisterRole, RoleDeclaration>,
+
     /// All subnets keyed by role.
     #[serde(default)]
     pub subnets: BTreeMap<SubnetRole, SubnetConfig>,
@@ -138,6 +145,69 @@ impl ConfigModel {
     #[must_use]
     pub fn get_subnet(&self, role: &SubnetRole) -> Option<SubnetConfig> {
         self.subnets.get(role).cloned()
+    }
+
+    /// Return the configured fleet name.
+    #[must_use]
+    pub fn fleet_name(&self) -> Option<&str> {
+        self.fleet.as_ref().and_then(|fleet| fleet.name.as_deref())
+    }
+
+    /// Return a fleet-scoped role reference for a local role.
+    #[must_use]
+    pub fn fleet_role_ref(&self, role: &CanisterRole) -> Option<FleetRoleRefV1> {
+        self.fleet_name()
+            .map(|fleet| FleetRoleRefV1::new(fleet, role.clone()))
+    }
+
+    /// Return whether a local canister role is explicitly declared.
+    #[must_use]
+    pub fn declares_role(&self, role: &CanisterRole) -> bool {
+        self.roles.contains_key(role)
+    }
+
+    /// Return the local canister roles attached to topology.
+    #[must_use]
+    pub fn attached_roles(&self) -> BTreeSet<CanisterRole> {
+        let mut attached = BTreeSet::new();
+        let mut pending = Vec::new();
+
+        for subnet in self.subnets.values() {
+            for role in subnet.canisters.keys() {
+                if attached.insert(role.clone()) {
+                    pending.push(role.clone());
+                }
+            }
+        }
+
+        while let Some(role) = pending.pop() {
+            for subnet in self.subnets.values() {
+                let Some(canister) = subnet.canisters.get(&role) else {
+                    continue;
+                };
+
+                for child in canister.role_bearing_child_roles() {
+                    if attached.insert(child.clone()) {
+                        pending.push(child.clone());
+                    }
+                }
+            }
+        }
+
+        attached
+    }
+
+    /// Return the fleet-scoped roles attached to topology.
+    #[must_use]
+    pub fn attached_fleet_roles(&self) -> BTreeSet<FleetRoleRefV1> {
+        let Some(fleet) = self.fleet_name() else {
+            return BTreeSet::new();
+        };
+
+        self.attached_roles()
+            .into_iter()
+            .map(|role| FleetRoleRefV1::new(fleet, role))
+            .collect()
     }
 
     /// Test-only helper: produces a minimally valid config.
@@ -169,6 +239,16 @@ impl ConfigModel {
             },
         );
 
+        cfg.fleet = Some(FleetConfig {
+            name: Some("test".to_string()),
+        });
+        cfg.roles.insert(
+            CanisterRole::ROOT,
+            RoleDeclaration {
+                kind: RoleDeclarationKind::Root,
+                package: None,
+            },
+        );
         cfg.subnets.insert(SubnetRole::PRIME, prime);
         cfg
     }

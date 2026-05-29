@@ -3,6 +3,15 @@ use std::{fmt::Write as _, fs, path::Path};
 use canic_core::{bootstrap::compiled::ConfigModel, ids::CanisterRole};
 use toml::Value as TomlValue;
 
+///
+/// PackageCanicMetadata
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackageCanicMetadata {
+    pub fleet: String,
+    pub role: String,
+}
+
 /// Read a Canic config source, or generate a minimal standalone config when allowed.
 #[must_use]
 pub fn read_config_source_or_default(
@@ -28,41 +37,79 @@ pub fn read_config_source_or_default(
     }
 }
 
-/// Read an optional Canic role declared in the package manifest metadata.
+/// Read optional Canic metadata declared in the package manifest.
 #[must_use]
-pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
+pub fn declared_package_metadata(manifest_dir: &Path) -> Option<PackageCanicMetadata> {
     let manifest = fs::read_to_string(manifest_dir.join("Cargo.toml")).ok()?;
-    toml::from_str::<TomlValue>(&manifest)
+    let canic = toml::from_str::<TomlValue>(&manifest)
         .ok()?
         .get("package")?
         .get("metadata")?
         .get("canic")?
-        .get("role")?
-        .as_str()
-        .map(str::to_string)
+        .clone();
+    let fleet = canic.get("fleet")?.as_str()?.to_string();
+    let role = canic.get("role")?.as_str()?.to_string();
+
+    Some(PackageCanicMetadata { fleet, role })
 }
 
-/// Read the required Canic role declared in package manifest metadata.
+/// Read an optional Canic role declared in the package manifest metadata.
 #[must_use]
-pub fn required_package_role(manifest_dir: &Path) -> String {
+pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
+    declared_package_metadata(manifest_dir).map(|metadata| metadata.role)
+}
+
+/// Read the required Canic metadata declared in package manifest metadata.
+#[must_use]
+pub fn required_package_metadata(manifest_dir: &Path) -> PackageCanicMetadata {
     let manifest_path = manifest_dir.join("Cargo.toml");
-    declared_package_role(manifest_dir).unwrap_or_else(|| {
+    declared_package_metadata(manifest_dir).unwrap_or_else(|| {
         panic!(
-            "missing Canic package role metadata in {}; add [package.metadata.canic] role = \"<role>\"",
+            "missing Canic package metadata in {}; add [package.metadata.canic] fleet = \"<fleet>\" and role = \"<role>\"",
             manifest_path.display()
         )
     })
 }
 
+/// Read the required Canic role declared in package manifest metadata.
+#[must_use]
+pub fn required_package_role(manifest_dir: &Path) -> String {
+    required_package_metadata(manifest_dir).role
+}
+
+/// Return whether a validated config declares the requested fleet role.
+#[must_use]
+pub fn config_declares_role(config: &ConfigModel, fleet_name: &str, role_name: &str) -> bool {
+    config.fleet_name() == Some(fleet_name)
+        && config
+            .roles
+            .contains_key(&CanisterRole::owned(role_name.to_string()))
+}
+
+/// Return the fleet name declared by a validated config.
+#[must_use]
+#[allow(dead_code)]
+pub fn config_fleet_name(config: &ConfigModel) -> Option<&str> {
+    config.fleet_name()
+}
+
+/// Return whether a validated config attaches the requested fleet role.
+#[must_use]
+#[allow(dead_code)]
+pub fn config_attaches_role(config: &ConfigModel, fleet_name: &str, role_name: &str) -> bool {
+    if config.fleet_name() != Some(fleet_name) {
+        return false;
+    }
+
+    config
+        .attached_roles()
+        .contains(&CanisterRole::owned(role_name.to_string()))
+}
+
 /// Return whether a validated config contains the requested canister role.
 #[must_use]
 pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
-    let role_id = CanisterRole::owned(role_name.to_string());
-
-    config
-        .subnets
-        .values()
-        .any(|subnet| subnet.get_canister(&role_id).is_some())
+    config_declares_role(config, config.fleet_name().unwrap_or_default(), role_name)
 }
 
 /// Render the minimal topology needed by a standalone non-root canister.
@@ -78,6 +125,15 @@ pub fn standalone_config_source(role: &str) -> String {
     format!(
         r#"controllers = []
 app_index = []
+
+[fleet]
+name = "standalone"
+
+[roles.root]
+kind = "root"
+
+[roles.{role_key}]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -132,6 +188,9 @@ mod tests {
 
         let prime = cfg.subnets.get("prime").expect("prime subnet exists");
 
+        assert_eq!(cfg.fleet_name(), Some("standalone"));
+        assert!(cfg.roles.contains_key("root"));
+        assert!(cfg.roles.contains_key("sandbox_minimal"));
         assert!(prime.canisters.contains_key("root"));
         assert!(prime.canisters.contains_key("sandbox_minimal"));
     }
@@ -143,6 +202,8 @@ mod tests {
 
         let prime = cfg.subnets.get("prime").expect("prime subnet exists");
 
+        assert_eq!(cfg.fleet_name(), Some("standalone"));
+        assert!(cfg.roles.contains_key("demo.role"));
         assert!(prime.canisters.contains_key("demo.role"));
     }
 
@@ -160,6 +221,7 @@ mod tests {
             read_config_source_or_default(missing_path.as_path(), false, Some("test"));
 
         assert!(generated);
+        assert!(source.contains("[roles.\"test\"]"));
         assert!(source.contains("[subnets.prime.canisters.\"test\"]"));
     }
 
@@ -175,6 +237,7 @@ version = "0.1.0"
 edition = "2024"
 
 [package.metadata.canic]
+fleet = "test"
 role = "scale_replica"
 "#,
         )
@@ -212,7 +275,7 @@ edition = "2024"
             .or_else(|| panic.downcast_ref::<&str>().copied())
             .expect("panic should include a message");
 
-        assert!(message.contains("missing Canic package role metadata"));
+        assert!(message.contains("missing Canic package metadata"));
         fs::remove_dir_all(&dir).expect("remove temp manifest dir");
     }
 
@@ -222,6 +285,15 @@ edition = "2024"
             r#"
 [subnets.prime.canisters.root]
 kind = "root"
+
+[fleet]
+name = "test"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
@@ -239,6 +311,15 @@ kind = "singleton"
             r#"
 [subnets.prime.canisters.root]
 kind = "root"
+
+[fleet]
+name = "test"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
