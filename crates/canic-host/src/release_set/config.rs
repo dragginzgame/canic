@@ -29,6 +29,21 @@ pub struct ConfiguredPoolExpectation {
     pub canister_role: String,
 }
 
+///
+/// ConfiguredRoleLifecycle
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfiguredRoleLifecycle {
+    pub fleet: String,
+    pub role: String,
+    pub display: String,
+    pub declaration_kind: String,
+    pub package: Option<String>,
+    pub attached: bool,
+    pub state: String,
+    pub topology: Option<String>,
+}
+
 impl RootSubnetRoleScope {
     const fn includes_root(self) -> bool {
         matches!(self, Self::Fleet)
@@ -103,6 +118,15 @@ pub fn configured_pool_expectations(
 ) -> Result<Vec<ConfiguredPoolExpectation>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
     configured_pool_expectations_from_source(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+}
+
+// Enumerate declared role lifecycle state for one fleet config.
+pub fn configured_role_lifecycle(
+    config_path: &Path,
+) -> Result<Vec<ConfiguredRoleLifecycle>, Box<dyn std::error::Error>> {
+    let config_source = fs::read_to_string(config_path)?;
+    configured_role_lifecycle_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -196,6 +220,74 @@ pub(super) fn configured_role_kinds_from_source(
     }
 
     Ok(kinds)
+}
+
+// Enumerate declared role lifecycle state from raw config source.
+pub(super) fn configured_role_lifecycle_from_source(
+    config_source: &str,
+) -> Result<Vec<ConfiguredRoleLifecycle>, Box<dyn std::error::Error>> {
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let fleet = config
+        .fleet_name()
+        .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?
+        .to_string();
+    let attached_roles = config.attached_roles();
+    let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
+
+    for (subnet_role, subnet) in &config.subnets {
+        for (role, canister) in &subnet.canisters {
+            topology
+                .entry(role.clone())
+                .or_default()
+                .push(format!("{subnet_role}/{role}"));
+
+            if let Some(scaling) = &canister.scaling {
+                for (pool, scale_pool) in &scaling.pools {
+                    topology
+                        .entry(scale_pool.canister_role.clone())
+                        .or_default()
+                        .push(format!("{subnet_role}/{role}/scaling/{pool}"));
+                }
+            }
+
+            if let Some(sharding) = &canister.sharding {
+                for (pool, shard_pool) in &sharding.pools {
+                    topology
+                        .entry(shard_pool.canister_role.clone())
+                        .or_default()
+                        .push(format!("{subnet_role}/{role}/sharding/{pool}"));
+                }
+            }
+
+            if let Some(directory) = &canister.directory {
+                for (pool, directory_pool) in &directory.pools {
+                    topology
+                        .entry(directory_pool.canister_role.clone())
+                        .or_default()
+                        .push(format!("{subnet_role}/{role}/directory/{pool}"));
+                }
+            }
+        }
+    }
+
+    Ok(config
+        .roles
+        .iter()
+        .map(|(role, declaration)| {
+            let role_name = role.as_str().to_string();
+            let attached = attached_roles.contains(role);
+            ConfiguredRoleLifecycle {
+                fleet: fleet.clone(),
+                display: format!("{fleet}.{role}"),
+                role: role_name,
+                declaration_kind: if role.is_root() { "root" } else { "canister" }.to_string(),
+                package: declaration.package.clone(),
+                attached,
+                state: if attached { "attached" } else { "declared" }.to_string(),
+                topology: topology.get(role).map(|labels| labels.join(",")),
+            }
+        })
+        .collect())
 }
 
 // Enumerate enabled config capabilities from raw config source.

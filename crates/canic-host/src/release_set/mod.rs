@@ -8,12 +8,13 @@ mod paths;
 mod stage;
 
 pub use config::{
-    ConfiguredPoolExpectation, LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles,
-    configured_controllers, configured_fleet_name, configured_fleet_roles,
-    configured_install_targets, configured_local_root_create_cycles, configured_pool_expectations,
-    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
-    configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
-    configured_role_topups, matching_fleet_config_paths,
+    ConfiguredPoolExpectation, ConfiguredRoleLifecycle, LOCAL_ROOT_MIN_READY_CYCLES,
+    configured_bootstrap_roles, configured_controllers, configured_fleet_name,
+    configured_fleet_roles, configured_install_targets, configured_local_root_create_cycles,
+    configured_pool_expectations, configured_release_roles, configured_role_auto_create,
+    configured_role_capabilities, configured_role_details, configured_role_kinds,
+    configured_role_lifecycle, configured_role_metrics_profiles, configured_role_topups,
+    matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -39,8 +40,8 @@ use config::{
     configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
     configured_release_roles_from_source, configured_role_auto_create_from_source,
     configured_role_capabilities_from_source, configured_role_details_from_source,
-    configured_role_kinds_from_source, configured_role_metrics_profiles_from_source,
-    configured_role_topups_from_source,
+    configured_role_kinds_from_source, configured_role_lifecycle_from_source,
+    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -70,8 +71,8 @@ mod tests {
         configured_pool_expectations_from_source, configured_release_roles_from_source,
         configured_role_auto_create_from_source, configured_role_capabilities_from_source,
         configured_role_details_from_source, configured_role_kinds_from_source,
-        configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
-        read_release_artifact, root_manifest_path,
+        configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
+        configured_role_topups_from_source, read_release_artifact, root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -268,6 +269,72 @@ kind = "singleton"
             kinds.get("scale_hub").map(String::as_str),
             Some("singleton")
         );
+    }
+
+    #[test]
+    fn configured_role_lifecycle_lists_declared_and_attached_roles() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "canisters/root"
+
+[roles.user_hub]
+kind = "canister"
+package = "canisters/user_hub"
+
+[roles.user_shard]
+kind = "canister"
+package = "canisters/user_shard"
+
+[roles.store]
+kind = "canister"
+package = "canisters/store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+
+[subnets.prime.canisters.user_hub.sharding.pools.users]
+canister_role = "user_shard"
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+"#;
+        let lifecycle = configured_role_lifecycle_from_source(config).expect("role lifecycle");
+
+        let root = lifecycle
+            .iter()
+            .find(|role| role.role == "root")
+            .expect("root lifecycle row");
+        assert_eq!(root.display, "demo.root");
+        assert_eq!(root.state, "attached");
+        assert_eq!(root.topology.as_deref(), Some("prime/root"));
+
+        let shard = lifecycle
+            .iter()
+            .find(|role| role.role == "user_shard")
+            .expect("shard lifecycle row");
+        assert_eq!(shard.state, "attached");
+        assert_eq!(
+            shard.topology.as_deref(),
+            Some("prime/user_hub/sharding/users,prime/user_shard")
+        );
+
+        let store = lifecycle
+            .iter()
+            .find(|role| role.role == "store")
+            .expect("store lifecycle row");
+        assert_eq!(store.package.as_deref(), Some("canisters/store"));
+        assert_eq!(store.state, "declared");
+        assert_eq!(store.topology, None);
     }
 
     #[test]

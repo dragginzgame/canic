@@ -12,9 +12,13 @@ present.
 
 ## Unreleased
 
-## [0.49.0] - 2026-05-29 - Role lifecycle foundation
+## [0.49.x] - 2026-05-29 - Role lifecycle foundation
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
+
+- `0.49.1` adds read-only fleet role lifecycle inspection: operators can list
+  declared roles and inspect whether a role is still compile-only or attached
+  to topology.
 
 - `0.49.0` starts the role-lifecycle foundation: Canic configs now declare
   fleet-scoped `[roles.<role>]`, package metadata includes `fleet`, and

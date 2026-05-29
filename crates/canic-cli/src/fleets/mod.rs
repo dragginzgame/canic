@@ -13,8 +13,8 @@ use canic_host::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
     },
     release_set::{
-        configured_fleet_name, configured_fleet_roles, display_workspace_path,
-        matching_fleet_config_paths,
+        ConfiguredRoleLifecycle, configured_fleet_name, configured_fleet_roles,
+        configured_role_lifecycle, display_workspace_path, matching_fleet_config_paths,
     },
     table::{ColumnAlign, render_table},
 };
@@ -35,6 +35,8 @@ const ROLE_PREVIEW_LIMIT: usize = 6;
 const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
+  canic fleet role list demo
+  canic fleet role inspect demo app
   canic fleet create demo
   canic fleet check test
   canic fleet delete demo";
@@ -52,6 +54,16 @@ Examples:
 
 This removes the matching config-defined fleet directory after you type the
 fleet name exactly.";
+const FLEET_ROLE_HELP_AFTER: &str = "\
+Examples:
+  canic fleet role list demo
+  canic fleet role inspect demo app";
+const FLEET_ROLE_LIST_HELP_AFTER: &str = "\
+Examples:
+  canic fleet role list demo";
+const FLEET_ROLE_INSPECT_HELP_AFTER: &str = "\
+Examples:
+  canic fleet role inspect demo app";
 
 ///
 /// FleetCommandError
@@ -81,6 +93,9 @@ pub enum FleetCommandError {
 
     #[error("fleet {0} config does not have a parent directory")]
     MissingFleetDirectory(String),
+
+    #[error("unknown role {role} in fleet {fleet}; run canic fleet role list {fleet}")]
+    UnknownRole { fleet: String, role: String },
 
     #[error("fleet create: {0}")]
     Create(String),
@@ -123,6 +138,25 @@ struct FleetCheckOptions {
 }
 
 ///
+/// RoleListOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RoleListOptions {
+    fleet: String,
+}
+
+///
+/// RoleInspectOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RoleInspectOptions {
+    fleet: String,
+    role: String,
+}
+
+///
 /// FleetListRow
 ///
 
@@ -153,9 +187,73 @@ where
             "check" => run_check(args),
             "delete" => run_delete(args),
             "list" => run_list(args),
+            "role" => run_role(args),
             _ => unreachable!("fleet dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_role<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, role_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(fleet_role_command(), args)
+        .map_err(|_| FleetCommandError::Usage(role_usage()))?
+    {
+        None => {
+            println!("{}", role_usage());
+            Ok(())
+        }
+        Some((command, args)) => match command.as_str() {
+            "list" => run_role_list(args),
+            "inspect" => run_role_inspect(args),
+            _ => unreachable!("fleet role dispatch command only defines known commands"),
+        },
+    }
+}
+
+fn run_role_list<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, role_list_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = RoleListOptions::parse(args)?;
+    let config_path = selected_fleet_config_path(&options.fleet)?;
+    let rows = configured_role_lifecycle(&config_path)?;
+    println!("{}", render_role_lifecycle_rows(&rows));
+    Ok(())
+}
+
+fn run_role_inspect<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, role_inspect_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = RoleInspectOptions::parse(args)?;
+    let config_path = selected_fleet_config_path(&options.fleet)?;
+    let rows = configured_role_lifecycle(&config_path)?;
+    let row = rows
+        .iter()
+        .find(|row| row.role == options.role)
+        .ok_or_else(|| FleetCommandError::UnknownRole {
+            fleet: options.fleet.clone(),
+            role: options.role.clone(),
+        })?;
+    println!("{}", render_role_inspection(row));
+    Ok(())
 }
 
 fn run_check<I>(args: I) -> Result<(), FleetCommandError>
@@ -281,6 +379,51 @@ impl FleetCheckOptions {
     }
 }
 
+impl RoleListOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_role_list_command(), args)
+            .map_err(|_| FleetCommandError::Usage(role_list_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+        })
+    }
+}
+
+impl RoleInspectOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_role_inspect_command(), args)
+            .map_err(|_| FleetCommandError::Usage(role_inspect_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            role: string_option(&matches, "role").expect("clap requires role"),
+        })
+    }
+}
+
 fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     discover_current_canic_config_choices()
 }
@@ -288,6 +431,27 @@ fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>>
 fn delete_target_dir(workspace_root: &Path, fleet: &str) -> Result<PathBuf, FleetCommandError> {
     let choices = discover_config_choices()?;
     delete_target_dir_from_choices(workspace_root, &choices, fleet)
+}
+
+fn selected_fleet_config_path(fleet: &str) -> Result<PathBuf, FleetCommandError> {
+    let choices = discover_config_choices()?;
+    if choices.is_empty() {
+        return Err(FleetCommandError::NoConfigChoices);
+    }
+    selected_fleet_config_path_from_choices(&choices, fleet)
+}
+
+fn selected_fleet_config_path_from_choices(
+    choices: &[PathBuf],
+    fleet: &str,
+) -> Result<PathBuf, FleetCommandError> {
+    let matches = matching_fleet_config_paths(choices, fleet);
+
+    match matches.as_slice() {
+        [] => Err(FleetCommandError::UnknownFleet(fleet.to_string())),
+        [path] => Ok(path.clone()),
+        _ => Err(FleetCommandError::DuplicateFleet(fleet.to_string())),
+    }
 }
 
 fn delete_target_dir_from_choices(
@@ -382,11 +546,68 @@ fn fleet_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("role")
+                .about("Inspect fleet role lifecycle")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("delete")
                 .about("Delete a config-defined Canic fleet")
                 .disable_help_flag(true),
         ))
         .after_help(FLEET_HELP_AFTER)
+}
+
+fn fleet_role_command() -> ClapCommand {
+    ClapCommand::new("role")
+        .bin_name("canic fleet role")
+        .about("Inspect fleet role lifecycle")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("list")
+                .about("List declared fleet roles")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect one declared fleet role")
+                .disable_help_flag(true),
+        ))
+        .after_help(FLEET_ROLE_HELP_AFTER)
+}
+
+fn fleet_role_list_command() -> ClapCommand {
+    ClapCommand::new("list")
+        .bin_name("canic fleet role list")
+        .about("List declared fleet roles")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name"),
+        )
+        .after_help(FLEET_ROLE_LIST_HELP_AFTER)
+}
+
+fn fleet_role_inspect_command() -> ClapCommand {
+    ClapCommand::new("inspect")
+        .bin_name("canic fleet role inspect")
+        .about("Inspect one declared fleet role")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name"),
+        )
+        .arg(
+            value_arg("role")
+                .value_name("role")
+                .required(true)
+                .help("Local role name"),
+        )
+        .after_help(FLEET_ROLE_INSPECT_HELP_AFTER)
 }
 
 fn fleet_list_command() -> ClapCommand {
@@ -487,6 +708,56 @@ fn format_canister_summary(roles: &[String]) -> String {
     format!("{} ({preview}{suffix})", roles.len())
 }
 
+fn render_role_lifecycle_rows(rows: &[ConfiguredRoleLifecycle]) -> String {
+    let rows = rows
+        .iter()
+        .map(|row| {
+            [
+                row.display.clone(),
+                row.package.clone().unwrap_or_else(|| "-".to_string()),
+                row.state.clone(),
+                row.topology.clone().unwrap_or_else(|| "-".to_string()),
+            ]
+        })
+        .collect::<Vec<_>>();
+    render_table(
+        &["ROLE", "PACKAGE", "STATE", "TOPOLOGY"],
+        &rows,
+        &[ColumnAlign::Left; 4],
+    )
+}
+
+fn render_role_inspection(row: &ConfiguredRoleLifecycle) -> String {
+    let topology = row.topology.as_deref().unwrap_or("-");
+    let package = row.package.as_deref().unwrap_or("-");
+    let deploy = if row.attached {
+        "eligible"
+    } else {
+        "blocked: role is declared-only"
+    };
+    let next_action = if row.attached {
+        format!("canic build {} {}", row.fleet, row.role)
+    } else {
+        format!(
+            "canic fleet role attach {} {} --subnet <subnet> --pool <pool>",
+            row.fleet, row.role
+        )
+    };
+
+    [
+        "Fleet role:".to_string(),
+        format!("  role: {}", row.display),
+        format!("  declaration: {}", row.declaration_kind),
+        format!("  package: {package}"),
+        format!("  state: {}", row.state),
+        format!("  topology: {topology}"),
+        "  cargo check: allowed".to_string(),
+        format!("  deploy artifact: {deploy}"),
+        format!("  next action: {next_action}"),
+    ]
+    .join("\n")
+}
+
 fn print_config_report(report: &IcpProjectConfigReport) {
     println!("Checked ICP project config:");
     println!("  path: {}", report.path.display());
@@ -526,6 +797,21 @@ fn create_usage() -> String {
 
 fn delete_usage() -> String {
     let mut command = fleet_delete_command();
+    command.render_help().to_string()
+}
+
+fn role_usage() -> String {
+    let mut command = fleet_role_command();
+    command.render_help().to_string()
+}
+
+fn role_list_usage() -> String {
+    let mut command = fleet_role_list_command();
+    command.render_help().to_string()
+}
+
+fn role_inspect_usage() -> String {
+    let mut command = fleet_role_inspect_command();
     command.render_help().to_string()
 }
 

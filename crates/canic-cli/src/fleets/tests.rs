@@ -32,6 +32,25 @@ fn parses_check_fleet() {
     assert_eq!(options.fleet, "test");
 }
 
+// Ensure role list requires one fleet name.
+#[test]
+fn parses_role_list_fleet() {
+    let options =
+        RoleListOptions::parse_test([OsString::from("demo")]).expect("parse role list options");
+
+    assert_eq!(options.fleet, "demo");
+}
+
+// Ensure role inspect requires fleet and role names.
+#[test]
+fn parses_role_inspect_fleet_and_role() {
+    let options = RoleInspectOptions::parse_test([OsString::from("demo"), OsString::from("app")])
+        .expect("parse role inspect options");
+
+    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.role, "app");
+}
+
 // Ensure unknown fleet check options fail through usage.
 #[test]
 fn rejects_unknown_check_option() {
@@ -104,6 +123,64 @@ fn renders_fleet_list_table() {
     );
 }
 
+// Ensure role lifecycle list renders declared-only and attached state.
+#[test]
+fn renders_role_lifecycle_table() {
+    let table = render_role_lifecycle_rows(&[
+        ConfiguredRoleLifecycle {
+            fleet: "demo".to_string(),
+            role: "root".to_string(),
+            display: "demo.root".to_string(),
+            declaration_kind: "root".to_string(),
+            package: Some("canisters/root".to_string()),
+            attached: true,
+            state: "attached".to_string(),
+            topology: Some("prime/root".to_string()),
+        },
+        ConfiguredRoleLifecycle {
+            fleet: "demo".to_string(),
+            role: "store".to_string(),
+            display: "demo.store".to_string(),
+            declaration_kind: "canister".to_string(),
+            package: Some("canisters/store".to_string()),
+            attached: false,
+            state: "declared".to_string(),
+            topology: None,
+        },
+    ]);
+
+    assert_eq!(
+        table,
+        [
+            "ROLE         PACKAGE           STATE      TOPOLOGY",
+            "----------   ---------------   --------   ----------",
+            "demo.root    canisters/root    attached   prime/root",
+            "demo.store   canisters/store   declared   -",
+        ]
+        .join("\n")
+    );
+}
+
+// Ensure role inspection explains build and deploy eligibility.
+#[test]
+fn renders_declared_only_role_inspection() {
+    let output = render_role_inspection(&ConfiguredRoleLifecycle {
+        fleet: "demo".to_string(),
+        role: "store".to_string(),
+        display: "demo.store".to_string(),
+        declaration_kind: "canister".to_string(),
+        package: Some("canisters/store".to_string()),
+        attached: false,
+        state: "declared".to_string(),
+        topology: None,
+    });
+
+    assert!(output.contains("role: demo.store"));
+    assert!(output.contains("cargo check: allowed"));
+    assert!(output.contains("deploy artifact: blocked: role is declared-only"));
+    assert!(output.contains("canic fleet role attach demo store"));
+}
+
 // Ensure fleet command help lists the command family without search.
 #[test]
 fn fleet_usage_lists_subcommands_and_examples() {
@@ -115,10 +192,23 @@ fn fleet_usage_lists_subcommands_and_examples() {
     assert!(text.contains("create"));
     assert!(text.contains("delete"));
     assert!(text.contains("list"));
+    assert!(text.contains("role"));
     assert!(!text.contains("sync"));
     assert!(!text.contains("current"));
     assert!(!text.contains("use"));
     assert!(!text.contains("search"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure fleet role help lists read-only lifecycle commands.
+#[test]
+fn fleet_role_usage_lists_subcommands_and_examples() {
+    let text = role_usage();
+
+    assert!(text.contains("Inspect fleet role lifecycle"));
+    assert!(text.contains("Usage: canic fleet role"));
+    assert!(text.contains("list"));
+    assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
 }
 
@@ -165,6 +255,24 @@ fn delete_usage_lists_confirmation() {
     assert!(text.contains("Usage: canic fleet delete"));
     assert!(text.contains("<name>"));
     assert!(text.contains("type the"));
+}
+
+// Ensure role list help takes explicit fleet identity.
+#[test]
+fn role_list_usage_lists_fleet_argument() {
+    let text = role_list_usage();
+
+    assert!(text.contains("Usage: canic fleet role list <fleet>"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure role inspect help takes explicit fleet and role identity.
+#[test]
+fn role_inspect_usage_lists_fleet_and_role_arguments() {
+    let text = role_inspect_usage();
+
+    assert!(text.contains("Usage: canic fleet role inspect <fleet> <role>"));
+    assert!(text.contains("Examples:"));
 }
 
 // Render precomputed config rows for focused table tests.
