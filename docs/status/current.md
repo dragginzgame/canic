@@ -49,9 +49,9 @@ inspect only the files needed for the current task.
 - Demo fleets now include `user_hub` and `user_shard` sharding walkthrough
   canisters with inspection-oriented endpoints, without adding them to the
   main test flow.
-- The published workspace MSRV is back to Rust `1.88.0`, while the internal
-  toolchain remains Rust `1.96.0`; tests may use `std::assert_matches!`, but
-  shipped runtime duration constants avoid newer const duration helpers.
+- The published workspace MSRV is Rust `1.91.0`, while the internal toolchain
+  remains Rust `1.96.0`; shipped runtime duration constants may use the
+  standard minute/hour duration helpers available at the advertised floor.
 - 0.47 started by making deployment-truth inventory carry explicit
   `observed_root` evidence. `DeploymentRootObservationV1` records deployment
   target, network, fleet template, root principal, observed canister ID,
@@ -656,7 +656,7 @@ inspect only the files needed for the current task.
 - Removed the obsolete `canic-cdk::structures::BTreeMap` wrapper. Stable-storage
   code now imports the upstream `ic_memory` B-tree map directly as
   `StableBtreeMap`, and map clearing uses upstream `clear_new()`.
-- The published MSRV is Rust `1.88.0`, separate from the internal Rust
+- The published MSRV is Rust `1.91.0`, separate from the internal Rust
   `1.96.0` toolchain. The repo may use stabilized `std::assert_matches!`
   diagnostics in internal tests without forcing downstream source consumers
   onto the internal compiler.
