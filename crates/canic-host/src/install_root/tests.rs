@@ -887,55 +887,7 @@ kind = "root"
 fn install_truth_gate_blocks_observed_controller_drift() {
     let root = temp_dir("canic-install-truth-controller-gate");
     let config_path = root.join("fleets/demo/canic.toml");
-    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
-    fs::write(
-        &config_path,
-        r#"
-controllers = []
-app_index = []
-
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
-
-[subnets.prime.canisters.root]
-kind = "root"
-"#,
-    )
-    .expect("write config");
+    write_demo_root_only_config(&config_path);
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
 
     let options = InstallRootOptions {
@@ -3730,6 +3682,31 @@ fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     fs::write(root.join("fleets/canic.toml"), config_source)
         .expect("temp canic.toml must be written");
     root
+}
+
+fn write_demo_root_only_config(config_path: &Path) {
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
+    fs::write(
+        config_path,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
 }
 
 fn write_wasm_gz_artifact(root: &Path, role: &str, bytes: &[u8]) {
