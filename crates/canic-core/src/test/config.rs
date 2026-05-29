@@ -4,7 +4,7 @@ use crate::{
     cdk::types::Cycles,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, MetricsCanisterConfig, RandomnessConfig,
-        StandardsCanisterConfig,
+        RoleDeclaration, RoleDeclarationKind, StandardsCanisterConfig,
     },
     config::{Config, ConfigModel},
     ids::{CanisterRole, SubnetRole},
@@ -61,8 +61,19 @@ impl ConfigTestBuilder {
     ) -> Self {
         let subnet = subnet.into();
         let role = role.into();
+        let declaration_kind = match config.kind {
+            CanisterKind::Root => RoleDeclarationKind::Root,
+            _ => RoleDeclarationKind::Canister,
+        };
         let entry = self.model.subnets.entry(subnet).or_default();
 
+        self.model.roles.insert(
+            role.clone(),
+            RoleDeclaration {
+                kind: declaration_kind,
+                package: None,
+            },
+        );
         entry.canisters.insert(role, config);
 
         self
