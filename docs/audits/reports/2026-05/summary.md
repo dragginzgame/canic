@@ -139,3 +139,17 @@ May has day summaries for the currently recorded audit days.
 42. Package maintainers: keep `ic-testkit` restricted to internal test
     harnesses and test/audit canisters, and keep `canic` default features
     narrow unless a release line explicitly chooses broader defaults.
+43. Host maintainers: split `canic-host::deployment_truth` implementation
+    files before adding another broad deployment phase family.
+44. CLI maintainers: split `crates/canic-cli/src/deploy/mod.rs` before adding
+    more deployment-truth commands.
+45. Host maintainers: keep install-root state transitions in `canic-host` and
+    avoid moving host mechanics into CLI command modules.
+46. Testkit maintainers: keep sibling `ic-testkit` Canic-free; Canic topology,
+    readiness, and bootstrap semantics belong in `canic-testing-internal`.
+47. Setup maintainers: treat metadata-driven startup/build changes as public
+    setup-surface changes and keep future edits behind `build_support`,
+    scaffold, and macro tests.
+48. Root capability maintainers: before adding a new root request or proof
+    mode, budget DTO, API validation, workflow authorization/execution,
+    replay, metrics, Candid/docs, and tests as one coordinated slice.

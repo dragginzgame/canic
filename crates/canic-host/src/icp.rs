@@ -463,6 +463,20 @@ impl IcpCli {
         run_output(&mut command)
     }
 
+    /// Top up one canister with cycles.
+    pub fn canister_top_up_output(
+        &self,
+        canister: &str,
+        amount_cycles: u128,
+    ) -> Result<String, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["top-up", "--amount"]);
+        command.arg(amount_cycles.to_string());
+        command.arg(canister);
+        self.add_target_args(&mut command);
+        run_output_with_stderr(&mut command)
+    }
+
     /// Return one canister status report from ICP CLI JSON output.
     pub fn canister_status_report(
         &self,
@@ -620,6 +634,17 @@ impl IcpCli {
     pub fn start_canister_display(&self, canister: &str) -> String {
         let mut command = self.canister_command();
         command.args(["start", canister]);
+        self.add_target_args(&mut command);
+        command_display(&command)
+    }
+
+    /// Render a dry-run top-up command.
+    #[must_use]
+    pub fn canister_top_up_display(&self, canister: &str, amount_cycles: u128) -> String {
+        let mut command = self.canister_command();
+        command.args(["top-up", "--amount"]);
+        command.arg(amount_cycles.to_string());
+        command.arg(canister);
         self.add_target_args(&mut command);
         command_display(&command)
     }
@@ -978,6 +1003,17 @@ mod tests {
         assert_eq!(
             icp.canister_query_output_display("root", "canic_ready", Some("json")),
             "icp canister call root canic_ready () --query --json -n ic"
+        );
+    }
+
+    // Ensure manual top-ups use the ICP CLI top-up command and selected network.
+    #[test]
+    fn renders_canister_top_up() {
+        let icp = IcpCli::new("icp", None, Some("ic".to_string()));
+
+        assert_eq!(
+            icp.canister_top_up_display("aaaaa-aa", 4_000_000_000_000),
+            "icp canister top-up --amount 4000000000000 aaaaa-aa -n ic"
         );
     }
 

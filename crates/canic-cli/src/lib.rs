@@ -20,6 +20,7 @@ mod status;
 mod support;
 #[cfg(test)]
 mod test_support;
+mod token;
 
 use crate::cli::{
     clap::parse_matches,
@@ -52,6 +53,9 @@ pub enum CliError {
 
     #[error("config: {0}")]
     Config(String),
+
+    #[error("cycles: {0}")]
+    Cycles(#[from] cycles::CyclesCommandError),
 
     #[error("deploy: {0}")]
     Deploy(#[from] deploy::DeployCommandError),
@@ -88,6 +92,9 @@ pub enum CliError {
 
     #[error("status: {0}")]
     Status(#[from] status::StatusCommandError),
+
+    #[error("token: {0}")]
+    Token(#[from] token::TokenCommandError),
 }
 
 /// Run the CLI from process arguments.
@@ -136,6 +143,7 @@ where
         "backup" => backup::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
+        "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
@@ -147,6 +155,7 @@ where
         "replica" => replica::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
+        "token" => token::run(tail).map_err(CliError::from),
         "restore" => restore::run(tail).map_err(CliError::from),
         _ => unreachable!("top-level dispatch command only defines known commands"),
     }

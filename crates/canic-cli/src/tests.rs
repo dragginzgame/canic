@@ -43,7 +43,9 @@ fn usage_lists_command_families() {
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    config"));
-    assert!(plain.find("    config") < plain.find("    info"));
+    assert!(plain.find("    config") < plain.find("    cycles"));
+    assert!(plain.find("    cycles") < plain.find("    token"));
+    assert!(plain.find("    token") < plain.find("    info"));
     assert!(plain.find("    info") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
     assert!(plain.find("    medic") < plain.find("    metrics"));
@@ -56,6 +58,8 @@ fn usage_lists_command_families() {
     assert!(plain.contains("--network <name>"));
     assert!(!plain.contains("    scaffold"));
     assert!(plain.contains("config"));
+    assert!(plain.contains("cycles"));
+    assert!(plain.contains("token"));
     assert!(plain.contains("info"));
     assert!(plain.contains("endpoints"));
     assert!(plain.contains("metrics"));
@@ -87,6 +91,11 @@ fn command_family_help_returns_ok() {
         &["backup", "verify", "help"],
         &["config", "help"],
         &["build", "help"],
+        &["cycles", "help"],
+        &["cycles", "balance", "help"],
+        &["cycles", "mint", "help"],
+        &["cycles", "transfer", "help"],
+        &["cycles", "topup", "help"],
         &["deploy", "help"],
         &["deploy", "check", "help"],
         &["deploy", "diff", "help"],
@@ -117,6 +126,10 @@ fn command_family_help_returns_ok() {
         &["manifest", "validate", "help"],
         &["medic", "help"],
         &["metrics", "help"],
+        &["token", "help"],
+        &["token", "balance", "help"],
+        &["token", "icp", "balance", "help"],
+        &["token", "transfer", "help"],
         &["snapshot", "help"],
         &["snapshot", "download", "help"],
         &["status", "help"],
@@ -125,15 +138,11 @@ fn command_family_help_returns_ok() {
     }
 }
 
-// Ensure old read-only top-level aliases are removed in favor of canic info.
+// Ensure the old read-only top-level list alias is removed in favor of canic info.
 #[test]
 fn top_level_info_aliases_are_removed() {
     std::assert_matches!(
         run([OsString::from("list"), OsString::from("help")]),
-        Err(CliError::Usage(_))
-    );
-    std::assert_matches!(
-        run([OsString::from("cycles"), OsString::from("help")]),
         Err(CliError::Usage(_))
     );
 }
@@ -185,6 +194,7 @@ fn version_flags_return_ok() {
     );
     assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
     assert!(
         run([
@@ -235,6 +245,7 @@ fn version_flags_return_ok() {
     assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("metrics"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("token"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
     assert!(
         run([
@@ -294,13 +305,33 @@ fn deploy_version_flags_return_ok() {
 #[test]
 fn global_icp_is_forwarded_to_commands_that_use_icp() {
     let mut tail = vec![OsString::from("test")];
+    let mut cycles_tail = vec![OsString::from("balance")];
+    let mut token_tail = vec![OsString::from("balance")];
 
     apply_global_icp("medic", &mut tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("cycles", &mut cycles_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("token", &mut token_tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
         tail,
         vec![
             OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        cycles_tail,
+        vec![
+            OsString::from("balance"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        token_tail,
+        vec![
+            OsString::from("balance"),
             OsString::from(INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp")
         ]
@@ -399,13 +430,33 @@ fn global_icp_is_forwarded_to_info_query_commands() {
 #[test]
 fn global_network_is_forwarded_to_commands_that_use_network() {
     let mut tail = vec![OsString::from("test")];
+    let mut cycles_tail = vec![OsString::from("balance")];
+    let mut token_tail = vec![OsString::from("balance")];
 
     apply_global_network("install", &mut tail, Some("ic".to_string()));
+    apply_global_network("cycles", &mut cycles_tail, Some("ic".to_string()));
+    apply_global_network("token", &mut token_tail, Some("ic".to_string()));
 
     assert_eq!(
         tail,
         vec![
             OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        cycles_tail,
+        vec![
+            OsString::from("balance"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        token_tail,
+        vec![
+            OsString::from("balance"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("ic")
         ]

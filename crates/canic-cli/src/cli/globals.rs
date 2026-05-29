@@ -122,7 +122,7 @@ pub fn apply_global_network(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "endpoints" | "medic" | "metrics" | "status" => true,
+        "cycles" | "endpoints" | "medic" | "metrics" | "status" | "token" => true,
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
@@ -137,7 +137,9 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "build" | "endpoints" | "install" | "medic" | "metrics" | "status" => true,
+        "build" | "cycles" | "endpoints" | "install" | "medic" | "metrics" | "status" | "token" => {
+            true
+        }
         "deploy" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
             Some("check" | "diff" | "inventory" | "plan" | "report")

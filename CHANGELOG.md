@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.10` adds ICP-shaped `canic cycles` and `canic token` wrappers with
+  explicit Canic deployment/role recipient resolution.
+
 - `0.48.9` reruns the capability-scope-enforcement audit, confirms capability
   and scope checks still run after authentication and identity binding, and
   refreshes the recurring audit hotspot path for endpoint auth ordering. It

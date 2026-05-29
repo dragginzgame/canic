@@ -78,6 +78,16 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::FleetContext,
     },
     CommandSpec {
+        name: "cycles",
+        about: "Wrap ICP cycles balance and transfer commands",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
+        name: "token",
+        about: "Wrap ICP token balance and transfer commands",
+        scope: CommandScope::FleetContext,
+    },
+    CommandSpec {
         name: "info",
         about: "Query deployed canister information",
         scope: CommandScope::FleetContext,
