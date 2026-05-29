@@ -82,12 +82,8 @@ pub enum SignatureAlgorithm {
 }
 
 pub enum DelegationAudience {
-    Roles(Vec<CanisterRole>),
-    Principals(Vec<Principal>),
-    RolesOrPrincipals {
-        roles: Vec<CanisterRole>,
-        principals: Vec<Principal>,
-    },
+    Role(CanisterRole),
+    Principal(Principal),
 }
 
 pub enum ShardKeyBinding {
@@ -168,9 +164,9 @@ derivation_path_hash = sha256(canonical_derivation_path_bytes(path))
 
 Strict canonical rules:
 
-- roles, scopes, and principal vectors must already be strictly sorted and duplicate-free
+- scopes must already be strictly sorted and duplicate-free
 - role and scope strings must be non-empty ASCII strings using only `[a-z0-9_:-]`
-- principal audiences must not contain the anonymous principal
+- principal audiences must not be the anonymous principal
 - no `Any` audience exists
 - verifier rejects noncanonical vectors rather than normalizing them at verification time
 
@@ -179,45 +175,37 @@ This is intentional: one semantic token must have one valid canonical encoding.
 ### Audience Binding Examples
 
 Delegated-token audiences describe who may accept the token. Principal audiences
-bind directly to verifier canister principals. Role audiences bind to the
-verifier's configured Canic role, and a certificate that uses any role branch
-must bind to exactly one role through `verifier_role_hash`.
+bind directly to one verifier canister principal. Role audiences bind to one
+verifier configured with a Canic role, through `verifier_role_hash`.
+
+Endpoint authorization is separate from delegated-token audience. A protected
+endpoint may accept several caller roles through protected internal endpoint
+descriptors, but a delegated token audience names exactly one verifier role or
+one verifier principal.
 
 Positive role-targeted certificate:
 
 ```rust
 let role = CanisterRole::new("project_instance");
-let audience = DelegationAudience::Roles(vec![role.clone()]);
+let audience = DelegationAudience::Role(role.clone());
 let verifier_role_hash = Some(role_hash(&role)?);
 ```
 
 That certificate can only be accepted by a verifier configured as
-`project_instance`. A token minted under it may narrow to the same single role,
-but it may not expand to another role or to a principal audience.
+`project_instance`. A token minted under it must keep the same role audience.
 
 Positive principal-targeted certificate:
 
 ```rust
 let verifier = Principal::from_text("...")?;
-let audience = DelegationAudience::Principals(vec![verifier]);
+let audience = DelegationAudience::Principal(verifier);
 let verifier_role_hash = None;
 ```
 
 That certificate is bound to the verifier principal and carries no role hash.
 
-Negative role-targeted certificate:
-
-```rust
-let audience = DelegationAudience::Roles(vec![
-    CanisterRole::new("project_instance"),
-    CanisterRole::new("project_hub"),
-]);
-```
-
-This is rejected even if the role vector is canonical. The role branch in a
-certificate is not a broad role set; it is a single-role binding. Use principal
-audiences for explicit multi-canister targeting, or issue separate
-role-targeted certificates per role.
+Plural and mixed audience variants are not part of the active DTO. Issue
+separate tokens for separate verifier targets.
 
 ## 5. Root Certificate Issuance
 
@@ -583,7 +571,7 @@ Expected failures:
 
 - disabled delegated auth config
 - malformed Candid token argument
-- noncanonical audience/scope/role/principal vectors
+- noncanonical scope vectors or invalid audience labels
 - unknown or mismatched root key
 - missing or stale cascaded `SubnetState` root key
 - root signature failure

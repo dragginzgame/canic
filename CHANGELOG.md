@@ -12,9 +12,18 @@ present.
 
 ## Unreleased
 
+- Lower the published MSRV back to Rust `1.88.0` while keeping the internal
+  repository toolchain on Rust `1.96.0`; workflow duration constants now use
+  second-based constructors so downstream crates can compile Canic on the lower
+  advertised floor.
+
 ## [0.48.x] - 2026-05-28 - Clean up & Audits
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
+
+- `0.48.11` hard-cuts delegated-token audience DTOs to singular
+  `Role(CanisterRole)` or `Principal(Principal)` targets, removing plural and
+  mixed role/principal audience shapes.
 
 - `0.48.10` adds ICP-shaped `canic cycles` and `canic token` wrappers with
   explicit Canic deployment/role recipient resolution.

@@ -182,7 +182,7 @@ mod tests {
             cert_ttl_secs: 400,
             max_token_ttl_secs: 120,
             scopes: vec!["read".to_string(), "write".to_string()],
-            audience: DelegationAudience::Roles(vec![CanisterRole::new("project_instance")]),
+            audience: DelegationAudience::Role(CanisterRole::new("project_instance")),
             ttl_limits: ttl_limits(),
         }
     }
@@ -246,17 +246,17 @@ mod tests {
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_multi_role_cert_audience() {
+    fn issue_delegation_proof_rejects_invalid_role_audience() {
         let mut input = input();
-        input.audience = DelegationAudience::Roles(vec![
-            CanisterRole::new("project_instance"),
-            CanisterRole::new("project_hub"),
-        ]);
+        input.audience =
+            DelegationAudience::Role(CanisterRole::owned("ProjectInstance".to_string()));
 
         assert_eq!(
             issue_delegation_proof(input, |hash| Ok(hash.to_vec())),
             Err(IssueDelegationProofError::Audience(
-                AudienceError::RoleAudienceMustBeSingular
+                AudienceError::Canonical(super::CanonicalAuthError::InvalidRole {
+                    role: "ProjectInstance".to_string(),
+                })
             ))
         );
     }

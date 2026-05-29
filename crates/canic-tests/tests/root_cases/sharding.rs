@@ -123,7 +123,7 @@ fn delegated_token_verification_uses_cascaded_subnet_state_root_key() {
         &setup.pic,
         shard_pid,
         subject,
-        DelegationAudience::Principals(vec![verifier_pid]),
+        DelegationAudience::Principal(verifier_pid),
         vec![cap::VERIFY.to_string()],
         provision.cert.max_token_ttl_secs,
         provision

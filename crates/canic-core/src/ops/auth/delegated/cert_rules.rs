@@ -146,7 +146,7 @@ mod tests {
             expires_at: 500,
             max_token_ttl_secs: 120,
             scopes: vec!["read".to_string()],
-            aud: DelegationAudience::Roles(vec![role.clone()]),
+            aud: DelegationAudience::Role(role.clone()),
             verifier_role_hash: Some(role_hash(&role).unwrap()),
         }
     }

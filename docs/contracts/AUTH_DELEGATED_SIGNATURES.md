@@ -65,8 +65,9 @@ pub struct AttestationKey {
 }
 ```
 
-Signed structures use `CanicAuthCanonical`. Canonical vectors are strict:
-roles, principals, and scopes must already be sorted and duplicate-free.
+Signed structures use `CanicAuthCanonical`. Delegated-token audience is
+singular: one verifier role or one verifier principal. Canonical scope vectors
+must already be sorted and duplicate-free.
 
 ## Crypto Backend and Signing Rules
 

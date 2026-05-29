@@ -187,7 +187,7 @@ mod tests {
             expires_at: 500,
             max_token_ttl_secs: 120,
             scopes: vec!["read".to_string(), "write".to_string()],
-            aud: DelegationAudience::Roles(vec![role.clone()]),
+            aud: DelegationAudience::Role(role.clone()),
             verifier_role_hash: Some(role_hash(&role).unwrap()),
         }
     }
@@ -225,7 +225,7 @@ mod tests {
         MintDelegatedTokenInput {
             proof,
             subject: p(9),
-            audience: DelegationAudience::Roles(vec![CanisterRole::new("project_instance")]),
+            audience: DelegationAudience::Role(CanisterRole::new("project_instance")),
             scopes: vec!["read".to_string()],
             ttl_secs: 60,
             nonce: [7; 16],
@@ -357,28 +357,11 @@ mod tests {
     fn mint_delegated_token_rejects_audience_expansion() {
         let proof = proof();
         let mut input = input(&proof);
-        input.audience = DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]);
+        input.audience = DelegationAudience::Role(CanisterRole::new("project_hub"));
 
         assert_eq!(
             mint_delegated_token(input, |_| Ok(vec![])),
             Err(MintDelegatedTokenError::AudienceNotSubset)
-        );
-    }
-
-    #[test]
-    fn mint_delegated_token_allows_role_claim_subset_of_mixed_cert_audience() {
-        let mut proof = proof();
-        let role = CanisterRole::new("project_instance");
-        proof.cert.aud = DelegationAudience::RolesOrPrincipals {
-            roles: vec![role],
-            principals: vec![],
-        };
-
-        let token = mint_delegated_token(input(&proof), |hash| Ok(hash.to_vec())).unwrap();
-
-        assert_eq!(
-            token.claims.aud,
-            DelegationAudience::Roles(vec![CanisterRole::new("project_instance")])
         );
     }
 

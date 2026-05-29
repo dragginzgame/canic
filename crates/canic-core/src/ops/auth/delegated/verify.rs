@@ -313,7 +313,7 @@ mod tests {
             expires_at: 500,
             max_token_ttl_secs: 120,
             scopes: vec!["read".to_string(), "write".to_string()],
-            aud: DelegationAudience::Roles(vec![role.clone()]),
+            aud: DelegationAudience::Role(role.clone()),
             verifier_role_hash: Some(role_hash(&role).unwrap()),
         }
     }
@@ -469,13 +469,40 @@ mod tests {
     #[test]
     fn verify_delegated_token_rejects_audience_subset_drift() {
         let mut token = token();
-        token.claims.aud = DelegationAudience::Roles(vec![CanisterRole::new("project_hub")]);
+        token.claims.aud = DelegationAudience::Role(CanisterRole::new("project_hub"));
         let trust = root_trust();
         let role = role();
 
         assert_eq!(
             verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
             Err(VerifyDelegatedTokenError::AudienceNotSubset)
+        );
+    }
+
+    #[test]
+    fn verify_delegated_token_accepts_exact_principal_audience_without_local_role() {
+        let mut token = token();
+        token.proof.cert.aud = DelegationAudience::Principal(p(99));
+        token.proof.cert.verifier_role_hash = None;
+        token.claims.aud = DelegationAudience::Principal(p(99));
+        token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
+        let trust = root_trust();
+
+        verify_delegated_token(input(&token, &trust, None, &[]), |_, _, _, _| Ok(())).unwrap();
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_non_matching_principal_audience() {
+        let mut token = token();
+        token.proof.cert.aud = DelegationAudience::Principal(p(98));
+        token.proof.cert.verifier_role_hash = None;
+        token.claims.aud = DelegationAudience::Principal(p(98));
+        token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
+        let trust = root_trust();
+
+        assert_eq!(
+            verify_delegated_token(input(&token, &trust, None, &[]), |_, _, _, _| Ok(())),
+            Err(VerifyDelegatedTokenError::TokenAudienceRejected)
         );
     }
 

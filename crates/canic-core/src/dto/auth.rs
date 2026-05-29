@@ -15,12 +15,8 @@ pub enum SignatureAlgorithm {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationAudience {
-    Roles(Vec<CanisterRole>),
-    Principals(Vec<Principal>),
-    RolesOrPrincipals {
-        roles: Vec<CanisterRole>,
-        principals: Vec<Principal>,
-    },
+    Role(CanisterRole),
+    Principal(Principal),
 }
 
 //

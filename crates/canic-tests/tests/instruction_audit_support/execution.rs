@@ -307,7 +307,7 @@ fn prepare_scenario(
                 &setup.pic,
                 shard_pid,
                 subject,
-                DelegationAudience::Principals(vec![target_pid]),
+                DelegationAudience::Principal(target_pid),
                 vec![cap::VERIFY.to_string()],
                 provision.cert.max_token_ttl_secs,
                 provision

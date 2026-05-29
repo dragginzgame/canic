@@ -30,12 +30,8 @@ pub enum CanonicalAuthError {
     EmptyScope,
     #[error("delegated auth scope contains invalid characters: {scope}")]
     InvalidScope { scope: String },
-    #[error("delegated auth roles must be strictly sorted and unique")]
-    NonCanonicalRoles,
     #[error("delegated auth scopes must be strictly sorted and unique")]
     NonCanonicalScopes,
-    #[error("delegated auth principals must be strictly sorted and unique")]
-    NonCanonicalPrincipals,
 }
 
 pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> {
@@ -133,18 +129,13 @@ fn encode_audience(
     audience: &DelegationAudience,
 ) -> Result<(), CanonicalAuthError> {
     match audience {
-        DelegationAudience::Roles(roles) => {
+        DelegationAudience::Role(role) => {
             out.push(1);
-            encode_roles(out, roles)?;
+            encode_role(out, role)?;
         }
-        DelegationAudience::Principals(principals) => {
+        DelegationAudience::Principal(principal) => {
             out.push(2);
-            encode_principals(out, principals)?;
-        }
-        DelegationAudience::RolesOrPrincipals { roles, principals } => {
-            out.push(3);
-            encode_roles(out, roles)?;
-            encode_principals(out, principals)?;
+            encode_principal(out, *principal);
         }
     }
 
@@ -164,22 +155,9 @@ fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBinding) {
     }
 }
 
-fn encode_roles(out: &mut Vec<u8>, roles: &[CanisterRole]) -> Result<(), CanonicalAuthError> {
-    let mut previous = None;
-    for role in roles {
-        validate_role(role)?;
-        let current = role.as_str().as_bytes();
-        if previous.is_some_and(|previous| previous >= current) {
-            return Err(CanonicalAuthError::NonCanonicalRoles);
-        }
-        previous = Some(current);
-    }
-
-    encode_len(out, roles.len());
-    for role in roles {
-        encode_bytes(out, role.as_str().as_bytes());
-    }
-
+fn encode_role(out: &mut Vec<u8>, role: &CanisterRole) -> Result<(), CanonicalAuthError> {
+    validate_role(role)?;
+    encode_bytes(out, role.as_str().as_bytes());
     Ok(())
 }
 
@@ -197,27 +175,6 @@ fn encode_scopes(out: &mut Vec<u8>, scopes: &[String]) -> Result<(), CanonicalAu
     encode_len(out, scopes.len());
     for scope in scopes {
         encode_bytes(out, scope.as_bytes());
-    }
-
-    Ok(())
-}
-
-fn encode_principals(
-    out: &mut Vec<u8>,
-    principals: &[Principal],
-) -> Result<(), CanonicalAuthError> {
-    let mut previous = None;
-    for principal in principals {
-        let current = principal.as_slice();
-        if previous.is_some_and(|previous| previous >= current) {
-            return Err(CanonicalAuthError::NonCanonicalPrincipals);
-        }
-        previous = Some(current);
-    }
-
-    encode_len(out, principals.len());
-    for principal in principals {
-        encode_bytes(out, principal.as_slice());
     }
 
     Ok(())
@@ -319,7 +276,7 @@ mod tests {
             expires_at: 200,
             max_token_ttl_secs: 60,
             scopes: vec!["read".to_string(), "write".to_string()],
-            aud: DelegationAudience::Roles(vec![CanisterRole::new("project_instance")]),
+            aud: DelegationAudience::Role(CanisterRole::new("project_instance")),
             verifier_role_hash: Some(role_hash(&CanisterRole::new("project_instance")).unwrap()),
         }
     }
@@ -336,38 +293,9 @@ mod tests {
     }
 
     #[test]
-    fn cert_hash_rejects_duplicate_roles() {
-        let mut cert = sample_cert();
-        cert.aud = DelegationAudience::RolesOrPrincipals {
-            roles: vec![
-                CanisterRole::new("project_instance"),
-                CanisterRole::new("project_instance"),
-            ],
-            principals: vec![p(4), p(9)],
-        };
-
-        assert_eq!(cert_hash(&cert), Err(CanonicalAuthError::NonCanonicalRoles));
-    }
-
-    #[test]
-    fn cert_hash_rejects_noncanonical_principals() {
-        let mut cert = sample_cert();
-        cert.aud = DelegationAudience::RolesOrPrincipals {
-            roles: vec![CanisterRole::new("project_instance")],
-            principals: vec![p(9), p(4)],
-        };
-
-        assert_eq!(
-            cert_hash(&cert),
-            Err(CanonicalAuthError::NonCanonicalPrincipals)
-        );
-    }
-
-    #[test]
     fn cert_hash_rejects_noncanonical_roles() {
         let mut cert = sample_cert();
-        cert.aud =
-            DelegationAudience::Roles(vec![CanisterRole::owned("ProjectInstance".to_string())]);
+        cert.aud = DelegationAudience::Role(CanisterRole::owned("ProjectInstance".to_string()));
 
         assert_eq!(
             cert_hash(&cert),
@@ -386,7 +314,7 @@ mod tests {
             cert_hash: [12; 32],
             issued_at: 100,
             expires_at: 120,
-            aud: DelegationAudience::Principals(vec![p(13)]),
+            aud: DelegationAudience::Principal(p(13)),
             scopes: vec!["Read".to_string()],
             nonce: [14; 16],
         };
@@ -400,18 +328,15 @@ mod tests {
     }
 
     #[test]
-    fn claims_hash_rejects_noncanonical_audience_and_scope_order() {
-        let mut left = DelegatedTokenClaims {
+    fn claims_hash_rejects_noncanonical_scope_order() {
+        let left = DelegatedTokenClaims {
             version: 2,
             subject: p(10),
             issuer_shard_pid: p(11),
             cert_hash: [12; 32],
             issued_at: 100,
             expires_at: 120,
-            aud: DelegationAudience::RolesOrPrincipals {
-                roles: vec![CanisterRole::new("project_instance")],
-                principals: vec![p(20), p(30)],
-            },
+            aud: DelegationAudience::Role(CanisterRole::new("project_instance")),
             scopes: vec!["write".to_string(), "read".to_string()],
             nonce: [14; 16],
         };
@@ -419,17 +344,6 @@ mod tests {
         assert_eq!(
             claims_hash(&left),
             Err(CanonicalAuthError::NonCanonicalScopes)
-        );
-
-        left.scopes = vec!["read".to_string(), "write".to_string()];
-        left.aud = DelegationAudience::RolesOrPrincipals {
-            roles: vec![CanisterRole::new("project_instance")],
-            principals: vec![p(30), p(20)],
-        };
-
-        assert_eq!(
-            claims_hash(&left),
-            Err(CanonicalAuthError::NonCanonicalPrincipals)
         );
     }
 

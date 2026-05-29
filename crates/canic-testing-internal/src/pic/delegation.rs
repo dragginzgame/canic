@@ -57,7 +57,7 @@ pub fn request_root_delegation_provision(
     let request = DelegationProofIssueRequest {
         shard_pid,
         scopes: vec![cap::VERIFY.to_string()],
-        aud: DelegationAudience::Principals(vec![verifier_pid]),
+        aud: DelegationAudience::Principal(verifier_pid),
         cert_ttl_secs: 60,
     };
     let response: Result<DelegationProof, Error> = pic.update_call_as_or_panic(
