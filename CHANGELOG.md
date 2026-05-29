@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.8` reruns the token-trust-chain audit and confirms delegated-token
+  verification still requires verifier-local root trust, root-certified shard
+  authority, canonical cert/claim hashes, shard signatures, and endpoint guard
+  ordering.
+
 - `0.48.7` reruns the audience-target-binding audit and hardens canister
   artifact role resolution so builds require exactly one scoped
   `[package.metadata.canic] role` package under the selected canister root.

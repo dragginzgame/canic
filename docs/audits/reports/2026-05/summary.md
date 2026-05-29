@@ -56,76 +56,80 @@ May has day summaries for the currently recorded audit days.
 12. Build/setup maintainers: keep canister artifact manifest resolution scoped
     to the selected canister root and exact `[package.metadata.canic] role`;
     do not reintroduce package-name or workspace-wide fallback.
-13. Auth maintainers: keep transport caller and authenticated subject lane
+13. Auth maintainers: keep delegated-token verifier orchestration, pure chain
+    verification, root-key resolution, endpoint access guards, and
+    role-attestation refresh behavior aligned whenever delegated issuer formats
+    or subnet-state propagation change.
+14. Auth maintainers: keep transport caller and authenticated subject lane
     semantics explicit when editing `AccessContext`, endpoint macro generation,
     delegated-session resolution, or delegated-token verification.
-14. Lifecycle maintainers: keep optional macro `init = { ... }` support behind
+15. Lifecycle maintainers: keep optional macro `init = { ... }` support behind
     zero-delay lifecycle timers so generated IC hooks stay restore/schedule-only.
-15. Layering maintainers: keep pure cross-layer identifiers in `ids`, with
+16. Layering maintainers: keep pure cross-layer identifiers in `ids`, with
     storage-specific persistence implementations kept in storage modules.
-16. Workflow maintainers: keep test-only replay harness storage imports from
+17. Workflow maintainers: keep test-only replay harness storage imports from
     expanding into production workflow code.
-17. Surface-governance maintainers: keep generated DID surface scans pointed at
+18. Surface-governance maintainers: keep generated DID surface scans pointed at
     refreshed `.icp` artifacts and exclude internal `test` canisters from
     consumer-facing counts.
-18. Facade maintainers: keep default-on `canic_metrics` documented as
+19. Facade maintainers: keep default-on `canic_metrics` documented as
     intentional surface whenever endpoint bundle defaults change.
-19. Complexity maintainers: keep the remediated metrics, directory placement,
+20. Complexity maintainers: keep the remediated metrics, directory placement,
     config schema, and intent storage modules decomposed; new metric families,
     placement states, and schema validation cases should land in focused
     support/test modules rather than re-growing production hubs.
-20. Complexity maintainers: watch remaining large config/IC facade files only
+21. Complexity maintainers: watch remaining large config/IC facade files only
     when they become active edit centers.
-21. Control-plane maintainers: keep release publication behavior in the focused
+22. Control-plane maintainers: keep release publication behavior in the focused
     `publication/release/*` modules, and split `publication/fleet.rs` or
     `publication/lifecycle.rs` before adding more phase branches there.
-22. Core/runtime maintainers: keep new IC management and provisioning behavior
+23. Core/runtime maintainers: keep new IC management and provisioning behavior
     in the focused `infra/ic/mgmt/*` and `workflow/ic/provision/*` modules.
-23. Facade/build maintainers: keep metrics/config build helpers behind hidden
+24. Facade/build maintainers: keep metrics/config build helpers behind hidden
     `__build`.
-24. Operator maintainers: preserve CLI/host/backup ownership boundaries as the
+25. Operator maintainers: preserve CLI/host/backup ownership boundaries as the
     ICP CLI flow continues.
-25. Auth maintainers: keep delegated-session cleanup side effects isolated to
+26. Auth maintainers: keep delegated-session cleanup side effects isolated to
     endpoint access-boundary code.
-26. Operator maintainers: keep `canic-cli`, `canic-host`, and `canic-backup`
+27. Operator maintainers: keep `canic-cli`, `canic-host`, and `canic-backup`
     dependency direction one-way and facade-free as the operator package
     surface grows.
-27. Host maintainers: keep host features on `canic-core`/data dependencies
+28. Host maintainers: keep host features on `canic-core`/data dependencies
     unless a future facade dependency is deliberately justified.
-28. Package maintainers: keep all fleets and test/audit/sandbox canisters
+29. Package maintainers: keep all fleets and test/audit/sandbox canisters
     explicitly unpublished.
-29. Operator maintainers: keep routine post-hard-cut command changes narrower
+30. Operator maintainers: keep routine post-hard-cut command changes narrower
     than the broad 0.33 release sweeps by deciding early whether the behavior
     belongs to CLI UX, host mechanics, or backup domain logic.
-30. CLI maintainers: split or isolate `list` responsibilities before adding
+31. CLI maintainers: split or isolate `list` responsibilities before adding
     more live projection columns, fallback logic, or rendering modes.
-31. CLI/host maintainers: continue routing fleet-scoped live commands through
+32. CLI/host maintainers: continue routing fleet-scoped live commands through
     the shared installed-fleet resolver. `list`, `cycles`, `metrics`, and
     `endpoints` use it; `snapshot download`, `backup`, and `status` remain
     candidates.
-32. Host/CLI maintainers: move shared ICP response parsing primitives needed by
+33. Host/CLI maintainers: move shared ICP response parsing primitives needed by
     both host and CLI into `canic-host`, starting with cycle-balance parsing.
     Initial parser ownership is complete in `canic-host::response_parse`; keep
     future ICP response normalization there instead of adding CLI-local parsers.
-33. CLI maintainers: continue splitting large command modules into options,
+34. CLI maintainers: continue splitting large command modules into options,
     transport, parse, and render modules before adding more behavior.
     `endpoints`, `cycles`, `metrics`, and top-level CLI help/global-option
     dispatch are split; backup remains the largest command module but should
     wait for the backup/restore flow to stabilize further.
-34. Backup/CLI maintainers: after 0.34 backup/restore functionality stabilizes,
+35. Backup/CLI maintainers: after 0.34 backup/restore functionality stabilizes,
     consolidate repeated fixture builders into crate-local test support modules.
-35. Host/backup maintainers: before promoting installed-fleet resolution into
+36. Host/backup maintainers: before promoting installed-fleet resolution into
     `canic-host`, move the live registry DTO/parser out of
     `canic-backup::discovery` so host can own environment-aware registry
     resolution without depending on backup-domain APIs.
-36. Host/backup maintainers: add receipt convention guidance before receipt
+37. Host/backup maintainers: add receipt convention guidance before receipt
     models grow further: naming, timestamps, truncation, provider metadata, and
     serialization shape should be normalized.
-37. Runtime/performance maintainers: rerun `instruction-footprint` after the
+38. Runtime/performance maintainers: rerun `instruction-footprint` after the
     next concrete performance change so the 0.35 baseline gains comparable
     drift deltas.
-38. Auth docs maintainers: keep active config docs and examples focused on
+39. Auth docs maintainers: keep active config docs and examples focused on
     `[auth.delegated_tokens]`, `[auth.role_attestation]`, and per-canister
     `auth` flags.
-39. Testkit maintainers: revisit `icp_artifact_ready_for_build` if the next
+40. Testkit maintainers: revisit `icp_artifact_ready_for_build` if the next
     testkit surface audit still finds no consumers outside its own tests.

@@ -7,6 +7,7 @@
 | `audience-target-binding.md` | PASS AFTER FIX | Audience binding still holds in verifier paths; artifact role resolution now fails closed to exactly one scoped package metadata role under the selected canister root. |
 | `expiry-replay-single-use.md` | PASS AFTER FIX | Delegated grants and role/internal attestations now reject at the exact expiry timestamp, aligning them with delegated tokens, replay metadata, consumed-token state, and sessions. |
 | `subject-caller-binding.md` | PASS | Delegated-token subject binding still routes through the canonical access-auth verifier; generated endpoint wrappers preserve transport-caller and authenticated-subject lanes. |
+| `token-trust-chain.md` | PASS | Delegated-token trust-chain validation still requires verifier-local root trust, root-certified shard authority, canonical cert/claim hashes, shard signatures, and endpoint guard ordering. |
 
 ## Findings
 
@@ -14,8 +15,8 @@
 - Focused code remediation was applied for exclusive expiry-boundary alignment
   and scoped canister role manifest resolution.
 - Residual risk remains low and unchanged from the previous comparable run:
-  `3 / 10` for subject-caller binding, expiry/replay/single-use, and
-  post-remediation audience/target binding.
+  `3 / 10` for subject-caller binding, expiry/replay/single-use,
+  token-trust-chain, and post-remediation audience/target binding.
 
 ## Follow-ups
 
@@ -29,3 +30,7 @@
   `now >= expires_at` boundary.
 - Keep every configured fleet role backed by exactly one package under the
   selected canister root with matching `[package.metadata.canic] role`.
+- Keep delegated-token verifier orchestration, pure chain verification,
+  root-key resolution, endpoint access guards, and role-attestation refresh
+  behavior aligned whenever delegated issuer formats or subnet-state
+  propagation change.
