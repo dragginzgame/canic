@@ -12,6 +12,9 @@ present.
 
 ## Unreleased
 
+- Demo fleet now includes a simple `user_hub` / `user_shard` sharding flow with
+  human-readable planning, assignment, and shard inspection endpoints.
+
 ## [0.48.x] - 2026-05-28 - Derived singleton topology
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)

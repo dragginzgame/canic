@@ -4,7 +4,7 @@ use candid::{Principal, decode_one, encode_one};
 use canic_testing_internal::pic::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
-    pic::{acquire_pic_serial_guard, pic},
+    pic::{InstallSpec, acquire_pic_serial_guard, pic},
 };
 use std::{
     path::{Path, PathBuf},
@@ -37,29 +37,32 @@ fn intent_race_capacity_one() {
     let pic = pic();
     println!("intent_race: PocketIC ready");
 
-    let external_id = pic.create_canister();
-    pic.add_cycles(external_id, INSTALL_CYCLES);
-    pic.install_canister(external_id, external_wasm, encode_one(()).unwrap(), None);
+    let external_id = pic.create_and_install(
+        InstallSpec::new(external_wasm, encode_one(()).unwrap(), INSTALL_CYCLES)
+            .label("intent_external"),
+    );
     println!("intent_race: installed external={external_id}");
 
-    let authority_id = pic.create_canister();
-    pic.add_cycles(authority_id, INSTALL_CYCLES);
-    pic.install_canister(
-        authority_id,
-        authority_wasm,
-        encode_one(external_id).unwrap(),
-        None,
+    let authority_id = pic.create_and_install(
+        InstallSpec::new(
+            authority_wasm,
+            encode_one(external_id).unwrap(),
+            INSTALL_CYCLES,
+        )
+        .label("intent_authority"),
     );
     println!("intent_race: installed authority={authority_id}");
 
-    let client_a = pic.create_canister();
-    pic.add_cycles(client_a, INSTALL_CYCLES);
-    pic.install_canister(client_a, client_wasm.clone(), encode_one(()).unwrap(), None);
+    let client_a = pic.create_and_install(
+        InstallSpec::new(client_wasm.clone(), encode_one(()).unwrap(), INSTALL_CYCLES)
+            .label("intent_client_a"),
+    );
     println!("intent_race: installed client_a={client_a}");
 
-    let client_b = pic.create_canister();
-    pic.add_cycles(client_b, INSTALL_CYCLES);
-    pic.install_canister(client_b, client_wasm, encode_one(()).unwrap(), None);
+    let client_b = pic.create_and_install(
+        InstallSpec::new(client_wasm, encode_one(()).unwrap(), INSTALL_CYCLES)
+            .label("intent_client_b"),
+    );
     println!("intent_race: installed client_b={client_b}");
 
     let msg_a = pic

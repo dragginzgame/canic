@@ -18,10 +18,9 @@ use ic_testkit::pic::Pic;
 
 /// Create a worker canister via the given hub canister.
 pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> {
-    let result: Result<Result<Principal, Error>, _> = pic.update_call(hub_pid, "create_worker", ());
-
-    let worker_pid = result
-        .map_err(|err| Error::internal(format!("create_worker transport failed: {err}")))??;
+    let worker_pid: Result<Principal, Error> =
+        pic.update_call_or_panic(hub_pid, "create_worker", ());
+    let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, hub_pid, worker_pid);
     Ok(worker_pid)
 }
@@ -29,9 +28,8 @@ pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> 
 /// Count worker canisters registered under a given parent.
 #[must_use]
 pub fn count_workers(pic: &Pic, root_id: Principal, parent_pid: Principal) -> usize {
-    let registry: Result<SubnetRegistryResponse, Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query subnet registry transport");
+    let registry: Result<SubnetRegistryResponse, Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_SUBNET_REGISTRY, ());
     let SubnetRegistryResponse(registry): SubnetRegistryResponse =
         registry.expect("query subnet registry application");
 
@@ -50,16 +48,14 @@ fn wait_for_worker_sync(pic: &Pic, hub_pid: Principal, worker_pid: Principal) {
     for _ in 0..50 {
         pic.tick();
 
-        let children: Result<Page<CanisterInfo>, Error> = pic
-            .query_call(
-                hub_pid,
-                protocol::CANIC_CANISTER_CHILDREN,
-                (PageRequest {
-                    limit: 100,
-                    offset: 0,
-                },),
-            )
-            .expect("query child list transport");
+        let children: Result<Page<CanisterInfo>, Error> = pic.query_call_or_panic(
+            hub_pid,
+            protocol::CANIC_CANISTER_CHILDREN,
+            (PageRequest {
+                limit: 100,
+                offset: 0,
+            },),
+        );
 
         if children
             .expect("query child list application")

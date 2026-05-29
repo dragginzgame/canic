@@ -24,8 +24,7 @@ fn generated_project_hub_client_calls_protected_project_instance() {
         "generated_project_hub_client_calls_protected_project_instance",
         "resolve project instance",
     );
-    let status: Result<DirectoryEntryStatusResponse, Error> = update_call_as(
-        pic,
+    let status: Result<DirectoryEntryStatusResponse, Error> = pic.update_call_as_or_panic(
         project_hub_id,
         Principal::anonymous(),
         "resolve_project",
@@ -43,8 +42,7 @@ fn generated_project_hub_client_calls_protected_project_instance() {
         "generated_project_hub_client_calls_protected_project_instance",
         "protected generated client call",
     );
-    let generated_client_call: Result<(), Error> = update_call_as(
-        pic,
+    let generated_client_call: Result<(), Error> = pic.update_call_as_or_panic(
         project_hub_id,
         Principal::anonymous(),
         "notify_project_instance",

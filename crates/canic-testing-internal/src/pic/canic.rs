@@ -18,7 +18,7 @@ use canic::{
 use ic_testkit::{
     Fake,
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
-    pic::{Pic, StandaloneCanisterFixture, install_prebuilt_canister},
+    pic::{InstallSpec, Pic, StandaloneCanisterFixture, install_prebuilt_canister_from_spec},
 };
 
 use super::artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
@@ -55,7 +55,8 @@ impl CanicPicExt for Pic {
     fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error> {
         let init_bytes = install_root_args()?;
 
-        Ok(self.create_and_install_with_args(wasm, init_bytes, INSTALL_CYCLES))
+        Ok(self
+            .create_and_install(InstallSpec::new(wasm, init_bytes, INSTALL_CYCLES).label("root")))
     }
 
     fn create_and_install_canister(
@@ -63,9 +64,14 @@ impl CanicPicExt for Pic {
         role: CanisterRole,
         wasm: Vec<u8>,
     ) -> Result<Principal, Error> {
+        let label = role.to_string();
         let init_bytes = install_args(role)?;
 
-        Ok(self.create_and_install_with_args(wasm, init_bytes, INSTALL_CYCLES))
+        Ok(
+            self.create_and_install(
+                InstallSpec::new(wasm, init_bytes, INSTALL_CYCLES).label(label),
+            ),
+        )
     }
 
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str) {
@@ -168,8 +174,11 @@ pub fn install_standalone_canister(
     let target_dir = test_target_dir(&workspace_root, &target_name);
     ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
 
+    let label = format!("standalone:{crate_name}:{role}");
     let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
-    let fixture = install_prebuilt_canister(wasm, standalone_init_args(role));
+    let fixture = install_prebuilt_canister_from_spec(
+        InstallSpec::new(wasm, standalone_init_args(role), 0).label(label),
+    );
     let canister_id = fixture.canister_id();
     let pic = fixture.pic();
     pic.wait_for_ready(

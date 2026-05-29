@@ -804,7 +804,9 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
 
 fn is_canister_status_decode_failure(err: &Error) -> bool {
     err.message.contains("CanisterStatusResult")
-        && err.message.contains("candid decode failed for type")
+        && (err.message.contains("candid decode failed for type")
+            || err.message.contains("candid decode_one failed")
+            || err.message.contains("decode_one failed"))
 }
 
 const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata {

@@ -1,24 +1,7 @@
 use std::io::Write;
 
-use super::*;
-
 // Emit one short progress marker for long grouped PocketIC scenario tests.
 pub fn test_progress(test_name: &str, phase: &str) {
     eprintln!("[pic_role_attestation] {test_name}: {phase}");
     let _ = std::io::stderr().flush();
-}
-
-pub fn update_call_as<T, A>(
-    pic: &Pic,
-    canister_id: Principal,
-    caller: Principal,
-    method: &str,
-    args: A,
-) -> T
-where
-    T: candid::CandidType + DeserializeOwned,
-    A: ArgumentEncoder,
-{
-    pic.update_call_as(canister_id, caller, method, args)
-        .expect("update_call failed")
 }

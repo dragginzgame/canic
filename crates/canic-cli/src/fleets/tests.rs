@@ -82,7 +82,7 @@ fn renders_fleet_list_table() {
             fleet: "demo".to_string(),
             network: "local".to_string(),
             config: "fleets/demo/canic.toml".to_string(),
-            canisters: "3 (root, app, user_hub)".to_string(),
+            canisters: "4 (root, app, user_hub, user_shard)".to_string(),
         },
         FleetListRow {
             fleet: "staging".to_string(),
@@ -96,8 +96,8 @@ fn renders_fleet_list_table() {
         table,
         [
             "FLEET     NETWORK   CONFIG                      CANISTERS",
-            "-------   -------   -------------------------   -----------------------",
-            "demo      local     fleets/demo/canic.toml      3 (root, app, user_hub)",
+            "-------   -------   -------------------------   -----------------------------------",
+            "demo      local     fleets/demo/canic.toml      4 (root, app, user_hub, user_shard)",
             "staging   local     fleets/staging/canic.toml   2 (root, app)",
         ]
         .join("\n")

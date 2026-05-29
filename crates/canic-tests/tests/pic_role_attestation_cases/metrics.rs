@@ -10,8 +10,7 @@ fn signer_guard_denial_records_access_metric() {
 
     let before = metric_count_for_labels(pic, signer_id, MetricsKind::Security, &labels);
 
-    let denied: Result<(), Error> = update_call_as(
-        pic,
+    let denied: Result<(), Error> = pic.update_call_as_or_panic(
         signer_id,
         Principal::anonymous(),
         "signer_guard_is_root",
@@ -40,7 +39,7 @@ fn signer_guard_success_records_perf_metric() {
     let before = metric_count_for_labels(pic, signer_id, MetricsKind::Runtime, &labels);
 
     let allowed: Result<(), Error> =
-        update_call_as(pic, signer_id, root_id, "signer_guard_is_root", ());
+        pic.update_call_as_or_panic(signer_id, root_id, "signer_guard_is_root", ());
     allowed.expect("root caller should satisfy the root guard");
 
     let after = metric_count_for_labels(pic, signer_id, MetricsKind::Runtime, &labels);

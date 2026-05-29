@@ -1,7 +1,8 @@
 use candid::{Principal, encode_one};
 use canic_core::dto::subnet::SubnetIdentity;
 use ic_testkit::pic::{
-    CachedPicBaseline, CachedPicBaselineGuard, Pic, restore_or_rebuild_cached_pic_baseline,
+    CachedPicBaseline, CachedPicBaselineGuard, InstallSpec, Pic,
+    restore_or_rebuild_cached_pic_baseline,
 };
 use std::sync::{Mutex, OnceLock};
 
@@ -9,11 +10,11 @@ use crate::pic::{role_pid as lookup_role_pid, wait_until_ready as wait_for_ready
 
 use super::{
     build::{build_normal_root_wasm, build_pic, build_test_root_wasm},
-    capability::create_verifier_canister,
     fixture::{CachedInstalledRoot, progress},
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
+const VERIFIER_ROLE: &str = "project_hub";
 static ROOT_SIGNER_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
@@ -136,8 +137,9 @@ fn build_cached_baseline(
     progress("signer ready");
     let verifier_id =
         matches!(cache_kind, RoleAttestationBaselineKind::SignerAndVerifier).then(|| {
-            progress("creating verifier baseline canister");
-            let verifier_id = create_verifier_canister(&pic, root_id);
+            progress("resolving verifier baseline canister");
+            let verifier_id = lookup_role_pid(&pic, root_id, VERIFIER_ROLE, 120);
+            wait_for_ready_canister(&pic, verifier_id, 240);
             progress("verifier baseline canister ready");
             verifier_id
         });
@@ -216,13 +218,12 @@ const fn baseline_slot(
 
 // Install the root canister under PocketIC with the manual subnet identity.
 fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
-    let root_id = pic.create_canister();
-    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
-    pic.install_canister(
-        root_id,
-        wasm,
-        encode_one(SubnetIdentity::Manual).expect("encode args"),
-        None,
-    );
-    root_id
+    pic.create_and_install(
+        InstallSpec::new(
+            wasm,
+            encode_one(SubnetIdentity::Manual).expect("encode args"),
+            ROOT_INSTALL_CYCLES,
+        )
+        .label("role_attestation_root"),
+    )
 }

@@ -15,9 +15,8 @@ const USER_SHARD_LOCAL_PUBLIC_KEY_TEST: &str = "user_shard_local_public_key_test
 // Create one user shard through the reference `user_hub` path.
 #[must_use]
 pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal) -> Principal {
-    let created: Result<Principal, Error> = pic
-        .update_call(user_hub_pid, "create_account", (user_pid,))
-        .expect("create_account transport failed");
+    let created: Result<Principal, Error> =
+        pic.update_call_or_panic(user_hub_pid, "create_account", (user_pid,));
     created.expect("create_account application failed")
 }
 
@@ -40,9 +39,8 @@ pub fn issue_delegated_token(
         cert_ttl_secs,
         nonce: [0; 16],
     };
-    let issued: Result<DelegatedToken, Error> = pic
-        .update_call(shard_pid, "user_shard_issue_token", (request,))
-        .expect("user_shard_issue_token transport failed");
+    let issued: Result<DelegatedToken, Error> =
+        pic.update_call_or_panic(shard_pid, "user_shard_issue_token", (request,));
     issued.expect("user_shard_issue_token application failed")
 }
 
@@ -54,22 +52,19 @@ pub fn request_root_delegation_provision(
     shard_pid: Principal,
     verifier_pid: Principal,
 ) -> DelegationProof {
-    let _shard_public_key_sec1: Result<Vec<u8>, Error> = pic
-        .update_call(shard_pid, USER_SHARD_LOCAL_PUBLIC_KEY_TEST, ())
-        .expect("user_shard_local_public_key_test transport failed");
+    let _shard_public_key_sec1: Result<Vec<u8>, Error> =
+        pic.update_call_or_panic(shard_pid, USER_SHARD_LOCAL_PUBLIC_KEY_TEST, ());
     let request = DelegationProofIssueRequest {
         shard_pid,
         scopes: vec![cap::VERIFY.to_string()],
         aud: DelegationAudience::Principals(vec![verifier_pid]),
         cert_ttl_secs: 60,
     };
-    let response: Result<Result<DelegationProof, Error>, _> = pic.update_call_as(
+    let response: Result<DelegationProof, Error> = pic.update_call_as_or_panic(
         root_id,
         shard_pid,
         protocol::CANIC_REQUEST_DELEGATION,
         (request,),
     );
-    response
-        .expect("canic_request_delegation transport failed")
-        .expect("canic_request_delegation application failed")
+    response.expect("canic_request_delegation application failed")
 }

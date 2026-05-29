@@ -1,0 +1,27 @@
+[package]
+name = "demo_fleet_user_hub"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+build = "../build.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+role = "user_hub"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["sharding"] }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true }
+
+[lints]
+workspace = true

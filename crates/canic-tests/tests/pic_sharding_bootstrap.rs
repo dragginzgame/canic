@@ -17,9 +17,8 @@ use canic_testing_internal::pic::{
 };
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
-    pic::{Pic, acquire_pic_serial_guard, pic},
+    pic::{InstallSpec, acquire_pic_serial_guard, pic},
 };
-use serde::de::DeserializeOwned;
 use std::{
     path::{Path, PathBuf},
     sync::Once,
@@ -44,22 +43,23 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
-    let root_id = pic.create_canister();
-    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
-    pic.install_canister(root_id, root_wasm, encode_args(()).unwrap(), None);
+    let root_id = pic.create_and_install(
+        InstallSpec::new(root_wasm, encode_args(()).unwrap(), ROOT_INSTALL_CYCLES)
+            .label("sharding_root_stub"),
+    );
 
-    let user_hub_id = pic.create_canister();
-    pic.add_cycles(user_hub_id, USER_HUB_INSTALL_CYCLES);
-    pic.install_canister(
-        user_hub_id,
-        user_hub_wasm,
-        user_hub_init_args(root_id),
-        None,
+    let user_hub_id = pic.create_and_install(
+        InstallSpec::new(
+            user_hub_wasm,
+            user_hub_init_args(root_id),
+            USER_HUB_INSTALL_CYCLES,
+        )
+        .label("canister_user_hub"),
     );
     pic.wait_for_ready(user_hub_id, 50, "user hub bootstrap");
 
     let registry: Result<ShardingRegistryResponse, Error> =
-        query_call(&pic, user_hub_id, "canic_sharding_registry", ());
+        pic.query_call_or_panic(user_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
     let pool_entries = registry_pool_entries(registry);
 
@@ -68,12 +68,12 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
 
     let partition_key = Principal::from_slice(&[10; 29]);
     let shard_pid: Result<Principal, Error> =
-        update_call(&pic, user_hub_id, "create_account", (partition_key,));
+        pic.update_call_or_panic(user_hub_id, "create_account", (partition_key,));
     let shard_pid = shard_pid.expect("create_account failed");
     assert_eq!(shard_pid, bootstrap_shard_pid);
 
     let registry: Result<ShardingRegistryResponse, Error> =
-        query_call(&pic, user_hub_id, "canic_sharding_registry", ());
+        pic.query_call_or_panic(user_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
 
     let pool_entries = registry_pool_entries(registry);
@@ -81,8 +81,7 @@ fn sharding_bootstraps_first_shard_when_active_empty() {
     assert_eq!(pool_entries.len(), 1);
     assert_eq!(pool_entries[0].pid, shard_pid);
 
-    let partition_keys: Result<ShardingPartitionKeysResponse, Error> = query_call(
-        &pic,
+    let partition_keys: Result<ShardingPartitionKeysResponse, Error> = pic.query_call_or_panic(
         user_hub_id,
         "canic_sharding_partition_keys",
         (POOL_NAME.to_string(), shard_pid),
@@ -104,17 +103,18 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
 
-    let root_id = pic.create_canister();
-    pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
-    pic.install_canister(root_id, root_wasm, encode_args(()).unwrap(), None);
+    let root_id = pic.create_and_install(
+        InstallSpec::new(root_wasm, encode_args(()).unwrap(), ROOT_INSTALL_CYCLES)
+            .label("sharding_root_stub"),
+    );
 
-    let user_hub_id = pic.create_canister();
-    pic.add_cycles(user_hub_id, USER_HUB_INSTALL_CYCLES);
-    pic.install_canister(
-        user_hub_id,
-        user_hub_wasm,
-        user_hub_init_args(root_id),
-        None,
+    let user_hub_id = pic.create_and_install(
+        InstallSpec::new(
+            user_hub_wasm,
+            user_hub_init_args(root_id),
+            USER_HUB_INSTALL_CYCLES,
+        )
+        .label("canister_user_hub"),
     );
     pic.wait_for_ready(user_hub_id, 50, "user hub bootstrap");
 
@@ -122,17 +122,17 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
     let partition_key_b = Principal::from_slice(&[11; 29]);
 
     let first: Result<Principal, Error> =
-        update_call(&pic, user_hub_id, "create_account", (partition_key_a,));
+        pic.update_call_or_panic(user_hub_id, "create_account", (partition_key_a,));
     let first = first.expect("create_account partition_key_a failed");
 
     let second: Result<Principal, Error> =
-        update_call(&pic, user_hub_id, "create_account", (partition_key_b,));
+        pic.update_call_or_panic(user_hub_id, "create_account", (partition_key_b,));
     let second = second.expect("create_account partition_key_b failed");
 
     assert_eq!(first, second);
 
     let registry: Result<ShardingRegistryResponse, Error> =
-        query_call(&pic, user_hub_id, "canic_sharding_registry", ());
+        pic.query_call_or_panic(user_hub_id, "canic_sharding_registry", ());
     let registry = registry.expect("registry query failed");
 
     let pool_count = registry
@@ -161,24 +161,6 @@ fn user_hub_init_args(root_pid: Principal) -> Vec<u8> {
     };
 
     encode_args((payload, None::<Vec<u8>>)).expect("encode init args")
-}
-
-fn update_call<T, A>(pic: &Pic, canister_id: Principal, method: &str, args: A) -> T
-where
-    T: candid::CandidType + DeserializeOwned,
-    A: candid::utils::ArgumentEncoder,
-{
-    pic.update_call(canister_id, method, args)
-        .expect("update_call failed")
-}
-
-fn query_call<T, A>(pic: &Pic, canister_id: Principal, method: &str, args: A) -> T
-where
-    T: candid::CandidType + DeserializeOwned,
-    A: candid::utils::ArgumentEncoder,
-{
-    pic.query_call(canister_id, method, args)
-        .expect("query_call failed")
 }
 
 // Collect only the entries for the user-shard pool under test.

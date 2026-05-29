@@ -21,9 +21,11 @@ from the resolved `canic` package automatically.
     as `scale_replica`.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
-- `demo/` – minimal root-plus-app fleet for quick experiments.
+- `demo/` – small root-plus-app and sharding fleet for quick experiments.
   - `root/` – root canister for the demo topology.
   - `app/` – simple application canister auto-created by the root.
+  - `user_hub/` + `user_shard/` – local sharding walkthrough roles with
+    human-readable planning, assignment, and shard inspection endpoints.
   - `canic.toml` – shared demo topology referenced by each demo fleet canister `build.rs`.
 
 ## Local Workflow
@@ -36,8 +38,12 @@ host artifact builder used by `canic install` directly.
 - Create/build test canisters manually: `icp deploy -e test`
 - Run the scripted local smoke flow: `make test-canisters`
 
-The demo fleet is intentionally small. Isolated test probes and PocketIC
-fixtures live under `canisters/test/`.
+The demo fleet is intentionally small but includes a sharding walkthrough. Use
+`canic config demo --verbose` to inspect the pool shape before install. After
+`canic install demo`, call `demo_user_hub_plan("alice")`, then call
+`demo_user_hub_assign("alice")` and use the returned shard id with
+`demo_user_shard_describe("alice")`. Isolated test probes and PocketIC fixtures
+live under `canisters/test/`.
 
 Note: `make test-fleet-install` and `make test-canisters` are manual local smoke
 helpers, not part of `make test`, and nonlocal targets expect their environment

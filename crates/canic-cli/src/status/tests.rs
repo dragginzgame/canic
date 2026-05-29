@@ -34,7 +34,7 @@ fn renders_status_report() {
                 deployment: "demo".to_string(),
                 deployed: "no".to_string(),
                 config: "fleets/demo/canic.toml".to_string(),
-                canisters: "2".to_string(),
+                canisters: "4".to_string(),
                 root: "-".to_string(),
             },
             StatusDeploymentRow {
@@ -57,7 +57,7 @@ fn renders_status_report() {
             "",
             "DEPLOYMENT   DEPLOYED   CONFIG                   CANISTERS   ROOT",
             "----------   --------   ----------------------   ---------   --------",
-            "demo         no         fleets/demo/canic.toml   2           -",
+            "demo         no         fleets/demo/canic.toml   4           -",
             "test         yes        fleets/test/canic.toml   7           aaaaa-aa",
         ]
         .join("\n")

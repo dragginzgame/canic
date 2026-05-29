@@ -30,8 +30,7 @@ pub fn issue_self_attestation_as(
     ttl_secs: u64,
     audience: Principal,
 ) -> SignedRoleAttestation {
-    let issued: Result<SignedRoleAttestation, Error> = update_call_as(
-        pic,
+    let issued: Result<SignedRoleAttestation, Error> = pic.update_call_as_or_panic(
         root_id,
         caller,
         "root_issue_self_attestation_test",

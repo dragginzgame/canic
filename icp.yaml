@@ -52,7 +52,7 @@ networks:
 environments:
   - name: demo
     network: local
-    canisters: [root, app]
+    canisters: [root, app, user_hub, user_shard]
 
   - name: test
     network: local

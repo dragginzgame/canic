@@ -23,9 +23,8 @@ fn query_subnet_registry(
     pic: &Pic,
     root_id: Principal,
 ) -> Vec<canic::dto::topology::SubnetRegistryEntry> {
-    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_REGISTRY, ())
-        .expect("query registry transport");
+    let registry: Result<canic::dto::topology::SubnetRegistryResponse, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_SUBNET_REGISTRY, ());
     registry.expect("query registry application").0
 }
 
@@ -58,9 +57,8 @@ pub fn assert_child_env(
     expected_parent_id: Principal,
     root_id: Principal,
 ) {
-    let env: Result<EnvSnapshotResponse, canic::Error> = pic
-        .query_call(child_pid, protocol::CANIC_ENV, ())
-        .expect("query env transport");
+    let env: Result<EnvSnapshotResponse, canic::Error> =
+        pic.query_call_or_panic(child_pid, protocol::CANIC_ENV, ());
     let env = env.expect("query env application");
 
     assert_eq!(
@@ -134,16 +132,14 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     );
 
     // 3. Query children endpoint
-    let page: Result<Page<CanisterInfo>, canic::Error> = pic
-        .query_call(
-            root_id,
-            protocol::CANIC_CANISTER_CHILDREN,
-            (PageRequest {
-                limit: 100,
-                offset: 0,
-            },),
-        )
-        .expect("query canister children transport");
+    let page: Result<Page<CanisterInfo>, canic::Error> = pic.query_call_or_panic(
+        root_id,
+        protocol::CANIC_CANISTER_CHILDREN,
+        (PageRequest {
+            limit: 100,
+            offset: 0,
+        },),
+    );
     let mut page = page.expect("query canister children application");
 
     // 4. Normalize actual entries (ignore lifecycle metadata)
@@ -167,28 +163,24 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
 
 /// Assert that root serves state snapshots and ordinary children do not export them.
 pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child_pid: Principal) {
-    let app_state: Result<AppStateResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_APP_STATE, ())
-        .expect("root app state transport");
+    let app_state: Result<AppStateResponse, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_APP_STATE, ());
     app_state.expect("root app state application");
 
-    let subnet_state: Result<SubnetStateResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_SUBNET_STATE, ())
-        .expect("root subnet state transport");
+    let subnet_state: Result<SubnetStateResponse, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_SUBNET_STATE, ());
     subnet_state.expect("root subnet state application");
 
     let non_controller = Principal::from_slice(&[251; 29]);
-    let denied_app_state: Result<Result<AppStateResponse, canic::Error>, _> =
-        pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_STATE, ());
-    let denied_app_state = denied_app_state.expect("non-controller app state transport");
+    let denied_app_state: Result<AppStateResponse, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_APP_STATE, ());
     let Err(denied_app_state) = denied_app_state else {
         panic!("non-controller app state query must be denied")
     };
     assert_eq!(denied_app_state.code, ErrorCode::Unauthorized);
 
-    let denied_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, _> =
-        pic.query_call_as(root_id, non_controller, protocol::CANIC_SUBNET_STATE, ());
-    let denied_subnet_state = denied_subnet_state.expect("non-controller subnet state transport");
+    let denied_subnet_state: Result<SubnetStateResponse, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_SUBNET_STATE, ());
     let Err(denied_subnet_state) = denied_subnet_state else {
         panic!("non-controller subnet state query must be denied")
     };
@@ -211,31 +203,27 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
 
 /// Assert controller-gated root diagnostic endpoints reject non-controller callers.
 pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principal) {
-    let app_registry: Result<AppRegistryResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_APP_REGISTRY, ())
-        .expect("root app registry transport");
+    let app_registry: Result<AppRegistryResponse, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_APP_REGISTRY, ());
     app_registry.expect("root app registry application");
 
-    let logs: Result<Page<LogEntry>, canic::Error> = pic
-        .query_call(
-            root_id,
-            protocol::CANIC_LOG,
-            (
-                Option::<String>::None,
-                Option::<String>::None,
-                Option::<canic::__internal::core::log::Level>::None,
-                PageRequest {
-                    limit: 10,
-                    offset: 0,
-                },
-            ),
-        )
-        .expect("root log transport");
+    let logs: Result<Page<LogEntry>, canic::Error> = pic.query_call_or_panic(
+        root_id,
+        protocol::CANIC_LOG,
+        (
+            Option::<String>::None,
+            Option::<String>::None,
+            Option::<canic::__internal::core::log::Level>::None,
+            PageRequest {
+                limit: 10,
+                offset: 0,
+            },
+        ),
+    );
     logs.expect("root log application");
 
-    let memory_ledger: Result<MemoryLedgerResponse, canic::Error> = pic
-        .query_call(root_id, protocol::CANIC_MEMORY_LEDGER, ())
-        .expect("root memory ledger transport");
+    let memory_ledger: Result<MemoryLedgerResponse, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_MEMORY_LEDGER, ());
     let memory_ledger = memory_ledger.expect("root memory ledger application");
     assert_eq!(memory_ledger.physical_format_id, 1);
     assert_eq!(memory_ledger.ledger_schema_version, 1);
@@ -250,15 +238,14 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
     );
 
     let non_controller = Principal::from_slice(&[252; 29]);
-    let denied_app_registry: Result<Result<AppRegistryResponse, canic::Error>, _> =
-        pic.query_call_as(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
-    let denied_app_registry = denied_app_registry.expect("non-controller app registry transport");
+    let denied_app_registry: Result<AppRegistryResponse, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
     let Err(denied_app_registry) = denied_app_registry else {
         panic!("non-controller app registry query must be denied")
     };
     assert_eq!(denied_app_registry.code, ErrorCode::Unauthorized);
 
-    let denied_log: Result<Result<Page<LogEntry>, canic::Error>, _> = pic.query_call_as(
+    let denied_log: Result<Page<LogEntry>, canic::Error> = pic.query_call_as_or_panic(
         root_id,
         non_controller,
         protocol::CANIC_LOG,
@@ -272,16 +259,13 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
             },
         ),
     );
-    let denied_log = denied_log.expect("non-controller log transport");
     let Err(denied_log) = denied_log else {
         panic!("non-controller log query must be denied")
     };
     assert_eq!(denied_log.code, ErrorCode::Unauthorized);
 
-    let denied_memory_ledger: Result<Result<MemoryLedgerResponse, canic::Error>, _> =
-        pic.query_call_as(root_id, non_controller, protocol::CANIC_MEMORY_LEDGER, ());
-    let denied_memory_ledger =
-        denied_memory_ledger.expect("non-controller memory ledger transport");
+    let denied_memory_ledger: Result<MemoryLedgerResponse, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_MEMORY_LEDGER, ());
     let Err(denied_memory_ledger) = denied_memory_ledger else {
         panic!("non-controller memory ledger query must be denied")
     };
@@ -290,7 +274,9 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
 
 // Match PocketIC missing-method failures without depending on one exact transport string.
 fn assert_missing_method(err: &ic_testkit::pic::PicCallError, method: &str) {
-    let message = err.message.as_str();
+    assert_eq!(err.kind(), ic_testkit::pic::PicCallErrorKind::Transport);
+
+    let message = err.message();
 
     assert!(
         message.contains(method),

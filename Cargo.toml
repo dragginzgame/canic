@@ -29,6 +29,8 @@ members = [
     "crates/canic-wasm-store",
     "fleets/demo/app",
     "fleets/demo/root",
+    "fleets/demo/user_hub",
+    "fleets/demo/user_shard",
     "fleets/test/app",
     "fleets/test/root",
     "fleets/test/scale",
@@ -74,7 +76,7 @@ ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
 ic-memory = "0.6.2"
-ic-testkit = "0.1.6"
+ic-testkit = "0.1.9"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"

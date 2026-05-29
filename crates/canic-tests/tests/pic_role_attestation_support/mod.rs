@@ -1,4 +1,4 @@
-pub use candid::{Principal, utils::ArgumentEncoder};
+pub use candid::Principal;
 pub use canic_core::api::rpc::RpcApi;
 pub use canic_core::dto::{
     auth::{AttestationKeyStatus, RoleAttestationRequest, SignedRoleAttestation},
@@ -17,7 +17,6 @@ pub use canic_testing_internal::pic::{
     install_test_root_cached, install_test_root_with_verifier_cached, role_pid, wait_until_ready,
 };
 pub use ic_testkit::pic::Pic;
-pub use serde::de::DeserializeOwned;
 pub use std::time::Duration;
 
 mod attestation;
@@ -29,5 +28,5 @@ pub use attestation::{
     encode_role_attestation_capability_proof, issue_self_attestation, issue_self_attestation_as,
     root_capability_hash,
 };
-pub use calls::{test_progress, update_call_as};
+pub use calls::test_progress;
 pub use metrics::{metric_count_for_labels, query_metric_entries};

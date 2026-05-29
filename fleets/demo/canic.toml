@@ -1,7 +1,7 @@
-# Minimal Canic demo fleet for quick root-plus-app experiments.
+# Minimal Canic demo fleet for quick root-plus-app and sharding experiments.
 
 controllers = []
-app_index = []
+app_index = ["app", "user_hub"]
 
 [fleet]
 name = "demo"
@@ -14,3 +14,17 @@ kind = "root"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+topup = {}
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.initial_shards = 1
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+topup = {}

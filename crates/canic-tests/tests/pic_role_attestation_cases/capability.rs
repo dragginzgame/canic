@@ -25,8 +25,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
     let issued_at = issued.payload.issued_at;
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 1, 9);
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -50,8 +49,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
     }
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 6, 4);
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -82,8 +80,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
         }),
         metadata: capability_metadata(issued_at, 9, 1, 60),
     };
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -106,8 +103,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
     let issued_at = issued.payload.issued_at;
     let envelope =
         cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 3, 7);
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -130,8 +126,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
     let envelope = cycles_role_attestation_envelope(root_id, request, issued, issued_at, 2, 8);
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -186,8 +181,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         }),
         metadata: capability_metadata(issued_at, 4, 6, 60),
     };
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
         "canic_response_capability_v1",
@@ -227,15 +221,13 @@ fn capability_endpoint_policy_and_structural_paths() {
         }),
         metadata: capability_metadata(issued_at, 4, 66, 60),
     };
-    let first: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let first: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
         "canic_response_capability_v1",
         (envelope_a,),
     );
-    let second: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let second: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
         "canic_response_capability_v1",
@@ -274,8 +266,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         proof: CapabilityProof::Structural,
         metadata: capability_metadata(issued_at, 7, 3, 60),
     };
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
         "canic_response_capability_v1",
@@ -307,8 +298,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         proof: CapabilityProof::Structural,
         metadata: capability_metadata(issued_at, 7, 3, 60),
     };
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
         "canic_response_capability_v1",
@@ -353,8 +343,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         }),
         metadata: capability_metadata(issued_at, 8, 2, 60),
     };
-    let response: Result<RootCapabilityResponseV1, Error> = update_call_as(
-        pic,
+    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
         "canic_response_capability_v1",
