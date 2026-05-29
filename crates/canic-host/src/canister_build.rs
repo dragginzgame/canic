@@ -163,7 +163,7 @@ fn build_canister_artifact(
         return build_hidden_wasm_store_artifact(workspace_root, icp_root, profile);
     }
 
-    let canister_manifest_path = canister_manifest_path(workspace_root, canister_name);
+    let canister_manifest_path = canister_manifest_path(workspace_root, canister_name)?;
     let canister_package_name = load_canister_package_name(&canister_manifest_path)?;
     let artifact_root = icp_root
         .join(LOCAL_ARTIFACT_ROOT_RELATIVE)

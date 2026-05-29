@@ -53,21 +53,44 @@ pub fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf
     }
 }
 
-// Discover the manifest for a role using workspace metadata first, then package naming.
-pub fn discover_canister_manifest_from_metadata(
+// Resolve exactly one canister manifest for a role, restricted to packages below
+// the selected canister root.
+pub fn resolve_canister_manifest_from_metadata_under(
     workspace_root: &Path,
     role_name: &str,
-) -> Option<PathBuf> {
-    let metadata = cargo_metadata_no_deps_cached(workspace_root).ok()?;
-    let expected_package_name = format!("canister_{role_name}");
+    search_root: &Path,
+) -> Result<PathBuf, String> {
+    let metadata = cargo_metadata_no_deps_cached(workspace_root).map_err(|err| {
+        format!("cargo metadata failed while resolving role '{role_name}': {err}")
+    })?;
+    let search_root = search_root
+        .canonicalize()
+        .unwrap_or_else(|_| search_root.to_path_buf());
 
-    metadata
+    let matches = metadata
         .packages
         .into_iter()
-        .find(|package| {
-            package_declares_role(package, role_name) || package.name == expected_package_name
-        })
+        .filter(|package| package.manifest_path.starts_with(&search_root))
+        .filter(|package| package_declares_role(package, role_name))
         .map(|package| package.manifest_path)
+        .collect::<Vec<_>>();
+
+    match matches.as_slice() {
+        [manifest_path] => Ok(manifest_path.clone()),
+        [] => Err(format!(
+            "no canister package under {} declares [package.metadata.canic] role = \"{role_name}\"",
+            search_root.display()
+        )),
+        paths => Err(format!(
+            "multiple canister packages under {} declare [package.metadata.canic] role = \"{role_name}\": {}",
+            search_root.display(),
+            paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
 }
 
 // Check whether a package declares the requested Canic role in Cargo metadata.

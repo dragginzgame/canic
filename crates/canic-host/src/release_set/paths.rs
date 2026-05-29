@@ -1,6 +1,6 @@
 use crate::workspace_discovery::{
-    discover_canister_manifest_from_metadata, discover_icp_root_from, discover_workspace_root_from,
-    normalize_workspace_path,
+    discover_icp_root_from, discover_workspace_root_from, normalize_workspace_path,
+    resolve_canister_manifest_from_metadata_under,
 };
 use std::{
     fs,
@@ -87,38 +87,35 @@ pub fn canisters_root(workspace_root: &Path) -> PathBuf {
         }
     }
 
-    if let Some(manifest_path) = discover_canister_manifest_from_metadata(workspace_root, "root")
-        && let Some(parent) = manifest_path.parent().and_then(Path::parent)
-    {
-        return parent.to_path_buf();
-    }
-
     workspace_root.join(CANISTERS_ROOT_RELATIVE)
 }
 
 // Resolve the downstream root canister manifest path.
-#[must_use]
-pub fn root_manifest_path(workspace_root: &Path) -> PathBuf {
-    std::env::var_os("CANIC_ROOT_MANIFEST_PATH").map_or_else(
-        || {
-            discover_canister_manifest_from_metadata(workspace_root, "root").unwrap_or_else(|| {
-                canisters_root(workspace_root)
-                    .join("root")
-                    .join("Cargo.toml")
-            })
-        },
-        |path| normalize_workspace_path(workspace_root, PathBuf::from(path)),
-    )
+pub fn root_manifest_path(workspace_root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Some(path) = std::env::var_os("CANIC_ROOT_MANIFEST_PATH") {
+        return Ok(normalize_workspace_path(
+            workspace_root,
+            PathBuf::from(path),
+        ));
+    }
+
+    canister_manifest_path(workspace_root, "root")
 }
 
 // Resolve the downstream manifest path for one visible canister role.
-#[must_use]
-pub fn canister_manifest_path(workspace_root: &Path, canister_name: &str) -> PathBuf {
-    discover_canister_manifest_from_metadata(workspace_root, canister_name).unwrap_or_else(|| {
-        canisters_root(workspace_root)
-            .join(canister_name)
-            .join("Cargo.toml")
-    })
+pub fn canister_manifest_path(
+    workspace_root: &Path,
+    canister_name: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let root = canisters_root(workspace_root);
+    resolve_canister_manifest_from_metadata_under(workspace_root, canister_name, &root)
+        .map_err(|err| {
+            format!(
+                "{err}; selected canister root is {}. Set CANIC_CANISTERS_ROOT or CANIC_CONFIG_PATH so it points at the fleet canister directory.",
+                root.display()
+            )
+            .into()
+        })
 }
 
 // Resolve the downstream workspace manifest path.

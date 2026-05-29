@@ -51,8 +51,9 @@ pub fn emit_root_release_set_manifest_with_config(
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let artifact_root = resolve_artifact_root(icp_root, network)?;
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
+    let root_manifest_path = root_manifest_path(workspace_root)?;
     let release_version = load_root_package_version(
-        &root_manifest_path(workspace_root),
+        &root_manifest_path,
         &workspace_manifest_path(workspace_root),
     )?;
     let entries = configured_release_roles(config_path)?

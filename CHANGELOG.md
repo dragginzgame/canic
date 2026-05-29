@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.7` reruns the audience-target-binding audit and hardens canister
+  artifact role resolution so builds require exactly one scoped
+  `[package.metadata.canic] role` package under the selected canister root.
+
 - `0.48.6` reruns the oldest recurring auth freshness audits, confirms
   subject-caller binding still holds, and aligns delegated grants plus
   role/internal attestations with Canic's exclusive expiry boundary.

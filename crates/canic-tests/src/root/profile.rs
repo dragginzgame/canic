@@ -116,42 +116,56 @@ fn profile_build_extra_env(
     profile: RootSetupProfile,
     workspace_root: &std::path::Path,
 ) -> Vec<(String, String)> {
+    let test_fleet_root = workspace_root.join("fleets").join("test");
+    let test_fleet_root_env = || {
+        (
+            "CANIC_CANISTERS_ROOT".to_string(),
+            test_fleet_root.display().to_string(),
+        )
+    };
+
     match profile {
-        RootSetupProfile::Topology => Vec::new(),
-        RootSetupProfile::ReconcileSmallStore => vec![(
-            "RUSTFLAGS".to_string(),
-            TEST_SMALL_STORE_RUSTFLAGS.to_string(),
-        )],
-        RootSetupProfile::Capability => vec![(
-            "CANIC_CONFIG_PATH".to_string(),
-            workspace_root
-                .join("fleets")
-                .join("test")
-                .join("test-configs")
-                .join("root-capability.toml")
-                .display()
-                .to_string(),
-        )],
-        RootSetupProfile::Scaling => vec![(
-            "CANIC_CONFIG_PATH".to_string(),
-            workspace_root
-                .join("fleets")
-                .join("test")
-                .join("test-configs")
-                .join("root-scaling.toml")
-                .display()
-                .to_string(),
-        )],
-        RootSetupProfile::Sharding => vec![(
-            "CANIC_CONFIG_PATH".to_string(),
-            workspace_root
-                .join("fleets")
-                .join("test")
-                .join("test-configs")
-                .join("root-sharding.toml")
-                .display()
-                .to_string(),
-        )],
+        RootSetupProfile::Topology => vec![test_fleet_root_env()],
+        RootSetupProfile::ReconcileSmallStore => vec![
+            (
+                "RUSTFLAGS".to_string(),
+                TEST_SMALL_STORE_RUSTFLAGS.to_string(),
+            ),
+            test_fleet_root_env(),
+        ],
+        RootSetupProfile::Capability => vec![
+            (
+                "CANIC_CONFIG_PATH".to_string(),
+                test_fleet_root
+                    .join("test-configs")
+                    .join("root-capability.toml")
+                    .display()
+                    .to_string(),
+            ),
+            test_fleet_root_env(),
+        ],
+        RootSetupProfile::Scaling => vec![
+            (
+                "CANIC_CONFIG_PATH".to_string(),
+                test_fleet_root
+                    .join("test-configs")
+                    .join("root-scaling.toml")
+                    .display()
+                    .to_string(),
+            ),
+            test_fleet_root_env(),
+        ],
+        RootSetupProfile::Sharding => vec![
+            (
+                "CANIC_CONFIG_PATH".to_string(),
+                test_fleet_root
+                    .join("test-configs")
+                    .join("root-sharding.toml")
+                    .display()
+                    .to_string(),
+            ),
+            test_fleet_root_env(),
+        ],
     }
 }
 

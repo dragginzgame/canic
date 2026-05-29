@@ -144,6 +144,16 @@ kind = "singleton"
         test()
     }
 
+    fn restore_env(key: &str, previous: Option<std::ffi::OsString>) {
+        unsafe {
+            if let Some(value) = previous {
+                std::env::set_var(key, value);
+            } else {
+                std::env::remove_var(key);
+            }
+        }
+    }
+
     struct TempWorkspace {
         path: PathBuf,
     }
@@ -741,54 +751,91 @@ kind = "root"
 
     #[test]
     fn root_manifest_path_prefers_canister_manifest_metadata() {
-        let temp = TempWorkspace::new();
-        let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("fleets/test/root")).expect("create root dir");
-        fs::create_dir_all(workspace_root.join("fleets/test/root/src"))
-            .expect("create root src dir");
-        fs::write(
-            workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"fleets/test/root\"]\n",
-        )
-        .expect("write workspace manifest");
-        fs::write(
-            workspace_root.join("fleets/test/root/Cargo.toml"),
-            "[package]\nname = \"canister_root\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-        )
-        .expect("write root manifest");
-        fs::write(workspace_root.join("fleets/test/root/src/lib.rs"), "").expect("write root lib");
+        with_guarded_env(|| {
+            let temp = TempWorkspace::new();
+            let workspace_root = temp.path();
+            fs::create_dir_all(workspace_root.join("fleets/test/root")).expect("create root dir");
+            fs::create_dir_all(workspace_root.join("fleets/test/root/src"))
+                .expect("create root src dir");
+            fs::write(
+                workspace_root.join("Cargo.toml"),
+                "[workspace]\nmembers = [\"fleets/test/root\"]\n",
+            )
+            .expect("write workspace manifest");
+            fs::write(
+                workspace_root.join("fleets/test/root/Cargo.toml"),
+                r#"[package]
+name = "canister_root"
+version = "0.1.0"
+edition = "2024"
 
-        assert_eq!(
-            root_manifest_path(workspace_root),
-            workspace_root.join("fleets/test/root/Cargo.toml")
-        );
+[package.metadata.canic]
+role = "root"
+"#,
+            )
+            .expect("write root manifest");
+            fs::write(workspace_root.join("fleets/test/root/src/lib.rs"), "")
+                .expect("write root lib");
+
+            let previous_config = std::env::var_os("CANIC_CONFIG_PATH");
+            let previous_root = std::env::var_os("CANIC_CANISTERS_ROOT");
+            unsafe {
+                std::env::remove_var("CANIC_CONFIG_PATH");
+                std::env::remove_var("CANIC_CANISTERS_ROOT");
+            }
+            let result = root_manifest_path(workspace_root).expect("root manifest path");
+            restore_env("CANIC_CONFIG_PATH", previous_config);
+            restore_env("CANIC_CANISTERS_ROOT", previous_root);
+
+            assert_eq!(result, workspace_root.join("fleets/test/root/Cargo.toml"));
+        });
     }
 
     #[test]
     fn canister_manifest_path_prefers_canister_manifest_metadata() {
-        let temp = TempWorkspace::new();
-        let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("fleets/test/user_hub"))
-            .expect("create user hub dir");
-        fs::create_dir_all(workspace_root.join("fleets/test/user_hub/src"))
-            .expect("create user hub src dir");
-        fs::write(
-            workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"fleets/test/user_hub\"]\n",
-        )
-        .expect("write workspace manifest");
-        fs::write(
-            workspace_root.join("fleets/test/user_hub/Cargo.toml"),
-            "[package]\nname = \"canister_user_hub\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-        )
-        .expect("write user hub manifest");
-        fs::write(workspace_root.join("fleets/test/user_hub/src/lib.rs"), "")
-            .expect("write user hub lib");
+        with_guarded_env(|| {
+            let temp = TempWorkspace::new();
+            let workspace_root = temp.path();
+            fs::create_dir_all(workspace_root.join("fleets/test/user_hub"))
+                .expect("create user hub dir");
+            fs::create_dir_all(workspace_root.join("fleets/test/user_hub/src"))
+                .expect("create user hub src dir");
+            fs::write(
+                workspace_root.join("Cargo.toml"),
+                "[workspace]\nmembers = [\"fleets/test/user_hub\"]\n",
+            )
+            .expect("write workspace manifest");
+            fs::write(
+                workspace_root.join("fleets/test/user_hub/Cargo.toml"),
+                r#"[package]
+name = "canister_user_hub"
+version = "0.1.0"
+edition = "2024"
 
-        assert_eq!(
-            canister_manifest_path(workspace_root, "user_hub"),
-            workspace_root.join("fleets/test/user_hub/Cargo.toml")
-        );
+[package.metadata.canic]
+role = "user_hub"
+"#,
+            )
+            .expect("write user hub manifest");
+            fs::write(workspace_root.join("fleets/test/user_hub/src/lib.rs"), "")
+                .expect("write user hub lib");
+
+            let previous_config = std::env::var_os("CANIC_CONFIG_PATH");
+            let previous_root = std::env::var_os("CANIC_CANISTERS_ROOT");
+            unsafe {
+                std::env::remove_var("CANIC_CONFIG_PATH");
+                std::env::remove_var("CANIC_CANISTERS_ROOT");
+            }
+            let result =
+                canister_manifest_path(workspace_root, "user_hub").expect("user hub manifest path");
+            restore_env("CANIC_CONFIG_PATH", previous_config);
+            restore_env("CANIC_CANISTERS_ROOT", previous_root);
+
+            assert_eq!(
+                result,
+                workspace_root.join("fleets/test/user_hub/Cargo.toml")
+            );
+        });
     }
 
     #[test]
@@ -819,9 +866,66 @@ role = "scale_replica"
             .expect("write scale lib");
 
         assert_eq!(
-            canister_manifest_path(workspace_root, "scale_replica"),
+            canister_manifest_path(workspace_root, "scale_replica").expect("scale manifest path"),
             workspace_root.join("fleets/test/scale/Cargo.toml")
         );
+    }
+
+    #[test]
+    fn canister_manifest_path_prefers_scoped_role_metadata() {
+        with_guarded_env(|| {
+            let temp = TempWorkspace::new();
+            let workspace_root = temp.path();
+            let audit_root = workspace_root.join("canisters/audit/root_probe");
+            let fleet_root = workspace_root.join("fleets/test/root");
+
+            fs::create_dir_all(audit_root.join("src")).expect("create audit root dir");
+            fs::create_dir_all(fleet_root.join("src")).expect("create fleet root dir");
+            fs::write(
+                workspace_root.join("Cargo.toml"),
+                "[workspace]\nmembers = [\"canisters/audit/root_probe\", \"fleets/test/root\"]\n",
+            )
+            .expect("write workspace manifest");
+            fs::write(
+                audit_root.join("Cargo.toml"),
+                r#"[package]
+name = "root_probe"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.canic]
+role = "root"
+"#,
+            )
+            .expect("write audit root manifest");
+            fs::write(audit_root.join("src/lib.rs"), "").expect("write audit root lib");
+            fs::write(
+                fleet_root.join("Cargo.toml"),
+                r#"[package]
+name = "canister_root"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.canic]
+role = "root"
+"#,
+            )
+            .expect("write fleet root manifest");
+            fs::write(fleet_root.join("src/lib.rs"), "").expect("write fleet root lib");
+
+            let previous_config = std::env::var_os("CANIC_CONFIG_PATH");
+            let previous_root = std::env::var_os("CANIC_CANISTERS_ROOT");
+            unsafe {
+                std::env::remove_var("CANIC_CONFIG_PATH");
+                std::env::set_var("CANIC_CANISTERS_ROOT", workspace_root.join("fleets/test"));
+            }
+            let result =
+                canister_manifest_path(workspace_root, "root").expect("scoped root manifest path");
+            restore_env("CANIC_CONFIG_PATH", previous_config);
+            restore_env("CANIC_CANISTERS_ROOT", previous_root);
+
+            assert_eq!(result, fleet_root.join("Cargo.toml"));
+        });
     }
 
     #[test]
@@ -871,15 +975,34 @@ role = "scale_replica"
     }
 
     #[test]
-    fn canister_manifest_path_falls_back_to_fleets_root() {
-        let temp = TempWorkspace::new();
-        let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("fleets")).expect("create fleets dir");
+    fn canister_manifest_path_requires_declared_role_metadata() {
+        with_guarded_env(|| {
+            let temp = TempWorkspace::new();
+            let workspace_root = temp.path();
+            fs::create_dir_all(workspace_root.join("fleets")).expect("create fleets dir");
+            fs::write(
+                workspace_root.join("Cargo.toml"),
+                "[workspace]\nmembers = []\n",
+            )
+            .expect("write workspace manifest");
 
-        assert_eq!(
-            canister_manifest_path(workspace_root, "user_hub"),
-            workspace_root.join("fleets/user_hub/Cargo.toml")
-        );
+            let previous_config = std::env::var_os("CANIC_CONFIG_PATH");
+            let previous_root = std::env::var_os("CANIC_CANISTERS_ROOT");
+            unsafe {
+                std::env::remove_var("CANIC_CONFIG_PATH");
+                std::env::remove_var("CANIC_CANISTERS_ROOT");
+            }
+            let err = canister_manifest_path(workspace_root, "user_hub")
+                .expect_err("missing role metadata must fail");
+            restore_env("CANIC_CONFIG_PATH", previous_config);
+            restore_env("CANIC_CANISTERS_ROOT", previous_root);
+
+            assert!(
+                err.to_string()
+                    .contains("[package.metadata.canic] role = \"user_hub\""),
+                "unexpected error: {err}"
+            );
+        });
     }
 
     #[test]
