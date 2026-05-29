@@ -183,6 +183,9 @@ fn write_fleet_config(root: &Path, name: &str) -> PathBuf {
 [fleet]
 name = "{name}"
 
+[roles.root]
+kind = "root"
+
 [subnets.prime.canisters.root]
 kind = "root"
 "#

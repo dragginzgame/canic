@@ -140,6 +140,12 @@ fn status_deployment_row_uses_project_root_for_config_paths() {
 [fleet]
 name = "toko"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
