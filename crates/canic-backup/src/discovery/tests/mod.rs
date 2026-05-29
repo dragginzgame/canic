@@ -53,7 +53,7 @@ fn discovery_rejects_duplicate_canisters() {
         .into_deployment_section()
         .expect_err("duplicate canisters should fail");
 
-    assert!(matches!(err, DiscoveryError::DuplicateCanisterId(_)));
+    std::assert_matches!(err, DiscoveryError::DuplicateCanisterId(_));
 }
 
 // Ensure discovery requires concrete member verification.
@@ -70,7 +70,7 @@ fn discovery_requires_verification_checks() {
         .into_deployment_section()
         .expect_err("missing verification should fail");
 
-    assert!(matches!(err, DiscoveryError::MissingVerificationChecks(_)));
+    std::assert_matches!(err, DiscoveryError::MissingVerificationChecks(_));
 }
 
 // Ensure non-recursive target resolution includes only direct children.

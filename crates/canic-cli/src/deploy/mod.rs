@@ -3909,7 +3909,7 @@ mod tests {
 
     #[test]
     fn deploy_check_rejects_invalid_profile() {
-        assert!(matches!(
+        std::assert_matches!(
             DeployTruthOptions::parse(
                 [
                     OsString::from("--profile"),
@@ -3920,7 +3920,7 @@ mod tests {
                 check_usage,
             ),
             Err(DeployCommandError::Usage(_))
-        ));
+        );
     }
 
     #[test]
@@ -3936,11 +3936,11 @@ mod tests {
             next_actions: Vec::new(),
         };
 
-        assert!(matches!(
+        std::assert_matches!(
             enforce_deployment_check_status(&report),
             Err(DeployCommandError::Blocked(message))
                 if message == "deployment inventory has 1 blocking issue(s) and 0 warning(s)"
-        ));
+        );
     }
 
     #[test]
@@ -4045,11 +4045,11 @@ mod tests {
             OsString::from("yaml"),
         ]);
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid deployment comparison output format: yaml")
-        ));
+        );
     }
 
     #[test]
@@ -4087,11 +4087,11 @@ mod tests {
             OsString::from("yaml"),
         ]);
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid deployment root output format: yaml")
-        ));
+        );
     }
 
     #[test]
@@ -5231,7 +5231,7 @@ mod tests {
         ])
         .expect_err("register without acknowledgement should fail usage");
 
-        assert!(matches!(err, DeployCommandError::Usage(_)));
+        std::assert_matches!(err, DeployCommandError::Usage(_));
     }
 
     #[test]
@@ -5789,7 +5789,7 @@ mod tests {
                 deployment_check: Some(check.clone()),
             })
             .expect_err("both observation sources should be rejected");
-        assert!(matches!(both_err, DeployCommandError::Blocked(_)));
+        std::assert_matches!(both_err, DeployCommandError::Blocked(_));
 
         let neither_err =
             build_external_upgrade_verification_check(ExternalUpgradeVerificationCheckRequest {
@@ -5799,7 +5799,7 @@ mod tests {
                 deployment_check: None,
             })
             .expect_err("missing observation source should be rejected");
-        assert!(matches!(neither_err, DeployCommandError::Blocked(_)));
+        std::assert_matches!(neither_err, DeployCommandError::Blocked(_));
     }
 
     #[test]
@@ -5914,11 +5914,11 @@ mod tests {
             authority_check_usage,
         );
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid authority output format: csv")
-        ));
+        );
     }
 
     #[test]
@@ -5933,11 +5933,11 @@ mod tests {
             authority_evidence_usage,
         );
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid authority output format: xml")
-        ));
+        );
     }
 
     #[test]
@@ -5952,11 +5952,11 @@ mod tests {
             authority_report_usage,
         );
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid authority output format: yaml")
-        ));
+        );
     }
 
     #[test]
@@ -5971,11 +5971,11 @@ mod tests {
             authority_receipt_usage,
         );
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid authority output format: toml")
-        ));
+        );
     }
 
     #[test]
@@ -5991,11 +5991,11 @@ mod tests {
             promote_policy_check_usage,
         );
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid promotion output format: csv")
-        ));
+        );
     }
 
     #[test]
@@ -6010,11 +6010,11 @@ mod tests {
             external_plan_usage,
         );
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Usage(message))
                 if message.contains("invalid external lifecycle output format: yaml")
-        ));
+        );
     }
 
     type PromoteCommandFactory = fn() -> ClapCommand;
@@ -6275,11 +6275,11 @@ mod tests {
 
         let result = read_install_deployment_plan(&path);
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(DeployCommandError::Blocked(message))
                 if message.contains("artifact promotion plan artifact-promotion-plan-1 is not ready")
-        ));
+        );
         fs::remove_file(path).expect("clean temp plan");
     }
 

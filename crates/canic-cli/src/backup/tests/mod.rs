@@ -190,14 +190,14 @@ fn backup_create_persistence_rejects_incompatible_existing_layout() {
         .expect_err("incompatible existing layout rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutMismatch {
             field: "network",
             existing,
             requested,
         } if existing == "local" && requested == "ic"
-    ));
+    );
 }
 
 // Ensure dry-run layouts cannot be reused as executable backup layouts.
@@ -212,14 +212,14 @@ fn backup_create_persistence_rejects_dry_run_layout_for_execute_request() {
         .expect_err("dry-run layout rejects execute request");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutMismatch {
             field: "requires_root_controller",
             existing,
             requested,
         } if existing == "true" && requested == "false"
-    ));
+    );
 }
 
 // Ensure completed execution layouts do not synthesize a missing execution journal.
@@ -233,12 +233,12 @@ fn backup_create_persistence_rejects_manifest_layout_missing_execution_journal()
         .expect_err("manifest layout missing execution journal rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutIncomplete {
             missing: "backup-execution-journal.json"
         }
-    ));
+    );
 }
 
 // Ensure backup list options default to the conventional backup root.
@@ -333,7 +333,7 @@ fn parses_backup_inspect_options() {
 #[test]
 fn backup_target_options_reject_missing_or_duplicate_selectors() {
     let missing = BackupInspectOptions::parse([]).expect_err("missing selector rejects");
-    assert!(matches!(missing, BackupCommandError::Usage(_)));
+    std::assert_matches!(missing, BackupCommandError::Usage(_));
 
     let duplicate = BackupInspectOptions::parse([
         OsString::from("1"),
@@ -341,7 +341,7 @@ fn backup_target_options_reject_missing_or_duplicate_selectors() {
         OsString::from("backups/run"),
     ])
     .expect_err("duplicate selector rejects");
-    assert!(matches!(duplicate, BackupCommandError::Usage(_)));
+    std::assert_matches!(duplicate, BackupCommandError::Usage(_));
 }
 
 // Ensure backup status reads the journal and reports resume actions.
@@ -414,12 +414,12 @@ fn backup_status_rejects_manifest_layout_missing_execution_journal() {
     let err = backup_status(&options).expect_err("missing execution journal rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutIncomplete {
             missing: "backup-execution-journal.json"
         }
-    ));
+    );
 }
 
 // Ensure backup status reports an execution layout as running once preflight is accepted.
@@ -499,10 +499,10 @@ fn require_complete_rejects_complete_execution_without_manifest() {
     let err = enforce_status_requirements(&options, &report)
         .expect_err("complete execution without manifest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
-    ));
+    );
 }
 
 // Ensure backup inspect reads dry-run plan and execution details.
@@ -543,12 +543,12 @@ fn backup_inspect_rejects_manifest_layout_missing_execution_journal() {
     let err = backup_inspect(&options).expect_err("missing execution journal rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutIncomplete {
             missing: "backup-execution-journal.json"
         }
-    ));
+    );
 }
 
 // Ensure backup list scans manifest-bearing directories and renders reusable paths.
@@ -672,10 +672,7 @@ fn backup_reference_resolves_rows_and_backup_ids() {
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(by_row, second);
     assert_eq!(by_id, first);
-    assert!(matches!(
-        missing,
-        BackupCommandError::BackupReferenceNotFound { .. }
-    ));
+    std::assert_matches!(missing, BackupCommandError::BackupReferenceNotFound { .. });
 }
 
 // Ensure duplicate backup ids fail closed instead of resolving arbitrarily.
@@ -695,10 +692,7 @@ fn backup_reference_rejects_ambiguous_backup_ids() {
     let err = resolve_backup_reference_in(&root, "backup-same").expect_err("ambiguous rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
-        err,
-        BackupCommandError::BackupReferenceAmbiguous { .. }
-    ));
+    std::assert_matches!(err, BackupCommandError::BackupReferenceAmbiguous { .. });
 }
 
 // Ensure unfinished execution layouts use the journal timestamp, not a raw run-id stamp.
@@ -838,14 +832,14 @@ fn require_complete_rejects_incomplete_status() {
     let err = enforce_status_requirements(&options, &BackupStatusReport::Download(report))
         .expect_err("incomplete status should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::IncompleteJournal {
             pending_artifacts: 1,
             total_artifacts: 1,
             ..
         }
-    ));
+    );
 }
 
 // Ensure require-complete rejects dry-run layouts.
@@ -874,10 +868,10 @@ fn require_complete_rejects_dry_run_status() {
     let err =
         enforce_status_requirements(&options, &report).expect_err("dry-run status should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
-    ));
+    );
 }
 
 // Ensure dry-run status JSON exposes deployment identity, not stale fleet identity.
@@ -918,10 +912,10 @@ fn verify_backup_rejects_dry_run_layout() {
     let err = verify_backup(&options).expect_err("dry-run verify rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
-    ));
+    );
 }
 
 // Ensure verification reports incomplete execution-backed layouts clearly.
@@ -938,12 +932,12 @@ fn verify_backup_rejects_manifest_layout_missing_execution_journal() {
     let err = verify_backup(&options).expect_err("missing execution journal rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutIncomplete {
             missing: "backup-execution-journal.json"
         }
-    ));
+    );
 }
 
 // Ensure verification rejects execution-backed layouts that finalized artifacts before execution completion.
@@ -974,10 +968,10 @@ fn verify_backup_rejects_incomplete_execution_layout_with_manifest() {
     let err = verify_backup(&options).expect_err("incomplete execution rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::DryRunNotComplete { plan_id } if plan_id == "plan-test"
-    ));
+    );
 }
 
 // Ensure verification rejects execution-backed layouts whose plan and execution journal drift.
@@ -1010,7 +1004,7 @@ fn verify_backup_rejects_execution_plan_journal_mismatch() {
     let err = verify_backup(&options).expect_err("mismatched execution rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupCommandError::Persistence(
             canic_backup::persistence::PersistenceError::PlanJournalOperationMismatch {
@@ -1018,7 +1012,7 @@ fn verify_backup_rejects_execution_plan_journal_mismatch() {
                 ..
             }
         )
-    ));
+    );
 }
 
 // Ensure the CLI verification path reads a layout and returns an integrity report.

@@ -205,10 +205,10 @@ fn release_stale_pending_keeps_fresh_entry_in_place() {
             provisional_pid: None,
         }
     );
-    assert!(matches!(
+    std::assert_matches!(
         DirectoryRegistryOps::lookup_entry("projects", "alpha"),
         Some(DirectoryEntryStatusResponse::Pending { .. })
-    ));
+    );
 }
 
 #[test]
@@ -252,9 +252,9 @@ fn claim_matched_writes_reject_late_claim_owner() {
     .expect("late claim owner should lose bind cleanly");
     assert!(!bind_ok);
 
-    assert!(matches!(
+    std::assert_matches!(
         DirectoryRegistryOps::lookup_state("projects", "alpha"),
         Some(DirectoryEntryState::Pending { claim_id, owner_pid, .. })
             if claim_id == second_claim.claim_id && owner_pid == p(2)
-    ));
+    );
 }

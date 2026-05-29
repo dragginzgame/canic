@@ -38,7 +38,7 @@ fn rejects_unknown_check_option() {
     let err = FleetCheckOptions::parse_test([OsString::from("--unknown")])
         .expect_err("parse should fail");
 
-    assert!(matches!(err, FleetCommandError::Usage(_)));
+    std::assert_matches!(err, FleetCommandError::Usage(_));
 }
 
 // Ensure fleet deletion requires the exact fleet name as confirmation.
@@ -57,7 +57,7 @@ fn confirm_delete_fleet_requires_exact_name() {
 
     let err = confirm_delete_fleet("demo", target, io::Cursor::new(b"yes\n"), Vec::new())
         .expect_err("wrong confirmation should cancel");
-    assert!(matches!(err, FleetCommandError::DeleteCancelled));
+    std::assert_matches!(err, FleetCommandError::DeleteCancelled);
 }
 
 // Ensure delete resolves the fleet config parent, not an arbitrary path.

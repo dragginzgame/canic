@@ -271,21 +271,21 @@ mod tests {
 
     #[test]
     fn build_requires_role() {
-        assert!(matches!(
+        std::assert_matches!(
             BuildOptions::parse(Vec::<OsString>::new()),
             Err(BuildCommandError::Usage(_))
-        ));
+        );
     }
 
     #[test]
     fn build_rejects_invalid_profile() {
-        assert!(matches!(
+        std::assert_matches!(
             BuildOptions::parse([
                 OsString::from("--profile"),
                 OsString::from("tiny"),
                 OsString::from("app")
             ]),
             Err(BuildCommandError::Usage(_))
-        ));
+        );
     }
 }

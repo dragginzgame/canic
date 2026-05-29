@@ -189,14 +189,14 @@ mod tests {
         let err = validate_terminal_operation_receipts(&journal)
             .expect_err("latest mismatched receipt should reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             RestoreRunnerError::TerminalOperationReceiptMismatch {
                 sequence: 0,
                 state: "completed",
                 ..
             }
-        ));
+        );
     }
 
     #[test]
@@ -218,14 +218,14 @@ mod tests {
         let err = validate_terminal_operation_receipts(&journal)
             .expect_err("stale receipt timestamp should reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             RestoreRunnerError::TerminalOperationReceiptMismatch {
                 sequence: 0,
                 state: "completed",
                 ..
             }
-        ));
+        );
     }
 
     #[test]

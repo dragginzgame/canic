@@ -62,5 +62,5 @@ fn signer_guard_success_records_perf_metric() {
         .expect("missing endpoint perf metric row");
 
     assert!(row.principal.is_none());
-    assert!(matches!(row.value, MetricValue::CountAndU64 { .. }));
+    std::assert_matches!(row.value, MetricValue::CountAndU64 { .. });
 }

@@ -264,10 +264,10 @@ mod tests {
         )
         .expect_err("method mismatch must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Scope(AuthScopeError::InternalInvocationMethodMismatch { .. })
-        ));
+        );
     }
 
     #[test]
@@ -279,10 +279,10 @@ mod tests {
         )
         .expect_err("role mismatch must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Scope(AuthScopeError::InternalInvocationRoleRejected { .. })
-        ));
+        );
     }
 
     #[test]
@@ -294,10 +294,10 @@ mod tests {
         )
         .expect_err("stale epoch must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. })
-        ));
+        );
     }
 
     #[test]
@@ -313,10 +313,10 @@ mod tests {
         )
         .expect_err("future issued_at must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Expiry(AuthExpiryError::AttestationNotYetValid { .. })
-        ));
+        );
     }
 
     #[test]
@@ -331,10 +331,10 @@ mod tests {
         )
         .expect_err("invalid attestation time window must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Validation(AuthValidationError::AttestationInvalidWindow { .. })
-        ));
+        );
     }
 
     #[test]
@@ -346,10 +346,10 @@ mod tests {
         let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
             .expect_err("future issued_at must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Expiry(AuthExpiryError::AttestationNotYetValid { .. })
-        ));
+        );
     }
 
     #[test]
@@ -360,9 +360,9 @@ mod tests {
         let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
             .expect_err("invalid attestation time window must reject");
 
-        assert!(matches!(
+        std::assert_matches!(
             err,
             AuthOpsError::Validation(AuthValidationError::AttestationInvalidWindow { .. })
-        ));
+        );
     }
 }

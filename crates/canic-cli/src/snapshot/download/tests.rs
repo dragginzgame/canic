@@ -78,11 +78,11 @@ fn deployment_membership_rejects_unknown_canister() {
     let err = validate_deployment_membership_json("demo", "missing-cai", &registry)
         .expect_err("missing canister should reject");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         SnapshotCommandError::CanisterNotInDeployment { deployment, canister }
             if deployment == "demo" && canister == "missing-cai"
-    ));
+    );
 }
 
 // Ensure cached installed-deployment registry entries can validate membership without reparsing.

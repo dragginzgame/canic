@@ -225,7 +225,10 @@ pub mod metrics {
                 })
                 .expect("metric entry should exist");
 
-            assert!(matches!(&entry.value, MetricValue::Count(actual) if *actual == count));
+            std::assert_matches!(
+                &entry.value,
+                MetricValue::Count(actual) if *actual == count
+            );
         }
     }
 }

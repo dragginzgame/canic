@@ -56,8 +56,5 @@ fn checksum_verify_rejects_mismatch() {
         .verify(EMPTY_SHA256)
         .expect_err("different hash should fail");
 
-    assert!(matches!(
-        err,
-        ArtifactChecksumError::ChecksumMismatch { .. }
-    ));
+    std::assert_matches!(err, ArtifactChecksumError::ChecksumMismatch { .. });
 }

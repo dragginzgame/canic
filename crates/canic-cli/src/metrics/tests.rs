@@ -19,14 +19,14 @@ fn parses_metric_kind_selectors() {
     .expect("security metrics kind");
     assert_eq!(options.kind, MetricsKind::Security);
 
-    assert!(matches!(
+    std::assert_matches!(
         MetricsOptions::parse([
             OsString::from("test"),
             OsString::from("--kind"),
             OsString::from("cycles"),
         ]),
         Err(MetricsCommandError::InvalidKind(_))
-    ));
+    );
 }
 
 #[test]

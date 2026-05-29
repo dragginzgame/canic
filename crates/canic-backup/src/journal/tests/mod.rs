@@ -93,10 +93,7 @@ fn state_transitions_are_monotonic() {
         )
         .expect_err("durable cannot move back to downloaded");
 
-    assert!(matches!(
-        err,
-        JournalValidationError::InvalidStateTransition { .. }
-    ));
+    std::assert_matches!(err, JournalValidationError::InvalidStateTransition { .. });
 }
 
 // Ensure checksum is required once an artifact is durable.
@@ -109,7 +106,7 @@ fn durable_artifact_requires_checksum() {
         .validate()
         .expect_err("durable artifact without checksum should fail");
 
-    assert!(matches!(err, JournalValidationError::EmptyField(_)));
+    std::assert_matches!(err, JournalValidationError::EmptyField(_));
 }
 
 // Ensure duplicate canister/snapshot rows are rejected.
@@ -122,10 +119,7 @@ fn duplicate_artifacts_fail_validation() {
         .validate()
         .expect_err("duplicate artifact should fail");
 
-    assert!(matches!(
-        err,
-        JournalValidationError::DuplicateArtifact { .. }
-    ));
+    std::assert_matches!(err, JournalValidationError::DuplicateArtifact { .. });
 }
 
 // Ensure journals round-trip through the JSON format.

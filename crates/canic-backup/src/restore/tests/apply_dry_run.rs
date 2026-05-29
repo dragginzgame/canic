@@ -163,10 +163,7 @@ fn apply_dry_run_rejects_missing_artifacts() {
         .expect_err("missing artifact should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
-        err,
-        RestoreApplyDryRunError::ArtifactMissing { .. }
-    ));
+    std::assert_matches!(err, RestoreApplyDryRunError::ArtifactMissing { .. });
 }
 
 // Ensure apply dry-runs reject artifact paths that escape the backup directory.
@@ -182,8 +179,8 @@ fn apply_dry_run_rejects_artifact_path_traversal() {
         .expect_err("path traversal should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyDryRunError::ArtifactPathEscapesBackup { .. }
-    ));
+    );
 }

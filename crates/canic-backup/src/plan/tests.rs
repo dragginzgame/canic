@@ -40,10 +40,7 @@ fn rejects_root_in_normal_scope() {
         .validate()
         .expect_err("root should require maintenance");
 
-    assert!(matches!(
-        err,
-        BackupPlanError::RootIncludedWithoutMaintenance
-    ));
+    std::assert_matches!(err, BackupPlanError::RootIncludedWithoutMaintenance);
 }
 
 // Ensure declared authority is still a valid planning/dry-run artifact.
@@ -62,10 +59,10 @@ fn planning_allows_declared_authority() {
         .validate_for_execution()
         .expect_err("declared authority cannot execute");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::UnprovenControlAuthority(canister) if canister == APP
-    ));
+    );
 }
 
 // Ensure unknown authority can be represented for dry-run output.
@@ -81,10 +78,10 @@ fn planning_allows_unknown_authority() {
         .validate_for_execution()
         .expect_err("unknown authority cannot execute");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::UnprovenControlAuthority(canister) if canister == APP
-    ));
+    );
 }
 
 // Ensure unproven control authority fails before any execution can happen.
@@ -98,10 +95,10 @@ fn rejects_unproven_control_authority() {
         .validate_for_execution()
         .expect_err("control authority should be proven");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::UnprovenControlAuthority(canister) if canister == APP
-    ));
+    );
 }
 
 // Ensure snapshot read authority is a first-class preflight, not a late download error.
@@ -115,10 +112,10 @@ fn rejects_unproven_snapshot_read_authority() {
         .validate_for_execution()
         .expect_err("snapshot read authority should be proven");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::UnprovenTargetSnapshotReadAuthority(canister) if canister == APP
-    ));
+    );
 }
 
 // Ensure mutations cannot be planned before authority and quiescence checks.
@@ -133,11 +130,11 @@ fn rejects_mutation_before_preflights() {
         .validate()
         .expect_err("mutation before preflight should reject");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::MutationBeforePreflight { operation_id }
             if operation_id == "stop-app"
-    ));
+    );
 }
 
 // Ensure whole root-omitted deployment plans do not pretend to have a unique subtree root.
@@ -150,10 +147,7 @@ fn rejects_root_omitted_deployment_scope_with_selected_root() {
         .validate()
         .expect_err("root-omitted deployment scope should not name one root");
 
-    assert!(matches!(
-        err,
-        BackupPlanError::NonRootDeploymentHasSelectedRoot
-    ));
+    std::assert_matches!(err, BackupPlanError::NonRootDeploymentHasSelectedRoot);
 }
 
 // Ensure journals can rely on stable contiguous operation ordering.
@@ -166,11 +160,11 @@ fn rejects_operation_order_mismatch() {
         .validate()
         .expect_err("operation order mismatch should reject");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::OperationOrderMismatch { operation_id, order, expected }
             if operation_id == "validate-control" && order == 42 && expected == 1
-    ));
+    );
 }
 
 // Ensure registry planning produces root-stays-running subtree phases.
@@ -248,10 +242,7 @@ fn builder_rejects_root_subtree_without_maintenance() {
     })
     .expect_err("normal root subtree should reject");
 
-    assert!(matches!(
-        err,
-        BackupPlanError::RootIncludedWithoutMaintenance
-    ));
+    std::assert_matches!(err, BackupPlanError::RootIncludedWithoutMaintenance);
 }
 
 // Ensure selectors can target explicit principals or unambiguous roles.
@@ -284,11 +275,11 @@ fn rejects_ambiguous_role_selector() {
     let err =
         resolve_backup_selector(&registry, "worker").expect_err("ambiguous role should reject");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::AmbiguousSelector { selector, matches }
             if selector == "worker" && matches == vec![WORKER.to_string(), OTHER_WORKER.to_string()]
-    ));
+    );
 }
 
 // Ensure selectors never silently target missing topology nodes.
@@ -344,10 +335,10 @@ fn control_authority_receipts_must_cover_all_targets() {
         )
         .expect_err("missing worker receipt rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::MissingControlAuthorityReceipt(canister) if canister == WORKER
-    ));
+    );
 }
 
 // Ensure receipts cannot prove authority for canisters outside the plan.
@@ -363,10 +354,10 @@ fn authority_receipts_reject_unknown_targets() {
         )
         .expect_err("unknown target receipt rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::UnknownAuthorityReceiptTarget(canister) if canister == WORKER
-    ));
+    );
 }
 
 // Ensure receipt application does not treat declarations as execution proof.
@@ -385,10 +376,10 @@ fn authority_receipts_reject_unproven_authority() {
         )
         .expect_err("declared receipt rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::UnprovenControlAuthority(canister) if canister == APP
-    ));
+    );
 }
 
 // Ensure root-coordinated plans cannot be upgraded by operator-only proof.
@@ -407,10 +398,10 @@ fn root_controller_plans_require_root_controller_receipts() {
         )
         .expect_err("operator controller does not satisfy root controller plan");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::MissingRootController(canister) if canister == APP
-    ));
+    );
 }
 
 // Ensure control authority preflights have a stable typed request shape.
@@ -522,11 +513,11 @@ fn rejects_expired_execution_preflight_bundle() {
         .apply_execution_preflight_receipts(&receipts, "unix:250")
         .expect_err("expired preflight bundle rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::PreflightReceiptExpired { preflight_id, expires_at, as_of }
             if preflight_id == PREFLIGHT_ID && expires_at == EXPIRES_AT && as_of == "unix:250"
-    ));
+    );
 }
 
 // Ensure receipt bundles cannot mix proofs from a different preflight run.
@@ -540,11 +531,11 @@ fn rejects_mismatched_preflight_id_in_bundle_receipts() {
         .apply_execution_preflight_receipts(&receipts, AS_OF)
         .expect_err("mismatched preflight receipt rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::PreflightReceiptIdMismatch { expected, actual }
             if expected == PREFLIGHT_ID && actual == "preflight-other"
-    ));
+    );
 }
 
 // Ensure standalone authority proofs also expire.
@@ -560,11 +551,11 @@ fn rejects_expired_authority_receipt() {
         )
         .expect_err("expired authority receipt rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::PreflightReceiptExpired { preflight_id, expires_at, as_of }
             if preflight_id == PREFLIGHT_ID && expires_at == EXPIRES_AT && as_of == "unix:250"
-    ));
+    );
 }
 
 // Ensure topology drift fails before mutation.
@@ -584,12 +575,12 @@ fn rejects_topology_preflight_hash_drift() {
         )
         .expect_err("topology drift rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupPlanError::TopologyPreflightHashMismatch { expected, actual }
             if expected == plan.topology_hash_before_quiesce
                 && actual == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    ));
+    );
 }
 
 // Ensure quiescence rejection fails before mutation.
@@ -608,7 +599,7 @@ fn rejects_unaccepted_quiescence_preflight() {
         )
         .expect_err("quiescence rejection rejects");
 
-    assert!(matches!(err, BackupPlanError::QuiescencePreflightRejected));
+    std::assert_matches!(err, BackupPlanError::QuiescencePreflightRejected);
 }
 
 // Ensure quiescence receipts cannot silently cover a different target set.
@@ -627,10 +618,7 @@ fn rejects_quiescence_target_mismatch() {
         )
         .expect_err("quiescence target mismatch rejects");
 
-    assert!(matches!(
-        err,
-        BackupPlanError::QuiescencePreflightTargetsMismatch
-    ));
+    std::assert_matches!(err, BackupPlanError::QuiescencePreflightTargetsMismatch);
 }
 
 fn subtree_plan() -> BackupPlan {

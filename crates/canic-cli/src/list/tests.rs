@@ -97,7 +97,7 @@ fn config_rejects_subtree_option() {
     ])
     .expect_err("config --subtree should fail");
 
-    assert!(matches!(err, ListCommandError::Usage(_)));
+    std::assert_matches!(err, ListCommandError::Usage(_));
 }
 
 // Ensure removed list selectors are hard rejected.
@@ -116,8 +116,8 @@ fn list_rejects_removed_root_and_from_options() {
     ])
     .expect_err("list --from should fail");
 
-    assert!(matches!(root_err, ListCommandError::Usage(_)));
-    assert!(matches!(from_err, ListCommandError::Usage(_)));
+    std::assert_matches!(root_err, ListCommandError::Usage(_));
+    std::assert_matches!(from_err, ListCommandError::Usage(_));
 }
 
 // Ensure list and config help keep deployment-target and fleet-template selection separate.
@@ -377,12 +377,12 @@ fn selected_subtree_rejects_ambiguous_role_name() {
     let err = render_registry_tree(&registry, Some("app"), &columns)
         .expect_err("repeated role should be ambiguous");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ListCommandError::RegistryTree(
             crate::support::registry_tree::RegistryTreeError::AmbiguousRole { role, .. }
         ) if role == "app"
-    ));
+    );
 }
 
 // Ensure the full list output names the selected deployment before the tree table.

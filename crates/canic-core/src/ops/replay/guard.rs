@@ -156,7 +156,7 @@ mod tests {
         RootReplayOps::reset_for_tests();
 
         let decision = evaluate_root_replay(base_input()).expect("fresh decision");
-        assert!(matches!(decision, ReplayDecision::Fresh(_)));
+        std::assert_matches!(decision, ReplayDecision::Fresh(_));
     }
 
     #[test]

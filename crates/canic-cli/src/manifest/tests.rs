@@ -29,7 +29,7 @@ fn parses_manifest_validate_options() {
 fn missing_manifest_validate_option_names_required_path() {
     let err = ManifestValidateOptions::parse([]).expect_err("missing manifest option");
 
-    assert!(matches!(err, ManifestCommandError::Usage(_)));
+    std::assert_matches!(err, ManifestCommandError::Usage(_));
     assert!(err.to_string().contains("--manifest <file>"));
     assert!(err.to_string().contains("canic manifest validate"));
 }

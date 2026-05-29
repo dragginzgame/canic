@@ -10,7 +10,7 @@ use crate::dto::prelude::*;
 // Metric tier selector.
 //
 
-#[derive(CandidType, Clone, Copy, Deserialize)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
 #[remain::sorted]
 pub enum MetricsKind {
     Core,
@@ -27,7 +27,7 @@ pub enum MetricsKind {
 // Unified metrics row.
 //
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Debug, Deserialize)]
 pub struct MetricEntry {
     // Ordered labels.
     pub labels: Vec<String>,
@@ -43,7 +43,7 @@ pub struct MetricEntry {
 // MetricValue
 //
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Debug, Deserialize)]
 pub enum MetricValue {
     Count(u64),
     CountAndU64 { count: u64, value_u64: u64 },

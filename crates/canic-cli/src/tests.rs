@@ -128,14 +128,14 @@ fn command_family_help_returns_ok() {
 // Ensure old read-only top-level aliases are removed in favor of canic info.
 #[test]
 fn top_level_info_aliases_are_removed() {
-    assert!(matches!(
+    std::assert_matches!(
         run([OsString::from("list"), OsString::from("help")]),
         Err(CliError::Usage(_))
-    ));
-    assert!(matches!(
+    );
+    std::assert_matches!(
         run([OsString::from("cycles"), OsString::from("help")]),
         Err(CliError::Usage(_))
-    ));
+    );
 }
 
 #[test]
@@ -154,10 +154,10 @@ fn info_help_uses_deployment_target_wording() {
 // Ensure the old fleet sync command is removed in favor of fleet check.
 #[test]
 fn fleet_sync_is_removed() {
-    assert!(matches!(
+    std::assert_matches!(
         run([OsString::from("fleet"), OsString::from("sync")]),
         Err(CliError::Fleets(_))
-    ));
+    );
 }
 
 // Ensure version flags are accepted at the top level and command-family level.
@@ -567,15 +567,15 @@ fn global_network_is_forwarded_to_info_query_commands() {
 
 #[test]
 fn command_local_global_options_are_hard_rejected() {
-    assert!(matches!(
+    std::assert_matches!(
         run([
             OsString::from("status"),
             OsString::from("--network"),
             OsString::from("local")
         ]),
         Err(CliError::Usage(_))
-    ));
-    assert!(matches!(
+    );
+    std::assert_matches!(
         run([
             OsString::from("medic"),
             OsString::from("test"),
@@ -583,7 +583,7 @@ fn command_local_global_options_are_hard_rejected() {
             OsString::from("icp")
         ]),
         Err(CliError::Usage(_))
-    ));
+    );
 }
 
 // Assert that a CLI argv slice returns successfully.

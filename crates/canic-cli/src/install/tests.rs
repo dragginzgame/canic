@@ -56,7 +56,7 @@ fn install_rejects_invalid_build_profile() {
     ])
     .expect_err("invalid profile should fail");
 
-    assert!(matches!(err, InstallCommandError::Usage(_)));
+    std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
 // Ensure removed install target forms are rejected before mutation starts.
@@ -77,9 +77,9 @@ fn install_rejects_target_overrides() {
     ])
     .expect_err("root build target should be removed");
 
-    assert!(matches!(root_arg, InstallCommandError::Usage(_)));
-    assert!(matches!(root_flag, InstallCommandError::Usage(_)));
-    assert!(matches!(build_target, InstallCommandError::Usage(_)));
+    std::assert_matches!(root_arg, InstallCommandError::Usage(_));
+    std::assert_matches!(root_flag, InstallCommandError::Usage(_));
+    std::assert_matches!(build_target, InstallCommandError::Usage(_));
 }
 
 // Ensure removed install config selection is rejected before mutation starts.
@@ -92,7 +92,7 @@ fn install_rejects_config_path() {
     ])
     .expect_err("config override should be removed");
 
-    assert!(matches!(err, InstallCommandError::Usage(_)));
+    std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
 // Ensure removed ready timeout controls are rejected before mutation starts.
@@ -105,7 +105,7 @@ fn install_rejects_ready_timeout() {
     ])
     .expect_err("ready timeout override should be removed");
 
-    assert!(matches!(err, InstallCommandError::Usage(_)));
+    std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
 // Ensure install requires an explicit fleet argument.
@@ -113,7 +113,7 @@ fn install_rejects_ready_timeout() {
 fn install_requires_fleet_argument() {
     let err = InstallOptions::parse([]).expect_err("missing fleet should fail");
 
-    assert!(matches!(err, InstallCommandError::Usage(_)));
+    std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
 // Ensure install help documents config-owned fleet identity.

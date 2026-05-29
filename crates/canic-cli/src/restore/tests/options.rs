@@ -325,7 +325,7 @@ fn restore_apply_requires_dry_run() {
     ])
     .expect_err("apply without dry-run should fail");
 
-    assert!(matches!(err, RestoreCommandError::Usage(_)));
+    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }
 
 // Ensure restore run requires an explicit execution mode.
@@ -337,7 +337,7 @@ fn restore_run_requires_mode() {
     ])
     .expect_err("restore run without dry-run should fail");
 
-    assert!(matches!(err, RestoreCommandError::Usage(_)));
+    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }
 
 // Ensure restore run rejects ambiguous execution modes.
@@ -353,7 +353,7 @@ fn restore_run_rejects_conflicting_modes() {
     ])
     .expect_err("restore run should reject conflicting modes");
 
-    assert!(matches!(err, RestoreCommandError::Usage(_)));
+    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }
 
 // Ensure restore run rejects zero-length execute batches.
@@ -368,5 +368,5 @@ fn restore_run_rejects_zero_max_steps() {
     ])
     .expect_err("restore run should reject zero max steps");
 
-    assert!(matches!(err, RestoreCommandError::Usage(_)));
+    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }

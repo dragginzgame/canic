@@ -652,10 +652,9 @@ inspect only the files needed for the current task.
 - Removed the obsolete `canic-cdk::structures::BTreeMap` wrapper. Stable-storage
   code now imports the upstream `ic_memory` B-tree map directly as
   `StableBtreeMap`, and map clearing uses upstream `clear_new()`.
-- Lowered Canic's declared MSRV to Rust `1.88.0` while keeping
-  `rust-toolchain.toml` and the internal CI build/test lane on Rust `1.95.0`.
-  README badges now expose both lanes; `ic-testkit` has its own matching
-  `rust-toolchain.toml`.
+- Raised Canic's declared MSRV to Rust `1.96.0` and aligned the CI MSRV lane
+  with the internal toolchain, allowing the repo to use stabilized
+  `std::assert_matches!` diagnostics in tests.
 - Moved the reusable PocketIC helper surface out of the Canic workspace into
   the sibling `ic-testkit` repository. Canic now consumes it through the
   workspace `ic-testkit` dependency, while Canic-specific root/auth

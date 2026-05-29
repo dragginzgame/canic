@@ -55,7 +55,7 @@ fn prepared_journal_backup_root_rejects_mismatched_backup_dir() {
         .expect_err("mismatched backup root should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::PreparedJournalBackupRootMismatch {
             backup_ref,
@@ -65,7 +65,7 @@ fn prepared_journal_backup_root_rejects_mismatched_backup_dir() {
         } if backup_ref == "1"
             && expected == backup_dir.display().to_string()
             && actual_path == actual.display().to_string()
-    ));
+    );
 }
 
 // Ensure stale journals without a backup root cannot be used through row refs.
@@ -88,13 +88,13 @@ fn prepared_journal_backup_root_requires_backup_root() {
         .expect_err("missing backup root should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::PreparedJournalBackupRootMissing {
             backup_ref,
             ..
         } if backup_ref == "1"
-    ));
+    );
 }
 
 // Ensure restore run writes a native no-mutation runner preview.
@@ -491,13 +491,13 @@ fn run_restore_run_execute_rejects_upload_without_snapshot_id() {
             .expect("decode run summary");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreRunCommandFailed {
             sequence: 0,
             status,
         } if status == "missing-uploaded-snapshot-id"
-    ));
+    );
     assert_eq!(updated.failed_operations, 1);
     assert_eq!(updated.operation_receipts.len(), 1);
     assert_eq!(
@@ -540,10 +540,7 @@ fn run_restore_run_execute_rejects_locked_journal() {
         ])
         .expect_err("locked journal should reject execution");
 
-    assert!(matches!(
-        err,
-        RestoreCommandError::RestoreApplyJournalLocked { .. }
-    ));
+    std::assert_matches!(err, RestoreCommandError::RestoreApplyJournalLocked { .. });
     assert!(lock_path.exists());
 }
 
@@ -567,14 +564,14 @@ fn run_restore_run_rejects_terminal_operation_without_receipt() {
         .run_restore_run(&["--dry-run"])
         .expect_err("terminal operation without receipt should reject");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreRunTerminalOperationMissingReceipt {
             sequence: 0,
             state,
             ..
         } if state == "completed"
-    ));
+    );
 }
 
 // Ensure restore run can fail closed after writing an incomplete summary.
@@ -616,14 +613,14 @@ fn run_restore_run_require_complete_writes_summary_then_fails() {
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(run_summary["executed_operation_count"], 1);
     assert_eq!(run_summary["complete"], false);
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreApplyIncomplete {
             completed_operations: 1,
             operation_count: 10,
             ..
         }
-    ));
+    );
 }
 
 // Ensure restore run execute records failed command exits in the journal.
@@ -667,13 +664,13 @@ fn run_restore_run_execute_marks_failed_operation() {
             .expect("decode updated journal");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreRunCommandFailed {
             sequence: 0,
             status,
         } if status == "1"
-    ));
+    );
     assert_eq!(updated.failed_operations, 1);
     assert_eq!(updated.pending_operations, 0);
     assert_eq!(
@@ -832,13 +829,13 @@ fn run_restore_run_require_no_attention_writes_summary_then_fails() {
         run_summary["pending_summary"]["pending_updated_at"],
         "2026-05-05T12:01:00Z"
     );
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreApplyReportNeedsAttention {
             outcome: canic_backup::restore::RestoreApplyReportOutcome::Pending,
             ..
         }
-    ));
+    );
 }
 
 // Ensure restore run can fail closed after writing a not-ready summary.
@@ -862,13 +859,13 @@ fn run_restore_run_require_ready_writes_summary_then_fails() {
         run_summary["blocked_reasons"][0],
         "artifact-validation-missing"
     );
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreApplyNotReady {
             reasons,
             ..
         } if reasons == ["artifact-validation-missing"]
-    ));
+    );
 }
 
 // Ensure restore status can be used as a pre-execute readiness gate.
@@ -892,11 +889,11 @@ fn run_restore_status_require_ready_writes_summary_then_fails() {
     assert_eq!(run_summary["run_mode"], "dry-run");
     assert_eq!(run_summary["ready"], false);
     assert_eq!(run_summary["outcome"], "blocked");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreApplyNotReady {
             reasons,
             ..
         } if reasons == ["artifact-validation-missing"]
-    ));
+    );
 }

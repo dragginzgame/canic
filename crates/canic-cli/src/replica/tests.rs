@@ -32,7 +32,7 @@ fn rejects_invalid_replica_start_port() {
     let error = ReplicaOptions::parse_start([OsString::from("--port"), OsString::from("0")])
         .expect_err("port 0 should be invalid");
 
-    assert!(matches!(error, ReplicaCommandError::InvalidPort { .. }));
+    std::assert_matches!(error, ReplicaCommandError::InvalidPort { .. });
 }
 
 // Ensure foreground mode is the default, matching ICP CLI.
@@ -167,11 +167,11 @@ fn maps_foreign_local_replica_owner_error() {
         stderr: "Error: port 8000 is in use by the local network of the project at '/home/adam/projects/icydb'\n".to_string(),
     });
 
-    assert!(matches!(
+    std::assert_matches!(
         error,
         ReplicaCommandError::ForeignLocalReplicaOwner { ref network, ref project }
             if network == "local" && project == "/home/adam/projects/icydb"
-    ));
+    );
     assert!(
         error
             .to_string()
@@ -187,7 +187,7 @@ fn maps_missing_project_manifest_error() {
         stderr: "Error: failed to locate project directory\n\nCaused by:\n    project manifest not found in /home/adam/projects/toko/backend\n".to_string(),
     });
 
-    assert!(matches!(error, ReplicaCommandError::ProjectManifestMissing));
+    std::assert_matches!(error, ReplicaCommandError::ProjectManifestMissing);
     assert!(error.to_string().contains("Create or repair icp.yaml"));
     assert!(error.to_string().contains("canic status"));
 }

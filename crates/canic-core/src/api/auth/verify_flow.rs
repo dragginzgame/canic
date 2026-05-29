@@ -151,12 +151,12 @@ mod tests {
             },
         ));
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(RoleAttestationVerifyFlowError::Initial(
                 AuthOpsError::Signature(AuthSignatureError::AttestationSignatureUnavailable)
             ))
-        ));
+        );
         assert_eq!(verify_calls.get(), 1);
         assert_eq!(refresh_calls.get(), 0);
     }
@@ -177,14 +177,14 @@ mod tests {
             },
         ));
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(RoleAttestationVerifyFlowError::PostRefresh(
                 AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId {
                     key_id: 7
                 })
             ))
-        ));
+        );
         assert_eq!(verify_calls.get(), 2);
         assert_eq!(refresh_calls.get(), 1);
     }
@@ -210,7 +210,7 @@ mod tests {
             },
         ));
 
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(RoleAttestationVerifyFlowError::Refresh {
                 trigger: AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId {
@@ -218,7 +218,7 @@ mod tests {
                 }),
                 ..
             })
-        ));
+        );
         assert_eq!(verify_calls.get(), 1);
         assert_eq!(refresh_calls.get(), 1);
     }

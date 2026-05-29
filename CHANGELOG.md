@@ -12,12 +12,16 @@ present.
 
 ## Unreleased
 
-- Demo fleet now includes a simple `user_hub` / `user_shard` sharding flow with
-  human-readable planning, assignment, and shard inspection endpoints.
-
 ## [0.48.x] - 2026-05-28 - Derived singleton topology
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
+
+- `0.48.4` raises Canic's published MSRV to Rust `1.96.0`, using the new
+  standard assertion and duration helpers for clearer diagnostics and simpler
+  scheduling constants.
+
+- `0.48.3` adds a demo `user_hub` / `user_shard` sharding walkthrough and
+  adopts `ic-testkit` 0.1.9 helpers to simplify PocketIC setup diagnostics.
 
 - `0.48.2` refreshes active setup, configuration, architecture, and crate docs
   so they consistently describe metadata-driven canister roles, derived

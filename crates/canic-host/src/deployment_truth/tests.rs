@@ -446,19 +446,19 @@ fn lifecycle_authority_report_validation_rejects_count_and_digest_drift() {
     report.external_action_required_count = 4;
 
     let err = validate_lifecycle_authority_report(&report).expect_err("count drift should fail");
-    assert!(matches!(err, LifecycleAuthorityReportError::CountMismatch));
+    std::assert_matches!(err, LifecycleAuthorityReportError::CountMismatch);
 
     let mut report = lifecycle_authority_report_from_check("lifecycle-authority-1", &check);
     report.authorities[0]
         .warnings
         .push("stale warning".to_string());
     let err = validate_lifecycle_authority_report(&report).expect_err("digest drift should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         LifecycleAuthorityReportError::DigestMismatch {
             field: "report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -534,12 +534,12 @@ fn external_lifecycle_plan_validation_rejects_digest_and_status_drift() {
     plan.lifecycle_plan_digest = sample_sha256("9");
 
     let err = validate_external_lifecycle_plan(&plan).expect_err("stale digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalLifecyclePlanError::DigestMismatch {
             field: "lifecycle_plan_digest"
         }
-    ));
+    );
 
     plan = external_lifecycle_plan_from_check(
         "external-lifecycle-plan-1",
@@ -549,10 +549,7 @@ fn external_lifecycle_plan_validation_rejects_digest_and_status_drift() {
     plan.status = ExternalLifecyclePlanStatusV1::Blocked;
     plan.lifecycle_plan_digest = sample_sha256("9");
     let err = validate_external_lifecycle_plan(&plan).expect_err("status drift should fail");
-    assert!(matches!(
-        err,
-        ExternalLifecyclePlanError::DigestMismatch { .. }
-    ));
+    std::assert_matches!(err, ExternalLifecyclePlanError::DigestMismatch { .. });
 }
 
 #[test]
@@ -575,12 +572,12 @@ fn external_lifecycle_plan_validation_rejects_source_check_drift() {
 
     let err = validate_external_lifecycle_plan_for_check(&lifecycle_plan, &drifted_check)
         .expect_err("source check drift should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalLifecyclePlanError::SourceMismatch {
             field: "deployment_check"
         }
-    ));
+    );
 }
 
 #[test]
@@ -753,12 +750,12 @@ fn external_upgrade_proposal_report_validation_rejects_stale_report_digest() {
 
     let err = validate_external_upgrade_proposal_report(&report)
         .expect_err("stale report digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeProposalReportError::DigestMismatch {
             field: "report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -789,12 +786,12 @@ fn external_upgrade_proposal_report_validation_rejects_source_check_drift() {
         &drifted_check,
     )
     .expect_err("source check drift should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeProposalReportError::SourceMismatch {
             field: "deployment_check"
         }
-    ));
+    );
 }
 
 #[test]
@@ -819,12 +816,12 @@ fn external_upgrade_proposal_report_validation_rejects_stale_proposal_digest() {
 
     let err = validate_external_upgrade_proposal_report(&report)
         .expect_err("stale proposal digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeProposalReportError::DigestMismatch {
             field: "proposal_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -1624,12 +1621,12 @@ fn external_upgrade_receipt_validation_rejects_stale_digest() {
 
     let err =
         validate_external_upgrade_receipt(&receipt).expect_err("stale receipt digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeReceiptError::DigestMismatch {
             field: "receipt_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -1640,12 +1637,12 @@ fn external_upgrade_receipt_validation_rejects_mismatched_proposal_source() {
     let err = validate_external_upgrade_receipt_for_proposal(&receipt, &mismatched)
         .expect_err("receipt cannot validate against another proposal");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeReceiptError::SourceMismatch {
             field: "proposal_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -1716,21 +1713,18 @@ fn external_upgrade_receipt_validation_rejects_contradictory_refusal() {
 
     let err = validate_external_upgrade_receipt(&receipt)
         .expect_err("refused consent cannot verify completion");
-    assert!(matches!(
-        err,
-        ExternalUpgradeReceiptError::RefusedConsentVerified
-    ));
+    std::assert_matches!(err, ExternalUpgradeReceiptError::RefusedConsentVerified);
 
     receipt.verification_result = ExternalUpgradeVerificationResultV1::Pending;
     receipt.receipt_id.clear();
     let err =
         validate_external_upgrade_receipt(&receipt).expect_err("blank receipt id should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeReceiptError::MissingRequiredField {
             field: "receipt_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -1880,12 +1874,12 @@ fn external_upgrade_consent_evidence_validation_rejects_stale_source() {
         validate_external_upgrade_consent_evidence_for_receipt(&evidence, &proposal, &receipt)
             .expect_err("stale source should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeConsentEvidenceError::Receipt(ExternalUpgradeReceiptError::SourceMismatch {
             field: "proposal_id"
         })
-    ));
+    );
 }
 
 #[test]
@@ -1998,14 +1992,14 @@ fn external_upgrade_verification_report_validation_rejects_stale_source() {
         validate_external_upgrade_verification_report_for_receipt(&report, &proposal, &receipt)
             .expect_err("stale source should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ExternalUpgradeVerificationReportError::Receipt(
             ExternalUpgradeReceiptError::SourceMismatch {
                 field: "proposal_id"
             }
         )
-    ));
+    );
 }
 
 #[test]
@@ -2806,13 +2800,13 @@ fn role_promotion_policy_validation_rejects_sealed_only_policy_with_source_build
     let err = validate_role_promotion_policy(&policy)
         .expect_err("sealed-only policy cannot allow source build");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPolicyCheckError::DecisionMismatch {
             role,
             field: "sealed_bytes"
         } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -3015,13 +3009,13 @@ fn promotion_policy_check_validation_rejects_stale_decision() {
 
     let err = validate_promotion_policy_check(&check).expect_err("stale decision should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPolicyCheckError::DecisionMismatch {
             role,
             field: "policy_satisfied"
         } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -3034,12 +3028,12 @@ fn promotion_policy_check_validation_rejects_stale_digest() {
     let err = validate_promotion_policy_check(&check)
         .expect_err("stale promotion policy check digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPolicyCheckError::LinkageMismatch {
             field: "promotion_policy_check_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3256,12 +3250,12 @@ fn promotion_artifact_identity_report_validation_rejects_stale_summary() {
     let err = validate_promotion_artifact_identity_report(&report)
         .expect_err("stale summary should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::SummaryMismatch {
             field: "identity_group_count"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3273,12 +3267,12 @@ fn promotion_artifact_identity_report_validation_rejects_stale_digest() {
     let err = validate_promotion_artifact_identity_report(&report)
         .expect_err("stale identity report digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::LinkageMismatch {
             field: "artifact_identity_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3289,10 +3283,10 @@ fn promotion_artifact_identity_report_validation_rejects_duplicate_roles() {
 
     let err = validate_promotion_artifact_identity_report(&report)
         .expect_err("duplicate role should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::DuplicateRole { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -3303,10 +3297,10 @@ fn promotion_artifact_identity_report_validation_rejects_status_blocker_mismatch
 
     let err = validate_promotion_artifact_identity_report(&report)
         .expect_err("status blocker mismatch should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::StatusBlockerMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -3317,12 +3311,12 @@ fn promotion_artifact_identity_report_validation_rejects_bad_digest_shape() {
 
     let err =
         validate_promotion_artifact_identity_report(&report).expect_err("bad digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::InvalidSha256Digest {
             field: "wasm_gz_sha256"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3333,10 +3327,10 @@ fn promotion_artifact_identity_report_validation_rejects_stale_group_key() {
 
     let err = validate_promotion_artifact_identity_report(&report)
         .expect_err("stale group key should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::IdentityGroupKeyMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -3347,10 +3341,10 @@ fn promotion_artifact_identity_report_validation_rejects_ungrouped_role() {
 
     let err = validate_promotion_artifact_identity_report(&report)
         .expect_err("ungrouped role should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactIdentityReportError::MissingGroupedRole { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -3389,12 +3383,12 @@ fn build_recipe_identity_validation_rejects_dirty_ambiguous_revision() {
 
     let err = validate_build_recipe_identity(&recipe).expect_err("blank revision should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::MissingRequiredField {
             field: "source_revision"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3425,12 +3419,12 @@ fn build_materialization_input_validation_rejects_bad_config_digest() {
     let err =
         validate_build_materialization_input(&input).expect_err("bad config digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::InvalidSha256Digest {
             field: "canonical_embedded_config_sha256"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3462,12 +3456,12 @@ fn build_materialization_result_validation_rejects_bad_output_digest() {
     let err =
         validate_build_materialization_result(&result).expect_err("bad output digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::InvalidSha256Digest {
             field: "wasm_sha256"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3553,13 +3547,13 @@ fn build_materialization_evidence_validation_rejects_stale_computed_digest() {
     let err = validate_build_materialization_evidence(&evidence)
         .expect_err("stale computed digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::DigestMismatch {
             field: "computed_materialization_input_digest",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -3579,12 +3573,12 @@ fn build_materialization_evidence_validation_rejects_stale_link_flag() {
     let err =
         validate_build_materialization_evidence(&evidence).expect_err("stale flag should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::LinkageMismatch {
             field: "recipe_id_matches_input"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3604,12 +3598,12 @@ fn build_materialization_evidence_validation_rejects_stale_digest() {
     let err =
         validate_build_materialization_evidence(&evidence).expect_err("stale digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::LinkageMismatch {
             field: "materialization_evidence_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3625,12 +3619,12 @@ fn build_materialization_evidence_rejects_mismatched_result_input_digest() {
     })
     .expect_err("mismatched result input digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityError::LinkageMismatch {
             field: "materialization_input_digest_matches_result"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3719,11 +3713,11 @@ fn promotion_materialization_identity_report_validation_rejects_stale_output_gro
     let err = validate_promotion_materialization_identity_report(&report)
         .expect_err("stale output group should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityReportError::OutputGroupKeyMismatch { .. }
             | PromotionMaterializationIdentityReportError::OutputGroupRoleMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -3740,12 +3734,12 @@ fn promotion_materialization_identity_report_validation_rejects_stale_digest() {
     let err = validate_promotion_materialization_identity_report(&report)
         .expect_err("stale materialization report digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityReportError::LinkageMismatch {
             field: "materialization_identity_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -3765,10 +3759,10 @@ fn promotion_materialization_identity_report_validation_rejects_duplicate_eviden
     let err = validate_promotion_materialization_identity_report(&report)
         .expect_err("duplicate evidence ids should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionMaterializationIdentityReportError::DuplicateEvidence { .. }
-    ));
+    );
 }
 
 #[test]
@@ -4003,12 +3997,12 @@ fn promotion_plan_transform_evidence_validation_rejects_blank_evidence_id() {
     })
     .expect_err("blank evidence id should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformEvidenceError::MissingRequiredField {
             field: "evidence_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4032,10 +4026,10 @@ fn promotion_plan_transform_evidence_validation_rejects_schema_drift() {
 
     let err = validate_promotion_plan_transform_evidence(&evidence)
         .expect_err("schema drift should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformEvidenceError::SchemaVersionMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -4059,12 +4053,12 @@ fn promotion_plan_transform_evidence_validation_rejects_stale_digest() {
 
     let err = validate_promotion_plan_transform_evidence(&evidence)
         .expect_err("stale evidence digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformEvidenceError::LinkageMismatch {
             field: "promotion_plan_transform_evidence_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4088,7 +4082,7 @@ fn promotion_plan_transform_evidence_validation_rejects_stale_transform() {
 
     let err = validate_promotion_plan_transform_evidence(&evidence)
         .expect_err("stale transform should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformEvidenceError::Transform(
             PromotionPlanTransformError::RoleStateMismatch {
@@ -4096,7 +4090,7 @@ fn promotion_plan_transform_evidence_validation_rejects_stale_transform() {
                 field: "artifact_identity_changed"
             }
         ) if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -4160,12 +4154,12 @@ fn promotion_target_execution_lineage_rejects_preflight_for_other_plan() {
     })
     .expect_err("preflight for another plan should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionTargetExecutionLineageError::LinkageMismatch {
             field: "execution_preflight.plan_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4184,10 +4178,10 @@ fn promotion_target_execution_lineage_rejects_execution_claim() {
     let err = validate_promotion_target_execution_lineage(&lineage)
         .expect_err("execution claim should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionTargetExecutionLineageError::ExecutionAttempted
-    ));
+    );
 }
 
 #[test]
@@ -4206,12 +4200,12 @@ fn promotion_target_execution_lineage_rejects_stale_digest() {
     let err = validate_promotion_target_execution_lineage(&lineage)
         .expect_err("stale lineage digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionTargetExecutionLineageError::LinkageMismatch {
             field: "target_execution_lineage_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4292,10 +4286,10 @@ fn artifact_promotion_plan_validation_rejects_status_blocker_mismatch() {
     let err =
         validate_artifact_promotion_plan(&plan).expect_err("ready plan with blockers should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::StatusBlockerMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -4306,12 +4300,12 @@ fn artifact_promotion_plan_validation_rejects_stale_lineage_copy() {
     let err =
         validate_artifact_promotion_plan(&plan).expect_err("stale plan lineage copy should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::LinkageMismatch {
             field: "promotion_plan_lineage_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4321,12 +4315,12 @@ fn artifact_promotion_plan_validation_rejects_stale_digest() {
 
     let err = validate_artifact_promotion_plan(&plan).expect_err("stale plan digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::LinkageMismatch {
             field: "artifact_promotion_plan_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4342,12 +4336,12 @@ fn artifact_promotion_plan_validation_rejects_mismatched_target_lineage() {
     let err = validate_artifact_promotion_plan(&plan)
         .expect_err("target lineage with different transform should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::LinkageMismatch {
             field: "target_execution_lineage.transform"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4372,12 +4366,12 @@ fn artifact_promotion_plan_for_check_rejects_other_target_plan() {
     let err = validate_artifact_promotion_plan_for_check(&plan, &check)
         .expect_err("target check for another plan should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::LinkageMismatch {
             field: "target_check.plan"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4398,10 +4392,10 @@ fn artifact_promotion_plan_for_check_rejects_missing_target_execution_lineage() 
     let err = validate_artifact_promotion_plan_for_check(&plan, &check)
         .expect_err("target check validation should require execution lineage");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::MissingTargetExecutionLineage
-    ));
+    );
 }
 
 #[test]
@@ -4416,7 +4410,7 @@ fn artifact_promotion_plan_for_check_rejects_preflight_check_mismatch() {
     let err = validate_artifact_promotion_plan_for_check(&plan, &check)
         .expect_err("preflight mismatch should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionPlanError::TargetCheck(
             DeploymentExecutionPreflightError::SourceCheckMismatch {
@@ -4424,7 +4418,7 @@ fn artifact_promotion_plan_for_check_rejects_preflight_check_mismatch() {
                 ..
             }
         )
-    ));
+    );
 }
 
 #[test]
@@ -4699,12 +4693,12 @@ fn artifact_promotion_provenance_report_rejects_stale_digest() {
     let err = validate_artifact_promotion_provenance_report(&report)
         .expect_err("stale provenance digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionProvenanceReportError::LinkageMismatch {
             field: "provenance_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4715,12 +4709,12 @@ fn artifact_promotion_provenance_report_rejects_stale_plan_digest_link() {
     let err = validate_artifact_promotion_provenance_report(&report)
         .expect_err("stale cited promotion plan digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionProvenanceReportError::LinkageMismatch {
             field: "provenance_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4731,12 +4725,12 @@ fn artifact_promotion_provenance_report_rejects_stale_wasm_store_digest_link() {
     let err = validate_artifact_promotion_provenance_report(&report)
         .expect_err("stale cited wasm-store identity report digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionProvenanceReportError::LinkageMismatch {
             field: "provenance_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4747,12 +4741,12 @@ fn artifact_promotion_provenance_report_rejects_stale_wasm_store_catalog_digest_
     let err = validate_artifact_promotion_provenance_report(&report)
         .expect_err("stale cited wasm-store catalog verification digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionProvenanceReportError::LinkageMismatch {
             field: "provenance_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4763,12 +4757,12 @@ fn artifact_promotion_provenance_report_rejects_stale_materialization_digest_lin
     let err = validate_artifact_promotion_provenance_report(&report)
         .expect_err("stale cited materialization report digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionProvenanceReportError::LinkageMismatch {
             field: "provenance_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4779,12 +4773,12 @@ fn artifact_promotion_provenance_report_rejects_stale_role_materialization_diges
     let err = validate_artifact_promotion_provenance_report(&report)
         .expect_err("stale role materialization evidence digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionProvenanceReportError::LinkageMismatch {
             field: "provenance_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4926,12 +4920,12 @@ fn artifact_promotion_execution_receipt_validation_rejects_stale_digest() {
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("stale execution receipt digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::LinkageMismatch {
             field: "execution_receipt_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4942,12 +4936,12 @@ fn artifact_promotion_execution_receipt_validation_rejects_stale_materialization
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("stale role materialization digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::LinkageMismatch {
             field: "execution_receipt_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4958,12 +4952,12 @@ fn artifact_promotion_execution_receipt_validation_rejects_stale_plan_digest_lin
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("stale cited plan digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::LinkageMismatch {
             field: "execution_receipt_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4977,12 +4971,12 @@ fn artifact_promotion_execution_receipt_validation_rejects_nested_receipt_drift(
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("nested deployment receipt drift should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::LinkageMismatch {
             field: "execution_receipt_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -4999,12 +4993,12 @@ fn artifact_promotion_execution_receipt_rejects_other_promoted_plan() {
     })
     .expect_err("deployment receipt must match promoted plan");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::LinkageMismatch {
             field: "deployment_receipt.plan_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -5035,12 +5029,12 @@ fn artifact_promotion_execution_receipt_rejects_blocked_provenance() {
     })
     .expect_err("blocked provenance cannot become execution receipt");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::ProvenanceNotReady {
             status: PromotionReadinessStatusV1::Blocked
         }
-    ));
+    );
 }
 
 #[test]
@@ -5051,12 +5045,12 @@ fn artifact_promotion_execution_receipt_validation_rejects_stale_operation_statu
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("wrapper status must match nested deployment receipt");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::LinkageMismatch {
             field: "operation_status"
         }
-    ));
+    );
 }
 
 #[test]
@@ -5067,12 +5061,12 @@ fn artifact_promotion_execution_receipt_validation_rejects_stale_provenance_stat
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("archived execution receipt must preserve ready provenance");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::ProvenanceNotReady {
             status: PromotionReadinessStatusV1::Blocked
         }
-    ));
+    );
 }
 
 #[test]
@@ -5083,10 +5077,10 @@ fn artifact_promotion_execution_receipt_validation_rejects_missing_deployment_ro
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("promotion execution receipt must cite deployment role evidence");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::MissingDeploymentRole { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5099,10 +5093,10 @@ fn artifact_promotion_execution_receipt_validation_rejects_unknown_deployment_ro
     let err = validate_artifact_promotion_execution_receipt(&receipt)
         .expect_err("deployment receipt cannot add roles outside promotion provenance");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ArtifactPromotionExecutionReceiptError::UnknownDeploymentRole { role } if role == "worker"
-    ));
+    );
 }
 
 #[test]
@@ -5156,10 +5150,10 @@ fn promotion_plan_transform_validation_rejects_schema_drift() {
     transform.schema_version += 1;
 
     let err = validate_promotion_plan_transform(&transform).expect_err("schema drift should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::SchemaVersionMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -5177,10 +5171,10 @@ fn promotion_plan_transform_validation_rejects_plan_id_mismatch() {
 
     let err =
         validate_promotion_plan_transform(&transform).expect_err("plan id mismatch should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::PromotedPlanIdMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -5198,10 +5192,10 @@ fn promotion_plan_transform_validation_rejects_duplicate_roles() {
 
     let err =
         validate_promotion_plan_transform(&transform).expect_err("duplicate role should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::DuplicateRole { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5219,10 +5213,10 @@ fn promotion_plan_transform_validation_rejects_missing_promoted_role() {
 
     let err = validate_promotion_plan_transform(&transform)
         .expect_err("missing promoted role should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::PromotedRoleMissing { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5240,13 +5234,13 @@ fn promotion_plan_transform_validation_rejects_stale_lineage_digest() {
 
     let err = validate_promotion_plan_transform(&transform)
         .expect_err("stale lineage digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::RoleStateMismatch {
             role,
             field: "promotion_plan_lineage_digest"
         } if role == "promotion_plan_lineage"
-    ));
+    );
 }
 
 #[test]
@@ -5297,13 +5291,13 @@ fn promotion_plan_transform_validation_rejects_stale_after_summary() {
     transform.roles[0].wasm_gz_sha256_after = Some(sample_sha256("f"));
 
     let err = validate_promotion_plan_transform(&transform).expect_err("stale summary should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::RoleStateMismatch {
             role,
             field: "wasm_gz_sha256_after"
         } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5322,13 +5316,13 @@ fn promotion_plan_transform_validation_rejects_stale_change_flag() {
     transform.roles[0].artifact_identity_changed = false;
 
     let err = validate_promotion_plan_transform(&transform).expect_err("stale flag should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::RoleStateMismatch {
             role,
             field: "artifact_identity_changed"
         } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5338,12 +5332,12 @@ fn role_artifact_source_requires_digest_pins_for_executable_overrides() {
     source.expected_wasm_gz_sha256 = None;
 
     let err = validate_role_artifact_source(&source).expect_err("digest pin should be required");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::MissingDigestPin {
             kind: RoleArtifactSourceKindV1::LocalWasm
         }
-    ));
+    );
 }
 
 #[test]
@@ -5352,12 +5346,12 @@ fn role_artifact_source_rejects_invalid_digest_shape() {
     source.expected_wasm_gz_sha256 = Some("NOT-A-DIGEST".to_string());
 
     let err = validate_role_artifact_source(&source).expect_err("digest should be checked");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::InvalidSha256Digest {
             field: "expected_wasm_gz_sha256"
         }
-    ));
+    );
 }
 
 #[test]
@@ -5366,10 +5360,10 @@ fn previous_receipt_artifact_source_requires_eligible_receipt_kind() {
     source.previous_receipt_kind = None;
 
     let err = validate_role_artifact_source(&source).expect_err("receipt kind should be required");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::MissingPreviousReceiptKind
-    ));
+    );
 
     source.previous_receipt_kind = Some(PreviousArtifactReceiptKindV1::DeploymentReceipt);
     validate_role_artifact_source(&source).expect("deployment receipt artifact should be eligible");
@@ -5385,10 +5379,10 @@ fn previous_receipt_artifact_source_requires_lineage_digest() {
     let err = validate_role_artifact_source(&source)
         .expect_err("receipt lineage digest should be required");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::MissingPreviousReceiptLineageDigest
-    ));
+    );
 }
 
 #[test]
@@ -5399,12 +5393,12 @@ fn previous_receipt_artifact_source_rejects_invalid_lineage_digest() {
     let err =
         validate_role_artifact_source(&source).expect_err("receipt lineage digest should validate");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::InvalidSha256Digest {
             field: "previous_receipt_lineage_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -5414,12 +5408,12 @@ fn non_receipt_artifact_source_rejects_previous_receipt_kind() {
 
     let err =
         validate_role_artifact_source(&source).expect_err("receipt kind should be source-specific");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::UnexpectedPreviousReceiptKind {
             kind: RoleArtifactSourceKindV1::LocalWasmGz
         }
-    ));
+    );
 }
 
 #[test]
@@ -5430,12 +5424,12 @@ fn non_receipt_artifact_source_rejects_previous_receipt_lineage_digest() {
     let err = validate_role_artifact_source(&source)
         .expect_err("receipt lineage digest should be source-specific");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionArtifactSourceError::UnexpectedPreviousReceiptLineageDigest {
             kind: RoleArtifactSourceKindV1::LocalWasmGz
         }
-    ));
+    );
 }
 
 #[test]
@@ -5594,12 +5588,12 @@ fn check_promotion_readiness_rejects_blank_readiness_id() {
     };
 
     let err = check_promotion_readiness(&request).expect_err("blank readiness id should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionReadinessError::MissingRequiredField {
             field: "readiness_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -5821,10 +5815,10 @@ fn promoted_deployment_plan_transform_requires_source_build_materialization_evid
     let err = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
         .expect_err("source-build transform should require materialization evidence");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::MaterializationRoleMissing { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5849,10 +5843,10 @@ fn promoted_deployment_plan_transform_rejects_duplicate_materialization_evidence
     let err = promoted_deployment_plan_transform_from_inputs_with_materialization(&request)
         .expect_err("duplicate materialization evidence should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::DuplicateMaterializationRole { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -5898,10 +5892,10 @@ fn promoted_deployment_plan_rejects_blocked_readiness() {
 
     let err =
         promoted_deployment_plan_from_inputs(&request).expect_err("blocked readiness should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::ReadinessBlocked { blocker_count: 1 }
-    ));
+    );
 }
 
 #[test]
@@ -5916,12 +5910,12 @@ fn promoted_deployment_plan_rejects_blank_plan_id() {
 
     let err =
         promoted_deployment_plan_from_inputs(&request).expect_err("blank plan id should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionPlanTransformError::MissingRequiredField {
             field: "promoted_plan_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -5981,10 +5975,7 @@ fn promotion_readiness_validation_rejects_status_blocker_mismatch() {
     readiness.status = PromotionReadinessStatusV1::Blocked;
 
     let err = validate_promotion_readiness(&readiness).expect_err("status should match blockers");
-    assert!(matches!(
-        err,
-        PromotionReadinessError::StatusBlockerMismatch { .. }
-    ));
+    std::assert_matches!(err, PromotionReadinessError::StatusBlockerMismatch { .. });
 }
 
 #[test]
@@ -5996,12 +5987,12 @@ fn promotion_readiness_validation_rejects_stale_digest() {
 
     let err =
         validate_promotion_readiness(&readiness).expect_err("stale readiness digest should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionReadinessError::LinkageMismatch {
             field: "promotion_readiness_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -6012,10 +6003,10 @@ fn promotion_readiness_validation_rejects_duplicate_roles() {
     readiness.roles.push(readiness.roles[0].clone());
 
     let err = validate_promotion_readiness(&readiness).expect_err("duplicate role should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionReadinessError::DuplicateRole { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -6027,10 +6018,10 @@ fn promotion_readiness_validation_rejects_restage_state_mismatch() {
     readiness.roles[0].restage_required = true;
 
     let err = validate_promotion_readiness(&readiness).expect_err("restage state should match");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionReadinessError::RestageStateMismatch { role } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -6041,12 +6032,12 @@ fn promotion_readiness_validation_rejects_bad_digest_shape() {
     readiness.roles[0].target_wasm_gz_sha256 = Some("NOT-A-DIGEST".to_string());
 
     let err = validate_promotion_readiness(&readiness).expect_err("digest should be checked");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionReadinessError::InvalidSha256Digest {
             field: "target_wasm_gz_sha256"
         }
-    ));
+    );
 }
 
 #[test]
@@ -6058,13 +6049,13 @@ fn promotion_readiness_validation_rejects_warning_in_blockers() {
     readiness.blockers[0].severity = SafetySeverityV1::Warning;
 
     let err = validate_promotion_readiness(&readiness).expect_err("blockers must be hard failures");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionReadinessError::FindingSeverityMismatch {
             field: "blockers",
             severity: SafetySeverityV1::Warning
         }
-    ));
+    );
 }
 
 #[test]
@@ -6495,10 +6486,10 @@ fn deployment_execution_preflight_validation_rejects_mutated_status() {
     let err = validate_deployment_execution_preflight(&preflight)
         .expect_err("ready status with blockers should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         DeploymentExecutionPreflightError::StatusBlockerMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -6519,13 +6510,13 @@ fn deployment_execution_preflight_validation_rejects_source_check_mismatch() {
     let err = validate_deployment_execution_preflight_for_check(&check, &preflight)
         .expect_err("preflight from another plan should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         DeploymentExecutionPreflightError::SourceCheckMismatch {
             field: "plan_id",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -6554,12 +6545,12 @@ fn deployment_execution_preflight_validation_rejects_capability_inconsistency() 
     let err = validate_deployment_execution_preflight(&preflight)
         .expect_err("missing non-required capability should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         DeploymentExecutionPreflightError::MissingCapabilityNotRequired {
             capability: DeploymentExecutorCapabilityV1::InstallCode
         }
-    ));
+    );
 }
 
 #[test]
@@ -6838,10 +6829,7 @@ fn promotion_wasm_store_identity_report_validation_rejects_stale_blockers() {
     let err = validate_promotion_wasm_store_identity_report(&report)
         .expect_err("stale blockers should fail");
 
-    assert!(matches!(
-        err,
-        PromotionWasmStoreIdentityReportError::BlockerMismatch
-    ));
+    std::assert_matches!(err, PromotionWasmStoreIdentityReportError::BlockerMismatch);
 }
 
 #[test]
@@ -6858,12 +6846,12 @@ fn promotion_wasm_store_identity_report_validation_rejects_stale_digest() {
     let err = validate_promotion_wasm_store_identity_report(&report)
         .expect_err("stale wasm-store identity digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionWasmStoreIdentityReportError::LinkageMismatch {
             field: "wasm_store_identity_report_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -6879,10 +6867,10 @@ fn promotion_wasm_store_identity_report_rejects_staging_schema_drift() {
     )
     .expect_err("staging receipt schema drift should fail before projection");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionWasmStoreIdentityReportError::StagingReceiptSchemaVersionMismatch { .. }
-    ));
+    );
 }
 
 #[test]
@@ -7028,11 +7016,11 @@ fn promotion_wasm_store_catalog_verification_rejects_duplicate_catalog_locator()
         })
         .expect_err("duplicate catalog locator should fail before verification");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionWasmStoreCatalogVerificationError::DuplicateLocator { locator }
             if locator == "root:aaaaa-aa:bootstrap"
-    ));
+    );
 }
 
 #[test]
@@ -7049,10 +7037,10 @@ fn promotion_wasm_store_catalog_verification_validation_rejects_stale_blockers()
     let err = validate_promotion_wasm_store_catalog_verification(&verification)
         .expect_err("stale catalog blockers should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionWasmStoreCatalogVerificationError::BlockerMismatch
-    ));
+    );
 }
 
 #[test]
@@ -7063,13 +7051,13 @@ fn promotion_wasm_store_catalog_verification_validation_rejects_stale_observatio
     let err = validate_promotion_wasm_store_catalog_verification(&verification)
         .expect_err("stale catalog observation digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionWasmStoreCatalogVerificationError::RoleMismatch {
             role,
             field: "catalog_observation_digest"
         } if role == "root"
-    ));
+    );
 }
 
 #[test]
@@ -7080,12 +7068,12 @@ fn promotion_wasm_store_catalog_verification_validation_rejects_stale_digest() {
     let err = validate_promotion_wasm_store_catalog_verification(&verification)
         .expect_err("stale catalog verification digest should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PromotionWasmStoreCatalogVerificationError::LinkageMismatch {
             field: "wasm_store_catalog_verification_digest"
         }
-    ));
+    );
 }
 
 #[test]
@@ -11239,13 +11227,13 @@ fn authority_receipt_rejects_mismatched_report_provenance() {
     )
     .expect_err("mismatched report inventory should fail receipt construction");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportMismatch {
             field: "inventory_id",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -11272,12 +11260,12 @@ fn authority_receipt_rejects_mismatched_report_content() {
     )
     .expect_err("mismatched report content should fail receipt construction");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportContentMismatch {
             field: "automatic_actions",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11300,10 +11288,7 @@ fn authority_receipt_rejects_mismatched_check_id() {
     )
     .expect_err("mismatched check id should fail receipt construction");
 
-    assert!(matches!(
-        err,
-        AuthorityEvidenceError::CheckIdMismatch { .. }
-    ));
+    std::assert_matches!(err, AuthorityEvidenceError::CheckIdMismatch { .. });
 }
 
 #[test]
@@ -11327,14 +11312,14 @@ fn authority_receipt_rejects_unsupported_source_schema_version() {
     )
     .expect_err("unsupported plan schema should fail receipt construction");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::SchemaVersionMismatch {
             component: "plan",
             expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
             found
         } if found == DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1
-    ));
+    );
 }
 
 #[test]
@@ -11357,12 +11342,12 @@ fn authority_receipt_rejects_blank_receipt_identity_inputs() {
     )
     .expect_err("blank receipt operation id should fail receipt construction");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::MissingRequiredField {
             field: "receipt.operation_id",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11386,12 +11371,12 @@ fn authority_receipt_rejects_missing_report_check_provenance() {
     )
     .expect_err("receipt construction should require report check provenance");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::MissingRequiredField {
             field: "report.check_id",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11414,12 +11399,12 @@ fn authority_receipt_rejects_missing_finished_at() {
     )
     .expect_err("completed dry-run receipt should require finished_at");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::MissingRequiredField {
             field: "receipt.finished_at",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11442,14 +11427,14 @@ fn authority_receipt_rejects_finished_before_started() {
     )
     .expect_err("receipt construction should reject invalid timestamp order");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::DryRunReceiptTimestampOrder {
             field: "receipt.started_at",
             other_field: "receipt.finished_at",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -11460,13 +11445,13 @@ fn authority_dry_run_evidence_rejects_mismatched_nested_check_id() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mismatched nested check id should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::EvidenceCheckIdMismatch {
             component: "report",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -11477,14 +11462,14 @@ fn authority_dry_run_evidence_rejects_unsupported_schema_version() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("unsupported evidence schema should fail validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::SchemaVersionMismatch {
             component: "evidence",
             expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
             found
         } if found == DEPLOYMENT_TRUTH_SCHEMA_VERSION + 1
-    ));
+    );
 }
 
 #[test]
@@ -11495,13 +11480,13 @@ fn authority_dry_run_evidence_rejects_nested_schema_version_drift() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("nested schema drift should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::SchemaVersionMismatch {
             component: "report",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -11512,12 +11497,12 @@ fn authority_dry_run_evidence_rejects_blank_required_identity() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("blank evidence identity should fail validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::MissingRequiredField {
             field: "evidence.evidence_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -11528,12 +11513,12 @@ fn authority_dry_run_evidence_rejects_missing_nested_check_provenance() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("full evidence should carry nested report check provenance");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::MissingRequiredField {
             field: "report.check_id"
         }
-    ));
+    );
 }
 
 #[test]
@@ -11552,12 +11537,12 @@ fn authority_dry_run_evidence_rejects_mismatched_receipt_content() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mismatched receipt content should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportContentMismatch {
             field: "receipt.hard_failures",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11568,12 +11553,12 @@ fn authority_dry_run_evidence_rejects_mutated_report_counts() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mutated report counts should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportContentMismatch {
             field: "report.counts",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11587,12 +11572,12 @@ fn authority_dry_run_evidence_rejects_mutated_report_readiness() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mutated report readiness should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportContentMismatch {
             field: "report.apply_readiness",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11609,12 +11594,12 @@ fn authority_dry_run_evidence_rejects_mutated_unsafe_blocker_readiness() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mutated unsafe blocker readiness should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportContentMismatch {
             field: "report.apply_readiness",
         }
-    ));
+    );
 }
 
 #[test]
@@ -11635,10 +11620,10 @@ fn authority_dry_run_evidence_rejects_attempted_actions() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("attempted dry-run actions should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::DryRunReceiptAttemptedActions { count: 1 }
-    ));
+    );
 }
 
 #[test]
@@ -11649,12 +11634,12 @@ fn authority_dry_run_evidence_rejects_non_complete_receipt_status() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("non-complete dry-run receipts should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::DryRunReceiptStatus {
             status: DeploymentExecutionStatusV1::FailedBeforeMutation
         }
-    ));
+    );
 }
 
 #[test]
@@ -11668,12 +11653,12 @@ fn authority_dry_run_evidence_rejects_failed_receipt_command_result() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("failed dry-run command results should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::DryRunReceiptCommandResult {
             result: DeploymentCommandResultV1::Failed { .. }
         }
-    ));
+    );
 }
 
 #[test]
@@ -11684,10 +11669,7 @@ fn authority_dry_run_evidence_rejects_complete_receipt_without_finished_at() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("complete dry-run receipts should record finished_at");
 
-    assert!(matches!(
-        err,
-        AuthorityEvidenceError::DryRunReceiptMissingFinishedAt
-    ));
+    std::assert_matches!(err, AuthorityEvidenceError::DryRunReceiptMissingFinishedAt);
 }
 
 #[test]
@@ -11698,14 +11680,14 @@ fn authority_dry_run_evidence_rejects_generated_at_mismatch() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("evidence generated_at should match receipt completion time");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::EvidenceGeneratedAtMismatch {
             evidence_value,
             receipt_value,
         } if evidence_value == "2026-05-23T00:00:02Z"
             && receipt_value == "2026-05-23T00:00:01Z"
-    ));
+    );
 }
 
 #[test]
@@ -11716,14 +11698,14 @@ fn authority_dry_run_evidence_rejects_receipt_finished_before_started() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("dry-run receipt finish time should not precede start time");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::DryRunReceiptTimestampOrder {
             field: "receipt.started_at",
             other_field: "receipt.finished_at",
             ..
         }
-    ));
+    );
 }
 
 #[test]
@@ -11737,12 +11719,12 @@ fn authority_dry_run_evidence_rejects_mismatched_controller_observations() {
     let err = validate_authority_dry_run_evidence(&evidence)
         .expect_err("mismatched controller observations should fail evidence validation");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         AuthorityEvidenceError::PlanReportContentMismatch {
             field: "receipt.verified_controller_observations",
         }
-    ));
+    );
 }
 
 #[test]
@@ -12778,7 +12760,7 @@ fn sample_build_recipe_identity() -> BuildRecipeIdentityV1 {
         cargo_profile: "debug".to_string(),
         cargo_features_digest: sample_sha256("1"),
         cargo_lock_digest: sample_sha256("2"),
-        rust_toolchain: "1.88.0".to_string(),
+        rust_toolchain: "1.96.0".to_string(),
         builder_version: "canic-build-v1".to_string(),
         target_triple: "wasm32-unknown-unknown".to_string(),
         linker_identity: "rust-lld".to_string(),

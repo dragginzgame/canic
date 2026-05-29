@@ -37,18 +37,18 @@ fn parses_candid_service_endpoints() {
     );
     assert!(canic_update.modes.is_empty());
     assert_eq!(canic_update.arguments.len(), 1);
-    assert!(matches!(
+    std::assert_matches!(
         &canic_update.arguments[0],
         EndpointType::Named {
             name,
             resolved: Some(_),
             ..
         } if name == "Nested"
-    ));
-    assert!(matches!(
+    );
+    std::assert_matches!(
         &canic_update.returns[0],
         EndpointType::Variant { cases, .. } if cases.len() == 2
-    ));
+    );
 }
 
 // Ensure multiline argument lists are parsed as structured endpoint types.
@@ -70,17 +70,17 @@ record {
     assert_eq!(endpoints[0].name, "import");
     assert!(endpoints[0].candid.starts_with("\"import\" : "));
     assert_eq!(endpoints[0].arguments.len(), 1);
-    assert!(matches!(
+    std::assert_matches!(
         &endpoints[0].arguments[0],
         EndpointType::Record { fields, .. }
             if fields.len() == 1 && fields[0].label == "payload"
-    ));
-    assert!(matches!(
+    );
+    std::assert_matches!(
         &endpoints[0].returns[0],
         EndpointType::Variant { cases, .. }
             if cases.iter().any(|case| case.label == "Ok")
                 && cases.iter().any(|case| case.label == "Err")
-    ));
+    );
 }
 
 // Ensure multiple arguments retain cardinality and named type structure.
@@ -97,15 +97,15 @@ service : {
 
     assert_eq!(endpoints.len(), 1);
     assert_eq!(endpoints[0].arguments.len(), 3);
-    assert!(matches!(
+    std::assert_matches!(
         &endpoints[0].arguments[0],
         EndpointType::Optional {
             cardinality: EndpointCardinality::Optional,
             inner,
             ..
         } if matches!(inner.as_ref(), EndpointType::Primitive { name, .. } if name == "text")
-    ));
-    assert!(matches!(
+    );
+    std::assert_matches!(
         &endpoints[0].arguments[1],
         EndpointType::Record { fields, .. }
             if fields.iter().any(|field| matches!(
@@ -115,15 +115,15 @@ service : {
                     ..
                 }
             ))
-    ));
-    assert!(matches!(
+    );
+    std::assert_matches!(
         &endpoints[0].arguments[2],
         EndpointType::Named {
             name,
             resolved: Some(_),
             ..
         } if name == "PageRequest"
-    ));
+    );
 }
 
 // Ensure fields named service before the top-level service do not confuse discovery.
@@ -256,7 +256,7 @@ fn rejects_did_option() {
     ])
     .expect_err("did override should be removed");
 
-    assert!(matches!(err, EndpointsCommandError::Usage(_)));
+    std::assert_matches!(err, EndpointsCommandError::Usage(_));
 }
 
 // Ensure explicit role fallback is not part of fleet-scoped endpoint lookup.
@@ -270,5 +270,5 @@ fn rejects_role_option() {
     ])
     .expect_err("role override should be removed");
 
-    assert!(matches!(err, EndpointsCommandError::Usage(_)));
+    std::assert_matches!(err, EndpointsCommandError::Usage(_));
 }

@@ -131,10 +131,10 @@ mod tests {
 
     #[test]
     fn decode_hex_rejects_invalid_input() {
-        assert!(matches!(decode_hex("f"), Err(DecodeHexError::OddLength(1))));
-        assert!(matches!(
+        std::assert_matches!(decode_hex("f"), Err(DecodeHexError::OddLength(1)));
+        std::assert_matches!(
             decode_hex("0g"),
             Err(DecodeHexError::InvalidDigit { index: 1, .. })
-        ));
+        );
     }
 }

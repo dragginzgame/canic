@@ -970,7 +970,7 @@ mod tests {
 
         let args = make_args(Vec::new());
         let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
-        assert!(matches!(plan, AccessPlan::None));
+        std::assert_matches!(plan, AccessPlan::None);
 
         let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
             BuiltinPredicate::AppAllowsUpdates,

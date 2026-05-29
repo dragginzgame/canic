@@ -100,7 +100,7 @@ fn topology_stability_rejects_drift() {
     let err =
         ensure_topology_stable(&discovery, &pre_snapshot).expect_err("topology drift should fail");
 
-    assert!(matches!(err, SnapshotManifestError::TopologyChanged { .. }));
+    std::assert_matches!(err, SnapshotManifestError::TopologyChanged { .. });
 }
 
 // Ensure the backup crate owns snapshot journal, checksum, and manifest capture.

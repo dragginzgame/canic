@@ -85,7 +85,7 @@ fn invalid_backup_plan_is_not_written() {
 
     let plan_path = layout.backup_plan_path();
     fs::remove_dir_all(root).ok();
-    assert!(matches!(err, PersistenceError::InvalidBackupPlan(_)));
+    std::assert_matches!(err, PersistenceError::InvalidBackupPlan(_));
     assert!(!plan_path.exists());
 }
 
@@ -122,7 +122,7 @@ fn invalid_execution_journal_is_not_written() {
 
     let journal_path = layout.execution_journal_path();
     fs::remove_dir_all(root).ok();
-    assert!(matches!(err, PersistenceError::InvalidExecutionJournal(_)));
+    std::assert_matches!(err, PersistenceError::InvalidExecutionJournal(_));
     assert!(!journal_path.exists());
 }
 
@@ -168,10 +168,7 @@ fn execution_integrity_rejects_plan_journal_operation_mismatch() {
         .expect_err("operation mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
-        err,
-        PersistenceError::PlanJournalOperationMismatch { .. }
-    ));
+    std::assert_matches!(err, PersistenceError::PlanJournalOperationMismatch { .. });
 }
 
 // Ensure terminal mutating operations cannot be accepted without receipts.
@@ -198,13 +195,13 @@ fn execution_integrity_rejects_completed_mutation_without_receipt() {
         .expect_err("missing mutation receipt should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PersistenceError::ExecutionOperationMissingReceipt {
             sequence: 4,
             state,
         } if state == "Completed"
-    ));
+    );
 }
 
 // Ensure retry history cannot hide a stale terminal receipt/state mismatch.
@@ -260,13 +257,13 @@ fn execution_integrity_requires_latest_mutation_receipt_to_match_state() {
         .expect_err("latest receipt mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PersistenceError::ExecutionOperationMissingReceipt {
             sequence: 4,
             state,
         } if state == "Failed"
-    ));
+    );
 }
 
 // Ensure terminal operation timestamps cannot drift from their durable receipts.
@@ -303,10 +300,10 @@ fn execution_integrity_requires_terminal_timestamp_to_match_receipt() {
         .expect_err("receipt timestamp mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PersistenceError::ExecutionOperationReceiptTimestampMismatch { sequence: 4 }
-    ));
+    );
 }
 
 // Ensure invalid manifests are rejected before writing.
@@ -323,7 +320,7 @@ fn invalid_manifest_is_not_written() {
 
     let manifest_path = layout.manifest_path();
     fs::remove_dir_all(root).ok();
-    assert!(matches!(err, PersistenceError::InvalidManifest(_)));
+    std::assert_matches!(err, PersistenceError::InvalidManifest(_));
     assert!(!manifest_path.exists());
 }
 
@@ -369,7 +366,7 @@ fn integrity_rejects_backup_id_mismatch() {
         .expect_err("backup id mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(err, PersistenceError::BackupIdMismatch { .. }));
+    std::assert_matches!(err, PersistenceError::BackupIdMismatch { .. });
 }
 
 // Ensure manifest and journal topology receipts cannot silently diverge.
@@ -392,10 +389,10 @@ fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
         .expect_err("topology receipt mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PersistenceError::ManifestJournalTopologyReceiptMismatch { .. }
-    ));
+    );
 }
 
 // Ensure incomplete journals cannot pass backup integrity verification.
@@ -417,7 +414,7 @@ fn integrity_rejects_non_durable_artifacts() {
         .expect_err("non-durable artifact should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(err, PersistenceError::NonDurableArtifact { .. }));
+    std::assert_matches!(err, PersistenceError::NonDurableArtifact { .. });
 }
 
 // Ensure journals cannot include artifacts outside the manifest boundary.
@@ -441,10 +438,7 @@ fn integrity_rejects_unexpected_journal_artifacts() {
         .expect_err("unexpected journal artifact should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
-        err,
-        PersistenceError::UnexpectedJournalArtifact { .. }
-    ));
+    std::assert_matches!(err, PersistenceError::UnexpectedJournalArtifact { .. });
 }
 
 // Ensure manifest snapshot checksums cannot drift from the durable journal.
@@ -467,10 +461,10 @@ fn integrity_rejects_manifest_journal_checksum_mismatch() {
         .expect_err("manifest checksum mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PersistenceError::ManifestJournalChecksumMismatch { .. }
-    ));
+    );
 }
 
 // Ensure manifest and journal artifact paths cannot silently diverge.
@@ -493,10 +487,10 @@ fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
         .expect_err("manifest journal artifact path mismatch should fail");
 
     fs::remove_dir_all(root).expect("remove temp layout");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         PersistenceError::ManifestJournalArtifactPathMismatch { .. }
-    ));
+    );
 }
 
 // Build one valid manifest for persistence tests.

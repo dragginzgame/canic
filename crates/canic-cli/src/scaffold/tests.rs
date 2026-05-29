@@ -54,17 +54,17 @@ fn confirm_scaffold_rejects_empty_response() {
     let err = confirm_scaffold(&options, io::Cursor::new(b"\n"), &mut output)
         .expect_err("empty response should cancel");
 
-    assert!(matches!(err, ScaffoldCommandError::Cancelled));
+    std::assert_matches!(err, ScaffoldCommandError::Cancelled);
 }
 
 // Ensure invalid scaffold names are rejected before filesystem writes.
 #[test]
 fn rejects_invalid_project_names() {
     for name in ["MyApp", "my-app", "_app", "app_", "app__one", "1app"] {
-        assert!(matches!(
+        std::assert_matches!(
             ScaffoldOptions::parse([OsString::from(name)]),
             Err(ScaffoldCommandError::Usage(_))
-        ));
+        );
     }
 }
 
@@ -130,5 +130,5 @@ fn scaffold_project_rejects_existing_target() {
     let err = scaffold_project(&options).expect_err("existing scaffold should fail");
 
     fs::remove_dir_all(root).expect("remove scaffold temp root");
-    assert!(matches!(err, ScaffoldCommandError::TargetExists(_)));
+    std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));
 }

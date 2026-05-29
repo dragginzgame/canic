@@ -71,11 +71,11 @@ fn rejects_preflight_receipts_for_different_plan() {
         .accept_preflight_receipts_at(&receipts, Some("unix:10".to_string()))
         .expect_err("different plan rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupExecutionJournalError::PreflightPlanMismatch { expected, actual }
             if expected == "plan-001" && actual == "plan-other"
-    ));
+    );
 }
 
 // Ensure backup execution transitions always carry audit timestamps.
@@ -155,13 +155,13 @@ fn rejects_out_of_order_mutation() {
         .mark_operation_pending_at(5, Some("unix:20".to_string()))
         .expect_err("out-of-order operation rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupExecutionJournalError::OutOfOrderOperationTransition {
             requested: 5,
             next: 4
         }
-    ));
+    );
 }
 
 // Ensure completed stop creates an explicit restart-required state.
@@ -192,10 +192,7 @@ fn restart_required_must_match_operation_state() {
         .validate()
         .expect_err("restart-required drift rejects");
 
-    assert!(matches!(
-        err,
-        BackupExecutionJournalError::RestartRequiredMismatch
-    ));
+    std::assert_matches!(err, BackupExecutionJournalError::RestartRequiredMismatch);
 }
 
 // Ensure snapshot creation receipts must carry the created snapshot id.
@@ -305,11 +302,11 @@ fn rejects_different_preflight_after_acceptance() {
         .accept_preflight_bundle_at("preflight-other".to_string(), Some("unix:11".to_string()))
         .expect_err("different preflight rejects");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupExecutionJournalError::PreflightAlreadyAccepted { existing, attempted }
             if existing == PREFLIGHT_ID && attempted == "preflight-other"
-    ));
+    );
 }
 
 fn journal() -> BackupExecutionJournal {

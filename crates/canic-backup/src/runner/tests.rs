@@ -169,14 +169,14 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
         .expect("read failed execution journal");
     let failed_summary = failed_journal.resume_summary();
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupRunnerError::CommandFailed {
             sequence: 5,
             status,
             message,
         } if status == "snapshot" && message == "simulated snapshot failure"
-    ));
+    );
     assert!(failed_summary.restart_required);
     assert_eq!(failed_summary.failed_operations, 1);
     assert_eq!(
@@ -226,10 +226,10 @@ fn runner_rejects_locked_execution_journal_before_running_commands() {
         .expect_err("locked journal rejects");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupRunnerError::JournalLocked { lock_path } if lock_path.ends_with("backup-execution-journal.json.lock")
-    ));
+    );
     assert!(executor.commands.is_empty());
 }
 
@@ -250,13 +250,13 @@ fn runner_preflight_failure_leaves_mutation_blocked() {
     let summary = journal.resume_summary();
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         BackupRunnerError::PreflightFailed {
             status,
             message,
         } if status == "preflight" && message == "simulated preflight failure"
-    ));
+    );
     assert_eq!(executor.commands, vec![format!("status:{APP}")]);
     assert!(!summary.preflight_accepted);
     assert_eq!(summary.completed_operations, 0);

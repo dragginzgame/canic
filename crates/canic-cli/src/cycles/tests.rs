@@ -25,14 +25,14 @@ fn parses_duration_selectors() {
         assert_eq!(options.since_seconds, expected);
     }
 
-    assert!(matches!(
+    std::assert_matches!(
         options::CyclesOptions::parse_info([
             OsString::from("test"),
             OsString::from("--since"),
             OsString::from("0h"),
         ]),
         Err(CyclesCommandError::InvalidDuration(_))
-    ));
+    );
 }
 
 #[test]

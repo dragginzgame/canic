@@ -50,13 +50,13 @@ fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
         .validate()
         .expect_err("duplicate receipt attempt should reject");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::DuplicateOperationReceiptAttempt {
             sequence: 0,
             attempt: 1,
         }
-    ));
+    );
 }
 
 // Ensure command receipts preserve the durable command/output audit envelope.
@@ -159,10 +159,10 @@ fn assert_receipt_missing_field(
         .record_operation_receipt(receipt)
         .expect_err("receipt field should be required");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::MissingField(missing) if missing == field
-    ));
+    );
     assert_eq!(journal.operation_receipts.len(), receipt_count);
 }
 
@@ -732,10 +732,10 @@ fn apply_journal_validation_rejects_unsupported_verification_kind() {
         .validate()
         .expect_err("unsupported verification kind should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::UnsupportedVerificationKind { sequence: 0, .. }
-    ));
+    );
 }
 
 // Ensure apply journal validation rejects inconsistent state counts.
@@ -750,13 +750,13 @@ fn apply_journal_validation_rejects_count_mismatch() {
 
     let err = journal.validate().expect_err("count mismatch should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::CountMismatch {
             field: "blocked_operations",
             ..
         }
-    ));
+    );
 }
 
 // Ensure supplied operation-kind counts must match concrete journal rows.
@@ -777,14 +777,14 @@ fn apply_journal_validation_rejects_operation_kind_count_mismatch() {
         .validate()
         .expect_err("operation-kind count mismatch should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::CountMismatch {
             field: "operation_counts.snapshot_uploads",
             reported: 0,
             actual: 1,
         }
-    ));
+    );
 }
 
 // Ensure apply journal validation rejects duplicate operation sequences.
@@ -801,10 +801,7 @@ fn apply_journal_validation_rejects_duplicate_sequences() {
         .validate()
         .expect_err("duplicate sequence should fail");
 
-    assert!(matches!(
-        err,
-        RestoreApplyJournalError::DuplicateSequence(0)
-    ));
+    std::assert_matches!(err, RestoreApplyJournalError::DuplicateSequence(0));
 }
 
 // Ensure failed journal operations must explain why execution failed.
@@ -824,10 +821,7 @@ fn apply_journal_validation_rejects_failed_without_reason() {
         .validate()
         .expect_err("failed operation without reason should fail");
 
-    assert!(matches!(
-        err,
-        RestoreApplyJournalError::FailureReasonRequired(0)
-    ));
+    std::assert_matches!(err, RestoreApplyJournalError::FailureReasonRequired(0));
 }
 
 // Ensure claiming a ready operation marks it pending and keeps it resumable.
@@ -947,10 +941,10 @@ fn apply_journal_validation_rejects_empty_state_updated_at() {
         .validate()
         .expect_err("empty state update marker should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::MissingField("operations[].state_updated_at")
-    ));
+    );
 }
 
 // Ensure operation-specific fields are required before command rendering.
@@ -961,28 +955,28 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
     let err = upload
         .validate()
         .expect_err("upload without artifact path should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::OperationMissingField {
             sequence: 0,
             operation: RestoreApplyOperationKind::UploadSnapshot,
             field: "operations[].artifact_path",
         }
-    ));
+    );
 
     let mut load = command_preview_journal(RestoreApplyOperationKind::LoadSnapshot, None);
     load.operations[0].snapshot_id = None;
     let err = load
         .validate()
         .expect_err("load without snapshot id should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::OperationMissingField {
             sequence: 0,
             operation: RestoreApplyOperationKind::LoadSnapshot,
             field: "operations[].snapshot_id",
         }
-    ));
+    );
 
     let mut verify =
         command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
@@ -990,14 +984,14 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
     let err = verify
         .validate()
         .expect_err("missing verification kind should fail");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::OperationMissingField {
             sequence: 0,
             operation: RestoreApplyOperationKind::VerifyMember,
             field: "operations[].verification_kind",
         }
-    ));
+    );
 }
 
 // Ensure unclaim fails when the next transitionable operation is not pending.
@@ -1009,7 +1003,7 @@ fn apply_journal_mark_next_operation_ready_rejects_without_pending_operation() {
         .mark_next_operation_ready_at(None)
         .expect_err("ready operation should not unclaim");
 
-    assert!(matches!(err, RestoreApplyJournalError::NoPendingOperation));
+    std::assert_matches!(err, RestoreApplyJournalError::NoPendingOperation);
     assert_eq!(journal.ready_operations, 1);
     assert_eq!(journal.pending_operations, 0);
 }
@@ -1045,13 +1039,13 @@ fn apply_journal_mark_pending_rejects_out_of_order_operation() {
         .expect_err("out-of-order pending claim should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::OutOfOrderOperationTransition {
             requested: 1,
             next: 0
         }
-    ));
+    );
     assert_eq!(journal.pending_operations, 0);
     assert_eq!(journal.ready_operations, 10);
 }
@@ -1139,13 +1133,13 @@ fn apply_journal_mark_completed_rejects_out_of_order_operation() {
         .expect_err("out-of-order operation should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::OutOfOrderOperationTransition {
             requested: 1,
             next: 0
         }
-    ));
+    );
     assert_eq!(journal.completed_operations, 0);
     assert_eq!(journal.ready_operations, 10);
 }
@@ -1248,8 +1242,8 @@ fn apply_journal_rejects_blocked_operation_completion() {
         .mark_operation_completed_at(0, None)
         .expect_err("blocked operation should not complete");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreApplyJournalError::InvalidOperationTransition { sequence: 0, .. }
-    ));
+    );
 }

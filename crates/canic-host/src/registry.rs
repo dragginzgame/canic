@@ -410,7 +410,7 @@ mod tests {
         .to_string();
         let err = parse_registry_entries(&payload).expect_err("reject invalid response bytes");
 
-        assert!(matches!(err, RegistryParseError::InvalidResponseBytes));
+        std::assert_matches!(err, RegistryParseError::InvalidResponseBytes);
     }
 
     #[test]
@@ -425,6 +425,6 @@ mod tests {
         .to_string();
         let err = parse_registry_entries(&payload).expect_err("surface registry rejection");
 
-        assert!(matches!(err, RegistryParseError::Rejected(message) if message == "not ready"));
+        std::assert_matches!(err, RegistryParseError::Rejected(message) if message == "not ready");
     }
 }

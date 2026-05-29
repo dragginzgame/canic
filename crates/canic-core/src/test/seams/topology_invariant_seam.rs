@@ -36,5 +36,5 @@ fn topology_invariants_live_in_policy() {
     let err = TopologyPolicy::assert_index_consistent_with_registry(&registry_data, &mismatched)
         .expect_err("policy should detect index divergence");
 
-    assert!(matches!(err, TopologyPolicyError::IndexRoleMismatch { .. }));
+    std::assert_matches!(err, TopologyPolicyError::IndexRoleMismatch { .. });
 }

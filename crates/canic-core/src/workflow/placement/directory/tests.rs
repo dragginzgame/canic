@@ -367,10 +367,10 @@ fn recover_entry_repairs_valid_stale_provisional_child() {
             bound_at: IcOps::now_secs(),
         }
     );
-    assert!(matches!(
+    std::assert_matches!(
         DirectoryRegistryOps::lookup_entry("projects", "alpha"),
         Some(DirectoryEntryStatusResponse::Bound { instance_pid, .. }) if instance_pid == child_pid
-    ));
+    );
 }
 
 #[test]

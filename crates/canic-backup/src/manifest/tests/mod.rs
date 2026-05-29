@@ -85,10 +85,10 @@ fn invalid_snapshot_checksum_fails_validation() {
         .validate()
         .expect_err("invalid snapshot checksum should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::InvalidHash("deployment.members[].source_snapshot.checksum")
-    ));
+    );
 }
 
 // Build one valid deployment member for manifest validation tests.
@@ -128,10 +128,7 @@ fn topology_hash_mismatch_fails_validation() {
 
     let err = manifest.validate().expect_err("mismatch should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::TopologyHashMismatch { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::TopologyHashMismatch { .. });
 }
 
 #[test]
@@ -143,10 +140,10 @@ fn missing_member_verification_checks_fail_validation() {
         .validate()
         .expect_err("missing member checks should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::MissingMemberVerificationChecks(_)
-    ));
+    );
 }
 
 #[test]
@@ -160,10 +157,7 @@ fn backup_unit_roles_must_exist_in_deployment() {
         .validate()
         .expect_err("unknown backup unit role should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::UnknownBackupUnitRole { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::UnknownBackupUnitRole { .. });
 }
 
 #[test]
@@ -178,10 +172,7 @@ fn backup_unit_ids_must_be_unique() {
         .validate()
         .expect_err("duplicate unit IDs should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::DuplicateBackupUnitId(_)
-    ));
+    std::assert_matches!(err, ManifestValidationError::DuplicateBackupUnitId(_));
 }
 
 #[test]
@@ -195,10 +186,7 @@ fn backup_unit_roles_must_be_unique() {
         .validate()
         .expect_err("duplicate backup unit role should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::DuplicateBackupUnitRole { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::DuplicateBackupUnitRole { .. });
 }
 
 #[test]
@@ -211,10 +199,10 @@ fn every_deployment_role_must_be_covered_by_a_backup_unit() {
         .validate()
         .expect_err("uncovered app role should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::BackupUnitCoverageMissingRole { .. }
-    ));
+    );
 }
 
 #[test]
@@ -228,10 +216,7 @@ fn deployment_verification_roles_must_exist_in_deployment() {
         .validate()
         .expect_err("unknown deployment verification role should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::UnknownVerificationRole { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::UnknownVerificationRole { .. });
 }
 
 #[test]
@@ -245,10 +230,7 @@ fn member_verification_check_roles_must_exist_in_deployment() {
         .validate()
         .expect_err("unknown member verification check role should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::UnknownVerificationRole { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::UnknownVerificationRole { .. });
 }
 
 #[test]
@@ -265,10 +247,10 @@ fn verification_check_roles_must_be_unique() {
         .validate()
         .expect_err("duplicate verification role filter should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::DuplicateVerificationCheckRole { .. }
-    ));
+    );
 }
 
 #[test]
@@ -289,10 +271,7 @@ fn member_verification_group_roles_must_exist_in_deployment() {
         .validate()
         .expect_err("unknown member verification role should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::UnknownVerificationRole { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::UnknownVerificationRole { .. });
 }
 
 #[test]
@@ -311,10 +290,10 @@ fn member_verification_group_roles_must_be_unique() {
         .validate()
         .expect_err("duplicate member verification role should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::DuplicateMemberVerificationRole(_)
-    ));
+    );
 }
 
 #[test]
@@ -328,10 +307,7 @@ fn nested_member_verification_roles_must_exist_in_deployment() {
         .validate()
         .expect_err("unknown nested verification role should fail");
 
-    assert!(matches!(
-        err,
-        ManifestValidationError::UnknownVerificationRole { .. }
-    ));
+    std::assert_matches!(err, ManifestValidationError::UnknownVerificationRole { .. });
 }
 
 #[test]
@@ -344,10 +320,10 @@ fn subtree_unit_must_be_closed_under_descendants() {
         .validate()
         .expect_err("subtree unit omitting app child should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::SubtreeBackupUnitMissingDescendant { .. }
-    ));
+    );
 }
 
 #[test]
@@ -366,10 +342,10 @@ fn subtree_unit_must_be_connected() {
         .validate()
         .expect_err("disconnected subtree unit should fail");
 
-    assert!(matches!(
+    std::assert_matches!(
         err,
         ManifestValidationError::SubtreeBackupUnitNotConnected { .. }
-    ));
+    );
 }
 
 #[test]

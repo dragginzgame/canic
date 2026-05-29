@@ -64,7 +64,7 @@ fn fixed_identity_member_cannot_be_remapped() {
     let err = RestorePlanner::plan(&manifest, Some(&mapping))
         .expect_err("fixed member remap should fail");
 
-    assert!(matches!(err, RestorePlanError::FixedIdentityRemap { .. }));
+    std::assert_matches!(err, RestorePlanError::FixedIdentityRemap { .. });
 }
 
 // Ensure relocatable identities may be mapped when all members are covered.
@@ -328,7 +328,7 @@ fn mapped_restore_requires_complete_mapping() {
     let err = RestorePlanner::plan(&manifest, Some(&mapping))
         .expect_err("incomplete mapping should fail");
 
-    assert!(matches!(err, RestorePlanError::MissingMappingSource(_)));
+    std::assert_matches!(err, RestorePlanError::MissingMappingSource(_));
 }
 
 // Ensure mappings cannot silently include canisters outside the manifest.
@@ -356,7 +356,7 @@ fn mapped_restore_rejects_unknown_mapping_sources() {
     let err = RestorePlanner::plan(&manifest, Some(&mapping))
         .expect_err("unknown mapping source should fail");
 
-    assert!(matches!(err, RestorePlanError::UnknownMappingSource(_)));
+    std::assert_matches!(err, RestorePlanError::UnknownMappingSource(_));
 }
 
 // Ensure duplicate target mappings fail before a plan is produced.
@@ -379,5 +379,5 @@ fn duplicate_mapping_targets_fail_validation() {
     let err =
         RestorePlanner::plan(&manifest, Some(&mapping)).expect_err("duplicate targets should fail");
 
-    assert!(matches!(err, RestorePlanError::DuplicateMappingTarget(_)));
+    std::assert_matches!(err, RestorePlanError::DuplicateMappingTarget(_));
 }

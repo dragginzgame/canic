@@ -41,7 +41,7 @@ fn parse_rejects_conflicting_manifest_sources() {
     ])
     .expect_err("conflicting sources should fail");
 
-    assert!(matches!(err, RestoreCommandError::Usage(_)));
+    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }
 
 // Ensure verified planning requires the canonical backup layout source.
@@ -54,7 +54,7 @@ fn parse_rejects_require_verified_with_manifest_source() {
     ])
     .expect_err("verification should require a backup layout");
 
-    assert!(matches!(err, RestoreCommandError::Usage(_)));
+    std::assert_matches!(err, RestoreCommandError::Usage(_));
 }
 
 // Ensure restore planning can require manifest, journal, and artifact integrity.
@@ -104,7 +104,7 @@ fn plan_restore_rejects_unverified_backup_layout() {
     let err = plan_restore(&options).expect_err("missing journal should fail");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert!(matches!(err, RestoreCommandError::Persistence(_)));
+    std::assert_matches!(err, RestoreCommandError::Persistence(_));
 }
 
 // Ensure the CLI planning path validates manifests and applies mappings.
@@ -181,13 +181,13 @@ fn run_restore_plan_require_restore_ready_writes_plan_then_fails() {
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert!(!plan.readiness_summary.ready);
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::RestoreNotReady {
             reasons,
             ..
         } if reasons == ["missing-snapshot-checksum"]
-    ));
+    );
 }
 
 // Ensure restore-readiness gating accepts plans with complete snapshot artifacts.
@@ -272,13 +272,13 @@ fn prepared_plan_path_reports_prepare_action_when_missing() {
     let err = require_prepared_plan_path("1", path.clone()).expect_err("missing plan rejects");
 
     fs::remove_dir_all(root).ok();
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::PreparedPlanMissing {
             backup_ref,
             path: missing_path,
         } if backup_ref == "1" && missing_path == path.display().to_string()
-    ));
+    );
 }
 
 // Ensure prepared runner references fail with an operator action, not raw IO.
@@ -291,11 +291,11 @@ fn prepared_journal_path_reports_prepare_action_when_missing() {
         require_prepared_journal_path("1", path.clone()).expect_err("missing journal rejects");
 
     fs::remove_dir_all(root).ok();
-    assert!(matches!(
+    std::assert_matches!(
         err,
         RestoreCommandError::PreparedJournalMissing {
             backup_ref,
             path: missing_path,
         } if backup_ref == "1" && missing_path == path.display().to_string()
-    ));
+    );
 }
