@@ -10,9 +10,10 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-`0.42.14` is in hardening after the closeout audit. The
-release bar has been met for dry-run authority reconciliation while keeping
-reconciliation read-only.
+Closed as the dry-run authority reconciliation line.
+
+`0.42.14` completed closeout hardening. The release bar was met for dry-run
+authority reconciliation while keeping reconciliation read-only.
 
 0.42 depends on 0.41 establishing deployment truth objects, observed inventory,
 diffs, safety reports, and installer gating.
@@ -187,7 +188,7 @@ diffs, safety reports, and installer gating.
 
 ## Release Bar
 
-0.42 is releasable once Canic can produce a dry-run authority reconciliation
-plan from 0.41 deployment truth and explain exact external actions without
-mutating controller state. Applying safe controller changes remains optional or
-later unless explicitly promoted into this line.
+Closed. Canic can produce a dry-run authority reconciliation plan from 0.41
+deployment truth and explain exact external actions without mutating
+controller state. Applying safe controller changes remains later work unless
+explicitly promoted into a new line.

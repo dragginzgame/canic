@@ -10,13 +10,13 @@ landed, what drifted, and what remains open.
 
 ## Current State
 
-Active implementation is in closeout hardening.
+Closed with follow-ups carried into later deployment lines.
 
-0.41 has shipped the host-side deployment truth model, local observation layer,
+0.41 shipped the host-side deployment truth model, local observation layer,
 read-only operator JSON surfaces, current-install safety gates, lightweight
-phase receipts, passive resume reports, and duplicate-evidence hardening.
-Remaining work should be limited to stale documentation cleanup, focused
-validation, audit findings, and final handoff preparation.
+phase receipts, passive resume reports, and duplicate-evidence hardening. The
+closeout audit found no blockers and left authority reconciliation, executor
+semantics, promotion checks, and deployment locks to later lines.
 
 ## Implemented
 
@@ -270,9 +270,5 @@ validation, audit findings, and final handoff preparation.
 
 ## Release Bar
 
-0.41 is ready for closeout audit once focused release-readiness validation
-passes over the deployment truth surface, current-install safety gates, deploy
-CLI surfaces, and changelog/status documentation.
-
-The closeout audit should confirm the exit criterion: Canic can state what it
-plans to do, what exists, what differs, and whether it is safe to continue.
+Closed. The closeout audit confirmed the exit criterion: Canic can state what
+it plans to do, what exists, what differs, and whether it is safe to continue.

@@ -13,6 +13,7 @@
 | `2026-05-13` | `docs/audits/reports/2026-05/2026-05-13/summary.md` | complete |
 | `2026-05-14` | `docs/audits/reports/2026-05/2026-05-14/summary.md` | complete |
 | `2026-05-24` | `docs/audits/reports/2026-05/2026-05-24/summary.md` | complete |
+| `2026-05-29` | `docs/audits/reports/2026-05/2026-05-29/summary.md` | complete |
 
 ## Month-Level Status
 

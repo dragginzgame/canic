@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-27
+Last updated: 2026-05-29
 
 ## Purpose
 
@@ -9,45 +9,48 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.47.x` verified deployment registration.
-- Current release-work area: 0.47 removes the main 0.46 caveat by adding
-  receipt-backed verification for explicitly registered deployment roots.
-  The implementation must not infer root authority from CLI arguments,
-  filenames, local state alone, fleet templates, or deployment names; it needs
-  explicit root evidence carried by deployment-truth artifacts before any
-  `not_verified` root can become `verified`.
-- The previous line, `0.46`, is closed with documented caveats as a focused
-  deployment-target identity hard cut plus passive two-target comparison line.
-  Live verified-root registration, live comparison crawling, and broader
-  group/catalog/teardown/test-deployment work are deferred beyond 0.46.
-- 0.46 moved local install state to
-  `.canic/<network>/deployments/<deployment>.json`,
-  deployment truth reads state by deployment target name, old
-  `.canic/<network>/fleets/<fleet>.json` live state fails closed instead of
-  being read as deployment truth, and supplied-plan install now requires exact
-  deployment identity. The explicit `deploy register` recovery command remains
-  intentionally minimal: it writes target state for a known root, marks that
-  root `not_verified`, and does not migrate old state or claim live deployment
-  truth. No automatic migration or silent fallback exists.
-- 0.47 must preserve the 0.45 external lifecycle handoff: supplied
-  observations, consent evidence, reported external action, and passive
-  completion reports are evidence, not live deployment truth.
-  `DeploymentTruthInventory`-backed verification remains the only 0.45
-  external lifecycle artifact that may be compared as verified external
-  completion.
-- Design starts at
-  `docs/design/0.47-verified-deployment-registration/0.47-design.md`.
-- The previous active line, `0.45.x`, closed with documented caveats: no live
-  inventory crawler, no consent delivery, no external execution, and no
-  wall-clock `max_observation_age_seconds` enforcement.
-- 0.45 projected existing `CanisterControlClassV1` observations into
-  `LifecycleAuthorityV1`, partitioned them through `ExternalLifecyclePlanV1`,
-  derived passive proposal/receipt/pending/check/handoff evidence, and exposed
-  external lifecycle CLI reports without adding consent delivery, external
-  execution, or install mutation.
+- Active minor: `0.48.x` derived singleton topology and canister setup
+  simplification.
+- Current release-work area: 0.48 removes redundant authored setup surfaces.
+  `canic::build!` and `canic::start!()` read the canister role from
+  `[package.metadata.canic] role`, root-vs-non-root startup is
+  metadata-driven, and ordinary managed canisters use `canic::start!()`.
+- The 0.41-0.47 deployment-truth sequence is closed with documented caveats.
+  Treat those lines as background constraints, not current implementation
+  targets: 0.41 passive truth, 0.42 dry-run authority, 0.43 execution
+  boundary, 0.44 artifact promotion, 0.45 passive external lifecycle, 0.46
+  deployment-target identity, and 0.47 verified registered-root recovery.
+- 0.47 closed the main 0.46 caveat: a registered root starts as
+  `not_verified` and can become `verified` only through explicit
+  deployment-truth root evidence plus the guarded root-verification receipt
+  path. It did not add broad live deployment verification, live inventory
+  crawling, group/catalog UX, teardown/test-deployment flows, or root
+  rotation.
+- 0.48 setup work must not weaken the closed 0.41-0.47 boundaries. In
+  particular, package metadata is the canister role source of truth, canister
+  crates are runtime artifacts rather than reusable Rust dependencies, and
+  production `ICP_ENVIRONMENT=ic` builds avoid debug Candid sidecars/metadata
+  bloat.
+- Treat the rest of 0.48 as miscellaneous cleanup, docs, audits, and focused
+  fixes. The next substantive continuation of the 0.41-0.47 deployment-truth
+  theme should start in 0.49 rather than being expanded inside 0.48.
 
 ## Recent Work
 
+- 0.48 made `[package.metadata.canic] role` the required role source for
+  `canic::build!` and `canic::start!()`. Package-name inference and old
+  build/root macro variants were removed.
+- Root and non-root managed canisters now both use `canic::start!()`.
+  `role = "root"` selects the root lifecycle and endpoint bundle; all other
+  roles select the normal managed canister lifecycle.
+- The active setup docs were refreshed around the single normal startup
+  surface, derived singleton topology, Candid artifact behavior, and the
+  canister artifact boundary.
+- Demo fleets now include `user_hub` and `user_shard` sharding walkthrough
+  canisters with inspection-oriented endpoints, without adding them to the
+  main test flow.
+- The workspace MSRV and internal toolchain moved to Rust `1.96.0`, and tests
+  now use `std::assert_matches!` plus newer duration helpers where useful.
 - 0.47 started by making deployment-truth inventory carry explicit
   `observed_root` evidence. `DeploymentRootObservationV1` records deployment
   target, network, fleet template, root principal, observed canister ID,

@@ -130,8 +130,8 @@ Group/catalog, teardown, and test-deployment features remain deferred beyond
 
 ## Release Bar
 
-0.46 should not close until Canic can distinguish fleet templates from
-deployment targets in local state and operator-visible workflows.
+Closed. Canic distinguishes fleet templates from deployment targets in local
+state and operator-visible workflows.
 
 The minimum identity bar is:
 

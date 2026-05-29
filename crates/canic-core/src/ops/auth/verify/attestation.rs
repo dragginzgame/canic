@@ -145,7 +145,7 @@ fn verify_attestation_time_window(
         .into());
     }
 
-    if now_secs > expires_at {
+    if now_secs >= expires_at {
         return Err(AuthExpiryError::AttestationExpired {
             expires_at,
             now_secs,
@@ -338,6 +338,25 @@ mod tests {
     }
 
     #[test]
+    fn internal_invocation_claims_reject_expiry_boundary() {
+        let accepted = [CanisterRole::new("project_hub")];
+        let mut payload = payload();
+        payload.issued_at = 10;
+        payload.expires_at = 15;
+
+        let err = verify_internal_invocation_proof_claims(
+            &payload,
+            input("system_add_project_to_user", &accepted, 4),
+        )
+        .expect_err("attestation at expiry boundary must reject");
+
+        std::assert_matches!(
+            err,
+            AuthOpsError::Expiry(AuthExpiryError::AttestationExpired { .. })
+        );
+    }
+
+    #[test]
     fn role_attestation_claims_reject_future_issued_at() {
         let mut payload = role_attestation();
         payload.issued_at = 16;
@@ -363,6 +382,21 @@ mod tests {
         std::assert_matches!(
             err,
             AuthOpsError::Validation(AuthValidationError::AttestationInvalidWindow { .. })
+        );
+    }
+
+    #[test]
+    fn role_attestation_claims_reject_expiry_boundary() {
+        let mut payload = role_attestation();
+        payload.issued_at = 10;
+        payload.expires_at = 15;
+
+        let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
+            .expect_err("attestation at expiry boundary must reject");
+
+        std::assert_matches!(
+            err,
+            AuthOpsError::Expiry(AuthExpiryError::AttestationExpired { .. })
         );
     }
 }

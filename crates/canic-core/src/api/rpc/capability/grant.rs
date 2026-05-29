@@ -90,7 +90,7 @@ pub(super) fn verify_root_delegated_grant_claims(
             "delegated grant is not valid yet for current time",
         ));
     }
-    if now_secs > grant.expires_at {
+    if now_secs >= grant.expires_at {
         return Err(Error::forbidden("delegated grant has expired"));
     }
 

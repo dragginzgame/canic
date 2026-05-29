@@ -545,6 +545,22 @@ fn verify_root_delegated_grant_claims_rejects_expired_window() {
 }
 
 #[test]
+fn verify_root_delegated_grant_claims_rejects_expiry_boundary() {
+    let now_secs = 100;
+    let caller = p(2);
+    let target_canister = p(1);
+    let capability = sample_request(10);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    proof.grant.issued_at = now_secs - 20;
+    proof.grant.expires_at = now_secs;
+
+    let err =
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+            .expect_err("grant at expiry boundary must fail");
+    assert!(err.message.contains("expired"));
+}
+
+#[test]
 fn verify_root_delegated_grant_claims_rejects_key_id_mismatch() {
     let now_secs = 100;
     let caller = p(2);

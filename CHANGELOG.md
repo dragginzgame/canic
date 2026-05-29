@@ -16,9 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.6` reruns the oldest recurring auth freshness audits, confirms
+  subject-caller binding still holds, and aligns delegated grants plus
+  role/internal attestations with Canic's exclusive expiry boundary.
+
 - `0.48.5` clarifies Candid artifact behavior, prevents canister artifact
-  crates from exposing Rust library targets, and documents delegated-token
-  audience binding examples.
+  crates from exposing Rust library targets, documents delegated-token
+  audience binding examples, and aligns the closed 0.41-0.47 handoff docs.
 
 - `0.48.4` raises Canic's published MSRV to Rust `1.96.0`, using the new
   standard assertion and duration helpers for clearer diagnostics and simpler

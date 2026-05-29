@@ -194,7 +194,8 @@ Final validation passed:
 
 ## Release Bar
 
-0.45 should not close until Canic can represent user-owned or externally
-controlled lifecycle states without pretending Canic has unilateral authority,
-and can verify externally completed work against deployment-truth inventory
-evidence when an existing check artifact is supplied.
+Closed. Canic can represent user-owned or externally controlled lifecycle
+states without pretending Canic has unilateral authority, and can verify
+externally completed work against deployment-truth inventory evidence when an
+existing check artifact is supplied. Consent delivery, external execution, live
+inventory crawling, and wall-clock observation-age enforcement remain deferred.
