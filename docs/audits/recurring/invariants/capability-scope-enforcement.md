@@ -98,7 +98,7 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `access/auth.rs` | `verify_token`, `enforce_required_scope` | subject/scope ordering enforcement | High |
+| `access/auth/token.rs` | `verify_token`, `enforce_subject_binding`, `enforce_required_scope` | subject/scope ordering enforcement | High |
 | `api/rpc/capability/grant.rs` | delegated grant claim checks | capability claim validation path | Medium |
 | `workflow/rpc/request/handler/authorize.rs` | `authorize` | authorization decision surface | Medium |
 

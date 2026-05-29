@@ -12,9 +12,15 @@ present.
 
 ## Unreleased
 
-## [0.48.x] - 2026-05-28 - Derived singleton topology
+## [0.48.x] - 2026-05-28 - Clean up & Audits
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
+
+- `0.48.9` reruns the capability-scope-enforcement audit, confirms capability
+  and scope checks still run after authentication and identity binding, and
+  refreshes the recurring audit hotspot path for endpoint auth ordering. It
+  also reruns dependency hygiene and confirms published crates still avoid
+  unpublished workspace-member dependencies.
 
 - `0.48.8` reruns the token-trust-chain audit and confirms delegated-token
   verification still requires verifier-local root trust, root-certified shard

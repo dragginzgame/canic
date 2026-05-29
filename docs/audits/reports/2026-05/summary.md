@@ -133,3 +133,9 @@ May has day summaries for the currently recorded audit days.
     `auth` flags.
 40. Testkit maintainers: revisit `icp_artifact_ready_for_build` if the next
     testkit surface audit still finds no consumers outside its own tests.
+41. Capability maintainers: keep capability proof DTOs, endpoint auth ordering,
+    and root capability workflow authorization/replay changes coordinated
+    across API, ops, workflow, metrics, and tests.
+42. Package maintainers: keep `ic-testkit` restricted to internal test
+    harnesses and test/audit canisters, and keep `canic` default features
+    narrow unless a release line explicitly chooses broader defaults.
