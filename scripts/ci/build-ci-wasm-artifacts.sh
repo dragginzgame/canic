@@ -33,11 +33,14 @@ fi
 # Keep PocketIC-oriented CI artifacts small.
 export RUSTFLAGS="${RUSTFLAGS:-} -C debuginfo=0"
 
+DEFAULT_BUILD_CONFIG="$ROOT_DIR/fleets/test/canic.toml"
+export CANIC_CONFIG_PATH="${CANIC_CONFIG_PATH:-$DEFAULT_BUILD_CONFIG}"
+
 if [ -n "${CANIC_REFERENCE_CANISTERS:-}" ]; then
     # Allow focused harnesses to build only the canisters they actually stage.
     read -r -a BUILD_CANISTERS <<<"$CANIC_REFERENCE_CANISTERS"
 else
-    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order)"
+    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config "$CANIC_CONFIG_PATH" --ci-order)"
     mapfile -t BUILD_CANISTERS <<<"$DEFAULT_BUILD_CANISTERS"
 fi
 

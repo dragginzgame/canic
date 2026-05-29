@@ -12,7 +12,7 @@ use canic_host::canister_build::{
     print_current_workspace_build_context_once,
 };
 use clap::Command as ClapCommand;
-use std::{env, ffi::OsString};
+use std::{env, ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const BUILD_HELP_AFTER: &str = "\
@@ -174,7 +174,7 @@ impl BuildEnvGuard {
         set_env("ICP_ENVIRONMENT", &options.network);
         set_optional_env("CANIC_WORKSPACE_ROOT", options.workspace.as_deref());
         set_optional_env("CANIC_ICP_ROOT", options.icp_root.as_deref());
-        set_optional_env("CANIC_CONFIG_PATH", options.config.as_deref());
+        set_optional_env_path("CANIC_CONFIG_PATH", options.config.as_deref());
         guard
     }
 }
@@ -191,6 +191,20 @@ impl Drop for BuildEnvGuard {
 fn set_optional_env(key: &str, value: Option<&str>) {
     if let Some(value) = value {
         set_env(key, value);
+    }
+}
+
+fn set_optional_env_path(key: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        let path = PathBuf::from(value);
+        let path = if path.is_absolute() {
+            path
+        } else {
+            env::current_dir()
+                .expect("current directory must be available")
+                .join(path)
+        };
+        set_env(key, path);
     }
 }
 

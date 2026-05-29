@@ -251,6 +251,7 @@ fn run_canister_build(
         .current_dir(workspace_root)
         .env("CARGO_TARGET_DIR", &target_root)
         .env("CANIC_ICP_ROOT", icp_root)
+        .env("CANIC_REQUIRE_ATTACHED_ROLE", "1")
         .args([
             "build",
             "--manifest-path",

@@ -220,6 +220,9 @@ name = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\n\
 version = \"0.0.0\"\n\
 edition = \"2024\"\n\
 publish = false\n\n\
+[package.metadata.canic]\n\
+fleet = \"wasm_store\"\n\
+role = \"wasm_store\"\n\n\
 [workspace]\n\n\
 [lib]\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
@@ -490,6 +493,9 @@ mod tests {
 
         assert!(manifest.contains("features = [\"control-plane\"]"));
         assert!(manifest.contains("canic = { path = "));
+        assert!(manifest.contains("[package.metadata.canic]"));
+        assert!(manifest.contains("fleet = \"wasm_store\""));
+        assert!(manifest.contains("role = \"wasm_store\""));
         fs::remove_dir_all(root).expect("clean temp dir");
     }
 }

@@ -12,10 +12,17 @@ present.
 
 ## Unreleased
 
-- Started the 0.49 role-lifecycle foundation: Canic configs now declare
+## [0.49.0] - 2026-05-29 - Role lifecycle foundation
+
+Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
+
+- `0.49.0` starts the role-lifecycle foundation: Canic configs now declare
   fleet-scoped `[roles.<role>]`, package metadata includes `fleet`, and
   `canic::build!` validates package `fleet.role` against declarations while
-  tracking attached-vs-declared role state.
+  tracking attached-vs-declared role state. It also fixes generated
+  packaged-downstream `wasm_store` bootstrap metadata, scopes CI artifact
+  builds to the selected test fleet config, and makes visible `canic build`
+  artifact builds require topology-attached roles.
 
 ## [0.48.x] - 2026-05-28 - Clean up & Audits
 
