@@ -13,8 +13,9 @@ use canic_host::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
     },
     release_set::{
-        ConfiguredRoleLifecycle, configured_fleet_name, configured_fleet_roles,
-        configured_role_lifecycle, display_workspace_path, matching_fleet_config_paths,
+        ConfiguredRoleLifecycle, DeclaredFleetRole, configured_fleet_name, configured_fleet_roles,
+        configured_role_lifecycle, declare_fleet_role, display_workspace_path,
+        matching_fleet_config_paths,
     },
     table::{ColumnAlign, render_table},
 };
@@ -35,6 +36,7 @@ const ROLE_PREVIEW_LIMIT: usize = 6;
 const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
+  canic fleet role declare demo store --package store
   canic fleet role list demo
   canic fleet role inspect demo app
   canic fleet create demo
@@ -56,6 +58,7 @@ This removes the matching config-defined fleet directory after you type the
 fleet name exactly.";
 const FLEET_ROLE_HELP_AFTER: &str = "\
 Examples:
+  canic fleet role declare demo store --package store
   canic fleet role list demo
   canic fleet role inspect demo app";
 const FLEET_ROLE_LIST_HELP_AFTER: &str = "\
@@ -64,6 +67,9 @@ Examples:
 const FLEET_ROLE_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic fleet role inspect demo app";
+const FLEET_ROLE_DECLARE_HELP_AFTER: &str = "\
+Examples:
+  canic fleet role declare demo store --package store";
 
 ///
 /// FleetCommandError
@@ -157,6 +163,17 @@ struct RoleInspectOptions {
 }
 
 ///
+/// RoleDeclareOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RoleDeclareOptions {
+    fleet: String,
+    role: String,
+    package: String,
+}
+
+///
 /// FleetListRow
 ///
 
@@ -210,11 +227,37 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
+            "declare" => run_role_declare(args),
             "list" => run_role_list(args),
             "inspect" => run_role_inspect(args),
             _ => unreachable!("fleet role dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_role_declare<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, role_declare_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = RoleDeclareOptions::parse(args)?;
+    let config_path = selected_fleet_config_path(&options.fleet)?;
+    let project_root = current_canic_project_root()?;
+    let declared = declare_fleet_role(
+        &config_path,
+        &options.fleet,
+        &options.role,
+        &options.package,
+    )?;
+    println!(
+        "{}",
+        render_declared_role(&declared, &project_root, &config_path)
+    );
+    Ok(())
 }
 
 fn run_role_list<I>(args: I) -> Result<(), FleetCommandError>
@@ -424,6 +467,30 @@ impl RoleInspectOptions {
     }
 }
 
+impl RoleDeclareOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_role_declare_command(), args)
+            .map_err(|_| FleetCommandError::Usage(role_declare_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            role: string_option(&matches, "role").expect("clap requires role"),
+            package: string_option(&matches, "package").expect("clap requires package"),
+        })
+    }
+}
+
 fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     discover_current_canic_config_choices()
 }
@@ -547,7 +614,7 @@ fn fleet_command() -> ClapCommand {
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("role")
-                .about("Inspect fleet role lifecycle")
+                .about("Manage fleet role lifecycle")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -561,8 +628,13 @@ fn fleet_command() -> ClapCommand {
 fn fleet_role_command() -> ClapCommand {
     ClapCommand::new("role")
         .bin_name("canic fleet role")
-        .about("Inspect fleet role lifecycle")
+        .about("Manage fleet role lifecycle")
         .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("declare")
+                .about("Declare an existing package-backed role")
+                .disable_help_flag(true),
+        ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List declared fleet roles")
@@ -574,6 +646,33 @@ fn fleet_role_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(FLEET_ROLE_HELP_AFTER)
+}
+
+fn fleet_role_declare_command() -> ClapCommand {
+    ClapCommand::new("declare")
+        .bin_name("canic fleet role declare")
+        .about("Declare an existing package-backed role")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name"),
+        )
+        .arg(
+            value_arg("role")
+                .value_name("role")
+                .required(true)
+                .help("Local role name"),
+        )
+        .arg(
+            clap::Arg::new("package")
+                .long("package")
+                .value_name("path")
+                .required(true)
+                .help("Package path recorded in [roles.<role>]"),
+        )
+        .after_help(FLEET_ROLE_DECLARE_HELP_AFTER)
 }
 
 fn fleet_role_list_command() -> ClapCommand {
@@ -758,6 +857,28 @@ fn render_role_inspection(row: &ConfiguredRoleLifecycle) -> String {
     .join("\n")
 }
 
+fn render_declared_role(
+    role: &DeclaredFleetRole,
+    workspace_root: &Path,
+    config_path: &Path,
+) -> String {
+    [
+        "Declared fleet role:".to_string(),
+        format!("  role: {}", role.display),
+        format!("  package: {}", role.package),
+        format!(
+            "  config: {}",
+            display_workspace_path(workspace_root, config_path)
+        ),
+        "  state: declared".to_string(),
+        format!(
+            "  next action: canic fleet role attach {} {} --subnet <subnet> --pool <pool>",
+            role.fleet, role.role
+        ),
+    ]
+    .join("\n")
+}
+
 fn print_config_report(report: &IcpProjectConfigReport) {
     println!("Checked ICP project config:");
     println!("  path: {}", report.path.display());
@@ -812,6 +933,11 @@ fn role_list_usage() -> String {
 
 fn role_inspect_usage() -> String {
     let mut command = fleet_role_inspect_command();
+    command.render_help().to_string()
+}
+
+fn role_declare_usage() -> String {
+    let mut command = fleet_role_declare_command();
     command.render_help().to_string()
 }
 

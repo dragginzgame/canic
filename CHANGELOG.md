@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.2` adds config-only fleet role declaration:
+  ```
+  canic fleet role declare <fleet> <role> --package <path>
+  ```
+  Operators can declare an ordinary package-backed role before topology
+  attachment while root and duplicate declarations still fail closed.
+
 - `0.49.1` adds read-only fleet role lifecycle inspection:
   ```
   canic fleet role list <fleet>

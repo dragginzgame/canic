@@ -51,6 +51,22 @@ fn parses_role_inspect_fleet_and_role() {
     assert_eq!(options.role, "app");
 }
 
+// Ensure role declaration requires fleet, role, and package path.
+#[test]
+fn parses_role_declare_fleet_role_and_package() {
+    let options = RoleDeclareOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("store"),
+        OsString::from("--package"),
+        OsString::from("store"),
+    ])
+    .expect("parse role declare options");
+
+    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.role, "store");
+    assert_eq!(options.package, "store");
+}
+
 // Ensure unknown fleet check options fail through usage.
 #[test]
 fn rejects_unknown_check_option() {
@@ -181,6 +197,30 @@ fn renders_declared_only_role_inspection() {
     assert!(output.contains("canic fleet role attach demo store"));
 }
 
+// Ensure declaration output stays explicit about config-only state.
+#[test]
+fn renders_declared_role_output() {
+    let root = Path::new("/workspace");
+    let config = root.join("fleets/demo/canic.toml");
+    let output = render_declared_role(
+        &DeclaredFleetRole {
+            fleet: "demo".to_string(),
+            role: "store".to_string(),
+            display: "demo.store".to_string(),
+            package: "store".to_string(),
+        },
+        root,
+        &config,
+    );
+
+    assert!(output.contains("Declared fleet role:"));
+    assert!(output.contains("role: demo.store"));
+    assert!(output.contains("package: store"));
+    assert!(output.contains("config: fleets/demo/canic.toml"));
+    assert!(output.contains("state: declared"));
+    assert!(output.contains("canic fleet role attach demo store"));
+}
+
 // Ensure fleet command help lists the command family without search.
 #[test]
 fn fleet_usage_lists_subcommands_and_examples() {
@@ -205,8 +245,9 @@ fn fleet_usage_lists_subcommands_and_examples() {
 fn fleet_role_usage_lists_subcommands_and_examples() {
     let text = role_usage();
 
-    assert!(text.contains("Inspect fleet role lifecycle"));
+    assert!(text.contains("Manage fleet role lifecycle"));
     assert!(text.contains("Usage: canic fleet role"));
+    assert!(text.contains("declare"));
     assert!(text.contains("list"));
     assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
@@ -272,6 +313,18 @@ fn role_inspect_usage_lists_fleet_and_role_arguments() {
     let text = role_inspect_usage();
 
     assert!(text.contains("Usage: canic fleet role inspect <fleet> <role>"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure role declare help takes explicit fleet, role, and package path.
+#[test]
+fn role_declare_usage_lists_required_package() {
+    let text = role_declare_usage();
+
+    assert!(text.contains("Usage: canic fleet role declare"));
+    assert!(text.contains("<fleet>"));
+    assert!(text.contains("<role>"));
+    assert!(text.contains("--package <path>"));
     assert!(text.contains("Examples:"));
 }
 

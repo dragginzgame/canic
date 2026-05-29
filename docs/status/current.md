@@ -47,6 +47,10 @@ inspect only the files needed for the current task.
   `canic fleet role inspect <fleet> <role>` now expose the read-only role
   lifecycle state: declared package metadata, attached topology labels,
   compile eligibility, deploy-artifact eligibility, and next action.
+- `canic fleet role declare <fleet> <role> --package <path>` now adds a
+  config-only ordinary role declaration for existing package-backed canisters.
+  It does not attach topology, rejects `root` and duplicate declarations, and
+  validates the updated config before writing.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.

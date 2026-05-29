@@ -8,13 +8,13 @@ mod paths;
 mod stage;
 
 pub use config::{
-    ConfiguredPoolExpectation, ConfiguredRoleLifecycle, LOCAL_ROOT_MIN_READY_CYCLES,
-    configured_bootstrap_roles, configured_controllers, configured_fleet_name,
-    configured_fleet_roles, configured_install_targets, configured_local_root_create_cycles,
-    configured_pool_expectations, configured_release_roles, configured_role_auto_create,
-    configured_role_capabilities, configured_role_details, configured_role_kinds,
-    configured_role_lifecycle, configured_role_metrics_profiles, configured_role_topups,
-    matching_fleet_config_paths,
+    ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
+    LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles, configured_controllers,
+    configured_fleet_name, configured_fleet_roles, configured_install_targets,
+    configured_local_root_create_cycles, configured_pool_expectations, configured_release_roles,
+    configured_role_auto_create, configured_role_capabilities, configured_role_details,
+    configured_role_kinds, configured_role_lifecycle, configured_role_metrics_profiles,
+    configured_role_topups, declare_fleet_role, matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -42,6 +42,7 @@ use config::{
     configured_role_capabilities_from_source, configured_role_details_from_source,
     configured_role_kinds_from_source, configured_role_lifecycle_from_source,
     configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+    declare_fleet_role_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -72,7 +73,8 @@ mod tests {
         configured_role_auto_create_from_source, configured_role_capabilities_from_source,
         configured_role_details_from_source, configured_role_kinds_from_source,
         configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
-        configured_role_topups_from_source, read_release_artifact, root_manifest_path,
+        configured_role_topups_from_source, declare_fleet_role_source, read_release_artifact,
+        root_manifest_path,
     };
     use crate::test_support::temp_dir;
     use flate2::{Compression, write::GzEncoder};
@@ -335,6 +337,54 @@ kind = "shard"
         assert_eq!(store.package.as_deref(), Some("canisters/store"));
         assert_eq!(store.state, "declared");
         assert_eq!(store.topology, None);
+    }
+
+    #[test]
+    fn declare_fleet_role_adds_declared_only_canister_role() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+        let updated =
+            declare_fleet_role_source(config, "demo", "store", "store").expect("declare role");
+
+        assert_eq!(updated.role.display, "demo.store");
+        assert_eq!(updated.role.package, "store");
+        assert!(updated.source.contains("[roles.\"store\"]"));
+        assert!(updated.source.contains("kind = \"canister\""));
+        assert!(updated.source.contains("package = \"store\""));
+
+        let lifecycle =
+            configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+        let store = lifecycle
+            .iter()
+            .find(|role| role.role == "store")
+            .expect("store row");
+        assert_eq!(store.state, "declared");
+        assert_eq!(store.topology, None);
+    }
+
+    #[test]
+    fn declare_fleet_role_rejects_root_and_duplicates() {
+        let root_err = declare_fleet_role_source(REAL_CONFIG, "demo", "root", "root")
+            .expect_err("root declaration should fail")
+            .to_string();
+        assert!(root_err.contains("root role must be attached"));
+
+        let duplicate_err = declare_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "user_hub")
+            .expect_err("duplicate declaration should fail")
+            .to_string();
+        assert!(duplicate_err.contains("already declared"));
     }
 
     #[test]
