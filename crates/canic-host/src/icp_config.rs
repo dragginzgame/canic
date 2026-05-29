@@ -404,6 +404,12 @@ mod tests {
 [fleet]
 name = "toko"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -455,6 +461,9 @@ environments:
 [fleet]
 name = "toko"
 
+[roles.root]
+kind = "root"
+
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
@@ -481,6 +490,12 @@ kind = "root"
             r#"
 [fleet]
 name = "toko"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -588,6 +603,11 @@ kind = "singleton"
     fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
         fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
         let mut source = format!("[fleet]\nname = \"{fleet}\"\n");
+        for role in roles {
+            let kind = if *role == "root" { "root" } else { "canister" };
+            write!(source, "\n[roles.{role}]\nkind = \"{kind}\"\n")
+                .expect("write role declaration");
+        }
         for role in roles {
             let kind = if *role == "root" { "root" } else { "singleton" };
             write!(

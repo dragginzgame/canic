@@ -8,6 +8,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use toml::Value as TomlValue;
 
 #[derive(Clone, Copy)]
 enum RootSubnetRoleScope {
@@ -481,12 +482,14 @@ const fn metrics_profile_tiers_label(profile: MetricsProfile) -> &'static str {
 pub(super) fn configured_fleet_name_from_source(
     config_source: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let config = toml::from_str::<TomlValue>(config_source)?;
     let name = config
-        .fleet
-        .and_then(|fleet| fleet.name)
+        .get("fleet")
+        .and_then(TomlValue::as_table)
+        .and_then(|fleet| fleet.get("name"))
+        .and_then(TomlValue::as_str)
         .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
-    Ok(name)
+    Ok(name.to_string())
 }
 
 // Enumerate configured top-level deployment controllers from raw config source.

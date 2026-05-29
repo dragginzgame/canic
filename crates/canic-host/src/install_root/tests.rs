@@ -323,6 +323,39 @@ fn root_init_args_include_wasm_module_hash() {
 fn configured_install_targets_use_root_subnet_release_roles_only() {
     let workspace_root = write_temp_workspace_config(
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -363,6 +396,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -450,6 +513,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -704,6 +797,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -773,6 +896,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -879,6 +1032,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -963,6 +1146,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -1028,6 +1241,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -1119,6 +1362,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -1775,6 +2048,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -1857,6 +2160,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -1915,6 +2248,39 @@ kind = "root"
 fn local_root_create_adds_configured_cycle_funding() {
     let workspace_root = write_temp_workspace_config(
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -1982,6 +2348,39 @@ fn parses_root_cycle_balance_response() {
 fn nonlocal_root_create_does_not_add_cycle_funding() {
     let workspace_root = write_temp_workspace_config(
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
@@ -2047,6 +2446,39 @@ fn install_config_error_lists_choices_when_project_default_missing() {
         fs::write(
             &demo,
             r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -2090,6 +2522,39 @@ fn config_selection_error_is_whitespace_table() {
     fs::write(
         &config,
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -2125,6 +2590,39 @@ fn config_selection_error_lists_multiple_paths_with_numbered_options() {
     fs::write(
         &demo,
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -2136,6 +2634,39 @@ kind = "singleton"
     fs::write(
         &example,
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -2179,6 +2710,39 @@ fn config_selection_preview_lists_six_canisters_before_ellipsis() {
     fs::write(
         &config,
         r#"
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -2295,6 +2859,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -2488,6 +3082,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -2546,6 +3170,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -2873,6 +3527,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -3070,6 +3754,36 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -3119,6 +3833,36 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.project_registry]
+kind = "canister"
+
+[roles.oracle_pokemon]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
+[roles.worker]
+kind = "canister"
 
 [app]
 init_mode = "enabled"

@@ -8286,6 +8286,15 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -8387,6 +8396,15 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -12531,6 +12549,15 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
 
 [app]
 init_mode = "enabled"

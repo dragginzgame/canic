@@ -90,6 +90,30 @@ app_index = ["user_hub", "scale_hub"]
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -115,6 +139,12 @@ kind = "singleton"
 controllers = []
 app_index = []
 
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -129,6 +159,12 @@ kind = "root"
     const NO_ROOT_CONFIG: &str = r#"
 controllers = []
 app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.user_hub]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -182,6 +218,18 @@ kind = "singleton"
 controllers = []
 app_index = []
 
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -230,6 +278,30 @@ app_index = ["user_hub", "scale_hub"]
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -287,6 +359,30 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -351,6 +447,30 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -389,6 +509,30 @@ app_index = ["user_hub", "scale_hub"]
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -471,6 +615,30 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -501,6 +669,30 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
 [subnets.prime]
 pool.minimum_size = 2
 
@@ -528,6 +720,30 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -558,6 +774,30 @@ app_index = []
 
 [fleet]
 name = "demo"
+
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -642,6 +882,30 @@ app_index = []
 [fleet]
 name = "demo"
 
+[roles.root]
+kind = "root"
+
+[roles.app]
+kind = "canister"
+
+[roles.user_hub]
+kind = "canister"
+
+[roles.user_shard]
+kind = "canister"
+
+[roles.project_instance]
+kind = "canister"
+
+[roles.scale_hub]
+kind = "canister"
+
+[roles.scale_replica]
+kind = "canister"
+
+[roles.minimal]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 [app.whitelist]
@@ -675,7 +939,7 @@ kind = "root"
     fn configured_release_roles_rejects_missing_root() {
         let err = configured_release_roles_from_source(NO_ROOT_CONFIG).unwrap_err();
         assert!(
-            err.to_string().contains("root canister not defined"),
+            err.to_string().contains("root role declaration missing"),
             "unexpected error: {err}"
         );
     }
