@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.48.md](docs/changelog/0.48.md)
 
+- `0.48.5` clarifies Candid artifact behavior, prevents canister artifact
+  crates from exposing Rust library targets, and documents delegated-token
+  audience binding examples.
+
 - `0.48.4` raises Canic's published MSRV to Rust `1.96.0`, using the new
   standard assertion and duration helpers for clearer diagnostics and simpler
   scheduling constants.

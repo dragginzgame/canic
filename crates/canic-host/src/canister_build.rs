@@ -309,7 +309,8 @@ fn extract_candid(
 }
 
 // Remove stale ICP-generated Candid sidecars so local surface scans match the
-// extracted `<role>.did` artifact we actually ship and verify.
+// extracted `<role>.did` artifact. Production `ic` builds skip Candid sidecars
+// entirely.
 fn remove_stale_icp_candid_sidecars(artifact_root: &Path) -> std::io::Result<()> {
     for relative in [
         "constructor.did",

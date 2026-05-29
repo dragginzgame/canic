@@ -17,6 +17,11 @@ Use this crate directly when you:
 Most ordinary Canic canister projects should start with `canic`, not
 `canic-wasm-store`.
 
+This package is a canister artifact source, not a reusable Rust dependency. It
+builds only as a `cdylib` Wasm canister target and intentionally does not expose
+an `rlib`; downstream tests and libraries should depend on shared type crates
+instead of importing canister entrypoint crates.
+
 ## What this crate owns
 
 This crate is intentionally narrow. It owns the published source for the

@@ -34,10 +34,27 @@ lifecycle and endpoint bundle. There is no separate public root startup macro.
   `target/wasm32-unknown-unknown/<profile>/canister_<name>.wasm`.
 - Canic release artifacts are gzip-compressed `.wasm.gz` files owned by the
   Canic build scripts.
-- ICP CLI-visible canister artifacts and generated Candid sidecars live under
+- ICP CLI-visible canister artifacts live under
   `.icp/<environment>/canisters/<role>/`.
-- Generated Candid interfaces use
-  `.icp/<environment>/canisters/<role>/<role>.did`.
+
+## Candid Extraction
+
+`canic::finish!()` emits the `ic_cdk::export_candid!()` pointer only for debug
+builds. Host builds use that debug-only pointer to run `candid-extractor` for
+local development artifacts.
+
+For `ICP_ENVIRONMENT=local`, Canic:
+
+- builds a debug Wasm for Candid extraction;
+- writes `.icp/local/canisters/<role>/<role>.did`;
+- embeds public `candid:service` metadata into the local Wasm artifact for
+  local `icp canister metadata` inspection.
+
+For `ICP_ENVIRONMENT=ic`, Canic intentionally skips Candid extraction, removes
+the generated `.did` sidecar path, and does not embed `candid:service`
+metadata. This keeps production Wasm artifacts from carrying local interface
+metadata bloat. Running `candid-extractor` directly against an `ic` release
+Wasm is not the supported path; use the local/debug extraction path instead.
 
 ## Audit Usage
 

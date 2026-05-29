@@ -21,7 +21,7 @@ role = "wasm_store"
 
 [lib]
 name = "canister_wasm_store"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }

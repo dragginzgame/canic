@@ -257,6 +257,18 @@ mod tests {
     }
 
     #[test]
+    fn cert_mixed_audience_allows_one_role_plus_principal_with_role_hash() {
+        let role = CanisterRole::new("project_instance");
+        let audience = DelegationAudience::RolesOrPrincipals {
+            roles: vec![role.clone()],
+            principals: vec![p(1), p(2)],
+        };
+        let expected = role_hash(&role).unwrap();
+
+        validate_cert_role_hash(&audience, Some(expected)).unwrap();
+    }
+
+    #[test]
     fn cert_role_hash_rejects_multi_role_cert_audience() {
         let audience = DelegationAudience::Roles(vec![
             CanisterRole::new("project_instance"),
@@ -264,6 +276,22 @@ mod tests {
         ]);
 
         assert_eq!(
+            expected_role_hash_for_cert_audience(&audience),
+            Err(AudienceError::RoleAudienceMustBeSingular)
+        );
+    }
+
+    #[test]
+    fn cert_mixed_audience_rejects_multi_role_cert_audience() {
+        let audience = DelegationAudience::RolesOrPrincipals {
+            roles: vec![
+                CanisterRole::new("project_instance"),
+                CanisterRole::new("project_hub"),
+            ],
+            principals: vec![p(1)],
+        };
+
+        std::assert_matches!(
             expected_role_hash_for_cert_audience(&audience),
             Err(AudienceError::RoleAudienceMustBeSingular)
         );

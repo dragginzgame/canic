@@ -260,3 +260,7 @@ Canic-managed canisters expose application methods plus Canic runtime,
 metadata, readiness, and management methods. When comparing an old non-Canic
 canister to a Canic-managed rewrite, compare the application surface separately
 from Canic-owned methods.
+
+Local builds extract `.did` files from debug Wasm artifacts. Production
+`ICP_ENVIRONMENT=ic` builds intentionally skip Candid extraction and embedded
+`candid:service` metadata so deployed Wasm artifacts stay smaller.

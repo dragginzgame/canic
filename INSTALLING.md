@@ -305,6 +305,11 @@ are generated under `.icp/local/canisters/<role>/<role>.did`. The checked-in
 exception is `crates/canic-wasm-store/wasm_store.did`, the canonical interface
 for the implicit bootstrap `wasm_store` crate.
 
+Local builds extract Candid from a debug Wasm and may embed public
+`candid:service` metadata into the local Wasm for inspection. Builds targeting
+`ICP_ENVIRONMENT=ic` skip `.did` generation and Candid metadata embedding so
+production Wasm artifacts do not carry local interface metadata.
+
 Canic-managed Candid includes both application methods and Canic runtime
 methods such as readiness, metadata, topology, and management endpoints. When
 migrating a non-Canic canister, compare the application surface separately from

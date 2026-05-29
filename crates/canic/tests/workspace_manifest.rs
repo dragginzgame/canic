@@ -65,6 +65,18 @@ fn is_explicitly_unpublished(manifest: &Value) -> bool {
     manifest["package"]["publish"].as_bool() == Some(false)
 }
 
+// Returns the crate types declared by a member manifest's [lib] section.
+fn lib_crate_types(manifest: &Value) -> BTreeSet<&str> {
+    manifest
+        .get("lib")
+        .and_then(|lib| lib.get("crate-type"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
 // Formats a path relative to the workspace root for stable test output.
 fn relative_display(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
@@ -368,6 +380,36 @@ fn publishable_members_do_not_depend_on_unpublished_workspace_members() {
         failures.sort();
         panic!(
             "publishable workspace member depends on unpublished local crate:\n{}",
+            failures.join("\n")
+        );
+    }
+}
+
+// Verifies canister artifact crates do not also publish Rust library artifacts.
+#[test]
+fn cdylib_members_do_not_emit_rlib_artifacts() {
+    let root = workspace_root();
+    let root_manifest_path = root.join("Cargo.toml");
+    let root_manifest = read_manifest(&root_manifest_path);
+    let member_manifests = workspace_member_manifests(&root, &root_manifest);
+
+    let mut failures = Vec::new();
+    for manifest_path in member_manifests {
+        let manifest = read_manifest(&manifest_path);
+        let crate_types = lib_crate_types(&manifest);
+
+        if crate_types.contains("cdylib") && crate_types.contains("rlib") {
+            failures.push(format!(
+                "{}: [lib] crate-type must not combine `cdylib` canister artifacts with `rlib` Rust library artifacts",
+                relative_display(&root, &manifest_path),
+            ));
+        }
+    }
+
+    if !failures.is_empty() {
+        failures.sort();
+        panic!(
+            "canister artifact crates expose Rust library artifacts:\n{}",
             failures.join("\n")
         );
     }

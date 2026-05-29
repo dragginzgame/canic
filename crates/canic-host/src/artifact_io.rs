@@ -59,8 +59,9 @@ pub fn write_gzip_artifact(
     Ok(())
 }
 
-// Embed the extracted service interface so deployed canisters support live
-// `icp canister metadata <canister> candid:service` introspection.
+// Embed the extracted service interface for local artifacts so
+// `icp canister metadata <canister> candid:service` introspection works during
+// development. Production `ic` builds skip this path.
 pub fn embed_candid_metadata(
     wasm_path: &Path,
     did_path: &Path,

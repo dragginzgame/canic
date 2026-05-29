@@ -176,6 +176,49 @@ Strict canonical rules:
 
 This is intentional: one semantic token must have one valid canonical encoding.
 
+### Audience Binding Examples
+
+Delegated-token audiences describe who may accept the token. Principal audiences
+bind directly to verifier canister principals. Role audiences bind to the
+verifier's configured Canic role, and a certificate that uses any role branch
+must bind to exactly one role through `verifier_role_hash`.
+
+Positive role-targeted certificate:
+
+```rust
+let role = CanisterRole::new("project_instance");
+let audience = DelegationAudience::Roles(vec![role.clone()]);
+let verifier_role_hash = Some(role_hash(&role)?);
+```
+
+That certificate can only be accepted by a verifier configured as
+`project_instance`. A token minted under it may narrow to the same single role,
+but it may not expand to another role or to a principal audience.
+
+Positive principal-targeted certificate:
+
+```rust
+let verifier = Principal::from_text("...")?;
+let audience = DelegationAudience::Principals(vec![verifier]);
+let verifier_role_hash = None;
+```
+
+That certificate is bound to the verifier principal and carries no role hash.
+
+Negative role-targeted certificate:
+
+```rust
+let audience = DelegationAudience::Roles(vec![
+    CanisterRole::new("project_instance"),
+    CanisterRole::new("project_hub"),
+]);
+```
+
+This is rejected even if the role vector is canonical. The role branch in a
+certificate is not a broad role set; it is a single-role binding. Use principal
+audiences for explicit multi-canister targeting, or issue separate
+role-targeted certificates per role.
+
 ## 5. Root Certificate Issuance
 
 Entrypoint path:
