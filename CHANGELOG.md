@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.3` adds standalone and leaf-only adoption report fixtures. Standalone
+  roles remain declared-only without synthesized topology, and leaf-only
+  reports keep authority-sensitive observed roles visible without recommending
+  role declaration.
+
 - `0.50.2` adds brownfield and partial adoption report fixtures, including
   external-controller, observed-only, and declared-only cases that keep all
   adoption recommendations passive and non-executing.

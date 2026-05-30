@@ -292,6 +292,7 @@ pub enum AdoptionOperatorActionRequirementV1 {
 }
 
 struct DeclaredRoleFindingInput<'a> {
+    profile: AdoptionProfileV1,
     fleet: &'a str,
     role: &'a CanisterRole,
     package: Option<&'a str>,
@@ -327,6 +328,7 @@ pub fn adoption_report_from_config_source(
     for (role, declaration) in &config.roles {
         seen_roles.insert(role.as_str().to_string());
         role_findings.push(role_finding_for_declared_role(DeclaredRoleFindingInput {
+            profile: request.profile,
             fleet: &fleet,
             role,
             package: declaration.package.as_deref(),
@@ -343,6 +345,7 @@ pub fn adoption_report_from_config_source(
             continue;
         }
         role_findings.push(role_finding_for_observed_only_role(
+            request.profile,
             &fleet,
             role,
             observed,
@@ -353,8 +356,13 @@ pub fn adoption_report_from_config_source(
 
     role_findings.sort_by(|left, right| left.role.cmp(&right.role));
 
-    let observed_canisters =
-        observed_canister_findings(&fleet, request.inventory, &declared_roles, &attached_roles);
+    let observed_canisters = observed_canister_findings(
+        request.profile,
+        &fleet,
+        request.inventory,
+        &declared_roles,
+        &attached_roles,
+    );
     let summary = report_summary(&role_findings, &observed_canisters);
     let mut recommendations = Vec::new();
     for finding in &role_findings {
@@ -406,7 +414,16 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
     } else {
         evidence.push("no topology attachment exists".to_string());
         classifications.insert(AdoptionClassificationV1::DeclaredOnly);
-        recommendations.push(attach_later_recommendation(input.fleet, &role_name));
+        if input.profile == AdoptionProfileV1::LeafOnly
+            && is_leaf_only_authority_sensitive_role(&role_name)
+        {
+            warnings.push(
+                "leaf-only profile leaves authority-sensitive declared roles unattached"
+                    .to_string(),
+            );
+        } else {
+            recommendations.push(attach_later_recommendation(input.fleet, &role_name));
+        }
     }
 
     if input.attached && !observed_any {
@@ -473,6 +490,7 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
 }
 
 fn role_finding_for_observed_only_role(
+    profile: AdoptionProfileV1,
     fleet: &str,
     role: &str,
     observed: &[&crate::deployment_truth::ObservedCanisterV1],
@@ -510,12 +528,13 @@ fn role_finding_for_observed_only_role(
             .iter()
             .map(|canister| format!("observed canister {}", canister.canister_id))
             .collect(),
-        recommendations: vec![declare_role_recommendation(fleet, role)],
-        warnings: Vec::new(),
+        recommendations: observed_only_recommendations(profile, fleet, role),
+        warnings: observed_only_warnings(profile, role),
     }
 }
 
 fn observed_canister_findings(
+    profile: AdoptionProfileV1,
     fleet: &str,
     inventory: Option<&DeploymentInventoryV1>,
     declarations: &BTreeSet<CanisterRole>,
@@ -566,10 +585,12 @@ fn observed_canister_findings(
                 .map(|hash| format!("module_hash={hash}")),
             deployment_target_evidence: Some(inventory.inventory_id.clone()),
             recommendations: match (role, declared) {
-                (Some(role), false) => vec![declare_role_recommendation(fleet, role)],
+                (Some(role), false) => observed_only_recommendations(profile, fleet, role),
                 _ => Vec::new(),
             },
-            warnings: Vec::new(),
+            warnings: role
+                .map(|role| observed_only_warnings(profile, role))
+                .unwrap_or_default(),
         });
     }
 
@@ -590,6 +611,32 @@ fn observed_canister_findings(
 
     findings.sort_by(|left, right| left.canister_id.cmp(&right.canister_id));
     findings
+}
+
+fn observed_only_recommendations(
+    profile: AdoptionProfileV1,
+    fleet: &str,
+    role: &str,
+) -> Vec<AdoptionRecommendationV1> {
+    if profile == AdoptionProfileV1::LeafOnly && is_leaf_only_authority_sensitive_role(role) {
+        return Vec::new();
+    }
+
+    vec![declare_role_recommendation(fleet, role)]
+}
+
+fn observed_only_warnings(profile: AdoptionProfileV1, role: &str) -> Vec<String> {
+    if profile == AdoptionProfileV1::LeafOnly && is_leaf_only_authority_sensitive_role(role) {
+        return vec![
+            "leaf-only profile leaves authority-sensitive observed roles external".to_string(),
+        ];
+    }
+
+    Vec::new()
+}
+
+fn is_leaf_only_authority_sensitive_role(role: &str) -> bool {
+    matches!(role, "root" | "governance" | "governance_root")
 }
 
 fn package_state(
@@ -924,6 +971,40 @@ package = "root"
 kind = "root"
 "#;
 
+    const STANDALONE_CONFIG: &str = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+"#;
+
+    const LEAF_ONLY_CONFIG: &str = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.app]
+kind = "singleton"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+
     #[test]
     fn adoption_report_preserves_declared_only_as_non_deployable() {
         let report = report(CONFIG, None, Vec::new());
@@ -1153,6 +1234,117 @@ kind = "root"
                         == AdoptionSuggestedActionEffectV1::MutatesState
                     && recommendation.suggested_action_support
                         == AdoptionSuggestedActionSupportV1::UnsupportedByAdoption)
+        );
+    }
+
+    #[test]
+    fn standalone_fixture_keeps_compile_only_role_unattached() {
+        let report = report_with_profile(
+            AdoptionProfileV1::Standalone,
+            STANDALONE_CONFIG,
+            None,
+            vec![AdoptionPackageMetadataV1 {
+                package: "worker".to_string(),
+                fleet: Some("demo".to_string()),
+                role: Some("worker".to_string()),
+            }],
+        );
+        let worker = role(&report, "worker");
+
+        assert_eq!(report.profile, AdoptionProfileV1::Standalone);
+        assert_eq!(report.summary.managed_configured_roles, 0);
+        assert_eq!(report.summary.declared_only_roles, 1);
+        assert_eq!(report.summary.attached_unobserved_roles, 0);
+        assert_eq!(worker.package_state, AdoptionPackageStateV1::Matches);
+        assert_eq!(worker.topology_state, AdoptionTopologyStateV1::Unattached);
+        assert_eq!(
+            worker.observation_state,
+            AdoptionObservationStateV1::Unobserved
+        );
+        assert!(
+            worker
+                .classifications
+                .contains(&AdoptionClassificationV1::DeclaredOnly)
+        );
+        assert!(
+            worker
+                .evidence
+                .iter()
+                .any(|evidence| evidence == "no topology attachment exists")
+        );
+        assert!(
+            report
+                .blocked_actions
+                .contains(&"topology attachment".to_string())
+        );
+    }
+
+    #[test]
+    fn leaf_only_fixture_does_not_recommend_authority_hub_adoption() {
+        let inventory = inventory(vec![
+            observed_canister(
+                "aaaaa-aa",
+                Some("governance"),
+                CanisterControlClassV1::UserControlled,
+                Some("governance-hash"),
+            ),
+            observed_canister(
+                "bbbbb-bb",
+                Some("app"),
+                CanisterControlClassV1::DeploymentControlled,
+                Some("app-hash"),
+            ),
+        ]);
+        let report = report_with_profile(
+            AdoptionProfileV1::LeafOnly,
+            LEAF_ONLY_CONFIG,
+            Some(&inventory),
+            Vec::new(),
+        );
+        let app = role(&report, "app");
+        let governance = role(&report, "governance");
+        let governance_observation = report
+            .observed_canisters
+            .iter()
+            .find(|finding| finding.matched_role.as_deref() == Some("governance"))
+            .expect("governance observation");
+
+        assert_eq!(report.profile, AdoptionProfileV1::LeafOnly);
+        assert!(
+            app.classifications
+                .contains(&AdoptionClassificationV1::Managed)
+        );
+        assert_eq!(app.observation_state, AdoptionObservationStateV1::Observed);
+        assert!(
+            governance
+                .classifications
+                .contains(&AdoptionClassificationV1::ObservedOnly)
+        );
+        assert!(
+            governance
+                .classifications
+                .contains(&AdoptionClassificationV1::ExternalControllerRequired)
+        );
+        assert!(governance.recommendations.is_empty());
+        assert!(
+            governance
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("leaf-only profile"))
+        );
+        assert!(governance_observation.recommendations.is_empty());
+        assert!(
+            governance_observation
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("leaf-only profile"))
+        );
+        assert!(
+            !report
+                .recommendations
+                .iter()
+                .any(|recommendation| recommendation.suggested_action.as_deref()
+                    == Some("canic fleet role declare demo governance --package <path>"))
         );
     }
 

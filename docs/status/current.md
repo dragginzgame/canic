@@ -40,6 +40,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.3 has added standalone and leaf-only adoption report coverage.
+  Standalone profile fixtures keep compile-only roles declared-only without
+  synthesized topology. Leaf-only reports now leave authority-sensitive
+  observed roles visible but suppress role-declaration recommendations for
+  those authority surfaces.
 - 0.50.2 has expanded passive adoption report coverage with brownfield and
   partial fixtures, plus focused externally controlled, observed-only, and
   declared-only fixture cases. These tests assert that report recommendations
