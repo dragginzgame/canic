@@ -40,6 +40,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.11 has gated observed-only role declaration recommendations on
+  authority evidence. Canic-authorized candidates may still receive a blocked
+  `canic fleet role declare ...` preview, while user-controlled, external, or
+  unknown candidates receive an authority-review recommendation first.
 - 0.50.10 has added `--cargo-metadata <path>` adoption evidence. The option
   reads `[package.metadata.canic]` `fleet` and `role` from a saved
   `cargo metadata --format-version 1` JSON artifact, rejects ambiguous use with

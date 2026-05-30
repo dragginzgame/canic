@@ -576,7 +576,7 @@ fn role_finding_for_observed_only_role(
         authority_state,
         artifact_state,
         evidence,
-        recommendations: observed_only_recommendations(profile, fleet, role),
+        recommendations: observed_only_recommendations(profile, fleet, role, authority_state),
         warnings,
     }
 }
@@ -633,7 +633,12 @@ fn observed_canister_findings(
                 .map(|hash| format!("module_hash={hash}")),
             deployment_target_evidence: Some(inventory.inventory_id.clone()),
             recommendations: match (role, declared) {
-                (Some(role), false) => observed_only_recommendations(profile, fleet, role),
+                (Some(role), false) => observed_only_recommendations(
+                    profile,
+                    fleet,
+                    role,
+                    authority_state_for_control_class(canister.control_class),
+                ),
                 _ => Vec::new(),
             },
             warnings: role
@@ -665,9 +670,18 @@ fn observed_only_recommendations(
     profile: AdoptionProfileV1,
     fleet: &str,
     role: &str,
+    authority_state: AdoptionAuthorityStateV1,
 ) -> Vec<AdoptionRecommendationV1> {
     if profile == AdoptionProfileV1::LeafOnly && is_leaf_only_authority_sensitive_role(role) {
         return Vec::new();
+    }
+
+    if authority_state != AdoptionAuthorityStateV1::CanicAuthorized {
+        return vec![review_authority_before_declaration_recommendation(
+            fleet,
+            role,
+            authority_state,
+        )];
     }
 
     vec![declare_role_recommendation(fleet, role)]
@@ -988,6 +1002,35 @@ fn declare_role_recommendation(fleet: &str, role: &str) -> AdoptionRecommendatio
         suggested_action_support: AdoptionSuggestedActionSupportV1::UnsupportedByAdoption,
         suggested_action_availability: AdoptionSuggestedActionAvailabilityV1::BlockedIn0500,
         operator_action_requirement: AdoptionOperatorActionRequirementV1::Required,
+    }
+}
+
+fn review_authority_before_declaration_recommendation(
+    fleet: &str,
+    role: &str,
+    authority_state: AdoptionAuthorityStateV1,
+) -> AdoptionRecommendationV1 {
+    AdoptionRecommendationV1 {
+        kind: "review_authority_before_declaration".to_string(),
+        severity: AdoptionRecommendationSeverityV1::Warning,
+        description: format!(
+            "review {fleet}.{role} authority before declaring observed role candidate ({})",
+            adoption_authority_state_label(authority_state)
+        ),
+        suggested_action: None,
+        suggested_action_effect: AdoptionSuggestedActionEffectV1::ReadOnly,
+        suggested_action_support: AdoptionSuggestedActionSupportV1::SupportedByAdoption,
+        suggested_action_availability: AdoptionSuggestedActionAvailabilityV1::AllowedIn0500,
+        operator_action_requirement: AdoptionOperatorActionRequirementV1::Required,
+    }
+}
+
+const fn adoption_authority_state_label(authority_state: AdoptionAuthorityStateV1) -> &'static str {
+    match authority_state {
+        AdoptionAuthorityStateV1::CanicAuthorized => "canic-authorized",
+        AdoptionAuthorityStateV1::UserControlled => "user-controlled",
+        AdoptionAuthorityStateV1::External => "external",
+        AdoptionAuthorityStateV1::Unknown => "unknown",
     }
 }
 
@@ -1515,7 +1558,45 @@ kind = "root"
             report
                 .recommendations
                 .iter()
+                .any(
+                    |recommendation| recommendation.kind == "review_authority_before_declaration"
+                        && recommendation.suggested_action.is_none()
+                        && recommendation.suggested_action_effect
+                            == AdoptionSuggestedActionEffectV1::ReadOnly
+                        && recommendation.suggested_action_support
+                            == AdoptionSuggestedActionSupportV1::SupportedByAdoption
+                )
+        );
+        assert!(
+            report
+                .recommendations
+                .iter()
+                .all(|recommendation| recommendation.kind != "declare_role")
+        );
+    }
+
+    #[test]
+    fn adoption_report_recommends_declaration_only_for_canic_authorized_observed_role() {
+        let inventory = inventory(vec![observed_canister(
+            "aaaaa-aa",
+            Some("candidate"),
+            CanisterControlClassV1::DeploymentControlled,
+            Some("candidate-hash"),
+        )]);
+        let report = report(BROWNFIELD_CONFIG, Some(&inventory), Vec::new());
+        let candidate = role(&report, "candidate");
+
+        assert_eq!(
+            candidate.authority_state,
+            AdoptionAuthorityStateV1::CanicAuthorized
+        );
+        assert!(
+            report
+                .recommendations
+                .iter()
                 .any(|recommendation| recommendation.kind == "declare_role"
+                    && recommendation.suggested_action.as_deref()
+                        == Some("canic fleet role declare demo candidate --package <path>")
                     && recommendation.suggested_action_effect
                         == AdoptionSuggestedActionEffectV1::MutatesState
                     && recommendation.suggested_action_support

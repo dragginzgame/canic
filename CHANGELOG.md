@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.11` gates observed-only role declaration recommendations on authority
+  evidence. Canic-authorized candidates may still get a blocked
+  `canic fleet role declare ...` preview, while user-controlled, external, or
+  unknown candidates now get an authority-review recommendation first.
+
 - `0.50.10` lets adoption reports consume saved Cargo metadata package
   evidence:
   ```text

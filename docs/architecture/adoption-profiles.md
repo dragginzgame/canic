@@ -170,6 +170,13 @@ canic fleet role declare demo store --package canisters/store
 canic fleet role attach demo store --subnet application
 ```
 
+Declaration recommendations are authority-gated. If an observed-only role is
+already Canic-authorized, the report may recommend a future
+`canic fleet role declare ...` command as a blocked, non-executed preview. If
+the observed candidate is user-controlled, externally controlled, or unknown,
+the report recommends authority review first and does not preview role
+declaration.
+
 ## Evidence Rules
 
 Name similarity alone is not enough for Canic to treat an observed canister as
