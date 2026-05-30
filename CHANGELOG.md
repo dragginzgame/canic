@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.5` polishes adoption text rendering so suggested actions appear as
+  `suggested_action_preview` entries, are marked as not executed by the report,
+  and blocked actions are framed as non-executed report output.
+
 - `0.50.4` clarifies hybrid external-Wasm reporting: adoption findings now
   include supplied module-hash and external artifact evidence, warn that
   artifact registry import is outside adoption reporting, and explicitly block

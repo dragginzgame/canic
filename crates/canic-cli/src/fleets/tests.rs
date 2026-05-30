@@ -421,6 +421,13 @@ fn renders_adoption_report_text_for_declared_only_roles() {
     assert!(text.contains("demo.store: declared-only"));
     assert!(text.contains("deployment inventory was not supplied"));
     assert!(text.contains("mutating_actions_performed: 0"));
+    assert!(text.contains("Recommendations (report-only; not executed):"));
+    assert!(text.contains(
+        "suggested_action_preview: canic fleet role attach demo store --subnet <subnet>"
+    ));
+    assert!(text.contains("status: not executed by adoption report"));
+    assert!(!text.contains("suggested_action:"));
+    assert!(text.contains("Blocked adoption actions (not executed by report):"));
     assert!(text.contains("topology attachment"));
 }
 

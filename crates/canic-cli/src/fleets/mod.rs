@@ -1507,7 +1507,7 @@ fn adoption_observed_canister_lines(report: &AdoptionReportV1) -> Vec<String> {
 }
 
 fn adoption_recommendation_lines(report: &AdoptionReportV1) -> Vec<String> {
-    let mut lines = vec!["Recommendations:".to_string()];
+    let mut lines = vec!["Recommendations (report-only; not executed):".to_string()];
     if report.recommendations.is_empty() {
         lines.push("  - none".to_string());
         return lines;
@@ -1524,14 +1524,23 @@ fn adoption_recommendation_lines(report: &AdoptionReportV1) -> Vec<String> {
             adoption_operator_requirement_label(recommendation.operator_action_requirement)
         ));
         if let Some(action) = &recommendation.suggested_action {
-            lines.push(format!("    suggested_action: {action}"));
+            lines.push(format!("    suggested_action_preview: {action}"));
+            lines.push("    status: not executed by adoption report".to_string());
+            lines.push(format!(
+                "    support: {}",
+                adoption_action_support_label(recommendation.suggested_action_support)
+            ));
+            lines.push(format!(
+                "    availability: {}",
+                adoption_action_availability_label(recommendation.suggested_action_availability)
+            ));
         }
     }
     lines
 }
 
 fn adoption_blocked_action_lines(report: &AdoptionReportV1) -> Vec<String> {
-    let mut lines = vec!["Blocked adoption actions:".to_string()];
+    let mut lines = vec!["Blocked adoption actions (not executed by report):".to_string()];
     if report.blocked_actions.is_empty() {
         lines.push("  - none".to_string());
     } else {

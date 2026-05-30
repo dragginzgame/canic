@@ -40,6 +40,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.5 has polished adoption text rendering. Recommendations now render as
+  report-only/non-executed output, suggested commands use
+  `suggested_action_preview` with explicit status/support/availability lines,
+  and blocked actions are described as actions not executed by the report.
 - 0.50.4 has clarified hybrid external-Wasm adoption reporting. Role findings
   now carry supplied module-hash and external artifact evidence, hybrid reports
   warn that artifact registry import is outside adoption reporting, and
