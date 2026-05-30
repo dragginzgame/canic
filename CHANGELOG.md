@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.1` adds the read-only fleet-scoped adoption report CLI:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile>
+  ```
+  The command renders text by default, can emit experimental JSON, and writes
+  only an explicitly requested report artifact through `--output <path>`.
+
 - `0.50.0` starts the passive adoption foundation with host-side adoption
   profiles, report models, role/resource classifications, and a read-only
   report builder that preserves 0.49 declared-vs-attached role boundaries while

@@ -115,6 +115,76 @@ fn parses_role_rename_fleet_old_role_and_new_role() {
     assert_eq!(options.new_role, "router");
 }
 
+// Ensure adoption report requires explicit fleet and profile, with text output by default.
+#[test]
+fn parses_adoption_report_fleet_profile_and_default_text() {
+    let options = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("brownfield"),
+    ])
+    .expect("parse adoption report options");
+
+    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.profile, AdoptionProfileV1::Brownfield);
+    assert_eq!(options.format, AdoptionReportFormat::Text);
+    assert_eq!(options.output, None);
+}
+
+// Ensure adoption report can emit JSON to an explicit output path.
+#[test]
+fn parses_adoption_report_json_output() {
+    let options = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("minimal"),
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--output"),
+        OsString::from("report.json"),
+    ])
+    .expect("parse adoption report options");
+
+    assert_eq!(options.profile, AdoptionProfileV1::Minimal);
+    assert_eq!(options.format, AdoptionReportFormat::Json);
+    assert_eq!(options.output, Some(PathBuf::from("report.json")));
+}
+
+// Ensure unsupported adoption profiles fail before any report generation.
+#[test]
+fn rejects_unknown_adoption_profile() {
+    let err = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("import"),
+    ])
+    .expect_err("unknown profile should fail");
+
+    std::assert_matches!(
+        err,
+        FleetCommandError::Usage(message) if message.contains("invalid adoption profile: import")
+    );
+}
+
+// Ensure unsupported adoption report formats fail through usage.
+#[test]
+fn rejects_unknown_adoption_report_format() {
+    let err = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("brownfield"),
+        OsString::from("--format"),
+        OsString::from("yaml"),
+    ])
+    .expect_err("unknown format should fail");
+
+    std::assert_matches!(
+        err,
+        FleetCommandError::Usage(message)
+            if message.contains("invalid adoption report output format: yaml")
+    );
+}
+
 // Ensure unknown fleet check options fail through usage.
 #[test]
 fn rejects_unknown_check_option() {
@@ -324,6 +394,62 @@ fn renders_renamed_role_output() {
     assert!(output.contains("canic fleet role inspect demo router"));
 }
 
+// Ensure text adoption reports summarize lifecycle state without mutating config.
+#[test]
+fn renders_adoption_report_text_for_declared_only_roles() {
+    let root = temp_dir("canic-fleet-adoption-report");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let before = fs::read_to_string(&config_path).expect("read config before report");
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Brownfield,
+        format: AdoptionReportFormat::Text,
+        output: None,
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:1").expect("report");
+    let text = render_adoption_report(&report);
+    let after = fs::read_to_string(&config_path).expect("read config after report");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(after, before);
+    assert!(text.contains("Adoption report:"));
+    assert!(text.contains("profile: brownfield"));
+    assert!(text.contains("read_only: true"));
+    assert!(text.contains("demo.store: declared-only"));
+    assert!(text.contains("deployment inventory was not supplied"));
+    assert!(text.contains("mutating_actions_performed: 0"));
+    assert!(text.contains("topology attachment"));
+}
+
+// Ensure adoption report --output writes only the requested JSON report artifact.
+#[test]
+fn writes_adoption_report_json_output_file() {
+    let root = temp_dir("canic-fleet-adoption-json");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let out = root.join("reports/adoption.json");
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Minimal,
+        format: AdoptionReportFormat::Json,
+        output: Some(out.clone()),
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:2").expect("report");
+    write_adoption_report(&options, &report).expect("write report");
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&out).expect("read report")).expect("parse report");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(value["fleet"], "demo");
+    assert_eq!(value["profile"], "Minimal");
+    assert_eq!(value["summary"]["mutating_actions_performed"], 0);
+}
+
 // Ensure fleet command help lists the command family without search.
 #[test]
 fn fleet_usage_lists_subcommands_and_examples() {
@@ -335,11 +461,24 @@ fn fleet_usage_lists_subcommands_and_examples() {
     assert!(text.contains("create"));
     assert!(text.contains("delete"));
     assert!(text.contains("list"));
+    assert!(text.contains("adoption"));
     assert!(text.contains("role"));
     assert!(!text.contains("sync"));
     assert!(!text.contains("current"));
     assert!(!text.contains("use"));
     assert!(!text.contains("search"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure fleet adoption help lists the read-only report command.
+#[test]
+fn fleet_adoption_usage_lists_subcommands_and_examples() {
+    let text = adoption_usage();
+
+    assert!(text.contains("Report safe onboarding recommendations"));
+    assert!(text.contains("Usage: canic fleet adoption"));
+    assert!(text.contains("report"));
+    assert!(text.contains("read-only"));
     assert!(text.contains("Examples:"));
 }
 
@@ -455,6 +594,20 @@ fn role_rename_usage_lists_fleet_old_role_and_new_role_arguments() {
     assert!(text.contains("Examples:"));
 }
 
+// Ensure adoption report help takes explicit fleet and profile identity.
+#[test]
+fn adoption_report_usage_lists_profile_and_output_options() {
+    let text = adoption_report_usage();
+
+    assert!(text.contains("Usage: canic fleet adoption report"));
+    assert!(text.contains("--profile <profile>"));
+    assert!(text.contains("<fleet>"));
+    assert!(text.contains("--format <text|json>"));
+    assert!(text.contains("--output <path>"));
+    assert!(text.contains("brownfield"));
+    assert!(text.contains("read-only"));
+}
+
 // Render precomputed config rows for focused table tests.
 fn render_fleet_list_from_rows(rows: Vec<FleetListRow>) -> String {
     render_fleet_rows(rows)
@@ -473,6 +626,11 @@ name = "{name}"
 
 [roles.root]
 kind = "root"
+package = "root"
+
+[roles.store]
+kind = "canister"
+package = "store"
 
 [subnets.prime.canisters.root]
 kind = "root"

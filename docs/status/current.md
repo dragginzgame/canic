@@ -40,6 +40,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.1 has wired the passive report model into a read-only CLI surface:
+  `canic fleet adoption report <fleet> --profile <profile>`. The command
+  selects the matching fleet config, renders text by default, can emit
+  experimental JSON with `--format json`, and writes only an explicitly
+  requested report artifact with `--output <path>`.
 - 0.50.0 has started with a host-side passive adoption report model.
   `canic-host::adoption` now defines adoption profiles, role/resource
   classifications, report findings, non-executed recommendations, and

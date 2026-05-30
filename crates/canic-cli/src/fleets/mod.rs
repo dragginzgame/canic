@@ -1,13 +1,23 @@
 use crate::{
     cli::clap::{
-        parse_matches, parse_subcommand, passthrough_subcommand, string_option, value_arg,
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
+        value_arg,
     },
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
     cli::help::print_help_or_version,
-    scaffold, version_text,
+    output, scaffold, version_text,
 };
 use canic_host::{
+    adoption::{
+        AdoptionArtifactStateV1, AdoptionAuthorityStateV1, AdoptionClassificationV1,
+        AdoptionDeclarationStateV1, AdoptionObservationStateV1,
+        AdoptionOperatorActionRequirementV1, AdoptionPackageStateV1, AdoptionProfileV1,
+        AdoptionRecommendationSeverityV1, AdoptionReportError, AdoptionReportRequest,
+        AdoptionReportV1, AdoptionSuggestedActionAvailabilityV1, AdoptionSuggestedActionEffectV1,
+        AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
+        adoption_report_from_config_source,
+    },
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
@@ -26,6 +36,7 @@ use std::{
     fs,
     io::{self, BufRead, Write},
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -37,6 +48,7 @@ const ROLE_PREVIEW_LIMIT: usize = 6;
 const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
+  canic fleet adoption report demo --profile brownfield
   canic fleet role declare demo store --package store
   canic fleet role attach demo store --subnet prime
   canic fleet role rename demo hub router
@@ -82,6 +94,22 @@ Examples:
 const FLEET_ROLE_RENAME_HELP_AFTER: &str = "\
 Examples:
   canic fleet role rename demo hub router";
+const FLEET_ADOPTION_HELP_AFTER: &str = "\
+Examples:
+  canic fleet adoption report demo --profile brownfield
+  canic fleet adoption report demo --profile minimal --format json
+
+Adoption commands are read-only. They report recommendations and never update
+fleet config, package manifests, topology, deployments, or controllers.";
+const FLEET_ADOPTION_REPORT_HELP_AFTER: &str = "\
+Examples:
+  canic fleet adoption report demo --profile brownfield
+  canic fleet adoption report demo --profile minimal --format json
+  canic fleet adoption report demo --profile partial --output adoption-report.txt
+
+Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
+minimal. The report is read-only; --output writes only the requested report
+artifact.";
 
 ///
 /// FleetCommandError
@@ -119,10 +147,16 @@ pub enum FleetCommandError {
     Create(String),
 
     #[error(transparent)]
+    AdoptionReport(#[from] AdoptionReportError),
+
+    #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
 
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),
@@ -209,6 +243,28 @@ struct RoleRenameOptions {
 }
 
 ///
+/// AdoptionReportOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AdoptionReportOptions {
+    fleet: String,
+    profile: AdoptionProfileV1,
+    format: AdoptionReportFormat,
+    output: Option<PathBuf>,
+}
+
+///
+/// AdoptionReportFormat
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AdoptionReportFormat {
+    Text,
+    Json,
+}
+
+///
 /// FleetListRow
 ///
 
@@ -239,10 +295,50 @@ where
             "check" => run_check(args),
             "delete" => run_delete(args),
             "list" => run_list(args),
+            "adoption" => run_adoption(args),
             "role" => run_role(args),
             _ => unreachable!("fleet dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_adoption<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, adoption_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(fleet_adoption_command(), args)
+        .map_err(|_| FleetCommandError::Usage(adoption_usage()))?
+    {
+        None => {
+            println!("{}", adoption_usage());
+            Ok(())
+        }
+        Some((command, args)) => match command.as_str() {
+            "report" => run_adoption_report(args),
+            _ => unreachable!("fleet adoption dispatch command only defines known commands"),
+        },
+    }
+}
+
+fn run_adoption_report<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, adoption_report_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = AdoptionReportOptions::parse(args)?;
+    let config_path = selected_fleet_config_path(&options.fleet)?;
+    let generated_at = current_adoption_report_generated_at()?;
+    let report = build_adoption_report_from_config_path(&config_path, &options, &generated_at)?;
+    write_adoption_report(&options, &report)
 }
 
 fn run_role<I>(args: I) -> Result<(), FleetCommandError>
@@ -628,6 +724,70 @@ impl RoleRenameOptions {
     }
 }
 
+impl AdoptionReportOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_adoption_report_command(), args)
+            .map_err(|_| FleetCommandError::Usage(adoption_report_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            profile: parse_adoption_profile(
+                string_option(&matches, "profile").as_deref(),
+                adoption_report_usage,
+            )?,
+            format: parse_adoption_report_format(
+                string_option(&matches, "format").as_deref(),
+                adoption_report_usage,
+            )?,
+            output: path_option(&matches, "output"),
+        })
+    }
+}
+
+fn parse_adoption_profile(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<AdoptionProfileV1, FleetCommandError> {
+    match value {
+        Some("brownfield") => Ok(AdoptionProfileV1::Brownfield),
+        Some("partial") => Ok(AdoptionProfileV1::Partial),
+        Some("standalone") => Ok(AdoptionProfileV1::Standalone),
+        Some("leaf-only") => Ok(AdoptionProfileV1::LeafOnly),
+        Some("hybrid-external-wasm") => Ok(AdoptionProfileV1::HybridExternalWasm),
+        Some("minimal") => Ok(AdoptionProfileV1::Minimal),
+        Some(other) => Err(FleetCommandError::Usage(format!(
+            "invalid adoption profile: {other}\n\n{}",
+            usage()
+        ))),
+        None => Err(FleetCommandError::Usage(usage())),
+    }
+}
+
+fn parse_adoption_report_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<AdoptionReportFormat, FleetCommandError> {
+    match value.unwrap_or("text") {
+        "text" => Ok(AdoptionReportFormat::Text),
+        "json" => Ok(AdoptionReportFormat::Json),
+        other => Err(FleetCommandError::Usage(format!(
+            "invalid adoption report output format: {other}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
 fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     discover_current_canic_config_choices()
 }
@@ -750,6 +910,11 @@ fn fleet_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("adoption")
+                .about("Report safe onboarding recommendations")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("role")
                 .about("Manage fleet role lifecycle")
                 .disable_help_flag(true),
@@ -760,6 +925,52 @@ fn fleet_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(FLEET_HELP_AFTER)
+}
+
+fn fleet_adoption_command() -> ClapCommand {
+    ClapCommand::new("adoption")
+        .bin_name("canic fleet adoption")
+        .about("Report safe onboarding recommendations")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("report")
+                .about("Generate a read-only adoption report")
+                .disable_help_flag(true),
+        ))
+        .after_help(FLEET_ADOPTION_HELP_AFTER)
+}
+
+fn fleet_adoption_report_command() -> ClapCommand {
+    ClapCommand::new("report")
+        .bin_name("canic fleet adoption report")
+        .about("Generate a read-only adoption report")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name"),
+        )
+        .arg(
+            clap::Arg::new("profile")
+                .long("profile")
+                .value_name("profile")
+                .required(true)
+                .help("Adoption profile to evaluate"),
+        )
+        .arg(
+            clap::Arg::new("format")
+                .long("format")
+                .value_name("text|json")
+                .help("Report output format"),
+        )
+        .arg(
+            clap::Arg::new("output")
+                .long("output")
+                .value_name("path")
+                .help("Write the report artifact to this path"),
+        )
+        .after_help(FLEET_ADOPTION_REPORT_HELP_AFTER)
 }
 
 fn fleet_role_command() -> ClapCommand {
@@ -1137,6 +1348,339 @@ fn render_renamed_role(
     .join("\n")
 }
 
+fn build_adoption_report_from_config_path(
+    config_path: &Path,
+    options: &AdoptionReportOptions,
+    generated_at: &str,
+) -> Result<AdoptionReportV1, FleetCommandError> {
+    let config_source = fs::read_to_string(config_path)?;
+    let report_id = format!(
+        "local:{}:{}:adoption-report",
+        options.fleet,
+        adoption_profile_label(options.profile)
+    );
+
+    adoption_report_from_config_source(AdoptionReportRequest {
+        report_id: &report_id,
+        generated_at,
+        profile: options.profile,
+        config_source: &config_source,
+        inventory: None,
+        artifact_manifest: None,
+        package_metadata: Vec::new(),
+    })
+    .map_err(FleetCommandError::from)
+}
+
+fn write_adoption_report(
+    options: &AdoptionReportOptions,
+    report: &AdoptionReportV1,
+) -> Result<(), FleetCommandError> {
+    match options.format {
+        AdoptionReportFormat::Text => {
+            output::write_text(options.output.as_ref(), &render_adoption_report(report))
+        }
+        AdoptionReportFormat::Json => output::write_pretty_json(options.output.as_ref(), report),
+    }
+}
+
+fn render_adoption_report(report: &AdoptionReportV1) -> String {
+    let mut lines = vec![
+        "Adoption report:".to_string(),
+        format!("  fleet: {}", report.fleet),
+        format!("  profile: {}", adoption_profile_label(report.profile)),
+        format!("  report_id: {}", report.report_id),
+        format!("  generated_at: {}", report.generated_at),
+        "  read_only: true".to_string(),
+        "Summary:".to_string(),
+    ];
+
+    lines.extend(adoption_summary_lines(report));
+    lines.extend(adoption_missing_evidence_lines(report));
+    lines.extend(adoption_role_finding_lines(report));
+    lines.extend(adoption_observed_canister_lines(report));
+    lines.extend(adoption_recommendation_lines(report));
+    lines.extend(adoption_blocked_action_lines(report));
+    lines.join("\n")
+}
+
+fn adoption_summary_lines(report: &AdoptionReportV1) -> Vec<String> {
+    let summary = &report.summary;
+    [
+        format!(
+            "  managed_configured_roles: {}",
+            summary.managed_configured_roles
+        ),
+        format!("  declared_only_roles: {}", summary.declared_only_roles),
+        format!(
+            "  attached_unobserved_roles: {}",
+            summary.attached_unobserved_roles
+        ),
+        format!(
+            "  observed_only_canisters: {}",
+            summary.observed_only_canisters
+        ),
+        format!(
+            "  user_controlled_canisters: {}",
+            summary.user_controlled_canisters
+        ),
+        format!(
+            "  external_controller_required: {}",
+            summary.external_controller_required
+        ),
+        format!("  evidence_conflicts: {}", summary.evidence_conflicts),
+        format!(
+            "  mutating_actions_performed: {}",
+            summary.mutating_actions_performed
+        ),
+    ]
+    .into()
+}
+
+fn adoption_missing_evidence_lines(report: &AdoptionReportV1) -> Vec<String> {
+    let mut lines = vec!["Missing or stale evidence:".to_string()];
+    if report.inputs.missing_or_stale_evidence.is_empty() {
+        lines.push("  - none".to_string());
+    } else {
+        lines.extend(
+            report
+                .inputs
+                .missing_or_stale_evidence
+                .iter()
+                .map(|evidence| format!("  - {evidence}")),
+        );
+    }
+    lines
+}
+
+fn adoption_role_finding_lines(report: &AdoptionReportV1) -> Vec<String> {
+    let mut lines = vec!["Role findings:".to_string()];
+    if report.role_findings.is_empty() {
+        lines.push("  - none".to_string());
+        return lines;
+    }
+
+    for finding in &report.role_findings {
+        lines.push(format!(
+            "  - {}.{}: {}",
+            finding.fleet,
+            finding.role,
+            format_adoption_classifications(&finding.classifications)
+        ));
+        lines.push(format!(
+            "    state: declaration={}, topology={}, observation={}, authority={}, artifact={}, package={}",
+            adoption_declaration_state_label(finding.declaration_state),
+            adoption_topology_state_label(finding.topology_state),
+            adoption_observation_state_label(finding.observation_state),
+            adoption_authority_state_label(finding.authority_state),
+            adoption_artifact_state_label(finding.artifact_state),
+            adoption_package_state_label(finding.package_state)
+        ));
+        lines.extend(
+            finding
+                .warnings
+                .iter()
+                .map(|warning| format!("    warning: {warning}")),
+        );
+    }
+
+    lines
+}
+
+fn adoption_observed_canister_lines(report: &AdoptionReportV1) -> Vec<String> {
+    let mut lines = vec!["Observed canisters:".to_string()];
+    if report.observed_canisters.is_empty() {
+        lines.push("  - none".to_string());
+        return lines;
+    }
+
+    for finding in &report.observed_canisters {
+        let role = finding.matched_role.as_deref().map_or("-", |role| role);
+        lines.push(format!(
+            "  - {}: role={}, classifications={}",
+            finding.canister_id,
+            role,
+            format_adoption_classifications(&finding.classifications)
+        ));
+    }
+    lines
+}
+
+fn adoption_recommendation_lines(report: &AdoptionReportV1) -> Vec<String> {
+    let mut lines = vec!["Recommendations:".to_string()];
+    if report.recommendations.is_empty() {
+        lines.push("  - none".to_string());
+        return lines;
+    }
+
+    for recommendation in &report.recommendations {
+        lines.push(format!(
+            "  - {} [{}; {}; {}; {}; {}]",
+            recommendation.description,
+            adoption_recommendation_severity_label(recommendation.severity),
+            adoption_action_effect_label(recommendation.suggested_action_effect),
+            adoption_action_support_label(recommendation.suggested_action_support),
+            adoption_action_availability_label(recommendation.suggested_action_availability),
+            adoption_operator_requirement_label(recommendation.operator_action_requirement)
+        ));
+        if let Some(action) = &recommendation.suggested_action {
+            lines.push(format!("    suggested_action: {action}"));
+        }
+    }
+    lines
+}
+
+fn adoption_blocked_action_lines(report: &AdoptionReportV1) -> Vec<String> {
+    let mut lines = vec!["Blocked adoption actions:".to_string()];
+    if report.blocked_actions.is_empty() {
+        lines.push("  - none".to_string());
+    } else {
+        lines.extend(
+            report
+                .blocked_actions
+                .iter()
+                .map(|action| format!("  - {action}")),
+        );
+    }
+    lines
+}
+
+fn format_adoption_classifications(classifications: &[AdoptionClassificationV1]) -> String {
+    if classifications.is_empty() {
+        return "-".to_string();
+    }
+
+    classifications
+        .iter()
+        .map(|classification| adoption_classification_label(*classification))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn current_adoption_report_generated_at() -> Result<String, Box<dyn std::error::Error>> {
+    Ok(format!(
+        "unix:{}",
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+    ))
+}
+
+const fn adoption_profile_label(profile: AdoptionProfileV1) -> &'static str {
+    match profile {
+        AdoptionProfileV1::Brownfield => "brownfield",
+        AdoptionProfileV1::Partial => "partial",
+        AdoptionProfileV1::Standalone => "standalone",
+        AdoptionProfileV1::LeafOnly => "leaf-only",
+        AdoptionProfileV1::HybridExternalWasm => "hybrid-external-wasm",
+        AdoptionProfileV1::Minimal => "minimal",
+    }
+}
+
+const fn adoption_classification_label(classification: AdoptionClassificationV1) -> &'static str {
+    match classification {
+        AdoptionClassificationV1::Managed => "managed",
+        AdoptionClassificationV1::DeclaredOnly => "declared-only",
+        AdoptionClassificationV1::ObservedOnly => "observed-only",
+        AdoptionClassificationV1::AttachedUnobserved => "attached-unobserved",
+        AdoptionClassificationV1::UserControlled => "user-controlled",
+        AdoptionClassificationV1::ExternalControllerRequired => "external-controller-required",
+        AdoptionClassificationV1::ImportedPoolCandidate => "imported-pool-candidate",
+        AdoptionClassificationV1::EvidenceConflict => "evidence-conflict",
+    }
+}
+
+const fn adoption_declaration_state_label(state: AdoptionDeclarationStateV1) -> &'static str {
+    match state {
+        AdoptionDeclarationStateV1::Undeclared => "undeclared",
+        AdoptionDeclarationStateV1::Declared => "declared",
+    }
+}
+
+const fn adoption_topology_state_label(state: AdoptionTopologyStateV1) -> &'static str {
+    match state {
+        AdoptionTopologyStateV1::Unattached => "unattached",
+        AdoptionTopologyStateV1::Attached => "attached",
+    }
+}
+
+const fn adoption_observation_state_label(state: AdoptionObservationStateV1) -> &'static str {
+    match state {
+        AdoptionObservationStateV1::Unobserved => "unobserved",
+        AdoptionObservationStateV1::Observed => "observed",
+        AdoptionObservationStateV1::CandidateMatch => "candidate-match",
+        AdoptionObservationStateV1::ConflictingMatch => "conflicting-match",
+    }
+}
+
+const fn adoption_authority_state_label(state: AdoptionAuthorityStateV1) -> &'static str {
+    match state {
+        AdoptionAuthorityStateV1::CanicAuthorized => "canic-authorized",
+        AdoptionAuthorityStateV1::UserControlled => "user-controlled",
+        AdoptionAuthorityStateV1::External => "external",
+        AdoptionAuthorityStateV1::Unknown => "unknown",
+    }
+}
+
+const fn adoption_artifact_state_label(state: AdoptionArtifactStateV1) -> &'static str {
+    match state {
+        AdoptionArtifactStateV1::CanicBuilt => "canic-built",
+        AdoptionArtifactStateV1::ExternalWasm => "external-wasm",
+        AdoptionArtifactStateV1::Unknown => "unknown",
+    }
+}
+
+const fn adoption_package_state_label(state: AdoptionPackageStateV1) -> &'static str {
+    match state {
+        AdoptionPackageStateV1::NotPackageBacked => "not-package-backed",
+        AdoptionPackageStateV1::NotChecked => "not-checked",
+        AdoptionPackageStateV1::Matches => "matches",
+        AdoptionPackageStateV1::MissingFleet => "missing-fleet",
+        AdoptionPackageStateV1::MissingRole => "missing-role",
+        AdoptionPackageStateV1::Mismatch => "mismatch",
+    }
+}
+
+const fn adoption_recommendation_severity_label(
+    severity: AdoptionRecommendationSeverityV1,
+) -> &'static str {
+    match severity {
+        AdoptionRecommendationSeverityV1::Info => "info",
+        AdoptionRecommendationSeverityV1::Warning => "warning",
+        AdoptionRecommendationSeverityV1::Blocked => "blocked",
+    }
+}
+
+const fn adoption_action_effect_label(effect: AdoptionSuggestedActionEffectV1) -> &'static str {
+    match effect {
+        AdoptionSuggestedActionEffectV1::ReadOnly => "read-only",
+        AdoptionSuggestedActionEffectV1::MutatesState => "mutates-state",
+    }
+}
+
+const fn adoption_action_support_label(support: AdoptionSuggestedActionSupportV1) -> &'static str {
+    match support {
+        AdoptionSuggestedActionSupportV1::SupportedByAdoption => "supported-by-adoption",
+        AdoptionSuggestedActionSupportV1::UnsupportedByAdoption => "unsupported-by-adoption",
+    }
+}
+
+const fn adoption_action_availability_label(
+    availability: AdoptionSuggestedActionAvailabilityV1,
+) -> &'static str {
+    match availability {
+        AdoptionSuggestedActionAvailabilityV1::AllowedIn0500 => "allowed-in-0.50.0",
+        AdoptionSuggestedActionAvailabilityV1::BlockedIn0500 => "blocked-in-0.50.0",
+    }
+}
+
+const fn adoption_operator_requirement_label(
+    requirement: AdoptionOperatorActionRequirementV1,
+) -> &'static str {
+    match requirement {
+        AdoptionOperatorActionRequirementV1::Required => "operator-action-required",
+        AdoptionOperatorActionRequirementV1::NotRequired => "no-operator-action-required",
+    }
+}
+
 fn print_config_report(report: &IcpProjectConfigReport) {
     println!("Checked ICP project config:");
     println!("  path: {}", report.path.display());
@@ -1181,6 +1725,16 @@ fn delete_usage() -> String {
 
 fn role_usage() -> String {
     let mut command = fleet_role_command();
+    command.render_help().to_string()
+}
+
+fn adoption_usage() -> String {
+    let mut command = fleet_adoption_command();
+    command.render_help().to_string()
+}
+
+fn adoption_report_usage() -> String {
+    let mut command = fleet_adoption_report_command();
     command.render_help().to_string()
 }
 
