@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.6` adds active adoption profile architecture docs, including the
+  read-only report boundary, profile vocabulary, lifecycle classifications,
+  recommendation previews, blocked actions, and evidence rules.
+
 - `0.50.5` polishes adoption text rendering so suggested actions appear as
   `suggested_action_preview` entries, are marked as not executed by the report,
   and blocked actions are framed as non-executed report output.

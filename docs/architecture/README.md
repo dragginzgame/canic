@@ -9,6 +9,7 @@ runtime/wire contracts belong in `docs/contracts/`.
 
 Current architecture notes:
 
+- [Adoption Profiles](adoption-profiles.md)
 - [Authentication](authentication.md)
 - [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
 - [Build Artifacts](build-artifacts.md)

@@ -50,6 +50,10 @@ walkthrough.
 * **Thin-root install flow:** The CLI stages ordinary child artifacts through
   the implicit `wasm_store` and keeps child artifacts out of the root Wasm. See
   [build-artifacts.md](docs/architecture/build-artifacts.md).
+* **Passive adoption reports:** Existing and partial deployments can be
+  inspected with read-only adoption profiles. Reports classify configured and
+  observed resources, but recommendations are non-executed previews. See
+  [adoption-profiles.md](docs/architecture/adoption-profiles.md).
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
   fleet configs and replica status, installs fleets, captures topology-aware
   snapshots, validates backup manifests, and drives guarded restore planning.

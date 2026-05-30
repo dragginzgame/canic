@@ -40,6 +40,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.6 has added active adoption profile architecture docs. The new
+  `docs/architecture/adoption-profiles.md` page documents the read-only report
+  boundary, profile vocabulary, lifecycle classifications, recommendation
+  previews, blocked actions, and evidence rules.
 - 0.50.5 has polished adoption text rendering. Recommendations now render as
   report-only/non-executed output, suggested commands use
   `suggested_action_preview` with explicit status/support/availability lines,
