@@ -85,6 +85,22 @@ experimental:
 canic fleet adoption report demo --profile minimal --format json
 ```
 
+Evidence can be supplied from existing JSON artifacts:
+
+```bash
+canic fleet adoption report demo --profile partial \
+  --inventory inventory.json \
+  --artifact-manifest artifact-manifest.json \
+  --package-metadata package-metadata.json
+```
+
+Those inputs are read-only:
+
+- `--inventory` reads `DeploymentInventoryV1` JSON evidence;
+- `--artifact-manifest` reads `RoleArtifactManifestV1` JSON evidence;
+- `--package-metadata` reads a JSON array of `AdoptionPackageMetadataV1`
+  entries.
+
 The report command must not:
 
 - edit `canic.toml`;

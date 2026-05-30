@@ -40,6 +40,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.7 has added explicit read-only evidence inputs for adoption reports:
+  `--inventory <path>`, `--artifact-manifest <path>`, and
+  `--package-metadata <path>`. These feed existing JSON evidence into
+  `canic fleet adoption report <fleet> --profile <profile>` without live
+  discovery or mutation.
 - 0.50.6 has added active adoption profile architecture docs. The new
   `docs/architecture/adoption-profiles.md` page documents the read-only report
   boundary, profile vocabulary, lifecycle classifications, recommendation

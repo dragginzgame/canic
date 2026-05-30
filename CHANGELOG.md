@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.7` adds explicit read-only evidence inputs for adoption reports:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile> --inventory <path>
+  canic fleet adoption report <fleet> --profile <profile> --artifact-manifest <path>
+  canic fleet adoption report <fleet> --profile <profile> --package-metadata <path>
+  ```
+  These options feed existing JSON evidence into the report without live
+  discovery or mutation.
+
 - `0.50.6` adds active adoption profile architecture docs, including the
   read-only report boundary, profile vocabulary, lifecycle classifications,
   recommendation previews, blocked actions, and evidence rules.

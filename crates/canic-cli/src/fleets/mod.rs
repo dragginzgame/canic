@@ -12,12 +12,13 @@ use canic_host::{
     adoption::{
         AdoptionArtifactStateV1, AdoptionAuthorityStateV1, AdoptionClassificationV1,
         AdoptionDeclarationStateV1, AdoptionObservationStateV1,
-        AdoptionOperatorActionRequirementV1, AdoptionPackageStateV1, AdoptionProfileV1,
-        AdoptionRecommendationSeverityV1, AdoptionReportError, AdoptionReportRequest,
-        AdoptionReportV1, AdoptionSuggestedActionAvailabilityV1, AdoptionSuggestedActionEffectV1,
-        AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
+        AdoptionOperatorActionRequirementV1, AdoptionPackageMetadataV1, AdoptionPackageStateV1,
+        AdoptionProfileV1, AdoptionRecommendationSeverityV1, AdoptionReportError,
+        AdoptionReportRequest, AdoptionReportV1, AdoptionSuggestedActionAvailabilityV1,
+        AdoptionSuggestedActionEffectV1, AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
         adoption_report_from_config_source,
     },
+    deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1},
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
@@ -31,6 +32,7 @@ use canic_host::{
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
+use serde::de::DeserializeOwned;
 use std::{
     ffi::OsString,
     fs,
@@ -105,11 +107,12 @@ const FLEET_ADOPTION_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
   canic fleet adoption report demo --profile minimal --format json
+  canic fleet adoption report demo --profile partial --inventory inventory.json
   canic fleet adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
 minimal. The report is read-only; --output writes only the requested report
-artifact.";
+artifact. Evidence inputs are JSON files and are read-only.";
 
 ///
 /// FleetCommandError
@@ -251,6 +254,9 @@ struct AdoptionReportOptions {
     fleet: String,
     profile: AdoptionProfileV1,
     format: AdoptionReportFormat,
+    inventory: Option<PathBuf>,
+    artifact_manifest: Option<PathBuf>,
+    package_metadata: Option<PathBuf>,
     output: Option<PathBuf>,
 }
 
@@ -750,6 +756,9 @@ impl AdoptionReportOptions {
                 string_option(&matches, "format").as_deref(),
                 adoption_report_usage,
             )?,
+            inventory: path_option(&matches, "inventory"),
+            artifact_manifest: path_option(&matches, "artifact-manifest"),
+            package_metadata: path_option(&matches, "package-metadata"),
             output: path_option(&matches, "output"),
         })
     }
@@ -963,6 +972,24 @@ fn fleet_adoption_report_command() -> ClapCommand {
                 .long("format")
                 .value_name("text|json")
                 .help("Report output format"),
+        )
+        .arg(
+            clap::Arg::new("inventory")
+                .long("inventory")
+                .value_name("path")
+                .help("Read DeploymentInventoryV1 JSON evidence from this path"),
+        )
+        .arg(
+            clap::Arg::new("artifact-manifest")
+                .long("artifact-manifest")
+                .value_name("path")
+                .help("Read RoleArtifactManifestV1 JSON evidence from this path"),
+        )
+        .arg(
+            clap::Arg::new("package-metadata")
+                .long("package-metadata")
+                .value_name("path")
+                .help("Read AdoptionPackageMetadataV1 JSON array evidence from this path"),
         )
         .arg(
             clap::Arg::new("output")
@@ -1354,6 +1381,12 @@ fn build_adoption_report_from_config_path(
     generated_at: &str,
 ) -> Result<AdoptionReportV1, FleetCommandError> {
     let config_source = fs::read_to_string(config_path)?;
+    let inventory = read_optional_json::<DeploymentInventoryV1>(options.inventory.as_deref())?;
+    let artifact_manifest =
+        read_optional_json::<RoleArtifactManifestV1>(options.artifact_manifest.as_deref())?;
+    let package_metadata =
+        read_optional_json::<Vec<AdoptionPackageMetadataV1>>(options.package_metadata.as_deref())?
+            .unwrap_or_default();
     let report_id = format!(
         "local:{}:{}:adoption-report",
         options.fleet,
@@ -1365,11 +1398,25 @@ fn build_adoption_report_from_config_path(
         generated_at,
         profile: options.profile,
         config_source: &config_source,
-        inventory: None,
-        artifact_manifest: None,
-        package_metadata: Vec::new(),
+        inventory: inventory.as_ref(),
+        artifact_manifest: artifact_manifest.as_ref(),
+        package_metadata,
     })
     .map_err(FleetCommandError::from)
+}
+
+fn read_optional_json<T>(path: Option<&Path>) -> Result<Option<T>, FleetCommandError>
+where
+    T: DeserializeOwned,
+{
+    path.map(read_json_file).transpose()
+}
+
+fn read_json_file<T>(path: &Path) -> Result<T, FleetCommandError>
+where
+    T: DeserializeOwned,
+{
+    Ok(serde_json::from_slice(&fs::read(path)?)?)
 }
 
 fn write_adoption_report(

@@ -128,10 +128,13 @@ fn parses_adoption_report_fleet_profile_and_default_text() {
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.profile, AdoptionProfileV1::Brownfield);
     assert_eq!(options.format, AdoptionReportFormat::Text);
+    assert_eq!(options.inventory, None);
+    assert_eq!(options.artifact_manifest, None);
+    assert_eq!(options.package_metadata, None);
     assert_eq!(options.output, None);
 }
 
-// Ensure adoption report can emit JSON to an explicit output path.
+// Ensure adoption report can read explicit evidence paths and emit JSON output.
 #[test]
 fn parses_adoption_report_json_output() {
     let options = AdoptionReportOptions::parse_test([
@@ -140,6 +143,12 @@ fn parses_adoption_report_json_output() {
         OsString::from("minimal"),
         OsString::from("--format"),
         OsString::from("json"),
+        OsString::from("--inventory"),
+        OsString::from("inventory.json"),
+        OsString::from("--artifact-manifest"),
+        OsString::from("artifacts.json"),
+        OsString::from("--package-metadata"),
+        OsString::from("packages.json"),
         OsString::from("--output"),
         OsString::from("report.json"),
     ])
@@ -147,6 +156,15 @@ fn parses_adoption_report_json_output() {
 
     assert_eq!(options.profile, AdoptionProfileV1::Minimal);
     assert_eq!(options.format, AdoptionReportFormat::Json);
+    assert_eq!(options.inventory, Some(PathBuf::from("inventory.json")));
+    assert_eq!(
+        options.artifact_manifest,
+        Some(PathBuf::from("artifacts.json"))
+    );
+    assert_eq!(
+        options.package_metadata,
+        Some(PathBuf::from("packages.json"))
+    );
     assert_eq!(options.output, Some(PathBuf::from("report.json")));
 }
 
@@ -405,6 +423,9 @@ fn renders_adoption_report_text_for_declared_only_roles() {
         fleet: "demo".to_string(),
         profile: AdoptionProfileV1::Brownfield,
         format: AdoptionReportFormat::Text,
+        inventory: None,
+        artifact_manifest: None,
+        package_metadata: None,
         output: None,
     };
 
@@ -442,6 +463,9 @@ fn writes_adoption_report_json_output_file() {
         fleet: "demo".to_string(),
         profile: AdoptionProfileV1::Minimal,
         format: AdoptionReportFormat::Json,
+        inventory: None,
+        artifact_manifest: None,
+        package_metadata: None,
         output: Some(out.clone()),
     };
 
@@ -455,6 +479,150 @@ fn writes_adoption_report_json_output_file() {
     assert_eq!(value["fleet"], "demo");
     assert_eq!(value["profile"], "Minimal");
     assert_eq!(value["summary"]["mutating_actions_performed"], 0);
+}
+
+// Ensure explicit evidence files are read and passed to the host adoption builder.
+#[test]
+fn adoption_report_reads_explicit_evidence_files() {
+    let root = temp_dir("canic-fleet-adoption-evidence");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        inventory: Some(evidence.inventory),
+        artifact_manifest: Some(evidence.artifact_manifest),
+        package_metadata: Some(evidence.package_metadata),
+        output: None,
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:3").expect("report");
+    let store = report
+        .role_findings
+        .iter()
+        .find(|finding| finding.role == "store")
+        .expect("store finding");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
+    assert_eq!(
+        report.inputs.artifact_manifest_id.as_deref(),
+        Some("manifest-1")
+    );
+    assert_eq!(report.inputs.package_metadata_count, 1);
+    assert_eq!(store.package_state, AdoptionPackageStateV1::Matches);
+    assert_eq!(
+        store.observation_state,
+        AdoptionObservationStateV1::Observed
+    );
+    assert_eq!(store.artifact_state, AdoptionArtifactStateV1::CanicBuilt);
+}
+
+struct AdoptionEvidenceFiles {
+    inventory: PathBuf,
+    artifact_manifest: PathBuf,
+    package_metadata: PathBuf,
+}
+
+fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
+    let files = AdoptionEvidenceFiles {
+        inventory: root.join("inventory.json"),
+        artifact_manifest: root.join("artifact-manifest.json"),
+        package_metadata: root.join("package-metadata.json"),
+    };
+
+    write_json_fixture(&files.inventory, adoption_inventory_fixture());
+    write_json_fixture(
+        &files.artifact_manifest,
+        adoption_artifact_manifest_fixture(),
+    );
+    write_json_fixture(&files.package_metadata, adoption_package_metadata_fixture());
+    files
+}
+
+fn write_json_fixture(path: &Path, value: serde_json::Value) {
+    fs::write(path, serde_json::to_vec(&value).expect("encode fixture")).expect("write fixture");
+}
+
+fn adoption_inventory_fixture() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "inventory_id": "inventory-1",
+        "observed_at": "2026-05-30T00:00:00Z",
+        "observed_identity": null,
+        "observed_root": null,
+        "local_config": {
+            "config_path": "fleets/demo/canic.toml",
+            "raw_config_sha256": null,
+            "canonical_embedded_config_sha256": null
+        },
+        "observed_canisters": [{
+            "canister_id": "aaaaa-aa",
+            "role": "store",
+            "control_class": "DeploymentControlled",
+            "controllers": [],
+            "module_hash": null,
+            "status": "running",
+            "root_trust_anchor": null,
+            "canonical_embedded_config_digest": null,
+            "role_assignment_source": "fixture"
+        }],
+        "observed_pool": [],
+        "observed_artifacts": [],
+        "observed_verifier_readiness": {
+            "status": "NotObserved",
+            "role_epochs": []
+        },
+        "unresolved_observations": []
+    })
+}
+
+fn adoption_artifact_manifest_fixture() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "manifest_id": "manifest-1",
+        "network": "local",
+        "artifact_root": null,
+        "role_artifacts": [adoption_role_artifact_fixture()],
+        "unresolved_artifacts": []
+    })
+}
+
+fn adoption_role_artifact_fixture() -> serde_json::Value {
+    serde_json::json!({
+        "role": "store",
+        "source": "LocalBuild",
+        "build_profile": "fast",
+        "wasm_path": null,
+        "wasm_gz_path": null,
+        "wasm_gz_size_bytes": null,
+        "wasm_sha256": null,
+        "wasm_gz_sha256": null,
+        "wasm_gz_sha256_source": null,
+        "observed_wasm_gz_file_sha256": null,
+        "observed_wasm_gz_file_sha256_source": null,
+        "installed_module_hash": null,
+        "candid_path": null,
+        "candid_sha256": null,
+        "raw_config_sha256": null,
+        "canonical_embedded_config_sha256": null,
+        "embedded_topology_sha256": null,
+        "builder_version": null,
+        "rust_toolchain": null,
+        "package_version": null
+    })
+}
+
+fn adoption_package_metadata_fixture() -> serde_json::Value {
+    serde_json::json!([{
+        "package": "store",
+        "fleet": "demo",
+        "role": "store"
+    }])
 }
 
 // Ensure fleet command help lists the command family without search.
@@ -610,6 +778,9 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("--profile <profile>"));
     assert!(text.contains("<fleet>"));
     assert!(text.contains("--format <text|json>"));
+    assert!(text.contains("--inventory <path>"));
+    assert!(text.contains("--artifact-manifest <path>"));
+    assert!(text.contains("--package-metadata <path>"));
     assert!(text.contains("--output <path>"));
     assert!(text.contains("brownfield"));
     assert!(text.contains("read-only"));
