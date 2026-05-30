@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 ## Purpose
 
@@ -51,6 +51,9 @@ inspect only the files needed for the current task.
   config-only ordinary role declaration for existing package-backed canisters.
   It does not attach topology, rejects `root` and duplicate declarations, and
   validates the updated config before writing.
+- `canic fleet role attach <fleet> <role> --subnet <subnet>` now moves a
+  declared ordinary role into direct topology, defaulting to `kind =
+  "singleton"` unless `--kind` selects `shard`, `replica`, or `instance`.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.

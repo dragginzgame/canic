@@ -67,6 +67,39 @@ fn parses_role_declare_fleet_role_and_package() {
     assert_eq!(options.package, "store");
 }
 
+// Ensure role attachment requires fleet, role, and subnet and defaults to singleton.
+#[test]
+fn parses_role_attach_fleet_role_and_subnet() {
+    let options = RoleAttachOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("store"),
+        OsString::from("--subnet"),
+        OsString::from("prime"),
+    ])
+    .expect("parse role attach options");
+
+    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.role, "store");
+    assert_eq!(options.subnet, "prime");
+    assert_eq!(options.kind, "singleton");
+}
+
+// Ensure role attachment accepts explicit non-singleton kind.
+#[test]
+fn parses_role_attach_kind() {
+    let options = RoleAttachOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("worker"),
+        OsString::from("--subnet"),
+        OsString::from("prime"),
+        OsString::from("--kind"),
+        OsString::from("replica"),
+    ])
+    .expect("parse role attach options");
+
+    assert_eq!(options.kind, "replica");
+}
+
 // Ensure unknown fleet check options fail through usage.
 #[test]
 fn rejects_unknown_check_option() {
@@ -194,7 +227,7 @@ fn renders_declared_only_role_inspection() {
     assert!(output.contains("role: demo.store"));
     assert!(output.contains("cargo check: allowed"));
     assert!(output.contains("deploy artifact: blocked: role is declared-only"));
-    assert!(output.contains("canic fleet role attach demo store"));
+    assert!(output.contains("canic fleet role attach demo store --subnet <subnet>"));
 }
 
 // Ensure declaration output stays explicit about config-only state.
@@ -218,7 +251,34 @@ fn renders_declared_role_output() {
     assert!(output.contains("package: store"));
     assert!(output.contains("config: fleets/demo/canic.toml"));
     assert!(output.contains("state: declared"));
-    assert!(output.contains("canic fleet role attach demo store"));
+    assert!(output.contains("canic fleet role attach demo store --subnet <subnet>"));
+}
+
+// Ensure attachment output points at artifact build as the next step.
+#[test]
+fn renders_attached_role_output() {
+    let root = Path::new("/workspace");
+    let config = root.join("fleets/demo/canic.toml");
+    let output = render_attached_role(
+        &AttachedFleetRole {
+            fleet: "demo".to_string(),
+            role: "store".to_string(),
+            display: "demo.store".to_string(),
+            subnet: "prime".to_string(),
+            kind: "singleton".to_string(),
+            topology: "prime/store".to_string(),
+        },
+        root,
+        &config,
+    );
+
+    assert!(output.contains("Attached fleet role:"));
+    assert!(output.contains("role: demo.store"));
+    assert!(output.contains("kind: singleton"));
+    assert!(output.contains("topology: prime/store"));
+    assert!(output.contains("config: fleets/demo/canic.toml"));
+    assert!(output.contains("state: attached"));
+    assert!(output.contains("canic build demo store"));
 }
 
 // Ensure fleet command help lists the command family without search.
@@ -248,6 +308,7 @@ fn fleet_role_usage_lists_subcommands_and_examples() {
     assert!(text.contains("Manage fleet role lifecycle"));
     assert!(text.contains("Usage: canic fleet role"));
     assert!(text.contains("declare"));
+    assert!(text.contains("attach"));
     assert!(text.contains("list"));
     assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
@@ -325,6 +386,19 @@ fn role_declare_usage_lists_required_package() {
     assert!(text.contains("<fleet>"));
     assert!(text.contains("<role>"));
     assert!(text.contains("--package <path>"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure role attach help takes explicit fleet, role, and subnet.
+#[test]
+fn role_attach_usage_lists_required_subnet() {
+    let text = role_attach_usage();
+
+    assert!(text.contains("Usage: canic fleet role attach"));
+    assert!(text.contains("<fleet>"));
+    assert!(text.contains("<role>"));
+    assert!(text.contains("--subnet <subnet>"));
+    assert!(text.contains("--kind <kind>"));
     assert!(text.contains("Examples:"));
 }
 

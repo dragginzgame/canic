@@ -13,9 +13,9 @@ use canic_host::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
     },
     release_set::{
-        ConfiguredRoleLifecycle, DeclaredFleetRole, configured_fleet_name, configured_fleet_roles,
-        configured_role_lifecycle, declare_fleet_role, display_workspace_path,
-        matching_fleet_config_paths,
+        AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, attach_fleet_role,
+        configured_fleet_name, configured_fleet_roles, configured_role_lifecycle,
+        declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
     },
     table::{ColumnAlign, render_table},
 };
@@ -37,6 +37,7 @@ const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
   canic fleet role declare demo store --package store
+  canic fleet role attach demo store --subnet prime
   canic fleet role list demo
   canic fleet role inspect demo app
   canic fleet create demo
@@ -59,6 +60,7 @@ fleet name exactly.";
 const FLEET_ROLE_HELP_AFTER: &str = "\
 Examples:
   canic fleet role declare demo store --package store
+  canic fleet role attach demo store --subnet prime
   canic fleet role list demo
   canic fleet role inspect demo app";
 const FLEET_ROLE_LIST_HELP_AFTER: &str = "\
@@ -70,6 +72,10 @@ Examples:
 const FLEET_ROLE_DECLARE_HELP_AFTER: &str = "\
 Examples:
   canic fleet role declare demo store --package store";
+const FLEET_ROLE_ATTACH_HELP_AFTER: &str = "\
+Examples:
+  canic fleet role attach demo store --subnet prime
+  canic fleet role attach demo worker --subnet prime --kind replica";
 
 ///
 /// FleetCommandError
@@ -174,6 +180,18 @@ struct RoleDeclareOptions {
 }
 
 ///
+/// RoleAttachOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RoleAttachOptions {
+    fleet: String,
+    role: String,
+    subnet: String,
+    kind: String,
+}
+
+///
 /// FleetListRow
 ///
 
@@ -228,6 +246,7 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "declare" => run_role_declare(args),
+            "attach" => run_role_attach(args),
             "list" => run_role_list(args),
             "inspect" => run_role_inspect(args),
             _ => unreachable!("fleet role dispatch command only defines known commands"),
@@ -256,6 +275,32 @@ where
     println!(
         "{}",
         render_declared_role(&declared, &project_root, &config_path)
+    );
+    Ok(())
+}
+
+fn run_role_attach<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, role_attach_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = RoleAttachOptions::parse(args)?;
+    let config_path = selected_fleet_config_path(&options.fleet)?;
+    let project_root = current_canic_project_root()?;
+    let attached = attach_fleet_role(
+        &config_path,
+        &options.fleet,
+        &options.role,
+        &options.subnet,
+        &options.kind,
+    )?;
+    println!(
+        "{}",
+        render_attached_role(&attached, &project_root, &config_path)
     );
     Ok(())
 }
@@ -491,6 +536,31 @@ impl RoleDeclareOptions {
     }
 }
 
+impl RoleAttachOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_role_attach_command(), args)
+            .map_err(|_| FleetCommandError::Usage(role_attach_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            role: string_option(&matches, "role").expect("clap requires role"),
+            subnet: string_option(&matches, "subnet").expect("clap requires subnet"),
+            kind: string_option(&matches, "kind").unwrap_or_else(|| "singleton".to_string()),
+        })
+    }
+}
+
 fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     discover_current_canic_config_choices()
 }
@@ -636,6 +706,11 @@ fn fleet_role_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("attach")
+                .about("Attach a declared role to direct topology")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List declared fleet roles")
                 .disable_help_flag(true),
@@ -673,6 +748,39 @@ fn fleet_role_declare_command() -> ClapCommand {
                 .help("Package path recorded in [roles.<role>]"),
         )
         .after_help(FLEET_ROLE_DECLARE_HELP_AFTER)
+}
+
+fn fleet_role_attach_command() -> ClapCommand {
+    ClapCommand::new("attach")
+        .bin_name("canic fleet role attach")
+        .about("Attach a declared role to direct topology")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name"),
+        )
+        .arg(
+            value_arg("role")
+                .value_name("role")
+                .required(true)
+                .help("Local role name"),
+        )
+        .arg(
+            clap::Arg::new("subnet")
+                .long("subnet")
+                .value_name("subnet")
+                .required(true)
+                .help("Subnet to attach the role under"),
+        )
+        .arg(
+            clap::Arg::new("kind")
+                .long("kind")
+                .value_name("kind")
+                .help("Canister kind: singleton, shard, replica, or instance"),
+        )
+        .after_help(FLEET_ROLE_ATTACH_HELP_AFTER)
 }
 
 fn fleet_role_list_command() -> ClapCommand {
@@ -838,7 +946,7 @@ fn render_role_inspection(row: &ConfiguredRoleLifecycle) -> String {
         format!("canic build {} {}", row.fleet, row.role)
     } else {
         format!(
-            "canic fleet role attach {} {} --subnet <subnet> --pool <pool>",
+            "canic fleet role attach {} {} --subnet <subnet>",
             row.fleet, row.role
         )
     };
@@ -872,9 +980,29 @@ fn render_declared_role(
         ),
         "  state: declared".to_string(),
         format!(
-            "  next action: canic fleet role attach {} {} --subnet <subnet> --pool <pool>",
+            "  next action: canic fleet role attach {} {} --subnet <subnet>",
             role.fleet, role.role
         ),
+    ]
+    .join("\n")
+}
+
+fn render_attached_role(
+    role: &AttachedFleetRole,
+    workspace_root: &Path,
+    config_path: &Path,
+) -> String {
+    [
+        "Attached fleet role:".to_string(),
+        format!("  role: {}", role.display),
+        format!("  kind: {}", role.kind),
+        format!("  topology: {}", role.topology),
+        format!(
+            "  config: {}",
+            display_workspace_path(workspace_root, config_path)
+        ),
+        "  state: attached".to_string(),
+        format!("  next action: canic build {} {}", role.fleet, role.role),
     ]
     .join("\n")
 }
@@ -938,6 +1066,11 @@ fn role_inspect_usage() -> String {
 
 fn role_declare_usage() -> String {
     let mut command = fleet_role_declare_command();
+    command.render_help().to_string()
+}
+
+fn role_attach_usage() -> String {
+    let mut command = fleet_role_attach_command();
     command.render_help().to_string()
 }
 

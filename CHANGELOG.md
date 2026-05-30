@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.3` adds direct topology attachment for declared roles:
+  ```
+  canic fleet role attach <fleet> <role> --subnet <subnet>
+  canic fleet role attach <fleet> <role> --subnet <subnet> --kind <kind>
+  ```
+  Operators can move ordinary roles from declared-only to attached topology
+  without editing `canic.toml` by hand.
+
 - `0.49.2` adds config-only fleet role declaration:
   ```
   canic fleet role declare <fleet> <role> --package <path>

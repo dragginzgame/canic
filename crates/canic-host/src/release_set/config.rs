@@ -55,6 +55,19 @@ pub struct DeclaredFleetRole {
     pub package: String,
 }
 
+///
+/// AttachedFleetRole
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AttachedFleetRole {
+    pub fleet: String,
+    pub role: String,
+    pub display: String,
+    pub subnet: String,
+    pub kind: String,
+    pub topology: String,
+}
+
 impl RootSubnetRoleScope {
     const fn includes_root(self) -> bool {
         matches!(self, Self::Fleet)
@@ -150,6 +163,21 @@ pub fn declare_fleet_role(
 ) -> Result<DeclaredFleetRole, Box<dyn std::error::Error>> {
     let source = fs::read_to_string(config_path)?;
     let updated = declare_fleet_role_source(&source, expected_fleet, role, package)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    fs::write(config_path, updated.source)?;
+    Ok(updated.role)
+}
+
+// Attach a declared package-backed role directly to subnet topology.
+pub fn attach_fleet_role(
+    config_path: &Path,
+    expected_fleet: &str,
+    role: &str,
+    subnet: &str,
+    kind: &str,
+) -> Result<AttachedFleetRole, Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(config_path)?;
+    let updated = attach_fleet_role_source(&source, expected_fleet, role, subnet, kind)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
     fs::write(config_path, updated.source)?;
     Ok(updated.role)
@@ -321,6 +349,12 @@ pub(super) struct DeclaredFleetRoleSource {
     pub(super) role: DeclaredFleetRole,
 }
 
+#[derive(Debug)]
+pub(super) struct AttachedFleetRoleSource {
+    pub(super) source: String,
+    pub(super) role: AttachedFleetRole,
+}
+
 pub(super) fn declare_fleet_role_source(
     config_source: &str,
     expected_fleet: &str,
@@ -379,6 +413,101 @@ pub(super) fn declare_fleet_role_source(
             package: package.to_string(),
         },
     })
+}
+
+pub(super) fn attach_fleet_role_source(
+    config_source: &str,
+    expected_fleet: &str,
+    role: &str,
+    subnet: &str,
+    kind: &str,
+) -> Result<AttachedFleetRoleSource, Box<dyn std::error::Error>> {
+    let role = role.trim();
+    let subnet = subnet.trim();
+    let kind = kind.trim();
+    validate_role_name(role)?;
+    validate_subnet_name(subnet)?;
+    validate_attach_kind(kind)?;
+    if role == "root" {
+        return Err("root role must already be attached through root topology".into());
+    }
+
+    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let actual_fleet = config
+        .fleet_name()
+        .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
+    if actual_fleet != expected_fleet {
+        return Err(format!(
+            "selected config declares fleet {actual_fleet:?}, not {expected_fleet:?}"
+        )
+        .into());
+    }
+
+    let role_id = CanisterRole::owned(role.to_string());
+    config
+        .roles
+        .get(&role_id)
+        .ok_or_else(|| format!("role {expected_fleet}.{role} is not declared"))?;
+    if config.attached_roles().contains(&role_id) {
+        return Err(format!("role {expected_fleet}.{role} is already attached").into());
+    }
+
+    let mut source = config_source.trim_end().to_string();
+    source.push_str("\n\n[subnets.");
+    source.push_str(&toml_string_literal(subnet));
+    source.push_str(".canisters.");
+    source.push_str(&toml_string_literal(role));
+    source.push_str("]\nkind = ");
+    source.push_str(&toml_string_literal(kind));
+    source.push('\n');
+
+    parse_config_model(&source).map_err(|err| err.to_string())?;
+
+    Ok(AttachedFleetRoleSource {
+        source,
+        role: AttachedFleetRole {
+            fleet: expected_fleet.to_string(),
+            role: role.to_string(),
+            display: format!("{expected_fleet}.{role}"),
+            subnet: subnet.to_string(),
+            kind: kind.to_string(),
+            topology: format!("{subnet}/{role}"),
+        },
+    })
+}
+
+fn validate_role_name(role: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if role.is_empty() {
+        return Err("role must not be empty".into());
+    }
+    if !role
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        return Err("role must contain only ASCII letters, numbers, '_' or '-'".into());
+    }
+    Ok(())
+}
+
+fn validate_subnet_name(subnet: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if subnet.is_empty() {
+        return Err("subnet must not be empty".into());
+    }
+    if !subnet
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        return Err("subnet must contain only ASCII letters, numbers, '_' or '-'".into());
+    }
+    Ok(())
+}
+
+fn validate_attach_kind(kind: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if matches!(kind, "singleton" | "shard" | "replica" | "instance") {
+        return Ok(());
+    }
+
+    Err("kind must be one of: singleton, shard, replica, instance".into())
 }
 
 fn toml_string_literal(value: &str) -> String {

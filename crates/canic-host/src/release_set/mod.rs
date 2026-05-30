@@ -8,13 +8,14 @@ mod paths;
 mod stage;
 
 pub use config::{
-    ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
-    LOCAL_ROOT_MIN_READY_CYCLES, configured_bootstrap_roles, configured_controllers,
-    configured_fleet_name, configured_fleet_roles, configured_install_targets,
-    configured_local_root_create_cycles, configured_pool_expectations, configured_release_roles,
-    configured_role_auto_create, configured_role_capabilities, configured_role_details,
-    configured_role_kinds, configured_role_lifecycle, configured_role_metrics_profiles,
-    configured_role_topups, declare_fleet_role, matching_fleet_config_paths,
+    AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
+    LOCAL_ROOT_MIN_READY_CYCLES, attach_fleet_role, configured_bootstrap_roles,
+    configured_controllers, configured_fleet_name, configured_fleet_roles,
+    configured_install_targets, configured_local_root_create_cycles, configured_pool_expectations,
+    configured_release_roles, configured_role_auto_create, configured_role_capabilities,
+    configured_role_details, configured_role_kinds, configured_role_lifecycle,
+    configured_role_metrics_profiles, configured_role_topups, declare_fleet_role,
+    matching_fleet_config_paths,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
@@ -35,14 +36,14 @@ use stage::read_release_artifact;
 
 #[cfg(test)]
 use config::{
-    configured_bootstrap_roles_from_source, configured_controllers_from_source,
-    configured_fleet_name_from_source, configured_fleet_roles_from_source,
-    configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
-    configured_release_roles_from_source, configured_role_auto_create_from_source,
-    configured_role_capabilities_from_source, configured_role_details_from_source,
-    configured_role_kinds_from_source, configured_role_lifecycle_from_source,
-    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
-    declare_fleet_role_source,
+    attach_fleet_role_source, configured_bootstrap_roles_from_source,
+    configured_controllers_from_source, configured_fleet_name_from_source,
+    configured_fleet_roles_from_source, configured_local_root_create_cycles_from_source,
+    configured_pool_expectations_from_source, configured_release_roles_from_source,
+    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
+    configured_role_details_from_source, configured_role_kinds_from_source,
+    configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
+    configured_role_topups_from_source, declare_fleet_role_source,
 };
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
@@ -65,7 +66,7 @@ pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::er
 #[cfg(test)]
 mod tests {
     use super::{
-        canister_manifest_path, canisters_root, config_path,
+        attach_fleet_role_source, canister_manifest_path, canisters_root, config_path,
         configured_bootstrap_roles_from_source, configured_controllers_from_source,
         configured_fleet_name_from_source, configured_fleet_roles_from_source,
         configured_install_targets, configured_local_root_create_cycles_from_source,
@@ -385,6 +386,101 @@ kind = "root"
             .expect_err("duplicate declaration should fail")
             .to_string();
         assert!(duplicate_err.contains("already declared"));
+    }
+
+    #[test]
+    fn attach_fleet_role_adds_direct_topology_attachment() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.store]
+kind = "canister"
+package = "store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+        let updated = attach_fleet_role_source(config, "demo", "store", "prime", "singleton")
+            .expect("attach role");
+
+        assert_eq!(updated.role.display, "demo.store");
+        assert_eq!(updated.role.topology, "prime/store");
+        assert!(
+            updated
+                .source
+                .contains("[subnets.\"prime\".canisters.\"store\"]")
+        );
+        assert!(updated.source.contains("kind = \"singleton\""));
+
+        let lifecycle =
+            configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+        let store = lifecycle
+            .iter()
+            .find(|role| role.role == "store")
+            .expect("store row");
+        assert_eq!(store.state, "attached");
+        assert_eq!(store.topology.as_deref(), Some("prime/store"));
+    }
+
+    #[test]
+    fn attach_fleet_role_preserves_explicit_supported_kind() {
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+        let updated = attach_fleet_role_source(config, "demo", "worker", "prime", "replica")
+            .expect("attach role");
+
+        assert_eq!(updated.role.kind, "replica");
+        assert_eq!(updated.role.topology, "prime/worker");
+        assert!(updated.source.contains("kind = \"replica\""));
+    }
+
+    #[test]
+    fn attach_fleet_role_rejects_missing_duplicate_root_and_unknown_kind() {
+        let missing_err =
+            attach_fleet_role_source(REAL_CONFIG, "demo", "missing", "prime", "singleton")
+                .expect_err("missing role should fail")
+                .to_string();
+        assert!(missing_err.contains("is not declared"));
+
+        let duplicate_err =
+            attach_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "prime", "singleton")
+                .expect_err("duplicate attachment should fail")
+                .to_string();
+        assert!(duplicate_err.contains("already attached"));
+
+        let root_err = attach_fleet_role_source(REAL_CONFIG, "demo", "root", "prime", "singleton")
+            .expect_err("root attachment should fail")
+            .to_string();
+        assert!(root_err.contains("root role must already be attached"));
+
+        let kind_err = attach_fleet_role_source(REAL_CONFIG, "demo", "minimal", "prime", "service")
+            .expect_err("unknown kind should fail")
+            .to_string();
+        assert!(kind_err.contains("kind must be one of"));
     }
 
     #[test]
@@ -1221,19 +1317,20 @@ role = "user_hub"
 
     #[test]
     fn canister_manifest_path_uses_declared_canic_role_metadata() {
-        let temp = TempWorkspace::new();
-        let workspace_root = temp.path();
-        fs::create_dir_all(workspace_root.join("fleets/test/scale")).expect("create scale dir");
-        fs::create_dir_all(workspace_root.join("fleets/test/scale/src"))
-            .expect("create scale src dir");
-        fs::write(
-            workspace_root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"fleets/test/scale\"]\n",
-        )
-        .expect("write workspace manifest");
-        fs::write(
-            workspace_root.join("fleets/test/scale/Cargo.toml"),
-            r#"[package]
+        with_guarded_env(|| {
+            let temp = TempWorkspace::new();
+            let workspace_root = temp.path();
+            fs::create_dir_all(workspace_root.join("fleets/test/scale")).expect("create scale dir");
+            fs::create_dir_all(workspace_root.join("fleets/test/scale/src"))
+                .expect("create scale src dir");
+            fs::write(
+                workspace_root.join("Cargo.toml"),
+                "[workspace]\nmembers = [\"fleets/test/scale\"]\n",
+            )
+            .expect("write workspace manifest");
+            fs::write(
+                workspace_root.join("fleets/test/scale/Cargo.toml"),
+                r#"[package]
 name = "canister_scale"
 version = "0.1.0"
 edition = "2024"
@@ -1241,15 +1338,24 @@ edition = "2024"
 [package.metadata.canic]
 role = "scale_replica"
 "#,
-        )
-        .expect("write scale manifest");
-        fs::write(workspace_root.join("fleets/test/scale/src/lib.rs"), "")
-            .expect("write scale lib");
+            )
+            .expect("write scale manifest");
+            fs::write(workspace_root.join("fleets/test/scale/src/lib.rs"), "")
+                .expect("write scale lib");
 
-        assert_eq!(
-            canister_manifest_path(workspace_root, "scale_replica").expect("scale manifest path"),
-            workspace_root.join("fleets/test/scale/Cargo.toml")
-        );
+            let previous_config = std::env::var_os("CANIC_CONFIG_PATH");
+            let previous_root = std::env::var_os("CANIC_CANISTERS_ROOT");
+            unsafe {
+                std::env::remove_var("CANIC_CONFIG_PATH");
+                std::env::remove_var("CANIC_CANISTERS_ROOT");
+            }
+            let result = canister_manifest_path(workspace_root, "scale_replica")
+                .expect("scale manifest path");
+            restore_env("CANIC_CONFIG_PATH", previous_config);
+            restore_env("CANIC_CANISTERS_ROOT", previous_root);
+
+            assert_eq!(result, workspace_root.join("fleets/test/scale/Cargo.toml"));
+        });
     }
 
     #[test]
@@ -1388,13 +1494,21 @@ role = "root"
 
     #[test]
     fn canisters_root_defaults_to_workspace_fleets_dir() {
-        let temp = TempWorkspace::new();
-        let workspace_root = temp.path();
+        with_guarded_env(|| {
+            let temp = TempWorkspace::new();
+            let workspace_root = temp.path();
+            let previous_config = std::env::var_os("CANIC_CONFIG_PATH");
+            let previous_root = std::env::var_os("CANIC_CANISTERS_ROOT");
+            unsafe {
+                std::env::remove_var("CANIC_CONFIG_PATH");
+                std::env::remove_var("CANIC_CANISTERS_ROOT");
+            }
+            let result = canisters_root(workspace_root);
+            restore_env("CANIC_CONFIG_PATH", previous_config);
+            restore_env("CANIC_CANISTERS_ROOT", previous_root);
 
-        assert_eq!(
-            canisters_root(workspace_root),
-            workspace_root.join("fleets")
-        );
+            assert_eq!(result, workspace_root.join("fleets"));
+        });
     }
 
     #[test]
