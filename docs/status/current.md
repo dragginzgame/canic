@@ -40,6 +40,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.10 has added `--cargo-metadata <path>` adoption evidence. The option
+  reads `[package.metadata.canic]` `fleet` and `role` from a saved
+  `cargo metadata --format-version 1` JSON artifact, rejects ambiguous use with
+  `--package-metadata`, normalizes package paths against the selected fleet
+  config, and does not run Cargo.
 - 0.50.9 has extended `--deployment-check <path>` adoption evidence so saved
   `DeploymentCheckV1.plan.role_artifacts` also supply artifact evidence when an
   explicit `--artifact-manifest <path>` is not provided.

@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.10` lets adoption reports consume saved Cargo metadata package
+  evidence:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile> --cargo-metadata <path>
+  ```
+  The option reads `[package.metadata.canic]` fleet/role metadata from an
+  existing `cargo metadata --format-version 1` JSON artifact and rejects
+  ambiguous use with `--package-metadata`. Cargo package paths are normalized
+  against the selected fleet config so `package = "."` and sibling package
+  declarations can match.
+
 - `0.50.9` makes `--deployment-check <path>` also supply saved plan artifact
   evidence from `DeploymentCheckV1.plan.role_artifacts`, unless an explicit
   `--artifact-manifest <path>` is provided.

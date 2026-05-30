@@ -131,6 +131,7 @@ fn parses_adoption_report_fleet_profile_and_default_text() {
     assert_eq!(options.deployment_check, None);
     assert_eq!(options.inventory, None);
     assert_eq!(options.artifact_manifest, None);
+    assert_eq!(options.cargo_metadata, None);
     assert_eq!(options.package_metadata, None);
     assert_eq!(options.output, None);
 }
@@ -165,11 +166,31 @@ fn parses_adoption_report_json_output() {
         options.artifact_manifest,
         Some(PathBuf::from("artifacts.json"))
     );
+    assert_eq!(options.cargo_metadata, None);
     assert_eq!(
         options.package_metadata,
         Some(PathBuf::from("packages.json"))
     );
     assert_eq!(options.output, Some(PathBuf::from("report.json")));
+}
+
+// Ensure adoption report can read cargo metadata evidence from an explicit path.
+#[test]
+fn parses_adoption_report_cargo_metadata_path() {
+    let options = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("partial"),
+        OsString::from("--cargo-metadata"),
+        OsString::from("cargo-metadata.json"),
+    ])
+    .expect("parse adoption report options");
+
+    assert_eq!(
+        options.cargo_metadata,
+        Some(PathBuf::from("cargo-metadata.json"))
+    );
+    assert_eq!(options.package_metadata, None);
 }
 
 // Ensure unsupported adoption profiles fail before any report generation.
@@ -430,6 +451,7 @@ fn renders_adoption_report_text_for_declared_only_roles() {
         deployment_check: None,
         inventory: None,
         artifact_manifest: None,
+        cargo_metadata: None,
         package_metadata: None,
         output: None,
     };
@@ -471,6 +493,7 @@ fn writes_adoption_report_json_output_file() {
         deployment_check: None,
         inventory: None,
         artifact_manifest: None,
+        cargo_metadata: None,
         package_metadata: None,
         output: Some(out.clone()),
     };
@@ -502,6 +525,7 @@ fn adoption_report_reads_explicit_evidence_files() {
         deployment_check: None,
         inventory: Some(evidence.inventory),
         artifact_manifest: Some(evidence.artifact_manifest),
+        cargo_metadata: None,
         package_metadata: Some(evidence.package_metadata),
         output: None,
     };
@@ -544,6 +568,7 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
         deployment_check: Some(evidence.deployment_check),
         inventory: None,
         artifact_manifest: None,
+        cargo_metadata: None,
         package_metadata: None,
         output: None,
     };
@@ -569,6 +594,39 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
     assert_eq!(store.artifact_state, AdoptionArtifactStateV1::CanicBuilt);
 }
 
+// Ensure cargo metadata evidence can supply package role metadata without live Cargo.
+#[test]
+fn adoption_report_reads_package_metadata_from_cargo_metadata_file() {
+    let root = temp_dir("canic-fleet-adoption-cargo-metadata");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        deployment_check: None,
+        inventory: None,
+        artifact_manifest: None,
+        cargo_metadata: Some(evidence.cargo_metadata),
+        package_metadata: None,
+        output: None,
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:5").expect("report");
+    let store = report
+        .role_findings
+        .iter()
+        .find(|finding| finding.role == "store")
+        .expect("store finding");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(report.inputs.package_metadata_count, 1);
+    assert_eq!(store.package_state, AdoptionPackageStateV1::Matches);
+}
+
 // Ensure adoption evidence rejects ambiguous inventory source selection.
 #[test]
 fn adoption_report_rejects_inventory_and_deployment_check_together() {
@@ -584,11 +642,12 @@ fn adoption_report_rejects_inventory_and_deployment_check_together() {
         deployment_check: Some(evidence.deployment_check),
         inventory: Some(evidence.inventory),
         artifact_manifest: None,
+        cargo_metadata: None,
         package_metadata: None,
         output: None,
     };
 
-    let err = build_adoption_report_from_config_path(&config_path, &options, "unix:5")
+    let err = build_adoption_report_from_config_path(&config_path, &options, "unix:6")
         .expect_err("ambiguous evidence should fail");
 
     fs::remove_dir_all(&root).expect("remove temp root");
@@ -599,10 +658,70 @@ fn adoption_report_rejects_inventory_and_deployment_check_together() {
     );
 }
 
+// Ensure adoption evidence rejects ambiguous package metadata source selection.
+#[test]
+fn adoption_report_rejects_package_metadata_and_cargo_metadata_together() {
+    let root = temp_dir("canic-fleet-adoption-conflicting-package-evidence");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        deployment_check: None,
+        inventory: None,
+        artifact_manifest: None,
+        cargo_metadata: Some(evidence.cargo_metadata),
+        package_metadata: Some(evidence.package_metadata),
+        output: None,
+    };
+
+    let err = build_adoption_report_from_config_path(&config_path, &options, "unix:7")
+        .expect_err("ambiguous package metadata evidence should fail");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    std::assert_matches!(
+        err,
+        FleetCommandError::Usage(message)
+            if message.contains("choose either --package-metadata or --cargo-metadata")
+    );
+}
+
+// Ensure cargo metadata package roots match package = "." declarations.
+#[test]
+fn cargo_metadata_package_path_preserves_current_directory_package() {
+    let root = Path::new("/workspace/fleets/demo");
+    let package = serde_json::json!({
+        "manifest_path": "/workspace/fleets/demo/Cargo.toml"
+    });
+
+    assert_eq!(
+        cargo_metadata_package_path(root, &package).as_deref(),
+        Some(".")
+    );
+}
+
+// Ensure cargo metadata package roots can match sibling relative declarations.
+#[test]
+fn cargo_metadata_package_path_normalizes_sibling_package() {
+    let config_dir = Path::new("/workspace/fleets/test/test-configs");
+    let package = serde_json::json!({
+        "manifest_path": "/workspace/fleets/test/test/Cargo.toml"
+    });
+
+    assert_eq!(
+        cargo_metadata_package_path(config_dir, &package).as_deref(),
+        Some("../test")
+    );
+}
+
 struct AdoptionEvidenceFiles {
     deployment_check: PathBuf,
     inventory: PathBuf,
     artifact_manifest: PathBuf,
+    cargo_metadata: PathBuf,
     package_metadata: PathBuf,
 }
 
@@ -611,6 +730,7 @@ fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
         deployment_check: root.join("deployment-check.json"),
         inventory: root.join("inventory.json"),
         artifact_manifest: root.join("artifact-manifest.json"),
+        cargo_metadata: root.join("cargo-metadata.json"),
         package_metadata: root.join("package-metadata.json"),
     };
 
@@ -620,6 +740,7 @@ fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
         &files.artifact_manifest,
         adoption_artifact_manifest_fixture(),
     );
+    write_json_fixture(&files.cargo_metadata, adoption_cargo_metadata_fixture(root));
     write_json_fixture(&files.package_metadata, adoption_package_metadata_fixture());
     files
 }
@@ -716,6 +837,31 @@ fn adoption_package_metadata_fixture() -> serde_json::Value {
         "fleet": "demo",
         "role": "store"
     }])
+}
+
+fn adoption_cargo_metadata_fixture(root: &Path) -> serde_json::Value {
+    serde_json::json!({
+        "packages": [{
+            "name": "store",
+            "manifest_path": root
+                .join("fleets/demo/store/Cargo.toml")
+                .to_string_lossy()
+                .to_string(),
+            "metadata": {
+                "canic": {
+                    "fleet": "demo",
+                    "role": "store"
+                }
+            }
+        }, {
+            "name": "without-canic-metadata",
+            "manifest_path": root
+                .join("fleets/demo/ignored/Cargo.toml")
+                .to_string_lossy()
+                .to_string(),
+            "metadata": {}
+        }]
+    })
 }
 
 // Ensure fleet command help lists the command family without search.
@@ -874,6 +1020,7 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("--deployment-check <path>"));
     assert!(text.contains("--inventory <path>"));
     assert!(text.contains("--artifact-manifest <path>"));
+    assert!(text.contains("--cargo-metadata <path>"));
     assert!(text.contains("--package-metadata <path>"));
     assert!(text.contains("--output <path>"));
     assert!(text.contains("brownfield"));

@@ -37,7 +37,7 @@ use std::{
     ffi::OsString,
     fs,
     io::{self, BufRead, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
@@ -109,13 +109,15 @@ Examples:
   canic fleet adoption report demo --profile minimal --format json
   canic fleet adoption report demo --profile partial --deployment-check check.json
   canic fleet adoption report demo --profile partial --inventory inventory.json
+  canic fleet adoption report demo --profile partial --cargo-metadata cargo-metadata.json
   canic fleet adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
 minimal. The report is read-only; --output writes only the requested report
 artifact. Evidence inputs are JSON files and are read-only. Use either
---inventory or --deployment-check, not both. Deployment-check evidence also
-supplies plan role artifacts when present.";
+--inventory or --deployment-check, not both. Use either --package-metadata or
+--cargo-metadata, not both. Deployment-check evidence also supplies plan role
+artifacts when present.";
 
 ///
 /// FleetCommandError
@@ -260,6 +262,7 @@ struct AdoptionReportOptions {
     deployment_check: Option<PathBuf>,
     inventory: Option<PathBuf>,
     artifact_manifest: Option<PathBuf>,
+    cargo_metadata: Option<PathBuf>,
     package_metadata: Option<PathBuf>,
     output: Option<PathBuf>,
 }
@@ -763,6 +766,7 @@ impl AdoptionReportOptions {
             deployment_check: path_option(&matches, "deployment-check"),
             inventory: path_option(&matches, "inventory"),
             artifact_manifest: path_option(&matches, "artifact-manifest"),
+            cargo_metadata: path_option(&matches, "cargo-metadata"),
             package_metadata: path_option(&matches, "package-metadata"),
             output: path_option(&matches, "output"),
         })
@@ -1001,6 +1005,12 @@ fn fleet_adoption_report_command() -> ClapCommand {
                 .long("package-metadata")
                 .value_name("path")
                 .help("Read AdoptionPackageMetadataV1 JSON array evidence from this path"),
+        )
+        .arg(
+            clap::Arg::new("cargo-metadata")
+                .long("cargo-metadata")
+                .value_name("path")
+                .help("Read package metadata evidence from cargo metadata JSON"),
         )
         .arg(
             clap::Arg::new("output")
@@ -1394,9 +1404,7 @@ fn build_adoption_report_from_config_path(
     let config_source = fs::read_to_string(config_path)?;
     let inventory = adoption_inventory_from_options(options)?;
     let artifact_manifest = adoption_artifact_manifest_from_options(options)?;
-    let package_metadata =
-        read_optional_json::<Vec<AdoptionPackageMetadataV1>>(options.package_metadata.as_deref())?
-            .unwrap_or_default();
+    let package_metadata = adoption_package_metadata_from_options(config_path, options)?;
     let report_id = format!(
         "local:{}:{}:adoption-report",
         options.fleet,
@@ -1413,6 +1421,20 @@ fn build_adoption_report_from_config_path(
         package_metadata,
     })
     .map_err(FleetCommandError::from)
+}
+
+fn adoption_package_metadata_from_options(
+    config_path: &Path,
+    options: &AdoptionReportOptions,
+) -> Result<Vec<AdoptionPackageMetadataV1>, FleetCommandError> {
+    match (&options.package_metadata, &options.cargo_metadata) {
+        (Some(_), Some(_)) => Err(FleetCommandError::Usage(
+            "choose either --package-metadata or --cargo-metadata, not both".to_string(),
+        )),
+        (Some(path), None) => read_json_file(path),
+        (None, Some(path)) => read_cargo_metadata_package_metadata(config_path, path),
+        (None, None) => Ok(Vec::new()),
+    }
 }
 
 fn adoption_artifact_manifest_from_options(
@@ -1489,11 +1511,111 @@ fn read_deployment_check_artifact_manifest(
     }))
 }
 
-fn read_optional_json<T>(path: Option<&Path>) -> Result<Option<T>, FleetCommandError>
-where
-    T: DeserializeOwned,
-{
-    path.map(read_json_file).transpose()
+fn read_cargo_metadata_package_metadata(
+    config_path: &Path,
+    path: &Path,
+) -> Result<Vec<AdoptionPackageMetadataV1>, FleetCommandError> {
+    let value = read_json_file::<serde_json::Value>(path)?;
+    let packages = value
+        .get("packages")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| {
+            FleetCommandError::Usage(format!(
+                "cargo metadata evidence {} is missing packages",
+                path.display()
+            ))
+        })?;
+    let config_dir = config_path.parent().unwrap_or_else(|| Path::new(""));
+    let mut metadata = Vec::new();
+
+    for package in packages {
+        let Some(canic_metadata) = package
+            .get("metadata")
+            .and_then(|metadata| metadata.get("canic"))
+        else {
+            continue;
+        };
+        let Some(package_path) = cargo_metadata_package_path(config_dir, package) else {
+            continue;
+        };
+        metadata.push(AdoptionPackageMetadataV1 {
+            package: package_path,
+            fleet: canic_metadata
+                .get("fleet")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            role: canic_metadata
+                .get("role")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+        });
+    }
+
+    Ok(metadata)
+}
+
+fn cargo_metadata_package_path(config_dir: &Path, package: &serde_json::Value) -> Option<String> {
+    let manifest_path = package.get("manifest_path")?.as_str()?;
+    let package_dir = Path::new(manifest_path).parent()?;
+    let relative = relative_package_dir(config_dir, package_dir);
+    Some(relative.to_string_lossy().replace('\\', "/"))
+}
+
+fn relative_package_dir(config_dir: &Path, package_dir: &Path) -> PathBuf {
+    if let Ok(relative) = package_dir.strip_prefix(config_dir) {
+        return non_empty_relative_path(relative);
+    }
+
+    lexical_relative_path(config_dir, package_dir).unwrap_or_else(|| package_dir.to_path_buf())
+}
+
+fn non_empty_relative_path(path: &Path) -> PathBuf {
+    if path.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        path.to_path_buf()
+    }
+}
+
+fn lexical_relative_path(base: &Path, target: &Path) -> Option<PathBuf> {
+    let base_components = normal_path_components(base);
+    let target_components = normal_path_components(target);
+    let common = base_components
+        .iter()
+        .zip(target_components.iter())
+        .take_while(|(base, target)| base == target)
+        .count();
+    if common == 0 {
+        return None;
+    }
+
+    let mut relative = PathBuf::new();
+    for _ in common..base_components.len() {
+        relative.push("..");
+    }
+    for component in &target_components[common..] {
+        relative.push(component);
+    }
+
+    Some(non_empty_relative_path(&relative))
+}
+
+fn normal_path_components(path: &Path) -> Vec<String> {
+    let mut components = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => {
+                components.push(prefix.as_os_str().to_string_lossy().to_string());
+            }
+            Component::RootDir => components.push(String::new()),
+            Component::CurDir => {}
+            Component::ParentDir => components.push("..".to_string()),
+            Component::Normal(segment) => components.push(segment.to_string_lossy().to_string()),
+        }
+    }
+
+    components
 }
 
 fn read_json_file<T>(path: &Path) -> Result<T, FleetCommandError>

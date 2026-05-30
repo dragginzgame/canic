@@ -90,7 +90,7 @@ Evidence can be supplied from existing JSON artifacts:
 ```bash
 canic fleet adoption report demo --profile partial \
   --deployment-check check.json \
-  --package-metadata package-metadata.json
+  --cargo-metadata cargo-metadata.json
 ```
 
 or with a standalone inventory artifact:
@@ -102,6 +102,12 @@ canic fleet adoption report demo --profile partial \
   --package-metadata package-metadata.json
 ```
 
+`--cargo-metadata` expects a pre-existing Cargo metadata artifact, for example:
+
+```bash
+cargo metadata --format-version 1 --no-deps > cargo-metadata.json
+```
+
 Those inputs are read-only:
 
 - `--deployment-check` reads inventory evidence from a `DeploymentCheckV1` JSON
@@ -109,9 +115,13 @@ Those inputs are read-only:
 - `--inventory` reads `DeploymentInventoryV1` JSON evidence;
 - `--artifact-manifest` reads `RoleArtifactManifestV1` JSON evidence;
 - `--package-metadata` reads a JSON array of `AdoptionPackageMetadataV1`
-  entries.
+  entries;
+- `--cargo-metadata` reads `[package.metadata.canic]` fleet/role evidence from
+  a saved `cargo metadata --format-version 1` JSON artifact and normalizes
+  Cargo package paths against the selected fleet config.
 
 Use either `--deployment-check` or `--inventory`, not both.
+Use either `--package-metadata` or `--cargo-metadata`, not both.
 
 The report command must not:
 
