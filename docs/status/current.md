@@ -40,6 +40,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.8 has added `--deployment-check <path>` to adoption reports. It reads
+  inventory evidence from a saved `DeploymentCheckV1` JSON artifact, rejects
+  ambiguous use with `--inventory`, and still performs no live discovery or
+  mutation.
 - 0.50.7 has added explicit read-only evidence inputs for adoption reports:
   `--inventory <path>`, `--artifact-manifest <path>`, and
   `--package-metadata <path>`. These feed existing JSON evidence into

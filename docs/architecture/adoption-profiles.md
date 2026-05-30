@@ -89,6 +89,14 @@ Evidence can be supplied from existing JSON artifacts:
 
 ```bash
 canic fleet adoption report demo --profile partial \
+  --deployment-check check.json \
+  --package-metadata package-metadata.json
+```
+
+or with a standalone inventory artifact:
+
+```bash
+canic fleet adoption report demo --profile partial \
   --inventory inventory.json \
   --artifact-manifest artifact-manifest.json \
   --package-metadata package-metadata.json
@@ -96,10 +104,14 @@ canic fleet adoption report demo --profile partial \
 
 Those inputs are read-only:
 
+- `--deployment-check` reads inventory evidence from a `DeploymentCheckV1` JSON
+  artifact;
 - `--inventory` reads `DeploymentInventoryV1` JSON evidence;
 - `--artifact-manifest` reads `RoleArtifactManifestV1` JSON evidence;
 - `--package-metadata` reads a JSON array of `AdoptionPackageMetadataV1`
   entries.
+
+Use either `--deployment-check` or `--inventory`, not both.
 
 The report command must not:
 

@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.8` lets adoption reports consume saved deployment-check inventory
+  evidence:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile> --deployment-check <path>
+  ```
+  The option extracts the `DeploymentCheckV1.inventory` artifact and rejects
+  ambiguous use with `--inventory`.
+
 - `0.50.7` adds explicit read-only evidence inputs for adoption reports:
   ```text
   canic fleet adoption report <fleet> --profile <profile> --inventory <path>

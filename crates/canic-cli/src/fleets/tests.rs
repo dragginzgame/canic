@@ -128,6 +128,7 @@ fn parses_adoption_report_fleet_profile_and_default_text() {
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.profile, AdoptionProfileV1::Brownfield);
     assert_eq!(options.format, AdoptionReportFormat::Text);
+    assert_eq!(options.deployment_check, None);
     assert_eq!(options.inventory, None);
     assert_eq!(options.artifact_manifest, None);
     assert_eq!(options.package_metadata, None);
@@ -143,6 +144,8 @@ fn parses_adoption_report_json_output() {
         OsString::from("minimal"),
         OsString::from("--format"),
         OsString::from("json"),
+        OsString::from("--deployment-check"),
+        OsString::from("check.json"),
         OsString::from("--inventory"),
         OsString::from("inventory.json"),
         OsString::from("--artifact-manifest"),
@@ -156,6 +159,7 @@ fn parses_adoption_report_json_output() {
 
     assert_eq!(options.profile, AdoptionProfileV1::Minimal);
     assert_eq!(options.format, AdoptionReportFormat::Json);
+    assert_eq!(options.deployment_check, Some(PathBuf::from("check.json")));
     assert_eq!(options.inventory, Some(PathBuf::from("inventory.json")));
     assert_eq!(
         options.artifact_manifest,
@@ -423,6 +427,7 @@ fn renders_adoption_report_text_for_declared_only_roles() {
         fleet: "demo".to_string(),
         profile: AdoptionProfileV1::Brownfield,
         format: AdoptionReportFormat::Text,
+        deployment_check: None,
         inventory: None,
         artifact_manifest: None,
         package_metadata: None,
@@ -463,6 +468,7 @@ fn writes_adoption_report_json_output_file() {
         fleet: "demo".to_string(),
         profile: AdoptionProfileV1::Minimal,
         format: AdoptionReportFormat::Json,
+        deployment_check: None,
         inventory: None,
         artifact_manifest: None,
         package_metadata: None,
@@ -493,6 +499,7 @@ fn adoption_report_reads_explicit_evidence_files() {
         fleet: "demo".to_string(),
         profile: AdoptionProfileV1::Partial,
         format: AdoptionReportFormat::Text,
+        deployment_check: None,
         inventory: Some(evidence.inventory),
         artifact_manifest: Some(evidence.artifact_manifest),
         package_metadata: Some(evidence.package_metadata),
@@ -522,7 +529,73 @@ fn adoption_report_reads_explicit_evidence_files() {
     assert_eq!(store.artifact_state, AdoptionArtifactStateV1::CanicBuilt);
 }
 
+// Ensure deployment-check evidence can supply inventory without live discovery.
+#[test]
+fn adoption_report_reads_inventory_from_deployment_check_file() {
+    let root = temp_dir("canic-fleet-adoption-check-evidence");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        deployment_check: Some(evidence.deployment_check),
+        inventory: None,
+        artifact_manifest: None,
+        package_metadata: None,
+        output: None,
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:4").expect("report");
+    let store = report
+        .role_findings
+        .iter()
+        .find(|finding| finding.role == "store")
+        .expect("store finding");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
+    assert_eq!(
+        store.observation_state,
+        AdoptionObservationStateV1::Observed
+    );
+}
+
+// Ensure adoption evidence rejects ambiguous inventory source selection.
+#[test]
+fn adoption_report_rejects_inventory_and_deployment_check_together() {
+    let root = temp_dir("canic-fleet-adoption-conflicting-evidence");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        deployment_check: Some(evidence.deployment_check),
+        inventory: Some(evidence.inventory),
+        artifact_manifest: None,
+        package_metadata: None,
+        output: None,
+    };
+
+    let err = build_adoption_report_from_config_path(&config_path, &options, "unix:5")
+        .expect_err("ambiguous evidence should fail");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    std::assert_matches!(
+        err,
+        FleetCommandError::Usage(message)
+            if message.contains("choose either --inventory or --deployment-check")
+    );
+}
+
 struct AdoptionEvidenceFiles {
+    deployment_check: PathBuf,
     inventory: PathBuf,
     artifact_manifest: PathBuf,
     package_metadata: PathBuf,
@@ -530,11 +603,13 @@ struct AdoptionEvidenceFiles {
 
 fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
     let files = AdoptionEvidenceFiles {
+        deployment_check: root.join("deployment-check.json"),
         inventory: root.join("inventory.json"),
         artifact_manifest: root.join("artifact-manifest.json"),
         package_metadata: root.join("package-metadata.json"),
     };
 
+    write_json_fixture(&files.deployment_check, adoption_deployment_check_fixture());
     write_json_fixture(&files.inventory, adoption_inventory_fixture());
     write_json_fixture(
         &files.artifact_manifest,
@@ -546,6 +621,12 @@ fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
 
 fn write_json_fixture(path: &Path, value: serde_json::Value) {
     fs::write(path, serde_json::to_vec(&value).expect("encode fixture")).expect("write fixture");
+}
+
+fn adoption_deployment_check_fixture() -> serde_json::Value {
+    serde_json::json!({
+        "inventory": adoption_inventory_fixture()
+    })
 }
 
 fn adoption_inventory_fixture() -> serde_json::Value {
@@ -778,6 +859,7 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("--profile <profile>"));
     assert!(text.contains("<fleet>"));
     assert!(text.contains("--format <text|json>"));
+    assert!(text.contains("--deployment-check <path>"));
     assert!(text.contains("--inventory <path>"));
     assert!(text.contains("--artifact-manifest <path>"));
     assert!(text.contains("--package-metadata <path>"));

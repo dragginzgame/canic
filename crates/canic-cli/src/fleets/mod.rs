@@ -107,12 +107,14 @@ const FLEET_ADOPTION_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
   canic fleet adoption report demo --profile minimal --format json
+  canic fleet adoption report demo --profile partial --deployment-check check.json
   canic fleet adoption report demo --profile partial --inventory inventory.json
   canic fleet adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
 minimal. The report is read-only; --output writes only the requested report
-artifact. Evidence inputs are JSON files and are read-only.";
+artifact. Evidence inputs are JSON files and are read-only. Use either
+--inventory or --deployment-check, not both.";
 
 ///
 /// FleetCommandError
@@ -254,6 +256,7 @@ struct AdoptionReportOptions {
     fleet: String,
     profile: AdoptionProfileV1,
     format: AdoptionReportFormat,
+    deployment_check: Option<PathBuf>,
     inventory: Option<PathBuf>,
     artifact_manifest: Option<PathBuf>,
     package_metadata: Option<PathBuf>,
@@ -756,6 +759,7 @@ impl AdoptionReportOptions {
                 string_option(&matches, "format").as_deref(),
                 adoption_report_usage,
             )?,
+            deployment_check: path_option(&matches, "deployment-check"),
             inventory: path_option(&matches, "inventory"),
             artifact_manifest: path_option(&matches, "artifact-manifest"),
             package_metadata: path_option(&matches, "package-metadata"),
@@ -978,6 +982,12 @@ fn fleet_adoption_report_command() -> ClapCommand {
                 .long("inventory")
                 .value_name("path")
                 .help("Read DeploymentInventoryV1 JSON evidence from this path"),
+        )
+        .arg(
+            clap::Arg::new("deployment-check")
+                .long("deployment-check")
+                .value_name("path")
+                .help("Read inventory evidence from a DeploymentCheckV1 JSON artifact"),
         )
         .arg(
             clap::Arg::new("artifact-manifest")
@@ -1381,7 +1391,7 @@ fn build_adoption_report_from_config_path(
     generated_at: &str,
 ) -> Result<AdoptionReportV1, FleetCommandError> {
     let config_source = fs::read_to_string(config_path)?;
-    let inventory = read_optional_json::<DeploymentInventoryV1>(options.inventory.as_deref())?;
+    let inventory = adoption_inventory_from_options(options)?;
     let artifact_manifest =
         read_optional_json::<RoleArtifactManifestV1>(options.artifact_manifest.as_deref())?;
     let package_metadata =
@@ -1403,6 +1413,33 @@ fn build_adoption_report_from_config_path(
         package_metadata,
     })
     .map_err(FleetCommandError::from)
+}
+
+fn adoption_inventory_from_options(
+    options: &AdoptionReportOptions,
+) -> Result<Option<DeploymentInventoryV1>, FleetCommandError> {
+    match (&options.inventory, &options.deployment_check) {
+        (Some(_), Some(_)) => Err(FleetCommandError::Usage(
+            "choose either --inventory or --deployment-check, not both".to_string(),
+        )),
+        (Some(path), None) => read_json_file(path).map(Some),
+        (None, Some(path)) => read_deployment_check_inventory(path).map(Some),
+        (None, None) => Ok(None),
+    }
+}
+
+fn read_deployment_check_inventory(
+    path: &Path,
+) -> Result<DeploymentInventoryV1, FleetCommandError> {
+    let value = read_json_file::<serde_json::Value>(path)?;
+    let Some(inventory) = value.get("inventory") else {
+        return Err(FleetCommandError::Usage(format!(
+            "deployment check evidence {} is missing inventory",
+            path.display()
+        )));
+    };
+
+    Ok(serde_json::from_value(inventory.clone())?)
 }
 
 fn read_optional_json<T>(path: Option<&Path>) -> Result<Option<T>, FleetCommandError>
