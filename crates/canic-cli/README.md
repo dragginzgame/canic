@@ -33,7 +33,7 @@ Downstream projects should install the same `canic-cli` version as their
 `canic` crate dependency. The installed binary includes the artifact builder:
 
 ```bash
-canic build <role>
+canic build <fleet> <role>
 ```
 
 For downstream repos where the Cargo workspace and ICP project root differ,
@@ -46,6 +46,7 @@ canic build \
   --workspace <cargo-workspace-dir> \
   --icp-root <icp-project-dir> \
   --config fleets/<fleet>/canic.toml \
+  <fleet> \
   root
 ```
 

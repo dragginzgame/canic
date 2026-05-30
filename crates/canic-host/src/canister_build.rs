@@ -6,7 +6,8 @@ use crate::{
     bootstrap_store::{BootstrapWasmStoreBuildOutput, build_bootstrap_wasm_store_artifact},
     cargo_command, icp_environment_from_env,
     release_set::{
-        canister_manifest_path, emit_root_release_set_manifest_if_ready, icp_root, workspace_root,
+        canister_manifest_path, config_path, configured_role_lifecycle,
+        emit_root_release_set_manifest_if_ready, icp_root, workspace_root,
     },
     remove_optional_file, should_export_candid_artifacts,
 };
@@ -127,7 +128,7 @@ pub fn build_current_workspace_canister_artifact(
 /// Copy the uncompressed artifact to the path requested by ICP custom builds.
 ///
 /// ICP CLI sets `ICP_WASM_OUTPUT_PATH` for script-backed canister builds. Normal
-/// direct `canic build <role>` calls leave it unset and only write Canic's
+/// direct `canic build <fleet> <role>` calls leave it unset and only write Canic's
 /// canonical `.icp/local/canisters/<role>/` artifacts.
 pub fn copy_icp_wasm_output(
     canister_name: &str,
@@ -163,6 +164,7 @@ fn build_canister_artifact(
         return build_hidden_wasm_store_artifact(workspace_root, icp_root, profile);
     }
 
+    validate_artifact_role_attached(workspace_root, canister_name)?;
     let canister_manifest_path = canister_manifest_path(workspace_root, canister_name)?;
     let canister_package_name = load_canister_package_name(&canister_manifest_path)?;
     let artifact_root = icp_root
@@ -220,6 +222,29 @@ fn build_canister_artifact(
     })
 }
 
+fn validate_artifact_role_attached(
+    workspace_root: &Path,
+    canister_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = config_path(workspace_root);
+    let roles = configured_role_lifecycle(&config_path)?;
+    let Some(row) = roles.iter().find(|row| row.role == canister_name) else {
+        return Err(format!(
+            "role {canister_name} is not declared in {}; declare the role before building an artifact",
+            config_path.display()
+        )
+        .into());
+    };
+    if !row.attached {
+        return Err(format!(
+            "role {}.{} is declared but not attached to topology; run `canic fleet role attach {} {} --subnet <subnet>` before building an artifact",
+            row.fleet, row.role, row.fleet, row.role
+        )
+        .into());
+    }
+    Ok(())
+}
+
 // Read the real package name from one canister manifest so downstreams are not
 // forced to mirror the reference `canister_<role>` naming scheme.
 fn load_canister_package_name(manifest_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -251,7 +276,6 @@ fn run_canister_build(
         .current_dir(workspace_root)
         .env("CARGO_TARGET_DIR", &target_root)
         .env("CANIC_ICP_ROOT", icp_root)
-        .env("CANIC_REQUIRE_ATTACHED_ROLE", "1")
         .args([
             "build",
             "--manifest-path",

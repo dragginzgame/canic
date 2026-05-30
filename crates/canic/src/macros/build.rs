@@ -44,7 +44,6 @@ macro_rules! __canic_build_internal {
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
         println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
-        println!("cargo:rerun-if-env-changed=CANIC_REQUIRE_ATTACHED_ROLE");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
 
         let __canic_default_role = (__canic_role_name != "root").then(|| __canic_role_name.clone());
@@ -155,17 +154,6 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_role_attached");
         } else {
             println!("cargo:rustc-cfg=canic_role_declared_only");
-        }
-
-        if std::env::var_os("CANIC_REQUIRE_ATTACHED_ROLE").is_some()
-            && !__canic_role_attached
-        {
-            panic!(
-                "canister role '{}.{}' is declared but not attached to topology in {}; artifact builds require attached roles",
-                fleet_name,
-                role_name,
-                $cfg_path.display()
-            );
         }
 
         for subnet in $cfg.subnets.values() {

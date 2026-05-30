@@ -59,6 +59,9 @@ inspect only the files needed for the current task.
   metadata with the selected `fleet` and `role`, adds the matching role
   declaration and workspace member, and intentionally leaves topology
   attachment to `canic fleet role attach`.
+- `canic build <fleet> <role>` is now the only visible artifact build shape.
+  It selects the matching fleet config, passes that config into Cargo builds,
+  and rejects declared-only roles before building artifacts.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.

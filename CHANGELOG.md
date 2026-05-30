@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.5` hard-cuts visible artifact builds to fleet-scoped role identity:
+  ```
+  canic build <fleet> <role>
+  ```
+  The command selects the matching fleet config and rejects declared-only roles
+  before starting the Cargo artifact build.
+
 - `0.49.4` adds declared-only canister scaffolding:
   ```
   canic scaffold canister <fleet> <role>

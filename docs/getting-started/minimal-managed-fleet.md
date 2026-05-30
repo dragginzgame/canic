@@ -76,19 +76,19 @@ canisters:
       steps:
         - type: script
           commands:
-            - canic build --profile fast root
+            - canic build --profile fast example root
   - name: hub
     build:
       steps:
         - type: script
           commands:
-            - canic build --profile fast hub
+            - canic build --profile fast example hub
   - name: registry
     build:
       steps:
         - type: script
           commands:
-            - canic build --profile fast registry
+            - canic build --profile fast example registry
 
 environments:
   - name: example
@@ -228,7 +228,7 @@ canic info list example
 Build one role without installing:
 
 ```bash
-canic build --profile fast hub
+canic build --profile fast example hub
 ```
 
 If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute

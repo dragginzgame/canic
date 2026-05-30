@@ -11,17 +11,26 @@ use canic_host::canister_build::{
     CanisterBuildProfile, build_current_workspace_canister_artifact, copy_icp_wasm_output,
     print_current_workspace_build_context_once,
 };
+use canic_host::{
+    install_root::{current_canic_project_root, discover_project_canic_config_choices},
+    release_set::{configured_fleet_name, configured_role_lifecycle, matching_fleet_config_paths},
+};
 use clap::Command as ClapCommand;
-use std::{env, ffi::OsString, path::PathBuf};
+use std::{
+    env,
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 use thiserror::Error as ThisError;
 
 const BUILD_HELP_AFTER: &str = "\
 Examples:
-  canic build app
-  canic --network local build root
-  canic build --profile fast --workspace backend --icp-root . --config backend/src/canisters/canic.toml root
+  canic build demo app
+  canic --network local build demo root
+  canic build --profile fast --workspace backend --icp-root . --config backend/fleets/demo/canic.toml demo root
 
-The selected role must have a canister manifest at the conventional fleet path.
+The selected fleet must have a matching canic.toml, and the selected role must
+be attached to topology before an artifact build is allowed.
 The command writes .icp/local/canisters/<role>/<role>.wasm and .wasm.gz.";
 
 ///
@@ -33,6 +42,17 @@ pub enum BuildCommandError {
     #[error("{0}")]
     Usage(String),
 
+    #[error("no Canic fleet configs found under fleets; run canic fleet create <name>")]
+    NoConfigChoices,
+
+    #[error("unknown fleet {0}; run canic fleet list to inspect config-defined fleets")]
+    UnknownFleet(String),
+
+    #[error(
+        "multiple configs declare fleet {0}; use distinct [fleet].name values before selecting it"
+    )]
+    DuplicateFleet(String),
+
     #[error(transparent)]
     Build(#[from] Box<dyn std::error::Error>),
 }
@@ -43,7 +63,8 @@ pub enum BuildCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BuildOptions {
-    canister: String,
+    fleet: String,
+    role: String,
     network: String,
     profile: Option<CanisterBuildProfile>,
     workspace: Option<String>,
@@ -60,7 +81,8 @@ impl BuildOptions {
             parse_matches(build_command(), args).map_err(|_| BuildCommandError::Usage(usage()))?;
 
         Ok(Self {
-            canister: string_option(&matches, "canister").expect("clap requires canister"),
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            role: string_option(&matches, "role").expect("clap requires role"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
             profile: string_option(&matches, "profile")
                 .as_deref()
@@ -84,13 +106,14 @@ where
     }
 
     let options = BuildOptions::parse(args)?;
-    let _guard = BuildEnvGuard::apply(&options);
+    let _guard = BuildEnvGuard::apply(&options)?;
     let profile = options
         .profile
         .unwrap_or_else(CanisterBuildProfile::current);
     print_current_workspace_build_context_once(profile)?;
-    let output = build_current_workspace_canister_artifact(&options.canister, profile)?;
-    copy_icp_wasm_output(&options.canister, &output)?;
+    validate_attached_role(&options)?;
+    let output = build_current_workspace_canister_artifact(&options.role, profile)?;
+    copy_icp_wasm_output(&options.role, &output)?;
     println!("{}", output.wasm_gz_path.display());
     Ok(())
 }
@@ -100,9 +123,15 @@ fn build_command() -> ClapCommand {
         .bin_name("canic build")
         .about("Build one Canic canister artifact")
         .disable_help_flag(true)
-        .override_usage("canic build <role>")
+        .override_usage("canic build <fleet> <role>")
         .arg(
-            value_arg("canister")
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name to build from"),
+        )
+        .arg(
+            value_arg("role")
                 .value_name("role")
                 .required(true)
                 .help("Config-defined canister role to build"),
@@ -144,6 +173,74 @@ fn usage() -> String {
     command.render_help().to_string()
 }
 
+fn validate_attached_role(options: &BuildOptions) -> Result<(), BuildCommandError> {
+    let config_path = resolve_build_config_path(options)?;
+    let roles = configured_role_lifecycle(&config_path)?;
+    let Some(row) = roles.iter().find(|row| row.role == options.role) else {
+        return Err(BuildCommandError::Usage(format!(
+            "role {}.{} is not declared in {}",
+            options.fleet,
+            options.role,
+            config_path.display()
+        )));
+    };
+    if !row.attached {
+        return Err(BuildCommandError::Usage(format!(
+            "role {}.{} is declared but not attached to topology; run `canic fleet role attach {} {} --subnet <subnet>` before building an artifact",
+            options.fleet, options.role, options.fleet, options.role
+        )));
+    }
+    Ok(())
+}
+
+fn resolve_build_config_path(options: &BuildOptions) -> Result<PathBuf, BuildCommandError> {
+    if let Some(config) = &options.config {
+        let path = normalize_build_path(config);
+        validate_config_fleet(&path, &options.fleet)?;
+        return Ok(path);
+    }
+
+    let project_root = options.workspace.as_ref().map_or_else(
+        || current_canic_project_root().map_err(BuildCommandError::from),
+        |workspace| Ok(normalize_build_path(workspace)),
+    )?;
+    let choices = discover_project_canic_config_choices(&project_root)?;
+    if choices.is_empty() {
+        return Err(BuildCommandError::NoConfigChoices);
+    }
+
+    let matches = matching_fleet_config_paths(&choices, &options.fleet);
+    match matches.as_slice() {
+        [path] => Ok(path.clone()),
+        [] => Err(BuildCommandError::UnknownFleet(options.fleet.clone())),
+        _ => Err(BuildCommandError::DuplicateFleet(options.fleet.clone())),
+    }
+}
+
+fn validate_config_fleet(
+    config_path: &Path,
+    expected_fleet: &str,
+) -> Result<(), BuildCommandError> {
+    let actual_fleet = configured_fleet_name(config_path)?;
+    if actual_fleet != expected_fleet {
+        return Err(BuildCommandError::Usage(format!(
+            "selected config declares fleet {actual_fleet:?}, not {expected_fleet:?}"
+        )));
+    }
+    Ok(())
+}
+
+fn normalize_build_path(path: &str) -> PathBuf {
+    let path = PathBuf::from(path);
+    if path.is_absolute() {
+        path
+    } else {
+        env::current_dir()
+            .expect("current directory must be available")
+            .join(path)
+    }
+}
+
 fn parse_profile(value: &str) -> Result<CanisterBuildProfile, BuildCommandError> {
     match value {
         "debug" => Ok(CanisterBuildProfile::Debug),
@@ -164,18 +261,19 @@ struct BuildEnvGuard {
 }
 
 impl BuildEnvGuard {
-    fn apply(options: &BuildOptions) -> Self {
+    fn apply(options: &BuildOptions) -> Result<Self, BuildCommandError> {
         let guard = Self {
             previous_network: env::var_os("ICP_ENVIRONMENT"),
             previous_workspace: env::var_os("CANIC_WORKSPACE_ROOT"),
             previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
             previous_config: env::var_os("CANIC_CONFIG_PATH"),
         };
+        let config_path = resolve_build_config_path(options)?;
         set_env("ICP_ENVIRONMENT", &options.network);
         set_optional_env("CANIC_WORKSPACE_ROOT", options.workspace.as_deref());
         set_optional_env("CANIC_ICP_ROOT", options.icp_root.as_deref());
-        set_optional_env_path("CANIC_CONFIG_PATH", options.config.as_deref());
-        guard
+        set_env("CANIC_CONFIG_PATH", config_path);
+        Ok(guard)
     }
 }
 
@@ -191,20 +289,6 @@ impl Drop for BuildEnvGuard {
 fn set_optional_env(key: &str, value: Option<&str>) {
     if let Some(value) = value {
         set_env(key, value);
-    }
-}
-
-fn set_optional_env_path(key: &str, value: Option<&str>) {
-    if let Some(value) = value {
-        let path = PathBuf::from(value);
-        let path = if path.is_absolute() {
-            path
-        } else {
-            env::current_dir()
-                .expect("current directory must be available")
-                .join(path)
-        };
-        set_env(key, path);
     }
 }
 
@@ -233,12 +317,16 @@ fn restore_env(key: &str, value: Option<OsString>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_dir;
+    use std::fs;
 
     #[test]
-    fn build_parses_required_role() {
-        let options = BuildOptions::parse([OsString::from("app")]).expect("parse build options");
+    fn build_parses_required_fleet_and_role() {
+        let options = BuildOptions::parse([OsString::from("demo"), OsString::from("app")])
+            .expect("parse build options");
 
-        assert_eq!(options.canister, "app");
+        assert_eq!(options.fleet, "demo");
+        assert_eq!(options.role, "app");
         assert_eq!(options.network, "local");
         assert_eq!(options.profile, None);
         assert_eq!(options.workspace, None);
@@ -249,13 +337,14 @@ mod tests {
     #[test]
     fn build_accepts_internal_network() {
         let options = BuildOptions::parse([
+            OsString::from("demo"),
             OsString::from("app"),
             OsString::from("--__canic-network"),
-            OsString::from("demo"),
+            OsString::from("localnet"),
         ])
         .expect("parse build options");
 
-        assert_eq!(options.network, "demo");
+        assert_eq!(options.network, "localnet");
     }
 
     #[test]
@@ -269,11 +358,13 @@ mod tests {
             OsString::from("backend/src/canisters/canic.toml"),
             OsString::from("--profile"),
             OsString::from("fast"),
+            OsString::from("demo"),
             OsString::from("root"),
         ])
         .expect("parse build options");
 
-        assert_eq!(options.canister, "root");
+        assert_eq!(options.fleet, "demo");
+        assert_eq!(options.role, "root");
         assert_eq!(options.profile, Some(CanisterBuildProfile::Fast));
         assert_eq!(options.workspace.as_deref(), Some("backend"));
         assert_eq!(options.icp_root.as_deref(), Some("."));
@@ -286,7 +377,7 @@ mod tests {
     #[test]
     fn build_requires_role() {
         std::assert_matches!(
-            BuildOptions::parse(Vec::<OsString>::new()),
+            BuildOptions::parse([OsString::from("demo")]),
             Err(BuildCommandError::Usage(_))
         );
     }
@@ -297,9 +388,129 @@ mod tests {
             BuildOptions::parse([
                 OsString::from("--profile"),
                 OsString::from("tiny"),
+                OsString::from("demo"),
                 OsString::from("app")
             ]),
             Err(BuildCommandError::Usage(_))
         );
+    }
+
+    #[test]
+    fn build_rejects_old_role_only_shape() {
+        std::assert_matches!(
+            BuildOptions::parse([OsString::from("app")]),
+            Err(BuildCommandError::Usage(_))
+        );
+    }
+
+    #[test]
+    fn build_usage_lists_fleet_and_role() {
+        let text = usage();
+
+        assert!(text.contains("Usage: canic build <fleet> <role>"));
+        assert!(text.contains("canic build demo app"));
+        assert!(text.contains("be attached to topology"));
+    }
+
+    #[test]
+    fn build_resolves_config_from_selected_fleet() {
+        let root = temp_dir("canic-cli-build-config");
+        let config_path = write_build_config(&root, true);
+        let options = build_options(&root, "demo", "app");
+
+        let resolved = resolve_build_config_path(&options).expect("resolve build config");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(resolved, config_path);
+    }
+
+    #[test]
+    fn build_preflight_rejects_declared_only_role() {
+        let root = temp_dir("canic-cli-build-declared-only");
+        write_build_config(&root, false);
+        let options = build_options(&root, "demo", "app");
+
+        let err = validate_attached_role(&options)
+            .expect_err("declared-only role should fail")
+            .to_string();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(err.contains("declared but not attached"));
+        assert!(err.contains("canic fleet role attach demo app --subnet <subnet>"));
+    }
+
+    #[test]
+    fn build_preflight_accepts_attached_role() {
+        let root = temp_dir("canic-cli-build-attached");
+        write_build_config(&root, true);
+        let options = build_options(&root, "demo", "app");
+
+        validate_attached_role(&options).expect("attached role should pass");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+    }
+
+    #[test]
+    fn explicit_build_config_must_match_selected_fleet() {
+        let root = temp_dir("canic-cli-build-fleet-mismatch");
+        let config_path = write_build_config(&root, true);
+        let mut options = build_options(&root, "other", "app");
+        options.config = Some(config_path.display().to_string());
+
+        let err = resolve_build_config_path(&options)
+            .expect_err("fleet mismatch should fail")
+            .to_string();
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(err.contains("not \"other\""));
+    }
+
+    fn build_options(root: &std::path::Path, fleet: &str, role: &str) -> BuildOptions {
+        BuildOptions {
+            fleet: fleet.to_string(),
+            role: role.to_string(),
+            network: "local".to_string(),
+            profile: None,
+            workspace: Some(root.display().to_string()),
+            icp_root: None,
+            config: None,
+        }
+    }
+
+    fn write_build_config(root: &std::path::Path, attach_app: bool) -> PathBuf {
+        let fleet_dir = root.join("fleets/demo");
+        fs::create_dir_all(&fleet_dir).expect("create fleet dir");
+        fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n")
+            .expect("write workspace manifest");
+        let mut config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#
+        .to_string();
+        if attach_app {
+            config.push_str(
+                r#"
+[subnets.prime.canisters.app]
+kind = "singleton"
+"#,
+            );
+        }
+        let config_path = fleet_dir.join("canic.toml");
+        fs::write(&config_path, config).expect("write canic config");
+        config_path
     }
 }
