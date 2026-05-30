@@ -13,7 +13,7 @@ use toml::Value as TomlValue;
 #[derive(Clone, Copy)]
 enum RootSubnetRoleScope {
     Release,
-    Fleet,
+    Deployable,
 }
 
 const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
@@ -70,7 +70,7 @@ pub struct AttachedFleetRole {
 
 impl RootSubnetRoleScope {
     const fn includes_root(self) -> bool {
-        matches!(self, Self::Fleet)
+        matches!(self, Self::Deployable)
     }
 }
 
@@ -83,12 +83,12 @@ pub fn configured_release_roles(
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
-// Enumerate the configured fleet roles in the single subnet that owns `root`.
-pub fn configured_fleet_roles(
+// Enumerate deployable roles in the single subnet that owns `root`.
+pub fn configured_deployable_roles(
     config_path: &Path,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
-    configured_fleet_roles_from_source(&config_source)
+    configured_deployable_roles_from_source(&config_source)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
 }
 
@@ -908,12 +908,12 @@ pub(super) fn configured_release_roles_from_source(
     configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Release)
 }
 
-// Enumerate all configured roles for the single subnet that owns `root`, except
-// the implicit `wasm_store` bootstrap canister.
-pub(super) fn configured_fleet_roles_from_source(
+// Enumerate deployable roles for the single subnet that owns `root`, except the
+// implicit `wasm_store` bootstrap canister.
+pub(super) fn configured_deployable_roles_from_source(
     config_source: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Fleet)
+    configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Deployable)
 }
 
 // Enumerate roles expected to be present once root bootstrap has completed.

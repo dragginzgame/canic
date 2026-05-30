@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.6` hardens deployment-truth role selection so declared-only roles stay
+  visible in lifecycle output but are excluded from deployable role selectors,
+  install targets, local artifact manifests, inventories, and local deployment
+  plans.
+
 - `0.49.5` hard-cuts visible artifact builds to fleet-scoped role identity:
   ```
   canic build <fleet> <role>

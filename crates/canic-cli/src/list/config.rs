@@ -7,7 +7,7 @@ use canic_host::{
     install_root::discover_current_canic_config_choices,
     registry::RegistryEntry,
     release_set::{
-        configured_fleet_roles, configured_role_auto_create, configured_role_capabilities,
+        configured_deployable_roles, configured_role_auto_create, configured_role_capabilities,
         configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
         configured_role_topups, matching_fleet_config_paths,
     },
@@ -22,7 +22,7 @@ pub(super) fn load_config_role_rows(
     options: &ListOptions,
 ) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
     let config_path = selected_config_path(options)?;
-    let roles = load_config_value(|| configured_fleet_roles(&config_path))?;
+    let roles = load_config_value(|| configured_deployable_roles(&config_path))?;
     let kinds = load_config_value(|| configured_role_kinds(&config_path))?;
     let capabilities = load_config_value(|| configured_role_capabilities(&config_path))?;
     let auto_create = load_config_value(|| configured_role_auto_create(&config_path))?;
@@ -91,7 +91,7 @@ pub(super) fn missing_config_roles(
     let Ok(config_path) = selected_config_path(options) else {
         return Vec::new();
     };
-    let Ok(expected) = configured_fleet_roles(&config_path) else {
+    let Ok(expected) = configured_deployable_roles(&config_path) else {
         return Vec::new();
     };
     let deployed = registry

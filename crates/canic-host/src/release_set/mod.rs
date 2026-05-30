@@ -10,7 +10,7 @@ mod stage;
 pub use config::{
     AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
     LOCAL_ROOT_MIN_READY_CYCLES, attach_fleet_role, configured_bootstrap_roles,
-    configured_controllers, configured_fleet_name, configured_fleet_roles,
+    configured_controllers, configured_deployable_roles, configured_fleet_name,
     configured_install_targets, configured_local_root_create_cycles, configured_pool_expectations,
     configured_release_roles, configured_role_auto_create, configured_role_capabilities,
     configured_role_details, configured_role_kinds, configured_role_lifecycle,
@@ -37,8 +37,8 @@ use stage::read_release_artifact;
 #[cfg(test)]
 use config::{
     attach_fleet_role_source, configured_bootstrap_roles_from_source,
-    configured_controllers_from_source, configured_fleet_name_from_source,
-    configured_fleet_roles_from_source, configured_local_root_create_cycles_from_source,
+    configured_controllers_from_source, configured_deployable_roles_from_source,
+    configured_fleet_name_from_source, configured_local_root_create_cycles_from_source,
     configured_pool_expectations_from_source, configured_release_roles_from_source,
     configured_role_auto_create_from_source, configured_role_capabilities_from_source,
     configured_role_details_from_source, configured_role_kinds_from_source,
@@ -68,7 +68,7 @@ mod tests {
     use super::{
         attach_fleet_role_source, canister_manifest_path, canisters_root, config_path,
         configured_bootstrap_roles_from_source, configured_controllers_from_source,
-        configured_fleet_name_from_source, configured_fleet_roles_from_source,
+        configured_deployable_roles_from_source, configured_fleet_name_from_source,
         configured_install_targets, configured_local_root_create_cycles_from_source,
         configured_pool_expectations_from_source, configured_release_roles_from_source,
         configured_role_auto_create_from_source, configured_role_capabilities_from_source,
@@ -254,8 +254,55 @@ kind = "singleton"
     }
 
     #[test]
-    fn configured_fleet_roles_include_root_first() {
-        let roles = configured_fleet_roles_from_source(REAL_CONFIG).expect("fleet roles");
+    fn configured_deployable_surfaces_exclude_declared_only_roles() {
+        let temp = TempWorkspace::new();
+        let config_path = temp.path().join("canic.toml");
+        let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.user_hub]
+kind = "canister"
+package = "user_hub"
+
+[roles.store]
+kind = "canister"
+package = "store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "singleton"
+"#;
+        fs::write(&config_path, config).expect("write config");
+
+        let deployable = configured_deployable_roles_from_source(config).expect("deployable roles");
+        let release = configured_release_roles_from_source(config).expect("release roles");
+        let install_targets =
+            configured_install_targets(&config_path, "root").expect("install targets");
+
+        assert_eq!(deployable, vec!["root".to_string(), "user_hub".to_string()]);
+        assert_eq!(release, vec!["user_hub".to_string()]);
+        assert_eq!(
+            install_targets,
+            vec!["root".to_string(), "user_hub".to_string()]
+        );
+        assert!(!deployable.contains(&"store".to_string()));
+        assert!(!release.contains(&"store".to_string()));
+        assert!(!install_targets.contains(&"store".to_string()));
+    }
+
+    #[test]
+    fn configured_deployable_roles_include_root_first() {
+        let roles = configured_deployable_roles_from_source(REAL_CONFIG).expect("deployable roles");
 
         assert_eq!(roles.first().map(String::as_str), Some("root"));
         assert!(roles.contains(&"user_hub".to_string()));

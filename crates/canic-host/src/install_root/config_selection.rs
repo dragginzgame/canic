@@ -1,4 +1,4 @@
-use crate::release_set::{configured_fleet_name, configured_fleet_roles};
+use crate::release_set::{configured_deployable_roles, configured_fleet_name};
 use crate::table::{ColumnAlign, render_table};
 use crate::workspace_discovery::normalize_workspace_path;
 use std::{
@@ -275,10 +275,10 @@ fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String
     .collect()
 }
 
-// Summarize the root-subnet fleet roles for one install config choice.
+// Summarize the root-subnet deployable roles for one install config choice.
 fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> ConfigChoiceRow {
     let config = display_workspace_path(workspace_root, path);
-    match configured_fleet_roles(path) {
+    match configured_deployable_roles(path) {
         Ok(roles) => ConfigChoiceRow {
             option: option.to_string(),
             config,

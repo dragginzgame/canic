@@ -2,8 +2,8 @@ use super::*;
 use crate::{
     install_root::{RootVerificationStatus, read_named_deployment_install_state_from_root},
     release_set::{
-        ConfiguredPoolExpectation, configured_controllers, configured_fleet_name,
-        configured_fleet_roles, configured_pool_expectations,
+        ConfiguredPoolExpectation, configured_controllers, configured_deployable_roles,
+        configured_fleet_name, configured_pool_expectations,
     },
 };
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
         ));
         request.deployment_name.clone()
     });
-    let roles = configured_fleet_roles(&config).map_or_else(
+    let roles = configured_deployable_roles(&config).map_or_else(
         |err| {
             unresolved_assumptions.push(assumption(
                 "local_config.roles",

@@ -7711,6 +7711,18 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
             .iter()
             .any(|gap| gap.key == "local_artifacts.user_hub")
     );
+    assert!(
+        inventory
+            .observed_artifacts
+            .iter()
+            .all(|artifact| artifact.role != "store")
+    );
+    assert!(
+        inventory
+            .unresolved_observations
+            .iter()
+            .all(|gap| gap.key != "local_artifacts.store")
+    );
 }
 
 #[test]
@@ -8040,6 +8052,12 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
 
     assert_eq!(manifest.manifest_id, "local:local:demo:artifacts");
     assert_eq!(manifest.role_artifacts.len(), 3);
+    assert!(
+        manifest
+            .role_artifacts
+            .iter()
+            .all(|artifact| artifact.role != "store")
+    );
     let wasm_store = manifest
         .role_artifacts
         .iter()
@@ -8142,6 +8160,12 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
             .iter()
             .any(|gap| gap.key == "local_artifacts.wasm_store")
     );
+    assert!(
+        manifest
+            .unresolved_artifacts
+            .iter()
+            .all(|gap| gap.key != "local_artifacts.store")
+    );
 }
 
 #[test]
@@ -8235,12 +8259,26 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
             .collect::<Vec<_>>(),
         vec!["root", "wasm_store", "user_hub"]
     );
+    assert_plan_excludes_declared_only_store(&plan);
     let root_assumption = plan
         .unresolved_assumptions
         .iter()
         .find(|assumption| assumption.key == "local_state.root_canister_id")
         .expect("missing root identity should be recorded");
     assert!(root_assumption.description.contains("--allow-unverified"));
+}
+
+fn assert_plan_excludes_declared_only_store(plan: &DeploymentPlanV1) {
+    assert!(
+        plan.role_artifacts
+            .iter()
+            .all(|artifact| artifact.role != "store")
+    );
+    assert!(
+        plan.unresolved_assumptions
+            .iter()
+            .all(|assumption| assumption.key != "local_artifacts.store")
+    );
 }
 
 fn assert_plan_has_implicit_wasm_store_artifact(plan: &DeploymentPlanV1) {
@@ -8293,6 +8331,9 @@ kind = "root"
 kind = "canister"
 
 [roles.user_shard]
+kind = "canister"
+
+[roles.store]
 kind = "canister"
 
 [app]

@@ -18,7 +18,7 @@ use canic_host::{
     },
     registry::RegistryEntry,
     release_set::{
-        configured_bootstrap_roles, configured_fleet_name, configured_fleet_roles,
+        configured_bootstrap_roles, configured_deployable_roles, configured_fleet_name,
         display_workspace_path,
     },
     replica_query,
@@ -227,7 +227,7 @@ fn status_deployment_row(
     };
     let install_state =
         read_installed_deployment_state_from_root(&options.network, &deployment, icp_root);
-    let configured_roles = configured_fleet_roles(path);
+    let configured_roles = configured_deployable_roles(path);
     let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
         Ok(state) => (

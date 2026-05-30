@@ -2,7 +2,7 @@ use crate::{
     install_root::{
         current_canic_project_root, discover_project_canic_config_choices, project_fleet_roots,
     },
-    release_set::{configured_fleet_name, configured_fleet_roles, icp_root},
+    release_set::{configured_deployable_roles, configured_fleet_name, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
 use std::{
@@ -255,7 +255,7 @@ fn discover_project_spec(
             matched_filter = true;
         }
 
-        let roles = configured_fleet_roles(&config_path)
+        let roles = configured_deployable_roles(&config_path)
             .map_err(|err| IcpConfigError::Config(err.to_string()))?;
         for role in &roles {
             if seen_canisters.insert(role.clone()) {

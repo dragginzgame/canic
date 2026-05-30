@@ -5,8 +5,8 @@ use crate::{
     installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
     release_set::{
-        ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE, configured_fleet_name,
-        configured_fleet_roles, configured_pool_expectations, load_root_release_set_manifest,
+        ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE, configured_deployable_roles,
+        configured_fleet_name, configured_pool_expectations, load_root_release_set_manifest,
     },
 };
 use std::{
@@ -150,7 +150,7 @@ fn observe_local_config_facts(
         ));
         fallback_fleet_name.to_string()
     });
-    let roles = configured_fleet_roles(config).map_or_else(
+    let roles = configured_deployable_roles(config).map_or_else(
         |err| {
             unresolved_observations.push(observation_gap(
                 "local_config.roles",
@@ -247,7 +247,7 @@ pub fn collect_local_role_artifact_manifest(
         ));
         "unknown".to_string()
     });
-    let roles = configured_fleet_roles(&config).map_or_else(
+    let roles = configured_deployable_roles(&config).map_or_else(
         |err| {
             unresolved_artifacts.push(observation_gap(
                 "local_config.roles",

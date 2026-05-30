@@ -14,7 +14,7 @@ use canic_host::{
     },
     release_set::{
         AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, attach_fleet_role,
-        configured_fleet_name, configured_fleet_roles, configured_role_lifecycle,
+        configured_deployable_roles, configured_fleet_name, configured_role_lifecycle,
         declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
     },
     table::{ColumnAlign, render_table},
@@ -888,7 +888,7 @@ fn fleet_list_row(workspace_root: &Path, path: &Path, network: &str) -> FleetLis
         network: network.to_string(),
         fleet,
         config: display_workspace_path(workspace_root, path),
-        canisters: configured_fleet_roles(path).map_or_else(
+        canisters: configured_deployable_roles(path).map_or_else(
             |_| "invalid config".to_string(),
             |roles| format_canister_summary(&roles),
         ),
