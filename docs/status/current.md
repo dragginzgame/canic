@@ -40,6 +40,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.4 has clarified hybrid external-Wasm adoption reporting. Role findings
+  now carry supplied module-hash and external artifact evidence, hybrid reports
+  warn that artifact registry import is outside adoption reporting, and
+  `artifact registry import` is listed as a blocked adoption action.
 - 0.50.3 has added standalone and leaf-only adoption report coverage.
   Standalone profile fixtures keep compile-only roles declared-only without
   synthesized topology. Leaf-only reports now leave authority-sensitive

@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.4` clarifies hybrid external-Wasm reporting: adoption findings now
+  include supplied module-hash and external artifact evidence, warn that
+  artifact registry import is outside adoption reporting, and explicitly block
+  `artifact registry import`.
+
 - `0.50.3` adds standalone and leaf-only adoption report fixtures. Standalone
   roles remain declared-only without synthesized topology, and leaf-only
   reports keep authority-sensitive observed roles visible without recommending

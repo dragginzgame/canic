@@ -301,6 +301,7 @@ struct DeclaredRoleFindingInput<'a> {
     duplicate_observation: bool,
     packages_by_path: &'a BTreeMap<String, AdoptionPackageMetadataV1>,
     artifact_state: Option<AdoptionArtifactStateV1>,
+    artifact_evidence: Option<&'a [String]>,
 }
 
 ///
@@ -320,6 +321,8 @@ pub fn adoption_report_from_config_source(
     let observed_duplicate_roles = duplicate_observed_roles(&observed_by_role);
     let packages_by_path = package_metadata_by_path(request.package_metadata);
     let artifacts_by_role = artifact_states_by_role(request.artifact_manifest, request.inventory);
+    let artifact_evidence_by_role =
+        artifact_evidence_by_role(request.artifact_manifest, request.inventory);
     let declared_roles = config.roles.keys().cloned().collect::<BTreeSet<_>>();
 
     let mut role_findings = Vec::new();
@@ -337,6 +340,9 @@ pub fn adoption_report_from_config_source(
             duplicate_observation: observed_duplicate_roles.contains(role.as_str()),
             packages_by_path: &packages_by_path,
             artifact_state: artifacts_by_role.get(role.as_str()).copied(),
+            artifact_evidence: artifact_evidence_by_role
+                .get(role.as_str())
+                .map(Vec::as_slice),
         }));
     }
 
@@ -351,6 +357,9 @@ pub fn adoption_report_from_config_source(
             observed,
             observed_duplicate_roles.contains(role),
             artifacts_by_role.get(role.as_str()).copied(),
+            artifact_evidence_by_role
+                .get(role.as_str())
+                .map(Vec::as_slice),
         ));
     }
 
@@ -433,6 +442,12 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
 
     for canister in observed {
         evidence.push(format!("observed canister {}", canister.canister_id));
+        if let Some(hash) = &canister.module_hash {
+            evidence.push(format!("observed canister module_hash={hash}"));
+        }
+    }
+    if let Some(artifact_evidence) = input.artifact_evidence {
+        evidence.extend(artifact_evidence.iter().cloned());
     }
 
     let authority_state = combined_authority_state(observed);
@@ -467,6 +482,18 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
         warnings.push("deployment evidence contains conflicting role facts".to_string());
     }
 
+    let artifact_state = input
+        .artifact_state
+        .unwrap_or_else(|| artifact_state_from_observed(observed));
+    if input.profile == AdoptionProfileV1::HybridExternalWasm
+        && artifact_state == AdoptionArtifactStateV1::ExternalWasm
+    {
+        warnings.push(
+            "external Wasm evidence is reported only; artifact registry import is outside adoption reporting"
+                .to_string(),
+        );
+    }
+
     AdoptionRoleFindingV1 {
         fleet: input.fleet.to_string(),
         role: role_name,
@@ -480,9 +507,7 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
         package_state,
         observation_state: observation_state(observed_any, input.duplicate_observation),
         authority_state,
-        artifact_state: input
-            .artifact_state
-            .unwrap_or_else(|| artifact_state_from_observed(observed)),
+        artifact_state,
         evidence,
         recommendations,
         warnings,
@@ -496,6 +521,7 @@ fn role_finding_for_observed_only_role(
     observed: &[&crate::deployment_truth::ObservedCanisterV1],
     duplicate_observation: bool,
     artifact_state: Option<AdoptionArtifactStateV1>,
+    artifact_evidence: Option<&[String]>,
 ) -> AdoptionRoleFindingV1 {
     let mut classifications = BTreeSet::new();
     classifications.insert(AdoptionClassificationV1::ObservedOnly);
@@ -514,6 +540,31 @@ fn role_finding_for_observed_only_role(
         classifications.insert(AdoptionClassificationV1::ExternalControllerRequired);
     }
 
+    let artifact_state = artifact_state.unwrap_or_else(|| artifact_state_from_observed(observed));
+    let mut evidence = observed
+        .iter()
+        .flat_map(|canister| {
+            let mut evidence = vec![format!("observed canister {}", canister.canister_id)];
+            if let Some(hash) = &canister.module_hash {
+                evidence.push(format!("observed canister module_hash={hash}"));
+            }
+            evidence
+        })
+        .collect::<Vec<_>>();
+    if let Some(artifact_evidence) = artifact_evidence {
+        evidence.extend(artifact_evidence.iter().cloned());
+    }
+
+    let mut warnings = observed_only_warnings(profile, role);
+    if profile == AdoptionProfileV1::HybridExternalWasm
+        && artifact_state == AdoptionArtifactStateV1::ExternalWasm
+    {
+        warnings.push(
+            "external Wasm evidence is reported only; artifact registry import is outside adoption reporting"
+                .to_string(),
+        );
+    }
+
     AdoptionRoleFindingV1 {
         fleet: fleet.to_string(),
         role: role.to_string(),
@@ -523,13 +574,10 @@ fn role_finding_for_observed_only_role(
         package_state: AdoptionPackageStateV1::NotPackageBacked,
         observation_state: observation_state(true, duplicate_observation),
         authority_state,
-        artifact_state: artifact_state.unwrap_or_else(|| artifact_state_from_observed(observed)),
-        evidence: observed
-            .iter()
-            .map(|canister| format!("observed canister {}", canister.canister_id))
-            .collect(),
+        artifact_state,
+        evidence,
         recommendations: observed_only_recommendations(profile, fleet, role),
-        warnings: observed_only_warnings(profile, role),
+        warnings,
     }
 }
 
@@ -739,6 +787,64 @@ fn artifact_states_by_role(
     states
 }
 
+fn artifact_evidence_by_role(
+    manifest: Option<&RoleArtifactManifestV1>,
+    inventory: Option<&DeploymentInventoryV1>,
+) -> BTreeMap<String, Vec<String>> {
+    let mut evidence = BTreeMap::<String, Vec<String>>::new();
+
+    if let Some(manifest) = manifest {
+        for artifact in &manifest.role_artifacts {
+            let role_evidence = evidence.entry(artifact.role.clone()).or_default();
+            role_evidence.push(format!(
+                "artifact manifest source={}",
+                artifact_source_label(artifact.source)
+            ));
+            if let Some(hash) = &artifact.installed_module_hash {
+                role_evidence.push(format!("artifact manifest installed_module_hash={hash}"));
+            }
+            if let Some(hash) = &artifact.wasm_sha256 {
+                role_evidence.push(format!("artifact manifest wasm_sha256={hash}"));
+            }
+            if let Some(hash) = &artifact.wasm_gz_sha256 {
+                role_evidence.push(format!("artifact manifest wasm_gz_sha256={hash}"));
+            }
+        }
+    }
+
+    if let Some(inventory) = inventory {
+        for artifact in &inventory.observed_artifacts {
+            let role_evidence = evidence.entry(artifact.role.clone()).or_default();
+            role_evidence.push(format!(
+                "observed artifact source={} path={}",
+                artifact_source_label(artifact.source),
+                artifact.artifact_path
+            ));
+            if let Some(hash) = &artifact.file_sha256 {
+                role_evidence.push(format!("observed artifact file_sha256={hash}"));
+            }
+            if let Some(hash) = &artifact.payload_sha256 {
+                role_evidence.push(format!("observed artifact payload_sha256={hash}"));
+            }
+            if let Some(size) = artifact.payload_size_bytes {
+                role_evidence.push(format!("observed artifact payload_size_bytes={size}"));
+            }
+        }
+    }
+
+    evidence
+}
+
+const fn artifact_source_label(source: ArtifactSourceV1) -> &'static str {
+    match source {
+        ArtifactSourceV1::LocalBuild => "local-build",
+        ArtifactSourceV1::ReleaseSet => "release-set",
+        ArtifactSourceV1::WasmStore => "wasm-store",
+        ArtifactSourceV1::External => "external",
+        ArtifactSourceV1::Unknown => "unknown",
+    }
+}
+
 fn combined_authority_state(
     observed: &[&crate::deployment_truth::ObservedCanisterV1],
 ) -> AdoptionAuthorityStateV1 {
@@ -914,6 +1020,7 @@ fn blocked_actions() -> Vec<String> {
         "deploy",
         "promote",
         "rollback",
+        "artifact registry import",
     ]
     .into_iter()
     .map(str::to_string)
@@ -1568,6 +1675,78 @@ kind = "root"
         );
     }
 
+    #[test]
+    fn hybrid_external_wasm_fixture_reports_hashes_without_import() {
+        let mut inventory = inventory(vec![observed_canister(
+            "bbbbb-bb",
+            Some("api"),
+            CanisterControlClassV1::DeploymentControlled,
+            Some("api-module-hash"),
+        )]);
+        inventory
+            .observed_artifacts
+            .push(observed_external_api_artifact());
+        let manifest = external_api_artifact_manifest();
+
+        let report = adoption_report_from_config_source(AdoptionReportRequest {
+            report_id: "hybrid-1",
+            generated_at: "2026-05-30T00:00:00Z",
+            profile: AdoptionProfileV1::HybridExternalWasm,
+            config_source: CONFIG,
+            inventory: Some(&inventory),
+            artifact_manifest: Some(&manifest),
+            package_metadata: Vec::new(),
+        })
+        .expect("adoption report");
+        let api = role(&report, "api");
+        let observed_api = report
+            .observed_canisters
+            .iter()
+            .find(|finding| finding.matched_role.as_deref() == Some("api"))
+            .expect("api observation");
+
+        assert_eq!(api.artifact_state, AdoptionArtifactStateV1::ExternalWasm);
+        assert!(
+            api.evidence
+                .iter()
+                .any(|evidence| evidence == "observed canister module_hash=api-module-hash")
+        );
+        assert!(
+            api.evidence
+                .iter()
+                .any(|evidence| evidence == "artifact manifest source=external")
+        );
+        assert!(
+            api.evidence.iter().any(|evidence| evidence
+                == "artifact manifest installed_module_hash=api-installed-module")
+        );
+        assert!(
+            api.evidence
+                .iter()
+                .any(|evidence| evidence == "observed artifact file_sha256=api-file-sha")
+        );
+        assert!(
+            api.warnings
+                .iter()
+                .any(|warning| warning.contains("artifact registry import is outside"))
+        );
+        assert_eq!(
+            observed_api.wasm_evidence.as_deref(),
+            Some("module_hash=api-module-hash")
+        );
+        assert!(
+            report
+                .blocked_actions
+                .contains(&"artifact registry import".to_string())
+        );
+        assert!(
+            report
+                .recommendations
+                .iter()
+                .all(|recommendation| !recommendation.kind.contains("artifact"))
+        );
+    }
+
     fn report(
         config_source: &str,
         inventory: Option<&DeploymentInventoryV1>,
@@ -1608,6 +1787,54 @@ kind = "root"
                 role: Some(package.to_string()),
             })
             .collect()
+    }
+
+    fn external_api_artifact_manifest() -> RoleArtifactManifestV1 {
+        RoleArtifactManifestV1 {
+            schema_version: 1,
+            manifest_id: "external-manifest-1".to_string(),
+            network: "local".to_string(),
+            artifact_root: None,
+            role_artifacts: vec![external_api_role_artifact()],
+            unresolved_artifacts: Vec::new(),
+        }
+    }
+
+    fn external_api_role_artifact() -> RoleArtifactV1 {
+        RoleArtifactV1 {
+            role: "api".to_string(),
+            source: ArtifactSourceV1::External,
+            build_profile: "external".to_string(),
+            wasm_path: Some("external/api.wasm".to_string()),
+            wasm_gz_path: Some("external/api.wasm.gz".to_string()),
+            wasm_gz_size_bytes: Some(42),
+            wasm_sha256: Some("api-wasm-sha".to_string()),
+            wasm_gz_sha256: Some("api-wasm-gz-sha".to_string()),
+            wasm_gz_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            observed_wasm_gz_file_sha256: Some("api-file-sha".to_string()),
+            observed_wasm_gz_file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            installed_module_hash: Some("api-installed-module".to_string()),
+            candid_path: None,
+            candid_sha256: None,
+            raw_config_sha256: None,
+            canonical_embedded_config_sha256: None,
+            embedded_topology_sha256: None,
+            builder_version: None,
+            rust_toolchain: None,
+            package_version: None,
+        }
+    }
+
+    fn observed_external_api_artifact() -> ObservedArtifactV1 {
+        ObservedArtifactV1 {
+            role: "api".to_string(),
+            artifact_path: "external/api.wasm.gz".to_string(),
+            file_sha256: Some("api-file-sha".to_string()),
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: Some("api-payload-sha".to_string()),
+            payload_size_bytes: Some(42),
+            source: ArtifactSourceV1::External,
+        }
     }
 
     fn role<'a>(report: &'a AdoptionReportV1, role: &str) -> &'a AdoptionRoleFindingV1 {
