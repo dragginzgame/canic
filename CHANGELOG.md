@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.13` carries unresolved inventory observations and unresolved artifact
+  entries from supplied evidence into adoption report
+  `missing_or_stale_evidence`, so passive reports show evidence gaps already
+  recorded by deployment-truth artifacts.
+
 - `0.50.12` expands text adoption reports so observed canister rows include
   match confidence plus supplied evidence such as controllers, Wasm evidence,
   deployment-target evidence, and warnings.

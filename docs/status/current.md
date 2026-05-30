@@ -40,6 +40,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.13 has made adoption reports preserve unresolved inventory observations
+  and unresolved artifact entries from supplied evidence in
+  `missing_or_stale_evidence`, without retrying observation or mutating
+  deployment-truth state.
 - 0.50.12 has expanded text adoption reports so observed canister rows include
   match confidence and supplied evidence details such as controllers, Wasm
   evidence, deployment-target evidence, and warnings.

@@ -122,6 +122,8 @@ Those inputs are read-only:
 
 Use either `--deployment-check` or `--inventory`, not both.
 Use either `--package-metadata` or `--cargo-metadata`, not both.
+Unresolved observations and unresolved artifact entries already present in
+supplied evidence are carried into `missing_or_stale_evidence`.
 
 The report command must not:
 

@@ -396,7 +396,10 @@ pub fn adoption_report_from_config_source(
                 .artifact_manifest
                 .map(|manifest| manifest.manifest_id.clone()),
             package_metadata_count: packages_by_path.len(),
-            missing_or_stale_evidence: missing_evidence(request.inventory),
+            missing_or_stale_evidence: missing_evidence(
+                request.inventory,
+                request.artifact_manifest,
+            ),
         },
         summary,
         role_findings,
@@ -917,12 +920,33 @@ fn artifact_state_from_observed(
     }
 }
 
-fn missing_evidence(inventory: Option<&DeploymentInventoryV1>) -> Vec<String> {
-    if inventory.is_some() {
-        Vec::new()
+fn missing_evidence(
+    inventory: Option<&DeploymentInventoryV1>,
+    artifact_manifest: Option<&RoleArtifactManifestV1>,
+) -> Vec<String> {
+    let mut evidence = Vec::new();
+
+    if let Some(inventory) = inventory {
+        evidence.extend(inventory.unresolved_observations.iter().map(|gap| {
+            format!(
+                "unresolved inventory observation {}: {}",
+                gap.key, gap.description
+            )
+        }));
     } else {
-        vec!["deployment inventory was not supplied".to_string()]
+        evidence.push("deployment inventory was not supplied".to_string());
     }
+
+    if let Some(manifest) = artifact_manifest {
+        evidence.extend(manifest.unresolved_artifacts.iter().map(|gap| {
+            format!(
+                "unresolved artifact evidence {}: {}",
+                gap.key, gap.description
+            )
+        }));
+    }
+
+    evidence
 }
 
 fn report_summary(
@@ -1074,10 +1098,10 @@ fn blocked_actions() -> Vec<String> {
 mod tests {
     use super::*;
     use crate::deployment_truth::{
-        ArtifactDigestSourceV1, DeploymentInventoryV1, DeploymentRootObservationSourceV1,
-        DeploymentRootObservationV1, LocalDeploymentConfigV1, ObservationStatusV1,
-        ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1, RoleArtifactManifestV1,
-        RoleArtifactV1, VerifierReadinessObservationV1,
+        ArtifactDigestSourceV1, DeploymentInventoryV1, DeploymentObservationGapV1,
+        DeploymentRootObservationSourceV1, DeploymentRootObservationV1, LocalDeploymentConfigV1,
+        ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1,
+        RoleArtifactManifestV1, RoleArtifactV1, VerifierReadinessObservationV1,
     };
 
     const CONFIG: &str = r#"
@@ -1519,6 +1543,48 @@ kind = "root"
             api.warnings
                 .iter()
                 .any(|warning| warning.contains("does not confirm"))
+        );
+    }
+
+    #[test]
+    fn adoption_report_preserves_unresolved_evidence_gaps() {
+        let mut inventory = inventory(Vec::new());
+        inventory
+            .unresolved_observations
+            .push(DeploymentObservationGapV1 {
+                key: "canister-status:api".to_string(),
+                description: "status query failed".to_string(),
+            });
+        let mut manifest = external_api_artifact_manifest();
+        manifest
+            .unresolved_artifacts
+            .push(DeploymentObservationGapV1 {
+                key: "artifact:api".to_string(),
+                description: "artifact file missing".to_string(),
+            });
+
+        let report = adoption_report_from_config_source(AdoptionReportRequest {
+            report_id: "adoption-1",
+            generated_at: "2026-05-30T00:00:00Z",
+            profile: AdoptionProfileV1::Partial,
+            config_source: CONFIG,
+            inventory: Some(&inventory),
+            artifact_manifest: Some(&manifest),
+            package_metadata: Vec::new(),
+        })
+        .expect("adoption report");
+
+        assert!(report.inputs.missing_or_stale_evidence.iter().any(|evidence| {
+            evidence == "unresolved inventory observation canister-status:api: status query failed"
+        }));
+        assert!(
+            report
+                .inputs
+                .missing_or_stale_evidence
+                .iter()
+                .any(|evidence| {
+                    evidence == "unresolved artifact evidence artifact:api: artifact file missing"
+                })
         );
     }
 
