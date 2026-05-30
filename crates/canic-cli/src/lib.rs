@@ -84,6 +84,9 @@ pub enum CliError {
     #[error("snapshot: {0}")]
     Snapshot(#[from] snapshot::SnapshotCommandError),
 
+    #[error("scaffold: {0}")]
+    Scaffold(#[from] scaffold::ScaffoldCommandError),
+
     #[error("restore: {0}")]
     Restore(#[from] restore::RestoreCommandError),
 
@@ -153,6 +156,7 @@ where
         "medic" => medic::run(tail).map_err(CliError::from),
         "metrics" => metrics::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
+        "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
         "token" => token::run(tail).map_err(CliError::from),

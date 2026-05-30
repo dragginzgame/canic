@@ -39,7 +39,8 @@ fn usage_lists_command_families() {
     assert!(plain.contains("ICP wallet commands"));
     assert!(plain.contains("Backup and restore commands"));
     assert!(plain.find("    status") < plain.find("    fleet"));
-    assert!(plain.find("    fleet") < plain.find("    replica"));
+    assert!(plain.find("    fleet") < plain.find("    scaffold"));
+    assert!(plain.find("    scaffold") < plain.find("    replica"));
     assert!(plain.find("    replica") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
@@ -57,7 +58,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("Options:"));
     assert!(plain.contains("--icp <path>"));
     assert!(plain.contains("--network <name>"));
-    assert!(!plain.contains("    scaffold"));
+    assert!(plain.contains("    scaffold"));
     assert!(plain.contains("config"));
     assert!(plain.contains("cycles"));
     assert!(plain.contains("token"));
@@ -114,6 +115,9 @@ fn command_family_help_returns_ok() {
         &["fleet", "create", "help"],
         &["fleet", "list", "help"],
         &["fleet", "delete", "help"],
+        &["scaffold"],
+        &["scaffold", "help"],
+        &["scaffold", "canister", "help"],
         &["replica"],
         &["replica", "help"],
         &["replica", "start", "help"],

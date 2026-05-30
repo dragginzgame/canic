@@ -55,6 +55,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Project,
     },
     CommandSpec {
+        name: "scaffold",
+        about: "Scaffold Canic source files",
+        scope: CommandScope::Project,
+    },
+    CommandSpec {
         name: "replica",
         about: "Manage the local ICP replica",
         scope: CommandScope::Project,

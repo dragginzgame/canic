@@ -54,6 +54,11 @@ inspect only the files needed for the current task.
 - `canic fleet role attach <fleet> <role> --subnet <subnet>` now moves a
   declared ordinary role into direct topology, defaulting to `kind =
   "singleton"` unless `--kind` selects `shard`, `replica`, or `instance`.
+- `canic scaffold canister <fleet> <role>` now creates a declared-only
+  ordinary canister crate under an existing fleet config. It writes package
+  metadata with the selected `fleet` and `role`, adds the matching role
+  declaration and workspace member, and intentionally leaves topology
+  attachment to `canic fleet role attach`.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.

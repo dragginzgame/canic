@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.4` adds declared-only canister scaffolding:
+  ```
+  canic scaffold canister <fleet> <role>
+  ```
+  Developers can create a new ordinary canister crate and role declaration
+  before choosing topology placement.
+
 - `0.49.3` adds direct topology attachment for declared roles:
   ```
   canic fleet role attach <fleet> <role> --subnet <subnet>
