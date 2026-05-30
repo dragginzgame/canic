@@ -301,6 +301,18 @@ struct DeclaredRoleFindingInput<'a> {
     duplicate_observation: bool,
     packages_by_path: &'a BTreeMap<String, AdoptionPackageMetadataV1>,
     artifact_state: Option<AdoptionArtifactStateV1>,
+    artifact_conflict: bool,
+    artifact_evidence: Option<&'a [String]>,
+}
+
+struct ObservedOnlyRoleFindingInput<'a> {
+    profile: AdoptionProfileV1,
+    fleet: &'a str,
+    role: &'a str,
+    observed: &'a [&'a crate::deployment_truth::ObservedCanisterV1],
+    duplicate_observation: bool,
+    artifact_state: Option<AdoptionArtifactStateV1>,
+    artifact_conflict: bool,
     artifact_evidence: Option<&'a [String]>,
 }
 
@@ -321,6 +333,8 @@ pub fn adoption_report_from_config_source(
     let observed_duplicate_roles = duplicate_observed_roles(&observed_by_role);
     let packages_by_path = package_metadata_by_path(request.package_metadata);
     let artifacts_by_role = artifact_states_by_role(request.artifact_manifest, request.inventory);
+    let artifact_conflict_roles =
+        artifact_conflict_roles(request.artifact_manifest, request.inventory);
     let artifact_evidence_by_role =
         artifact_evidence_by_role(request.artifact_manifest, request.inventory);
     let declared_roles = config.roles.keys().cloned().collect::<BTreeSet<_>>();
@@ -340,6 +354,7 @@ pub fn adoption_report_from_config_source(
             duplicate_observation: observed_duplicate_roles.contains(role.as_str()),
             packages_by_path: &packages_by_path,
             artifact_state: artifacts_by_role.get(role.as_str()).copied(),
+            artifact_conflict: artifact_conflict_roles.contains(role.as_str()),
             artifact_evidence: artifact_evidence_by_role
                 .get(role.as_str())
                 .map(Vec::as_slice),
@@ -351,15 +366,18 @@ pub fn adoption_report_from_config_source(
             continue;
         }
         role_findings.push(role_finding_for_observed_only_role(
-            request.profile,
-            &fleet,
-            role,
-            observed,
-            observed_duplicate_roles.contains(role),
-            artifacts_by_role.get(role.as_str()).copied(),
-            artifact_evidence_by_role
-                .get(role.as_str())
-                .map(Vec::as_slice),
+            ObservedOnlyRoleFindingInput {
+                profile: request.profile,
+                fleet: &fleet,
+                role,
+                observed,
+                duplicate_observation: observed_duplicate_roles.contains(role),
+                artifact_state: artifacts_by_role.get(role.as_str()).copied(),
+                artifact_conflict: artifact_conflict_roles.contains(role),
+                artifact_evidence: artifact_evidence_by_role
+                    .get(role.as_str())
+                    .map(Vec::as_slice),
+            },
         ));
     }
 
@@ -485,6 +503,11 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
         warnings.push("deployment evidence contains conflicting role facts".to_string());
     }
 
+    if input.artifact_conflict {
+        classifications.insert(AdoptionClassificationV1::EvidenceConflict);
+        warnings.push("artifact evidence contains conflicting role facts".to_string());
+    }
+
     let artifact_state = input
         .artifact_state
         .unwrap_or_else(|| artifact_state_from_observed(observed));
@@ -518,21 +541,18 @@ fn role_finding_for_declared_role(input: DeclaredRoleFindingInput<'_>) -> Adopti
 }
 
 fn role_finding_for_observed_only_role(
-    profile: AdoptionProfileV1,
-    fleet: &str,
-    role: &str,
-    observed: &[&crate::deployment_truth::ObservedCanisterV1],
-    duplicate_observation: bool,
-    artifact_state: Option<AdoptionArtifactStateV1>,
-    artifact_evidence: Option<&[String]>,
+    input: ObservedOnlyRoleFindingInput<'_>,
 ) -> AdoptionRoleFindingV1 {
     let mut classifications = BTreeSet::new();
     classifications.insert(AdoptionClassificationV1::ObservedOnly);
-    if duplicate_observation {
+    if input.duplicate_observation {
+        classifications.insert(AdoptionClassificationV1::EvidenceConflict);
+    }
+    if input.artifact_conflict {
         classifications.insert(AdoptionClassificationV1::EvidenceConflict);
     }
 
-    let authority_state = combined_authority_state(observed);
+    let authority_state = combined_authority_state(input.observed);
     if matches!(authority_state, AdoptionAuthorityStateV1::UserControlled) {
         classifications.insert(AdoptionClassificationV1::UserControlled);
     }
@@ -543,8 +563,11 @@ fn role_finding_for_observed_only_role(
         classifications.insert(AdoptionClassificationV1::ExternalControllerRequired);
     }
 
-    let artifact_state = artifact_state.unwrap_or_else(|| artifact_state_from_observed(observed));
-    let mut evidence = observed
+    let artifact_state = input
+        .artifact_state
+        .unwrap_or_else(|| artifact_state_from_observed(input.observed));
+    let mut evidence = input
+        .observed
         .iter()
         .flat_map(|canister| {
             let mut evidence = vec![format!("observed canister {}", canister.canister_id)];
@@ -554,12 +577,15 @@ fn role_finding_for_observed_only_role(
             evidence
         })
         .collect::<Vec<_>>();
-    if let Some(artifact_evidence) = artifact_evidence {
+    if let Some(artifact_evidence) = input.artifact_evidence {
         evidence.extend(artifact_evidence.iter().cloned());
     }
 
-    let mut warnings = observed_only_warnings(profile, role);
-    if profile == AdoptionProfileV1::HybridExternalWasm
+    let mut warnings = observed_only_warnings(input.profile, input.role);
+    if input.artifact_conflict {
+        warnings.push("artifact evidence contains conflicting role facts".to_string());
+    }
+    if input.profile == AdoptionProfileV1::HybridExternalWasm
         && artifact_state == AdoptionArtifactStateV1::ExternalWasm
     {
         warnings.push(
@@ -569,17 +595,22 @@ fn role_finding_for_observed_only_role(
     }
 
     AdoptionRoleFindingV1 {
-        fleet: fleet.to_string(),
-        role: role.to_string(),
+        fleet: input.fleet.to_string(),
+        role: input.role.to_string(),
         classifications: classifications.into_iter().collect(),
         declaration_state: AdoptionDeclarationStateV1::Undeclared,
         topology_state: AdoptionTopologyStateV1::Unattached,
         package_state: AdoptionPackageStateV1::NotPackageBacked,
-        observation_state: observation_state(true, duplicate_observation),
+        observation_state: observation_state(true, input.duplicate_observation),
         authority_state,
         artifact_state,
         evidence,
-        recommendations: observed_only_recommendations(profile, fleet, role, authority_state),
+        recommendations: observed_only_recommendations(
+            input.profile,
+            input.fleet,
+            input.role,
+            authority_state,
+        ),
         warnings,
     }
 }
@@ -774,14 +805,7 @@ fn artifact_states_by_role(
         for artifact in &manifest.role_artifacts {
             states.insert(
                 artifact.role.clone(),
-                match artifact.source {
-                    ArtifactSourceV1::External | ArtifactSourceV1::Unknown => {
-                        AdoptionArtifactStateV1::ExternalWasm
-                    }
-                    ArtifactSourceV1::LocalBuild
-                    | ArtifactSourceV1::ReleaseSet
-                    | ArtifactSourceV1::WasmStore => AdoptionArtifactStateV1::CanicBuilt,
-                },
+                artifact_state_for_source(artifact.source),
             );
         }
     }
@@ -790,18 +814,45 @@ fn artifact_states_by_role(
         for artifact in &inventory.observed_artifacts {
             states
                 .entry(artifact.role.clone())
-                .or_insert(match artifact.source {
-                    ArtifactSourceV1::External | ArtifactSourceV1::Unknown => {
-                        AdoptionArtifactStateV1::ExternalWasm
-                    }
-                    ArtifactSourceV1::LocalBuild
-                    | ArtifactSourceV1::ReleaseSet
-                    | ArtifactSourceV1::WasmStore => AdoptionArtifactStateV1::CanicBuilt,
-                });
+                .or_insert_with(|| artifact_state_for_source(artifact.source));
         }
     }
 
     states
+}
+
+fn artifact_conflict_roles(
+    manifest: Option<&RoleArtifactManifestV1>,
+    inventory: Option<&DeploymentInventoryV1>,
+) -> BTreeSet<String> {
+    let mut manifest_states = BTreeMap::new();
+    let mut conflict_roles = BTreeSet::new();
+
+    if let Some(manifest) = manifest {
+        for artifact in &manifest.role_artifacts {
+            let state = artifact_state_for_source(artifact.source);
+            if manifest_states
+                .insert(artifact.role.clone(), state)
+                .is_some_and(|previous| previous != state)
+            {
+                conflict_roles.insert(artifact.role.clone());
+            }
+        }
+    }
+
+    if let Some(inventory) = inventory {
+        for artifact in &inventory.observed_artifacts {
+            let state = artifact_state_for_source(artifact.source);
+            if manifest_states
+                .get(&artifact.role)
+                .is_some_and(|previous| *previous != state)
+            {
+                conflict_roles.insert(artifact.role.clone());
+            }
+        }
+    }
+
+    conflict_roles
 }
 
 fn artifact_evidence_by_role(
@@ -850,6 +901,17 @@ fn artifact_evidence_by_role(
     }
 
     evidence
+}
+
+const fn artifact_state_for_source(source: ArtifactSourceV1) -> AdoptionArtifactStateV1 {
+    match source {
+        ArtifactSourceV1::External | ArtifactSourceV1::Unknown => {
+            AdoptionArtifactStateV1::ExternalWasm
+        }
+        ArtifactSourceV1::LocalBuild
+        | ArtifactSourceV1::ReleaseSet
+        | ArtifactSourceV1::WasmStore => AdoptionArtifactStateV1::CanicBuilt,
+    }
 }
 
 const fn artifact_source_label(source: ArtifactSourceV1) -> &'static str {
@@ -1671,6 +1733,78 @@ kind = "root"
     }
 
     #[test]
+    fn adoption_report_authority_gates_observed_only_declaration_recommendations() {
+        for (
+            control_class,
+            expected_authority,
+            expected_recommendation_kind,
+            expected_suggested_action,
+        ) in [
+            (
+                CanisterControlClassV1::DeploymentControlled,
+                AdoptionAuthorityStateV1::CanicAuthorized,
+                "declare_role",
+                Some("canic fleet role declare demo candidate --package <path>"),
+            ),
+            (
+                CanisterControlClassV1::UserControlled,
+                AdoptionAuthorityStateV1::UserControlled,
+                "review_authority_before_declaration",
+                None,
+            ),
+            (
+                CanisterControlClassV1::ExternallyImported,
+                AdoptionAuthorityStateV1::External,
+                "review_authority_before_declaration",
+                None,
+            ),
+            (
+                CanisterControlClassV1::UnknownUnsafe,
+                AdoptionAuthorityStateV1::Unknown,
+                "review_authority_before_declaration",
+                None,
+            ),
+        ] {
+            let inventory = inventory(vec![observed_canister(
+                "aaaaa-aa",
+                Some("candidate"),
+                control_class,
+                Some("candidate-hash"),
+            )]);
+            let report = report(BROWNFIELD_CONFIG, Some(&inventory), Vec::new());
+            let candidate = role(&report, "candidate");
+            let recommendation = candidate
+                .recommendations
+                .first()
+                .expect("authority-gated recommendation");
+
+            assert_eq!(candidate.authority_state, expected_authority);
+            assert_eq!(recommendation.kind, expected_recommendation_kind);
+            assert_eq!(
+                recommendation.suggested_action.as_deref(),
+                expected_suggested_action
+            );
+            if expected_authority == AdoptionAuthorityStateV1::CanicAuthorized {
+                assert_eq!(
+                    recommendation.suggested_action_availability,
+                    AdoptionSuggestedActionAvailabilityV1::BlockedIn0500
+                );
+                assert_eq!(
+                    recommendation.suggested_action_support,
+                    AdoptionSuggestedActionSupportV1::UnsupportedByAdoption
+                );
+            } else {
+                assert!(
+                    candidate
+                        .recommendations
+                        .iter()
+                        .all(|recommendation| recommendation.kind != "declare_role")
+                );
+            }
+        }
+    }
+
+    #[test]
     fn adoption_report_keeps_managed_separate_from_authority() {
         let inventory = inventory(vec![observed_canister(
             "aaaaa-aa",
@@ -1742,6 +1876,86 @@ kind = "root"
         assert!(
             api.classifications
                 .contains(&AdoptionClassificationV1::EvidenceConflict)
+        );
+        assert_eq!(report.summary.evidence_conflicts, 1);
+    }
+
+    #[test]
+    fn adoption_report_marks_reverse_conflicting_artifact_evidence() {
+        let mut inventory = inventory(Vec::new());
+        inventory
+            .observed_artifacts
+            .push(observed_external_api_artifact());
+        let manifest = RoleArtifactManifestV1 {
+            schema_version: 1,
+            manifest_id: "local-manifest-1".to_string(),
+            network: "local".to_string(),
+            artifact_root: None,
+            role_artifacts: vec![RoleArtifactV1 {
+                source: ArtifactSourceV1::LocalBuild,
+                build_profile: "fast".to_string(),
+                ..external_api_role_artifact()
+            }],
+            unresolved_artifacts: Vec::new(),
+        };
+
+        let report = adoption_report_from_config_source(AdoptionReportRequest {
+            report_id: "artifact-conflict-2",
+            generated_at: "2026-05-30T00:00:00Z",
+            profile: AdoptionProfileV1::HybridExternalWasm,
+            config_source: CONFIG,
+            inventory: Some(&inventory),
+            artifact_manifest: Some(&manifest),
+            package_metadata: Vec::new(),
+        })
+        .expect("adoption report");
+        let api = role(&report, "api");
+
+        assert!(
+            api.classifications
+                .contains(&AdoptionClassificationV1::EvidenceConflict)
+        );
+        assert!(
+            api.warnings
+                .iter()
+                .any(|warning| warning == "artifact evidence contains conflicting role facts")
+        );
+        assert_eq!(report.summary.evidence_conflicts, 1);
+    }
+
+    #[test]
+    fn adoption_report_marks_conflicting_artifact_evidence() {
+        let mut inventory = inventory(Vec::new());
+        inventory.observed_artifacts.push(ObservedArtifactV1 {
+            role: "api".to_string(),
+            artifact_path: "local/api.wasm.gz".to_string(),
+            file_sha256: None,
+            file_sha256_source: Some(ArtifactDigestSourceV1::ObservedFileDigest),
+            payload_sha256: None,
+            payload_size_bytes: None,
+            source: ArtifactSourceV1::LocalBuild,
+        });
+        let manifest = external_api_artifact_manifest();
+        let report = adoption_report_from_config_source(AdoptionReportRequest {
+            report_id: "artifact-conflict-1",
+            generated_at: "2026-05-30T00:00:00Z",
+            profile: AdoptionProfileV1::HybridExternalWasm,
+            config_source: CONFIG,
+            inventory: Some(&inventory),
+            artifact_manifest: Some(&manifest),
+            package_metadata: Vec::new(),
+        })
+        .expect("adoption report");
+        let api = role(&report, "api");
+
+        assert!(
+            api.classifications
+                .contains(&AdoptionClassificationV1::EvidenceConflict)
+        );
+        assert!(
+            api.warnings
+                .iter()
+                .any(|warning| warning == "artifact evidence contains conflicting role facts")
         );
         assert_eq!(report.summary.evidence_conflicts, 1);
     }

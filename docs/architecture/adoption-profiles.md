@@ -202,3 +202,8 @@ external controller requirement.
 External Wasm evidence is informational. Module hashes, artifact paths, payload
 hashes, and payload sizes can appear in role findings, but importing those
 artifacts into `wasm_store` is outside the adoption report surface.
+
+If supplied artifact manifest evidence and inventory artifact evidence disagree
+about whether the same role is Canic-built or externally supplied, the role is
+reported as an `evidence-conflict`. Adoption reporting does not choose one
+artifact source or try to reconcile it.

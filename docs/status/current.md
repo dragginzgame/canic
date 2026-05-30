@@ -40,6 +40,16 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.15 has closed the adoption line by updating the 0.50 design doc from
+  tentative planning language to implemented release-line language, keeping
+  JSON output experimental throughout `0.50.x`, and adding regression coverage
+  for symmetric artifact evidence conflicts, the authority recommendation
+  matrix, and explicit artifact-manifest precedence over deployment-check plan
+  artifacts.
+- 0.50.14 has made adoption reports mark conflicting artifact evidence as
+  `evidence-conflict` when supplied artifact manifest and inventory artifact
+  evidence disagree about whether the same role is Canic-built or externally
+  supplied.
 - 0.50.13 has made adoption reports preserve unresolved inventory observations
   and unresolved artifact entries from supplied evidence in
   `missing_or_stale_evidence`, without retrying observation or mutating

@@ -594,6 +594,54 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
     assert_eq!(store.artifact_state, AdoptionArtifactStateV1::CanicBuilt);
 }
 
+// Ensure explicit artifact-manifest evidence wins over deployment-check plan artifacts.
+#[test]
+fn adoption_report_artifact_manifest_overrides_deployment_check_artifacts() {
+    let root = temp_dir("canic-fleet-adoption-artifact-precedence");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+    let explicit_artifact_manifest = root.join("explicit-artifact-manifest.json");
+    let mut manifest = adoption_artifact_manifest_fixture();
+    manifest["manifest_id"] = serde_json::Value::String("explicit-manifest".to_string());
+    manifest["role_artifacts"][0]["source"] = serde_json::Value::String("External".to_string());
+    write_json_fixture(&explicit_artifact_manifest, manifest);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        deployment_check: Some(evidence.deployment_check),
+        inventory: None,
+        artifact_manifest: Some(explicit_artifact_manifest),
+        cargo_metadata: None,
+        package_metadata: None,
+        output: None,
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:9").expect("report");
+    let store = report
+        .role_findings
+        .iter()
+        .find(|finding| finding.role == "store")
+        .expect("store finding");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
+    assert_eq!(
+        report.inputs.artifact_manifest_id.as_deref(),
+        Some("explicit-manifest")
+    );
+    assert_eq!(store.artifact_state, AdoptionArtifactStateV1::ExternalWasm);
+    assert!(
+        store
+            .evidence
+            .iter()
+            .any(|evidence| evidence == "artifact manifest source=external")
+    );
+}
+
 // Ensure text adoption reports expose observed canister evidence details.
 #[test]
 fn renders_adoption_report_text_with_observed_canister_evidence() {
@@ -621,6 +669,8 @@ fn renders_adoption_report_text_with_observed_canister_evidence() {
     fs::remove_dir_all(&root).expect("remove temp root");
     assert!(text.contains("Observed canisters:"));
     assert!(text.contains("aaaaa-aa: role=store, confidence=candidate"));
+    assert!(text.contains("controllers: controller-a"));
+    assert!(text.contains("wasm_evidence: module_hash=hash-a"));
     assert!(text.contains("deployment_target_evidence: inventory-1"));
 }
 
@@ -808,8 +858,8 @@ fn adoption_inventory_fixture() -> serde_json::Value {
             "canister_id": "aaaaa-aa",
             "role": "store",
             "control_class": "DeploymentControlled",
-            "controllers": [],
-            "module_hash": null,
+            "controllers": ["controller-a"],
+            "module_hash": "hash-a",
             "status": "running",
             "root_trust_anchor": null,
             "canonical_embedded_config_digest": null,

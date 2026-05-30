@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.15` closes the adoption line by updating the implemented 0.50 design,
+  keeping JSON output experimental for all of 0.50.x, and adding regression
+  coverage for symmetric artifact evidence conflicts, authority-gated
+  declaration recommendations, and explicit artifact-manifest precedence.
+
+- `0.50.14` marks conflicting artifact evidence as an adoption
+  `evidence-conflict` when supplied artifact manifest and inventory evidence
+  disagree about whether the same role is Canic-built or externally supplied.
+
 - `0.50.13` carries unresolved inventory observations and unresolved artifact
   entries from supplied evidence into adoption report
   `missing_or_stale_evidence`, so passive reports show evidence gaps already
