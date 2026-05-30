@@ -105,7 +105,7 @@ canic fleet adoption report demo --profile partial \
 Those inputs are read-only:
 
 - `--deployment-check` reads inventory evidence from a `DeploymentCheckV1` JSON
-  artifact;
+  artifact and, when present, reads plan role artifacts as artifact evidence;
 - `--inventory` reads `DeploymentInventoryV1` JSON evidence;
 - `--artifact-manifest` reads `RoleArtifactManifestV1` JSON evidence;
 - `--package-metadata` reads a JSON array of `AdoptionPackageMetadataV1`

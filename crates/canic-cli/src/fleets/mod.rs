@@ -18,7 +18,7 @@ use canic_host::{
         AdoptionSuggestedActionEffectV1, AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
         adoption_report_from_config_source,
     },
-    deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1},
+    deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1, RoleArtifactV1},
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
@@ -114,7 +114,8 @@ Examples:
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
 minimal. The report is read-only; --output writes only the requested report
 artifact. Evidence inputs are JSON files and are read-only. Use either
---inventory or --deployment-check, not both.";
+--inventory or --deployment-check, not both. Deployment-check evidence also
+supplies plan role artifacts when present.";
 
 ///
 /// FleetCommandError
@@ -1392,8 +1393,7 @@ fn build_adoption_report_from_config_path(
 ) -> Result<AdoptionReportV1, FleetCommandError> {
     let config_source = fs::read_to_string(config_path)?;
     let inventory = adoption_inventory_from_options(options)?;
-    let artifact_manifest =
-        read_optional_json::<RoleArtifactManifestV1>(options.artifact_manifest.as_deref())?;
+    let artifact_manifest = adoption_artifact_manifest_from_options(options)?;
     let package_metadata =
         read_optional_json::<Vec<AdoptionPackageMetadataV1>>(options.package_metadata.as_deref())?
             .unwrap_or_default();
@@ -1413,6 +1413,21 @@ fn build_adoption_report_from_config_path(
         package_metadata,
     })
     .map_err(FleetCommandError::from)
+}
+
+fn adoption_artifact_manifest_from_options(
+    options: &AdoptionReportOptions,
+) -> Result<Option<RoleArtifactManifestV1>, FleetCommandError> {
+    if let Some(path) = &options.artifact_manifest {
+        return read_json_file(path).map(Some);
+    }
+
+    options
+        .deployment_check
+        .as_deref()
+        .map(read_deployment_check_artifact_manifest)
+        .transpose()
+        .map(Option::flatten)
 }
 
 fn adoption_inventory_from_options(
@@ -1440,6 +1455,38 @@ fn read_deployment_check_inventory(
     };
 
     Ok(serde_json::from_value(inventory.clone())?)
+}
+
+fn read_deployment_check_artifact_manifest(
+    path: &Path,
+) -> Result<Option<RoleArtifactManifestV1>, FleetCommandError> {
+    let value = read_json_file::<serde_json::Value>(path)?;
+    let Some(plan) = value.get("plan") else {
+        return Ok(None);
+    };
+    let role_artifacts = plan
+        .get("role_artifacts")
+        .cloned()
+        .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
+    let network = plan
+        .get("deployment_identity")
+        .and_then(|identity| identity.get("network"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let check_id = value
+        .get("check_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("unknown-check");
+
+    Ok(Some(RoleArtifactManifestV1 {
+        schema_version: 1,
+        manifest_id: format!("deployment-check:{check_id}:role-artifacts"),
+        network,
+        artifact_root: None,
+        role_artifacts: serde_json::from_value::<Vec<RoleArtifactV1>>(role_artifacts)?,
+        unresolved_artifacts: Vec::new(),
+    }))
 }
 
 fn read_optional_json<T>(path: Option<&Path>) -> Result<Option<T>, FleetCommandError>

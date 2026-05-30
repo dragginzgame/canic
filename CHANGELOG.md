@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.9` makes `--deployment-check <path>` also supply saved plan artifact
+  evidence from `DeploymentCheckV1.plan.role_artifacts`, unless an explicit
+  `--artifact-manifest <path>` is provided.
+
 - `0.50.8` lets adoption reports consume saved deployment-check inventory
   evidence:
   ```text

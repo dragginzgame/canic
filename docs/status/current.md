@@ -40,6 +40,9 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.9 has extended `--deployment-check <path>` adoption evidence so saved
+  `DeploymentCheckV1.plan.role_artifacts` also supply artifact evidence when an
+  explicit `--artifact-manifest <path>` is not provided.
 - 0.50.8 has added `--deployment-check <path>` to adoption reports. It reads
   inventory evidence from a saved `DeploymentCheckV1` JSON artifact, rejects
   ambiguous use with `--inventory`, and still performs no live discovery or

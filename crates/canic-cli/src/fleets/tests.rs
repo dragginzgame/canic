@@ -559,9 +559,14 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
     fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
     assert_eq!(
+        report.inputs.artifact_manifest_id.as_deref(),
+        Some("deployment-check:check-1:role-artifacts")
+    );
+    assert_eq!(
         store.observation_state,
         AdoptionObservationStateV1::Observed
     );
+    assert_eq!(store.artifact_state, AdoptionArtifactStateV1::CanicBuilt);
 }
 
 // Ensure adoption evidence rejects ambiguous inventory source selection.
@@ -625,6 +630,13 @@ fn write_json_fixture(path: &Path, value: serde_json::Value) {
 
 fn adoption_deployment_check_fixture() -> serde_json::Value {
     serde_json::json!({
+        "check_id": "check-1",
+        "plan": {
+            "deployment_identity": {
+                "network": "local"
+            },
+            "role_artifacts": [adoption_role_artifact_fixture()]
+        },
         "inventory": adoption_inventory_fixture()
     })
 }
