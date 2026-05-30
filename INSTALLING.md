@@ -65,11 +65,14 @@ single source of truth for both `canic::build!` and `canic::start!()`:
 
 ```toml
 [package.metadata.canic]
+fleet = "test"
 role = "app"
 ```
 
 Use `role = "root"` for the root canister. Ordinary child roles use their
-configured fleet role name, such as `app`, `hub`, or `registry`.
+configured fleet role name, such as `app`, `hub`, or `registry`. The `fleet`
+value is the fleet template name from `[fleet] name = "..."`, not a deployment
+target name.
 Root canisters also need the `control-plane` feature on their runtime `canic`
 dependency. Enable `auth-crypto` too when delegated token material is enabled
 for the fleet.
@@ -86,6 +89,7 @@ ic-cdk = "<version>"
 canic = { path = "/path/to/canic/crates/canic" }
 
 [package.metadata.canic]
+fleet = "test"
 role = "app"
 ```
 
@@ -111,8 +115,8 @@ fn main() {
 ## Minimal Canister Shapes
 
 Every normal fleet canister uses `canic::start!()`. Root vs non-root behavior
-comes from `[package.metadata.canic] role = "..."` and the validated fleet
-config.
+comes from `[package.metadata.canic] fleet = "..."` plus `role = "..."` and the
+validated fleet config.
 
 Non-root `lib.rs`:
 
@@ -174,6 +178,14 @@ app_index = ["app"]
 [fleet]
 name = "test"
 
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -182,9 +194,12 @@ kind = "singleton"
 topup = {}
 ```
 
-Every role named in package metadata must exist in this config. `role = "root"`
-selects the root lifecycle and root endpoint bundle; all other roles select the
-ordinary fleet lifecycle and non-root endpoint bundle.
+Every role named in package metadata must exist in this config. Declared-only
+ordinary roles may compile before topology placement, but only attached roles
+under `[subnets.*.canisters.*]` can be built as deploy artifacts or enter
+deployment truth. `role = "root"` selects the root lifecycle and root endpoint
+bundle; all other roles select the ordinary fleet lifecycle and non-root
+endpoint bundle.
 
 The full schema lives in [`CONFIG.md`](CONFIG.md).
 
@@ -206,7 +221,7 @@ canic info list test
 Build one artifact without installing:
 
 ```bash
-canic build --profile fast app
+canic build test app --profile fast
 ```
 
 For downstream repos where the Rust workspace and ICP project root differ, pass
@@ -214,11 +229,11 @@ both paths explicitly:
 
 ```bash
 canic --network local build \
-  --profile fast \
   --workspace /path/to/cargo-workspace \
   --icp-root /path/to/icp-project \
   --config /path/to/cargo-workspace/fleets/<fleet>/canic.toml \
-  root
+  <fleet> root \
+  --profile fast
 ```
 
 When passing `--config` explicitly, prefer an absolute path. This keeps path
@@ -328,8 +343,8 @@ Canic-owned methods.
 - If the root canister does not compile or bootstrap delegated-auth material,
   confirm the runtime dependency enables the `auth-crypto` and `control-plane`
   features.
-- Each canister crate must declare its role with
-  `[package.metadata.canic] role = "hub"`.
+- Each canister crate must declare its fleet-scoped role with
+  `[package.metadata.canic] fleet = "<fleet>"` and `role = "<role>"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not
   fully installed or the local replica lost state. Run `canic medic <fleet>` and
   reinstall the local fleet.

@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.9` refreshes setup/build docs around the hard-cut role lifecycle:
+  package metadata now shows both `fleet` and `role`, examples use
+  `canic build <fleet> <role>`, and the current handoff names 0.49 as the
+  active line.
+
 - `0.49.8` adds workspace governance for `[package.metadata.canic]` fleet-role
   declarations and fixes generated standalone configs so compile-only
   standalone canisters no longer synthesize role attachment topology.

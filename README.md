@@ -36,7 +36,10 @@ walkthrough.
 
 * **Lifecycle and build macros:** `canic::start!()` and `canic::build!` wire IC
   hooks, endpoint bundles, and compile-time config validation from
-  `[package.metadata.canic] role = "..."`.
+  `[package.metadata.canic] fleet = "..."` and `role = "..."`.
+* **Role lifecycle:** ordinary managed canisters can be declared before
+  topology placement, then explicitly attached before artifact builds or
+  deployment truth.
 * **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
   subnets, roles, singleton/replica/shard/instance placement, warm pools,
   scaling pools, sharding pools, and directory pools.

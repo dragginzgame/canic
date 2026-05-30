@@ -13,8 +13,12 @@ from the resolved `canic` package automatically.
 
 ## Layout
 
-- `test/` – local reference topology wired through `icp.yaml` and used by CI wasm/audit workflows.
-  - `root/` – root orchestrator canister (`canic::start!` with `role = "root"`) that wires topology, bootstraps the internal `wasm_store`, stages/publishes ordinary child releases, and exposes root admin endpoints.
+- `test/` – local reference topology wired through `icp.yaml` and used by CI
+  wasm/audit workflows.
+  - `root/` – root orchestrator canister (`canic::start!` with package
+    metadata `fleet = "test"` and `role = "root"`) that wires topology,
+    bootstraps the internal `wasm_store`, stages/publishes ordinary child
+    releases, and exposes root admin endpoints.
   - `app/` – minimal application canister used as a placeholder service.
   - `user_hub/` + `user_shard/` – sharding placement plus delegated signing flow.
   - `scale_hub/` + `scale/` – scaling pool demo, with the worker role exposed

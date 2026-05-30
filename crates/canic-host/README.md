@@ -15,7 +15,7 @@ For normal local setup, prefer the root
 script directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.49.8/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.49.9/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal
@@ -61,10 +61,11 @@ When the Rust workspace root and ICP CLI/project root differ, set both:
 
 If canister crates live outside the default `fleets/` directory, host
 discovery first tries Cargo workspace metadata. Every Canic-managed canister
-package must declare the role it implements in Cargo metadata:
+package must declare the fleet-scoped role it implements in Cargo metadata:
 
 ```toml
 [package.metadata.canic]
+fleet = "project"
 role = "project_ledger"
 ```
 

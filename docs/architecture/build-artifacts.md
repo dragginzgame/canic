@@ -16,17 +16,22 @@ metadata:
 
 ```toml
 [package.metadata.canic]
+fleet = "demo"
 role = "app"
 ```
 
 The package role is the single source of truth for the build and startup
 macros. `canic::build!("<path-to-canic.toml>")` validates that the metadata role
-exists in the fleet config and emits the compile-time role/config environment
-consumed by `canic::start!()`.
+exists in the named fleet config and emits the compile-time role/config
+environment consumed by `canic::start!()`.
 
 `role = "root"` emits the root build cfgs and selects the root lifecycle and
 root endpoint bundle. Every other configured role selects the non-root
 lifecycle and endpoint bundle. There is no separate public root startup macro.
+
+Ordinary roles may be declared before topology placement so `cargo check` can
+run during early development. `canic build <fleet> <role>` is stricter: the
+role must be attached to topology before Canic writes deploy artifacts.
 
 ## Canister Artifacts
 

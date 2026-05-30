@@ -9,12 +9,10 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.48.x` derived singleton topology and canister setup
-  simplification.
-- Current release-work area: 0.48 removes redundant authored setup surfaces.
-  `canic::build!` and `canic::start!()` read the canister role from
-  `[package.metadata.canic] role`, root-vs-non-root startup is
-  metadata-driven, and ordinary managed canisters use `canic::start!()`.
+- Active minor: `0.49.x` role lifecycle and topology attachment.
+- Current release-work area: 0.49 separates fleet-scoped role declaration from
+  topology attachment. Declared ordinary roles may compile, but only attached
+  roles can become deploy artifacts, install targets, or deployment truth.
 - The 0.41-0.47 deployment-truth sequence is closed with documented caveats.
   Treat those lines as background constraints, not current implementation
   targets: 0.41 passive truth, 0.42 dry-run authority, 0.43 execution
@@ -26,15 +24,13 @@ inspect only the files needed for the current task.
   path. It did not add broad live deployment verification, live inventory
   crawling, group/catalog UX, teardown/test-deployment flows, or root
   rotation.
-- 0.48 setup work must not weaken the closed 0.41-0.47 boundaries. In
+- 0.48 setup work closed the redundant authored setup surfaces. In
   particular, package metadata is the canister role source of truth, canister
   crates are runtime artifacts rather than reusable Rust dependencies, and
   production `ICP_ENVIRONMENT=ic` builds avoid debug Candid sidecars/metadata
   bloat.
-- Treat the rest of 0.48 as miscellaneous cleanup, docs, audits, and focused
-  fixes. 0.49 should continue setup/build/fleet-role workflow by separating
-  role declaration from topology attachment. It must preserve deployment-truth
-  strictness, but it is not a new deployment-truth verification line.
+- 0.49 must preserve deployment-truth strictness, but it is not a new
+  deployment-truth verification line.
 
 ## Recent Work
 
@@ -74,8 +70,9 @@ inspect only the files needed for the current task.
   fleet-role metadata against declared fleet roles and package paths. Generated
   standalone configs are declared-only and no longer synthesize root topology or
   attach the requested standalone role.
-- 0.48 made `[package.metadata.canic] role` the required role source for
-  `canic::build!` and `canic::start!()`. Package-name inference and old
+- 0.48 made package metadata the role source for `canic::build!` and
+  `canic::start!()`, and 0.49 made that identity fleet-scoped through
+  `[package.metadata.canic] fleet` plus `role`. Package-name inference and old
   build/root macro variants were removed.
 - Root and non-root managed canisters now both use `canic::start!()`.
   `role = "root"` selects the root lifecycle and endpoint bundle; all other

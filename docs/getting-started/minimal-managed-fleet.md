@@ -34,10 +34,11 @@ fleets/example/
 ```
 
 Every canister package must declare the Canic role it implements. The role must
-match one canister table in `canic.toml`:
+resolve to a declared role in `canic.toml`:
 
 ```toml
 [package.metadata.canic]
+fleet = "example"
 role = "hub"
 ```
 
@@ -76,19 +77,19 @@ canisters:
       steps:
         - type: script
           commands:
-            - canic build --profile fast example root
+            - canic build example root --profile fast
   - name: hub
     build:
       steps:
         - type: script
           commands:
-            - canic build --profile fast example hub
+            - canic build example hub --profile fast
   - name: registry
     build:
       steps:
         - type: script
           commands:
-            - canic build --profile fast example registry
+            - canic build example registry --profile fast
 
 environments:
   - name: example
@@ -106,6 +107,18 @@ app_index = []
 
 [fleet]
 name = "example"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.hub]
+kind = "canister"
+package = "hub"
+
+[roles.registry]
+kind = "canister"
+package = "registry"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -140,6 +153,7 @@ when the fleet enables delegated-token material.
 
 ```toml
 [package.metadata.canic]
+fleet = "example"
 role = "root"
 
 [dependencies]
@@ -170,6 +184,7 @@ macros for application methods.
 
 ```toml
 [package.metadata.canic]
+fleet = "example"
 role = "hub"
 
 [dependencies]
@@ -211,6 +226,7 @@ Use the same `lib.rs` shape for `registry`; set its role in that crate's
 
 ```toml
 [package.metadata.canic]
+fleet = "example"
 role = "registry"
 ```
 
@@ -228,7 +244,7 @@ canic info list example
 Build one role without installing:
 
 ```bash
-canic build --profile fast example hub
+canic build example hub --profile fast
 ```
 
 If you pass `--workspace`, `--icp-root`, or `--config` explicitly, use absolute

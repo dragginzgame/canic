@@ -5,8 +5,8 @@ Core orchestration logic for Canic canisters: config handling, ops layer, regist
 Most canister projects should depend on `canic` (the facade crate) and use:
 - `canic::build!` from `build.rs` to validate/embed `canic.toml`
 - `canic::start!` from `lib.rs` to wire init/upgrade and export endpoints
-- `[package.metadata.canic] role = "..."` in `Cargo.toml` to select the
-  canister role
+- `[package.metadata.canic] fleet = "..."` and `role = "..."` in `Cargo.toml`
+  to select the fleet-scoped canister role
 
 `canic-core` is still published because it holds the underlying building blocks:
 typed config, auth/decision helpers, storage/view layers, and the workflow and
@@ -45,6 +45,7 @@ In `Cargo.toml`:
 
 ```toml
 [package.metadata.canic]
+fleet = "demo"
 role = "app"
 ```
 
