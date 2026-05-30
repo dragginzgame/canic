@@ -909,6 +909,21 @@ kind = "root"
 kind = "singleton"
 "#;
 
+    const BROWNFIELD_CONFIG: &str = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+
     #[test]
     fn adoption_report_preserves_declared_only_as_non_deployable() {
         let report = report(CONFIG, None, Vec::new());
@@ -931,6 +946,214 @@ kind = "singleton"
                 == AdoptionSuggestedActionAvailabilityV1::BlockedIn0500
         }));
         assert!(report.blocked_actions.contains(&"install".to_string()));
+    }
+
+    #[test]
+    fn brownfield_fixture_reports_observed_roles_without_claiming_them() {
+        let inventory = inventory(vec![
+            observed_canister(
+                "aaaaa-aa",
+                Some("root"),
+                CanisterControlClassV1::DeploymentControlled,
+                None,
+            ),
+            observed_canister(
+                "bbbbb-bb",
+                Some("api"),
+                CanisterControlClassV1::UserControlled,
+                Some("api-hash"),
+            ),
+            observed_canister(
+                "ccccc-cc",
+                Some("store"),
+                CanisterControlClassV1::ExternallyImported,
+                Some("store-hash"),
+            ),
+            observed_canister(
+                "ddddd-dd",
+                None,
+                CanisterControlClassV1::UnknownUnsafe,
+                Some("unknown-hash"),
+            ),
+        ]);
+        let report = report_with_profile(
+            AdoptionProfileV1::Brownfield,
+            BROWNFIELD_CONFIG,
+            Some(&inventory),
+            Vec::new(),
+        );
+        let api = role(&report, "api");
+        let store = role(&report, "store");
+
+        assert_eq!(report.profile, AdoptionProfileV1::Brownfield);
+        assert_eq!(report.summary.managed_configured_roles, 1);
+        assert_eq!(report.summary.observed_only_canisters, 3);
+        assert_eq!(report.summary.user_controlled_canisters, 1);
+        assert_eq!(report.summary.external_controller_required, 2);
+        assert_eq!(report.summary.mutating_actions_performed, 0);
+        assert!(
+            api.classifications
+                .contains(&AdoptionClassificationV1::ObservedOnly)
+        );
+        assert_eq!(
+            api.authority_state,
+            AdoptionAuthorityStateV1::UserControlled
+        );
+        assert!(
+            store
+                .classifications
+                .contains(&AdoptionClassificationV1::ExternalControllerRequired)
+        );
+        assert_eq!(store.artifact_state, AdoptionArtifactStateV1::ExternalWasm);
+        assert!(
+            report
+                .recommendations
+                .iter()
+                .filter(|recommendation| recommendation.kind == "declare_role")
+                .all(|recommendation| recommendation.suggested_action_support
+                    == AdoptionSuggestedActionSupportV1::UnsupportedByAdoption
+                    && recommendation.suggested_action_availability
+                        == AdoptionSuggestedActionAvailabilityV1::BlockedIn0500)
+        );
+    }
+
+    #[test]
+    fn partial_fixture_preserves_managed_and_external_roles_separately() {
+        let inventory = inventory(vec![
+            observed_canister(
+                "aaaaa-aa",
+                Some("root"),
+                CanisterControlClassV1::DeploymentControlled,
+                None,
+            ),
+            observed_canister(
+                "bbbbb-bb",
+                Some("api"),
+                CanisterControlClassV1::DeploymentControlled,
+                Some("api-hash"),
+            ),
+            observed_canister(
+                "ccccc-cc",
+                Some("legacy"),
+                CanisterControlClassV1::UserControlled,
+                Some("legacy-hash"),
+            ),
+        ]);
+        let report = report_with_profile(
+            AdoptionProfileV1::Partial,
+            CONFIG,
+            Some(&inventory),
+            Vec::new(),
+        );
+        let api = role(&report, "api");
+        let store = role(&report, "store");
+        let legacy = role(&report, "legacy");
+
+        assert_eq!(report.profile, AdoptionProfileV1::Partial);
+        assert_eq!(report.summary.managed_configured_roles, 2);
+        assert_eq!(report.summary.declared_only_roles, 1);
+        assert_eq!(report.summary.attached_unobserved_roles, 0);
+        assert_eq!(report.summary.observed_only_canisters, 1);
+        assert_eq!(api.observation_state, AdoptionObservationStateV1::Observed);
+        assert!(
+            api.classifications
+                .contains(&AdoptionClassificationV1::Managed)
+        );
+        assert!(
+            store
+                .classifications
+                .contains(&AdoptionClassificationV1::DeclaredOnly)
+        );
+        assert_eq!(
+            legacy.authority_state,
+            AdoptionAuthorityStateV1::UserControlled
+        );
+    }
+
+    #[test]
+    fn external_controller_fixture_reports_external_action_boundary() {
+        let inventory = inventory(vec![observed_canister(
+            "bbbbb-bb",
+            Some("api"),
+            CanisterControlClassV1::JointlyControlled,
+            Some("api-hash"),
+        )]);
+        let report = report(CONFIG, Some(&inventory), Vec::new());
+        let api = role(&report, "api");
+
+        assert!(
+            api.classifications
+                .contains(&AdoptionClassificationV1::Managed)
+        );
+        assert!(
+            api.classifications
+                .contains(&AdoptionClassificationV1::ExternalControllerRequired)
+        );
+        assert_eq!(api.authority_state, AdoptionAuthorityStateV1::External);
+        assert_eq!(report.summary.external_controller_required, 1);
+        assert!(
+            report
+                .blocked_actions
+                .contains(&"controller changes".to_string())
+        );
+    }
+
+    #[test]
+    fn observed_only_fixture_without_role_stays_unmatched() {
+        let inventory = inventory(vec![observed_canister(
+            "zzzzz-zz",
+            None,
+            CanisterControlClassV1::UnknownUnsafe,
+            Some("unknown-hash"),
+        )]);
+        let report = report(BROWNFIELD_CONFIG, Some(&inventory), Vec::new());
+        let observed = report
+            .observed_canisters
+            .iter()
+            .find(|finding| finding.canister_id == "zzzzz-zz")
+            .expect("observed-only canister finding");
+
+        assert_eq!(report.summary.observed_only_canisters, 1);
+        assert_eq!(observed.matched_role, None);
+        assert_eq!(observed.confidence, AdoptionMatchConfidenceV1::None);
+        assert!(
+            observed
+                .classifications
+                .contains(&AdoptionClassificationV1::ObservedOnly)
+        );
+        assert!(
+            observed.recommendations.is_empty(),
+            "name-free observations must not invent declaration actions"
+        );
+    }
+
+    #[test]
+    fn declared_only_fixture_reports_compile_only_role() {
+        let report = report_with_profile(
+            AdoptionProfileV1::Partial,
+            CONFIG,
+            None,
+            matching_metadata(),
+        );
+        let store = role(&report, "store");
+
+        assert_eq!(store.package_state, AdoptionPackageStateV1::Matches);
+        assert_eq!(store.topology_state, AdoptionTopologyStateV1::Unattached);
+        assert!(
+            store
+                .classifications
+                .contains(&AdoptionClassificationV1::DeclaredOnly)
+        );
+        assert!(
+            store
+                .recommendations
+                .iter()
+                .any(|recommendation| recommendation.kind == "attach_role_later"
+                    && recommendation.suggested_action_effect
+                        == AdoptionSuggestedActionEffectV1::MutatesState
+                    && recommendation.suggested_action_support
+                        == AdoptionSuggestedActionSupportV1::UnsupportedByAdoption)
+        );
     }
 
     #[test]
@@ -1158,16 +1381,41 @@ kind = "singleton"
         inventory: Option<&DeploymentInventoryV1>,
         package_metadata: Vec<AdoptionPackageMetadataV1>,
     ) -> AdoptionReportV1 {
+        report_with_profile(
+            AdoptionProfileV1::Brownfield,
+            config_source,
+            inventory,
+            package_metadata,
+        )
+    }
+
+    fn report_with_profile(
+        profile: AdoptionProfileV1,
+        config_source: &str,
+        inventory: Option<&DeploymentInventoryV1>,
+        package_metadata: Vec<AdoptionPackageMetadataV1>,
+    ) -> AdoptionReportV1 {
         adoption_report_from_config_source(AdoptionReportRequest {
             report_id: "adoption-1",
             generated_at: "2026-05-30T00:00:00Z",
-            profile: AdoptionProfileV1::Brownfield,
+            profile,
             config_source,
             inventory,
             artifact_manifest: None,
             package_metadata,
         })
         .expect("adoption report")
+    }
+
+    fn matching_metadata() -> Vec<AdoptionPackageMetadataV1> {
+        ["root", "api", "store"]
+            .into_iter()
+            .map(|package| AdoptionPackageMetadataV1 {
+                package: package.to_string(),
+                fleet: Some("demo".to_string()),
+                role: Some(package.to_string()),
+            })
+            .collect()
     }
 
     fn role<'a>(report: &'a AdoptionReportV1, role: &str) -> &'a AdoptionRoleFindingV1 {

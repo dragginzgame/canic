@@ -40,6 +40,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.50.2 has expanded passive adoption report coverage with brownfield and
+  partial fixtures, plus focused externally controlled, observed-only, and
+  declared-only fixture cases. These tests assert that report recommendations
+  remain passive and that name-free observations do not invent role-declaration
+  actions.
 - 0.50.1 has wired the passive report model into a read-only CLI surface:
   `canic fleet adoption report <fleet> --profile <profile>`. The command
   selects the matching fleet config, renders text by default, can emit

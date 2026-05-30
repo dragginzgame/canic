@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.2` adds brownfield and partial adoption report fixtures, including
+  external-controller, observed-only, and declared-only cases that keep all
+  adoption recommendations passive and non-executing.
+
 - `0.50.1` adds the read-only fleet-scoped adoption report CLI:
   ```text
   canic fleet adoption report <fleet> --profile <profile>
