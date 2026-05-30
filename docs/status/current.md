@@ -9,10 +9,16 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.49.x` role lifecycle and topology attachment.
-- Current release-work area: 0.49 separates fleet-scoped role declaration from
-  topology attachment. Declared ordinary roles may compile, but only attached
-  roles can become deploy artifacts, install targets, or deployment truth.
+- Active minor: `0.50.x` adoption profiles and safe onboarding.
+- Current release-work area: 0.50 starts a passive adoption model for
+  brownfield, partial, standalone, leaf-only, hybrid external-Wasm, and minimal
+  onboarding. The first slice is read-only: it classifies configured and
+  observed roles and returns an adoption report with non-executed
+  recommendations.
+- 0.49 role lifecycle and topology attachment is the immediate foundation:
+  fleet-scoped roles can be declared before topology attachment, but only
+  attached roles can become deploy artifacts, install targets, or deployment
+  truth.
 - The 0.41-0.47 deployment-truth sequence is closed with documented caveats.
   Treat those lines as background constraints, not current implementation
   targets: 0.41 passive truth, 0.42 dry-run authority, 0.43 execution
@@ -34,7 +40,14 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
-- 0.49 implementation has started with the role-lifecycle foundation:
+- 0.50.0 has started with a host-side passive adoption report model.
+  `canic-host::adoption` now defines adoption profiles, role/resource
+  classifications, report findings, non-executed recommendations, and
+  `adoption_report_from_config_source(...)`. The report builder consumes
+  supplied config, optional deployment inventory, optional artifact manifest,
+  and optional package metadata evidence without reading or writing project
+  files.
+- 0.49 implementation landed the role-lifecycle foundation:
   `canic.toml` accepts explicit `[roles.<role>]` declarations under a required
   `[fleet] name`, canister package metadata now carries both `fleet` and
   `role`, and `canic::build!` validates declared `fleet.role` identity while

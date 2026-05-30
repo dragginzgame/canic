@@ -2,6 +2,7 @@
 
 use std::process::Command;
 
+pub mod adoption;
 mod artifact_io;
 mod bootstrap_store;
 mod build_profile;
