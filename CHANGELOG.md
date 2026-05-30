@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)
 
+- `0.50.12` expands text adoption reports so observed canister rows include
+  match confidence plus supplied evidence such as controllers, Wasm evidence,
+  deployment-target evidence, and warnings.
+
 - `0.50.11` gates observed-only role declaration recommendations on authority
   evidence. Canic-authorized candidates may still get a blocked
   `canic fleet role declare ...` preview, while user-controlled, external, or

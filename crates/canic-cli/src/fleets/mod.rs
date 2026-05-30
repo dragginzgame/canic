@@ -11,7 +11,7 @@ use crate::{
 use canic_host::{
     adoption::{
         AdoptionArtifactStateV1, AdoptionAuthorityStateV1, AdoptionClassificationV1,
-        AdoptionDeclarationStateV1, AdoptionObservationStateV1,
+        AdoptionDeclarationStateV1, AdoptionMatchConfidenceV1, AdoptionObservationStateV1,
         AdoptionOperatorActionRequirementV1, AdoptionPackageMetadataV1, AdoptionPackageStateV1,
         AdoptionProfileV1, AdoptionRecommendationSeverityV1, AdoptionReportError,
         AdoptionReportRequest, AdoptionReportV1, AdoptionSuggestedActionAvailabilityV1,
@@ -1750,11 +1750,30 @@ fn adoption_observed_canister_lines(report: &AdoptionReportV1) -> Vec<String> {
     for finding in &report.observed_canisters {
         let role = finding.matched_role.as_deref().map_or("-", |role| role);
         lines.push(format!(
-            "  - {}: role={}, classifications={}",
+            "  - {}: role={}, confidence={}, classifications={}",
             finding.canister_id,
             role,
+            adoption_match_confidence_label(finding.confidence),
             format_adoption_classifications(&finding.classifications)
         ));
+        if !finding.controllers.is_empty() {
+            lines.push(format!(
+                "    controllers: {}",
+                finding.controllers.join(",")
+            ));
+        }
+        if let Some(evidence) = &finding.wasm_evidence {
+            lines.push(format!("    wasm_evidence: {evidence}"));
+        }
+        if let Some(evidence) = &finding.deployment_target_evidence {
+            lines.push(format!("    deployment_target_evidence: {evidence}"));
+        }
+        lines.extend(
+            finding
+                .warnings
+                .iter()
+                .map(|warning| format!("    warning: {warning}")),
+        );
     }
     lines
 }
@@ -1898,6 +1917,15 @@ const fn adoption_package_state_label(state: AdoptionPackageStateV1) -> &'static
         AdoptionPackageStateV1::MissingFleet => "missing-fleet",
         AdoptionPackageStateV1::MissingRole => "missing-role",
         AdoptionPackageStateV1::Mismatch => "mismatch",
+    }
+}
+
+const fn adoption_match_confidence_label(confidence: AdoptionMatchConfidenceV1) -> &'static str {
+    match confidence {
+        AdoptionMatchConfidenceV1::None => "none",
+        AdoptionMatchConfidenceV1::Candidate => "candidate",
+        AdoptionMatchConfidenceV1::ExplicitEvidence => "explicit-evidence",
+        AdoptionMatchConfidenceV1::Conflict => "conflict",
     }
 }
 

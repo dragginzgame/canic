@@ -179,6 +179,15 @@ declaration.
 
 ## Evidence Rules
 
+Observed canister text output includes the match confidence and supplied
+evidence details when present:
+
+```text
+Observed canisters:
+  - aaaaa-aa: role=store, confidence=candidate, classifications=observed-only
+    deployment_target_evidence: inventory-1
+```
+
 Name similarity alone is not enough for Canic to treat an observed canister as
 managed. It may produce a candidate finding, but management requires explicit
 configuration, topology, authority, package metadata, deployment-truth, or

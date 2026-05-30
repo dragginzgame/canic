@@ -594,6 +594,36 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
     assert_eq!(store.artifact_state, AdoptionArtifactStateV1::CanicBuilt);
 }
 
+// Ensure text adoption reports expose observed canister evidence details.
+#[test]
+fn renders_adoption_report_text_with_observed_canister_evidence() {
+    let root = temp_dir("canic-fleet-adoption-observed-text");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::Text,
+        deployment_check: Some(evidence.deployment_check),
+        inventory: None,
+        artifact_manifest: None,
+        cargo_metadata: None,
+        package_metadata: None,
+        output: None,
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:8").expect("report");
+    let text = render_adoption_report(&report);
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert!(text.contains("Observed canisters:"));
+    assert!(text.contains("aaaaa-aa: role=store, confidence=candidate"));
+    assert!(text.contains("deployment_target_evidence: inventory-1"));
+}
+
 // Ensure cargo metadata evidence can supply package role metadata without live Cargo.
 #[test]
 fn adoption_report_reads_package_metadata_from_cargo_metadata_file() {
