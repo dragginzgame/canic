@@ -4,6 +4,24 @@ use std::path::{Path, PathBuf};
 
 use toml::Value;
 
+///
+/// CanicPackageMetadata
+///
+struct CanicPackageMetadata {
+    fleet: String,
+    role: String,
+}
+
+///
+/// CanicConfigRole
+///
+struct CanicConfigRole {
+    config_path: PathBuf,
+    kind: Option<String>,
+    package_manifest: Option<PathBuf>,
+    attached: bool,
+}
+
 // Returns the repository root for manifest inspection.
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -16,6 +34,15 @@ fn workspace_root() -> PathBuf {
 
 // Reads and parses a Cargo manifest from disk.
 fn read_manifest(path: &Path) -> Value {
+    let source = fs::read_to_string(path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+
+    toml::from_str::<Value>(&source)
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()))
+}
+
+// Reads and parses one Canic config from disk.
+fn read_canic_config(path: &Path) -> Value {
     let source = fs::read_to_string(path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
 
@@ -55,6 +82,19 @@ fn package_name(manifest: &Value) -> Option<&str> {
     manifest["package"]["name"].as_str()
 }
 
+// Returns Canic package metadata from one Cargo manifest.
+fn canic_package_metadata(manifest: &Value) -> Option<CanicPackageMetadata> {
+    let canic = manifest
+        .get("package")?
+        .get("metadata")?
+        .get("canic")?
+        .as_table()?;
+    Some(CanicPackageMetadata {
+        fleet: canic.get("fleet")?.as_str()?.to_string(),
+        role: canic.get("role")?.as_str()?.to_string(),
+    })
+}
+
 // Returns whether a member manifest is explicitly published.
 fn is_explicitly_publishable(manifest: &Value) -> bool {
     manifest["package"]["publish"].as_bool() == Some(true)
@@ -77,12 +117,137 @@ fn lib_crate_types(manifest: &Value) -> BTreeSet<&str> {
         .collect()
 }
 
+// Walks a directory tree and collects files with the requested name.
+fn collect_named_files(root: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
+    let entries = fs::read_dir(root).unwrap_or_else(|err| {
+        panic!(
+            "failed to read directory while collecting {file_name}: {}: {err}",
+            root.display()
+        )
+    });
+
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|err| {
+                panic!(
+                    "failed to read directory entry in {}: {err}",
+                    root.display()
+                )
+            })
+            .path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if path.is_dir() {
+            if matches!(name, ".git" | ".tmp" | "target") {
+                continue;
+            }
+            collect_named_files(&path, file_name, files);
+        } else if name == file_name {
+            files.push(path);
+        }
+    }
+}
+
+// Returns the declared Canic roles from repository configs, keyed by fleet and role.
+fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRole> {
+    let mut config_paths = Vec::new();
+    collect_named_files(root, "canic.toml", &mut config_paths);
+
+    let mut roles = BTreeMap::new();
+    for config_path in config_paths {
+        let config = read_canic_config(&config_path);
+        let Some(fleet) = config
+            .get("fleet")
+            .and_then(|fleet| fleet.get("name"))
+            .and_then(Value::as_str)
+        else {
+            continue;
+        };
+        let Some(role_table) = config.get("roles").and_then(Value::as_table) else {
+            continue;
+        };
+
+        for (role, declaration) in role_table {
+            let declaration = declaration.as_table();
+            let kind = declaration
+                .and_then(|table| table.get("kind"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let package_manifest = declaration
+                .and_then(|table| table.get("package"))
+                .and_then(Value::as_str)
+                .map(|package| {
+                    config_path
+                        .parent()
+                        .expect("config should have a parent directory")
+                        .join(package)
+                        .join("Cargo.toml")
+                });
+            let attached = config
+                .get("subnets")
+                .and_then(Value::as_table)
+                .is_some_and(|subnets| {
+                    subnets.values().any(|subnet| {
+                        subnet
+                            .get("canisters")
+                            .and_then(Value::as_table)
+                            .is_some_and(|canisters| canisters.contains_key(role))
+                    })
+                });
+
+            roles.insert(
+                (fleet.to_string(), role.clone()),
+                CanicConfigRole {
+                    config_path: config_path.clone(),
+                    kind,
+                    package_manifest,
+                    attached,
+                },
+            );
+        }
+    }
+
+    roles
+}
+
 // Formats a path relative to the workspace root for stable test output.
 fn relative_display(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
         .display()
         .to_string()
+}
+
+// Returns a stable absolute path when the path exists.
+fn comparable_path(path: &Path) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+// Returns whether a package intentionally relies on generated standalone config.
+fn uses_generated_standalone_config(
+    manifest_path: &Path,
+    manifest: &Value,
+    metadata: &CanicPackageMetadata,
+) -> bool {
+    if metadata.fleet != "standalone" || metadata.role == "root" {
+        return false;
+    }
+    if !is_explicitly_unpublished(manifest) || !lib_crate_types(manifest).contains("cdylib") {
+        return false;
+    }
+
+    let Some(package_dir) = manifest_path.parent() else {
+        return false;
+    };
+    if package_dir.join("canic.toml").exists() {
+        return false;
+    }
+
+    fs::read_to_string(package_dir.join("build.rs")).is_ok_and(|source| {
+        source.contains("canic::build!(\"canic.toml\")")
+            || source.contains("canic::build!(\"./canic.toml\")")
+    })
 }
 
 // Allow the one intentional local-only dev-dependency edge for unpublished
@@ -410,6 +575,89 @@ fn cdylib_members_do_not_emit_rlib_artifacts() {
         failures.sort();
         panic!(
             "canister artifact crates expose Rust library artifacts:\n{}",
+            failures.join("\n")
+        );
+    }
+}
+
+// Verifies canister package metadata stays aligned with fleet role declarations.
+#[test]
+fn canic_package_metadata_resolves_to_declared_fleet_roles() {
+    let root = workspace_root();
+    let root_manifest_path = root.join("Cargo.toml");
+    let root_manifest = read_manifest(&root_manifest_path);
+    let member_manifests = workspace_member_manifests(&root, &root_manifest);
+    let declared_roles = declared_canic_roles(&root);
+
+    let mut failures = Vec::new();
+    for manifest_path in member_manifests {
+        let manifest = read_manifest(&manifest_path);
+        let Some(metadata) = canic_package_metadata(&manifest) else {
+            continue;
+        };
+        if metadata.fleet.trim().is_empty() || metadata.role.trim().is_empty() {
+            failures.push(format!(
+                "{}: [package.metadata.canic] fleet and role must be non-empty strings",
+                relative_display(&root, &manifest_path)
+            ));
+            continue;
+        }
+
+        let Some(role) = declared_roles.get(&(metadata.fleet.clone(), metadata.role.clone()))
+        else {
+            if uses_generated_standalone_config(&manifest_path, &manifest, &metadata) {
+                continue;
+            }
+            failures.push(format!(
+                "{}: [package.metadata.canic] {}.{} is not declared by any canic.toml [roles.{}]",
+                relative_display(&root, &manifest_path),
+                metadata.fleet,
+                metadata.role,
+                metadata.role
+            ));
+            continue;
+        };
+
+        match role.package_manifest.as_ref() {
+            Some(package_manifest)
+                if comparable_path(package_manifest) == comparable_path(&manifest_path) => {}
+            Some(package_manifest) => failures.push(format!(
+                "{}: [package.metadata.canic] {}.{} package path points at {}, declared in {}",
+                relative_display(&root, &manifest_path),
+                metadata.fleet,
+                metadata.role,
+                relative_display(&root, package_manifest),
+                relative_display(&root, &role.config_path)
+            )),
+            None => failures.push(format!(
+                "{}: [package.metadata.canic] {}.{} resolves to a role without a package path in {}",
+                relative_display(&root, &manifest_path),
+                metadata.fleet,
+                metadata.role,
+                relative_display(&root, &role.config_path)
+            )),
+        }
+
+        if metadata.role == "root" {
+            if role.kind.as_deref() != Some("root") {
+                failures.push(format!(
+                    "{}: root package metadata must resolve to [roles.root] kind = \"root\"",
+                    relative_display(&root, &manifest_path)
+                ));
+            }
+            if !role.attached {
+                failures.push(format!(
+                    "{}: root package metadata must resolve to attached root topology",
+                    relative_display(&root, &manifest_path)
+                ));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        failures.sort();
+        panic!(
+            "Canic package metadata is not aligned with fleet role declarations:\n{}",
             failures.join("\n")
         );
     }

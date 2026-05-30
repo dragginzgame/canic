@@ -10,9 +10,9 @@ PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
   wasm-size, and capability-surface audits, including the `minimal` shared
   runtime baseline.
 - `sandbox/minimal/` – manual local sandbox for temporary endpoint experiments.
-  It uses `canic::start_local!()` with generated standalone config and is not
-  part of `icp.yaml`, the demo topology, the reference release set, or automated
-  test fixtures.
+  It uses `canic::start_local!()` with generated declared-only standalone
+  config and is not part of `icp.yaml`, the demo topology, the reference
+  release set, or automated test fixtures.
 - `test/` – isolated PocketIC and integration-test fixture canisters that are
   not themselves a config-defined fleet.
 

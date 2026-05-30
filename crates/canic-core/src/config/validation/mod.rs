@@ -53,6 +53,20 @@ impl Validate for ConfigModel {
 
         validate_role_declarations(self)?;
 
+        if self.subnets.is_empty() {
+            if self.roles.contains_key(&CanisterRole::ROOT) {
+                return Err(ConfigSchemaError::ValidationError(
+                    "topology-less configs cannot declare role 'root'".into(),
+                ));
+            }
+            if !self.app_index.is_empty() {
+                return Err(ConfigSchemaError::ValidationError(
+                    "topology-less configs cannot define app_index entries".into(),
+                ));
+            }
+            return Ok(());
+        }
+
         let prime = SubnetRole::PRIME;
         let prime_subnet = self
             .subnets
@@ -143,7 +157,7 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
         }
     }
 
-    if !config.roles.contains_key(&CanisterRole::ROOT) {
+    if !config.subnets.is_empty() && !config.roles.contains_key(&CanisterRole::ROOT) {
         return Err(ConfigSchemaError::ValidationError(
             "root role declaration missing; add [roles.root] kind = \"root\"".into(),
         ));

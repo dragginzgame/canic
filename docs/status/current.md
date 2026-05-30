@@ -70,6 +70,10 @@ inspect only the files needed for the current task.
   declared roles in the selected fleet config, updates exact topology
   role-bearing references, and updates matching package metadata when the
   declared package manifest is editable.
+- Workspace governance now checks committed `[package.metadata.canic]`
+  fleet-role metadata against declared fleet roles and package paths. Generated
+  standalone configs are declared-only and no longer synthesize root topology or
+  attach the requested standalone role.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.

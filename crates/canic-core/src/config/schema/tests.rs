@@ -113,6 +113,71 @@ fn non_root_role_declaration_may_be_declared_only() {
 }
 
 #[test]
+fn topology_less_config_may_declare_only_non_root_roles() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.subnets.clear();
+    cfg.roles.remove(&CanisterRole::ROOT);
+    cfg.roles.insert(
+        CanisterRole::from("store"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: None,
+        },
+    );
+
+    cfg.validate()
+        .expect("topology-less non-root role declaration should be valid");
+
+    assert!(cfg.declares_role(&CanisterRole::from("store")));
+    assert!(cfg.attached_roles().is_empty());
+}
+
+#[test]
+fn topology_less_config_rejects_root_and_app_index() {
+    let mut root_cfg = ConfigModel::test_default();
+    root_cfg.subnets.clear();
+    root_cfg.roles.insert(
+        CanisterRole::ROOT,
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Root,
+            package: None,
+        },
+    );
+
+    let root_err = root_cfg
+        .validate()
+        .expect_err("topology-less root declaration should fail");
+    assert!(
+        root_err
+            .to_string()
+            .contains("topology-less configs cannot declare role 'root'"),
+        "expected root error, got: {root_err}"
+    );
+
+    let mut app_index_cfg = ConfigModel::test_default();
+    app_index_cfg.subnets.clear();
+    app_index_cfg.roles.remove(&CanisterRole::ROOT);
+    app_index_cfg.app_index.insert(CanisterRole::from("store"));
+    app_index_cfg.roles.insert(
+        CanisterRole::from("store"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: None,
+        },
+    );
+
+    let app_index_err = app_index_cfg
+        .validate()
+        .expect_err("topology-less app_index should fail");
+    assert!(
+        app_index_err
+            .to_string()
+            .contains("topology-less configs cannot define app_index entries"),
+        "expected app_index error, got: {app_index_err}"
+    );
+}
+
+#[test]
 fn attached_fleet_roles_include_role_bearing_pool_targets() {
     let mut cfg = ConfigModel::test_default();
     let mut hub = base_canister_config(CanisterKind::Singleton);

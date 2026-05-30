@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.8` adds workspace governance for `[package.metadata.canic]` fleet-role
+  declarations and fixes generated standalone configs so compile-only
+  standalone canisters no longer synthesize role attachment topology.
+
 - `0.49.7` adds fleet-scoped role renaming:
   ```
   canic fleet role rename <fleet> <old-role> <new-role>

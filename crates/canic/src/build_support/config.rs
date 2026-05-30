@@ -112,7 +112,7 @@ pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
     config_declares_role(config, config.fleet_name().unwrap_or_default(), role_name)
 }
 
-/// Render the minimal topology needed by a standalone non-root canister.
+/// Render the minimal declared-only config needed by a standalone non-root canister.
 #[must_use]
 pub fn standalone_config_source(role: &str) -> String {
     assert!(
@@ -129,9 +129,6 @@ app_index = []
 [fleet]
 name = "standalone"
 
-[roles.root]
-kind = "root"
-
 [roles.{role_key}]
 kind = "canister"
 
@@ -139,14 +136,6 @@ kind = "canister"
 init_mode = "enabled"
 
 [app.whitelist]
-
-[subnets.prime]
-
-[subnets.prime.canisters.root]
-kind = "root"
-
-[subnets.prime.canisters.{role_key}]
-kind = "singleton"
 "#
     )
 }
@@ -186,13 +175,11 @@ mod tests {
         let source = standalone_config_source("sandbox_minimal");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
 
-        let prime = cfg.subnets.get("prime").expect("prime subnet exists");
-
         assert_eq!(cfg.fleet_name(), Some("standalone"));
-        assert!(cfg.roles.contains_key("root"));
         assert!(cfg.roles.contains_key("sandbox_minimal"));
-        assert!(prime.canisters.contains_key("root"));
-        assert!(prime.canisters.contains_key("sandbox_minimal"));
+        assert!(!cfg.roles.contains_key("root"));
+        assert!(cfg.subnets.is_empty());
+        assert!(!config_attaches_role(&cfg, "standalone", "sandbox_minimal"));
     }
 
     #[test]
@@ -200,11 +187,9 @@ mod tests {
         let source = standalone_config_source("demo.role");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
 
-        let prime = cfg.subnets.get("prime").expect("prime subnet exists");
-
         assert_eq!(cfg.fleet_name(), Some("standalone"));
         assert!(cfg.roles.contains_key("demo.role"));
-        assert!(prime.canisters.contains_key("demo.role"));
+        assert!(cfg.subnets.is_empty());
     }
 
     #[test]
@@ -222,7 +207,7 @@ mod tests {
 
         assert!(generated);
         assert!(source.contains("[roles.\"test\"]"));
-        assert!(source.contains("[subnets.prime.canisters.\"test\"]"));
+        assert!(!source.contains("[subnets."));
     }
 
     #[test]
