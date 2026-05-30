@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.49.md](docs/changelog/0.49.md)
 
+- `0.49.7` adds fleet-scoped role renaming:
+  ```
+  canic fleet role rename <fleet> <old-role> <new-role>
+  ```
+  The command updates the selected fleet config, topology role references, and
+  matching package metadata when the declared package manifest is editable.
+
 - `0.49.6` hardens deployment-truth role selection so declared-only roles stay
   visible in lifecycle output but are excluded from deployable role selectors,
   install targets, local artifact manifests, inventories, and local deployment

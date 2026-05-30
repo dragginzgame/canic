@@ -13,9 +13,10 @@ use canic_host::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
     },
     release_set::{
-        AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, attach_fleet_role,
-        configured_deployable_roles, configured_fleet_name, configured_role_lifecycle,
-        declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
+        AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, RenamedFleetRole,
+        attach_fleet_role, configured_deployable_roles, configured_fleet_name,
+        configured_role_lifecycle, declare_fleet_role, display_workspace_path,
+        matching_fleet_config_paths, rename_fleet_role,
     },
     table::{ColumnAlign, render_table},
 };
@@ -38,6 +39,7 @@ Examples:
   canic fleet list
   canic fleet role declare demo store --package store
   canic fleet role attach demo store --subnet prime
+  canic fleet role rename demo hub router
   canic fleet role list demo
   canic fleet role inspect demo app
   canic fleet create demo
@@ -61,6 +63,7 @@ const FLEET_ROLE_HELP_AFTER: &str = "\
 Examples:
   canic fleet role declare demo store --package store
   canic fleet role attach demo store --subnet prime
+  canic fleet role rename demo hub router
   canic fleet role list demo
   canic fleet role inspect demo app";
 const FLEET_ROLE_LIST_HELP_AFTER: &str = "\
@@ -76,6 +79,9 @@ const FLEET_ROLE_ATTACH_HELP_AFTER: &str = "\
 Examples:
   canic fleet role attach demo store --subnet prime
   canic fleet role attach demo worker --subnet prime --kind replica";
+const FLEET_ROLE_RENAME_HELP_AFTER: &str = "\
+Examples:
+  canic fleet role rename demo hub router";
 
 ///
 /// FleetCommandError
@@ -192,6 +198,17 @@ struct RoleAttachOptions {
 }
 
 ///
+/// RoleRenameOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RoleRenameOptions {
+    fleet: String,
+    old_role: String,
+    new_role: String,
+}
+
+///
 /// FleetListRow
 ///
 
@@ -247,6 +264,7 @@ where
         Some((command, args)) => match command.as_str() {
             "declare" => run_role_declare(args),
             "attach" => run_role_attach(args),
+            "rename" => run_role_rename(args),
             "list" => run_role_list(args),
             "inspect" => run_role_inspect(args),
             _ => unreachable!("fleet role dispatch command only defines known commands"),
@@ -301,6 +319,31 @@ where
     println!(
         "{}",
         render_attached_role(&attached, &project_root, &config_path)
+    );
+    Ok(())
+}
+
+fn run_role_rename<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, role_rename_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = RoleRenameOptions::parse(args)?;
+    let config_path = selected_fleet_config_path(&options.fleet)?;
+    let project_root = current_canic_project_root()?;
+    let renamed = rename_fleet_role(
+        &config_path,
+        &options.fleet,
+        &options.old_role,
+        &options.new_role,
+    )?;
+    println!(
+        "{}",
+        render_renamed_role(&renamed, &project_root, &config_path)
     );
     Ok(())
 }
@@ -561,6 +604,30 @@ impl RoleAttachOptions {
     }
 }
 
+impl RoleRenameOptions {
+    #[cfg(test)]
+    fn parse_test<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse(args)
+    }
+
+    fn parse<I>(args: I) -> Result<Self, FleetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(fleet_role_rename_command(), args)
+            .map_err(|_| FleetCommandError::Usage(role_rename_usage()))?;
+
+        Ok(Self {
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            old_role: string_option(&matches, "old-role").expect("clap requires old role"),
+            new_role: string_option(&matches, "new-role").expect("clap requires new role"),
+        })
+    }
+}
+
 fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     discover_current_canic_config_choices()
 }
@@ -711,6 +778,11 @@ fn fleet_role_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("rename")
+                .about("Rename a declared fleet role")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List declared fleet roles")
                 .disable_help_flag(true),
@@ -781,6 +853,32 @@ fn fleet_role_attach_command() -> ClapCommand {
                 .help("Canister kind: singleton, shard, replica, or instance"),
         )
         .after_help(FLEET_ROLE_ATTACH_HELP_AFTER)
+}
+
+fn fleet_role_rename_command() -> ClapCommand {
+    ClapCommand::new("rename")
+        .bin_name("canic fleet role rename")
+        .about("Rename a declared fleet role")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("fleet")
+                .value_name("fleet")
+                .required(true)
+                .help("Config-defined fleet name"),
+        )
+        .arg(
+            value_arg("old-role")
+                .value_name("old-role")
+                .required(true)
+                .help("Existing local role name"),
+        )
+        .arg(
+            value_arg("new-role")
+                .value_name("new-role")
+                .required(true)
+                .help("New local role name"),
+        )
+        .after_help(FLEET_ROLE_RENAME_HELP_AFTER)
 }
 
 fn fleet_role_list_command() -> ClapCommand {
@@ -1007,6 +1105,38 @@ fn render_attached_role(
     .join("\n")
 }
 
+fn render_renamed_role(
+    role: &RenamedFleetRole,
+    workspace_root: &Path,
+    config_path: &Path,
+) -> String {
+    let package = role.package_manifest.as_ref().map_or_else(
+        || {
+            role.package_manifest_note
+                .as_deref()
+                .unwrap_or("not updated")
+                .to_string()
+        },
+        |path| display_workspace_path(workspace_root, path),
+    );
+
+    [
+        "Renamed fleet role:".to_string(),
+        format!("  old: {}", role.old_display),
+        format!("  new: {}", role.new_display),
+        format!(
+            "  config: {}",
+            display_workspace_path(workspace_root, config_path)
+        ),
+        format!("  package_manifest: {package}"),
+        format!(
+            "  next action: canic fleet role inspect {} {}",
+            role.fleet, role.new_role
+        ),
+    ]
+    .join("\n")
+}
+
 fn print_config_report(report: &IcpProjectConfigReport) {
     println!("Checked ICP project config:");
     println!("  path: {}", report.path.display());
@@ -1071,6 +1201,11 @@ fn role_declare_usage() -> String {
 
 fn role_attach_usage() -> String {
     let mut command = fleet_role_attach_command();
+    command.render_help().to_string()
+}
+
+fn role_rename_usage() -> String {
+    let mut command = fleet_role_rename_command();
     command.render_help().to_string()
 }
 

@@ -100,6 +100,21 @@ fn parses_role_attach_kind() {
     assert_eq!(options.kind, "replica");
 }
 
+// Ensure role rename requires fleet, old role, and new role names.
+#[test]
+fn parses_role_rename_fleet_old_role_and_new_role() {
+    let options = RoleRenameOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("hub"),
+        OsString::from("router"),
+    ])
+    .expect("parse role rename options");
+
+    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.old_role, "hub");
+    assert_eq!(options.new_role, "router");
+}
+
 // Ensure unknown fleet check options fail through usage.
 #[test]
 fn rejects_unknown_check_option() {
@@ -281,6 +296,34 @@ fn renders_attached_role_output() {
     assert!(output.contains("canic build demo store"));
 }
 
+// Ensure rename output reports config and package metadata updates.
+#[test]
+fn renders_renamed_role_output() {
+    let root = Path::new("/workspace");
+    let config = root.join("fleets/demo/canic.toml");
+    let manifest = root.join("fleets/demo/router/Cargo.toml");
+    let output = render_renamed_role(
+        &RenamedFleetRole {
+            fleet: "demo".to_string(),
+            old_role: "hub".to_string(),
+            new_role: "router".to_string(),
+            old_display: "demo.hub".to_string(),
+            new_display: "demo.router".to_string(),
+            package_manifest: Some(manifest),
+            package_manifest_note: None,
+        },
+        root,
+        &config,
+    );
+
+    assert!(output.contains("Renamed fleet role:"));
+    assert!(output.contains("old: demo.hub"));
+    assert!(output.contains("new: demo.router"));
+    assert!(output.contains("config: fleets/demo/canic.toml"));
+    assert!(output.contains("package_manifest: fleets/demo/router/Cargo.toml"));
+    assert!(output.contains("canic fleet role inspect demo router"));
+}
+
 // Ensure fleet command help lists the command family without search.
 #[test]
 fn fleet_usage_lists_subcommands_and_examples() {
@@ -309,6 +352,7 @@ fn fleet_role_usage_lists_subcommands_and_examples() {
     assert!(text.contains("Usage: canic fleet role"));
     assert!(text.contains("declare"));
     assert!(text.contains("attach"));
+    assert!(text.contains("rename"));
     assert!(text.contains("list"));
     assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
@@ -399,6 +443,15 @@ fn role_attach_usage_lists_required_subnet() {
     assert!(text.contains("<role>"));
     assert!(text.contains("--subnet <subnet>"));
     assert!(text.contains("--kind <kind>"));
+    assert!(text.contains("Examples:"));
+}
+
+// Ensure role rename help takes explicit fleet, old role, and new role identity.
+#[test]
+fn role_rename_usage_lists_fleet_old_role_and_new_role_arguments() {
+    let text = role_rename_usage();
+
+    assert!(text.contains("Usage: canic fleet role rename <fleet> <old-role> <new-role>"));
     assert!(text.contains("Examples:"));
 }
 

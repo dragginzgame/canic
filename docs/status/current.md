@@ -66,6 +66,10 @@ inspect only the files needed for the current task.
   excludes declared-only roles from install targets, local artifact manifests,
   inventories, and local deployment plans while leaving them visible through
   role lifecycle inspection.
+- `canic fleet role rename <fleet> <old-role> <new-role>` now renames ordinary
+  declared roles in the selected fleet config, updates exact topology
+  role-bearing references, and updates matching package metadata when the
+  declared package manifest is editable.
 - 0.48 made `[package.metadata.canic] role` the required role source for
   `canic::build!` and `canic::start!()`. Package-name inference and old
   build/root macro variants were removed.
