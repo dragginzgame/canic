@@ -517,12 +517,40 @@ fn git_output_text<const N: usize>(workspace_root: &Path, args: [&str; N]) -> Op
 }
 
 fn git_output_bytes<const N: usize>(workspace_root: &Path, args: [&str; N]) -> Option<Vec<u8>> {
-    let output = Command::new("git")
-        .current_dir(workspace_root)
-        .args(args)
-        .output()
-        .ok()?;
+    git_output_bytes_with_extra_env(workspace_root, args, &[])
+}
+
+fn git_output_bytes_with_extra_env<const N: usize>(
+    workspace_root: &Path,
+    args: [&str; N],
+    extra_env: &[(&str, &Path)],
+) -> Option<Vec<u8>> {
+    let mut command = Command::new("git");
+    command.current_dir(workspace_root);
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
+    clear_git_environment(&mut command);
+
+    let output = command.args(args).output().ok()?;
     output.status.success().then_some(output.stdout)
+}
+
+fn clear_git_environment(command: &mut Command) {
+    for key in [
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_PREFIX",
+        "GIT_WORK_TREE",
+    ] {
+        command.env_remove(key);
+    }
 }
 
 fn command_version<const N: usize>(command: &str, args: [&str; N]) -> Option<String> {
@@ -570,6 +598,26 @@ mod tests {
         fs::remove_dir_all(&root).expect("remove root");
         assert_eq!(provenance.vcs, SourceVcsV1::Unknown);
         assert_eq!(provenance.dirty_policy, SourceDirtyPolicyV1::Unknown);
+    }
+
+    #[test]
+    fn source_provenance_ignores_inherited_git_context() {
+        let root = temp_dir("canic-build-provenance-git-env");
+        fs::create_dir_all(&root).expect("create root");
+        let repo_root = canic_repo_root();
+        let git_dir = repo_root.join(".git");
+
+        let output = git_output_bytes_with_extra_env(
+            &root,
+            ["rev-parse", "HEAD"],
+            &[
+                ("GIT_DIR", git_dir.as_path()),
+                ("GIT_WORK_TREE", repo_root.as_path()),
+            ],
+        );
+
+        fs::remove_dir_all(&root).expect("remove root");
+        assert!(output.is_none());
     }
 
     #[test]
@@ -726,5 +774,13 @@ role = "{role}"
             did_path,
             manifest_path: None,
         }
+    }
+
+    fn canic_repo_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|path| path.join(".git").exists())
+            .expect("Canic repository root has .git")
+            .to_path_buf()
     }
 }
