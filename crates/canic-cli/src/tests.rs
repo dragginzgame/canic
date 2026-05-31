@@ -44,7 +44,8 @@ fn usage_lists_command_families() {
     assert!(plain.find("    replica") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
-    assert!(plain.find("    deploy") < plain.find("    config"));
+    assert!(plain.find("    deploy") < plain.find("    evidence"));
+    assert!(plain.find("    evidence") < plain.find("    config"));
     assert!(plain.find("    config") < plain.find("    info"));
     assert!(plain.find("    info") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
@@ -108,6 +109,8 @@ fn command_family_help_returns_ok() {
         &["info", "list", "help"],
         &["info", "cycles", "help"],
         &["endpoints", "help"],
+        &["evidence", "help"],
+        &["evidence", "compare", "help"],
         &["install", "help"],
         &["fleet"],
         &["fleet", "help"],

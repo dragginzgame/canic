@@ -80,6 +80,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Deployment,
     },
     CommandSpec {
+        name: "evidence",
+        about: "Compare stable evidence envelopes",
+        scope: CommandScope::Deployment,
+    },
+    CommandSpec {
         name: "config",
         about: "Inspect selected fleet config",
         scope: CommandScope::Deployment,

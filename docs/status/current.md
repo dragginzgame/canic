@@ -54,6 +54,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.51.3 has added `canic evidence compare --left <path> --right <path>` for
+  CI-friendly comparison of stable `EvidenceEnvelopeV1` fields. The command is
+  read-only, compares envelope schema/provenance/target/input/payload
+  hash/summary/exit-class data, and intentionally ignores `generated_at`,
+  `canic_version`, and the nested command-specific payload body.
 - 0.51.2 has centralized evidence-envelope exit-class precedence in
   `canic-host::evidence_envelope`. Adoption-report and deployment-check
   envelope emitters now classify from the same structured summary, and

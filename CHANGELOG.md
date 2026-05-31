@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
 
+- `0.51.3` adds a CI-friendly stable envelope comparison command:
+  ```text
+  canic evidence compare --left <path> --right <path>
+  ```
+  The command compares stable `EvidenceEnvelopeV1` fields while ignoring
+  timestamp/version noise and the nested command-specific payload body.
+
 - `0.51.2` centralizes evidence-envelope exit-class precedence, aligns
   adoption-report and deployment-check envelope emitters on the shared
   summary-based classification, and documents CI policy guidance for warnings,

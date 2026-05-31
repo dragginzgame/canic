@@ -4,6 +4,7 @@ mod cli;
 mod cycles;
 mod deploy;
 mod endpoints;
+mod evidence;
 mod fleets;
 mod info;
 mod install;
@@ -62,6 +63,9 @@ pub enum CliError {
 
     #[error("endpoints: {0}")]
     Endpoints(#[from] endpoints::EndpointsCommandError),
+
+    #[error("evidence: {0}")]
+    Evidence(#[from] evidence::EvidenceCommandError),
 
     #[error("install: {0}")]
     Install(#[from] install::InstallCommandError),
@@ -149,6 +153,7 @@ where
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
+        "evidence" => evidence::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),

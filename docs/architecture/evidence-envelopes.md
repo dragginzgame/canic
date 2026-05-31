@@ -29,6 +29,12 @@ canic fleet adoption report <fleet> --profile <profile> --format envelope-json
 canic deploy check <deployment> --format envelope-json
 ```
 
+Stable envelope comparison is available with:
+
+```text
+canic evidence compare --left <path> --right <path>
+```
+
 Existing raw JSON output remains available:
 
 ```text
@@ -179,6 +185,35 @@ case envelope.exit_class:
   invalid_input | execution_failed | internal_error:
     fail
 ```
+
+## Envelope Comparison
+
+`canic evidence compare` compares the stable envelope contract, not the full
+command-specific payload body. It compares:
+
+- envelope schema;
+- command provenance;
+- target identity;
+- source config fingerprint;
+- supplied input fingerprints;
+- payload schema;
+- payload SHA-256;
+- structured summary;
+- exit class.
+
+It intentionally ignores:
+
+- `canic_version`;
+- `generated_at`;
+- the nested `payload` body.
+
+The nested payload body is ignored because payload DTOs may be experimental or
+internal. `payload_sha256` is still compared, so a changed payload identity is
+visible without teaching CI to parse payload-specific fields.
+
+The command exits successfully when compared fields match and fails when they
+differ. Text output is intended for humans; `--format json` emits the compare
+report for CI.
 
 ## Deferred Work
 
