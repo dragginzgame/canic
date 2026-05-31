@@ -610,8 +610,11 @@ kind = "singleton"
         let mut source = format!("[fleet]\nname = \"{fleet}\"\n");
         for role in roles {
             let kind = if *role == "root" { "root" } else { "canister" };
-            write!(source, "\n[roles.{role}]\nkind = \"{kind}\"\n")
-                .expect("write role declaration");
+            write!(
+                source,
+                "\n[roles.{role}]\nkind = \"{kind}\"\npackage = \"{role}\"\n"
+            )
+            .expect("write role declaration");
         }
         for role in roles {
             let kind = if *role == "root" { "root" } else { "singleton" };

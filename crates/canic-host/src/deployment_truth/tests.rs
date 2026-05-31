@@ -8338,6 +8338,7 @@ package = "user_shard"
 
 [roles.store]
 kind = "canister"
+package = "store"
 
 [app]
 init_mode = "enabled"
