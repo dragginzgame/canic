@@ -13,6 +13,7 @@ use crate::{
     },
     dto::placement::sharding::ShardingPlanStateResponse,
     ids::CanisterRole,
+    log::Topic,
     ops::{
         config::ConfigOps,
         placement::sharding::mapper::{
