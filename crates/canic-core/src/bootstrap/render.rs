@@ -68,9 +68,7 @@ fn render_fleet_config(config: &FleetConfig) -> TokenStream {
 // Render a fleet role declaration.
 fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
     let kind = render_role_declaration_kind(declaration.kind);
-    let package = render_option(declaration.package.as_ref(), |package| {
-        render_owned_string(package)
-    });
+    let package = render_owned_string(&declaration.package);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RoleDeclaration {

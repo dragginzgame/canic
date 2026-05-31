@@ -20,9 +20,6 @@ package = "../scale_hub"
 kind = "canister"
 package = "../test"
 
-[roles.minimal]
-kind = "canister"
-
 [app]
 init_mode = "enabled"
 
@@ -56,6 +53,3 @@ kind = "singleton"
 role_attestation_cache = true
 
 [subnets.general]
-
-[subnets.general.canisters.minimal]
-kind = "replica"

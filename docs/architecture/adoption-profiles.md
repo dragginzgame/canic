@@ -47,8 +47,8 @@ edit manifests.
 
 Adoption reporting uses the 0.49 role lifecycle directly:
 
-- `declared-only`: a role exists under `[roles.<role>]` but is not attached to
-  topology;
+- `declared-only`: a role exists under `[roles.<role>]` with an explicit
+  `package = "<path>"`, but is not attached to topology;
 - `attached`: a role is declared and referenced by topology;
 - `observed-only`: evidence mentions a canister that is not currently declared
   as a Canic role;

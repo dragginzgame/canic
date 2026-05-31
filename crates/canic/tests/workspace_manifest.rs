@@ -580,6 +580,37 @@ fn cdylib_members_do_not_emit_rlib_artifacts() {
     }
 }
 
+// Verifies checked-in role declarations point at real package manifests.
+#[test]
+fn canic_role_declaration_packages_exist() {
+    let root = workspace_root();
+    let declared_roles = declared_canic_roles(&root);
+
+    let mut failures = Vec::new();
+    for ((fleet, role), declaration) in declared_roles {
+        match declaration.package_manifest.as_ref() {
+            Some(package_manifest) if package_manifest.is_file() => {}
+            Some(package_manifest) => failures.push(format!(
+                "{}: [roles.{role}] package for {fleet}.{role} must contain Cargo.toml, missing {}",
+                relative_display(&root, &declaration.config_path),
+                relative_display(&root, package_manifest)
+            )),
+            None => failures.push(format!(
+                "{}: [roles.{role}] package for {fleet}.{role} must be declared",
+                relative_display(&root, &declaration.config_path)
+            )),
+        }
+    }
+
+    if !failures.is_empty() {
+        failures.sort();
+        panic!(
+            "Canic role declaration packages are not concrete package paths:\n{}",
+            failures.join("\n")
+        );
+    }
+}
+
 // Verifies canister package metadata stays aligned with fleet role declarations.
 #[test]
 fn canic_package_metadata_resolves_to_declared_fleet_roles() {

@@ -35,8 +35,8 @@ impl fmt::Display for FleetRoleRefV1 {
 pub struct RoleDeclaration {
     pub kind: RoleDeclarationKind,
 
-    #[serde(default)]
-    pub package: Option<String>,
+    /// Package path relative to the declaring canic.toml.
+    pub package: String,
 }
 
 ///

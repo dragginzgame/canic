@@ -38,7 +38,7 @@ pub struct ConfiguredRoleLifecycle {
     pub role: String,
     pub display: String,
     pub declaration_kind: String,
-    pub package: Option<String>,
+    pub package: String,
     pub attached: bool,
     pub state: String,
     pub topology: Option<String>,
@@ -558,13 +558,11 @@ pub(super) fn rename_fleet_role_source(
     let source = rename_config_role_references(config_source, old_role, new_role)?;
     parse_config_model(&source).map_err(|err| err.to_string())?;
 
-    let (package_manifest, package_source, package_manifest_note) = config_path
-        .parent()
-        .and_then(|parent| declaration.package.as_ref().map(|package| parent.join(package)))
-        .map_or_else(
-            || (None, None, Some("role has no package path".to_string())),
-            |package| {
-                let manifest = package.join("Cargo.toml");
+    let (package_manifest, package_source, package_manifest_note) =
+        config_path.parent().map_or_else(
+            || (None, None, Some("config path has no parent".to_string())),
+            |parent| {
+                let manifest = parent.join(&declaration.package).join("Cargo.toml");
                 match update_package_manifest_role(&manifest, expected_fleet, old_role, new_role) {
                     Ok(Some(updated)) => (Some(manifest), Some(updated), None),
                     Ok(None) => (

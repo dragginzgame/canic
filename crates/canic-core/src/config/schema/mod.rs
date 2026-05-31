@@ -246,7 +246,7 @@ impl ConfigModel {
             CanisterRole::ROOT,
             RoleDeclaration {
                 kind: RoleDeclarationKind::Root,
-                package: None,
+                package: "root".to_string(),
             },
         );
         cfg.subnets.insert(SubnetRole::PRIME, prime);

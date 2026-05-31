@@ -16,12 +16,19 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
 
+- `0.51.1` hardens envelope input fingerprints by centralizing file
+  fingerprinting in `canic-host`, adding `path_display`, normalizing evidence
+  paths relative to the selected root, and redacting absolute paths outside
+  that root. It also hard-cuts fleet role declarations so every
+  `[roles.<role>]` entry must carry an explicit `package = "<path>"`, and
+  workspace governance now rejects package paths that do not contain a real
+  `Cargo.toml`. Adoption reports use `undeclared-role` rather than a
+  non-package role state for observed-only findings.
+
 - `0.51.0` adds the stable `EvidenceEnvelopeV1` model and envelope JSON output
   for passive adoption reports and deployment checks:
   ```text
   canic fleet adoption report <fleet> --profile <profile> --format envelope-json
-  ```
-  ```text
   canic deploy check <deployment> --format envelope-json
   ```
   Existing adoption `--format json` remains the raw experimental adoption

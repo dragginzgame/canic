@@ -63,6 +63,8 @@ Every report generated from this audit must include:
 - Code snapshot identifier
 - Method tag/version
 - Comparability status
+- Generated artifact environment and retained public roster
+- Artifact refresh commands and their status
 
 ## Executive Summary Block (Required)
 
@@ -74,13 +76,35 @@ Every report must begin the findings section with a short executive summary:
 - Over-bundled families (or explicit `none`)
 - Follow-up required (`yes` / `no`)
 
+## Report Completeness Gate (Required)
+
+Every run must include all sections marked `Mandatory` in this template and all
+sections required by `docs/audits/recurring/README.md`.
+
+At minimum, a complete recurring report must include:
+
+- Structural Hotspots
+- Hub Module Pressure
+- Global Amplification Factor
+- Compatibility Signals
+- Early Warning Signals
+- Endpoint / RPC Alignment
+- Dependency Fan-In Pressure
+- Deterministic Risk Score
+- Verification Readout
+
+If any required section is omitted or blocked, mark the report
+`PARTIAL (section gap)` in the comparability status and add a follow-up action
+to complete or intentionally retire that section before the next run.
+
 ## Scope
 
 Primary code areas:
 
-- `crates/canic/src/macros/endpoints.rs`
+- `crates/canic/src/macros/endpoints/**`
 - `crates/canic/src/macros/start.rs`
 - `crates/canic-core/src/protocol.rs`
+- `crates/canic/src/protocol.rs`
 - `crates/canic-core/src/dto/capability/**`
 - `crates/canic-core/src/dto/rpc.rs`
 - `crates/canic-core/src/api/rpc/**`
@@ -98,6 +122,36 @@ Exclude these from counts unless the audit explicitly says otherwise:
 - deprecated or legacy modules explicitly marked as such
 
 If a report includes filtered exceptions, list them explicitly.
+
+## Roster Selection (Required)
+
+Generated `.did` directories can contain stale local artifacts from earlier
+builds. Every run must derive the retained DID roster from the selected fleet
+configuration before counting surface.
+
+Record:
+
+- selected fleet config path
+- selected environment
+- retained role list
+- filtered local artifacts
+
+Suggested role-list command:
+
+```bash
+scripts/ci/list-config-canisters.sh --config <fleet-config> --ci-order
+```
+
+Suggested retained-roster scan pattern:
+
+```bash
+for role in <retained roles>; do
+    rg -n '^  canic_' ".icp/<environment>/canisters/$role/$role.did"
+done
+```
+
+Do not use an unfiltered `.icp/<environment>/canisters/**` scan as the final
+surface count when stale local artifacts are present.
 
 ## Capability Surface Unit (Normative)
 
@@ -159,10 +213,10 @@ Run hard checks first.
 Suggested scans:
 
 ```bash
-rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
-rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_delegation_' crates/canic/src/macros/endpoints.rs
+rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_delegation_' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^  canic_.*_admin :' .icp/local/canisters -g '*.did'
-rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
+rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
 ```
 
 Required checks:
@@ -185,9 +239,9 @@ Count and classify generated endpoint bundles.
 Suggested scans:
 
 ```bash
-rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
-rg -n '#\\[canic_(query|update)' crates/canic/src/macros/endpoints.rs
-rg -n 'admin\\(' crates/canic/src/macros/endpoints.rs
+rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
+rg -n '#\\[.*canic_(query|update)' crates/canic/src/macros/endpoints -g '*.rs'
+rg -n 'admin\\(' crates/canic/src/macros/endpoints -g '*.rs'
 ```
 
 Record:
@@ -208,13 +262,15 @@ Suggested scans:
 
 ```bash
 rg -n '^pub const ' crates/canic-core/src/protocol.rs
+rg -n '^pub const ' crates/canic/src/protocol.rs
 rg -n '^pub enum ' crates/canic-core/src/dto/{capability,rpc}.rs crates/canic-core/src/dto/capability -g '*.rs'
 rg -n 'RequestFamily|CapabilityProof|CapabilityService' crates/canic-core/src -g '*.rs'
 ```
 
 Record:
 
-- `protocol.rs` constant count
+- `canic-core::protocol` constant count
+- `canic::protocol` facade-only constant count
 - `dto::rpc::Request` variant count
 - `dto::rpc::Response` variant count
 - `dto::capability::CapabilityProof` variant count
@@ -249,7 +305,7 @@ Suggested scans:
 
 ```bash
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
-rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints.rs
+rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```
 
@@ -297,8 +353,11 @@ report preamble.
 Suggested scans:
 
 ```bash
-rg -n '^service :' .icp/local/canisters -g '*.did'
-rg -n '^  canic_' .icp/local/canisters -g '*.did'
+scripts/ci/list-config-canisters.sh --config <fleet-config> --ci-order
+for role in <retained roles>; do
+    rg -n '^service :' ".icp/local/canisters/$role/$role.did"
+    rg -n '^  canic_' ".icp/local/canisters/$role/$role.did"
+done
 ```
 
 Required output:
@@ -418,7 +477,7 @@ Suggested scans:
 
 ```bash
 rg 'pub enum |pub struct |pub fn ' crates/canic-core/src/{dto,api,workflow,ops} -g '*.rs'
-rg '^  canic_' canisters -g '*.did'
+rg '^  canic_' .icp/local/canisters -g '*.did'
 git log --name-only -n 20 -- crates/
 ```
 
@@ -452,8 +511,9 @@ rg -n 'dto::capability|dto::rpc|protocol::|canic_endpoints_' crates/ -g '*.rs'
 | --- | ---: | --- | --- | --- |
 | `dto::capability` |  |  |  |  |
 | `dto::rpc` |  |  |  |  |
-| `macros/endpoints.rs` |  |  |  |  |
-| `protocol.rs` |  |  |  |  |
+| `macros/endpoints/**` |  |  |  |  |
+| `canic-core/src/protocol.rs` |  |  |  |  |
+| `canic/src/protocol.rs` |  |  |  |  |
 
 ## Deterministic Risk Score (Required)
 
@@ -484,9 +544,10 @@ Record command outcomes with:
 Minimum commands to report:
 
 ```bash
-rg -n '^macro_rules! canic_endpoints' crates/canic/src/macros/endpoints.rs
+rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^pub const ' crates/canic-core/src/protocol.rs
-rg -n '^  canic_' canisters -g '*.did'
+rg -n '^pub const ' crates/canic/src/protocol.rs
+rg -n '^  canic_' .icp/local/canisters -g '*.did'
 rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```

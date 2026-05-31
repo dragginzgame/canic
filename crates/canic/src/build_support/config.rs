@@ -131,6 +131,7 @@ name = "standalone"
 
 [roles.{role_key}]
 kind = "canister"
+package = "."
 
 [app]
 init_mode = "enabled"
@@ -276,9 +277,11 @@ name = "test"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
@@ -302,9 +305,11 @@ name = "test"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [subnets.prime.canisters.app]
 kind = "singleton"

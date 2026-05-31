@@ -328,33 +328,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -390,53 +400,15 @@ fn install_truth_preflight_uses_current_install_inputs_without_mutation() {
         fs::create_dir_all(root.join("fleets/demo")).expect("create config dir");
         fs::write(
             root.join("fleets/demo/canic.toml"),
-            r#"
-controllers = []
-app_index = []
-
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
-
+            demo_config_source(
+                r#"
 [subnets.prime.canisters.root]
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
 kind = "singleton"
 "#,
+            ),
         )
         .expect("write config");
         write_wasm_gz_artifact(&root, "root", b"root-artifact");
@@ -447,20 +419,7 @@ kind = "singleton"
             env::set_var("CANIC_WORKSPACE_ROOT", &root);
         }
 
-        let options = InstallRootOptions {
-            root_canister: "root".to_string(),
-            root_build_target: "root".to_string(),
-            network: "local".to_string(),
-            deployment_name: None,
-            icp_root: Some(root.clone()),
-            build_profile: Some(CanisterBuildProfile::Fast),
-            ready_timeout_seconds: 30,
-            config_path: Some("fleets/demo/canic.toml".to_string()),
-            expected_fleet: Some("demo".to_string()),
-            interactive_config_selection: false,
-            deployment_plan_override: None,
-            artifact_promotion_plan_override: None,
-        };
+        let options = local_demo_install_options(&root);
 
         let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
             .expect("install truth preflight");
@@ -516,33 +475,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -559,20 +528,7 @@ kind = "singleton"
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
 
-    let options = InstallRootOptions {
-        root_canister: "root".to_string(),
-        root_build_target: "root".to_string(),
-        network: "local".to_string(),
-        deployment_name: None,
-        icp_root: Some(root.clone()),
-        build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
-        interactive_config_selection: false,
-        deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
-    };
+    let options = local_demo_install_options(&root);
 
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -790,68 +746,17 @@ fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
-        r#"
-controllers = []
-app_index = []
-
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
-
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
+        ),
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
 
-    let options = InstallRootOptions {
-        root_canister: "root".to_string(),
-        root_build_target: "root".to_string(),
-        network: "local".to_string(),
-        deployment_name: None,
-        icp_root: Some(root.clone()),
-        build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
-        interactive_config_selection: false,
-        deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
-    };
+    let options = local_demo_install_options(&root);
 
     let mut check = current_install_deployment_truth_check_at(
         &options,
@@ -977,50 +882,12 @@ fn install_truth_gate_blocks_missing_expected_root_canister() {
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
-        r#"
-controllers = []
-app_index = []
-
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
-
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
+        ),
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
@@ -1091,68 +958,17 @@ fn install_truth_gate_blocks_all_safety_report_hard_failures() {
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
-        r#"
-controllers = []
-app_index = []
-
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
-
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
+        ),
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
 
-    let options = InstallRootOptions {
-        root_canister: "root".to_string(),
-        root_build_target: "root".to_string(),
-        network: "local".to_string(),
-        deployment_name: None,
-        icp_root: Some(root.clone()),
-        build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
-        interactive_config_selection: false,
-        deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
-    };
+    let options = local_demo_install_options(&root);
 
     let mut check = current_install_deployment_truth_check_at(
         &options,
@@ -1187,68 +1003,17 @@ fn install_truth_gate_persists_machine_readable_receipt() {
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
-        r#"
-controllers = []
-app_index = []
-
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
-[app]
-init_mode = "enabled"
-[app.whitelist]
-
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
+        ),
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
 
-    let options = InstallRootOptions {
-        root_canister: "root".to_string(),
-        root_build_target: "root".to_string(),
-        network: "local".to_string(),
-        deployment_name: None,
-        icp_root: Some(root.clone()),
-        build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
-        interactive_config_selection: false,
-        deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
-    };
+    let options = local_demo_install_options(&root);
 
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -1317,33 +1082,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -2002,33 +1777,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -2114,33 +1899,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -2205,33 +2000,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -2305,33 +2110,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -2403,33 +2218,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -2479,33 +2304,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -2541,84 +2376,21 @@ fn config_selection_error_lists_multiple_paths_with_numbered_options() {
     fs::create_dir_all(example.parent().expect("example parent")).expect("create example parent");
     fs::write(
         &demo,
-        r#"
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 
 [subnets.prime.canisters.app]
 kind = "singleton"
 "#,
+        ),
     )
     .expect("write demo config");
     fs::write(
         &example,
-        r#"
-[fleet]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-
-[roles.project_registry]
-kind = "canister"
-
-[roles.oracle_pokemon]
-kind = "canister"
-
-[roles.user_hub]
-kind = "canister"
-
-[roles.user_shard]
-kind = "canister"
-
-[roles.scale_hub]
-kind = "canister"
-
-[roles.scale_replica]
-kind = "canister"
-
-[roles.minimal]
-kind = "canister"
-
-[roles.worker]
-kind = "canister"
-
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 
@@ -2634,6 +2406,7 @@ kind = "singleton"
 [subnets.prime.canisters.scale_hub]
 kind = "singleton"
 "#,
+        ),
     )
     .expect("write example config");
     let message = config_selection_error(&root, &root.join("fleets/canic.toml"), &[demo, example]);
@@ -2667,33 +2440,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -2701,7 +2484,7 @@ kind = "root"
 [subnets.prime.canisters.app]
 kind = "singleton"
 
-[subnets.prime.canisters.minimal]
+[subnets.prime.canisters.role_baseline]
 kind = "singleton"
 
 [subnets.prime.canisters.scale_replica]
@@ -2728,7 +2511,9 @@ kind = "singleton"
         std::slice::from_ref(&config),
     );
 
-    assert!(message.contains("8 (root, app, minimal, scale_hub, scale_replica, user_hub, ...)"));
+    assert!(
+        message.contains("8 (root, app, role_baseline, scale_hub, scale_replica, user_hub, ...)")
+    );
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -2814,33 +2599,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -3036,33 +2831,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -3125,33 +2930,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -3481,33 +3296,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -3684,6 +3509,77 @@ fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     root
 }
 
+fn demo_config_source(attached: &str) -> String {
+    format!(
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[roles.project_registry]
+kind = "canister"
+package = "project_registry"
+
+[roles.oracle_pokemon]
+kind = "canister"
+package = "oracle_pokemon"
+
+[roles.user_hub]
+kind = "canister"
+package = "user_hub"
+
+[roles.user_shard]
+kind = "canister"
+package = "user_shard"
+
+[roles.scale_hub]
+kind = "canister"
+package = "scale_hub"
+
+[roles.scale_replica]
+kind = "canister"
+package = "scale"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+{attached}
+"#
+    )
+}
+
+fn local_demo_install_options(root: &Path) -> InstallRootOptions {
+    InstallRootOptions {
+        root_canister: "root".to_string(),
+        root_build_target: "root".to_string(),
+        network: "local".to_string(),
+        deployment_name: None,
+        icp_root: Some(root.to_path_buf()),
+        build_profile: Some(CanisterBuildProfile::Fast),
+        ready_timeout_seconds: 30,
+        config_path: Some("fleets/demo/canic.toml".to_string()),
+        expected_fleet: Some("demo".to_string()),
+        interactive_config_selection: false,
+        deployment_plan_override: None,
+        artifact_promotion_plan_override: None,
+    }
+}
+
 fn write_demo_root_only_config(config_path: &Path) {
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
@@ -3697,6 +3593,7 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [app]
 init_mode = "enabled"
@@ -3733,33 +3630,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"
@@ -3813,33 +3720,43 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.project_registry]
 kind = "canister"
+package = "project_registry"
 
 [roles.oracle_pokemon]
 kind = "canister"
+package = "oracle_pokemon"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [app]
 init_mode = "enabled"

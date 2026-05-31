@@ -14,6 +14,7 @@
 | `2026-05-14` | `docs/audits/reports/2026-05/2026-05-14/summary.md` | complete |
 | `2026-05-24` | `docs/audits/reports/2026-05/2026-05-24/summary.md` | complete |
 | `2026-05-29` | `docs/audits/reports/2026-05/2026-05-29/summary.md` | complete |
+| `2026-05-31` | `docs/audits/reports/2026-05/2026-05-31/summary.md` | complete |
 
 ## Month-Level Status
 
@@ -153,3 +154,7 @@ May has day summaries for the currently recorded audit days.
 48. Root capability maintainers: before adding a new root request or proof
     mode, budget DTO, API validation, workflow authorization/execution,
     replay, metrics, Candid/docs, and tests as one coordinated slice.
+49. Audit maintenance: the capability-surface recurring template now follows
+    the endpoint directory module, current fleet roster filtering, and the
+    core/facade protocol split; keep those scan boundaries aligned as the
+    runtime surface moves.

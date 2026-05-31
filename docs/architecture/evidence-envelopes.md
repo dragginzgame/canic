@@ -118,8 +118,20 @@ substitute for live checks, deployment truth validation, or operator review.
 ## Input Fingerprints
 
 File input fingerprints use SHA-256 over file bytes where possible. Paths should
-be project/config-relative or otherwise safe for CI artifacts. Timestamps are
-explanatory metadata only; they are not provenance by themselves.
+be project/config-relative or otherwise safe for CI artifacts. The
+`path_display` field records how the path was handled:
+
+```text
+relative          path is relative to the selected project/config root
+absolute_redacted path was outside that root and intentionally omitted
+omitted           path was unavailable or intentionally not included
+```
+
+Timestamps are explanatory metadata only; they are not provenance by
+themselves.
+
+When an evidence path is redacted from normalized command provenance,
+`argv_redactions` records which argument was affected.
 
 ## CI/GitOps Guidance
 

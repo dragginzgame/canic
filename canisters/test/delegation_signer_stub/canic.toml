@@ -6,6 +6,7 @@ name = "delegation_signer_stub"
 
 [roles.root]
 kind = "root"
+package = "../delegation_root_stub"
 
 [roles.user_shard]
 kind = "canister"

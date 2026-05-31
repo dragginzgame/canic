@@ -10,12 +10,15 @@ package = "."
 
 [roles.signer]
 kind = "canister"
+package = "../delegation_signer_stub"
 
 [roles.project_hub]
 kind = "canister"
+package = "../project_hub_stub"
 
 [roles.project_instance]
 kind = "canister"
+package = "../project_instance_stub"
 
 [auth.delegated_tokens]
 enabled = true

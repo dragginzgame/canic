@@ -29,7 +29,7 @@ fn root_canister_must_exist_in_prime_subnet() {
         CanisterRole::ROOT,
         RoleDeclaration {
             kind: RoleDeclarationKind::Root,
-            package: None,
+            package: "root".to_string(),
         },
     );
     cfg.subnets
@@ -101,7 +101,7 @@ fn non_root_role_declaration_may_be_declared_only() {
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: Some("crates/store".to_string()),
+            package: "crates/store".to_string(),
         },
     );
 
@@ -113,6 +113,38 @@ fn non_root_role_declaration_may_be_declared_only() {
 }
 
 #[test]
+fn role_declarations_require_package_paths() {
+    let err = toml::from_str::<RoleDeclaration>(
+        r#"
+kind = "canister"
+"#,
+    )
+    .expect_err("role declaration without package should fail deserialization");
+
+    assert!(err.to_string().contains("missing field `package`"));
+}
+
+#[test]
+fn role_declaration_package_paths_must_not_be_empty() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.roles.insert(
+        CanisterRole::from("store"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: " ".to_string(),
+        },
+    );
+
+    let err = cfg.validate().expect_err("empty role package should fail");
+
+    assert!(
+        err.to_string()
+            .contains("role declaration 'store' package must not be empty"),
+        "expected empty package error, got: {err}"
+    );
+}
+
+#[test]
 fn topology_less_config_may_declare_only_non_root_roles() {
     let mut cfg = ConfigModel::test_default();
     cfg.subnets.clear();
@@ -121,7 +153,7 @@ fn topology_less_config_may_declare_only_non_root_roles() {
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: None,
+            package: "store".to_string(),
         },
     );
 
@@ -140,7 +172,7 @@ fn topology_less_config_rejects_root_and_app_index() {
         CanisterRole::ROOT,
         RoleDeclaration {
             kind: RoleDeclarationKind::Root,
-            package: None,
+            package: "root".to_string(),
         },
     );
 
@@ -162,7 +194,7 @@ fn topology_less_config_rejects_root_and_app_index() {
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: None,
+            package: "store".to_string(),
         },
     );
 
@@ -201,14 +233,14 @@ fn attached_fleet_roles_include_role_bearing_pool_targets() {
         CanisterRole::from("user_hub"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: None,
+            package: "user_hub".to_string(),
         },
     );
     cfg.roles.insert(
         CanisterRole::from("user_shard"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
-            package: None,
+            package: "user_shard".to_string(),
         },
     );
 

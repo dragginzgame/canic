@@ -6,9 +6,11 @@ name = "project_instance_stub"
 
 [roles.root]
 kind = "root"
+package = "../delegation_root_stub"
 
 [roles.project_hub]
 kind = "canister"
+package = "../project_hub_stub"
 
 [roles.project_instance]
 kind = "canister"

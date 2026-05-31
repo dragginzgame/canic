@@ -22,8 +22,8 @@ use canic_host::{
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
-        PayloadSchemaRefV1, adoption_report_schema, deployment_check_schema,
-        evidence_envelope_schema, sha256_hex,
+        PayloadSchemaRefV1, adoption_report_schema, command_path_for_root, deployment_check_schema,
+        evidence_envelope_schema, file_input_fingerprint, json_payload_sha256,
     },
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
@@ -1290,7 +1290,7 @@ fn render_role_lifecycle_rows(rows: &[ConfiguredRoleLifecycle]) -> String {
         .map(|row| {
             [
                 row.display.clone(),
-                row.package.clone().unwrap_or_else(|| "-".to_string()),
+                row.package.clone(),
                 row.state.clone(),
                 row.topology.clone().unwrap_or_else(|| "-".to_string()),
             ]
@@ -1305,7 +1305,7 @@ fn render_role_lifecycle_rows(rows: &[ConfiguredRoleLifecycle]) -> String {
 
 fn render_role_inspection(row: &ConfiguredRoleLifecycle) -> String {
     let topology = row.topology.as_deref().unwrap_or("-");
-    let package = row.package.as_deref().unwrap_or("-");
+    let package = row.package.as_str();
     let deploy = if row.attached {
         "eligible"
     } else {
@@ -1660,7 +1660,7 @@ fn build_adoption_report_envelope(
     report: &AdoptionReportV1,
 ) -> Result<EvidenceEnvelopeV1, FleetCommandError> {
     let payload = serde_json::to_value(report)?;
-    let payload_sha256 = Some(sha256_hex(&serde_json::to_vec(report)?));
+    let payload_sha256 = Some(json_payload_sha256(report)?);
     let config_root = config_path.parent().unwrap_or_else(|| Path::new("."));
 
     Ok(EvidenceEnvelopeV1 {
@@ -1681,6 +1681,7 @@ fn build_adoption_report_envelope(
             config_path,
             config_root,
             Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
+            None,
         )?),
         inputs: adoption_report_input_fingerprints(config_root, options)?,
         payload_schema: adoption_report_schema(),
@@ -1707,32 +1708,39 @@ fn adoption_report_command_provenance(
         "envelope-json".to_string(),
     ];
 
+    let mut argv_redactions = Vec::new();
+
     push_optional_path_arg(
         &mut argv_normalized,
+        &mut argv_redactions,
         "--deployment-check",
         options.deployment_check.as_ref(),
         config_root,
     );
     push_optional_path_arg(
         &mut argv_normalized,
+        &mut argv_redactions,
         "--inventory",
         options.inventory.as_ref(),
         config_root,
     );
     push_optional_path_arg(
         &mut argv_normalized,
+        &mut argv_redactions,
         "--artifact-manifest",
         options.artifact_manifest.as_ref(),
         config_root,
     );
     push_optional_path_arg(
         &mut argv_normalized,
+        &mut argv_redactions,
         "--cargo-metadata",
         options.cargo_metadata.as_ref(),
         config_root,
     );
     push_optional_path_arg(
         &mut argv_normalized,
+        &mut argv_redactions,
         "--package-metadata",
         options.package_metadata.as_ref(),
         config_root,
@@ -1741,20 +1749,25 @@ fn adoption_report_command_provenance(
     CommandProvenanceV1 {
         name: "canic fleet adoption report".to_string(),
         argv_normalized,
-        argv_redactions: Vec::new(),
+        argv_redactions,
         format: "envelope-json".to_string(),
     }
 }
 
 fn push_optional_path_arg(
     args: &mut Vec<String>,
+    redactions: &mut Vec<String>,
     flag: &str,
     path: Option<&PathBuf>,
     config_root: &Path,
 ) {
     if let Some(path) = path {
         args.push(flag.to_string());
-        args.push(safe_relative_path(config_root, path));
+        let display_path = command_path_for_root(path, config_root);
+        if display_path.starts_with("<redacted:") {
+            redactions.push(format!("{flag} absolute path outside config root"));
+        }
+        args.push(display_path);
     }
 }
 
@@ -1820,47 +1833,15 @@ fn push_optional_input_fingerprint(
     schema: Option<PayloadSchemaRefV1>,
 ) -> Result<(), FleetCommandError> {
     if let Some(path) = path {
-        inputs.push(file_input_fingerprint(kind, path, config_root, schema)?);
+        inputs.push(file_input_fingerprint(
+            kind,
+            path,
+            config_root,
+            schema,
+            None,
+        )?);
     }
     Ok(())
-}
-
-fn file_input_fingerprint(
-    kind: &str,
-    path: &Path,
-    config_root: &Path,
-    schema: Option<PayloadSchemaRefV1>,
-) -> Result<InputFingerprintV1, FleetCommandError> {
-    let bytes = fs::read(path)?;
-    let metadata = fs::metadata(path)?;
-    let modified_unix_secs = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_secs());
-
-    Ok(InputFingerprintV1 {
-        kind: kind.to_string(),
-        path: Some(safe_relative_path(config_root, path)),
-        sha256: Some(sha256_hex(&bytes)),
-        size_bytes: Some(bytes.len() as u64),
-        modified_unix_secs,
-        schema,
-        note: None,
-    })
-}
-
-fn safe_relative_path(base: &Path, path: &Path) -> String {
-    let relative = if let Ok(relative) = path.strip_prefix(base) {
-        non_empty_relative_path(relative)
-    } else {
-        lexical_relative_path(base, path).unwrap_or_else(|| {
-            path.file_name()
-                .map_or_else(|| PathBuf::from("<redacted>"), PathBuf::from)
-        })
-    };
-
-    relative.to_string_lossy().replace('\\', "/")
 }
 
 fn adoption_report_evidence_summary(report: &AdoptionReportV1) -> EvidenceSummaryV1 {
@@ -2210,7 +2191,7 @@ const fn adoption_artifact_state_label(state: AdoptionArtifactStateV1) -> &'stat
 
 const fn adoption_package_state_label(state: AdoptionPackageStateV1) -> &'static str {
     match state {
-        AdoptionPackageStateV1::NotPackageBacked => "not-package-backed",
+        AdoptionPackageStateV1::UndeclaredRole => "undeclared-role",
         AdoptionPackageStateV1::NotChecked => "not-checked",
         AdoptionPackageStateV1::Matches => "matches",
         AdoptionPackageStateV1::MissingFleet => "missing-fleet",

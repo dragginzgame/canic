@@ -6,19 +6,19 @@ name = "test"
 
 [roles.root]
 kind = "root"
+package = "../root"
 
 [roles.user_hub]
 kind = "canister"
+package = "../user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "../user_shard"
 
 [roles.test]
 kind = "canister"
 package = "../test"
-
-[roles.minimal]
-kind = "canister"
 
 [app]
 init_mode = "enabled"
@@ -62,6 +62,3 @@ kind = "singleton"
 role_attestation_cache = true
 
 [subnets.general]
-
-[subnets.general.canisters.minimal]
-kind = "replica"

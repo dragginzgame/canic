@@ -96,27 +96,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -148,6 +156,7 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [app]
 init_mode = "enabled"
@@ -169,6 +178,7 @@ name = "demo"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [app]
 init_mode = "enabled"
@@ -227,12 +237,15 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [app]
 init_mode = "enabled"
@@ -382,7 +395,7 @@ kind = "shard"
             .iter()
             .find(|role| role.role == "store")
             .expect("store lifecycle row");
-        assert_eq!(store.package.as_deref(), Some("canisters/store"));
+        assert_eq!(store.package, "canisters/store");
         assert_eq!(store.state, "declared");
         assert_eq!(store.topology, None);
     }
@@ -628,12 +641,15 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.hub]
 kind = "canister"
+package = "hub"
 
 [roles.worker]
 kind = "canister"
+package = "worker"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -713,27 +729,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -794,27 +818,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -881,27 +913,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -944,27 +984,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -1049,27 +1097,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -1103,27 +1159,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [subnets.prime]
 pool.minimum_size = 2
@@ -1155,27 +1219,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -1209,27 +1281,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"
@@ -1253,7 +1333,7 @@ policy.max_shards = 4
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
-[subnets.prime.canisters.minimal]
+[subnets.prime.canisters.role_baseline]
 kind = "replica"
 "#;
         let roles = configured_bootstrap_roles_from_source(config).expect("bootstrap roles");
@@ -1316,27 +1396,35 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.project_instance]
 kind = "canister"
+package = "project_instance"
 
 [roles.scale_hub]
 kind = "canister"
+package = "scale_hub"
 
 [roles.scale_replica]
 kind = "canister"
+package = "scale"
 
-[roles.minimal]
+[roles.role_baseline]
 kind = "canister"
+package = "role_baseline"
 
 [app]
 init_mode = "enabled"

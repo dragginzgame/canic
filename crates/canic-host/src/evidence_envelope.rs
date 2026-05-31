@@ -2,6 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::{
+    fs, io,
+    path::{Component, Path},
+    time::UNIX_EPOCH,
+};
 
 ///
 /// EvidenceEnvelopeV1
@@ -116,11 +121,23 @@ pub enum PayloadSchemaStabilityV1 {
 pub struct InputFingerprintV1 {
     pub kind: String,
     pub path: Option<String>,
+    pub path_display: InputPathDisplayV1,
     pub sha256: Option<String>,
     pub size_bytes: Option<u64>,
     pub modified_unix_secs: Option<u64>,
     pub schema: Option<PayloadSchemaRefV1>,
     pub note: Option<String>,
+}
+
+///
+/// InputPathDisplayV1
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputPathDisplayV1 {
+    Relative,
+    AbsoluteRedacted,
+    Omitted,
 }
 
 ///
@@ -214,6 +231,108 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex_bytes(Sha256::digest(bytes))
 }
 
+pub fn json_payload_sha256<T>(payload: &T) -> Result<String, serde_json::Error>
+where
+    T: Serialize,
+{
+    Ok(sha256_hex(&serde_json::to_vec(payload)?))
+}
+
+pub fn file_input_fingerprint(
+    kind: &str,
+    path: &Path,
+    root: &Path,
+    schema: Option<PayloadSchemaRefV1>,
+    note: Option<String>,
+) -> io::Result<InputFingerprintV1> {
+    let bytes = fs::read(path)?;
+    let metadata = fs::metadata(path)?;
+    let modified_unix_secs = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs());
+    let path_summary = input_path_summary(path, root);
+
+    Ok(InputFingerprintV1 {
+        kind: kind.to_string(),
+        path: path_summary.path,
+        path_display: path_summary.display,
+        sha256: Some(sha256_hex(&bytes)),
+        size_bytes: Some(metadata.len()),
+        modified_unix_secs,
+        schema,
+        note,
+    })
+}
+
+#[must_use]
+pub fn command_path_for_root(path: &Path, root: &Path) -> String {
+    input_path_summary(path, root)
+        .path
+        .unwrap_or_else(|| "<redacted:absolute-outside-root>".to_string())
+}
+
+///
+/// InputPathSummaryV1
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct InputPathSummaryV1 {
+    path: Option<String>,
+    display: InputPathDisplayV1,
+}
+
+fn input_path_summary(path: &Path, root: &Path) -> InputPathSummaryV1 {
+    let canonical_path = fs::canonicalize(path).ok();
+    let canonical_root = fs::canonicalize(root).ok();
+
+    if let (Some(canonical_path), Some(canonical_root)) = (canonical_path, canonical_root) {
+        if let Ok(relative) = canonical_path.strip_prefix(canonical_root) {
+            return InputPathSummaryV1 {
+                path: Some(path_to_display(relative)),
+                display: InputPathDisplayV1::Relative,
+            };
+        }
+        return InputPathSummaryV1 {
+            path: None,
+            display: InputPathDisplayV1::AbsoluteRedacted,
+        };
+    }
+
+    if path.is_absolute() {
+        return InputPathSummaryV1 {
+            path: None,
+            display: InputPathDisplayV1::AbsoluteRedacted,
+        };
+    }
+
+    InputPathSummaryV1 {
+        path: Some(path_to_display(path)),
+        display: InputPathDisplayV1::Relative,
+    }
+}
+
+fn path_to_display(path: &Path) -> String {
+    let mut components = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => {
+                components.push(prefix.as_os_str().to_string_lossy().to_string());
+            }
+            Component::RootDir | Component::CurDir => {}
+            Component::ParentDir => components.push("..".to_string()),
+            Component::Normal(segment) => components.push(segment.to_string_lossy().to_string()),
+        }
+    }
+
+    if components.is_empty() {
+        ".".to_string()
+    } else {
+        components.join("/")
+    }
+}
+
 fn hex_bytes(bytes: impl AsRef<[u8]>) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let bytes = bytes.as_ref();
@@ -228,6 +347,7 @@ fn hex_bytes(bytes: impl AsRef<[u8]>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn exit_class_serializes_to_snake_case() {
@@ -254,5 +374,58 @@ mod tests {
             deployment_check_schema().stability,
             PayloadSchemaStabilityV1::Internal
         );
+    }
+
+    #[test]
+    fn file_input_fingerprint_uses_relative_path_under_root() {
+        let root = temp_dir("canic-envelope-relative");
+        let input = root.join("evidence").join("input.json");
+        fs::create_dir_all(input.parent().expect("input parent")).expect("create parent");
+        fs::write(&input, b"{\"ok\":true}").expect("write input");
+
+        let fingerprint =
+            file_input_fingerprint("input", &input, &root, None, None).expect("fingerprint");
+
+        fs::remove_dir_all(&root).expect("clean temp dir");
+        assert_eq!(fingerprint.path.as_deref(), Some("evidence/input.json"));
+        assert_eq!(fingerprint.path_display, InputPathDisplayV1::Relative);
+        assert_eq!(fingerprint.size_bytes, Some(11));
+        assert!(
+            fingerprint
+                .sha256
+                .as_deref()
+                .is_some_and(|hash| hash.len() == 64)
+        );
+    }
+
+    #[test]
+    fn file_input_fingerprint_redacts_absolute_path_outside_root() {
+        let root = temp_dir("canic-envelope-root");
+        let outside = temp_dir("canic-envelope-outside");
+        fs::create_dir_all(&root).expect("create root");
+        fs::create_dir_all(&outside).expect("create outside");
+        let input = outside.join("secret.json");
+        fs::write(&input, b"secret").expect("write input");
+
+        let fingerprint =
+            file_input_fingerprint("input", &input, &root, None, None).expect("fingerprint");
+        let command_path = command_path_for_root(&input, &root);
+
+        fs::remove_dir_all(&root).expect("clean root");
+        fs::remove_dir_all(&outside).expect("clean outside");
+        assert_eq!(fingerprint.path, None);
+        assert_eq!(
+            fingerprint.path_display,
+            InputPathDisplayV1::AbsoluteRedacted
+        );
+        assert_eq!(command_path, "<redacted:absolute-outside-root>");
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{name}-{suffix}"))
     }
 }

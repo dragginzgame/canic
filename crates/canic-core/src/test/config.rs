@@ -71,7 +71,7 @@ impl ConfigTestBuilder {
             role.clone(),
             RoleDeclaration {
                 kind: declaration_kind,
-                package: None,
+                package: role.as_ref().to_string(),
             },
         );
         entry.canisters.insert(role, config);

@@ -226,7 +226,7 @@ pub enum AdoptionArtifactStateV1 {
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AdoptionPackageStateV1 {
-    NotPackageBacked,
+    UndeclaredRole,
     NotChecked,
     Matches,
     MissingFleet,
@@ -295,7 +295,7 @@ struct DeclaredRoleFindingInput<'a> {
     profile: AdoptionProfileV1,
     fleet: &'a str,
     role: &'a CanisterRole,
-    package: Option<&'a str>,
+    package: &'a str,
     attached: bool,
     observed: Option<&'a [&'a crate::deployment_truth::ObservedCanisterV1]>,
     duplicate_observation: bool,
@@ -348,7 +348,7 @@ pub fn adoption_report_from_config_source(
             profile: request.profile,
             fleet: &fleet,
             role,
-            package: declaration.package.as_deref(),
+            package: declaration.package.as_str(),
             attached: attached_roles.contains(role),
             observed: observed_by_role.get(role.as_str()).map(Vec::as_slice),
             duplicate_observation: observed_duplicate_roles.contains(role.as_str()),
@@ -600,7 +600,7 @@ fn role_finding_for_observed_only_role(
         classifications: classifications.into_iter().collect(),
         declaration_state: AdoptionDeclarationStateV1::Undeclared,
         topology_state: AdoptionTopologyStateV1::Unattached,
-        package_state: AdoptionPackageStateV1::NotPackageBacked,
+        package_state: AdoptionPackageStateV1::UndeclaredRole,
         observation_state: observation_state(true, input.duplicate_observation),
         authority_state,
         artifact_state,
@@ -736,14 +736,11 @@ fn is_leaf_only_authority_sensitive_role(role: &str) -> bool {
 }
 
 fn package_state(
-    package: Option<&str>,
+    package: &str,
     fleet: &str,
     role: &str,
     packages_by_path: &BTreeMap<String, AdoptionPackageMetadataV1>,
 ) -> AdoptionPackageStateV1 {
-    let Some(package) = package else {
-        return AdoptionPackageStateV1::NotPackageBacked;
-    };
     let Some(metadata) = packages_by_path.get(package) else {
         return AdoptionPackageStateV1::NotChecked;
     };
@@ -1351,9 +1348,9 @@ kind = "root"
             ),
             observed_canister(
                 "ccccc-cc",
-                Some("legacy"),
+                Some("external_app"),
                 CanisterControlClassV1::UserControlled,
-                Some("legacy-hash"),
+                Some("external_app-hash"),
             ),
         ]);
         let report = report_with_profile(
@@ -1364,7 +1361,7 @@ kind = "root"
         );
         let api = role(&report, "api");
         let store = role(&report, "store");
-        let legacy = role(&report, "legacy");
+        let external_app = role(&report, "external_app");
 
         assert_eq!(report.profile, AdoptionProfileV1::Partial);
         assert_eq!(report.summary.managed_configured_roles, 2);
@@ -1382,7 +1379,7 @@ kind = "root"
                 .contains(&AdoptionClassificationV1::DeclaredOnly)
         );
         assert_eq!(
-            legacy.authority_state,
+            external_app.authority_state,
             AdoptionAuthorityStateV1::UserControlled
         );
     }
@@ -1654,29 +1651,29 @@ kind = "root"
     fn adoption_report_classifies_observed_only_user_controlled_canister() {
         let inventory = inventory(vec![observed_canister(
             "aaaaa-aa",
-            Some("legacy"),
+            Some("external_app"),
             CanisterControlClassV1::UserControlled,
-            Some("legacy-hash"),
+            Some("external_app-hash"),
         )]);
         let report = report(CONFIG, Some(&inventory), Vec::new());
-        let legacy = role(&report, "legacy");
+        let external_app = role(&report, "external_app");
 
         assert_eq!(
-            legacy.declaration_state,
+            external_app.declaration_state,
             AdoptionDeclarationStateV1::Undeclared
         );
         assert!(
-            legacy
+            external_app
                 .classifications
                 .contains(&AdoptionClassificationV1::ObservedOnly)
         );
         assert!(
-            legacy
+            external_app
                 .classifications
                 .contains(&AdoptionClassificationV1::UserControlled)
         );
         assert!(
-            legacy
+            external_app
                 .classifications
                 .contains(&AdoptionClassificationV1::ExternalControllerRequired)
         );
@@ -2233,8 +2230,8 @@ kind = "root"
             observed_canisters,
             observed_pool: Vec::new(),
             observed_artifacts: vec![ObservedArtifactV1 {
-                role: "legacy".to_string(),
-                artifact_path: "observed:legacy".to_string(),
+                role: "external_app".to_string(),
+                artifact_path: "observed:external_app".to_string(),
                 file_sha256: None,
                 file_sha256_source: Some(ArtifactDigestSourceV1::InstalledModuleHash),
                 payload_sha256: None,

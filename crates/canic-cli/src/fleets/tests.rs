@@ -324,7 +324,7 @@ fn renders_role_lifecycle_table() {
             role: "root".to_string(),
             display: "demo.root".to_string(),
             declaration_kind: "root".to_string(),
-            package: Some("canisters/root".to_string()),
+            package: "canisters/root".to_string(),
             attached: true,
             state: "attached".to_string(),
             topology: Some("prime/root".to_string()),
@@ -334,7 +334,7 @@ fn renders_role_lifecycle_table() {
             role: "store".to_string(),
             display: "demo.store".to_string(),
             declaration_kind: "canister".to_string(),
-            package: Some("canisters/store".to_string()),
+            package: "canisters/store".to_string(),
             attached: false,
             state: "declared".to_string(),
             topology: None,
@@ -361,7 +361,7 @@ fn renders_declared_only_role_inspection() {
         role: "store".to_string(),
         display: "demo.store".to_string(),
         declaration_kind: "canister".to_string(),
-        package: Some("canisters/store".to_string()),
+        package: "canisters/store".to_string(),
         attached: false,
         state: "declared".to_string(),
         topology: None,
@@ -574,6 +574,7 @@ fn writes_adoption_report_envelope_json_output_file() {
     );
     assert_eq!(value["source_config"]["kind"], "canic_config");
     assert_eq!(value["source_config"]["path"], "canic.toml");
+    assert_eq!(value["source_config"]["path_display"], "relative");
     assert!(
         value["inputs"]
             .as_array()

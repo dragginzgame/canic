@@ -54,6 +54,21 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.51.1 has hardened evidence-envelope fingerprints. Adoption-report and
+  deployment-check envelopes now share the `canic-host::evidence_envelope`
+  file fingerprint and payload-hash helpers, `InputFingerprintV1` records
+  `path_display`, paths under the selected root render relative, and absolute
+  evidence paths outside that root are omitted rather than copied into CI
+  artifacts.
+- 0.51.1 also hard-cuts fleet role declarations to require
+  `package = "<path>"` on every `[roles.<role>]` entry. Standalone generated
+  configs use `package = "."`, workspace governance rejects package paths that
+  do not contain a real `Cargo.toml`, and test/special configs now use concrete
+  package paths instead of placeholder role-name directories. The old
+  package-less `minimal` topology fixture role has been removed from alternate
+  test fleet configs; the remaining `canisters/audit/minimal` crate is only the
+  standalone audit baseline. Adoption reports now call observed-only package
+  state `undeclared-role` rather than preserving a non-package role concept.
 - 0.51.0 has started the stable evidence-envelope line. `canic-host` now
   defines `EvidenceEnvelopeV1`, `ExitClassV1`, target/provenance/schema/input
   fingerprint DTOs, structured summary messages, and SHA-256 helpers. The

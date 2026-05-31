@@ -148,9 +148,7 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
             )));
         }
 
-        if let Some(package) = declaration.package.as_deref()
-            && package.trim().is_empty()
-        {
+        if declaration.package.trim().is_empty() {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "role declaration '{role}' package must not be empty",
             )));

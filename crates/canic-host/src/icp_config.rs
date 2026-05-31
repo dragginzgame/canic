@@ -406,9 +406,11 @@ name = "toko"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -463,6 +465,7 @@ name = "toko"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [subnets.prime.canisters.root]
 kind = "root"
@@ -493,9 +496,11 @@ name = "toko"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.app]
 kind = "canister"
+package = "app"
 
 [subnets.prime.canisters.root]
 kind = "root"

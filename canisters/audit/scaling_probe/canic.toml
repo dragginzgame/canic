@@ -6,6 +6,7 @@ name = "scaling_probe"
 
 [roles.root]
 kind = "root"
+package = "../root_probe"
 
 [roles.scale_hub]
 kind = "canister"
@@ -13,6 +14,7 @@ package = "."
 
 [roles.scale_replica]
 kind = "canister"
+package = "../../../fleets/test/scale"
 
 [subnets.prime]
 

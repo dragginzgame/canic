@@ -8326,12 +8326,15 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [roles.store]
 kind = "canister"
@@ -8440,12 +8443,15 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [app]
 init_mode = "enabled"
@@ -12593,12 +12599,15 @@ name = "demo"
 
 [roles.root]
 kind = "root"
+package = "root"
 
 [roles.user_hub]
 kind = "canister"
+package = "user_hub"
 
 [roles.user_shard]
 kind = "canister"
+package = "user_shard"
 
 [app]
 init_mode = "enabled"

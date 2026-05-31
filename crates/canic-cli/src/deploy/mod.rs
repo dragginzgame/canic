@@ -81,7 +81,8 @@ use canic_host::{
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
-        PayloadSchemaRefV1, deployment_check_schema, evidence_envelope_schema, sha256_hex,
+        InputPathDisplayV1, PayloadSchemaRefV1, deployment_check_schema, evidence_envelope_schema,
+        file_input_fingerprint, json_payload_sha256,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -2335,9 +2336,8 @@ fn build_deployment_check_envelope(
     check: &DeploymentCheckV1,
 ) -> Result<EvidenceEnvelopeV1, DeployCommandError> {
     let payload = serde_json::to_value(check).map_err(Box::<dyn std::error::Error>::from)?;
-    let payload_sha256 = Some(sha256_hex(
-        &serde_json::to_vec(check).map_err(Box::<dyn std::error::Error>::from)?,
-    ));
+    let payload_sha256 =
+        Some(json_payload_sha256(check).map_err(Box::<dyn std::error::Error>::from)?);
     let source_config = deployment_check_source_config_fingerprint(check)?;
 
     Ok(EvidenceEnvelopeV1 {
@@ -2399,10 +2399,27 @@ fn deployment_check_source_config_fingerprint(
         return Ok(None);
     };
     let path = Path::new(config_path);
-    let path_display = path.to_string_lossy().replace('\\', "/");
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => Some(metadata),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+    let config_root = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut fingerprint = match fs::metadata(path) {
+        Ok(_) => file_input_fingerprint(
+            "canic_config",
+            path,
+            config_root,
+            Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
+            None,
+        )
+        .map_err(Box::<dyn std::error::Error>::from)
+        .map_err(DeployCommandError::from)?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => InputFingerprintV1 {
+            kind: "canic_config".to_string(),
+            path: None,
+            path_display: InputPathDisplayV1::Omitted,
+            sha256: None,
+            size_bytes: None,
+            modified_unix_secs: None,
+            schema: Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
+            note: Some("source config path was recorded but file is not available".to_string()),
+        },
         Err(err) => {
             return Err(DeployCommandError::from(
                 Box::<dyn std::error::Error>::from(err),
@@ -2410,23 +2427,13 @@ fn deployment_check_source_config_fingerprint(
         }
     };
 
-    Ok(Some(InputFingerprintV1 {
-        kind: "canic_config".to_string(),
-        path: Some(path_display),
-        sha256: check.inventory.local_config.raw_config_sha256.clone(),
-        size_bytes: metadata.as_ref().map(std::fs::Metadata::len),
-        modified_unix_secs: metadata
-            .and_then(|metadata| metadata.modified().ok())
-            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-            .map(|duration| duration.as_secs()),
-        schema: Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
-        note: check
-            .inventory
-            .local_config
-            .raw_config_sha256
-            .is_none()
-            .then(|| "raw config hash was not observed by deployment check".to_string()),
-    }))
+    if let Some(raw_config_sha256) = &check.inventory.local_config.raw_config_sha256 {
+        fingerprint.sha256 = Some(raw_config_sha256.clone());
+    } else if fingerprint.note.is_none() {
+        fingerprint.note = Some("raw config hash was not observed by deployment check".to_string());
+    }
+
+    Ok(Some(fingerprint))
 }
 
 fn deployment_check_evidence_summary(check: &DeploymentCheckV1) -> EvidenceSummaryV1 {
@@ -4271,6 +4278,12 @@ mod tests {
                 .is_some_and(|hash| hash.len() == 64)
         );
         assert_eq!(value["source_config"]["kind"], "canic_config");
+        assert_eq!(value["source_config"]["path_display"], "relative");
+        assert!(
+            value["source_config"]["path"]
+                .as_str()
+                .is_some_and(|path| path.contains("deploy-check-envelope-canic.toml"))
+        );
         assert!(
             value["summary"]["warnings"]
                 .as_array()

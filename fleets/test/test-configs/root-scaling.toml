@@ -16,9 +16,6 @@ package = "../scale_hub"
 kind = "canister"
 package = "../scale"
 
-[roles.minimal]
-kind = "canister"
-
 [app]
 init_mode = "enabled"
 
@@ -51,6 +48,3 @@ kind = "replica"
 topup = {}
 
 [subnets.general]
-
-[subnets.general.canisters.minimal]
-kind = "replica"
