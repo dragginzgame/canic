@@ -9,9 +9,13 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Current minor: `0.54.x` passive deployment catalog is active. The design is:
+- Current minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md
+  ```
+  The closeout audit is:
+  ```text
+  docs/audits/release-lines/0.54-closeout.md
   ```
 - `0.54.0` has added the v1-sized catalog commands:
   ```text
@@ -32,6 +36,18 @@ inspect only the files needed for the current task.
   `canic deploy check <deployment> --format envelope-json`,
   `canic evidence gate --policy <path> --manifest <path>`, and the passive
   deployment catalog while keeping the v1 boundary small.
+- `0.54.2` has closed the line with:
+  ```text
+  docs/audits/release-lines/0.54-closeout.md
+  ```
+  The audit verifies local-state-only catalog behavior, text/JSON output,
+  explicit output files, missing/legacy/malformed-state handling, the passive
+  boundary, and the absence of groups, locks, signing, registry import,
+  teardown, controller mutation, topology mutation, install authority, and
+  active adoption/import.
+  This slice also resolves the 0.49 closeout design-doc follow-up by removing
+  stale role-only metadata wording and unshipped scaffold/attach/build examples
+  from the implemented 0.49 design.
 - Previous minor: `0.53.x` CI policy gates and project evidence manifests is
   closed. The implemented design is:
   ```text
@@ -121,6 +137,17 @@ inspect only the files needed for the current task.
   deployment groups, saved-evidence catalogs, locks, signing, registry import,
   teardown, controller mutation, topology mutation, and active adoption/import
   out of v1.
+- Added the 0.54.2 closeout audit:
+  ```text
+  docs/audits/release-lines/0.54-closeout.md
+  ```
+  Verdict: PASS. No release-blocking findings.
+- Cleaned up the implemented 0.49 design doc so it now matches shipped CLI
+  surfaces: `canic fleet create <name>`, `canic scaffold canister <fleet>
+  <role>`, and `canic fleet role attach <fleet> <role> --subnet <subnet>
+  [--kind <kind>]`. Removed stale references to role-only package metadata,
+  scaffold attachment flags, build dev flags, detach/normalize commands, and
+  pool/max-shard attach flags.
 - Drafted and then cut the tentative 0.54 design to the v1-sized operator
   story:
   ```text

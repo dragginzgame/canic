@@ -16,6 +16,18 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.54.md](docs/changelog/0.54.md)
 
+- `0.54.2` closes the passive deployment catalog line with a release audit:
+  ```text
+  docs/audits/release-lines/0.54-closeout.md
+  ```
+  The audit verifies the catalog commands, local-state-only source, text/JSON
+  output, explicit output files, missing/legacy/malformed-state behavior,
+  passive boundary, v1 walkthrough, and absence of groups, locks, signing,
+  registry import, teardown, controller mutation, topology mutation, install
+  authority, or active adoption/import.
+  It also resolves the 0.49 design-doc follow-up by aligning the old design
+  with shipped hard-cut command shapes and metadata requirements.
+
 - `0.54.1` adds a maintained compact v1 operator walkthrough:
   ```text
   docs/architecture/v1-operator-walkthrough.md

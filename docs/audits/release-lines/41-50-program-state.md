@@ -42,9 +42,10 @@ That is not a 0.50 adoption-report defect, but it is release-closeout debt for
 the overall 0.41-0.50 arc.
 
 The main documentation risk is that older design docs remain marked
-"Tentative", and the 0.49 design still contains role-only package metadata
-compatibility language that contradicts the implemented hard cut. Active setup
-docs and 0.50 docs are aligned; design-source closeout is not.
+"Tentative". The 0.49 role-only metadata follow-up identified during this audit
+has since been resolved in the 0.49 design and closeout audit. Active setup
+docs and 0.50 docs are aligned; remaining design-source closeout is mostly
+older implemented-line status wording.
 
 Recommendation: fix the workspace test failure and design-doc closeout debt,
 then make the next numbered line **0.51 - CI/GitOps provenance and stable
@@ -78,7 +79,7 @@ state from adoption reports.
 | 0.46 | Multi-deployment operations | Deployment-target state hard cut, archived check comparison, explicit unverified root registration, old fleet state rejection, target-wording cleanup. | Concrete deployments are separate from reusable fleet templates. | Mostly passive; `deploy register` writes unverified local state. | `docs/design/0.46-multi-deployment-operations/status.md`; `deployment_truth/multi.rs`; `install_root` deployment-state tests. | Verified-root registration deferred to 0.47; groups/catalog/teardown deferred. |
 | 0.47 | Verified deployment registration | Root observation evidence, passive root inspection, explicit root verification command, guarded local-state promotion, receipts, digest/source guards. | A registered root can become verified only from bound deployment-truth evidence. | `deploy root inspect` passive; `deploy root verify` mutates local trust state only. | `docs/design/0.47-verified-deployment-registration/status.md`; `deployment_truth/root.rs`; `verify_registered_deployment_root_*` tests. | No broad live deployment verification or root rotation. |
 | 0.48 | Setup/macros cleanup | Metadata-driven `build!`/`start!`, removed `start_root!`, single normal startup macro, canister artifact boundary, token/cycles wrappers, singular delegated-token audience. | Canister setup surface became smaller and stricter. | Build/start macros active at compile/runtime; token/cycles wrappers call external ICP tools. | `crates/canic/src/macros/{build,start}.rs`; `crates/canic/src/build_support/config.rs`; `docs/changelog/0.48.md`; setup docs. | Some historical audit docs still mention `start_root!`; active public API does not. |
-| 0.49 | Role lifecycle foundation | Fleet-scoped role declarations, declared-only roles, attach/list/inspect/rename, strict `canic build <fleet> <role>`, deployable selector hardening. | Developers can stage roles before topology attachment without weakening deploy/build truth. | Role declare/attach/rename mutate config/package files; list/inspect are passive; build is active artifact generation. | `docs/audits/release-lines/0.49-closeout.md`; `release_set/config.rs`; `fleets/mod.rs`; `workspace_manifest.rs`. | 0.49 design doc still has stale role-only metadata wording. |
+| 0.49 | Role lifecycle foundation | Fleet-scoped role declarations, declared-only roles, attach/list/inspect/rename, strict `canic build <fleet> <role>`, deployable selector hardening. | Developers can stage roles before topology attachment without weakening deploy/build truth. | Role declare/attach/rename mutate config/package files; list/inspect are passive; build is active artifact generation. | `docs/audits/release-lines/0.49-closeout.md`; `release_set/config.rs`; `fleets/mod.rs`; `workspace_manifest.rs`. | Original design-doc role-only wording follow-up is resolved. |
 | 0.50 | Adoption profiles and safe onboarding | Host adoption model, read-only CLI, evidence inputs, deployment-check/cargo-metadata consumption, authority-gated recommendations, missing/stale evidence, evidence-conflict, JSON experimental decision. | Operators can understand brownfield/partial/standalone/leaf-only/hybrid states without Canic taking ownership. | Passive/read-only. | `docs/audits/release-lines/0.50-closeout.md`; `crates/canic-host/src/adoption.rs`; `crates/canic-cli/src/fleets/mod.rs`; adoption tests. | No import/mutation behavior by design. |
 
 ## Architecture Map
@@ -149,7 +150,7 @@ state from adoption reports.
 | Claim | Status | Evidence | Notes |
 | --- | --- | --- | --- |
 | Package metadata is fleet-role strict. | Verified | `PackageCanicMetadata { fleet, role }`; workspace governance test. | Active package manifests include both fields. |
-| Role-only package metadata compatibility is gone. | Verified in code, partially stale in docs | `required_package_metadata` requires both fields; 0.50 docs say role-only invalid. | 0.49 design still says role-only may be valid when unambiguous. |
+| Role-only package metadata compatibility is gone. | Verified | `required_package_metadata` requires both fields; 0.50 docs say role-only invalid; 0.49 design follow-up now requires both fields. | No active compatibility path remains. |
 | Roles are fleet-scoped. | Verified | `FleetRoleRefV1 { fleet, role }`; `[fleet] name`; role CLI takes `<fleet> <role>`. | One fleet per config is the implemented model. |
 | Declared-only roles are first-class. | Verified | `ConfiguredRoleLifecycle`; `canic fleet role list/inspect`; 0.49 tests. | They are compile-eligible but not deployable. |
 | Declared-only roles are excluded from build/deploy/install/truth mutation surfaces. | Verified | `configured_deployable_roles`; tests `configured_deployable_surfaces_exclude_declared_only_roles`; build preflight test. | Adoption reports preserve this boundary. |
@@ -164,7 +165,7 @@ state from adoption reports.
 | Adoption reporting never mutates config/topology/controllers/artifacts/deployments. | Verified | Host builder takes values; CLI only writes optional output artifact. | Smoke tests in 0.50 closeout verified file boundary. |
 | Evidence inputs are optional and safely handled. | Verified | CLI option parsing and tests for conflicts/invalid paths. | JSON schema remains experimental in 0.50. |
 | `evidence-conflict` and `missing_or_stale_evidence` are implemented. | Verified | `artifact_conflict_roles`, `missing_evidence`; 0.50.13/14/15 tests. | Both directions of artifact conflict are tested. |
-| Docs and changelogs reflect current behavior. | Partially Verified | Active README/setup/adoption docs aligned; changelogs through 0.50.15. | 0.43-0.46 and 0.49 design docs still say "Tentative"; 0.49 has stale role-only wording. |
+| Docs and changelogs reflect current behavior. | Partially Verified | Active README/setup/adoption docs aligned; changelogs through 0.50.15. | 0.43-0.46 design docs still say "Tentative"; 0.49 role-only wording follow-up is resolved. |
 
 ## User Journey Audit
 
@@ -183,7 +184,7 @@ state from adoption reports.
 
 | Capability | Test evidence | Gaps |
 | --- | --- | --- |
-| Fleet-role metadata and governance | `crates/canic/tests/workspace_manifest.rs::canic_package_metadata_resolves_to_declared_fleet_roles`; build-support tests. | 0.49 design doc should be updated; code coverage is strong. |
+| Fleet-role metadata and governance | `crates/canic/tests/workspace_manifest.rs::canic_package_metadata_resolves_to_declared_fleet_roles`; build-support tests. | 0.49 design-doc follow-up is resolved; code coverage is strong. |
 | Declared-only lifecycle | `configured_role_lifecycle_lists_declared_and_attached_roles`; `configured_deployable_surfaces_exclude_declared_only_roles`; CLI render tests. | No major gap. |
 | Role declare/attach/rename | `declare_fleet_role_*`, `attach_fleet_role_*`, `rename_fleet_role_*`. | No major gap. |
 | Build strictness | `build_rejects_old_role_only_shape`, `build_preflight_rejects_declared_only_role`, `build_resolves_config_from_selected_fleet`. | No major gap. |
@@ -209,9 +210,6 @@ Aligned:
 
 Stale or risky:
 
-- `docs/design/0.49-role-lifecycle-topology-attachment/0.49-design.md` still
-  starts as "Tentative design notes" and contains a role-only metadata example
-  plus text saying `role = "store"` alone may be valid when unambiguous.
 - `docs/design/0.43-*`, `0.44-*`, `0.45-*`, and `0.46-*` design docs still
   say "Tentative design notes" even though their status docs mark those lines
   closed. This is less risky than 0.49 because status docs are clear, but it is
@@ -242,7 +240,6 @@ Stale or risky:
 
 - Mark post-46 adoption-profile backlog docs as superseded by 0.50 passive
   adoption reporting.
-- Remove or update 0.49 design role-only metadata compatibility text.
 - Mark implemented design docs 0.43-0.46 and 0.49 as implemented/closed, or
   make the top of each doc point readers to the corresponding `status.md`.
 - Treat historical `start_root!` audit notes as archival only; do not keep
@@ -324,8 +321,8 @@ Alternatives:
 | Risk | Severity | Area | Evidence | Impact | Mitigation | Blocks next line? |
 | --- | --- | --- | --- | --- | --- | --- |
 | Workspace test failure in `pic_ingress_payload_limits` | High | Tests/setup | `cargo test --workspace --locked` fails installing `payload_limit_probe` due missing subnet `prime`. | Broad CI confidence is not clean; standalone config behavior may have broken a PocketIC fixture. | Fix fixture/config expectation or use an attached test config for topology-dependent probe. | Yes, before release/merge; no, for design-only planning. |
-| 0.49 design doc contradicts hard cut | Medium | Docs | Search finds role-only metadata example and "role alone valid" text in 0.49 design. | Contributors may reintroduce fallback behavior. | Update 0.49 design to implemented hard-cut language. | No, but should be closeout debt. |
-| Older design docs still say tentative | Low | Docs | 0.43-0.46 and 0.49 design docs start with "Tentative design notes". | Design-source confusion. | Mark implemented/closed or point to status logs. | No. |
+| 0.49 design doc contradicted hard cut | Resolved | Docs | Original audit found role-only metadata example and "role alone valid" text in 0.49 design. | Contributors could have reintroduced fallback behavior. | Resolved on 2026-05-31 by updating 0.49 design to implemented hard-cut language. | No. |
+| Older design docs still say tentative | Low | Docs | 0.43-0.46 design docs start with "Tentative design notes". | Design-source confusion. | Mark implemented/closed or point to status logs. | No. |
 | Post-46 adoption backlog status obsolete | Low | Roadmap | `post-46-backlog/adoption-profiles/status.md` says not started. | Roadmap readers may miss 0.50 completion. | Mark superseded by 0.50 passive adoption. | No. |
 | Raw JSON artifacts lack stable public envelope | Medium | Automation | CI/GitOps backlog says no stable public JSON envelope/exit-code contract. | Automation may depend on internal DTOs. | Make 0.51 provenance/envelope line. | No, but should be next. |
 | Active adoption/import temptation | High | Product safety | 0.50 reports only; recommendations are non-executing. | Premature import could bless foreign state or mutate topology unsafely. | Keep active adoption out until authority/apply/receipt design exists. | Yes for any import feature. |
@@ -377,7 +374,7 @@ Searches:
   docs.
 - `rg -n "[package.metadata.canic]|fleet =|role =" ...`
   showed active package metadata examples use both `fleet` and `role`; the
-  stale exception is the 0.49 design doc role-only example.
+  0.49 design-doc role-only exception has since been resolved.
 
 Not run:
 
