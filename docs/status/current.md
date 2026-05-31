@@ -16,14 +16,14 @@ inspect only the files needed for the current task.
   ```
   The proposed line consumes 0.51 `EvidenceEnvelopeV1` and 0.52
   `canic.build_provenance.v1` evidence to evaluate passive CI policy gates,
-  starting with:
+  now implemented first as:
   ```text
   canic evidence gate --policy <path> --envelope <path>
   ```
   It should not add deployment locks, signing, provider wrappers, artifact
   registry import, controller mutation, topology mutation, active
-  adoption/import, or deployment/install authority. The first policy slice
-  should stay narrow: one strict policy file, one existing
+  adoption/import, or deployment/install authority. The first policy
+  implementation slice stays narrow: one strict policy file, one existing
   `EvidenceEnvelopeV1`, stable envelope fields plus payload schema
   identity/stability only, and a stable `PolicyGateReportV1` result.
 - Current minor: `0.52.x` source, build, and artifact provenance is closed.
@@ -73,6 +73,20 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.53.1 has added the passive single-envelope CI policy gate:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  The command reads one strict `CiPolicyV1` TOML file and one existing
+  `EvidenceEnvelopeV1`, evaluates stable envelope fields, payload schema
+  identity/stability, evaluated exit class, structured summary state, and
+  required input fingerprints, then emits stable `PolicyGateReportV1` output.
+  Raw `--format json` emits the report; `--format envelope-json` wraps it in a
+  new `EvidenceEnvelopeV1` with `target.kind = "policy_gate"` and fingerprints
+  for both the policy file and evaluated envelope. The gate is passive and does
+  not run builds, query live deployments, mutate evidence/config/topology/
+  controllers, register artifacts, or turn policy success into deployment
+  truth.
 - 0.53.0 has hard-cut stale CLI surfaces before policy-gate work:
   ```text
   canic fleet config <fleet>
@@ -91,10 +105,11 @@ inspect only the files needed for the current task.
   ```text
   canic evidence gate --policy <path> --envelope <path>
   ```
-  0.53.0 should evaluate envelope schema, payload schema identity/stability,
-  evaluated exit class, and structured summary evidence state, then emit a
-  stable `PolicyGateReportV1` that distinguishes evaluated evidence from the
-  gate result. Build-provenance field rules such as clean source,
+  The first policy implementation slice evaluates envelope schema, payload
+  schema identity/stability, evaluated exit class, and structured summary
+  evidence state, then emits a stable `PolicyGateReportV1` that distinguishes
+  evaluated evidence from the gate result. Build-provenance field rules such
+  as clean source,
   `Cargo.lock`, package identity, gzip Wasm, and SHA-256 requirements are
   deferred until after single-envelope semantics are proven. Project evidence
   manifests remain later 0.53.x scope.

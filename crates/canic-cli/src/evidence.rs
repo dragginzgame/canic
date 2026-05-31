@@ -3,12 +3,24 @@ use crate::{
     cli::help::print_help_or_version,
     output, version_text,
 };
-use canic_host::evidence_envelope::EvidenceEnvelopeV1;
+use canic_host::{
+    evidence_envelope::{
+        CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
+        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1,
+        evidence_envelope_schema, json_payload_sha256, policy_gate_report_schema,
+    },
+    policy_gate::{
+        PolicyEvaluationStatusV1, PolicyFindingSeverityV1, PolicyGateError, PolicyGateReportV1,
+        PolicyGateRequest, evaluate_policy_gate,
+    },
+};
 use clap::Command as ClapCommand;
 use serde::Serialize;
 use std::{
     ffi::OsString,
+    fs,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -41,6 +53,15 @@ pub enum EvidenceCommandError {
 
     #[error("envelopes differ:\n{0}")]
     EnvelopesDiffer(String),
+
+    #[error(transparent)]
+    PolicyGate(#[from] PolicyGateError),
+
+    #[error("policy gate failed ({exit_class:?})\n{findings}")]
+    PolicyGateFailed {
+        exit_class: ExitClassV1,
+        findings: String,
+    },
 }
 
 ///
@@ -120,6 +141,53 @@ struct EvidenceCompareReport {
     differences: Vec<EvidenceCompareDifference>,
 }
 
+///
+/// EvidenceGateOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct EvidenceGateOptions {
+    policy: PathBuf,
+    envelope: PathBuf,
+    format: EvidenceGateFormat,
+    output: Option<PathBuf>,
+}
+
+impl EvidenceGateOptions {
+    fn parse<I>(args: I) -> Result<Self, EvidenceCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(evidence_gate_command(), args)
+            .map_err(|_| EvidenceCommandError::Usage(gate_usage()))?;
+        let format = match matches
+            .get_one::<String>("format")
+            .map_or("text", String::as_str)
+        {
+            "text" => EvidenceGateFormat::Text,
+            "json" => EvidenceGateFormat::Json,
+            "envelope-json" => EvidenceGateFormat::EnvelopeJson,
+            _ => return Err(EvidenceCommandError::Usage(gate_usage())),
+        };
+
+        Ok(Self {
+            policy: path_option(&matches, "policy").expect("clap requires policy"),
+            envelope: path_option(&matches, "envelope").expect("clap requires envelope"),
+            format,
+            output: path_option(&matches, "output"),
+        })
+    }
+}
+
+///
+/// EvidenceGateFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EvidenceGateFormat {
+    Text,
+    Json,
+    EnvelopeJson,
+}
+
 /// Run an evidence subcommand.
 pub fn run<I>(args: I) -> Result<(), EvidenceCommandError>
 where
@@ -151,8 +219,40 @@ where
             }
             Ok(())
         }
+        "gate" => {
+            if print_help_or_version(&args, gate_usage, version_text()) {
+                return Ok(());
+            }
+            let options = EvidenceGateOptions::parse(args)?;
+            let report = evaluate_gate_files(&options)?;
+            write_gate_report(&options, &report)?;
+            if !is_success_exit_class(report.gate_exit_class) {
+                return Err(EvidenceCommandError::PolicyGateFailed {
+                    exit_class: report.gate_exit_class,
+                    findings: render_gate_findings(&report),
+                });
+            }
+            Ok(())
+        }
         _ => unreachable!("evidence dispatch command only defines known commands"),
     }
+}
+
+fn evaluate_gate_files(
+    options: &EvidenceGateOptions,
+) -> Result<PolicyGateReportV1, EvidenceCommandError> {
+    let policy_source = fs::read_to_string(&options.policy)?;
+    let envelope =
+        output::read_json_file::<EvidenceEnvelopeV1, EvidenceCommandError>(&options.envelope)?;
+    let root = std::env::current_dir()?;
+    evaluate_policy_gate(PolicyGateRequest {
+        policy_source: &policy_source,
+        policy_path: &options.policy,
+        envelope_path: &options.envelope,
+        fingerprint_root: &root,
+        envelope,
+    })
+    .map_err(EvidenceCommandError::from)
 }
 
 fn compare_envelope_files(
@@ -222,6 +322,53 @@ fn write_compare_report(
     }
 }
 
+fn write_gate_report(
+    options: &EvidenceGateOptions,
+    report: &PolicyGateReportV1,
+) -> Result<(), EvidenceCommandError> {
+    match options.format {
+        EvidenceGateFormat::Text => output::write_text::<EvidenceCommandError>(
+            options.output.as_ref(),
+            &render_gate_report(report),
+        ),
+        EvidenceGateFormat::Json => output::write_pretty_json(options.output.as_ref(), report),
+        EvidenceGateFormat::EnvelopeJson => {
+            let envelope = policy_gate_envelope(options, report)?;
+            output::write_pretty_json(options.output.as_ref(), &envelope)
+        }
+    }
+}
+
+fn policy_gate_envelope(
+    options: &EvidenceGateOptions,
+    report: &PolicyGateReportV1,
+) -> Result<EvidenceEnvelopeV1, EvidenceCommandError> {
+    let payload_sha256 = json_payload_sha256(report)?;
+    let payload = serde_json::to_value(report)?;
+    Ok(EvidenceEnvelopeV1 {
+        envelope_schema: evidence_envelope_schema(),
+        canic_version: env!("CARGO_PKG_VERSION").to_string(),
+        command: CommandProvenanceV1 {
+            name: "canic evidence gate".to_string(),
+            argv_normalized: normalized_gate_args(options),
+            argv_redactions: Vec::new(),
+            format: "envelope-json".to_string(),
+        },
+        target: policy_gate_target(&report.evaluated_target),
+        generated_at: current_evidence_generated_at(),
+        source_config: None,
+        inputs: vec![
+            report.policy_file_fingerprint.clone(),
+            report.evaluated_envelope_fingerprint.clone(),
+        ],
+        payload_schema: policy_gate_report_schema(),
+        payload_sha256: Some(payload_sha256),
+        payload,
+        summary: policy_gate_summary(report),
+        exit_class: report.gate_exit_class,
+    })
+}
+
 fn render_compare_report(report: &EvidenceCompareReport) -> String {
     let mut lines = vec![
         "Evidence envelope compare:".to_string(),
@@ -259,6 +406,184 @@ fn render_compare_differences(report: &EvidenceCompareReport) -> String {
         .join("\n")
 }
 
+fn render_gate_report(report: &PolicyGateReportV1) -> String {
+    let mut lines = vec![
+        "Evidence policy gate:".to_string(),
+        format!(
+            "  policy_status: {}",
+            policy_status_label(report.policy_status)
+        ),
+        format!(
+            "  evaluated_envelope_exit_class: {}",
+            exit_class_label(report.evaluated_envelope_exit_class)
+        ),
+        format!(
+            "  gate_exit_class: {}",
+            exit_class_label(report.gate_exit_class)
+        ),
+        format!("  payload_schema: {}", report.evaluated_payload_schema.id),
+        format!("  target: {}", render_target(&report.evaluated_target)),
+    ];
+
+    if report.findings.is_empty() {
+        lines.push("Findings: none".to_string());
+    } else {
+        lines.push("Findings:".to_string());
+        for finding in &report.findings {
+            lines.push(format!(
+                "  - {} [{}]: {}",
+                finding.code,
+                policy_finding_severity_label(finding.severity),
+                finding.message
+            ));
+        }
+    }
+
+    lines.join("\n")
+}
+
+fn render_gate_findings(report: &PolicyGateReportV1) -> String {
+    if report.findings.is_empty() {
+        return "no findings were emitted".to_string();
+    }
+    report
+        .findings
+        .iter()
+        .map(|finding| format!("- {}: {}", finding.code, finding.message))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn policy_gate_summary(report: &PolicyGateReportV1) -> EvidenceSummaryV1 {
+    let mut summary = EvidenceSummaryV1 {
+        warnings: Vec::new(),
+        blocked_actions: Vec::new(),
+        missing_or_stale_evidence: Vec::new(),
+        evidence_conflicts: Vec::new(),
+    };
+
+    for finding in &report.findings {
+        let message = EvidenceMessageV1::new(
+            &finding.code,
+            finding.message.clone(),
+            match finding.severity {
+                PolicyFindingSeverityV1::Info => EvidenceMessageSeverityV1::Info,
+                PolicyFindingSeverityV1::Warning => EvidenceMessageSeverityV1::Warning,
+                PolicyFindingSeverityV1::Error => EvidenceMessageSeverityV1::Error,
+            },
+        );
+        match finding.subject.as_deref() {
+            Some("evidence_conflict") => summary.evidence_conflicts.push(message),
+            Some("missing_required_evidence") => summary.missing_or_stale_evidence.push(message),
+            _ => summary.blocked_actions.push(message),
+        }
+    }
+
+    summary
+}
+
+fn policy_gate_target(target: &EvidenceTargetV1) -> EvidenceTargetV1 {
+    EvidenceTargetV1 {
+        kind: EvidenceTargetKindV1::PolicyGate,
+        deployment: target.deployment.clone(),
+        fleet: target.fleet.clone(),
+        role: target.role.clone(),
+        profile: target.profile.clone(),
+        network: target.network.clone(),
+    }
+}
+
+fn normalized_gate_args(options: &EvidenceGateOptions) -> Vec<String> {
+    let mut args = vec![
+        "canic".to_string(),
+        "evidence".to_string(),
+        "gate".to_string(),
+        "--policy".to_string(),
+        options.policy.display().to_string(),
+        "--envelope".to_string(),
+        options.envelope.display().to_string(),
+        "--format".to_string(),
+        match options.format {
+            EvidenceGateFormat::Text => "text",
+            EvidenceGateFormat::Json => "json",
+            EvidenceGateFormat::EnvelopeJson => "envelope-json",
+        }
+        .to_string(),
+    ];
+    if let Some(output) = &options.output {
+        args.push("--output".to_string());
+        args.push(output.display().to_string());
+    }
+    args
+}
+
+fn current_evidence_generated_at() -> String {
+    format!(
+        "unix:{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_secs())
+    )
+}
+
+const fn is_success_exit_class(exit_class: ExitClassV1) -> bool {
+    matches!(
+        exit_class,
+        ExitClassV1::Success | ExitClassV1::SuccessWithWarnings
+    )
+}
+
+const fn policy_status_label(status: PolicyEvaluationStatusV1) -> &'static str {
+    match status {
+        PolicyEvaluationStatusV1::Passed => "passed",
+        PolicyEvaluationStatusV1::Failed => "failed",
+    }
+}
+
+const fn policy_finding_severity_label(severity: PolicyFindingSeverityV1) -> &'static str {
+    match severity {
+        PolicyFindingSeverityV1::Info => "info",
+        PolicyFindingSeverityV1::Warning => "warning",
+        PolicyFindingSeverityV1::Error => "error",
+    }
+}
+
+const fn exit_class_label(exit_class: ExitClassV1) -> &'static str {
+    match exit_class {
+        ExitClassV1::Success => "success",
+        ExitClassV1::SuccessWithWarnings => "success_with_warnings",
+        ExitClassV1::BlockedByPolicy => "blocked_by_policy",
+        ExitClassV1::EvidenceConflict => "evidence_conflict",
+        ExitClassV1::MissingRequiredEvidence => "missing_required_evidence",
+        ExitClassV1::InvalidInput => "invalid_input",
+        ExitClassV1::ExecutionFailed => "execution_failed",
+        ExitClassV1::InternalError => "internal_error",
+    }
+}
+
+fn render_target(target: &EvidenceTargetV1) -> String {
+    [
+        target
+            .deployment
+            .as_ref()
+            .map(|value| format!("deployment={value}")),
+        target.fleet.as_ref().map(|value| format!("fleet={value}")),
+        target.role.as_ref().map(|value| format!("role={value}")),
+        target
+            .profile
+            .as_ref()
+            .map(|value| format!("profile={value}")),
+        target
+            .network
+            .as_ref()
+            .map(|value| format!("network={value}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
 fn usage() -> String {
     let mut command = evidence_command();
     command.render_help().to_string()
@@ -269,16 +594,55 @@ fn compare_usage() -> String {
     command.render_help().to_string()
 }
 
+fn gate_usage() -> String {
+    let mut command = evidence_gate_command();
+    command.render_help().to_string()
+}
+
 fn evidence_command() -> ClapCommand {
     ClapCommand::new("evidence")
         .bin_name("canic evidence")
-        .about("Compare stable Canic evidence envelopes")
+        .about("Evaluate and compare stable Canic evidence envelopes")
         .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("gate")
+                .about("Evaluate one EvidenceEnvelopeV1 against a CI policy")
+                .disable_help_flag(true),
+        ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("compare")
                 .about("Compare two EvidenceEnvelopeV1 JSON files")
                 .disable_help_flag(true),
         ))
+}
+
+fn evidence_gate_command() -> ClapCommand {
+    ClapCommand::new("gate")
+        .bin_name("canic evidence gate")
+        .about("Evaluate one EvidenceEnvelopeV1 against a CI policy")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("policy")
+                .long("policy")
+                .value_name("path")
+                .required(true),
+        )
+        .arg(
+            value_arg("envelope")
+                .long("envelope")
+                .value_name("path")
+                .required(true),
+        )
+        .arg(
+            value_arg("format")
+                .long("format")
+                .value_name("text|json|envelope-json")
+                .default_value("text"),
+        )
+        .arg(value_arg("output").long("output").value_name("path"))
+        .after_help(
+            "Reads exactly one policy file and one existing EvidenceEnvelopeV1. The gate is passive: it does not run builds, deploy, discover live state, mutate inputs, or turn policy success into deployment truth.",
+        )
 }
 
 fn evidence_compare_command() -> ClapCommand {
@@ -312,6 +676,7 @@ fn evidence_compare_command() -> ClapCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::temp_dir;
     use canic_host::evidence_envelope::{
         CommandProvenanceV1, EvidenceMessageSeverityV1, EvidenceMessageV1, EvidenceSummaryV1,
         EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, adoption_report_schema,
@@ -335,6 +700,26 @@ mod tests {
         assert_eq!(options.left, PathBuf::from("left.json"));
         assert_eq!(options.right, PathBuf::from("right.json"));
         assert_eq!(options.format, EvidenceCompareFormat::Json);
+    }
+
+    #[test]
+    fn parses_gate_options() {
+        let options = EvidenceGateOptions::parse([
+            OsString::from("--policy"),
+            OsString::from("policy.toml"),
+            OsString::from("--envelope"),
+            OsString::from("evidence.json"),
+            OsString::from("--format"),
+            OsString::from("envelope-json"),
+            OsString::from("--output"),
+            OsString::from("gate.json"),
+        ])
+        .expect("parse options");
+
+        assert_eq!(options.policy, PathBuf::from("policy.toml"));
+        assert_eq!(options.envelope, PathBuf::from("evidence.json"));
+        assert_eq!(options.format, EvidenceGateFormat::EnvelopeJson);
+        assert_eq!(options.output, Some(PathBuf::from("gate.json")));
     }
 
     #[test]
@@ -420,6 +805,98 @@ mod tests {
         assert_eq!(report.differences[0].field, "exit_class");
     }
 
+    #[test]
+    fn gate_files_evaluate_policy_and_json_output() {
+        let root = temp_dir("canic-evidence-gate-json");
+        fs::create_dir_all(&root).expect("create root");
+        let policy = root.join("policy.toml");
+        let envelope = root.join("envelope.json");
+        let output = root.join("gate.json");
+        fs::write(&policy, MINIMAL_POLICY).expect("write policy");
+        fs::write(
+            &envelope,
+            serde_json::to_vec(&sample_envelope()).expect("encode envelope"),
+        )
+        .expect("write envelope");
+        let options = EvidenceGateOptions {
+            policy,
+            envelope,
+            format: EvidenceGateFormat::Json,
+            output: Some(output.clone()),
+        };
+
+        let report = evaluate_gate_files(&options).expect("evaluate gate");
+        write_gate_report(&options, &report).expect("write gate");
+        let written = fs::read_to_string(&output).expect("read output");
+
+        fs::remove_dir_all(root).expect("clean");
+        assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Passed);
+        assert_eq!(report.gate_exit_class, ExitClassV1::Success);
+        assert!(written.contains("\"policy_status\": \"passed\""));
+    }
+
+    #[test]
+    fn gate_envelope_wraps_policy_report() {
+        let root = temp_dir("canic-evidence-gate-envelope");
+        fs::create_dir_all(&root).expect("create root");
+        let policy = root.join("policy.toml");
+        let envelope = root.join("envelope.json");
+        fs::write(&policy, MINIMAL_POLICY).expect("write policy");
+        fs::write(
+            &envelope,
+            serde_json::to_vec(&sample_envelope()).expect("encode envelope"),
+        )
+        .expect("write envelope");
+        let options = EvidenceGateOptions {
+            policy,
+            envelope,
+            format: EvidenceGateFormat::EnvelopeJson,
+            output: None,
+        };
+        let report = evaluate_gate_files(&options).expect("evaluate gate");
+
+        let gate = policy_gate_envelope(&options, &report).expect("wrap gate");
+
+        fs::remove_dir_all(root).expect("clean");
+        assert_eq!(gate.target.kind, EvidenceTargetKindV1::PolicyGate);
+        assert_eq!(gate.target.fleet.as_deref(), Some("demo"));
+        assert_eq!(gate.payload_schema.id, "canic.policy_gate_report.v1");
+        assert_eq!(gate.exit_class, ExitClassV1::Success);
+        assert_eq!(gate.inputs.len(), 2);
+    }
+
+    #[test]
+    fn gate_writes_report_before_failure_can_be_returned() {
+        let root = temp_dir("canic-evidence-gate-failure");
+        fs::create_dir_all(&root).expect("create root");
+        let policy = root.join("policy.toml");
+        let envelope = root.join("envelope.json");
+        let output = root.join("gate.json");
+        let mut failing = sample_envelope();
+        failing.exit_class = ExitClassV1::SuccessWithWarnings;
+        fs::write(&policy, MINIMAL_POLICY).expect("write policy");
+        fs::write(
+            &envelope,
+            serde_json::to_vec(&failing).expect("encode envelope"),
+        )
+        .expect("write envelope");
+        let options = EvidenceGateOptions {
+            policy,
+            envelope,
+            format: EvidenceGateFormat::Json,
+            output: Some(output.clone()),
+        };
+
+        let report = evaluate_gate_files(&options).expect("evaluate gate");
+        write_gate_report(&options, &report).expect("write failing report");
+        let written = fs::read_to_string(&output).expect("read output");
+
+        fs::remove_dir_all(root).expect("clean");
+        assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Failed);
+        assert_eq!(report.gate_exit_class, ExitClassV1::BlockedByPolicy);
+        assert!(written.contains("\"gate_exit_class\": \"blocked_by_policy\""));
+    }
+
     fn sample_envelope() -> EvidenceEnvelopeV1 {
         EvidenceEnvelopeV1 {
             envelope_schema: evidence_envelope_schema(),
@@ -476,4 +953,14 @@ mod tests {
             .as_nanos();
         std::env::temp_dir().join(format!("{name}-{suffix}.json"))
     }
+
+    const MINIMAL_POLICY: &str = r#"
+schema_version = 1
+
+[envelope]
+required_schema = "canic.evidence_envelope.v1"
+
+[exit_class]
+allowed = ["success"]
+"#;
 }

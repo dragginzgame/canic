@@ -16,6 +16,19 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
 
+- `0.53.1` adds the passive single-envelope policy gate:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  The command reads one strict `CiPolicyV1` TOML file and one existing
+  `EvidenceEnvelopeV1`, evaluates stable envelope fields and payload schema
+  identity/stability, and emits stable `PolicyGateReportV1` output. Raw
+  `--format json` emits the report; `--format envelope-json` wraps the report
+  in a new `EvidenceEnvelopeV1` with policy-file and evaluated-envelope input
+  fingerprints. The gate is passive and does not run builds, query live
+  deployments, mutate evidence/config/topology/controllers, or turn policy
+  success into deployment truth.
+
 - `0.53.0` hard-cuts stale CLI surfaces before the policy-gate work starts:
   ```text
   canic fleet config <fleet>

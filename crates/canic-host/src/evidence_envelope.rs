@@ -61,6 +61,7 @@ pub enum EvidenceTargetKindV1 {
     Fleet,
     FleetAdoption,
     Artifact,
+    PolicyGate,
     Unknown,
 }
 
@@ -260,6 +261,7 @@ pub const fn evidence_summary_exit_class(
 pub const EVIDENCE_ENVELOPE_SCHEMA_ID: &str = "canic.evidence_envelope.v1";
 pub const ADOPTION_REPORT_SCHEMA_ID: &str = "canic.adoption_report.v1";
 pub const DEPLOYMENT_CHECK_SCHEMA_ID: &str = "canic.deployment_check.v1";
+pub const POLICY_GATE_REPORT_SCHEMA_ID: &str = "canic.policy_gate_report.v1";
 
 #[must_use]
 pub fn evidence_envelope_schema() -> PayloadSchemaRefV1 {
@@ -274,6 +276,11 @@ pub fn adoption_report_schema() -> PayloadSchemaRefV1 {
 #[must_use]
 pub fn deployment_check_schema() -> PayloadSchemaRefV1 {
     PayloadSchemaRefV1::internal(DEPLOYMENT_CHECK_SCHEMA_ID, "1")
+}
+
+#[must_use]
+pub fn policy_gate_report_schema() -> PayloadSchemaRefV1 {
+    PayloadSchemaRefV1::stable(POLICY_GATE_REPORT_SCHEMA_ID, "1")
 }
 
 #[must_use]

@@ -81,7 +81,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "evidence",
-        about: "Compare stable evidence envelopes",
+        about: "Evaluate and compare stable evidence envelopes",
         scope: CommandScope::Deployment,
     },
     CommandSpec {
