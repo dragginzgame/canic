@@ -9,21 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.51.x` CI/GitOps provenance and stable evidence envelopes.
-  The design is registered in
-  `docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md`
-  and keeps passive evidence/reporting commands passive while defining a
-  stable automation envelope, exit classes, input fingerprints, command
-  provenance, and schema identity.
-- Current release-work area: 0.51 starts by adding stable envelope JSON output
-  for passive adoption reports and deployment checks:
-  `canic fleet adoption report <fleet> --profile <profile> --format
-  envelope-json` and `canic deploy check <deployment> --format
-  envelope-json`. Existing `--format json` remains the raw experimental
-  adoption report payload, and deployment check raw JSON remains
-  `DeploymentCheckV1`. Release validation fixtures have also been updated to
-  the hard-cut fleet-scoped role lifecycle, and internal Wasm artifact builds
-  now run Cargo with `--locked`.
+- Active minor: `0.52.x` source, build, and artifact provenance. The proposed
+  design is registered in
+  `docs/design/0.52-source-build-artifact-provenance/0.52-design.md`.
+- Current release-work area: 0.52 should build on 0.51's stable evidence
+  envelopes by adding source, Cargo, build, and artifact provenance for:
+  ```text
+  canic build <fleet> <role> --provenance <path>
+  ```
+  The first implementation slice should emit an `EvidenceEnvelopeV1` containing
+  stable `canic.build_provenance.v1` payload. It must not add signing, CI
+  locks, provider wrappers, controller mutation, topology mutation, artifact
+  registry import, adoption mutation, or deployment/install authority.
+- 0.51 CI/GitOps evidence envelopes are closed. The implemented design is at
+  `docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md`;
+  the closeout audit is `docs/audits/release-lines/0.51-closeout.md`.
 - 0.50 adoption profiles and safe onboarding are closed with documented
   caveats. Treat the 0.50 line as the immediate passive-report foundation:
   brownfield, partial, standalone, leaf-only, hybrid external-Wasm, and minimal
@@ -54,8 +54,26 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Drafted the proposed 0.52 source, build, and artifact provenance design. The
+  design keeps `EvidenceEnvelopeV1` as the stable automation wrapper from 0.51
+  and proposes stable `SourceProvenanceV1`, `CargoProvenanceV1`,
+  `ArtifactProvenanceV1`, and `BuildProvenanceV1` records. The first emitter is
+  designed as:
+  ```text
+  canic build <fleet> <role> --provenance <path>
+  ```
+  It records build provenance only after successful artifact generation, with
+  signing, CI locks, project manifests, provider wrappers, registry import,
+  controller mutation, topology mutation, adoption mutation, and
+  deployment/install authority explicitly deferred.
+- 0.51.6 has cleaned up the historical post-46 CI/GitOps provenance backlog.
+  The backlog is now marked partially superseded by 0.51, uses the implemented
+  `EvidenceEnvelopeV1` and `ExitClassV1` names. Source/build/artifact
+  provenance is now proposed as 0.52; remaining future scope is CI locks,
+  project manifest semantics, optional signing/attestation, and provider
+  wrappers.
 - 0.51.5 has closed the evidence-envelope line with
-  `docs/audits/0.51-closeout.md`. The audit verdict is PASS: the stable
+  `docs/audits/release-lines/0.51-closeout.md`. The audit verdict is PASS: the stable
   envelope model, passive adoption-report and deployment-check emitters, shared
   input fingerprinting, exit-class precedence, envelope comparison, docs, and
   targeted validation are aligned. The only noted follow-up is historical

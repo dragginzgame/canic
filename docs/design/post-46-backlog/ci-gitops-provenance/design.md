@@ -2,12 +2,29 @@
 
 ## Status
 
-Backlog only.
+Partially superseded by 0.51.
 
-This is a post-0.46 backlog topic. It captures CI/CD, GitOps, and
+This post-0.46 backlog topic originally captured CI/CD, GitOps, and
 supply-chain needs that should build on deployment truth, authority, execution,
-promotion, lifecycle, comparison, registry, and adoption foundations. It is
-not a promised numbered follow-on release.
+promotion, lifecycle, comparison, registry, and adoption foundations.
+
+0.51 promoted and implemented the stable evidence-envelope and exit-class part
+of this backlog as:
+
+```text
+docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md
+```
+
+Source/build/artifact provenance is now proposed as the 0.52 line:
+
+```text
+docs/design/0.52-source-build-artifact-provenance/0.52-design.md
+```
+
+The remaining backlog items outside 0.52 are CI locks, project manifest
+semantics, optional signing/attestation, and provider wrappers. This document
+is retained as historical design source material, not as a competing active
+envelope or provenance design.
 
 ---
 
@@ -40,9 +57,10 @@ This topic consumes:
 
 0.43 internal executor result shapes are not the public JSON contract.
 
-This topic would own the stable public JSON schema, exit-code contract, CI
-wrappers, signed plans and receipts, and public project manifest contract if it
-is promoted into a real release line.
+0.51 now owns the stable evidence-envelope schema and exit-class taxonomy.
+0.52 proposes source/build/artifact provenance. Future lines may still own CI
+wrappers, signed plans and receipts, deployment locks, and a public project
+manifest contract.
 
 ---
 
@@ -57,37 +75,22 @@ live inventory.
 
 ## Machine-Readable Interfaces
 
-Stable machine-readable output should use an envelope:
+Stable machine-readable output now uses the 0.51 evidence envelope:
 
 ```text
-JsonEnvelopeV1 {
-  schema_version,
-  command,
-  generated_at,
-  deployment_id,
-  result_kind,
-  payload,
-  warnings,
-  hard_failures,
-}
+EvidenceEnvelopeV1
 ```
 
-Exit codes should be coarse and policy-friendly:
+The stable exit taxonomy is:
 
 ```text
-ExitCodeClassV1 {
-  ok,
-  diff_found,
-  unsafe_blocked,
-  external_action_required,
-  invalid_input,
-  execution_failed,
-}
+ExitClassV1
 ```
 
-The JSON payload can carry completed deployment foundation objects and any
-promoted post-46 backlog objects. The envelope makes command parsing stable
-without forcing every internal model to be frozen forever.
+The envelope currently wraps selected passive command payloads without freezing
+every nested DTO. New automation work should extend or consume
+`EvidenceEnvelopeV1`; it should not introduce another public JSON envelope for
+the same role.
 
 ---
 
@@ -174,8 +177,8 @@ should not make filesystem layout part of `DeploymentPlanV1`.
 Core objects:
 
 ```text
-JsonEnvelopeV1
-ExitCodeClassV1
+EvidenceEnvelopeV1
+ExitClassV1
 BuildProvenanceV1
 SignedReceiptEnvelopeV1
 CiDeploymentLockV1
@@ -201,9 +204,10 @@ canic project validate
 ```
 
 Current deployment-truth commands print JSON by default; this topic would own a
-stable public JSON envelope rather than relying on the current raw internal
-payloads. Command names are tentative. The stable part is the JSON envelope,
-exit-code classes, provenance, and lock model.
+stable public evidence envelope rather than relying on raw internal payloads.
+0.51 now owns that envelope through `--format envelope-json` and
+`canic evidence compare`. Future commands here should consume that surface
+instead of inventing a second envelope.
 
 ---
 
@@ -222,34 +226,36 @@ This future work should not:
 
 ## Implementation Slices
 
-### Slice 1: JSON Envelope
+### Slice 1: Evidence Envelope
 
-Define stable envelopes for deployment command output.
+Completed in 0.51. `EvidenceEnvelopeV1` wraps selected passive command output.
 
-### Slice 2: Exit-Code Contract
+### Slice 2: Exit-Class Contract
 
-Map safety, diff, external-action, and execution outcomes to stable exit-code
+Completed in 0.51 for the current envelope emitters. `ExitClassV1` maps
+success, warnings, blockers, evidence conflicts, missing required evidence,
+invalid input, execution failure, and internal errors into stable automation
 classes.
 
 ### Slice 3: Provenance Fields
 
-Record build provenance in artifact manifests and receipts.
+Remaining. Record build provenance in artifact manifests and receipts.
 
 ### Slice 4: Project Manifest
 
-Define and validate the public project manifest contract.
+Remaining. Define and validate the public project manifest contract.
 
 ### Slice 5: CI Lock
 
-Add deployment-scoped lock acquire, refresh, and release behavior.
+Remaining. Add deployment-scoped lock acquire, refresh, and release behavior.
 
 ### Slice 6: Signed Receipts And Plans
 
-Add optional signing envelopes around plan and receipt digests.
+Remaining. Add optional signing envelopes around plan and receipt digests.
 
 ### Slice 7: GitHub And GitLab Wrappers
 
-Publish thin CI wrappers around the stable command contract.
+Remaining. Publish thin CI wrappers around the stable command contract.
 
 ---
 

@@ -12,13 +12,41 @@ present.
 
 ## Unreleased
 
+## [0.52.x] - 2026-05-31 - Source, build, and artifact provenance
+
+Detailed patch breakdown: [docs/changelog/0.52.md](docs/changelog/0.52.md)
+
+- Proposed the 0.52 design:
+  ```text
+  docs/design/0.52-source-build-artifact-provenance/0.52-design.md
+  ```
+  The line should build on 0.51 evidence envelopes by adding stable source,
+  Cargo, build, and artifact provenance for:
+  ```text
+  canic build <fleet> <role> --provenance <path>
+  ```
+  It defers signing, CI locks, project manifests, provider wrappers, registry
+  import, controller mutation, topology mutation, and deployment/install
+  authority.
+
 ## [0.51.x] - 2026-05-31 - CI/GitOps provenance and stable evidence envelopes
 
 Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
 
+- `0.51.6` marks the historical post-46 CI/GitOps provenance backlog as
+  partially superseded by 0.51 and replaces old backlog-only draft names with
+  the implemented envelope vocabulary:
+  ```text
+  EvidenceEnvelopeV1
+  ExitClassV1
+  ```
+  Remaining backlog scope is source/build/artifact provenance, CI locks,
+  project manifest semantics, optional signing/attestation, and provider
+  wrappers.
+
 - `0.51.5` adds the 0.51 closeout audit:
   ```text
-  docs/audits/0.51-closeout.md
+  docs/audits/release-lines/0.51-closeout.md
   ```
   The audit verifies the stable evidence-envelope model, passive adoption and
   deployment-check emitters, shared exit-class and fingerprint behavior,
