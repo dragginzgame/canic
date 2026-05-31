@@ -25,8 +25,8 @@ inspect only the files needed for the current task.
   adoption/import, or deployment/install authority. The first policy
   implementation now stays narrow around one strict policy file, one existing
   `EvidenceEnvelopeV1`, stable envelope fields, stable
-  `canic.build_provenance.v1` payload rules, and a stable
-  `PolicyGateReportV1` result.
+  `canic.build_provenance.v1` payload rules, project evidence manifests over
+  existing envelope files, and stable policy gate report results.
 - Current minor: `0.52.x` source, build, and artifact provenance is closed.
   The implemented design is
   `docs/design/0.52-source-build-artifact-provenance/0.52-design.md`; the
@@ -74,6 +74,19 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.53.3 has added project evidence manifests to the passive policy gate:
+  ```text
+  canic evidence gate --policy <path> --manifest <path>
+  ```
+  `ProjectEvidenceManifestV1` groups existing evidence envelope files with
+  required/optional status, expected payload schema, and expected target
+  identity. Manifest gates emit `ProjectEvidenceGateReportV1`; required
+  missing evidence fails with `missing_required_evidence`, optional missing
+  evidence reports `success_with_warnings`, and payload/target mismatches fail
+  with `blocked_by_policy`. The command remains passive: it does not run
+  builds, generate evidence, discover live deployments, mutate manifest/
+  evidence/config/topology/controllers, register artifacts, or turn policy
+  success into deployment truth.
 - 0.53.2 has added optional build-provenance field rules to the passive
   single-envelope policy gate:
   ```text

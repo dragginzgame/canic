@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
 
+- `0.53.3` adds project evidence manifests to the passive policy gate:
+  ```text
+  canic evidence gate --policy <path> --manifest <path>
+  ```
+  A manifest groups existing evidence envelope files with required/optional
+  status, expected payload schema, and target identity. Manifest gates remain
+  read-only and still do not run builds, discover live state, mutate evidence
+  inputs, or turn policy success into deployment truth.
+
 - `0.53.2` adds optional build-provenance policy rules to the existing passive
   policy gate:
   ```text

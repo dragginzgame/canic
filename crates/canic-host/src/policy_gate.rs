@@ -6,10 +6,14 @@ use crate::build_provenance::{
 use crate::evidence_envelope::{
     EvidenceEnvelopeV1, EvidenceSummaryV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
     PayloadSchemaRefV1, PayloadSchemaStabilityV1, combine_exit_classes, evidence_envelope_schema,
-    file_input_fingerprint,
+    file_input_fingerprint, project_evidence_manifest_schema,
 };
 use serde::{Deserialize, Serialize, de};
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -22,6 +26,9 @@ pub enum PolicyGateError {
 
     #[error("failed to parse policy TOML: {0}")]
     Toml(#[from] toml::de::Error),
+
+    #[error("failed to parse evidence envelope JSON: {0}")]
+    Json(#[from] serde_json::Error),
 
     #[error("failed to fingerprint policy input: {0}")]
     Io(#[from] std::io::Error),
@@ -157,6 +164,65 @@ pub struct PolicyGateRequest<'a> {
 }
 
 ///
+/// ProjectEvidenceManifestGateRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectEvidenceManifestGateRequest<'a> {
+    pub policy_source: &'a str,
+    pub policy_path: &'a Path,
+    pub manifest_source: &'a str,
+    pub manifest_path: &'a Path,
+    pub fingerprint_root: &'a Path,
+}
+
+///
+/// ProjectEvidenceManifestV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEvidenceManifestV1 {
+    pub schema_version: u32,
+    pub project: ProjectEvidenceManifestProjectV1,
+    pub evidence: Vec<ProjectEvidenceManifestEntryV1>,
+}
+
+///
+/// ProjectEvidenceManifestProjectV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEvidenceManifestProjectV1 {
+    pub name: String,
+    pub root: String,
+}
+
+///
+/// ProjectEvidenceManifestEntryV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEvidenceManifestEntryV1 {
+    pub kind: String,
+    pub path: String,
+    pub required: bool,
+    pub payload_schema: String,
+    pub target: ProjectEvidenceManifestTargetV1,
+}
+
+///
+/// ProjectEvidenceManifestTargetV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEvidenceManifestTargetV1 {
+    pub deployment: Option<String>,
+    pub fleet: Option<String>,
+    pub role: Option<String>,
+    pub profile: Option<String>,
+    pub network: Option<String>,
+}
+
+///
 /// PolicyGateReportV1
 ///
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -171,6 +237,38 @@ pub struct PolicyGateReportV1 {
     pub policy_status: PolicyEvaluationStatusV1,
     pub gate_exit_class: ExitClassV1,
     pub requirements: Vec<PolicyRequirementV1>,
+    pub findings: Vec<PolicyFindingV1>,
+}
+
+///
+/// ProjectEvidenceGateReportV1
+///
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ProjectEvidenceGateReportV1 {
+    pub schema_version: u32,
+    pub manifest_schema_version: u32,
+    pub project_name: String,
+    pub policy_file_fingerprint: InputFingerprintV1,
+    pub manifest_file_fingerprint: InputFingerprintV1,
+    pub policy_status: PolicyEvaluationStatusV1,
+    pub gate_exit_class: ExitClassV1,
+    pub evidence: Vec<ProjectEvidenceGateEntryReportV1>,
+}
+
+///
+/// ProjectEvidenceGateEntryReportV1
+///
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ProjectEvidenceGateEntryReportV1 {
+    pub kind: String,
+    pub path: String,
+    pub required: bool,
+    pub expected_payload_schema: String,
+    pub expected_target: ProjectEvidenceManifestTargetV1,
+    pub status: PolicyEvaluationStatusV1,
+    pub gate_exit_class: ExitClassV1,
+    pub evaluated_envelope_fingerprint: Option<InputFingerprintV1>,
+    pub policy_report: Option<PolicyGateReportV1>,
     pub findings: Vec<PolicyFindingV1>,
 }
 
@@ -229,6 +327,14 @@ pub fn parse_ci_policy_v1(source: &str) -> Result<CiPolicyV1, PolicyGateError> {
     Ok(policy)
 }
 
+pub fn parse_project_evidence_manifest_v1(
+    source: &str,
+) -> Result<ProjectEvidenceManifestV1, PolicyGateError> {
+    let manifest = toml::from_str::<ProjectEvidenceManifestV1>(source)?;
+    validate_project_evidence_manifest_v1(&manifest)?;
+    Ok(manifest)
+}
+
 pub fn evaluate_policy_gate(
     request: PolicyGateRequest<'_>,
 ) -> Result<PolicyGateReportV1, PolicyGateError> {
@@ -253,6 +359,58 @@ pub fn evaluate_policy_gate(
         evaluated_envelope_fingerprint,
         request.envelope,
     ))
+}
+
+pub fn evaluate_project_evidence_manifest_gate(
+    request: ProjectEvidenceManifestGateRequest<'_>,
+) -> Result<ProjectEvidenceGateReportV1, PolicyGateError> {
+    let policy = parse_ci_policy_v1(request.policy_source)?;
+    let manifest = parse_project_evidence_manifest_v1(request.manifest_source)?;
+    let policy_file_fingerprint = file_input_fingerprint(
+        "ci_policy",
+        request.policy_path,
+        request.fingerprint_root,
+        None,
+        None,
+    )?;
+    let manifest_file_fingerprint = file_input_fingerprint(
+        "project_evidence_manifest",
+        request.manifest_path,
+        request.fingerprint_root,
+        Some(project_evidence_manifest_schema()),
+        None,
+    )?;
+    let project_root = manifest_project_root(request.manifest_path, &manifest.project.root);
+    let mut evidence = Vec::new();
+
+    for entry in &manifest.evidence {
+        evidence.push(evaluate_manifest_entry(
+            &policy,
+            &policy_file_fingerprint,
+            &project_root,
+            entry,
+        )?);
+    }
+
+    let has_failures = evidence
+        .iter()
+        .any(|entry| entry.status == PolicyEvaluationStatusV1::Failed);
+    let gate_exit_class = combine_exit_classes(evidence.iter().map(|entry| entry.gate_exit_class));
+
+    Ok(ProjectEvidenceGateReportV1 {
+        schema_version: 1,
+        manifest_schema_version: manifest.schema_version,
+        project_name: manifest.project.name,
+        policy_file_fingerprint,
+        manifest_file_fingerprint,
+        policy_status: if has_failures {
+            PolicyEvaluationStatusV1::Failed
+        } else {
+            PolicyEvaluationStatusV1::Passed
+        },
+        gate_exit_class,
+        evidence,
+    })
 }
 
 fn validate_ci_policy_v1(policy: &CiPolicyV1) -> Result<(), PolicyGateError> {
@@ -294,6 +452,38 @@ fn validate_ci_policy_v1(policy: &CiPolicyV1) -> Result<(), PolicyGateError> {
     Ok(())
 }
 
+fn validate_project_evidence_manifest_v1(
+    manifest: &ProjectEvidenceManifestV1,
+) -> Result<(), PolicyGateError> {
+    if manifest.schema_version != 1 {
+        return Err(PolicyGateError::InvalidPolicy(format!(
+            "unsupported project evidence manifest schema_version {}; expected 1",
+            manifest.schema_version
+        )));
+    }
+    ensure_nonempty("project.name", &manifest.project.name)?;
+    ensure_nonempty("project.root", &manifest.project.root)?;
+    if manifest.evidence.is_empty() {
+        return Err(PolicyGateError::InvalidPolicy(
+            "evidence must not be empty".to_string(),
+        ));
+    }
+    for (index, entry) in manifest.evidence.iter().enumerate() {
+        ensure_nonempty(&format!("evidence[{index}].kind"), &entry.kind)?;
+        ensure_nonempty(&format!("evidence[{index}].path"), &entry.path)?;
+        ensure_nonempty(
+            &format!("evidence[{index}].payload_schema"),
+            &entry.payload_schema,
+        )?;
+        if !entry.target.has_selector() {
+            return Err(PolicyGateError::InvalidPolicy(format!(
+                "evidence[{index}].target must include at least one target field"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn ensure_optional_allow_list<T>(field: &str, value: Option<&[T]>) -> Result<(), PolicyGateError> {
     if value.is_some_and(<[T]>::is_empty) {
         return Err(PolicyGateError::InvalidPolicy(format!(
@@ -310,6 +500,38 @@ fn ensure_nonempty(field: &str, value: &str) -> Result<(), PolicyGateError> {
         )));
     }
     Ok(())
+}
+
+impl ProjectEvidenceManifestTargetV1 {
+    const fn has_selector(&self) -> bool {
+        self.deployment.is_some()
+            || self.fleet.is_some()
+            || self.role.is_some()
+            || self.profile.is_some()
+            || self.network.is_some()
+    }
+
+    fn matches_envelope_target(&self, target: &EvidenceTargetV1) -> bool {
+        self.deployment
+            .as_ref()
+            .is_none_or(|expected| target.deployment.as_ref() == Some(expected))
+            && self
+                .fleet
+                .as_ref()
+                .is_none_or(|expected| target.fleet.as_ref() == Some(expected))
+            && self
+                .role
+                .as_ref()
+                .is_none_or(|expected| target.role.as_ref() == Some(expected))
+            && self
+                .profile
+                .as_ref()
+                .is_none_or(|expected| target.profile.as_ref() == Some(expected))
+            && self
+                .network
+                .as_ref()
+                .is_none_or(|expected| target.network.as_ref() == Some(expected))
+    }
 }
 
 fn evaluate_policy(
@@ -358,6 +580,152 @@ fn evaluate_policy(
         gate_exit_class,
         requirements: builder.requirements,
         findings: builder.findings,
+    }
+}
+
+fn evaluate_manifest_entry(
+    policy: &CiPolicyV1,
+    policy_file_fingerprint: &InputFingerprintV1,
+    project_root: &Path,
+    entry: &ProjectEvidenceManifestEntryV1,
+) -> Result<ProjectEvidenceGateEntryReportV1, PolicyGateError> {
+    let evidence_path = resolve_manifest_entry_path(project_root, &entry.path);
+    if !evidence_path.is_file() {
+        return Ok(missing_manifest_entry_report(entry));
+    }
+
+    let envelope_source = fs::read_to_string(&evidence_path)?;
+    let envelope = serde_json::from_str::<EvidenceEnvelopeV1>(&envelope_source)?;
+    let evaluated_envelope_fingerprint = file_input_fingerprint(
+        "evidence_envelope",
+        &evidence_path,
+        project_root,
+        Some(evidence_envelope_schema()),
+        None,
+    )?;
+    let mut policy_report = evaluate_policy(
+        policy,
+        policy_file_fingerprint.clone(),
+        evaluated_envelope_fingerprint.clone(),
+        envelope.clone(),
+    );
+    let mut findings = Vec::new();
+    let mut gate_exit_classes = vec![policy_report.gate_exit_class];
+
+    if envelope.payload_schema.id != entry.payload_schema {
+        let finding = PolicyFindingV1::error(
+            "policy.manifest.payload_schema_mismatch",
+            "manifest evidence payload schema does not match the evaluated envelope",
+            "manifest.evidence.payload_schema",
+            ExitClassV1::BlockedByPolicy,
+        )
+        .expected(serde_json::json!(entry.payload_schema))
+        .actual(serde_json::json!(envelope.payload_schema.id));
+        gate_exit_classes.push(finding.exit_class());
+        findings.push(finding);
+    }
+
+    if !entry.target.matches_envelope_target(&envelope.target) {
+        let finding = PolicyFindingV1::error(
+            "policy.manifest.target_mismatch",
+            "manifest evidence target does not match the evaluated envelope target",
+            "manifest.evidence.target",
+            ExitClassV1::BlockedByPolicy,
+        )
+        .expected(serde_json::json!(entry.target))
+        .actual(serde_json::json!(envelope.target));
+        gate_exit_classes.push(finding.exit_class());
+        findings.push(finding);
+    }
+
+    policy_report.findings.extend(findings.clone());
+    let gate_exit_class = combine_exit_classes(gate_exit_classes);
+    policy_report.gate_exit_class = gate_exit_class;
+    if !findings.is_empty() {
+        policy_report.policy_status = PolicyEvaluationStatusV1::Failed;
+    }
+
+    Ok(ProjectEvidenceGateEntryReportV1 {
+        kind: entry.kind.clone(),
+        path: entry.path.clone(),
+        required: entry.required,
+        expected_payload_schema: entry.payload_schema.clone(),
+        expected_target: entry.target.clone(),
+        status: if policy_report.policy_status == PolicyEvaluationStatusV1::Failed {
+            PolicyEvaluationStatusV1::Failed
+        } else {
+            PolicyEvaluationStatusV1::Passed
+        },
+        gate_exit_class,
+        evaluated_envelope_fingerprint: Some(evaluated_envelope_fingerprint),
+        policy_report: Some(policy_report),
+        findings,
+    })
+}
+
+fn missing_manifest_entry_report(
+    entry: &ProjectEvidenceManifestEntryV1,
+) -> ProjectEvidenceGateEntryReportV1 {
+    let (status, gate_exit_class, findings) = if entry.required {
+        (
+            PolicyEvaluationStatusV1::Failed,
+            ExitClassV1::MissingRequiredEvidence,
+            vec![
+                PolicyFindingV1::error(
+                    "policy.manifest.required_evidence_missing",
+                    "required manifest evidence file is missing",
+                    "manifest.evidence.path",
+                    ExitClassV1::MissingRequiredEvidence,
+                )
+                .expected(serde_json::json!(entry.path)),
+            ],
+        )
+    } else {
+        (
+            PolicyEvaluationStatusV1::Passed,
+            ExitClassV1::SuccessWithWarnings,
+            vec![
+                PolicyFindingV1::warning(
+                    "policy.manifest.optional_evidence_missing",
+                    "optional manifest evidence file is missing",
+                    "manifest.evidence.path",
+                )
+                .expected(serde_json::json!(entry.path)),
+            ],
+        )
+    };
+
+    ProjectEvidenceGateEntryReportV1 {
+        kind: entry.kind.clone(),
+        path: entry.path.clone(),
+        required: entry.required,
+        expected_payload_schema: entry.payload_schema.clone(),
+        expected_target: entry.target.clone(),
+        status,
+        gate_exit_class,
+        evaluated_envelope_fingerprint: None,
+        policy_report: None,
+        findings,
+    }
+}
+
+fn manifest_project_root(manifest_path: &Path, root: &str) -> PathBuf {
+    let root_path = PathBuf::from(root);
+    if root_path.is_absolute() {
+        return root_path;
+    }
+    manifest_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(root_path)
+}
+
+fn resolve_manifest_entry_path(project_root: &Path, path: &str) -> PathBuf {
+    let path = PathBuf::from(path);
+    if path.is_absolute() {
+        path
+    } else {
+        project_root.join(path)
     }
 }
 
@@ -831,6 +1199,21 @@ impl PolicyFindingV1 {
             message: message.into(),
             requirement_id: Some(requirement_id.to_string()),
             subject: Some(exit_class_subject(exit_class).to_string()),
+            expected: None,
+            actual: None,
+            evidence_path: None,
+            target: None,
+            related_input: None,
+        }
+    }
+
+    fn warning(code: &str, message: impl Into<String>, requirement_id: &str) -> Self {
+        Self {
+            code: code.to_string(),
+            severity: PolicyFindingSeverityV1::Warning,
+            message: message.into(),
+            requirement_id: Some(requirement_id.to_string()),
+            subject: Some("success_with_warnings".to_string()),
             expected: None,
             actual: None,
             evidence_path: None,
@@ -1321,6 +1704,117 @@ schema = "canic.config.toml"
     }
 
     #[test]
+    fn project_evidence_manifest_gate_evaluates_required_envelope() {
+        let root = temp_dir("canic-policy-manifest-pass");
+        fs::create_dir_all(&root).expect("create root");
+        let policy_path = root.join("policy.toml");
+        let manifest_path = root.join("evidence.toml");
+        let envelope_path = root.join("build.json");
+        fs::write(&policy_path, BUILD_PROVENANCE_POLICY).expect("write policy");
+        fs::write(
+            &envelope_path,
+            serde_json::to_vec(&sample_envelope()).expect("encode envelope"),
+        )
+        .expect("write envelope");
+        let manifest_source = sample_manifest_source("build.json", true);
+        fs::write(&manifest_path, &manifest_source).expect("write manifest");
+
+        let report = evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+            policy_source: BUILD_PROVENANCE_POLICY,
+            policy_path: &policy_path,
+            manifest_source: &manifest_source,
+            manifest_path: &manifest_path,
+            fingerprint_root: &root,
+        })
+        .expect("evaluate manifest gate");
+
+        fs::remove_dir_all(root).expect("clean");
+        assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Passed);
+        assert_eq!(report.gate_exit_class, ExitClassV1::Success);
+        assert_eq!(report.evidence.len(), 1);
+        assert_eq!(report.evidence[0].status, PolicyEvaluationStatusV1::Passed);
+        assert!(report.evidence[0].policy_report.is_some());
+    }
+
+    #[test]
+    fn project_evidence_manifest_gate_reports_missing_required_and_optional_evidence() {
+        let required_report = evaluate_manifest_gate_for_test(
+            &sample_manifest_source("missing.json", true),
+            BUILD_PROVENANCE_POLICY,
+        );
+
+        assert_eq!(
+            required_report.gate_exit_class,
+            ExitClassV1::MissingRequiredEvidence
+        );
+        assert_eq!(
+            required_report.evidence[0].status,
+            PolicyEvaluationStatusV1::Failed
+        );
+        assert_eq!(
+            required_report.evidence[0].findings[0].code,
+            "policy.manifest.required_evidence_missing"
+        );
+
+        let optional_report = evaluate_manifest_gate_for_test(
+            &sample_manifest_source("missing.json", false),
+            BUILD_PROVENANCE_POLICY,
+        );
+
+        assert_eq!(
+            optional_report.gate_exit_class,
+            ExitClassV1::SuccessWithWarnings
+        );
+        assert_eq!(
+            optional_report.evidence[0].status,
+            PolicyEvaluationStatusV1::Passed
+        );
+        assert_eq!(
+            optional_report.evidence[0].findings[0].code,
+            "policy.manifest.optional_evidence_missing"
+        );
+    }
+
+    #[test]
+    fn project_evidence_manifest_gate_checks_target_and_payload_schema_expectations() {
+        let mut wrong_schema = sample_envelope();
+        wrong_schema.payload_schema = PayloadSchemaRefV1::stable("canic.other.v1", "1");
+        let wrong_schema_report = evaluate_manifest_gate_with_envelope(
+            &sample_manifest_source("build.json", true),
+            wrong_schema,
+        );
+
+        assert_eq!(
+            wrong_schema_report.gate_exit_class,
+            ExitClassV1::BlockedByPolicy
+        );
+        assert!(
+            wrong_schema_report.evidence[0]
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.manifest.payload_schema_mismatch")
+        );
+
+        let mut wrong_target = sample_envelope();
+        wrong_target.target.role = Some("other".to_string());
+        let wrong_target_report = evaluate_manifest_gate_with_envelope(
+            &sample_manifest_source("build.json", true),
+            wrong_target,
+        );
+
+        assert_eq!(
+            wrong_target_report.gate_exit_class,
+            ExitClassV1::BlockedByPolicy
+        );
+        assert!(
+            wrong_target_report.evidence[0]
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.manifest.target_mismatch")
+        );
+    }
+
+    #[test]
     fn policy_gate_report_schema_is_stable() {
         assert_eq!(
             policy_gate_report_schema(),
@@ -1351,6 +1845,60 @@ schema = "canic.config.toml"
             envelope,
         })
         .expect("evaluate policy");
+
+        fs::remove_dir_all(root).expect("clean");
+        report
+    }
+
+    fn evaluate_manifest_gate_for_test(
+        manifest_source: &str,
+        policy_source: &str,
+    ) -> ProjectEvidenceGateReportV1 {
+        let root = temp_dir("canic-policy-manifest-test");
+        fs::create_dir_all(&root).expect("create root");
+        let policy_path = root.join("policy.toml");
+        let manifest_path = root.join("evidence.toml");
+        fs::write(&policy_path, policy_source).expect("write policy");
+        fs::write(&manifest_path, manifest_source).expect("write manifest");
+
+        let report = evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+            policy_source,
+            policy_path: &policy_path,
+            manifest_source,
+            manifest_path: &manifest_path,
+            fingerprint_root: &root,
+        })
+        .expect("evaluate manifest gate");
+
+        fs::remove_dir_all(root).expect("clean");
+        report
+    }
+
+    fn evaluate_manifest_gate_with_envelope(
+        manifest_source: &str,
+        envelope: EvidenceEnvelopeV1,
+    ) -> ProjectEvidenceGateReportV1 {
+        let root = temp_dir("canic-policy-manifest-envelope-test");
+        fs::create_dir_all(&root).expect("create root");
+        let policy_path = root.join("policy.toml");
+        let manifest_path = root.join("evidence.toml");
+        let envelope_path = root.join("build.json");
+        fs::write(&policy_path, BUILD_PROVENANCE_POLICY).expect("write policy");
+        fs::write(&manifest_path, manifest_source).expect("write manifest");
+        fs::write(
+            &envelope_path,
+            serde_json::to_vec(&envelope).expect("encode envelope"),
+        )
+        .expect("write envelope");
+
+        let report = evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+            policy_source: BUILD_PROVENANCE_POLICY,
+            policy_path: &policy_path,
+            manifest_source,
+            manifest_path: &manifest_path,
+            fingerprint_root: &root,
+        })
+        .expect("evaluate manifest gate");
 
         fs::remove_dir_all(root).expect("clean");
         report
@@ -1461,6 +2009,28 @@ schema = "canic.config.toml"
             size_bytes: 123,
             produced_by: "canic build".to_string(),
         }
+    }
+
+    fn sample_manifest_source(path: &str, required: bool) -> String {
+        format!(
+            r#"
+schema_version = 1
+
+[project]
+name = "demo"
+root = "."
+
+[[evidence]]
+kind = "build_provenance"
+path = "{path}"
+required = {required}
+payload_schema = "canic.build_provenance.v1"
+
+[evidence.target]
+fleet = "demo"
+role = "app"
+"#
+        )
     }
 
     const MINIMAL_POLICY: &str = r#"
