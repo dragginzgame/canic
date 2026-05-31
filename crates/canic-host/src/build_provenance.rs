@@ -253,6 +253,10 @@ pub fn build_provenance_payload(
 }
 
 fn source_provenance(workspace_root: &Path) -> SourceProvenanceV1 {
+    if !is_git_worktree_root(workspace_root) {
+        return unknown_source_provenance();
+    }
+
     let Some(revision) = git_output_text(workspace_root, ["rev-parse", "HEAD"]) else {
         return unknown_source_provenance();
     };
@@ -285,6 +289,20 @@ fn source_provenance(workspace_root: &Path) -> SourceProvenanceV1 {
         dirty_summary_digest: dirty.then(|| sha256_hex(&status)),
         dirty_summary_algorithm: dirty.then(|| DIRTY_SUMMARY_ALGORITHM.to_string()),
     }
+}
+
+fn is_git_worktree_root(workspace_root: &Path) -> bool {
+    let Some(top_level) = git_output_text(workspace_root, ["rev-parse", "--show-toplevel"]) else {
+        return false;
+    };
+    let Ok(top_level) = PathBuf::from(top_level).canonicalize() else {
+        return false;
+    };
+    let Ok(workspace_root) = workspace_root.canonicalize() else {
+        return false;
+    };
+
+    top_level == workspace_root
 }
 
 const fn unknown_source_provenance() -> SourceProvenanceV1 {
@@ -517,19 +535,8 @@ fn git_output_text<const N: usize>(workspace_root: &Path, args: [&str; N]) -> Op
 }
 
 fn git_output_bytes<const N: usize>(workspace_root: &Path, args: [&str; N]) -> Option<Vec<u8>> {
-    git_output_bytes_with_extra_env(workspace_root, args, &[])
-}
-
-fn git_output_bytes_with_extra_env<const N: usize>(
-    workspace_root: &Path,
-    args: [&str; N],
-    extra_env: &[(&str, &Path)],
-) -> Option<Vec<u8>> {
     let mut command = Command::new("git");
     command.current_dir(workspace_root);
-    for (key, value) in extra_env {
-        command.env(key, value);
-    }
     clear_git_environment(&mut command);
 
     let output = command.args(args).output().ok()?;
@@ -601,23 +608,18 @@ mod tests {
     }
 
     #[test]
-    fn source_provenance_ignores_inherited_git_context() {
-        let root = temp_dir("canic-build-provenance-git-env");
+    fn source_provenance_requires_selected_git_worktree_root() {
+        let temp = temp_dir("canic-build-provenance-parent-git");
+        let root = canic_repo_root()
+            .join("target")
+            .join(temp.file_name().expect("temp path has file name"));
         fs::create_dir_all(&root).expect("create root");
-        let repo_root = canic_repo_root();
-        let git_dir = repo_root.join(".git");
 
-        let output = git_output_bytes_with_extra_env(
-            &root,
-            ["rev-parse", "HEAD"],
-            &[
-                ("GIT_DIR", git_dir.as_path()),
-                ("GIT_WORK_TREE", repo_root.as_path()),
-            ],
-        );
+        let provenance = source_provenance(&root);
 
         fs::remove_dir_all(&root).expect("remove root");
-        assert!(output.is_none());
+        assert_eq!(provenance.vcs, SourceVcsV1::Unknown);
+        assert_eq!(provenance.dirty_policy, SourceDirtyPolicyV1::Unknown);
     }
 
     #[test]
