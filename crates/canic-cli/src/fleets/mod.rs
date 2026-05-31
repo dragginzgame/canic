@@ -21,9 +21,10 @@ use canic_host::{
     deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1, RoleArtifactV1},
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
-        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
+        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, InputFingerprintV1,
         PayloadSchemaRefV1, adoption_report_schema, command_path_for_root, deployment_check_schema,
-        evidence_envelope_schema, file_input_fingerprint, json_payload_sha256,
+        evidence_envelope_schema, evidence_summary_exit_class, file_input_fingerprint,
+        json_payload_sha256,
     },
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
@@ -1662,6 +1663,8 @@ fn build_adoption_report_envelope(
     let payload = serde_json::to_value(report)?;
     let payload_sha256 = Some(json_payload_sha256(report)?);
     let config_root = config_path.parent().unwrap_or_else(|| Path::new("."));
+    let summary = adoption_report_evidence_summary(report);
+    let exit_class = evidence_summary_exit_class(&summary, false);
 
     Ok(EvidenceEnvelopeV1 {
         envelope_schema: evidence_envelope_schema(),
@@ -1687,8 +1690,8 @@ fn build_adoption_report_envelope(
         payload_schema: adoption_report_schema(),
         payload_sha256,
         payload,
-        summary: adoption_report_evidence_summary(report),
-        exit_class: adoption_report_exit_class(report),
+        summary,
+        exit_class,
     })
 }
 
@@ -1901,20 +1904,6 @@ fn adoption_evidence_conflict_messages(report: &AdoptionReportV1) -> Vec<Evidenc
             )
         })
         .collect()
-}
-
-const fn adoption_report_exit_class(report: &AdoptionReportV1) -> ExitClassV1 {
-    if report.summary.evidence_conflicts > 0 {
-        return ExitClassV1::EvidenceConflict;
-    }
-    if !report.blocked_actions.is_empty() {
-        return ExitClassV1::BlockedByPolicy;
-    }
-    if !report.warnings.is_empty() || !report.inputs.missing_or_stale_evidence.is_empty() {
-        return ExitClassV1::SuccessWithWarnings;
-    }
-
-    ExitClassV1::Success
 }
 
 fn render_adoption_report(report: &AdoptionReportV1) -> String {

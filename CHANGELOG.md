@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
 
+- `0.51.2` centralizes evidence-envelope exit-class precedence, aligns
+  adoption-report and deployment-check envelope emitters on the shared
+  summary-based classification, and documents CI policy guidance for warnings,
+  blockers, missing required evidence, and conflicts.
+
 - `0.51.1` hardens envelope input fingerprints by centralizing file
   fingerprinting in `canic-host`, adding `path_display`, normalizing evidence
   paths relative to the selected root, and redacting absolute paths outside

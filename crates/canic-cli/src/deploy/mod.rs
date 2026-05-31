@@ -82,7 +82,7 @@ use canic_host::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
         InputPathDisplayV1, PayloadSchemaRefV1, deployment_check_schema, evidence_envelope_schema,
-        file_input_fingerprint, json_payload_sha256,
+        evidence_summary_exit_class, file_input_fingerprint, json_payload_sha256,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -2339,6 +2339,8 @@ fn build_deployment_check_envelope(
     let payload_sha256 =
         Some(json_payload_sha256(check).map_err(Box::<dyn std::error::Error>::from)?);
     let source_config = deployment_check_source_config_fingerprint(check)?;
+    let summary = deployment_check_evidence_summary(check);
+    let exit_class = combine_deployment_check_exit_class(check.report.status, &summary);
 
     Ok(EvidenceEnvelopeV1 {
         envelope_schema: evidence_envelope_schema(),
@@ -2361,8 +2363,8 @@ fn build_deployment_check_envelope(
         payload_schema: deployment_check_schema(),
         payload_sha256,
         payload,
-        summary: deployment_check_evidence_summary(check),
-        exit_class: deployment_check_exit_class(check.report.status),
+        summary,
+        exit_class,
     })
 }
 
@@ -2506,7 +2508,22 @@ fn deployment_check_evidence_conflicts(check: &DeploymentCheckV1) -> Vec<Evidenc
         .collect()
 }
 
-const fn deployment_check_exit_class(status: SafetyStatusV1) -> ExitClassV1 {
+const fn combine_deployment_check_exit_class(
+    status: SafetyStatusV1,
+    summary: &EvidenceSummaryV1,
+) -> ExitClassV1 {
+    let status_class = deployment_check_status_exit_class(status);
+    let summary_class =
+        evidence_summary_exit_class(summary, matches!(status, SafetyStatusV1::NotEvaluated));
+
+    if summary_class.dominates(status_class) {
+        summary_class
+    } else {
+        status_class
+    }
+}
+
+const fn deployment_check_status_exit_class(status: SafetyStatusV1) -> ExitClassV1 {
     match status {
         SafetyStatusV1::Safe => ExitClassV1::Success,
         SafetyStatusV1::Warning => ExitClassV1::SuccessWithWarnings,
@@ -4290,6 +4307,39 @@ mod tests {
                 .expect("warnings")
                 .iter()
                 .any(|warning| warning["code"] == "deploy.warning.test_warning")
+        );
+    }
+
+    #[test]
+    fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
+        let mut check = sample_authority_check();
+        check.report.status = SafetyStatusV1::Blocked;
+        check.report.hard_failures.push(SafetyFindingV1 {
+            code: "artifact_conflict".to_string(),
+            message: "artifact evidence disagrees".to_string(),
+            severity: SafetySeverityV1::HardFailure,
+            subject: Some("store".to_string()),
+        });
+        let options = DeployCheckOptions {
+            truth: DeployTruthOptions {
+                deployment: "demo".to_string(),
+                network: "local".to_string(),
+                profile: None,
+            },
+            format: CheckOutputFormat::EnvelopeJson,
+        };
+
+        let envelope =
+            build_deployment_check_envelope(&options, &check).expect("deployment check envelope");
+        let value = serde_json::to_value(&envelope).expect("serialize envelope");
+
+        assert_eq!(value["exit_class"], "evidence_conflict");
+        assert!(
+            value["summary"]["evidence_conflicts"]
+                .as_array()
+                .expect("evidence conflicts")
+                .iter()
+                .any(|conflict| conflict["code"] == "deploy.evidence_conflict.artifact_conflict")
         );
     }
 

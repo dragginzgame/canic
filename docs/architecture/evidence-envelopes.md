@@ -95,6 +95,25 @@ internal_error
 fail on warnings, but the command does not treat every warning as a shell
 failure.
 
+When more than one condition exists, Canic applies this precedence:
+
+```text
+internal_error
+execution_failed
+invalid_input
+evidence_conflict
+missing_required_evidence
+blocked_by_policy
+success_with_warnings
+success
+```
+
+For example, a deployment check that is blocked because of contradictory
+evidence reports `evidence_conflict`, not the less specific
+`blocked_by_policy`. `missing_or_stale_evidence` remains a review signal unless
+the command cannot produce meaningful output and explicitly classifies it as
+`missing_required_evidence`.
+
 ## Safety Boundary
 
 Envelope output does not make passive commands active.
@@ -138,6 +157,7 @@ When an evidence path is redacted from normalized command provenance,
 Recommended automation behavior:
 
 - fail on `evidence_conflict`;
+- fail on `missing_required_evidence`;
 - fail on `blocked_by_policy`;
 - warn or fail by project policy on `success_with_warnings`;
 - archive the full envelope as the CI artifact;
@@ -145,6 +165,20 @@ Recommended automation behavior:
   DTO layouts;
 - treat `missing_or_stale_evidence` as an operator-review signal unless the
   command classifies it as `missing_required_evidence`.
+
+Example conservative policy:
+
+```text
+case envelope.exit_class:
+  success:
+    pass
+  success_with_warnings:
+    pass_or_fail_by_project_policy
+  evidence_conflict | missing_required_evidence | blocked_by_policy:
+    fail
+  invalid_input | execution_failed | internal_error:
+    fail
+```
 
 ## Deferred Work
 

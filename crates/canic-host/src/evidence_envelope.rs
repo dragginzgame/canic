@@ -207,6 +207,56 @@ pub enum ExitClassV1 {
     InternalError,
 }
 
+impl ExitClassV1 {
+    #[must_use]
+    pub const fn precedence(self) -> u8 {
+        match self {
+            Self::Success => 0,
+            Self::SuccessWithWarnings => 1,
+            Self::BlockedByPolicy => 2,
+            Self::MissingRequiredEvidence => 3,
+            Self::EvidenceConflict => 4,
+            Self::InvalidInput => 5,
+            Self::ExecutionFailed => 6,
+            Self::InternalError => 7,
+        }
+    }
+
+    #[must_use]
+    pub const fn dominates(self, other: Self) -> bool {
+        self.precedence() >= other.precedence()
+    }
+}
+
+#[must_use]
+pub fn combine_exit_classes(classes: impl IntoIterator<Item = ExitClassV1>) -> ExitClassV1 {
+    classes
+        .into_iter()
+        .max_by_key(|class| class.precedence())
+        .unwrap_or(ExitClassV1::Success)
+}
+
+#[must_use]
+pub const fn evidence_summary_exit_class(
+    summary: &EvidenceSummaryV1,
+    missing_required_evidence: bool,
+) -> ExitClassV1 {
+    if !summary.evidence_conflicts.is_empty() {
+        return ExitClassV1::EvidenceConflict;
+    }
+    if missing_required_evidence {
+        return ExitClassV1::MissingRequiredEvidence;
+    }
+    if !summary.blocked_actions.is_empty() {
+        return ExitClassV1::BlockedByPolicy;
+    }
+    if !summary.warnings.is_empty() || !summary.missing_or_stale_evidence.is_empty() {
+        return ExitClassV1::SuccessWithWarnings;
+    }
+
+    ExitClassV1::Success
+}
+
 pub const EVIDENCE_ENVELOPE_SCHEMA_ID: &str = "canic.evidence_envelope.v1";
 pub const ADOPTION_REPORT_SCHEMA_ID: &str = "canic.adoption_report.v1";
 pub const DEPLOYMENT_CHECK_SCHEMA_ID: &str = "canic.deployment_check.v1";
@@ -354,6 +404,63 @@ mod tests {
         let encoded = serde_json::to_string(&ExitClassV1::SuccessWithWarnings).expect("serialize");
 
         assert_eq!(encoded, "\"success_with_warnings\"");
+    }
+
+    #[test]
+    fn exit_class_precedence_prefers_policy_relevant_failures() {
+        assert_eq!(
+            combine_exit_classes([
+                ExitClassV1::SuccessWithWarnings,
+                ExitClassV1::BlockedByPolicy,
+                ExitClassV1::EvidenceConflict,
+            ]),
+            ExitClassV1::EvidenceConflict
+        );
+        assert!(ExitClassV1::InvalidInput.dominates(ExitClassV1::EvidenceConflict));
+        assert!(ExitClassV1::InternalError.dominates(ExitClassV1::ExecutionFailed));
+    }
+
+    #[test]
+    fn evidence_summary_exit_class_uses_stable_precedence() {
+        let mut summary = EvidenceSummaryV1 {
+            warnings: vec![EvidenceMessageV1::new(
+                "test.warning",
+                "warning",
+                EvidenceMessageSeverityV1::Warning,
+            )],
+            blocked_actions: Vec::new(),
+            missing_or_stale_evidence: Vec::new(),
+            evidence_conflicts: Vec::new(),
+        };
+
+        assert_eq!(
+            evidence_summary_exit_class(&summary, false),
+            ExitClassV1::SuccessWithWarnings
+        );
+
+        summary.blocked_actions.push(EvidenceMessageV1::new(
+            "test.blocked",
+            "blocked",
+            EvidenceMessageSeverityV1::Error,
+        ));
+        assert_eq!(
+            evidence_summary_exit_class(&summary, false),
+            ExitClassV1::BlockedByPolicy
+        );
+        assert_eq!(
+            evidence_summary_exit_class(&summary, true),
+            ExitClassV1::MissingRequiredEvidence
+        );
+
+        summary.evidence_conflicts.push(EvidenceMessageV1::new(
+            "test.conflict",
+            "conflict",
+            EvidenceMessageSeverityV1::Error,
+        ));
+        assert_eq!(
+            evidence_summary_exit_class(&summary, true),
+            ExitClassV1::EvidenceConflict
+        );
     }
 
     #[test]

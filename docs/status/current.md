@@ -54,6 +54,13 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.51.2 has centralized evidence-envelope exit-class precedence in
+  `canic-host::evidence_envelope`. Adoption-report and deployment-check
+  envelope emitters now classify from the same structured summary, and
+  deployment-check conflicts report `evidence_conflict` ahead of generic
+  `blocked_by_policy`. The evidence-envelope architecture docs now spell out
+  CI policy guidance for warnings, blockers, missing required evidence, and
+  conflicts.
 - 0.51.1 has hardened evidence-envelope fingerprints. Adoption-report and
   deployment-check envelopes now share the `canic-host::evidence_envelope`
   file fingerprint and payload-hash helpers, `InputFingerprintV1` records
