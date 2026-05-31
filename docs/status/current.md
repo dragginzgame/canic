@@ -55,6 +55,16 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.52.3 has added CI/GitOps policy guidance for build provenance:
+  ```text
+  docs/architecture/build-provenance-ci-policy.md
+  ```
+  The guide explains recommended checks for dirty source state, `Cargo.lock`
+  drift, package metadata `fleet.role`, raw Wasm vs gzip Wasm artifact hashes,
+  and saved build-provenance linkage from passive adoption/deployment-check
+  envelopes. It does not add signing, CI locks, provider wrappers, registry
+  import, controller mutation, topology mutation, install authority, or active
+  adoption/import.
 - 0.52.2 has added saved build-provenance evidence inputs for passive
   envelope reports:
   ```text

@@ -173,7 +173,9 @@ canic deploy check <deployment> --format envelope-json \
 
 These options fingerprint the supplied `canic.build_provenance.v1` envelope.
 They do not re-run builds, validate deployment truth from provenance alone, or
-turn provenance into authority.
+turn provenance into authority. See
+[Build Provenance CI Policy](build-provenance-ci-policy.md) for recommended
+checks over source, Cargo, package metadata, and artifact evidence.
 
 ## CI/GitOps Guidance
 

@@ -54,6 +54,9 @@ canic deploy check <deployment> --format envelope-json --build-provenance <path>
 
 Those commands only fingerprint the saved provenance envelope as input
 evidence. They do not re-run builds or treat provenance as deployment truth.
+See [Build Provenance CI Policy](build-provenance-ci-policy.md) for recommended
+CI checks over dirty source state, Cargo lock drift, package metadata identity,
+and artifact hashes.
 
 ## Canister Artifacts
 

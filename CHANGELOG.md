@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.52.md](docs/changelog/0.52.md)
 
+- `0.52.3` adds CI/GitOps policy guidance for stable build provenance:
+  ```text
+  docs/architecture/build-provenance-ci-policy.md
+  ```
+  The guide explains recommended checks for dirty source state, `Cargo.lock`
+  drift, package metadata `fleet.role`, raw/gzip Wasm artifact hashes, and
+  saved provenance linkage from passive adoption/deployment-check envelopes.
+
 - `0.52.2` lets passive adoption-report and deployment-check evidence
   envelopes fingerprint saved build provenance evidence:
   ```text
