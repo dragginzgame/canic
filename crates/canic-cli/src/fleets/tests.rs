@@ -174,6 +174,21 @@ fn parses_adoption_report_json_output() {
     assert_eq!(options.output, Some(PathBuf::from("report.json")));
 }
 
+// Ensure adoption report accepts stable envelope JSON without changing raw JSON.
+#[test]
+fn parses_adoption_report_envelope_json_output() {
+    let options = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("minimal"),
+        OsString::from("--format"),
+        OsString::from("envelope-json"),
+    ])
+    .expect("parse adoption report options");
+
+    assert_eq!(options.format, AdoptionReportFormat::EnvelopeJson);
+}
+
 // Ensure adoption report can read cargo metadata evidence from an explicit path.
 #[test]
 fn parses_adoption_report_cargo_metadata_path() {
@@ -500,7 +515,7 @@ fn writes_adoption_report_json_output_file() {
 
     let report =
         build_adoption_report_from_config_path(&config_path, &options, "unix:2").expect("report");
-    write_adoption_report(&options, &report).expect("write report");
+    write_adoption_report(&config_path, &options, &report).expect("write report");
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(&out).expect("read report")).expect("parse report");
 
@@ -508,6 +523,70 @@ fn writes_adoption_report_json_output_file() {
     assert_eq!(value["fleet"], "demo");
     assert_eq!(value["profile"], "Minimal");
     assert_eq!(value["summary"]["mutating_actions_performed"], 0);
+    assert!(value.get("envelope_schema").is_none());
+}
+
+// Ensure envelope JSON wraps the raw adoption report with stable provenance fields.
+#[test]
+fn writes_adoption_report_envelope_json_output_file() {
+    let root = temp_dir("canic-fleet-adoption-envelope-json");
+    let demo = write_fleet_config(&root, "demo");
+    let config_path = demo.join("canic.toml");
+    let evidence = write_adoption_evidence_files(&root);
+    let out = root.join("reports/adoption-envelope.json");
+    let before = fs::read_to_string(&config_path).expect("read config before envelope");
+    let options = AdoptionReportOptions {
+        fleet: "demo".to_string(),
+        profile: AdoptionProfileV1::Partial,
+        format: AdoptionReportFormat::EnvelopeJson,
+        deployment_check: None,
+        inventory: Some(evidence.inventory),
+        artifact_manifest: Some(evidence.artifact_manifest),
+        cargo_metadata: None,
+        package_metadata: Some(evidence.package_metadata),
+        output: Some(out.clone()),
+    };
+
+    let report =
+        build_adoption_report_from_config_path(&config_path, &options, "unix:51").expect("report");
+    write_adoption_report(&config_path, &options, &report).expect("write report");
+    let after = fs::read_to_string(&config_path).expect("read config after envelope");
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&out).expect("read report")).expect("parse envelope");
+
+    fs::remove_dir_all(&root).expect("remove temp root");
+    assert_eq!(after, before);
+    assert_eq!(value["envelope_schema"]["id"], "canic.evidence_envelope.v1");
+    assert_eq!(value["envelope_schema"]["stability"], "stable");
+    assert_eq!(value["command"]["name"], "canic fleet adoption report");
+    assert_eq!(value["command"]["format"], "envelope-json");
+    assert_eq!(value["target"]["kind"], "fleet_adoption");
+    assert_eq!(value["target"]["fleet"], "demo");
+    assert_eq!(value["target"]["profile"], "partial");
+    assert_eq!(value["payload_schema"]["id"], "canic.adoption_report.v1");
+    assert_eq!(value["payload_schema"]["stability"], "experimental");
+    assert_eq!(value["payload"]["fleet"], "demo");
+    assert_eq!(value["payload"]["profile"], "Partial");
+    assert!(
+        value["payload_sha256"]
+            .as_str()
+            .is_some_and(|hash| hash.len() == 64)
+    );
+    assert_eq!(value["source_config"]["kind"], "canic_config");
+    assert_eq!(value["source_config"]["path"], "canic.toml");
+    assert!(
+        value["inputs"]
+            .as_array()
+            .expect("inputs array")
+            .iter()
+            .any(|input| input["kind"] == "deployment_inventory")
+    );
+    assert!(
+        value["summary"]["missing_or_stale_evidence"]
+            .as_array()
+            .expect("missing evidence array")
+            .is_empty()
+    );
 }
 
 // Ensure explicit evidence files are read and passed to the host adoption builder.
@@ -1096,7 +1175,7 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("Usage: canic fleet adoption report"));
     assert!(text.contains("--profile <profile>"));
     assert!(text.contains("<fleet>"));
-    assert!(text.contains("--format <text|json>"));
+    assert!(text.contains("--format <text|json|envelope-json>"));
     assert!(text.contains("--deployment-check <path>"));
     assert!(text.contains("--inventory <path>"));
     assert!(text.contains("--artifact-manifest <path>"));

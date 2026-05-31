@@ -78,6 +78,11 @@ use canic_host::{
         validate_external_upgrade_verification_check_for_deployment_check,
         validate_external_upgrade_verification_check_for_policy,
     },
+    evidence_envelope::{
+        CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
+        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
+        PayloadSchemaRefV1, deployment_check_schema, evidence_envelope_schema, sha256_hex,
+    },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
         InstallRootOptions, RegisterDeploymentStateOptions, VerifyDeploymentRootOptions,
@@ -92,7 +97,7 @@ use serde::de::DeserializeOwned;
 use std::{
     ffi::OsString,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
@@ -218,8 +223,10 @@ const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
   canic --network local deploy check --profile fast demo
+  canic deploy check demo --format envelope-json
 
-Prints the local DeploymentCheckV1 JSON without installing or mutating state.";
+Prints the local DeploymentCheckV1 JSON without installing or mutating state.
+Use --format envelope-json for the stable CI/GitOps evidence envelope.";
 const DEPLOY_AUTHORITY_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority check demo
@@ -591,6 +598,15 @@ struct DeployTruthOptions {
 }
 
 ///
+/// DeployCheckOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployCheckOptions {
+    truth: DeployTruthOptions,
+    format: CheckOutputFormat,
+}
+
+///
 /// DeployResumeReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -725,6 +741,15 @@ struct DeployPromoteReportOptions {
 enum AuthorityOutputFormat {
     Json,
     Text,
+}
+
+///
+/// CheckOutputFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CheckOutputFormat {
+    Json,
+    EnvelopeJson,
 }
 
 ///
@@ -2161,12 +2186,9 @@ where
         return Ok(());
     }
 
-    let check = load_deployment_check(DeployTruthOptions::parse(
-        args,
-        deploy_check_command,
-        check_usage,
-    )?)?;
-    print_json(&check)?;
+    let options = DeployCheckOptions::parse(args)?;
+    let check = load_deployment_check(options.truth.clone())?;
+    write_deployment_check(&options, &check)?;
     enforce_deployment_check_status(&check.report)
 }
 
@@ -2293,6 +2315,197 @@ where
     serde_json::from_slice(&bytes)
         .map_err(Box::<dyn std::error::Error>::from)
         .map_err(DeployCommandError::from)
+}
+
+fn write_deployment_check(
+    options: &DeployCheckOptions,
+    check: &DeploymentCheckV1,
+) -> Result<(), DeployCommandError> {
+    match options.format {
+        CheckOutputFormat::Json => print_json(check),
+        CheckOutputFormat::EnvelopeJson => {
+            let envelope = build_deployment_check_envelope(options, check)?;
+            print_json(&envelope)
+        }
+    }
+}
+
+fn build_deployment_check_envelope(
+    options: &DeployCheckOptions,
+    check: &DeploymentCheckV1,
+) -> Result<EvidenceEnvelopeV1, DeployCommandError> {
+    let payload = serde_json::to_value(check).map_err(Box::<dyn std::error::Error>::from)?;
+    let payload_sha256 = Some(sha256_hex(
+        &serde_json::to_vec(check).map_err(Box::<dyn std::error::Error>::from)?,
+    ));
+    let source_config = deployment_check_source_config_fingerprint(check)?;
+
+    Ok(EvidenceEnvelopeV1 {
+        envelope_schema: evidence_envelope_schema(),
+        canic_version: env!("CARGO_PKG_VERSION").to_string(),
+        command: deployment_check_command_provenance(options),
+        target: EvidenceTargetV1 {
+            kind: EvidenceTargetKindV1::Deployment,
+            deployment: Some(check.plan.deployment_identity.deployment_name.clone()),
+            fleet: Some(check.plan.fleet_template.clone()),
+            role: None,
+            profile: options
+                .truth
+                .profile
+                .map(|profile| profile.target_dir_name().to_string()),
+            network: Some(check.plan.deployment_identity.network.clone()),
+        },
+        generated_at: check.inventory.observed_at.clone(),
+        source_config,
+        inputs: Vec::new(),
+        payload_schema: deployment_check_schema(),
+        payload_sha256,
+        payload,
+        summary: deployment_check_evidence_summary(check),
+        exit_class: deployment_check_exit_class(check.report.status),
+    })
+}
+
+fn deployment_check_command_provenance(options: &DeployCheckOptions) -> CommandProvenanceV1 {
+    let mut argv_normalized = vec![
+        "canic".to_string(),
+        "deploy".to_string(),
+        "check".to_string(),
+        options.truth.deployment.clone(),
+        "--format".to_string(),
+        "envelope-json".to_string(),
+    ];
+    if let Some(profile) = options.truth.profile {
+        argv_normalized.push("--profile".to_string());
+        argv_normalized.push(profile.target_dir_name().to_string());
+    }
+    if options.truth.network != local_network() {
+        argv_normalized.push("--network".to_string());
+        argv_normalized.push(options.truth.network.clone());
+    }
+
+    CommandProvenanceV1 {
+        name: "canic deploy check".to_string(),
+        argv_normalized,
+        argv_redactions: Vec::new(),
+        format: "envelope-json".to_string(),
+    }
+}
+
+fn deployment_check_source_config_fingerprint(
+    check: &DeploymentCheckV1,
+) -> Result<Option<InputFingerprintV1>, DeployCommandError> {
+    let Some(config_path) = &check.inventory.local_config.config_path else {
+        return Ok(None);
+    };
+    let path = Path::new(config_path);
+    let path_display = path.to_string_lossy().replace('\\', "/");
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => Some(metadata),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+        Err(err) => {
+            return Err(DeployCommandError::from(
+                Box::<dyn std::error::Error>::from(err),
+            ));
+        }
+    };
+
+    Ok(Some(InputFingerprintV1 {
+        kind: "canic_config".to_string(),
+        path: Some(path_display),
+        sha256: check.inventory.local_config.raw_config_sha256.clone(),
+        size_bytes: metadata.as_ref().map(std::fs::Metadata::len),
+        modified_unix_secs: metadata
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs()),
+        schema: Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
+        note: check
+            .inventory
+            .local_config
+            .raw_config_sha256
+            .is_none()
+            .then(|| "raw config hash was not observed by deployment check".to_string()),
+    }))
+}
+
+fn deployment_check_evidence_summary(check: &DeploymentCheckV1) -> EvidenceSummaryV1 {
+    EvidenceSummaryV1 {
+        warnings: check
+            .report
+            .warnings
+            .iter()
+            .map(|finding| {
+                EvidenceMessageV1::new(
+                    &format!("deploy.warning.{}", finding.code),
+                    finding.message.clone(),
+                    EvidenceMessageSeverityV1::Warning,
+                )
+            })
+            .collect(),
+        blocked_actions: check
+            .report
+            .hard_failures
+            .iter()
+            .map(|finding| {
+                EvidenceMessageV1::new(
+                    &format!("deploy.blocked.{}", finding.code),
+                    finding.message.clone(),
+                    EvidenceMessageSeverityV1::Error,
+                )
+            })
+            .collect(),
+        missing_or_stale_evidence: deployment_check_missing_or_stale_evidence(check),
+        evidence_conflicts: deployment_check_evidence_conflicts(check),
+    }
+}
+
+fn deployment_check_missing_or_stale_evidence(check: &DeploymentCheckV1) -> Vec<EvidenceMessageV1> {
+    check
+        .inventory
+        .unresolved_observations
+        .iter()
+        .map(|gap| {
+            EvidenceMessageV1::new(
+                "deploy.missing_or_stale.observation",
+                gap.description.clone(),
+                EvidenceMessageSeverityV1::Warning,
+            )
+        })
+        .chain(check.plan.unresolved_assumptions.iter().map(|assumption| {
+            EvidenceMessageV1::new(
+                "deploy.missing_or_stale.assumption",
+                assumption.description.clone(),
+                EvidenceMessageSeverityV1::Warning,
+            )
+        }))
+        .collect()
+}
+
+fn deployment_check_evidence_conflicts(check: &DeploymentCheckV1) -> Vec<EvidenceMessageV1> {
+    check
+        .report
+        .hard_failures
+        .iter()
+        .chain(check.report.warnings.iter())
+        .filter(|finding| finding.code.contains("conflict"))
+        .map(|finding| {
+            EvidenceMessageV1::new(
+                &format!("deploy.evidence_conflict.{}", finding.code),
+                finding.message.clone(),
+                EvidenceMessageSeverityV1::Error,
+            )
+        })
+        .collect()
+}
+
+const fn deployment_check_exit_class(status: SafetyStatusV1) -> ExitClassV1 {
+    match status {
+        SafetyStatusV1::Safe => ExitClassV1::Success,
+        SafetyStatusV1::Warning => ExitClassV1::SuccessWithWarnings,
+        SafetyStatusV1::Blocked => ExitClassV1::BlockedByPolicy,
+        SafetyStatusV1::NotEvaluated => ExitClassV1::MissingRequiredEvidence,
+    }
 }
 
 fn enforce_deployment_check_status(report: &SafetyReportV1) -> Result<(), DeployCommandError> {
@@ -2665,6 +2878,23 @@ impl DeployTruthOptions {
             deployment_plan_override: None,
             artifact_promotion_plan_override: None,
         }
+    }
+}
+
+impl DeployCheckOptions {
+    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_check_command(), args)
+            .map_err(|_| DeployCommandError::Usage(check_usage()))?;
+        Ok(Self {
+            truth: DeployTruthOptions::from_matches(&matches, check_usage)?,
+            format: parse_check_output_format(
+                string_option(&matches, "format").as_deref(),
+                check_usage,
+            )?,
+        })
     }
 }
 
@@ -3446,6 +3676,7 @@ fn deploy_report_command() -> ClapCommand {
 
 fn deploy_check_command() -> ClapCommand {
     deploy_truth_leaf_command("check", "Print the local deployment truth check JSON")
+        .arg(check_format_arg())
         .after_help(DEPLOY_CHECK_HELP_AFTER)
 }
 
@@ -3488,6 +3719,14 @@ fn authority_format_arg() -> clap::Arg {
     value_arg("format")
         .long("format")
         .value_name("json|text")
+        .num_args(1)
+        .help("Output format; defaults to json")
+}
+
+fn check_format_arg() -> clap::Arg {
+    value_arg("format")
+        .long("format")
+        .value_name("json|envelope-json")
         .num_args(1)
         .help("Output format; defaults to json")
 }
@@ -3788,6 +4027,20 @@ fn parse_promotion_output_format(
     }
 }
 
+fn parse_check_output_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<CheckOutputFormat, DeployCommandError> {
+    match value.unwrap_or("json") {
+        "json" => Ok(CheckOutputFormat::Json),
+        "envelope-json" => Ok(CheckOutputFormat::EnvelopeJson),
+        other => Err(DeployCommandError::Usage(format!(
+            "invalid deployment check output format: {other}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
 fn parse_authority_output_format(
     value: Option<&str>,
     usage: fn() -> String,
@@ -3872,9 +4125,10 @@ mod tests {
         LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1,
         PreviousArtifactReceiptKindV1, PromotionArtifactLevelV1, ResumeSafetyV1,
         RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
-        TrustDomainV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
-        compare_plan_to_inventory, external_upgrade_receipt_from_observation,
-        promotion_readiness_from_inputs, safety_report_from_diff,
+        SafetyFindingV1, SafetySeverityV1, TrustDomainV1, VerifierReadinessExpectationV1,
+        VerifierReadinessObservationV1, compare_plan_to_inventory,
+        external_upgrade_receipt_from_observation, promotion_readiness_from_inputs,
+        safety_report_from_diff,
     };
 
     #[test]
@@ -3957,6 +4211,73 @@ mod tests {
         };
 
         enforce_deployment_check_status(&report).expect("warning report should not fail check");
+    }
+
+    #[test]
+    fn deploy_check_parses_envelope_json_format() {
+        let options = DeployCheckOptions::parse([
+            OsString::from("demo"),
+            OsString::from("--format"),
+            OsString::from("envelope-json"),
+        ])
+        .expect("parse deploy check");
+
+        assert_eq!(options.truth.deployment, "demo");
+        assert_eq!(options.format, CheckOutputFormat::EnvelopeJson);
+    }
+
+    #[test]
+    fn deployment_check_envelope_wraps_raw_payload() {
+        let config_path = temp_json_path("deploy-check-envelope-canic.toml");
+        fs::write(&config_path, "[fleet]\nname = \"demo\"\n").expect("write config");
+        let mut check = sample_authority_check();
+        check.inventory.local_config.config_path = Some(config_path.to_string_lossy().to_string());
+        check.inventory.local_config.raw_config_sha256 = Some(sample_sha256("a"));
+        check.report.warnings.push(SafetyFindingV1 {
+            code: "test_warning".to_string(),
+            message: "operator should review warning".to_string(),
+            severity: SafetySeverityV1::Warning,
+            subject: Some("test".to_string()),
+        });
+        check.report.status = SafetyStatusV1::Warning;
+        let options = DeployCheckOptions {
+            truth: DeployTruthOptions {
+                deployment: "demo".to_string(),
+                network: "local".to_string(),
+                profile: Some(CanisterBuildProfile::Fast),
+            },
+            format: CheckOutputFormat::EnvelopeJson,
+        };
+
+        let envelope =
+            build_deployment_check_envelope(&options, &check).expect("deployment check envelope");
+        let value = serde_json::to_value(&envelope).expect("serialize envelope");
+
+        fs::remove_file(config_path).expect("clean config");
+        assert_eq!(value["envelope_schema"]["id"], "canic.evidence_envelope.v1");
+        assert_eq!(value["payload_schema"]["id"], "canic.deployment_check.v1");
+        assert_eq!(value["payload_schema"]["stability"], "internal");
+        assert_eq!(value["target"]["kind"], "deployment");
+        assert_eq!(value["target"]["deployment"], "demo");
+        assert_eq!(value["target"]["fleet"], "demo");
+        assert_eq!(value["target"]["profile"], "fast");
+        assert_eq!(value["command"]["name"], "canic deploy check");
+        assert_eq!(value["command"]["format"], "envelope-json");
+        assert_eq!(value["payload"]["check_id"], "check-1");
+        assert_eq!(value["exit_class"], "success_with_warnings");
+        assert!(
+            value["payload_sha256"]
+                .as_str()
+                .is_some_and(|hash| hash.len() == 64)
+        );
+        assert_eq!(value["source_config"]["kind"], "canic_config");
+        assert!(
+            value["summary"]["warnings"]
+                .as_array()
+                .expect("warnings")
+                .iter()
+                .any(|warning| warning["code"] == "deploy.warning.test_warning")
+        );
     }
 
     #[test]

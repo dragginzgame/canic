@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Purpose
 
@@ -9,11 +9,25 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.50.x` adoption profiles and safe onboarding.
-- Current release-work area: 0.50 starts a passive adoption model for
+- Active minor: `0.51.x` CI/GitOps provenance and stable evidence envelopes.
+  The design is registered in
+  `docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md`
+  and keeps passive evidence/reporting commands passive while defining a
+  stable automation envelope, exit classes, input fingerprints, command
+  provenance, and schema identity.
+- Current release-work area: 0.51 starts by adding stable envelope JSON output
+  for passive adoption reports and deployment checks:
+  `canic fleet adoption report <fleet> --profile <profile> --format
+  envelope-json` and `canic deploy check <deployment> --format
+  envelope-json`. Existing `--format json` remains the raw experimental
+  adoption report payload, and deployment check raw JSON remains
+  `DeploymentCheckV1`. Release validation fixtures have also been updated to
+  the hard-cut fleet-scoped role lifecycle, and internal Wasm artifact builds
+  now run Cargo with `--locked`.
+- 0.50 adoption profiles and safe onboarding are closed with documented
+  caveats. Treat the 0.50 line as the immediate passive-report foundation:
   brownfield, partial, standalone, leaf-only, hybrid external-Wasm, and minimal
-  onboarding. The first slice is read-only: it classifies configured and
-  observed roles and returns an adoption report with non-executed
+  onboarding reports classify configured and observed roles with non-executed
   recommendations.
 - 0.49 role lifecycle and topology attachment is the immediate foundation:
   fleet-scoped roles can be declared before topology attachment, but only
@@ -40,6 +54,20 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.51.0 has started the stable evidence-envelope line. `canic-host` now
+  defines `EvidenceEnvelopeV1`, `ExitClassV1`, target/provenance/schema/input
+  fingerprint DTOs, structured summary messages, and SHA-256 helpers. The
+  adoption report CLI accepts `--format envelope-json`, preserves raw
+  `--format json`, and emits an envelope with fleet/profile target identity,
+  source config/input fingerprints, payload schema identity, payload hash,
+  structured warnings/blockers/evidence gaps/conflicts, and an envelope exit
+  class without adding mutation or live discovery. Deployment check also
+  accepts `--format envelope-json`, preserving raw `DeploymentCheckV1` for
+  existing JSON output while wrapping deployment/fleet target identity,
+  provenance, config fingerprint metadata, payload identity, safety summary,
+  and exit class. Release validation fixtures were updated to the hard-cut
+  role lifecycle, and internal Wasm artifact builders now invoke Cargo with
+  `--locked`.
 - 0.50.15 has closed the adoption line by updating the 0.50 design doc from
   tentative planning language to implemented release-line language, keeping
   JSON output experimental throughout `0.50.x`, and adding regression coverage

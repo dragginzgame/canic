@@ -59,6 +59,9 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
+    let mut cargo_args = profile.cargo_profile_args().to_vec();
+    cargo_args.push("--locked");
+
     let mut build_env = Vec::with_capacity(extra_env.len() + 2);
     build_env.push(("ICP_ENVIRONMENT", "local"));
     build_env.push(INTERNAL_TEST_ENDPOINTS_ENV);
@@ -67,7 +70,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         workspace_root,
         target_dir,
         packages,
-        profile.cargo_profile_args(),
+        &cargo_args,
         &build_env,
     );
 }

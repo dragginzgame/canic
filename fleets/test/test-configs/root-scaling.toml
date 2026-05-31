@@ -1,6 +1,24 @@
 controllers = []
 app_index = ["scale_hub"]
 
+[fleet]
+name = "test"
+
+[roles.root]
+kind = "root"
+package = "../root"
+
+[roles.scale_hub]
+kind = "canister"
+package = "../scale_hub"
+
+[roles.scale_replica]
+kind = "canister"
+package = "../scale"
+
+[roles.minimal]
+kind = "canister"
+
 [app]
 init_mode = "enabled"
 

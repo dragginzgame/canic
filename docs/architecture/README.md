@@ -13,3 +13,4 @@ Current architecture notes:
 - [Authentication](authentication.md)
 - [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
 - [Build Artifacts](build-artifacts.md)
+- [Evidence Envelopes](evidence-envelopes.md)

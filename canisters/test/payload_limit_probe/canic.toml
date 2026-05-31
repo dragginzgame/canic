@@ -1,0 +1,25 @@
+controllers = []
+app_index = []
+
+[fleet]
+name = "payload_limit_probe"
+
+[roles.root]
+kind = "root"
+
+[roles.test]
+kind = "canister"
+package = "."
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.test]
+kind = "singleton"
+
+[app]
+init_mode = "enabled"
+
+[app.whitelist]

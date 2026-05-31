@@ -12,6 +12,24 @@ present.
 
 ## Unreleased
 
+## [0.51.x] - 2026-05-31 - CI/GitOps provenance and stable evidence envelopes
+
+Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
+
+- `0.51.0` adds the stable `EvidenceEnvelopeV1` model and envelope JSON output
+  for passive adoption reports and deployment checks:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile> --format envelope-json
+  ```
+  ```text
+  canic deploy check <deployment> --format envelope-json
+  ```
+  Existing adoption `--format json` remains the raw experimental adoption
+  report payload, and existing deployment-check JSON remains raw
+  `DeploymentCheckV1`. This patch also tightens release validation fixtures for
+  the hard-cut role lifecycle and runs internal Wasm artifact builds with
+  Cargo `--locked`.
+
 ## [0.50.x] - 2026-05-30 - Adoption profiles and safe onboarding
 
 Detailed patch breakdown: [docs/changelog/0.50.md](docs/changelog/0.50.md)

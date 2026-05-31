@@ -19,6 +19,12 @@ use canic_host::{
         adoption_report_from_config_source,
     },
     deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1, RoleArtifactV1},
+    evidence_envelope::{
+        CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
+        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
+        PayloadSchemaRefV1, adoption_report_schema, deployment_check_schema,
+        evidence_envelope_schema, sha256_hex,
+    },
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
@@ -100,6 +106,7 @@ const FLEET_ADOPTION_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
   canic fleet adoption report demo --profile minimal --format json
+  canic fleet adoption report demo --profile minimal --format envelope-json
 
 Adoption commands are read-only. They report recommendations and never update
 fleet config, package manifests, topology, deployments, or controllers.";
@@ -107,17 +114,20 @@ const FLEET_ADOPTION_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
   canic fleet adoption report demo --profile minimal --format json
+  canic fleet adoption report demo --profile minimal --format envelope-json
   canic fleet adoption report demo --profile partial --deployment-check check.json
   canic fleet adoption report demo --profile partial --inventory inventory.json
   canic fleet adoption report demo --profile partial --cargo-metadata cargo-metadata.json
   canic fleet adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
-minimal. The report is read-only; --output writes only the requested report
-artifact. Evidence inputs are JSON files and are read-only. Use either
---inventory or --deployment-check, not both. Use either --package-metadata or
---cargo-metadata, not both. Deployment-check evidence also supplies plan role
-artifacts when present.";
+minimal. --format json emits the raw experimental adoption report payload;
+--format envelope-json emits the stable CI/GitOps evidence envelope with the
+raw adoption payload nested inside. The report is read-only; --output writes
+only the requested report artifact. Evidence inputs are JSON files and are
+read-only. Use either --inventory or --deployment-check, not both. Use either
+--package-metadata or --cargo-metadata, not both. Deployment-check evidence
+also supplies plan role artifacts when present.";
 
 ///
 /// FleetCommandError
@@ -275,6 +285,7 @@ struct AdoptionReportOptions {
 enum AdoptionReportFormat {
     Text,
     Json,
+    EnvelopeJson,
 }
 
 ///
@@ -351,7 +362,7 @@ where
     let config_path = selected_fleet_config_path(&options.fleet)?;
     let generated_at = current_adoption_report_generated_at()?;
     let report = build_adoption_report_from_config_path(&config_path, &options, &generated_at)?;
-    write_adoption_report(&options, &report)
+    write_adoption_report(&config_path, &options, &report)
 }
 
 fn run_role<I>(args: I) -> Result<(), FleetCommandError>
@@ -799,6 +810,7 @@ fn parse_adoption_report_format(
     match value.unwrap_or("text") {
         "text" => Ok(AdoptionReportFormat::Text),
         "json" => Ok(AdoptionReportFormat::Json),
+        "envelope-json" => Ok(AdoptionReportFormat::EnvelopeJson),
         other => Err(FleetCommandError::Usage(format!(
             "invalid adoption report output format: {other}\n\n{}",
             usage()
@@ -979,7 +991,7 @@ fn fleet_adoption_report_command() -> ClapCommand {
         .arg(
             clap::Arg::new("format")
                 .long("format")
-                .value_name("text|json")
+                .value_name("text|json|envelope-json")
                 .help("Report output format"),
         )
         .arg(
@@ -1626,6 +1638,7 @@ where
 }
 
 fn write_adoption_report(
+    config_path: &Path,
     options: &AdoptionReportOptions,
     report: &AdoptionReportV1,
 ) -> Result<(), FleetCommandError> {
@@ -1634,7 +1647,293 @@ fn write_adoption_report(
             output::write_text(options.output.as_ref(), &render_adoption_report(report))
         }
         AdoptionReportFormat::Json => output::write_pretty_json(options.output.as_ref(), report),
+        AdoptionReportFormat::EnvelopeJson => {
+            let envelope = build_adoption_report_envelope(config_path, options, report)?;
+            output::write_pretty_json(options.output.as_ref(), &envelope)
+        }
     }
+}
+
+fn build_adoption_report_envelope(
+    config_path: &Path,
+    options: &AdoptionReportOptions,
+    report: &AdoptionReportV1,
+) -> Result<EvidenceEnvelopeV1, FleetCommandError> {
+    let payload = serde_json::to_value(report)?;
+    let payload_sha256 = Some(sha256_hex(&serde_json::to_vec(report)?));
+    let config_root = config_path.parent().unwrap_or_else(|| Path::new("."));
+
+    Ok(EvidenceEnvelopeV1 {
+        envelope_schema: evidence_envelope_schema(),
+        canic_version: env!("CARGO_PKG_VERSION").to_string(),
+        command: adoption_report_command_provenance(config_root, options),
+        target: EvidenceTargetV1 {
+            kind: EvidenceTargetKindV1::FleetAdoption,
+            deployment: None,
+            fleet: Some(report.fleet.clone()),
+            role: None,
+            profile: Some(adoption_profile_label(report.profile).to_string()),
+            network: None,
+        },
+        generated_at: report.generated_at.clone(),
+        source_config: Some(file_input_fingerprint(
+            "canic_config",
+            config_path,
+            config_root,
+            Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
+        )?),
+        inputs: adoption_report_input_fingerprints(config_root, options)?,
+        payload_schema: adoption_report_schema(),
+        payload_sha256,
+        payload,
+        summary: adoption_report_evidence_summary(report),
+        exit_class: adoption_report_exit_class(report),
+    })
+}
+
+fn adoption_report_command_provenance(
+    config_root: &Path,
+    options: &AdoptionReportOptions,
+) -> CommandProvenanceV1 {
+    let mut argv_normalized = vec![
+        "canic".to_string(),
+        "fleet".to_string(),
+        "adoption".to_string(),
+        "report".to_string(),
+        options.fleet.clone(),
+        "--profile".to_string(),
+        adoption_profile_label(options.profile).to_string(),
+        "--format".to_string(),
+        "envelope-json".to_string(),
+    ];
+
+    push_optional_path_arg(
+        &mut argv_normalized,
+        "--deployment-check",
+        options.deployment_check.as_ref(),
+        config_root,
+    );
+    push_optional_path_arg(
+        &mut argv_normalized,
+        "--inventory",
+        options.inventory.as_ref(),
+        config_root,
+    );
+    push_optional_path_arg(
+        &mut argv_normalized,
+        "--artifact-manifest",
+        options.artifact_manifest.as_ref(),
+        config_root,
+    );
+    push_optional_path_arg(
+        &mut argv_normalized,
+        "--cargo-metadata",
+        options.cargo_metadata.as_ref(),
+        config_root,
+    );
+    push_optional_path_arg(
+        &mut argv_normalized,
+        "--package-metadata",
+        options.package_metadata.as_ref(),
+        config_root,
+    );
+
+    CommandProvenanceV1 {
+        name: "canic fleet adoption report".to_string(),
+        argv_normalized,
+        argv_redactions: Vec::new(),
+        format: "envelope-json".to_string(),
+    }
+}
+
+fn push_optional_path_arg(
+    args: &mut Vec<String>,
+    flag: &str,
+    path: Option<&PathBuf>,
+    config_root: &Path,
+) {
+    if let Some(path) = path {
+        args.push(flag.to_string());
+        args.push(safe_relative_path(config_root, path));
+    }
+}
+
+fn adoption_report_input_fingerprints(
+    config_root: &Path,
+    options: &AdoptionReportOptions,
+) -> Result<Vec<InputFingerprintV1>, FleetCommandError> {
+    let mut inputs = Vec::new();
+
+    push_optional_input_fingerprint(
+        &mut inputs,
+        "deployment_check",
+        options.deployment_check.as_deref(),
+        config_root,
+        Some(deployment_check_schema()),
+    )?;
+    push_optional_input_fingerprint(
+        &mut inputs,
+        "deployment_inventory",
+        options.inventory.as_deref(),
+        config_root,
+        Some(PayloadSchemaRefV1::internal(
+            "canic.deployment_inventory.v1",
+            "1",
+        )),
+    )?;
+    push_optional_input_fingerprint(
+        &mut inputs,
+        "role_artifact_manifest",
+        options.artifact_manifest.as_deref(),
+        config_root,
+        Some(PayloadSchemaRefV1::internal(
+            "canic.role_artifact_manifest.v1",
+            "1",
+        )),
+    )?;
+    push_optional_input_fingerprint(
+        &mut inputs,
+        "cargo_metadata",
+        options.cargo_metadata.as_deref(),
+        config_root,
+        Some(PayloadSchemaRefV1::internal("cargo.metadata.v1", "1")),
+    )?;
+    push_optional_input_fingerprint(
+        &mut inputs,
+        "adoption_package_metadata",
+        options.package_metadata.as_deref(),
+        config_root,
+        Some(PayloadSchemaRefV1::experimental(
+            "canic.adoption_package_metadata.v1",
+            "1",
+        )),
+    )?;
+
+    Ok(inputs)
+}
+
+fn push_optional_input_fingerprint(
+    inputs: &mut Vec<InputFingerprintV1>,
+    kind: &str,
+    path: Option<&Path>,
+    config_root: &Path,
+    schema: Option<PayloadSchemaRefV1>,
+) -> Result<(), FleetCommandError> {
+    if let Some(path) = path {
+        inputs.push(file_input_fingerprint(kind, path, config_root, schema)?);
+    }
+    Ok(())
+}
+
+fn file_input_fingerprint(
+    kind: &str,
+    path: &Path,
+    config_root: &Path,
+    schema: Option<PayloadSchemaRefV1>,
+) -> Result<InputFingerprintV1, FleetCommandError> {
+    let bytes = fs::read(path)?;
+    let metadata = fs::metadata(path)?;
+    let modified_unix_secs = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs());
+
+    Ok(InputFingerprintV1 {
+        kind: kind.to_string(),
+        path: Some(safe_relative_path(config_root, path)),
+        sha256: Some(sha256_hex(&bytes)),
+        size_bytes: Some(bytes.len() as u64),
+        modified_unix_secs,
+        schema,
+        note: None,
+    })
+}
+
+fn safe_relative_path(base: &Path, path: &Path) -> String {
+    let relative = if let Ok(relative) = path.strip_prefix(base) {
+        non_empty_relative_path(relative)
+    } else {
+        lexical_relative_path(base, path).unwrap_or_else(|| {
+            path.file_name()
+                .map_or_else(|| PathBuf::from("<redacted>"), PathBuf::from)
+        })
+    };
+
+    relative.to_string_lossy().replace('\\', "/")
+}
+
+fn adoption_report_evidence_summary(report: &AdoptionReportV1) -> EvidenceSummaryV1 {
+    EvidenceSummaryV1 {
+        warnings: report
+            .warnings
+            .iter()
+            .map(|warning| {
+                EvidenceMessageV1::new(
+                    "adoption.warning",
+                    warning.clone(),
+                    EvidenceMessageSeverityV1::Warning,
+                )
+            })
+            .collect(),
+        blocked_actions: report
+            .blocked_actions
+            .iter()
+            .map(|action| {
+                EvidenceMessageV1::new(
+                    "adoption.blocked_action",
+                    action.clone(),
+                    EvidenceMessageSeverityV1::Error,
+                )
+            })
+            .collect(),
+        missing_or_stale_evidence: report
+            .inputs
+            .missing_or_stale_evidence
+            .iter()
+            .map(|evidence| {
+                EvidenceMessageV1::new(
+                    "adoption.missing_or_stale_evidence",
+                    evidence.clone(),
+                    EvidenceMessageSeverityV1::Warning,
+                )
+            })
+            .collect(),
+        evidence_conflicts: adoption_evidence_conflict_messages(report),
+    }
+}
+
+fn adoption_evidence_conflict_messages(report: &AdoptionReportV1) -> Vec<EvidenceMessageV1> {
+    report
+        .role_findings
+        .iter()
+        .filter(|finding| {
+            finding
+                .classifications
+                .contains(&AdoptionClassificationV1::EvidenceConflict)
+        })
+        .map(|finding| {
+            EvidenceMessageV1::new(
+                "adoption.evidence_conflict",
+                format!("role {} has conflicting adoption evidence", finding.role),
+                EvidenceMessageSeverityV1::Error,
+            )
+        })
+        .collect()
+}
+
+const fn adoption_report_exit_class(report: &AdoptionReportV1) -> ExitClassV1 {
+    if report.summary.evidence_conflicts > 0 {
+        return ExitClassV1::EvidenceConflict;
+    }
+    if !report.blocked_actions.is_empty() {
+        return ExitClassV1::BlockedByPolicy;
+    }
+    if !report.warnings.is_empty() || !report.inputs.missing_or_stale_evidence.is_empty() {
+        return ExitClassV1::SuccessWithWarnings;
+    }
+
+    ExitClassV1::Success
 }
 
 fn render_adoption_report(report: &AdoptionReportV1) -> String {
