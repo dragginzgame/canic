@@ -16,6 +16,22 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
 
+- `0.51.4` adds CI/GitOps evidence-envelope pipeline guidance with concrete
+  passive artifact examples:
+  ```text
+  canic fleet adoption report demo --profile minimal --format envelope-json \
+    --output artifacts/canic/adoption-envelope.json
+  canic deploy check demo-staging --format envelope-json \
+    > artifacts/canic/deployment-check-envelope.json
+  canic evidence compare \
+    --left artifacts/canic/baseline-deployment-check-envelope.json \
+    --right artifacts/canic/deployment-check-envelope.json \
+    --format json \
+    > artifacts/canic/envelope-compare.json
+  ```
+  The guidance explains which stable envelope fields CI should use, when raw
+  JSON is still command-specific, and what envelope artifacts do not prove.
+
 - `0.51.3` adds a CI-friendly stable envelope comparison command:
   ```text
   canic evidence compare --left <path> --right <path>

@@ -54,6 +54,11 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.51.4 has added concrete CI/GitOps guidance for stable evidence envelopes.
+  `docs/architecture/evidence-envelopes.md` now shows passive artifact layouts,
+  a minimal adoption/deployment-check/compare pipeline, raw JSON vs envelope
+  JSON examples, recommended CI policy fields, and explicit limits on what
+  envelope artifacts and envelope comparison prove.
 - 0.51.3 has added `canic evidence compare --left <path> --right <path>` for
   CI-friendly comparison of stable `EvidenceEnvelopeV1` fields. The command is
   read-only, compares envelope schema/provenance/target/input/payload

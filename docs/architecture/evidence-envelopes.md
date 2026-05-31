@@ -33,6 +33,7 @@ Stable envelope comparison is available with:
 
 ```text
 canic evidence compare --left <path> --right <path>
+canic evidence compare --left <path> --right <path> --format json
 ```
 
 Existing raw JSON output remains available:
@@ -185,6 +186,88 @@ case envelope.exit_class:
   invalid_input | execution_failed | internal_error:
     fail
 ```
+
+## Example Pipeline Artifacts
+
+A minimal passive pipeline can write envelope artifacts under a CI artifact
+directory such as:
+
+```text
+artifacts/canic/adoption-envelope.json
+artifacts/canic/deployment-check-envelope.json
+artifacts/canic/baseline-deployment-check-envelope.json
+artifacts/canic/envelope-compare.json
+```
+
+The exact directory is project policy. Canic does not require a specific CI
+provider or artifact layout.
+
+## Minimal Passive Pipeline
+
+One conservative pipeline shape is:
+
+```text
+canic fleet adoption report demo --profile minimal --format envelope-json \
+  --output artifacts/canic/adoption-envelope.json
+
+canic deploy check demo-staging --format envelope-json \
+  > artifacts/canic/deployment-check-envelope.json
+
+canic evidence compare \
+  --left artifacts/canic/baseline-deployment-check-envelope.json \
+  --right artifacts/canic/deployment-check-envelope.json \
+  --format json \
+  > artifacts/canic/envelope-compare.json
+```
+
+This flow is read-only. It records adoption evidence, records deployment-check
+evidence, and compares the stable envelope contract from a previous baseline
+against the newly generated deployment-check envelope.
+
+Pipeline policy should branch on envelope fields rather than nested payload
+DTOs:
+
+- use `exit_class` for pass/fail decisions;
+- use `summary.*[].code` for stable warning, blocker, missing evidence, and
+  conflict categories;
+- use `payload_schema` to decide whether a nested payload is stable,
+  experimental, or internal;
+- use `payload_sha256` to detect nested payload identity changes without
+  parsing that payload;
+- use `inputs` and `source_config` to record which evidence files produced the
+  report.
+
+## Raw JSON vs Envelope JSON
+
+Raw JSON remains command-specific:
+
+```text
+canic fleet adoption report demo --profile brownfield --format json
+canic deploy check demo-staging --format json
+```
+
+Envelope JSON is the stable automation wrapper:
+
+```text
+canic fleet adoption report demo --profile brownfield --format envelope-json
+canic deploy check demo-staging --format envelope-json
+```
+
+Do not write CI policy against raw payload fields unless the payload schema is
+explicitly marked stable. In 0.51, `canic.adoption_report.v1` remains
+experimental and `canic.deployment_check.v1` remains internal.
+
+## What Envelopes Do Not Prove
+
+An envelope is evidence about one command invocation. It does not prove that
+deployment state is still fresh after the command exits.
+
+Envelope comparison also stays passive. Matching envelopes do not install,
+upgrade, verify, register, import, attach topology, or inspect the network.
+They only show that the stable envelope fields being compared match.
+
+Signing, external attestations, project CI locks, and provider-specific pipeline
+integrations remain deferred work.
 
 ## Envelope Comparison
 

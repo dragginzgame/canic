@@ -94,19 +94,33 @@ Subsystem ownership for this audit:
 
 | Subsystem | Path Scope |
 | ---- | ---- |
-| endpoints | `endpoints/**`, `macros/**` |
-| workflow | `workflow/**` |
-| policy | `policy/**`, `access/**` |
-| ops | `ops/**` |
-| dto | `dto/**` |
-| model | `model/**` |
-| storage | `storage/**` |
+| access | `access/**` |
 | api | `api/**` |
+| bootstrap | `bootstrap/**` |
+| cdk | `cdk/**` |
+| config | `config/**` |
+| dispatch | `dispatch/**` |
+| domain | `domain/**` |
+| dto | `dto/**` |
+| format | `format/**` |
+| ids | `ids/**` |
+| infra | `infra/**` |
+| ingress | `ingress/**` |
+| lifecycle | `lifecycle/**` |
+| memory | `memory/**` |
+| ops | `ops/**` |
+| root | root-level `*.rs` files under `crates/canic-core/src/` |
+| storage | `storage/**` |
+| test-support | `test/**`, `tests/**`, `test.rs`, `tests.rs`, `test_support.rs` |
+| view | `view/**` |
+| workflow | `workflow/**` |
 
 Rules:
 
 * Each file must be assigned to exactly one subsystem.
 * If a file spans domains, classify by primary responsibility.
+* If a new top-level scope appears, either add it here as a methodology update
+  or report it as an unmapped scope in the run.
 
 ---
 
@@ -174,6 +188,9 @@ Baseline rule:
 | Total runtime files in scope |  |  |  |
 | Runtime LOC |  |  |  |
 | Files >= 600 LOC |  |  |  |
+| Non-test runtime files |  |  |  |
+| Non-test runtime LOC |  |  |  |
+| Non-test files >= 600 LOC |  |  |  |
 | Capability mentions |  |  |  |
 | Capability decision owners |  |  |  |
 | Capability execution consumers |  |  |  |
@@ -526,6 +543,10 @@ rg 'crate::workflow|crate::ops|crate::api|crate::policy' crates/ -g '*.rs'
 rg 'pub struct|impl ' crates/ -g '*.rs'
 git log --name-only -n 20 -- crates/
 ```
+
+Large-file scans must report both total and non-test counts. Total `>= 600 LOC`
+files identify maintainability pressure, but non-test `>= 600 LOC` files drive
+runtime complexity risk by default.
 
 ### Runtime Complexity Hotspots
 
