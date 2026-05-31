@@ -12,9 +12,34 @@ present.
 
 ## Unreleased
 
+## [0.54.x] - 2026-05-31 - Passive deployment catalog
+
+Detailed patch breakdown: [docs/changelog/0.54.md](docs/changelog/0.54.md)
+
+- `0.54.0` adds a passive deployment catalog over existing deployment-target
+  local state:
+  ```text
+  canic deploy catalog list
+  canic deploy catalog inspect <deployment>
+  ```
+  The catalog reads `.canic/<network>/deployments/<deployment>.json`, emits
+  text by default or raw `DeploymentCatalogReportV1` JSON with `--format json`,
+  and can write the selected format with `--output <path>`. It does not query
+  live deployments, create deployment truth, infer deployments from fleet
+  names, mutate topology/controllers/state, install Wasm, register artifacts,
+  or add deployment groups.
+
 ## [0.53.x] - 2026-05-31 - CI policy gates and project evidence manifests
 
 Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
+
+- `0.53.6` closes the CI policy gate line with a release audit:
+  ```text
+  docs/audits/release-lines/0.53-closeout.md
+  ```
+  The audit verifies the passive single-envelope gate, build-provenance policy
+  rules, project evidence manifests, duplicate manifest-path hardening, CLI
+  help, docs, tests, and unchanged passive boundary.
 
 - `0.53.5` hardens project evidence manifests by rejecting duplicate evidence
   paths before policy gate evaluation. This prevents the same saved envelope

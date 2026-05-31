@@ -9,25 +9,45 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Tentative next minor: `0.53.x` CI policy gates and project evidence
-  manifests. The tentative design is:
+- Current minor: `0.54.x` passive deployment catalog is active. The design is:
+  ```text
+  docs/design/0.54-passive-deployment-catalog/0.54-design.md
+  ```
+- `0.54.0` has added the v1-sized catalog commands:
+  ```text
+  canic deploy catalog list
+  canic deploy catalog inspect <deployment>
+  ```
+  The commands read only `.canic/<network>/deployments/<deployment>.json`,
+  default to text output, support raw JSON with `--format json`, and write the
+  selected format with `--output <path>`. They do not query live deployments,
+  create deployment truth, infer deployments from fleet-template names, mutate
+  topology/controllers/state, install Wasm, register artifacts, or add
+  deployment groups.
+- Previous minor: `0.53.x` CI policy gates and project evidence manifests is
+  closed. The implemented design is:
   ```text
   docs/design/0.53-ci-policy-gates-project-manifests/0.53-design.md
   ```
-  The proposed line consumes 0.51 `EvidenceEnvelopeV1` and 0.52
+  The closeout audit is:
+  ```text
+  docs/audits/release-lines/0.53-closeout.md
+  ```
+  The line consumes 0.51 `EvidenceEnvelopeV1` and 0.52
   `canic.build_provenance.v1` evidence to evaluate passive CI policy gates,
-  now implemented first as:
+  implemented as:
   ```text
   canic evidence gate --policy <path> --envelope <path>
+  canic evidence gate --policy <path> --manifest <path>
   ```
-  It should not add deployment locks, signing, provider wrappers, artifact
+  It did not add deployment locks, signing, provider wrappers, artifact
   registry import, controller mutation, topology mutation, active
-  adoption/import, or deployment/install authority. The first policy
-  implementation now stays narrow around one strict policy file, one existing
-  `EvidenceEnvelopeV1`, stable envelope fields, stable
-  `canic.build_provenance.v1` payload rules, project evidence manifests over
-  existing envelope files, and stable policy gate report results.
-- Current minor: `0.52.x` source, build, and artifact provenance is closed.
+  adoption/import, or deployment/install authority. The policy implementation
+  stays narrow around strict policy files, existing `EvidenceEnvelopeV1`
+  evidence, stable envelope fields, stable `canic.build_provenance.v1` payload
+  rules, project evidence manifests over existing envelope files, and stable
+  policy gate report results.
+- Previous minor: `0.52.x` source, build, and artifact provenance is closed.
   The implemented design is
   `docs/design/0.52-source-build-artifact-provenance/0.52-design.md`; the
   closeout audit is `docs/audits/release-lines/0.52-closeout.md`.
@@ -74,6 +94,33 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Implemented the 0.54.0 passive deployment catalog:
+  ```text
+  canic deploy catalog list
+  canic deploy catalog inspect <deployment>
+  ```
+  The catalog is intentionally narrow before v1: it reads local
+  deployment-target state only, emits text or `DeploymentCatalogReportV1` JSON,
+  writes only explicit `--output` artifacts, and keeps deployment groups,
+  promotion lanes, saved-evidence catalogs, locks, signing, registry import,
+  provider wrappers, teardown, and active adoption/import deferred.
+- Drafted and then cut the tentative 0.54 design to the v1-sized operator
+  story:
+  ```text
+  docs/design/0.54-passive-deployment-catalog/0.54-design.md
+  ```
+  The design intentionally defers deployment groups, promotion lanes,
+  saved-evidence catalogs, locks, signing, registry import, provider wrappers,
+  teardown, and active adoption/import until after the v1 surface is simpler
+  and closed.
+- 0.53.6 has closed the CI policy gate line with:
+  ```text
+  docs/audits/release-lines/0.53-closeout.md
+  ```
+  The audit verdict is PASS. It verifies the passive single-envelope gate,
+  build-provenance policy rules, project evidence manifests, duplicate
+  manifest-path hardening, CLI help, docs, tests, and unchanged passive
+  boundary.
 - 0.53.5 has hardened project evidence manifests. Duplicate evidence paths are
   now invalid before policy gate evaluation, so one saved envelope cannot be
   evaluated more than once under a single manifest. The passive boundary is

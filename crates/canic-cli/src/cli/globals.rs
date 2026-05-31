@@ -166,6 +166,7 @@ fn deploy_leaf_accepts_global_network(tail: &[OsString]) -> bool {
             "check" | "diff" | "install" | "inventory" | "plan" | "register" | "report"
             | "resume-report",
         ) => true,
+        Some("catalog") => matches!(second, Some("inspect" | "list")),
         Some("authority") => matches!(second, Some("check" | "evidence" | "receipt" | "report")),
         Some("external") => matches!(
             second,

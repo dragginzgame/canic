@@ -8,11 +8,15 @@ use crate::{
         globals::internal_network_arg,
         help::print_help_or_version,
     },
-    version_text,
+    output, version_text,
 };
 use canic_host::{
     build_provenance::build_provenance_schema,
     canister_build::CanisterBuildProfile,
+    deployment_catalog::{
+        DeploymentCatalogReportV1, DeploymentCatalogRequest, build_deployment_catalog_report,
+        deployment_catalog_report_text, inspect_deployment_catalog_report,
+    },
     deployment_truth::{
         ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
         ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
@@ -116,6 +120,8 @@ Examples:
   canic deploy diff demo
   canic deploy report demo
   canic deploy check demo
+  canic deploy catalog list
+  canic deploy catalog inspect demo-local
   canic deploy authority check demo
   canic deploy authority evidence demo
   canic deploy authority report demo
@@ -149,6 +155,32 @@ mutation flows through `canic deploy install <deployment> --plan <file>`.
 `canic install <fleet>` remains the fleet-template bootstrap entrypoint.
 Authority commands are dry-run reconciliation reports and do not mutate
 controller state.";
+const DEPLOY_CATALOG_HELP_AFTER: &str = "\
+Examples:
+  canic deploy catalog list
+  canic deploy catalog inspect demo-local
+  canic --network local deploy catalog list --format json --output catalog.json
+
+Catalog commands are read-only local-state reports. They list or inspect
+deployment targets recorded under .canic/<network>/deployments and do not query
+live deployments, create deployment truth, mutate topology, change
+controllers, install Wasm, or infer deployments from fleet-template names.";
+const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
+Examples:
+  canic deploy catalog list
+  canic deploy catalog list --format json
+  canic --network local deploy catalog list --format json --output catalog.json
+
+Lists deployment targets from existing local deployment-target state only. This
+does not refresh live state or infer deployments from fleet-template names.";
+const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
+Examples:
+  canic deploy catalog inspect demo-local
+  canic deploy catalog inspect demo-local --format json
+  canic --network local deploy catalog inspect demo-local --format json --output demo-local.json
+
+Inspects one deployment target from existing local deployment-target state
+only. The deployment argument is a deployment target, not a fleet template.";
 const DEPLOY_ROOT_HELP_AFTER: &str = "\
 Examples:
   canic deploy root inspect --request root-verification.json
@@ -614,6 +646,17 @@ struct DeployCheckOptions {
 }
 
 ///
+/// DeployCatalogOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeployCatalogOptions {
+    deployment: Option<String>,
+    network: String,
+    format: CatalogOutputFormat,
+    output: Option<PathBuf>,
+}
+
+///
 /// DeployResumeReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -760,6 +803,15 @@ enum CheckOutputFormat {
 }
 
 ///
+/// CatalogOutputFormat
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CatalogOutputFormat {
+    Text,
+    Json,
+}
+
+///
 /// ExternalOutputFormat
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -901,6 +953,7 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "authority" => run_authority(args),
+            "catalog" => run_catalog(args),
             "external" => run_external(args),
             "promote" => run_promote(args),
             "root" => run_root(args),
@@ -916,6 +969,65 @@ where
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }
+}
+
+fn run_catalog<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, catalog_usage, version_text()) {
+        return Ok(());
+    }
+
+    match parse_subcommand(deploy_catalog_command(), args)
+        .map_err(|_| DeployCommandError::Usage(catalog_usage()))?
+    {
+        Some((command, args)) if command == "list" => run_catalog_list(args),
+        Some((command, args)) if command == "inspect" => run_catalog_inspect(args),
+        _ => {
+            println!("{}", catalog_usage());
+            Ok(())
+        }
+    }
+}
+
+fn run_catalog_list<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, catalog_list_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployCatalogOptions::parse_list(args)?;
+    let request = deployment_catalog_request(&options)?;
+    let report = build_deployment_catalog_report(&request)
+        .map_err(Box::<dyn std::error::Error>::from)
+        .map_err(DeployCommandError::from)?;
+    write_catalog_report(&options, &report)
+}
+
+fn run_catalog_inspect<I>(args: I) -> Result<(), DeployCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, catalog_inspect_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = DeployCatalogOptions::parse_inspect(args)?;
+    let deployment = options
+        .deployment
+        .as_deref()
+        .expect("catalog inspect parser requires deployment");
+    let request = deployment_catalog_request(&options)?;
+    let report = inspect_deployment_catalog_report(&request, deployment)
+        .map_err(Box::<dyn std::error::Error>::from)
+        .map_err(DeployCommandError::from)?;
+    write_catalog_report(&options, &report)
 }
 
 fn run_root<I>(args: I) -> Result<(), DeployCommandError>
@@ -2276,6 +2388,37 @@ where
     Ok(())
 }
 
+fn write_catalog_report(
+    options: &DeployCatalogOptions,
+    report: &DeploymentCatalogReportV1,
+) -> Result<(), DeployCommandError> {
+    match options.format {
+        CatalogOutputFormat::Text => output::write_text::<Box<dyn std::error::Error>>(
+            options.output.as_ref(),
+            &deployment_catalog_report_text(report),
+        )
+        .map_err(DeployCommandError::from),
+        CatalogOutputFormat::Json => output::write_pretty_json::<_, Box<dyn std::error::Error>>(
+            options.output.as_ref(),
+            report,
+        )
+        .map_err(DeployCommandError::from),
+    }
+}
+
+fn deployment_catalog_request(
+    options: &DeployCatalogOptions,
+) -> Result<DeploymentCatalogRequest, DeployCommandError> {
+    let icp_root = resolve_current_canic_icp_root()
+        .map_err(Box::<dyn std::error::Error>::from)
+        .map_err(DeployCommandError::from)?;
+    Ok(DeploymentCatalogRequest {
+        icp_root,
+        network: options.network.clone(),
+        generated_at: current_observed_at()?,
+    })
+}
+
 fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, DeployCommandError> {
     read_json_file(path)
 }
@@ -2997,6 +3140,60 @@ impl DeployCheckOptions {
     }
 }
 
+impl DeployCatalogOptions {
+    #[cfg(test)]
+    fn parse_list_test<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse_list(args)
+    }
+
+    #[cfg(test)]
+    fn parse_inspect_test<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse_inspect(args)
+    }
+
+    fn parse_list<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_catalog_list_command(), args)
+            .map_err(|_| DeployCommandError::Usage(catalog_list_usage()))?;
+        Ok(Self {
+            deployment: None,
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            format: parse_catalog_output_format(
+                string_option(&matches, "format").as_deref(),
+                catalog_list_usage,
+            )?,
+            output: path_option(&matches, "output"),
+        })
+    }
+
+    fn parse_inspect<I>(args: I) -> Result<Self, DeployCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(deploy_catalog_inspect_command(), args)
+            .map_err(|_| DeployCommandError::Usage(catalog_inspect_usage()))?;
+        Ok(Self {
+            deployment: Some(
+                string_option(&matches, "deployment").expect("clap requires deployment"),
+            ),
+            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            format: parse_catalog_output_format(
+                string_option(&matches, "format").as_deref(),
+                catalog_inspect_usage,
+            )?,
+            output: path_option(&matches, "output"),
+        })
+    }
+}
+
 fn deploy_command() -> ClapCommand {
     ClapCommand::new("deploy")
         .bin_name("canic deploy")
@@ -3005,6 +3202,11 @@ fn deploy_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("authority")
                 .about("Dry-run controller authority reconciliation")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("catalog")
+                .about("List or inspect known deployment targets")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
@@ -3068,6 +3270,52 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
+}
+
+fn deploy_catalog_command() -> ClapCommand {
+    ClapCommand::new("catalog")
+        .bin_name("canic deploy catalog")
+        .about("List or inspect known deployment targets")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("list")
+                .about("List known deployment targets from local state")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("inspect")
+                .about("Inspect one known deployment target from local state")
+                .disable_help_flag(true),
+        ))
+        .after_help(DEPLOY_CATALOG_HELP_AFTER)
+}
+
+fn deploy_catalog_list_command() -> ClapCommand {
+    ClapCommand::new("list")
+        .bin_name("canic deploy catalog list")
+        .about("List known deployment targets from local state")
+        .disable_help_flag(true)
+        .arg(catalog_format_arg())
+        .arg(catalog_output_arg())
+        .arg(internal_network_arg())
+        .after_help(DEPLOY_CATALOG_LIST_HELP_AFTER)
+}
+
+fn deploy_catalog_inspect_command() -> ClapCommand {
+    ClapCommand::new("inspect")
+        .bin_name("canic deploy catalog inspect")
+        .about("Inspect one known deployment target from local state")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("deployment")
+                .value_name("deployment")
+                .required(true)
+                .help("Deployment target name to inspect"),
+        )
+        .arg(catalog_format_arg())
+        .arg(catalog_output_arg())
+        .arg(internal_network_arg())
+        .after_help(DEPLOY_CATALOG_INSPECT_HELP_AFTER)
 }
 
 fn deploy_root_command() -> ClapCommand {
@@ -3831,6 +4079,22 @@ fn check_format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn catalog_format_arg() -> clap::Arg {
+    value_arg("format")
+        .long("format")
+        .value_name("text|json")
+        .num_args(1)
+        .help("Output format; defaults to text")
+}
+
+fn catalog_output_arg() -> clap::Arg {
+    value_arg("output")
+        .long("output")
+        .value_name("path")
+        .num_args(1)
+        .help("Write the selected catalog output format to this path")
+}
+
 fn build_provenance_input_arg() -> clap::Arg {
     value_arg("build-provenance")
         .long("build-provenance")
@@ -3898,6 +4162,21 @@ fn report_usage() -> String {
 
 fn check_usage() -> String {
     let mut command = deploy_check_command();
+    command.render_help().to_string()
+}
+
+fn catalog_usage() -> String {
+    let mut command = deploy_catalog_command();
+    command.render_help().to_string()
+}
+
+fn catalog_list_usage() -> String {
+    let mut command = deploy_catalog_list_command();
+    command.render_help().to_string()
+}
+
+fn catalog_inspect_usage() -> String {
+    let mut command = deploy_catalog_inspect_command();
     command.render_help().to_string()
 }
 
@@ -4149,6 +4428,20 @@ fn parse_check_output_format(
     }
 }
 
+fn parse_catalog_output_format(
+    value: Option<&str>,
+    usage: fn() -> String,
+) -> Result<CatalogOutputFormat, DeployCommandError> {
+    match value.unwrap_or("text") {
+        "text" => Ok(CatalogOutputFormat::Text),
+        "json" => Ok(CatalogOutputFormat::Json),
+        other => Err(DeployCommandError::Usage(format!(
+            "invalid deployment catalog output format: {other}\n\n{}",
+            usage()
+        ))),
+    }
+}
+
 fn parse_authority_output_format(
     value: Option<&str>,
     usage: fn() -> String,
@@ -4374,6 +4667,146 @@ mod tests {
 
         assert!(text.contains("--format <json|envelope-json>"));
         assert!(text.contains("--build-provenance <path>"));
+    }
+
+    #[test]
+    fn deploy_catalog_options_parse_list_defaults_to_text() {
+        let options = DeployCatalogOptions::parse_list_test([
+            OsString::from("--__canic-network"),
+            OsString::from("local"),
+        ])
+        .expect("parse catalog list");
+
+        assert_eq!(options.deployment, None);
+        assert_eq!(options.network, "local");
+        assert_eq!(options.format, CatalogOutputFormat::Text);
+        assert_eq!(options.output, None);
+    }
+
+    #[test]
+    fn deploy_catalog_options_parse_inspect_json_output() {
+        let options = DeployCatalogOptions::parse_inspect_test([
+            OsString::from("demo-local"),
+            OsString::from("--format"),
+            OsString::from("json"),
+            OsString::from("--output"),
+            OsString::from("catalog.json"),
+        ])
+        .expect("parse catalog inspect");
+
+        assert_eq!(options.deployment.as_deref(), Some("demo-local"));
+        assert_eq!(options.network, "local");
+        assert_eq!(options.format, CatalogOutputFormat::Json);
+        assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
+    }
+
+    #[test]
+    fn deploy_catalog_rejects_unknown_format() {
+        let err = DeployCatalogOptions::parse_list_test([
+            OsString::from("--format"),
+            OsString::from("envelope-json"),
+        ])
+        .expect_err("catalog format is narrow in 0.54.0");
+
+        std::assert_matches!(
+            err,
+            DeployCommandError::Usage(message)
+                if message.contains("invalid deployment catalog output format")
+        );
+    }
+
+    #[test]
+    fn deploy_catalog_command_dispatches_list_and_inspect() {
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [OsString::from("catalog"), OsString::from("list")],
+        )
+        .expect("parse deploy catalog")
+        .expect("catalog command");
+
+        assert_eq!(parsed.0, "catalog");
+        let nested = parse_subcommand(deploy_catalog_command(), parsed.1)
+            .expect("parse nested catalog")
+            .expect("catalog list command");
+        assert_eq!(nested.0, "list");
+
+        let parsed = parse_subcommand(
+            deploy_command(),
+            [
+                OsString::from("catalog"),
+                OsString::from("inspect"),
+                OsString::from("demo-local"),
+            ],
+        )
+        .expect("parse deploy catalog inspect")
+        .expect("catalog command");
+
+        assert_eq!(parsed.0, "catalog");
+        let nested = parse_subcommand(deploy_catalog_command(), parsed.1)
+            .expect("parse nested catalog inspect")
+            .expect("catalog inspect command");
+        assert_eq!(nested.0, "inspect");
+        assert_eq!(nested.1, vec![OsString::from("demo-local")]);
+    }
+
+    #[test]
+    fn deploy_catalog_help_documents_passive_deployment_target_scope() {
+        let help = catalog_usage();
+        let list_help = catalog_list_usage();
+        let inspect_help = catalog_inspect_usage();
+
+        assert!(help.contains("deployment targets recorded under .canic/<network>/deployments"));
+        assert!(help.contains("do not query"));
+        assert!(help.contains("infer deployments from fleet-template names"));
+        assert!(list_help.contains("--format <text|json>"));
+        assert!(list_help.contains("--output <path>"));
+        assert!(inspect_help.contains("deployment target, not a fleet template"));
+    }
+
+    #[test]
+    fn writes_catalog_json_output_file() {
+        let out = temp_json_path("deploy-catalog-output.json");
+        let options = DeployCatalogOptions {
+            deployment: None,
+            network: "local".to_string(),
+            format: CatalogOutputFormat::Json,
+            output: Some(out.clone()),
+        };
+        let report = sample_catalog_report();
+
+        write_catalog_report(&options, &report).expect("write catalog");
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&out).expect("read catalog")).expect("parse catalog");
+
+        fs::remove_file(out).expect("clean catalog");
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["entries"][0]["deployment"], "demo-local");
+        assert!(value.get("envelope_schema").is_none());
+    }
+
+    #[test]
+    fn deploy_catalog_path_has_no_live_lookup_or_mutation_primitives() {
+        let source = include_str!("mod.rs");
+        let catalog_source = source_between(source, "fn run_catalog<I>", "fn run_root<I>");
+        for forbidden in [
+            "update_settings",
+            "install_code",
+            "create_canister",
+            "delete_canister",
+            "stop_canister",
+            "uninstall_code",
+            "provisional_create_canister",
+            "dfx",
+            "check_install_deployment_truth",
+            "install_root(",
+            "register_deployment_state",
+            "verify_registered_deployment_root",
+        ] {
+            assert!(
+                !catalog_source.contains(forbidden),
+                "deploy catalog path must stay local-state read-only; found forbidden token {forbidden}"
+            );
+        }
     }
 
     #[test]
@@ -7044,6 +7477,25 @@ mod tests {
 
     fn sample_sha256(seed: &str) -> String {
         seed.repeat(64)
+    }
+
+    fn sample_catalog_report() -> DeploymentCatalogReportV1 {
+        DeploymentCatalogReportV1 {
+            schema_version: 1,
+            generated_at: "unix:54".to_string(),
+            project_root: Some(".".to_string()),
+            entries: vec![canic_host::deployment_catalog::DeploymentCatalogEntryV1 {
+                deployment: "demo-local".to_string(),
+                fleet: Some("demo".to_string()),
+                network: Some("local".to_string()),
+                root_principal: Some("aaaaa-aa".to_string()),
+                root_verification:
+                    canic_host::deployment_catalog::DeploymentCatalogRootVerificationV1::Verified,
+                local_state_ref: None,
+                warnings: Vec::new(),
+            }],
+            warnings: Vec::new(),
+        }
     }
 
     fn temp_json_path(name: &str) -> PathBuf {
