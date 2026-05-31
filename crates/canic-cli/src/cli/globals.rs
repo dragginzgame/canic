@@ -140,10 +140,7 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
         "build" | "cycles" | "endpoints" | "install" | "medic" | "metrics" | "status" | "token" => {
             true
         }
-        "deploy" => matches!(
-            tail.first().and_then(|arg| arg.to_str()),
-            Some("check" | "diff" | "inventory" | "plan" | "report")
-        ),
+        "deploy" => deploy_leaf_accepts_global_network(tail),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
@@ -158,6 +155,25 @@ fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
         tail.first().and_then(|arg| arg.to_str()),
         Some("cycles" | "list")
     )
+}
+
+fn deploy_leaf_accepts_global_network(tail: &[OsString]) -> bool {
+    let first = tail.first().and_then(|arg| arg.to_str());
+    let second = tail.get(1).and_then(|arg| arg.to_str());
+
+    match first {
+        Some(
+            "check" | "diff" | "install" | "inventory" | "plan" | "register" | "report"
+            | "resume-report",
+        ) => true,
+        Some("authority") => matches!(second, Some("check" | "evidence" | "receipt" | "report")),
+        Some("external") => matches!(
+            second,
+            Some("check" | "critical-fix" | "handoff" | "pending" | "plan" | "proposals")
+        ),
+        Some("root") => second == Some("verify"),
+        _ => false,
+    }
 }
 
 fn tail_has_option(tail: &[OsString], name: &str) -> bool {

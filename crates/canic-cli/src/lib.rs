@@ -9,7 +9,6 @@ mod fleets;
 mod info;
 mod install;
 mod list;
-mod manifest;
 mod medic;
 mod metrics;
 mod output;
@@ -52,9 +51,6 @@ pub enum CliError {
     #[error("build: {0}")]
     Build(#[from] build::BuildCommandError),
 
-    #[error("config: {0}")]
-    Config(String),
-
     #[error("cycles: {0}")]
     Cycles(#[from] cycles::CyclesCommandError),
 
@@ -75,9 +71,6 @@ pub enum CliError {
 
     #[error("fleet: {0}")]
     Fleets(#[from] fleets::FleetCommandError),
-
-    #[error("manifest: {0}")]
-    Manifest(#[from] manifest::ManifestCommandError),
 
     #[error("medic: {0}")]
     Medic(#[from] medic::MedicCommandError),
@@ -149,7 +142,6 @@ where
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
-        "config" => list::run_config(tail).map_err(|err| CliError::Config(err.to_string())),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
         "endpoints" => endpoints::run(tail).map_err(CliError::from),
@@ -157,7 +149,6 @@ where
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
-        "manifest" => manifest::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
         "metrics" => metrics::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),

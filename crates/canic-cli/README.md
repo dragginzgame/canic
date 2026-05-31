@@ -101,7 +101,7 @@ name = "test"
 Successful installs write
 `.canic/<network>/deployments/<deployment>.json` with the deployment name, fleet
 template, root target, resolved root principal, build target, config path, root
-verification state, and staging manifest path. `canic config <name>` shows the
+verification state, and staging manifest path. `canic fleet config <name>` shows the
 selected fleet declaration, including opt-in role features such as auth,
 sharding, and scaling, while `canic info list <name>` queries the deployed root
 registry for that target.
@@ -181,7 +181,7 @@ durable artifact paths, and checksums before restore planning.
 
 Use these commands after capture and before restore planning:
 
-- `canic manifest validate` checks manifest shape, topology hash inputs,
+- `canic backup manifest validate` checks manifest shape, topology hash inputs,
   and backup units.
 - `canic backup status` summarizes resumable download journal progress.
 - `canic backup verify` validates the backup layout and artifact checksums.

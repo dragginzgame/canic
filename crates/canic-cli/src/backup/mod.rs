@@ -21,6 +21,7 @@ mod create;
 mod inspect;
 mod labels;
 mod layout;
+mod manifest;
 mod model;
 mod options;
 mod prune;
@@ -37,6 +38,7 @@ use create::backup_create;
 #[cfg(test)]
 use create::{persist_backup_create_dry_run, persist_backup_create_dry_run_with_layout};
 use inspect::backup_inspect;
+use manifest::run as run_manifest;
 pub use model::{
     BackupCreateReport, BackupDryRunStatusReport, BackupInspectOperation, BackupInspectReport,
     BackupInspectTarget, BackupListEntry, BackupPruneEntry, BackupPruneReport, BackupStatusReport,
@@ -83,6 +85,9 @@ pub enum BackupCommandError {
 
     #[error("backup reference {reference} is ambiguous under backups; use `--dir <dir>`")]
     BackupReferenceAmbiguous { reference: String },
+
+    #[error("manifest: {0}")]
+    Manifest(String),
 
     #[error(
         "backup layout at --out is for a different request: {field} existing={existing}, requested={requested}"
@@ -189,6 +194,9 @@ where
             let report = backup_inspect(&options)?;
             write_inspect_report(&options, &report)?;
             Ok(())
+        }
+        "manifest" => {
+            run_manifest(args).map_err(|err| BackupCommandError::Manifest(err.to_string()))
         }
         "prune" => {
             if print_help_or_version(&args, prune_usage, version_text()) {

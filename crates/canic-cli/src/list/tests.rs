@@ -136,7 +136,7 @@ fn list_and_config_usage_explain_fleet_and_subtree_options() {
     assert!(list.contains("--verbose"));
     assert!(!list.contains("--from"));
     assert!(!list.contains("--root"));
-    assert!(config.contains("Usage: canic config [OPTIONS] <fleet>"));
+    assert!(config.contains("Usage: canic fleet config [OPTIONS] <fleet>"));
     assert!(config.contains("<fleet>"));
     assert!(!config.contains("--fleet <name>"));
     assert!(!config.contains("--subtree"));

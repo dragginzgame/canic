@@ -45,8 +45,7 @@ fn usage_lists_command_families() {
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    evidence"));
-    assert!(plain.find("    evidence") < plain.find("    config"));
-    assert!(plain.find("    config") < plain.find("    info"));
+    assert!(plain.find("    evidence") < plain.find("    info"));
     assert!(plain.find("    info") < plain.find("    endpoints"));
     assert!(plain.find("    endpoints") < plain.find("    medic"));
     assert!(plain.find("    medic") < plain.find("    metrics"));
@@ -54,13 +53,11 @@ fn usage_lists_command_families() {
     assert!(plain.find("    cycles") < plain.find("    token"));
     assert!(plain.find("    metrics") < plain.find("    snapshot"));
     assert!(plain.find("    snapshot") < plain.find("    backup"));
-    assert!(plain.find("    backup") < plain.find("    manifest"));
-    assert!(plain.find("    manifest") < plain.find("    restore"));
+    assert!(plain.find("    backup") < plain.find("    restore"));
     assert!(plain.contains("Options:"));
     assert!(plain.contains("--icp <path>"));
     assert!(plain.contains("--network <name>"));
     assert!(plain.contains("    scaffold"));
-    assert!(plain.contains("config"));
     assert!(plain.contains("cycles"));
     assert!(plain.contains("token"));
     assert!(plain.contains("info"));
@@ -76,7 +73,6 @@ fn usage_lists_command_families() {
     assert!(plain.contains("install"));
     assert!(plain.contains("snapshot"));
     assert!(plain.contains("backup"));
-    assert!(plain.contains("manifest"));
     assert!(plain.contains("medic"));
     assert!(plain.contains("restore"));
     assert!(plain.contains("Tip: Run `canic <command> help`"));
@@ -90,9 +86,10 @@ fn command_family_help_returns_ok() {
         &["backup", "create", "help"],
         &["backup", "inspect", "help"],
         &["backup", "list", "help"],
+        &["backup", "manifest", "help"],
+        &["backup", "manifest", "validate", "help"],
         &["backup", "status", "help"],
         &["backup", "verify", "help"],
-        &["config", "help"],
         &["build", "help"],
         &["cycles", "help"],
         &["cycles", "balance", "help"],
@@ -115,6 +112,7 @@ fn command_family_help_returns_ok() {
         &["fleet"],
         &["fleet", "help"],
         &["fleet", "check", "help"],
+        &["fleet", "config", "help"],
         &["fleet", "create", "help"],
         &["fleet", "list", "help"],
         &["fleet", "delete", "help"],
@@ -130,8 +128,6 @@ fn command_family_help_returns_ok() {
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
         &["restore", "run", "help"],
-        &["manifest", "help"],
-        &["manifest", "validate", "help"],
         &["medic", "help"],
         &["metrics", "help"],
         &["token", "help"],
@@ -151,6 +147,22 @@ fn command_family_help_returns_ok() {
 fn top_level_info_aliases_are_removed() {
     std::assert_matches!(
         run([OsString::from("list"), OsString::from("help")]),
+        Err(CliError::Usage(_))
+    );
+}
+
+#[test]
+fn top_level_fleet_config_command_is_removed() {
+    std::assert_matches!(
+        run([OsString::from("config"), OsString::from("help")]),
+        Err(CliError::Usage(_))
+    );
+}
+
+#[test]
+fn top_level_backup_manifest_command_is_removed() {
+    std::assert_matches!(
+        run([OsString::from("manifest"), OsString::from("help")]),
         Err(CliError::Usage(_))
     );
 }
@@ -200,7 +212,14 @@ fn version_flags_return_ok() {
         ])
         .is_ok()
     );
-    assert!(run([OsString::from("config"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("backup"),
+            OsString::from("manifest"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
     assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
@@ -243,6 +262,14 @@ fn version_flags_return_ok() {
     );
     assert!(
         run([
+            OsString::from("fleet"),
+            OsString::from("config"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
             OsString::from("replica"),
             OsString::from("start"),
             OsString::from("--version")
@@ -250,7 +277,6 @@ fn version_flags_return_ok() {
         .is_ok()
     );
     assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("manifest"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("metrics"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("token"), OsString::from("--version")]).is_ok());
@@ -475,16 +501,22 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
 fn global_network_is_forwarded_to_deploy() {
     let mut tail = vec![OsString::from("check"), OsString::from("demo")];
     let mut diff_tail = vec![OsString::from("diff"), OsString::from("demo")];
+    let mut install_tail = vec![OsString::from("install"), OsString::from("demo")];
     let mut inventory_tail = vec![OsString::from("inventory"), OsString::from("demo")];
     let mut plan_tail = vec![OsString::from("plan"), OsString::from("demo")];
+    let mut register_tail = vec![OsString::from("register"), OsString::from("demo")];
     let mut report_tail = vec![OsString::from("report"), OsString::from("demo")];
+    let mut resume_tail = vec![OsString::from("resume-report"), OsString::from("demo")];
     let mut family_tail = Vec::new();
 
     apply_global_network("deploy", &mut tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut diff_tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut install_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut inventory_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut plan_tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut register_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut report_tail, Some("ic".to_string()));
+    apply_global_network("deploy", &mut resume_tail, Some("ic".to_string()));
     apply_global_network("deploy", &mut family_tail, Some("ic".to_string()));
 
     assert_eq!(
@@ -500,6 +532,15 @@ fn global_network_is_forwarded_to_deploy() {
         diff_tail,
         vec![
             OsString::from("diff"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        install_tail,
+        vec![
+            OsString::from("install"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("ic")
@@ -524,6 +565,15 @@ fn global_network_is_forwarded_to_deploy() {
         ]
     );
     assert_eq!(
+        register_tail,
+        vec![
+            OsString::from("register"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
         report_tail,
         vec![
             OsString::from("report"),
@@ -532,7 +582,64 @@ fn global_network_is_forwarded_to_deploy() {
             OsString::from("ic")
         ]
     );
+    assert_eq!(
+        resume_tail,
+        vec![
+            OsString::from("resume-report"),
+            OsString::from("demo"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
     assert!(family_tail.is_empty());
+}
+
+#[test]
+fn global_network_is_forwarded_to_nested_deploy_network_leaves() {
+    for raw_tail in [
+        &["authority", "check", "demo"][..],
+        &["authority", "evidence", "demo"],
+        &["authority", "receipt", "demo"],
+        &["authority", "report", "demo"],
+        &["external", "check", "demo"],
+        &["external", "critical-fix", "demo"],
+        &["external", "handoff", "demo"],
+        &["external", "pending", "demo"],
+        &["external", "plan", "demo"],
+        &["external", "proposals", "demo"],
+        &["root", "verify", "demo"],
+    ] {
+        let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
+        apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+
+        assert!(tail.ends_with(&[
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]));
+    }
+}
+
+#[test]
+fn global_network_is_not_forwarded_to_request_only_deploy_leaves() {
+    for raw_tail in [
+        &["compare", "--left", "a.json", "--right", "b.json"][..],
+        &["external", "verify", "--request", "request.json"],
+        &[
+            "external",
+            "inspect",
+            "consent",
+            "--request",
+            "request.json",
+        ],
+        &["promote", "plan", "--request", "request.json"],
+        &["root", "inspect", "--request", "request.json"],
+    ] {
+        let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
+        let original = tail.clone();
+        apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+
+        assert_eq!(tail, original);
+    }
 }
 
 #[test]

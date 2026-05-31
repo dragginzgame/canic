@@ -9,19 +9,37 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active minor: `0.52.x` source, build, and artifact provenance. The proposed
-  design is registered in
-  `docs/design/0.52-source-build-artifact-provenance/0.52-design.md`.
-- Current release-work area: 0.52 should build on 0.51's stable evidence
-  envelopes by adding source, Cargo, build, and artifact provenance for:
+- Tentative next minor: `0.53.x` CI policy gates and project evidence
+  manifests. The tentative design is:
+  ```text
+  docs/design/0.53-ci-policy-gates-project-manifests/0.53-design.md
+  ```
+  The proposed line consumes 0.51 `EvidenceEnvelopeV1` and 0.52
+  `canic.build_provenance.v1` evidence to evaluate passive CI policy gates,
+  starting with:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  It should not add deployment locks, signing, provider wrappers, artifact
+  registry import, controller mutation, topology mutation, active
+  adoption/import, or deployment/install authority. The first policy slice
+  should stay narrow: one strict policy file, one existing
+  `EvidenceEnvelopeV1`, stable envelope fields plus payload schema
+  identity/stability only, and a stable `PolicyGateReportV1` result.
+- Current minor: `0.52.x` source, build, and artifact provenance is closed.
+  The implemented design is
+  `docs/design/0.52-source-build-artifact-provenance/0.52-design.md`; the
+  closeout audit is `docs/audits/release-lines/0.52-closeout.md`.
+- Completed release-work area: 0.52 builds on 0.51's stable evidence envelopes
+  by adding source, Cargo, build, and artifact provenance for:
   ```text
   canic build <fleet> <role> --provenance <path>
   ```
-  The first implementation slice emits an `EvidenceEnvelopeV1` containing
-  stable `canic.build_provenance.v1` payload. Further 0.52 work should keep
-  signing, CI locks, provider wrappers, controller mutation, topology mutation,
-  artifact registry import, adoption mutation, and deployment/install
-  authority out of scope unless explicitly promoted.
+  The command emits an `EvidenceEnvelopeV1` containing stable
+  `canic.build_provenance.v1` payload. 0.52 intentionally keeps signing, CI
+  locks, provider wrappers, controller mutation, topology mutation, artifact
+  registry import, adoption mutation, and deployment/install authority out of
+  scope.
 - 0.51 CI/GitOps evidence envelopes are closed. The implemented design is at
   `docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md`;
   the closeout audit is `docs/audits/release-lines/0.51-closeout.md`.
@@ -55,6 +73,39 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.53.0 has hard-cut stale CLI surfaces before policy-gate work:
+  ```text
+  canic fleet config <fleet>
+  canic backup manifest validate --manifest <file>
+  ```
+  The old top-level `canic config` and `canic manifest` command families are
+  removed. Global `--network` forwarding now reaches every `canic deploy ...`
+  leaf that consumes deployment network state.
+- Drafted the tentative 0.53 CI policy gate and project evidence manifest
+  design:
+  ```text
+  docs/design/0.53-ci-policy-gates-project-manifests/0.53-design.md
+  ```
+  The design now tightens the first implementation slice to a single-envelope
+  policy gate:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  0.53.0 should evaluate envelope schema, payload schema identity/stability,
+  evaluated exit class, and structured summary evidence state, then emit a
+  stable `PolicyGateReportV1` that distinguishes evaluated evidence from the
+  gate result. Build-provenance field rules such as clean source,
+  `Cargo.lock`, package identity, gzip Wasm, and SHA-256 requirements are
+  deferred until after single-envelope semantics are proven. Project evidence
+  manifests remain later 0.53.x scope.
+- 0.52.4 has closed the source/build/artifact provenance line with:
+  ```text
+  docs/audits/release-lines/0.52-closeout.md
+  ```
+  The audit verdict is PASS. It verifies stable `canic.build_provenance.v1`
+  payload modeling, explicit build provenance output, saved build-provenance
+  evidence inputs, CI/GitOps policy docs, and unchanged deployment, install,
+  topology, and controller mutation boundaries.
 - 0.52.3 has added CI/GitOps policy guidance for build provenance:
   ```text
   docs/architecture/build-provenance-ci-policy.md

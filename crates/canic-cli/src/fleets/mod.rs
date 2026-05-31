@@ -64,6 +64,7 @@ Examples:
   canic fleet role rename demo hub router
   canic fleet role list demo
   canic fleet role inspect demo app
+  canic fleet config demo
   canic fleet create demo
   canic fleet check test
   canic fleet delete demo";
@@ -167,6 +168,9 @@ pub enum FleetCommandError {
 
     #[error("fleet create: {0}")]
     Create(String),
+
+    #[error("config: {0}")]
+    Config(String),
 
     #[error(transparent)]
     AdoptionReport(#[from] AdoptionReportError),
@@ -324,6 +328,7 @@ where
             "check" => run_check(args),
             "delete" => run_delete(args),
             "list" => run_list(args),
+            "config" => run_config(args),
             "adoption" => run_adoption(args),
             "role" => run_role(args),
             _ => unreachable!("fleet dispatch command only defines known commands"),
@@ -559,6 +564,13 @@ where
         render_fleet_list(&project_root, &choices, &options.network)
     );
     Ok(())
+}
+
+fn run_config<I>(args: I) -> Result<(), FleetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    crate::list::run_config(args).map_err(|err| FleetCommandError::Config(err.to_string()))
 }
 
 fn run_delete<I>(args: I) -> Result<(), FleetCommandError>
@@ -952,6 +964,11 @@ fn fleet_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("list")
                 .about("List config-defined Canic fleets")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("config")
+                .about("Inspect selected fleet config")
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(

@@ -423,7 +423,6 @@ dependencies = [
  "canic-control-plane",
  "canic-core",
  "ic-testkit",
- "serde",
 ]
 
 [[package]]
@@ -2531,7 +2530,6 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "project-protocol-stub",
 ]
 
 [[package]]

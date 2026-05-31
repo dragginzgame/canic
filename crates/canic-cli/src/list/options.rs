@@ -14,8 +14,8 @@ Examples:
   canic info list demo-local --verbose";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
-  canic config test
-  canic config test --verbose";
+  canic fleet config test
+  canic fleet config test --verbose";
 
 ///
 /// ListOptions
@@ -119,7 +119,7 @@ fn info_list_command() -> ClapCommand {
 }
 
 fn config_command() -> ClapCommand {
-    base_list_options(ClapCommand::new("config").bin_name("canic config"))
+    base_list_options(ClapCommand::new("config").bin_name("canic fleet config"))
         .about("List canisters declared by the selected fleet config")
         .arg(
             value_arg("fleet")

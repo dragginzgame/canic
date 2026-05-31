@@ -31,7 +31,7 @@ fn missing_manifest_validate_option_names_required_path() {
 
     std::assert_matches!(err, ManifestCommandError::Usage(_));
     assert!(err.to_string().contains("--manifest <file>"));
-    assert!(err.to_string().contains("canic manifest validate"));
+    assert!(err.to_string().contains("canic backup manifest validate"));
 }
 
 // Ensure manifest help stays backup-artifact scoped instead of live-fleet scoped.

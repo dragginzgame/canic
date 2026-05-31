@@ -144,10 +144,11 @@ Examples:
   canic deploy resume-report --receipt receipt.json demo
   canic deploy check --profile fast demo
 
-Deployment truth commands are read-only checks. Plan-mediated mutation flows
-through `canic deploy install <deployment> --plan <file>` or the legacy `canic install`
-entrypoint. Authority commands are dry-run reconciliation reports and do not
-mutate controller state.";
+Deployment truth commands are read-only checks. Plan-mediated deployment-target
+mutation flows through `canic deploy install <deployment> --plan <file>`.
+`canic install <fleet>` remains the fleet-template bootstrap entrypoint.
+Authority commands are dry-run reconciliation reports and do not mutate
+controller state.";
 const DEPLOY_ROOT_HELP_AFTER: &str = "\
 Examples:
   canic deploy root inspect --request root-verification.json

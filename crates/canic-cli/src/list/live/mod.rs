@@ -341,7 +341,7 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     if stderr.contains("Cannot find canister id") {
         return Some(
-            "no root canister id exists for this deployment target. Use `canic config <fleet-template>` for the selected fleet config, or run `canic install <fleet-template>` before querying the root registry.",
+            "no root canister id exists for this deployment target. Use `canic fleet config <fleet-template>` for the selected fleet config, or run `canic install <fleet-template>` before querying the root registry.",
         );
     }
 

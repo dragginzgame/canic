@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially superseded by 0.51.
+Partially superseded by 0.51, 0.52, and the proposed 0.53 line.
 
 This post-0.46 backlog topic originally captured CI/CD, GitOps, and
 supply-chain needs that should build on deployment truth, authority, execution,
@@ -15,16 +15,23 @@ of this backlog as:
 docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md
 ```
 
-Source/build/artifact provenance is now proposed as the 0.52 line:
+Source/build/artifact provenance was implemented as the 0.52 line:
 
 ```text
 docs/design/0.52-source-build-artifact-provenance/0.52-design.md
 ```
 
-The remaining backlog items outside 0.52 are CI locks, project manifest
-semantics, optional signing/attestation, and provider wrappers. This document
-is retained as historical design source material, not as a competing active
-envelope or provenance design.
+Passive CI policy gates and project evidence manifests are now proposed as the
+0.53 line:
+
+```text
+docs/design/0.53-ci-policy-gates-project-manifests/0.53-design.md
+```
+
+The remaining backlog items outside 0.53 are CI locks, optional
+signing/attestation, and provider wrappers. This document is retained as
+historical design source material, not as a competing active envelope,
+provenance, or policy-gate design.
 
 ---
 
@@ -58,9 +65,15 @@ This topic consumes:
 0.43 internal executor result shapes are not the public JSON contract.
 
 0.51 now owns the stable evidence-envelope schema and exit-class taxonomy.
-0.52 proposes source/build/artifact provenance. Future lines may still own CI
-wrappers, signed plans and receipts, deployment locks, and a public project
-manifest contract.
+0.52 implemented source/build/artifact provenance. 0.53 is now proposed for
+passive CI policy gates and project evidence manifests:
+
+```text
+docs/design/0.53-ci-policy-gates-project-manifests/0.53-design.md
+```
+
+Future lines may still own CI wrappers, signed plans and receipts, and
+deployment locks.
 
 ---
 
@@ -241,9 +254,10 @@ classes.
 
 Remaining. Record build provenance in artifact manifests and receipts.
 
-### Slice 4: Project Manifest
+### Slice 4: Project Evidence Manifest
 
-Remaining. Define and validate the public project manifest contract.
+Proposed in 0.53. Define and validate a passive project evidence manifest for
+grouping saved evidence files under CI policy gates.
 
 ### Slice 5: CI Lock
 

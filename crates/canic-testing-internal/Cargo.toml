@@ -14,7 +14,6 @@ canic = { workspace = true }
 canic-control-plane = { workspace = true }
 canic-core = { workspace = true }
 ic-testkit = { workspace = true }
-serde = { workspace = true }
 
 [lints]
 workspace = true

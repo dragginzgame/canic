@@ -247,11 +247,11 @@ metadata, and lower-level build/install commands, see
 ## Fleet Management
 
 Use `canic fleet list` to list config-defined fleets. Use
-`canic config <fleet>` for declared config, and pass `<fleet>` as the first
+`canic fleet config <fleet>` for declared config, and pass `<fleet>` as the first
 argument to deployed-fleet commands.
 
 ```bash
-canic config test
+canic fleet config test
 canic info list test
 canic status
 canic --network local fleet list

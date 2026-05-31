@@ -58,6 +58,11 @@ pub(super) fn backup_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .subcommand(passthrough_subcommand(
+            ClapCommand::new("manifest")
+                .about("Validate backup manifests")
+                .disable_help_flag(true),
+        ))
+        .subcommand(passthrough_subcommand(
             ClapCommand::new("prune")
                 .about("Remove selected backup directories")
                 .disable_help_flag(true),

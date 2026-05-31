@@ -85,11 +85,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Deployment,
     },
     CommandSpec {
-        name: "config",
-        about: "Inspect selected fleet config",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
         name: "cycles",
         about: "Wrap ICP cycles balance and transfer commands",
         scope: CommandScope::IcpWallet,
@@ -127,11 +122,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "backup",
         about: "Verify backup directories and journal status",
-        scope: CommandScope::BackupRestore,
-    },
-    CommandSpec {
-        name: "manifest",
-        about: "Validate backup manifests",
         scope: CommandScope::BackupRestore,
     },
     CommandSpec {

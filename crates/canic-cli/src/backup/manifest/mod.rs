@@ -56,7 +56,7 @@ impl ManifestValidateOptions {
 
 fn manifest_validate_command() -> ClapCommand {
     ClapCommand::new("validate")
-        .bin_name("canic manifest validate")
+        .bin_name("canic backup manifest validate")
         .about("Validate a backup manifest")
         .disable_help_flag(true)
         .arg(
@@ -129,7 +129,7 @@ fn validate_usage() -> String {
 
 fn manifest_command() -> ClapCommand {
     ClapCommand::new("manifest")
-        .bin_name("canic manifest")
+        .bin_name("canic backup manifest")
         .about("Validate backup manifests")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(

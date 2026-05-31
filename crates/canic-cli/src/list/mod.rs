@@ -56,7 +56,7 @@ pub enum ListCommandError {
     InstallState(String),
 
     #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` to register existing state, or `canic config <fleet-template>` to inspect its config"
+        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` to register existing state, or `canic fleet config <fleet-template>` to inspect its config"
     )]
     NoInstalledDeployment { network: String, deployment: String },
 

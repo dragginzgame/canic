@@ -12,9 +12,51 @@ present.
 
 ## Unreleased
 
+## [0.53.x] - 2026-05-31 - CI policy gates and project evidence manifests
+
+Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
+
+- `0.53.0` hard-cuts stale CLI surfaces before the policy-gate work starts:
+  ```text
+  canic fleet config <fleet>
+  canic backup manifest validate --manifest <file>
+  ```
+  The old top-level `canic config` and `canic manifest` command families are
+  removed. Global `--network` forwarding now reaches all deployment-truth
+  deploy leaves that consume network selection instead of only the top-level
+  check/report leaves.
+
+- Proposed the tentative 0.53 design:
+  ```text
+  docs/design/0.53-ci-policy-gates-project-manifests/0.53-design.md
+  ```
+  The line should build on 0.51 evidence envelopes and 0.52 build provenance
+  by adding passive CI policy gates for existing evidence. The first policy
+  slice is now scoped to a single-envelope gate:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  It evaluates envelope schema, payload schema identity/stability, exit class,
+  and summary evidence state, emits stable `PolicyGateReportV1`, and defers
+  build-provenance field rules plus project evidence manifests until the
+  single-envelope semantics are proven.
+  It defers deployment locks, signing, provider wrappers, registry import,
+  controller mutation, topology mutation, active adoption/import, and
+  deployment/install authority.
+
 ## [0.52.x] - 2026-05-31 - Source, build, and artifact provenance
 
 Detailed patch breakdown: [docs/changelog/0.52.md](docs/changelog/0.52.md)
+
+- `0.52.4` closes the source/build/artifact provenance line with a release
+  audit:
+  ```text
+  docs/audits/release-lines/0.52-closeout.md
+  ```
+  The audit verifies the stable `canic.build_provenance.v1` payload, explicit
+  build provenance output, saved build-provenance evidence inputs, CI/GitOps
+  policy docs, and the unchanged deployment/install/topology/controller
+  boundary.
 
 - `0.52.3` adds CI/GitOps policy guidance for stable build provenance:
   ```text
