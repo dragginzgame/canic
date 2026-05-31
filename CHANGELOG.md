@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
 
+- `0.53.5` hardens project evidence manifests by rejecting duplicate evidence
+  paths before policy gate evaluation. This prevents the same saved envelope
+  from being evaluated twice under one manifest.
+
 - `0.53.4` adds policy gate architecture guidance and CI examples:
   ```text
   docs/architecture/ci-policy-gates.md

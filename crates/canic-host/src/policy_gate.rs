@@ -10,9 +10,9 @@ use crate::evidence_envelope::{
 };
 use serde::{Deserialize, Serialize, de};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 use thiserror::Error as ThisError;
 
@@ -468,9 +468,16 @@ fn validate_project_evidence_manifest_v1(
             "evidence must not be empty".to_string(),
         ));
     }
+    let mut seen_paths = BTreeSet::new();
     for (index, entry) in manifest.evidence.iter().enumerate() {
         ensure_nonempty(&format!("evidence[{index}].kind"), &entry.kind)?;
         ensure_nonempty(&format!("evidence[{index}].path"), &entry.path)?;
+        let path_key = manifest_evidence_path_key(&entry.path);
+        if !seen_paths.insert(path_key.clone()) {
+            return Err(PolicyGateError::InvalidPolicy(format!(
+                "evidence[{index}].path duplicates an earlier evidence path after normalization: {path_key}"
+            )));
+        }
         ensure_nonempty(
             &format!("evidence[{index}].payload_schema"),
             &entry.payload_schema,
@@ -482,6 +489,39 @@ fn validate_project_evidence_manifest_v1(
         }
     }
     Ok(())
+}
+
+fn manifest_evidence_path_key(path: &str) -> String {
+    let mut components = Vec::new();
+
+    for component in Path::new(path.trim()).components() {
+        match component {
+            Component::Prefix(prefix) => {
+                components.push(prefix.as_os_str().to_string_lossy().to_string());
+            }
+            Component::RootDir => components.push(String::new()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if components
+                    .last()
+                    .is_some_and(|component| !component.is_empty() && component != "..")
+                {
+                    components.pop();
+                } else {
+                    components.push("..".to_string());
+                }
+            }
+            Component::Normal(segment) => {
+                components.push(segment.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    if components.is_empty() {
+        ".".to_string()
+    } else {
+        components.join("/")
+    }
 }
 
 fn ensure_optional_allow_list<T>(field: &str, value: Option<&[T]>) -> Result<(), PolicyGateError> {
@@ -1811,6 +1851,46 @@ schema = "canic.config.toml"
                 .findings
                 .iter()
                 .any(|finding| finding.code == "policy.manifest.target_mismatch")
+        );
+    }
+
+    #[test]
+    fn project_evidence_manifest_rejects_duplicate_evidence_paths() {
+        let manifest_source = r#"
+schema_version = 1
+
+[project]
+name = "demo"
+root = "."
+
+[[evidence]]
+kind = "build_provenance"
+path = "build.json"
+required = true
+payload_schema = "canic.build_provenance.v1"
+
+[evidence.target]
+fleet = "demo"
+role = "app"
+
+[[evidence]]
+kind = "deployment_check"
+path = " ./build.json "
+required = true
+payload_schema = "canic.deployment_check.v1"
+
+[evidence.target]
+deployment = "demo-staging"
+"#;
+
+        let error = parse_project_evidence_manifest_v1(manifest_source)
+            .expect_err("duplicate evidence path should fail");
+
+        assert!(matches!(error, PolicyGateError::InvalidPolicy(_)));
+        assert!(
+            error
+                .to_string()
+                .contains("duplicates an earlier evidence path")
         );
     }
 

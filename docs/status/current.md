@@ -74,6 +74,10 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.53.5 has hardened project evidence manifests. Duplicate evidence paths are
+  now invalid before policy gate evaluation, so one saved envelope cannot be
+  evaluated more than once under a single manifest. The passive boundary is
+  unchanged.
 - 0.53.4 has added maintained policy-gate architecture guidance:
   ```text
   docs/architecture/ci-policy-gates.md
