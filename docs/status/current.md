@@ -23,9 +23,10 @@ inspect only the files needed for the current task.
   It should not add deployment locks, signing, provider wrappers, artifact
   registry import, controller mutation, topology mutation, active
   adoption/import, or deployment/install authority. The first policy
-  implementation slice stays narrow: one strict policy file, one existing
-  `EvidenceEnvelopeV1`, stable envelope fields plus payload schema
-  identity/stability only, and a stable `PolicyGateReportV1` result.
+  implementation now stays narrow around one strict policy file, one existing
+  `EvidenceEnvelopeV1`, stable envelope fields, stable
+  `canic.build_provenance.v1` payload rules, and a stable
+  `PolicyGateReportV1` result.
 - Current minor: `0.52.x` source, build, and artifact provenance is closed.
   The implemented design is
   `docs/design/0.52-source-build-artifact-provenance/0.52-design.md`; the
@@ -73,6 +74,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.53.2 has added optional build-provenance field rules to the passive
+  single-envelope policy gate:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  The new `[build_provenance]` policy table can require clean source evidence,
+  `Cargo.lock` evidence, gzip Wasm output, SHA-256 artifact hashes, and package
+  metadata `fleet.role` matching the evaluated envelope target. The gate still
+  consumes one existing `EvidenceEnvelopeV1`; it does not run builds, generate
+  provenance, query deployments, mutate policy/evidence/config/topology/
+  controllers, register artifacts, or turn policy success into deployment
+  truth. Project evidence manifests remain later 0.53.x scope.
 - 0.53.1 has added the passive single-envelope CI policy gate:
   ```text
   canic evidence gate --policy <path> --envelope <path>

@@ -1,12 +1,15 @@
 //! Passive CI policy gates over stable evidence envelopes.
 
+use crate::build_provenance::{
+    ArtifactProvenanceKindV1, BUILD_PROVENANCE_SCHEMA_ID, BuildProvenanceV1, SourceDirtyPolicyV1,
+};
 use crate::evidence_envelope::{
     EvidenceEnvelopeV1, EvidenceSummaryV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
     PayloadSchemaRefV1, PayloadSchemaStabilityV1, combine_exit_classes, evidence_envelope_schema,
     file_input_fingerprint,
 };
-use serde::{Deserialize, Serialize};
-use std::path::Path;
+use serde::{Deserialize, Serialize, de};
+use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
 
 ///
@@ -34,6 +37,7 @@ pub struct CiPolicyV1 {
     pub envelope: PolicyEnvelopeRulesV1,
     pub exit_class: PolicyExitClassRulesV1,
     pub summary: Option<PolicySummaryRulesV1>,
+    pub build_provenance: Option<PolicyBuildProvenanceRulesV1>,
     #[serde(default)]
     pub required_input: Vec<PolicyRequiredInputRuleV1>,
 }
@@ -69,6 +73,65 @@ pub struct PolicySummaryRulesV1 {
     #[serde(default)]
     pub fail_on_blocked_actions: bool,
     pub allow_missing_or_stale_evidence: Option<bool>,
+}
+
+///
+/// PolicyBuildProvenanceRulesV1
+///
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PolicyBuildProvenanceRulesV1 {
+    rules: Vec<PolicyBuildProvenanceRuleV1>,
+}
+
+///
+/// PolicyBuildProvenanceRuleV1
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PolicyBuildProvenanceRuleV1 {
+    CleanSource,
+    CargoLock,
+    WasmGzip,
+    Sha256,
+    PackageIdentityMatchesTarget,
+}
+
+impl PolicyBuildProvenanceRulesV1 {
+    fn is_enabled(&self, rule: PolicyBuildProvenanceRuleV1) -> bool {
+        self.rules.contains(&rule)
+    }
+}
+
+impl<'de> Deserialize<'de> for PolicyBuildProvenanceRulesV1 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "require_clean_source",
+            "require_cargo_lock",
+            "require_wasm_gzip",
+            "require_sha256",
+            "require_package_identity_matches_target",
+        ];
+        let values = BTreeMap::<String, bool>::deserialize(deserializer)?;
+        let mut rules = Vec::new();
+        for (key, enabled) in values {
+            let rule = match key.as_str() {
+                "require_clean_source" => PolicyBuildProvenanceRuleV1::CleanSource,
+                "require_cargo_lock" => PolicyBuildProvenanceRuleV1::CargoLock,
+                "require_wasm_gzip" => PolicyBuildProvenanceRuleV1::WasmGzip,
+                "require_sha256" => PolicyBuildProvenanceRuleV1::Sha256,
+                "require_package_identity_matches_target" => {
+                    PolicyBuildProvenanceRuleV1::PackageIdentityMatchesTarget
+                }
+                unknown => return Err(de::Error::unknown_field(unknown, FIELDS)),
+            };
+            if enabled {
+                rules.push(rule);
+            }
+        }
+        Ok(Self { rules })
+    }
 }
 
 ///
@@ -213,6 +276,15 @@ fn validate_ci_policy_v1(policy: &CiPolicyV1) -> Result<(), PolicyGateError> {
             "exit_class.allowed must not be empty".to_string(),
         ));
     }
+    if policy
+        .build_provenance
+        .as_ref()
+        .is_some_and(|rules| rules.rules.is_empty())
+    {
+        return Err(PolicyGateError::InvalidPolicy(
+            "build_provenance must enable at least one rule".to_string(),
+        ));
+    }
     for (index, rule) in policy.required_input.iter().enumerate() {
         ensure_nonempty(&format!("required_input[{index}].kind"), &rule.kind)?;
         if let Some(schema) = &rule.schema {
@@ -252,6 +324,7 @@ fn evaluate_policy(
     builder.evaluate_payload_stability(policy, &envelope);
     builder.evaluate_exit_class(policy, &envelope);
     builder.evaluate_summary(policy.summary.as_ref(), &envelope.summary);
+    builder.evaluate_build_provenance(policy.build_provenance.as_ref(), &envelope);
     builder.evaluate_required_inputs(&policy.required_input, &envelope.inputs);
 
     let has_failures = builder
@@ -509,6 +582,220 @@ impl PolicyReportBuilder {
         }
     }
 
+    fn evaluate_build_provenance(
+        &mut self,
+        rules: Option<&PolicyBuildProvenanceRulesV1>,
+        envelope: &EvidenceEnvelopeV1,
+    ) {
+        let Some(rules) = rules else {
+            return;
+        };
+
+        if envelope.payload_schema.id.as_str() != BUILD_PROVENANCE_SCHEMA_ID {
+            self.fail_enabled_build_provenance_rules(
+                rules,
+                "policy.build_provenance.payload_schema",
+                "build-provenance policy rules require a canic.build_provenance.v1 payload",
+                ExitClassV1::BlockedByPolicy,
+                serde_json::json!(BUILD_PROVENANCE_SCHEMA_ID),
+                serde_json::json!(envelope.payload_schema.id.clone()),
+            );
+            return;
+        }
+
+        let provenance = match serde_json::from_value::<BuildProvenanceV1>(envelope.payload.clone())
+        {
+            Ok(provenance) => provenance,
+            Err(err) => {
+                self.fail_enabled_build_provenance_rules(
+                    rules,
+                    "policy.build_provenance.invalid_payload",
+                    "build-provenance policy rules could not decode the envelope payload",
+                    ExitClassV1::BlockedByPolicy,
+                    serde_json::json!("BuildProvenanceV1"),
+                    serde_json::json!(err.to_string()),
+                );
+                return;
+            }
+        };
+
+        if rules.is_enabled(PolicyBuildProvenanceRuleV1::CleanSource) {
+            self.evaluate_clean_source(&provenance);
+        }
+        if rules.is_enabled(PolicyBuildProvenanceRuleV1::CargoLock) {
+            self.evaluate_cargo_lock(&provenance);
+        }
+        if rules.is_enabled(PolicyBuildProvenanceRuleV1::WasmGzip) {
+            self.evaluate_wasm_gzip(&provenance);
+        }
+        if rules.is_enabled(PolicyBuildProvenanceRuleV1::Sha256) {
+            self.evaluate_sha256(&provenance);
+        }
+        if rules.is_enabled(PolicyBuildProvenanceRuleV1::PackageIdentityMatchesTarget) {
+            self.evaluate_package_identity_matches_target(&provenance, &envelope.target);
+        }
+    }
+
+    fn evaluate_clean_source(&mut self, provenance: &BuildProvenanceV1) {
+        let requirement_id = "build_provenance.require_clean_source";
+        if provenance.source.dirty == Some(false)
+            && provenance.source.dirty_policy == SourceDirtyPolicyV1::Clean
+        {
+            self.pass(requirement_id);
+            return;
+        }
+
+        self.fail(
+            requirement_id,
+            PolicyFindingV1::error(
+                "policy.build_provenance.source_not_clean",
+                "build provenance does not prove a clean source checkout",
+                requirement_id,
+                ExitClassV1::BlockedByPolicy,
+            )
+            .expected(serde_json::json!({
+                "dirty": false,
+                "dirty_policy": SourceDirtyPolicyV1::Clean,
+            }))
+            .actual(serde_json::json!({
+                "dirty": provenance.source.dirty,
+                "dirty_policy": provenance.source.dirty_policy,
+            })),
+        );
+    }
+
+    fn evaluate_cargo_lock(&mut self, provenance: &BuildProvenanceV1) {
+        let requirement_id = "build_provenance.require_cargo_lock";
+        if provenance.cargo.cargo_lock_sha256.is_some() {
+            self.pass(requirement_id);
+            return;
+        }
+
+        self.fail(
+            requirement_id,
+            PolicyFindingV1::error(
+                "policy.build_provenance.cargo_lock_missing",
+                "build provenance does not include Cargo.lock evidence",
+                requirement_id,
+                ExitClassV1::MissingRequiredEvidence,
+            ),
+        );
+    }
+
+    fn evaluate_wasm_gzip(&mut self, provenance: &BuildProvenanceV1) {
+        let requirement_id = "build_provenance.require_wasm_gzip";
+        if provenance
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.artifact_kind == ArtifactProvenanceKindV1::WasmGzip)
+        {
+            self.pass(requirement_id);
+            return;
+        }
+
+        self.fail(
+            requirement_id,
+            PolicyFindingV1::error(
+                "policy.build_provenance.wasm_gzip_missing",
+                "build provenance does not include a gzip Wasm artifact",
+                requirement_id,
+                ExitClassV1::MissingRequiredEvidence,
+            ),
+        );
+    }
+
+    fn evaluate_sha256(&mut self, provenance: &BuildProvenanceV1) {
+        let requirement_id = "build_provenance.require_sha256";
+        if !provenance.artifacts.is_empty()
+            && provenance.artifacts.iter().all(|artifact| {
+                artifact.hash_algorithm == "sha256" && is_sha256_hex(&artifact.sha256)
+            })
+        {
+            self.pass(requirement_id);
+            return;
+        }
+
+        self.fail(
+            requirement_id,
+            PolicyFindingV1::error(
+                "policy.build_provenance.sha256_missing_or_invalid",
+                "build provenance has missing or invalid artifact SHA-256 evidence",
+                requirement_id,
+                ExitClassV1::MissingRequiredEvidence,
+            )
+            .actual(serde_json::json!(
+                provenance
+                    .artifacts
+                    .iter()
+                    .map(|artifact| serde_json::json!({
+                        "artifact_kind": artifact.artifact_kind,
+                        "hash_algorithm": artifact.hash_algorithm,
+                        "sha256": artifact.sha256,
+                    }))
+                    .collect::<Vec<_>>()
+            )),
+        );
+    }
+
+    fn evaluate_package_identity_matches_target(
+        &mut self,
+        provenance: &BuildProvenanceV1,
+        target: &EvidenceTargetV1,
+    ) {
+        let requirement_id = "build_provenance.require_package_identity_matches_target";
+        let target_fleet = target.fleet.as_deref();
+        let target_role = target.role.as_deref();
+        let package_fleet = provenance.cargo.package_metadata_fleet.as_str();
+        let package_role = provenance.cargo.package_metadata_role.as_str();
+
+        if target_fleet == Some(package_fleet) && target_role == Some(package_role) {
+            self.pass(requirement_id);
+            return;
+        }
+
+        let exit_class = if target_fleet.is_none() || target_role.is_none() {
+            ExitClassV1::MissingRequiredEvidence
+        } else {
+            ExitClassV1::BlockedByPolicy
+        };
+        self.fail(
+            requirement_id,
+            PolicyFindingV1::error(
+                "policy.build_provenance.package_identity_mismatch",
+                "build provenance package metadata does not match the envelope target",
+                requirement_id,
+                exit_class,
+            )
+            .expected(serde_json::json!({
+                "target_fleet": target_fleet,
+                "target_role": target_role,
+            }))
+            .actual(serde_json::json!({
+                "package_metadata_fleet": package_fleet,
+                "package_metadata_role": package_role,
+            })),
+        );
+    }
+
+    fn fail_enabled_build_provenance_rules(
+        &mut self,
+        rules: &PolicyBuildProvenanceRulesV1,
+        code: &str,
+        message: &str,
+        exit_class: ExitClassV1,
+        expected: serde_json::Value,
+        actual: serde_json::Value,
+    ) {
+        for requirement_id in build_provenance_requirement_ids(rules) {
+            self.fail(
+                requirement_id,
+                PolicyFindingV1::error(code, message, requirement_id, exit_class)
+                    .expected(expected.clone())
+                    .actual(actual.clone()),
+            );
+        }
+    }
+
     fn pass(&mut self, requirement_id: &str) {
         self.requirements.push(PolicyRequirementV1 {
             requirement_id: requirement_id.to_string(),
@@ -593,9 +880,33 @@ fn message_codes(messages: &[crate::evidence_envelope::EvidenceMessageV1]) -> Ve
         .collect()
 }
 
+fn build_provenance_requirement_ids(rules: &PolicyBuildProvenanceRulesV1) -> Vec<&'static str> {
+    rules
+        .rules
+        .iter()
+        .map(|rule| match rule {
+            PolicyBuildProvenanceRuleV1::CleanSource => "build_provenance.require_clean_source",
+            PolicyBuildProvenanceRuleV1::CargoLock => "build_provenance.require_cargo_lock",
+            PolicyBuildProvenanceRuleV1::WasmGzip => "build_provenance.require_wasm_gzip",
+            PolicyBuildProvenanceRuleV1::Sha256 => "build_provenance.require_sha256",
+            PolicyBuildProvenanceRuleV1::PackageIdentityMatchesTarget => {
+                "build_provenance.require_package_identity_matches_target"
+            }
+        })
+        .collect()
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::build_provenance::{
+        ArtifactProvenanceV1, BuildProvenanceStatusV1, BuildScriptInputStateV1, CargoProvenanceV1,
+        SourceProvenanceV1, SourceVcsV1,
+    };
     use crate::evidence_envelope::{
         CommandProvenanceV1, EvidenceMessageSeverityV1, EvidenceMessageV1, EvidenceTargetKindV1,
         InputPathDisplayV1, PayloadSchemaStabilityV1, evidence_envelope_schema,
@@ -647,6 +958,61 @@ allowed = []
         )
         .expect_err("empty allow list fails");
         assert!(empty.to_string().contains("exit_class.allowed"));
+    }
+
+    #[test]
+    fn policy_parser_accepts_build_provenance_rules() {
+        let policy = parse_ci_policy_v1(BUILD_PROVENANCE_POLICY).expect("parse policy");
+
+        let rules = policy
+            .build_provenance
+            .expect("build provenance rules present");
+        assert!(rules.is_enabled(PolicyBuildProvenanceRuleV1::CleanSource));
+        assert!(rules.is_enabled(PolicyBuildProvenanceRuleV1::CargoLock));
+        assert!(rules.is_enabled(PolicyBuildProvenanceRuleV1::WasmGzip));
+        assert!(rules.is_enabled(PolicyBuildProvenanceRuleV1::Sha256));
+        assert!(rules.is_enabled(PolicyBuildProvenanceRuleV1::PackageIdentityMatchesTarget));
+    }
+
+    #[test]
+    fn policy_parser_rejects_empty_build_provenance_rules() {
+        let err = parse_ci_policy_v1(
+            r#"
+schema_version = 1
+
+[envelope]
+required_schema = "canic.evidence_envelope.v1"
+
+[exit_class]
+allowed = ["success"]
+
+[build_provenance]
+"#,
+        )
+        .expect_err("empty build provenance rules fail");
+
+        assert!(err.to_string().contains("build_provenance"));
+    }
+
+    #[test]
+    fn policy_parser_rejects_unknown_build_provenance_keys() {
+        let err = parse_ci_policy_v1(
+            r#"
+schema_version = 1
+
+[envelope]
+required_schema = "canic.evidence_envelope.v1"
+
+[exit_class]
+allowed = ["success"]
+
+[build_provenance]
+require_magic = true
+"#,
+        )
+        .expect_err("unknown build provenance keys fail");
+
+        assert!(err.to_string().contains("failed to parse policy TOML"));
     }
 
     #[test]
@@ -805,6 +1171,156 @@ schema = "canic.config.toml"
     }
 
     #[test]
+    fn build_provenance_policy_passes_matching_payload() {
+        let report = evaluate_policy_for_test(BUILD_PROVENANCE_POLICY, sample_envelope());
+
+        assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Passed);
+        assert_eq!(report.gate_exit_class, ExitClassV1::Success);
+        assert!(report.findings.is_empty());
+        assert!(report.requirements.iter().any(
+            |requirement| requirement.requirement_id == "build_provenance.require_clean_source"
+        ));
+    }
+
+    #[test]
+    fn build_provenance_policy_rejects_dirty_or_unknown_source() {
+        let mut dirty = sample_build_provenance_payload();
+        dirty.source.dirty = Some(true);
+        dirty.source.dirty_policy = SourceDirtyPolicyV1::DirtyRecorded;
+        let dirty_report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(serde_json::to_value(dirty).expect("payload json")),
+        );
+
+        assert_eq!(dirty_report.gate_exit_class, ExitClassV1::BlockedByPolicy);
+        assert!(
+            dirty_report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.source_not_clean")
+        );
+
+        let mut unknown = sample_build_provenance_payload();
+        unknown.source.vcs = SourceVcsV1::Unknown;
+        unknown.source.dirty = None;
+        unknown.source.dirty_policy = SourceDirtyPolicyV1::Unknown;
+        let unknown_report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(serde_json::to_value(unknown).expect("payload json")),
+        );
+
+        assert_eq!(unknown_report.gate_exit_class, ExitClassV1::BlockedByPolicy);
+    }
+
+    #[test]
+    fn build_provenance_policy_requires_cargo_lock_and_gzip_wasm() {
+        let mut no_lock = sample_build_provenance_payload();
+        no_lock.cargo.cargo_lock_sha256 = None;
+        let no_lock_report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(serde_json::to_value(no_lock).expect("payload json")),
+        );
+
+        assert_eq!(
+            no_lock_report.gate_exit_class,
+            ExitClassV1::MissingRequiredEvidence
+        );
+        assert!(
+            no_lock_report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.cargo_lock_missing")
+        );
+
+        let mut no_gzip = sample_build_provenance_payload();
+        no_gzip
+            .artifacts
+            .retain(|artifact| artifact.artifact_kind != ArtifactProvenanceKindV1::WasmGzip);
+        let no_gzip_report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(serde_json::to_value(no_gzip).expect("payload json")),
+        );
+
+        assert_eq!(
+            no_gzip_report.gate_exit_class,
+            ExitClassV1::MissingRequiredEvidence
+        );
+        assert!(
+            no_gzip_report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.wasm_gzip_missing")
+        );
+    }
+
+    #[test]
+    fn build_provenance_policy_requires_sha256_artifact_evidence() {
+        let mut payload = sample_build_provenance_payload();
+        payload.artifacts[0].sha256 = "not-a-sha".to_string();
+        let report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(serde_json::to_value(payload).expect("payload json")),
+        );
+
+        assert_eq!(report.gate_exit_class, ExitClassV1::MissingRequiredEvidence);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.sha256_missing_or_invalid")
+        );
+    }
+
+    #[test]
+    fn build_provenance_policy_requires_package_identity_to_match_target() {
+        let mut payload = sample_build_provenance_payload();
+        payload.cargo.package_metadata_role = "other".to_string();
+        let report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(serde_json::to_value(payload).expect("payload json")),
+        );
+
+        assert_eq!(report.gate_exit_class, ExitClassV1::BlockedByPolicy);
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.package_identity_mismatch")
+        );
+    }
+
+    #[test]
+    fn build_provenance_policy_rejects_wrong_or_invalid_payload() {
+        let mut wrong_schema = sample_envelope();
+        wrong_schema.payload_schema = PayloadSchemaRefV1::stable("canic.adoption_report.v1", "1");
+        let wrong_schema_report = evaluate_policy_for_test(BUILD_PROVENANCE_POLICY, wrong_schema);
+
+        assert_eq!(
+            wrong_schema_report.gate_exit_class,
+            ExitClassV1::BlockedByPolicy
+        );
+        assert!(
+            wrong_schema_report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.payload_schema")
+        );
+
+        let invalid_report = evaluate_policy_for_test(
+            BUILD_PROVENANCE_POLICY,
+            sample_envelope_with_payload(json!({ "schema_version": 1 })),
+        );
+
+        assert_eq!(invalid_report.gate_exit_class, ExitClassV1::BlockedByPolicy);
+        assert!(
+            invalid_report
+                .findings
+                .iter()
+                .any(|finding| finding.code == "policy.build_provenance.invalid_payload")
+        );
+    }
+
+    #[test]
     fn policy_gate_report_schema_is_stable() {
         assert_eq!(
             policy_gate_report_schema(),
@@ -841,6 +1357,12 @@ schema = "canic.config.toml"
     }
 
     fn sample_envelope() -> EvidenceEnvelopeV1 {
+        sample_envelope_with_payload(
+            serde_json::to_value(sample_build_provenance_payload()).expect("payload json"),
+        )
+    }
+
+    fn sample_envelope_with_payload(payload: serde_json::Value) -> EvidenceEnvelopeV1 {
         EvidenceEnvelopeV1 {
             envelope_schema: evidence_envelope_schema(),
             canic_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -863,7 +1385,7 @@ schema = "canic.config.toml"
             inputs: Vec::new(),
             payload_schema: PayloadSchemaRefV1::stable("canic.build_provenance.v1", "1"),
             payload_sha256: Some("0".repeat(64)),
-            payload: json!({ "schema_version": 1 }),
+            payload,
             summary: EvidenceSummaryV1 {
                 warnings: Vec::new(),
                 blocked_actions: Vec::new(),
@@ -871,6 +1393,73 @@ schema = "canic.config.toml"
                 evidence_conflicts: Vec::new(),
             },
             exit_class: ExitClassV1::Success,
+        }
+    }
+
+    fn sample_build_provenance_payload() -> BuildProvenanceV1 {
+        BuildProvenanceV1 {
+            schema_version: 1,
+            generated_at: "unix:1".to_string(),
+            canic_version: env!("CARGO_PKG_VERSION").to_string(),
+            command: CommandProvenanceV1 {
+                name: "canic build".to_string(),
+                argv_normalized: vec![
+                    "canic".to_string(),
+                    "build".to_string(),
+                    "demo".to_string(),
+                    "app".to_string(),
+                ],
+                argv_redactions: Vec::new(),
+                format: "provenance".to_string(),
+            },
+            build_status: BuildProvenanceStatusV1::Success,
+            source: SourceProvenanceV1 {
+                schema_version: 1,
+                vcs: SourceVcsV1::Git,
+                revision: Some("abc123".to_string()),
+                branch: Some("main".to_string()),
+                dirty: Some(false),
+                dirty_policy: SourceDirtyPolicyV1::Clean,
+                dirty_summary_digest: None,
+                dirty_summary_algorithm: None,
+            },
+            cargo: CargoProvenanceV1 {
+                cargo_lock_sha256: Some("1".repeat(64)),
+                package_manifest_sha256: Some("2".repeat(64)),
+                package_name: "demo_app".to_string(),
+                package_manifest: "fleets/demo/app/Cargo.toml".to_string(),
+                package_metadata_fleet: "demo".to_string(),
+                package_metadata_role: "app".to_string(),
+                rustc_version: Some("rustc 1.88.0".to_string()),
+                cargo_version: Some("cargo 1.88.0".to_string()),
+                target: Some("wasm32-unknown-unknown".to_string()),
+                profile: "fast".to_string(),
+                features: Vec::new(),
+                default_features: None,
+                rustflags_digest: None,
+                rustflags_digest_algorithm: None,
+                cargo_config_fingerprints: Vec::new(),
+                build_script_inputs: BuildScriptInputStateV1::NotRecorded,
+            },
+            artifacts: vec![
+                sample_artifact(ArtifactProvenanceKindV1::Wasm, "a"),
+                sample_artifact(ArtifactProvenanceKindV1::WasmGzip, "b"),
+            ],
+            warnings: Vec::new(),
+        }
+    }
+
+    fn sample_artifact(kind: ArtifactProvenanceKindV1, hash_char: &str) -> ArtifactProvenanceV1 {
+        ArtifactProvenanceV1 {
+            role: "app".to_string(),
+            fleet: "demo".to_string(),
+            artifact_kind: kind,
+            path: Some("target/app.wasm.gz".to_string()),
+            path_display: InputPathDisplayV1::Relative,
+            hash_algorithm: "sha256".to_string(),
+            sha256: hash_char.repeat(64),
+            size_bytes: 123,
+            produced_by: "canic build".to_string(),
         }
     }
 
@@ -897,5 +1486,22 @@ allowed = ["success", "success_with_warnings"]
 fail_on_evidence_conflicts = true
 fail_on_blocked_actions = true
 allow_missing_or_stale_evidence = false
+"#;
+
+    const BUILD_PROVENANCE_POLICY: &str = r#"
+schema_version = 1
+
+[envelope]
+required_schema = "canic.evidence_envelope.v1"
+
+[exit_class]
+allowed = ["success"]
+
+[build_provenance]
+require_clean_source = true
+require_cargo_lock = true
+require_wasm_gzip = true
+require_sha256 = true
+require_package_identity_matches_target = true
 "#;
 }

@@ -16,6 +16,16 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
 
+- `0.53.2` adds optional build-provenance policy rules to the existing passive
+  policy gate:
+  ```text
+  canic evidence gate --policy <path> --envelope <path>
+  ```
+  Policies may now require clean source evidence, `Cargo.lock` evidence, gzip
+  Wasm output, SHA-256 artifact hashes, and package metadata `fleet.role`
+  matching the evaluated envelope target. The gate still evaluates one
+  existing evidence envelope and remains passive.
+
 - `0.53.1` adds the passive single-envelope policy gate:
   ```text
   canic evidence gate --policy <path> --envelope <path>
