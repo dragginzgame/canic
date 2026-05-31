@@ -14,4 +14,5 @@ Current architecture notes:
 - [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
 - [Build Artifacts](build-artifacts.md)
 - [Build Provenance CI Policy](build-provenance-ci-policy.md)
+- [CI Policy Gates](ci-policy-gates.md)
 - [Evidence Envelopes](evidence-envelopes.md)

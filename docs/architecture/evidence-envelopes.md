@@ -37,6 +37,13 @@ canic evidence compare --left <path> --right <path>
 canic evidence compare --left <path> --right <path> --format json
 ```
 
+Passive policy gates are available with:
+
+```text
+canic evidence gate --policy <path> --envelope <path>
+canic evidence gate --policy <path> --manifest <path>
+```
+
 Existing raw JSON output remains available:
 
 ```text
@@ -176,6 +183,10 @@ They do not re-run builds, validate deployment truth from provenance alone, or
 turn provenance into authority. See
 [Build Provenance CI Policy](build-provenance-ci-policy.md) for recommended
 checks over source, Cargo, package metadata, and artifact evidence.
+
+Use [CI Policy Gates](ci-policy-gates.md) when CI needs Canic to evaluate
+saved evidence against a project policy instead of hand-rolling checks over
+JSON.
 
 ## CI/GitOps Guidance
 

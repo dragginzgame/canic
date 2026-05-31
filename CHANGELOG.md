@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.53.md](docs/changelog/0.53.md)
 
+- `0.53.4` adds policy gate architecture guidance and CI examples:
+  ```text
+  docs/architecture/ci-policy-gates.md
+  ```
+  The guide documents policy files, project evidence manifests, the current
+  `canic evidence gate` command shapes, minimal CI usage, output formats, exit
+  classes, and the passive safety boundary.
+
 - `0.53.3` adds project evidence manifests to the passive policy gate:
   ```text
   canic evidence gate --policy <path> --manifest <path>

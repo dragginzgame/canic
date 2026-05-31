@@ -96,6 +96,21 @@ Canic records evidence; it does not choose whether a project may build with
 uncommitted lockfile changes, a different Rust toolchain, or non-default build
 features.
 
+Canic can evaluate the common source/Cargo/artifact checks with a passive
+policy gate:
+
+```toml
+[build_provenance]
+require_clean_source = true
+require_cargo_lock = true
+require_wasm_gzip = true
+require_sha256 = true
+require_package_identity_matches_target = true
+```
+
+See [CI Policy Gates](ci-policy-gates.md) for the full policy-file and
+manifest workflow.
+
 ## Package Metadata Identity
 
 Package identity comes from `[package.metadata.canic]`.
@@ -161,4 +176,3 @@ This policy guidance does not add:
 - topology mutation;
 - deployment install authority;
 - active adoption/import.
-

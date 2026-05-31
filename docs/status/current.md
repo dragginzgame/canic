@@ -74,6 +74,14 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.53.4 has added maintained policy-gate architecture guidance:
+  ```text
+  docs/architecture/ci-policy-gates.md
+  ```
+  The guide documents policy files, project evidence manifests, single-envelope
+  and manifest gate command shapes, minimal CI usage, output formats, exit
+  classes, and the passive safety boundary. Evidence-envelope and build
+  provenance architecture docs now link to it.
 - 0.53.3 has added project evidence manifests to the passive policy gate:
   ```text
   canic evidence gate --policy <path> --manifest <path>
@@ -98,7 +106,7 @@ inspect only the files needed for the current task.
   consumes one existing `EvidenceEnvelopeV1`; it does not run builds, generate
   provenance, query deployments, mutate policy/evidence/config/topology/
   controllers, register artifacts, or turn policy success into deployment
-  truth. Project evidence manifests remain later 0.53.x scope.
+  truth.
 - 0.53.1 has added the passive single-envelope CI policy gate:
   ```text
   canic evidence gate --policy <path> --envelope <path>
@@ -131,14 +139,11 @@ inspect only the files needed for the current task.
   ```text
   canic evidence gate --policy <path> --envelope <path>
   ```
-  The first policy implementation slice evaluates envelope schema, payload
+  The first policy implementation slice evaluated envelope schema, payload
   schema identity/stability, evaluated exit class, and structured summary
-  evidence state, then emits a stable `PolicyGateReportV1` that distinguishes
-  evaluated evidence from the gate result. Build-provenance field rules such
-  as clean source,
-  `Cargo.lock`, package identity, gzip Wasm, and SHA-256 requirements are
-  deferred until after single-envelope semantics are proven. Project evidence
-  manifests remain later 0.53.x scope.
+  evidence state, then emitted a stable `PolicyGateReportV1` that distinguishes
+  evaluated evidence from the gate result. Later slices added build-provenance
+  field rules and project evidence manifests.
 - 0.52.4 has closed the source/build/artifact provenance line with:
   ```text
   docs/audits/release-lines/0.52-closeout.md
