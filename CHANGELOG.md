@@ -16,6 +16,16 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.54.md](docs/changelog/0.54.md)
 
+- `0.54.1` adds a maintained compact v1 operator walkthrough:
+  ```text
+  docs/architecture/v1-operator-walkthrough.md
+  ```
+  The guide connects build provenance, deployment-check envelopes, policy
+  gates, and the passive deployment catalog while keeping fleet/role identity
+  separate from deployment-target identity and keeping install, controller,
+  registry, topology, teardown, signing, locks, groups, and active adoption out
+  of scope.
+
 - `0.54.0` adds a passive deployment catalog over existing deployment-target
   local state:
   ```text

@@ -54,6 +54,11 @@ walkthrough.
   inspected with read-only adoption profiles. Reports classify configured and
   observed resources, but recommendations are non-executed previews. See
   [adoption-profiles.md](docs/architecture/adoption-profiles.md).
+* **Evidence and catalog reports:** Build provenance, deployment-check
+  envelopes, policy gates, and the passive deployment catalog give operators a
+  compact evidence flow without adding install, controller, registry, topology,
+  or teardown authority. See
+  [v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md).
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
   fleet configs and replica status, installs fleets, captures topology-aware
   snapshots, validates backup manifests, and drives guarded restore planning.
@@ -76,6 +81,8 @@ canic info list test
 Useful next reads:
 
 * [INSTALLING.md](INSTALLING.md) - end-to-end installation and local operation.
+* [docs/architecture/v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md)
+  - compact pre-v1 build, evidence, policy, and catalog flow.
 * [crates/canic-cli/README.md](crates/canic-cli/README.md) - operator command
   guide, including backup and restore.
 * [crates/canic-host/README.md](crates/canic-host/README.md) - build profiles,

@@ -16,3 +16,4 @@ Current architecture notes:
 - [Build Provenance CI Policy](build-provenance-ci-policy.md)
 - [CI Policy Gates](ci-policy-gates.md)
 - [Evidence Envelopes](evidence-envelopes.md)
+- [V1 Operator Walkthrough](v1-operator-walkthrough.md)

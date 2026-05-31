@@ -24,6 +24,14 @@ inspect only the files needed for the current task.
   create deployment truth, infer deployments from fleet-template names, mutate
   topology/controllers/state, install Wasm, register artifacts, or add
   deployment groups.
+- `0.54.1` has added the compact pre-v1 operator walkthrough:
+  ```text
+  docs/architecture/v1-operator-walkthrough.md
+  ```
+  The guide connects `canic build <fleet> <role> --provenance <path>`,
+  `canic deploy check <deployment> --format envelope-json`,
+  `canic evidence gate --policy <path> --manifest <path>`, and the passive
+  deployment catalog while keeping the v1 boundary small.
 - Previous minor: `0.53.x` CI policy gates and project evidence manifests is
   closed. The implemented design is:
   ```text
@@ -104,6 +112,15 @@ inspect only the files needed for the current task.
   writes only explicit `--output` artifacts, and keeps deployment groups,
   promotion lanes, saved-evidence catalogs, locks, signing, registry import,
   provider wrappers, teardown, and active adoption/import deferred.
+- Added the 0.54.1 v1 operator walkthrough:
+  ```text
+  docs/architecture/v1-operator-walkthrough.md
+  ```
+  It documents the compact build -> evidence -> policy -> catalog flow, records
+  the local catalog smoke expectations for a fresh checkout, and leaves
+  deployment groups, saved-evidence catalogs, locks, signing, registry import,
+  teardown, controller mutation, topology mutation, and active adoption/import
+  out of v1.
 - Drafted and then cut the tentative 0.54 design to the v1-sized operator
   story:
   ```text
