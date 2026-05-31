@@ -1,5 +1,12 @@
+use super::proof_cache::{
+    cache_internal_invocation_proof, cached_internal_invocation_proof,
+    clear_internal_invocation_proof_cache,
+};
 use super::*;
-use crate::dto::auth::InternalInvocationProofPayloadV1;
+use crate::{
+    config::schema::RoleAttestationConfig,
+    dto::auth::{InternalInvocationProofPayloadV1, SignedInternalInvocationProofV1},
+};
 use candid::{decode_args, decode_one};
 use std::collections::BTreeMap;
 
@@ -44,10 +51,6 @@ fn cfg(min_epoch: u64) -> RoleAttestationConfig {
         max_ttl_secs: 900,
         min_accepted_epoch_by_role,
     }
-}
-
-fn clear_internal_invocation_proof_cache() {
-    INTERNAL_INVOCATION_PROOF_CACHE.with_borrow_mut(BTreeMap::clear);
 }
 
 #[test]

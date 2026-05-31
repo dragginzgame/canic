@@ -158,10 +158,10 @@ May has day summaries for the currently recorded audit days.
     the endpoint directory module, current fleet roster filtering, and the
     core/facade protocol split; keep those scan boundaries aligned as the
     runtime surface moves.
-50. Complexity maintainers: keep protected internal-call facade tests in
-    `crates/canic-core/src/api/ic/canic/tests.rs`, and split new internal proof
-    or protected endpoint client behavior before `api/ic/canic/mod.rs` crosses
-    the production large-file threshold again.
+50. Complexity maintainers: keep protected internal-call facade tests,
+    endpoint descriptors, envelope encoding, and proof-cache state split across
+    `crates/canic-core/src/api/ic/canic/{tests,endpoint,envelope,proof_cache}.rs`;
+    do not fold them back into `api/ic/canic/mod.rs`.
 51. Audit maintenance: keep the complexity-accretion recurring subsystem map
     aligned with actual `canic-core/src` top-level scopes and continue
     reporting non-test `>= 600 LOC` files separately from test harness size.

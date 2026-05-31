@@ -54,6 +54,12 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.51.5 has closed the evidence-envelope line with
+  `docs/audits/0.51-closeout.md`. The audit verdict is PASS: the stable
+  envelope model, passive adoption-report and deployment-check emitters, shared
+  input fingerprinting, exit-class precedence, envelope comparison, docs, and
+  targeted validation are aligned. The only noted follow-up is historical
+  post-46 backlog wording that still uses pre-0.51 draft names.
 - 0.51.4 has added concrete CI/GitOps guidance for stable evidence envelopes.
   `docs/architecture/evidence-envelopes.md` now shows passive artifact layouts,
   a minimal adoption/deployment-check/compare pipeline, raw JSON vs envelope

@@ -5,7 +5,7 @@
 | Report | Status | Summary |
 | --- | --- | --- |
 | `capability-surface.md` | PASS WITH TEMPLATE CLEANUP | Current fleet artifacts refreshed successfully, retained public DID scans passed, and workspace clippy passed. Risk remains `3 / 10`; endpoint directory-module, core/facade protocol, and roster-filtering template cleanups were applied after the run. |
-| `complexity-accretion.md` | PASS WITH TEST-HUB CLEANUP | Runtime file/LOC and enum growth were measured against the 2026-05-09 baseline. Risk remains `3 / 10` after splitting the only non-test `>= 600 LOC` hotspot, `api/ic/canic.rs`, into production and test modules. |
+| `complexity-accretion.md` | PASS WITH MODULE CLEANUP | Runtime file/LOC and enum growth were measured against the 2026-05-09 baseline. Risk remains `3 / 10` after splitting the only non-test `>= 600 LOC` hotspot, `api/ic/canic.rs`, into focused production and test modules. |
 
 ## Findings
 
@@ -21,8 +21,9 @@
 - The complexity run found one actionable production-named hotspot:
   `crates/canic-core/src/api/ic/canic.rs` mixed protected internal-call facade
   code with 24 focused tests and reached `908` logical LOC. It is now a
-  directory module with production code at `596` LOC and tests in
-  `api/ic/canic/tests.rs`.
+  directory module with endpoint descriptor, envelope, proof-cache, facade, and
+  test responsibilities split; the largest protected internal-call production
+  file is `api/ic/canic/mod.rs` at `375` logical LOC.
 - After the complexity cleanup, the current `>= 600` LOC files in
   `canic-core/src` are test-only harnesses.
 
@@ -41,10 +42,11 @@
    fleet role list and explicitly filter stale local `.icp` artifacts.
 3. Completed after the run: include both `canic-core/src/protocol.rs` and
    `canic/src/protocol.rs` in future capability-surface wire scans.
-4. Completed after the run: split protected internal-call facade tests out of
-   `crates/canic-core/src/api/ic/canic.rs` and update the complexity recurring
+4. Completed after the run: split protected internal-call facade tests,
+   endpoint descriptors, envelope encoding, and proof-cache state out of
+   `crates/canic-core/src/api/ic/canic.rs`; update the complexity recurring
    template to distinguish production large-file pressure from test harness
    size.
-5. Carry forward: keep `crates/canic-core/src/api/ic/canic/mod.rs` below the
-   production large-file threshold when adding new internal proof or protected
-   endpoint client behavior.
+5. Carry forward: keep new placement and request-handler branch axes in focused
+   helper modules before `workflow/placement/*` or
+   `workflow/rpc/request/handler/*` cross the production large-file threshold.

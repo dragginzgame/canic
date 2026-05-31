@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.51.md](docs/changelog/0.51.md)
 
+- `0.51.5` adds the 0.51 closeout audit:
+  ```text
+  docs/audits/0.51-closeout.md
+  ```
+  The audit verifies the stable evidence-envelope model, passive adoption and
+  deployment-check emitters, shared exit-class and fingerprint behavior,
+  envelope comparison, docs, and targeted validation.
+
 - `0.51.4` adds CI/GitOps evidence-envelope pipeline guidance with concrete
   passive artifact examples:
   ```text
