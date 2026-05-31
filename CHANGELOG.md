@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.52.md](docs/changelog/0.52.md)
 
+- `0.52.1` adds explicit build provenance output:
+  ```text
+  canic build <fleet> <role> --provenance <path>
+  ```
+  The file is an `EvidenceEnvelopeV1` with stable
+  `canic.build_provenance.v1` payload and records source, Cargo, package
+  metadata, build profile, and artifact hash evidence after a successful build.
+
 - Proposed the 0.52 design:
   ```text
   docs/design/0.52-source-build-artifact-provenance/0.52-design.md

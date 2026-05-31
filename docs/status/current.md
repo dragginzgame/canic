@@ -17,10 +17,11 @@ inspect only the files needed for the current task.
   ```text
   canic build <fleet> <role> --provenance <path>
   ```
-  The first implementation slice should emit an `EvidenceEnvelopeV1` containing
-  stable `canic.build_provenance.v1` payload. It must not add signing, CI
-  locks, provider wrappers, controller mutation, topology mutation, artifact
-  registry import, adoption mutation, or deployment/install authority.
+  The first implementation slice emits an `EvidenceEnvelopeV1` containing
+  stable `canic.build_provenance.v1` payload. Further 0.52 work should keep
+  signing, CI locks, provider wrappers, controller mutation, topology mutation,
+  artifact registry import, adoption mutation, and deployment/install
+  authority out of scope unless explicitly promoted.
 - 0.51 CI/GitOps evidence envelopes are closed. The implemented design is at
   `docs/design/0.51-ci-gitops-provenance-evidence-envelopes/0.51-design.md`;
   the closeout audit is `docs/audits/release-lines/0.51-closeout.md`.
@@ -54,6 +55,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.52.1 has added explicit build provenance output:
+  ```text
+  canic build <fleet> <role> --provenance <path>
+  ```
+  The file is an `EvidenceEnvelopeV1` with stable
+  `canic.build_provenance.v1` payload. `BuildProvenanceV1` records source
+  state, dirty-source status, Cargo lock/package manifest evidence, package
+  metadata `fleet.role`, toolchain/profile/target data, and produced Wasm/gzip
+  Wasm SHA-256 hashes after successful artifact generation. Ordinary
+  `canic build <fleet> <role>` still writes no provenance file, and provenance
+  output does not mutate deployment truth, controllers, topology, `wasm_store`,
+  artifact registries, adoption state, install state, or canister lifecycle.
 - Drafted the proposed 0.52 source, build, and artifact provenance design. The
   design keeps `EvidenceEnvelopeV1` as the stable automation wrapper from 0.51
   and proposes stable `SourceProvenanceV1`, `CargoProvenanceV1`,

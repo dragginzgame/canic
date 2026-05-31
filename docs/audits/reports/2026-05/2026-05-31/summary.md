@@ -5,7 +5,7 @@
 | Report | Status | Summary |
 | --- | --- | --- |
 | `capability-surface.md` | PASS WITH TEMPLATE CLEANUP | Current fleet artifacts refreshed successfully, retained public DID scans passed, and workspace clippy passed. Risk remains `3 / 10`; endpoint directory-module, core/facade protocol, and roster-filtering template cleanups were applied after the run. |
-| `complexity-accretion.md` | PASS WITH MODULE CLEANUP | Runtime file/LOC and enum growth were measured against the 2026-05-09 baseline. Risk remains `3 / 10` after splitting the only non-test `>= 600 LOC` hotspot, `api/ic/canic.rs`, into focused production and test modules. |
+| `complexity-accretion.md` | PASS WITH MODULE CLEANUP | Runtime file/LOC and enum growth were measured against the 2026-05-09 baseline. Risk remains `3 / 10` after splitting the only non-test `>= 600 LOC` hotspot, `api/ic/canic.rs`, then decomposing sharding and directory placement facades. |
 
 ## Findings
 
@@ -26,13 +26,20 @@
   file is `api/ic/canic/mod.rs` at `375` logical LOC.
 - After the complexity cleanup, the current `>= 600` LOC files in
   `canic-core/src` are test-only harnesses.
+- The follow-up sharding cleanup moved allocation, bootstrap, and registry
+  helpers out of `workflow/placement/sharding/mod.rs`, reducing that facade
+  from `560` to `291` logical LOC.
+- The follow-up directory cleanup moved classification, create/finalize,
+  cleanup/recovery, and config resolution helpers out of
+  `workflow/placement/directory/mod.rs`, reducing that facade from `529` to
+  `210` logical LOC.
 
 ## Verification Rollup
 
 | Report | PASS | BLOCKED | FAIL | Notes |
 | --- | ---: | ---: | ---: | --- |
 | `capability-surface.md` | 8 | 0 | 0 | Artifact refresh, macro scans, DID scans, wire/DTO scans, and workspace clippy passed. |
-| `complexity-accretion.md` | 8 | 0 | 0 | Runtime LOC, subsystem, enum/reference, large-file, and branch-density scans passed; `cargo fmt --all` and focused `api::ic::canic` tests passed. |
+| `complexity-accretion.md` | 11 | 0 | 0 | Runtime LOC, subsystem, enum/reference, large-file, and branch-density scans passed; `cargo fmt --all`, focused `api::ic::canic` tests, focused sharding compile, and focused placement tests passed. |
 
 ## Follow-ups
 
@@ -47,6 +54,12 @@
    `crates/canic-core/src/api/ic/canic.rs`; update the complexity recurring
    template to distinguish production large-file pressure from test harness
    size.
-5. Carry forward: keep new placement and request-handler branch axes in focused
-   helper modules before `workflow/placement/*` or
-   `workflow/rpc/request/handler/*` cross the production large-file threshold.
+5. Completed after the run: split sharding placement allocation, bootstrap, and
+   registry helpers into focused sibling modules under
+   `workflow/placement/sharding/`.
+6. Completed after the run: split directory placement classification,
+   create/finalize, cleanup/recovery, and config resolution helpers into
+   focused sibling modules under `workflow/placement/directory/`.
+7. Carry forward: keep new request-handler branch axes in focused helper
+   modules before `workflow/rpc/request/handler/*` crosses the production
+   large-file threshold.

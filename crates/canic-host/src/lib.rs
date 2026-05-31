@@ -6,6 +6,7 @@ pub mod adoption;
 mod artifact_io;
 mod bootstrap_store;
 mod build_profile;
+pub mod build_provenance;
 pub mod canister_build;
 mod cargo_metadata;
 pub mod deployment_truth;

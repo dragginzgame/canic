@@ -8,7 +8,9 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     ops::{
         storage::children::CanisterChildrenOps,
-        storage::placement::directory::{DirectoryClaimResult, DirectoryRegistryOps},
+        storage::placement::directory::{
+            DirectoryClaimResult, DirectoryPendingClaim, DirectoryRegistryOps,
+        },
         storage::registry::subnet::SubnetRegistryOps,
     },
     test::{

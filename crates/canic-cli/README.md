@@ -36,6 +36,13 @@ Downstream projects should install the same `canic-cli` version as their
 canic build <fleet> <role>
 ```
 
+To archive CI-friendly build provenance next to an artifact, request an
+explicit provenance file:
+
+```bash
+canic build <fleet> <role> --provenance artifacts/<role>-provenance.json
+```
+
 For downstream repos where the Cargo workspace and ICP project root differ,
 pass paths as command options instead of exporting Canic build environment
 variables:

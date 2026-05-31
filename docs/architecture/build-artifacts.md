@@ -33,6 +33,18 @@ Ordinary roles may be declared before topology placement so `cargo check` can
 run during early development. `canic build <fleet> <role>` is stricter: the
 role must be attached to topology before Canic writes deploy artifacts.
 
+Build provenance is opt-in:
+
+```text
+canic build <fleet> <role> --provenance <path>
+```
+
+The provenance file is an `EvidenceEnvelopeV1` containing stable
+`canic.build_provenance.v1` payload. It records source, Cargo, package
+metadata, build-profile, and artifact hash evidence after a successful build.
+It does not change deployment truth, install state, controllers, topology, or
+artifact registry state.
+
 ## Canister Artifacts
 
 - Direct Cargo canister builds emit raw wasm under

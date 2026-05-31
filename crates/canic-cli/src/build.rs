@@ -5,33 +5,42 @@ use crate::{
         globals::internal_network_arg,
         help::print_help_or_version,
     },
-    version_text,
+    output, version_text,
 };
+use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
     CanisterBuildProfile, build_current_workspace_canister_artifact, copy_icp_wasm_output,
     print_current_workspace_build_context_once,
 };
+use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
-    release_set::{configured_fleet_name, configured_role_lifecycle, matching_fleet_config_paths},
+    release_set::{
+        configured_fleet_name, configured_role_lifecycle, matching_fleet_config_paths,
+        workspace_root,
+    },
 };
 use clap::Command as ClapCommand;
 use std::{
     env,
     ffi::OsString,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
 const BUILD_HELP_AFTER: &str = "\
 Examples:
   canic build demo app
+  canic build demo app --provenance artifacts/app-provenance.json
   canic --network local build demo root
   canic build --profile fast --workspace backend --icp-root . --config backend/fleets/demo/canic.toml demo root
 
 The selected fleet must have a matching canic.toml, and the selected role must
 be attached to topology before an artifact build is allowed.
-The command writes .icp/local/canisters/<role>/<role>.wasm and .wasm.gz.";
+The command writes .icp/local/canisters/<role>/<role>.wasm and .wasm.gz.
+Use --provenance <path> to additionally write a stable EvidenceEnvelopeV1
+containing canic.build_provenance.v1.";
 
 ///
 /// BuildCommandError
@@ -55,6 +64,12 @@ pub enum BuildCommandError {
 
     #[error(transparent)]
     Build(#[from] Box<dyn std::error::Error>),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 }
 
 ///
@@ -70,6 +85,7 @@ struct BuildOptions {
     workspace: Option<String>,
     icp_root: Option<String>,
     config: Option<String>,
+    provenance: Option<PathBuf>,
 }
 
 impl BuildOptions {
@@ -91,6 +107,7 @@ impl BuildOptions {
             workspace: string_option(&matches, "workspace"),
             icp_root: string_option(&matches, "icp-root"),
             config: string_option(&matches, "config"),
+            provenance: string_option(&matches, "provenance").map(PathBuf::from),
         })
     }
 }
@@ -114,6 +131,7 @@ where
     validate_attached_role(&options)?;
     let output = build_current_workspace_canister_artifact(&options.role, profile)?;
     copy_icp_wasm_output(&options.role, &output)?;
+    write_build_provenance_if_requested(&options, profile, output.clone())?;
     println!("{}", output.wasm_gz_path.display());
     Ok(())
 }
@@ -123,7 +141,7 @@ fn build_command() -> ClapCommand {
         .bin_name("canic build")
         .about("Build one Canic canister artifact")
         .disable_help_flag(true)
-        .override_usage("canic build <fleet> <role>")
+        .override_usage("canic build [OPTIONS] <fleet> <role>")
         .arg(
             value_arg("fleet")
                 .value_name("fleet")
@@ -164,6 +182,13 @@ fn build_command() -> ClapCommand {
                 .num_args(1)
                 .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
         )
+        .arg(
+            value_arg("provenance")
+                .long("provenance")
+                .value_name("file")
+                .num_args(1)
+                .help("Write an EvidenceEnvelopeV1 build provenance artifact to this file"),
+        )
         .arg(internal_network_arg())
         .after_help(BUILD_HELP_AFTER)
 }
@@ -191,6 +216,88 @@ fn validate_attached_role(options: &BuildOptions) -> Result<(), BuildCommandErro
         )));
     }
     Ok(())
+}
+
+fn write_build_provenance_if_requested(
+    options: &BuildOptions,
+    profile: CanisterBuildProfile,
+    output: canic_host::canister_build::CanisterArtifactBuildOutput,
+) -> Result<(), BuildCommandError> {
+    let Some(path) = &options.provenance else {
+        return Ok(());
+    };
+
+    let workspace_root = workspace_root()?;
+    let config_path = resolve_build_config_path(options)?;
+    let request = BuildProvenanceRequest {
+        fleet: options.fleet.clone(),
+        role: options.role.clone(),
+        network: options.network.clone(),
+        profile,
+        workspace_root: workspace_root.clone(),
+        config_path,
+        output,
+        command: build_command_provenance(options, &workspace_root),
+        generated_at: current_build_generated_at()?,
+        canic_version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+    let envelope = build_provenance_envelope(&request)?;
+    output::write_pretty_json_file::<_, BuildCommandError>(path, &envelope)?;
+    Ok(())
+}
+
+fn build_command_provenance(options: &BuildOptions, workspace_root: &Path) -> CommandProvenanceV1 {
+    let mut argv_normalized = vec![
+        "canic".to_string(),
+        "build".to_string(),
+        options.fleet.clone(),
+        options.role.clone(),
+    ];
+    if let Some(profile) = options.profile {
+        argv_normalized.push("--profile".to_string());
+        argv_normalized.push(profile.target_dir_name().to_string());
+    }
+    if let Some(workspace) = &options.workspace {
+        push_path_arg(
+            &mut argv_normalized,
+            "--workspace",
+            workspace,
+            workspace_root,
+        );
+    }
+    if let Some(icp_root) = &options.icp_root {
+        push_path_arg(&mut argv_normalized, "--icp-root", icp_root, workspace_root);
+    }
+    if let Some(config) = &options.config {
+        push_path_arg(&mut argv_normalized, "--config", config, workspace_root);
+    }
+    if options.network != local_network() {
+        argv_normalized.push("--network".to_string());
+        argv_normalized.push(options.network.clone());
+    }
+    if let Some(provenance) = &options.provenance {
+        argv_normalized.push("--provenance".to_string());
+        argv_normalized.push(command_path_for_root(provenance, workspace_root));
+    }
+
+    CommandProvenanceV1 {
+        name: "canic build".to_string(),
+        argv_normalized,
+        argv_redactions: Vec::new(),
+        format: "provenance".to_string(),
+    }
+}
+
+fn push_path_arg(argv_normalized: &mut Vec<String>, name: &str, path: &str, root: &Path) {
+    argv_normalized.push(name.to_string());
+    argv_normalized.push(command_path_for_root(Path::new(path), root));
+}
+
+fn current_build_generated_at() -> Result<String, Box<dyn std::error::Error>> {
+    Ok(format!(
+        "unix:{}",
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+    ))
 }
 
 fn resolve_build_config_path(options: &BuildOptions) -> Result<PathBuf, BuildCommandError> {
@@ -332,6 +439,7 @@ mod tests {
         assert_eq!(options.workspace, None);
         assert_eq!(options.icp_root, None);
         assert_eq!(options.config, None);
+        assert_eq!(options.provenance, None);
     }
 
     #[test]
@@ -358,6 +466,8 @@ mod tests {
             OsString::from("backend/src/canisters/canic.toml"),
             OsString::from("--profile"),
             OsString::from("fast"),
+            OsString::from("--provenance"),
+            OsString::from("artifacts/root-provenance.json"),
             OsString::from("demo"),
             OsString::from("root"),
         ])
@@ -371,6 +481,10 @@ mod tests {
         assert_eq!(
             options.config.as_deref(),
             Some("backend/src/canisters/canic.toml")
+        );
+        assert_eq!(
+            options.provenance.as_deref(),
+            Some(Path::new("artifacts/root-provenance.json"))
         );
     }
 
@@ -407,9 +521,30 @@ mod tests {
     fn build_usage_lists_fleet_and_role() {
         let text = usage();
 
-        assert!(text.contains("Usage: canic build <fleet> <role>"));
+        assert!(text.contains("Usage: canic build [OPTIONS] <fleet> <role>"));
         assert!(text.contains("canic build demo app"));
+        assert!(text.contains("--provenance <file>"));
         assert!(text.contains("be attached to topology"));
+    }
+
+    #[test]
+    fn build_command_provenance_redacts_paths_outside_workspace() {
+        let root = temp_dir("canic-cli-build-provenance-command");
+        fs::create_dir_all(&root).expect("create root");
+        let outside = temp_dir("canic-cli-build-provenance-outside");
+        fs::create_dir_all(&outside).expect("create outside");
+        let mut options = build_options(&root, "demo", "app");
+        options.provenance = Some(outside.join("build-provenance.json"));
+
+        let provenance = build_command_provenance(&options, &root);
+
+        fs::remove_dir_all(root).expect("remove root");
+        fs::remove_dir_all(outside).expect("remove outside");
+        assert!(
+            provenance
+                .argv_normalized
+                .contains(&"<redacted:absolute-outside-root>".to_string())
+        );
     }
 
     #[test]
@@ -474,6 +609,7 @@ mod tests {
             workspace: Some(root.display().to_string()),
             icp_root: None,
             config: None,
+            provenance: None,
         }
     }
 

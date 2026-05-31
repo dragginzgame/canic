@@ -165,3 +165,11 @@ May has day summaries for the currently recorded audit days.
 51. Audit maintenance: keep the complexity-accretion recurring subsystem map
     aligned with actual `canic-core/src` top-level scopes and continue
     reporting non-test `>= 600 LOC` files separately from test harness size.
+52. Complexity maintainers: keep sharding placement allocation, bootstrap, and
+    registry helper responsibilities split across
+    `crates/canic-core/src/workflow/placement/sharding/{allocation,bootstrap,registry}.rs`;
+    do not fold them back into `workflow/placement/sharding/mod.rs`.
+53. Complexity maintainers: keep directory placement classification,
+    create/finalize, cleanup/recovery, and config lookup responsibilities split
+    across `crates/canic-core/src/workflow/placement/directory/{classification,create,cleanup,config}.rs`;
+    do not fold them back into `workflow/placement/directory/mod.rs`.
