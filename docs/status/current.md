@@ -55,6 +55,18 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- 0.52.2 has added saved build-provenance evidence inputs for passive
+  envelope reports:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile> --format envelope-json --build-provenance <path>
+  canic deploy check <deployment> --format envelope-json --build-provenance <path>
+  ```
+  These options fingerprint the supplied `canic.build_provenance.v1` envelope
+  as stable input evidence only. They require `--format envelope-json` and do
+  not re-run builds, import artifacts, validate deployment truth from
+  provenance, attach topology, mutate controllers, or turn provenance into
+  authority. The slice also adapts Canic memory-ledger diagnostics to the
+  locked `ic-memory 0.7.0` API.
 - 0.52.1 has added explicit build provenance output:
   ```text
   canic build <fleet> <role> --provenance <path>

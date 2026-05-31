@@ -16,6 +16,18 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.52.md](docs/changelog/0.52.md)
 
+- `0.52.2` lets passive adoption-report and deployment-check evidence
+  envelopes fingerprint saved build provenance evidence:
+  ```text
+  canic fleet adoption report <fleet> --profile <profile> --format envelope-json --build-provenance <path>
+  canic deploy check <deployment> --format envelope-json --build-provenance <path>
+  ```
+  The file is recorded as a stable `canic.build_provenance.v1` input
+  fingerprint only; report generation does not re-run builds, import
+  artifacts, mutate topology/controllers, or turn provenance into deployment
+  truth. This patch also adapts Canic memory-ledger diagnostics to the locked
+  `ic-memory 0.7.0` API.
+
 - `0.52.1` adds explicit build provenance output:
   ```text
   canic build <fleet> <role> --provenance <path>

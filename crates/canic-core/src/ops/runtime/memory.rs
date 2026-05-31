@@ -113,8 +113,8 @@ impl MemoryRegistryOps {
             .collect();
 
         Ok(MemoryLedgerResponse {
-            ledger_schema_version: snapshot.export.ledger_schema_version,
-            physical_format_id: snapshot.export.physical_format_id,
+            ledger_schema_version: crate::memory::ledger::MEMORY_LEDGER_SCHEMA_VERSION,
+            physical_format_id: crate::memory::ledger::MEMORY_PHYSICAL_FORMAT_ID,
             current_generation: snapshot.export.current_generation,
             commit_recovery: commit_recovery_response(snapshot.export.commit_recovery),
             authorities,
@@ -183,11 +183,13 @@ const fn memory_allocation_state_response(state: AllocationState) -> MemoryAlloc
     }
 }
 
-fn memory_schema_metadata_response(record: &SchemaMetadataRecord) -> MemorySchemaMetadataEntry {
+const fn memory_schema_metadata_response(
+    record: &SchemaMetadataRecord,
+) -> MemorySchemaMetadataEntry {
     MemorySchemaMetadataEntry {
         generation: record.generation(),
         schema_version: record.schema().schema_version,
-        schema_fingerprint: record.schema().schema_fingerprint.clone(),
+        schema_fingerprint: None,
     }
 }
 
@@ -197,7 +199,7 @@ fn memory_ledger_generation_response(
     let generation = generation.generation;
     MemoryLedgerGenerationEntry {
         generation: generation.generation(),
-        parent_generation: generation.parent_generation(),
+        parent_generation: Some(generation.parent_generation()),
         runtime_fingerprint: generation.runtime_fingerprint().map(str::to_string),
         declaration_count: generation.declaration_count(),
         committed_at: generation.committed_at(),

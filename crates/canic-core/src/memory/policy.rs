@@ -181,12 +181,6 @@ fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryReg
                 },
             }
         }
-        MemoryManagerSlotError::UnsupportedSubstrate { .. }
-        | MemoryManagerSlotError::UnsupportedDescriptorVersion { .. } => {
-            MemoryRegistryError::LedgerCorrupt {
-                reason: "unsupported MemoryManager allocation slot descriptor",
-            }
-        }
     }
 }
 

@@ -4,9 +4,8 @@ use super::{manager::MEMORY_MANAGER, policy, registry::MemoryRegistryError};
 #[cfg(any(test, target_arch = "wasm32"))]
 use ic_memory::stable_structures::Memory;
 use ic_memory::{
-    AllocationHistory, AllocationLedger, AllocationSlotDescriptor, CURRENT_LEDGER_SCHEMA_VERSION,
-    CURRENT_PHYSICAL_FORMAT_ID, DiagnosticExport, MemoryManagerAuthorityRecord,
-    StableCellLedgerRecord,
+    AllocationHistory, AllocationLedger, AllocationSlotDescriptor, DiagnosticExport,
+    MemoryManagerAuthorityRecord, StableCellLedgerRecord,
     stable_structures::{
         DefaultMemoryImpl,
         cell::Cell,
@@ -20,6 +19,8 @@ use serde::Deserialize;
 use std::cell::RefCell;
 
 pub const MEMORY_LAYOUT_LEDGER_ID: u8 = ic_memory::MEMORY_MANAGER_LEDGER_ID;
+pub const MEMORY_LEDGER_SCHEMA_VERSION: u32 = 1;
+pub const MEMORY_PHYSICAL_FORMAT_ID: u32 = 1;
 #[cfg(any(test, target_arch = "wasm32"))]
 const LEGACY_CANIC_LEDGER_MAGIC: u64 = 0x4341_4E49_434D_454D;
 #[cfg(any(test, target_arch = "wasm32"))]
@@ -136,13 +137,8 @@ fn snapshot_from_record(
 }
 
 fn genesis_ledger() -> AllocationLedger {
-    AllocationLedger::new_committed(
-        CURRENT_LEDGER_SCHEMA_VERSION,
-        CURRENT_PHYSICAL_FORMAT_ID,
-        0,
-        AllocationHistory::default(),
-    )
-    .expect("empty ic-memory genesis ledger is structurally valid")
+    AllocationLedger::new_committed(0, AllocationHistory::default())
+        .expect("empty ic-memory genesis ledger is structurally valid")
 }
 
 ///

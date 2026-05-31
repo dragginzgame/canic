@@ -11,6 +11,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    build_provenance::build_provenance_schema,
     canister_build::CanisterBuildProfile,
     deployment_truth::{
         ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
@@ -81,8 +82,9 @@ use canic_host::{
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
-        InputPathDisplayV1, PayloadSchemaRefV1, deployment_check_schema, evidence_envelope_schema,
-        evidence_summary_exit_class, file_input_fingerprint, json_payload_sha256,
+        InputPathDisplayV1, PayloadSchemaRefV1, command_path_for_root, deployment_check_schema,
+        evidence_envelope_schema, evidence_summary_exit_class, file_input_fingerprint,
+        json_payload_sha256,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -225,9 +227,11 @@ Examples:
   canic deploy check demo
   canic --network local deploy check --profile fast demo
   canic deploy check demo --format envelope-json
+  canic deploy check demo --format envelope-json --build-provenance build-provenance.json
 
 Prints the local DeploymentCheckV1 JSON without installing or mutating state.
-Use --format envelope-json for the stable CI/GitOps evidence envelope.";
+Use --format envelope-json for the stable CI/GitOps evidence envelope.
+--build-provenance is fingerprinted only in envelope output.";
 const DEPLOY_AUTHORITY_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority check demo
@@ -605,6 +609,7 @@ struct DeployTruthOptions {
 struct DeployCheckOptions {
     truth: DeployTruthOptions,
     format: CheckOutputFormat,
+    build_provenance: Option<PathBuf>,
 }
 
 ///
@@ -2338,6 +2343,7 @@ fn build_deployment_check_envelope(
     let payload = serde_json::to_value(check).map_err(Box::<dyn std::error::Error>::from)?;
     let payload_sha256 =
         Some(json_payload_sha256(check).map_err(Box::<dyn std::error::Error>::from)?);
+    let config_root = deployment_check_config_root(check);
     let source_config = deployment_check_source_config_fingerprint(check)?;
     let summary = deployment_check_evidence_summary(check);
     let exit_class = combine_deployment_check_exit_class(check.report.status, &summary);
@@ -2345,7 +2351,7 @@ fn build_deployment_check_envelope(
     Ok(EvidenceEnvelopeV1 {
         envelope_schema: evidence_envelope_schema(),
         canic_version: env!("CARGO_PKG_VERSION").to_string(),
-        command: deployment_check_command_provenance(options),
+        command: deployment_check_command_provenance(options, &config_root),
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::Deployment,
             deployment: Some(check.plan.deployment_identity.deployment_name.clone()),
@@ -2359,7 +2365,7 @@ fn build_deployment_check_envelope(
         },
         generated_at: check.inventory.observed_at.clone(),
         source_config,
-        inputs: Vec::new(),
+        inputs: deployment_check_input_fingerprints(options, &config_root)?,
         payload_schema: deployment_check_schema(),
         payload_sha256,
         payload,
@@ -2368,7 +2374,10 @@ fn build_deployment_check_envelope(
     })
 }
 
-fn deployment_check_command_provenance(options: &DeployCheckOptions) -> CommandProvenanceV1 {
+fn deployment_check_command_provenance(
+    options: &DeployCheckOptions,
+    config_root: &Path,
+) -> CommandProvenanceV1 {
     let mut argv_normalized = vec![
         "canic".to_string(),
         "deploy".to_string(),
@@ -2385,12 +2394,69 @@ fn deployment_check_command_provenance(options: &DeployCheckOptions) -> CommandP
         argv_normalized.push("--network".to_string());
         argv_normalized.push(options.truth.network.clone());
     }
+    let mut argv_redactions = Vec::new();
+    push_optional_path_arg(
+        &mut argv_normalized,
+        &mut argv_redactions,
+        "--build-provenance",
+        options.build_provenance.as_ref(),
+        config_root,
+    );
 
     CommandProvenanceV1 {
         name: "canic deploy check".to_string(),
         argv_normalized,
-        argv_redactions: Vec::new(),
+        argv_redactions,
         format: "envelope-json".to_string(),
+    }
+}
+
+fn deployment_check_config_root(check: &DeploymentCheckV1) -> PathBuf {
+    check
+        .inventory
+        .local_config
+        .config_path
+        .as_deref()
+        .and_then(|path| Path::new(path).parent())
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
+}
+
+fn deployment_check_input_fingerprints(
+    options: &DeployCheckOptions,
+    config_root: &Path,
+) -> Result<Vec<InputFingerprintV1>, DeployCommandError> {
+    let mut inputs = Vec::new();
+    if let Some(path) = &options.build_provenance {
+        inputs.push(
+            file_input_fingerprint(
+                "build_provenance",
+                path,
+                config_root,
+                Some(build_provenance_schema()),
+                None,
+            )
+            .map_err(Box::<dyn std::error::Error>::from)
+            .map_err(DeployCommandError::from)?,
+        );
+    }
+    Ok(inputs)
+}
+
+fn push_optional_path_arg(
+    args: &mut Vec<String>,
+    redactions: &mut Vec<String>,
+    flag: &str,
+    path: Option<&PathBuf>,
+    config_root: &Path,
+) {
+    if let Some(path) = path {
+        args.push(flag.to_string());
+        let display_path = command_path_for_root(path, config_root);
+        if display_path.starts_with("<redacted:") {
+            redactions.push(format!("{flag} absolute path outside config root"));
+        }
+        args.push(display_path);
     }
 }
 
@@ -2912,12 +2978,20 @@ impl DeployCheckOptions {
     {
         let matches = parse_matches(deploy_check_command(), args)
             .map_err(|_| DeployCommandError::Usage(check_usage()))?;
+        let format =
+            parse_check_output_format(string_option(&matches, "format").as_deref(), check_usage)?;
+        let build_provenance = path_option(&matches, "build-provenance");
+        if build_provenance.is_some() && format != CheckOutputFormat::EnvelopeJson {
+            return Err(DeployCommandError::Usage(format!(
+                "--build-provenance requires --format envelope-json\n\n{}",
+                check_usage()
+            )));
+        }
+
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches, check_usage)?,
-            format: parse_check_output_format(
-                string_option(&matches, "format").as_deref(),
-                check_usage,
-            )?,
+            format,
+            build_provenance,
         })
     }
 }
@@ -3701,6 +3775,7 @@ fn deploy_report_command() -> ClapCommand {
 fn deploy_check_command() -> ClapCommand {
     deploy_truth_leaf_command("check", "Print the local deployment truth check JSON")
         .arg(check_format_arg())
+        .arg(build_provenance_input_arg())
         .after_help(DEPLOY_CHECK_HELP_AFTER)
 }
 
@@ -3753,6 +3828,14 @@ fn check_format_arg() -> clap::Arg {
         .value_name("json|envelope-json")
         .num_args(1)
         .help("Output format; defaults to json")
+}
+
+fn build_provenance_input_arg() -> clap::Arg {
+    value_arg("build-provenance")
+        .long("build-provenance")
+        .value_name("path")
+        .num_args(1)
+        .help("Fingerprint a BuildProvenanceV1 evidence envelope; requires --format envelope-json")
 }
 
 fn external_format_arg() -> clap::Arg {
@@ -4248,12 +4331,60 @@ mod tests {
 
         assert_eq!(options.truth.deployment, "demo");
         assert_eq!(options.format, CheckOutputFormat::EnvelopeJson);
+        assert_eq!(options.build_provenance, None);
+    }
+
+    #[test]
+    fn deploy_check_parses_build_provenance_envelope_input() {
+        let options = DeployCheckOptions::parse([
+            OsString::from("demo"),
+            OsString::from("--format"),
+            OsString::from("envelope-json"),
+            OsString::from("--build-provenance"),
+            OsString::from("build-provenance.json"),
+        ])
+        .expect("parse deploy check");
+
+        assert_eq!(
+            options.build_provenance,
+            Some(PathBuf::from("build-provenance.json"))
+        );
+    }
+
+    #[test]
+    fn deploy_check_rejects_build_provenance_without_envelope_output() {
+        let err = DeployCheckOptions::parse([
+            OsString::from("demo"),
+            OsString::from("--build-provenance"),
+            OsString::from("build-provenance.json"),
+        ])
+        .expect_err("build provenance requires envelope output");
+
+        std::assert_matches!(
+            err,
+            DeployCommandError::Usage(message)
+                if message.contains("--build-provenance requires --format envelope-json")
+        );
+    }
+
+    #[test]
+    fn deploy_check_usage_lists_build_provenance_input() {
+        let text = check_usage();
+
+        assert!(text.contains("--format <json|envelope-json>"));
+        assert!(text.contains("--build-provenance <path>"));
     }
 
     #[test]
     fn deployment_check_envelope_wraps_raw_payload() {
         let config_path = temp_json_path("deploy-check-envelope-canic.toml");
+        let build_provenance_path = temp_json_path("deploy-check-build-provenance.json");
         fs::write(&config_path, "[fleet]\nname = \"demo\"\n").expect("write config");
+        fs::write(
+            &build_provenance_path,
+            br#"{"payload_schema":{"id":"canic.build_provenance.v1"}}"#,
+        )
+        .expect("write build provenance");
         let mut check = sample_authority_check();
         check.inventory.local_config.config_path = Some(config_path.to_string_lossy().to_string());
         check.inventory.local_config.raw_config_sha256 = Some(sample_sha256("a"));
@@ -4271,6 +4402,7 @@ mod tests {
                 profile: Some(CanisterBuildProfile::Fast),
             },
             format: CheckOutputFormat::EnvelopeJson,
+            build_provenance: Some(build_provenance_path.clone()),
         };
 
         let envelope =
@@ -4278,6 +4410,7 @@ mod tests {
         let value = serde_json::to_value(&envelope).expect("serialize envelope");
 
         fs::remove_file(config_path).expect("clean config");
+        fs::remove_file(build_provenance_path).expect("clean build provenance");
         assert_eq!(value["envelope_schema"]["id"], "canic.evidence_envelope.v1");
         assert_eq!(value["payload_schema"]["id"], "canic.deployment_check.v1");
         assert_eq!(value["payload_schema"]["stability"], "internal");
@@ -4308,6 +4441,21 @@ mod tests {
                 .iter()
                 .any(|warning| warning["code"] == "deploy.warning.test_warning")
         );
+        assert!(
+            value["inputs"]
+                .as_array()
+                .expect("inputs")
+                .iter()
+                .any(|input| input["kind"] == "build_provenance"
+                    && input["schema"]["id"] == "canic.build_provenance.v1")
+        );
+        assert!(
+            value["command"]["argv_normalized"]
+                .as_array()
+                .expect("argv")
+                .iter()
+                .any(|arg| arg == "--build-provenance")
+        );
     }
 
     #[test]
@@ -4327,6 +4475,7 @@ mod tests {
                 profile: None,
             },
             format: CheckOutputFormat::EnvelopeJson,
+            build_provenance: None,
         };
 
         let envelope =

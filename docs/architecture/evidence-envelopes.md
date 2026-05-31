@@ -27,6 +27,7 @@ The current envelope emitters are:
 ```text
 canic fleet adoption report <fleet> --profile <profile> --format envelope-json
 canic deploy check <deployment> --format envelope-json
+canic build <fleet> <role> --provenance <path>
 ```
 
 Stable envelope comparison is available with:
@@ -77,6 +78,7 @@ Current payload schema stability:
 canic.evidence_envelope.v1 = stable
 canic.adoption_report.v1   = experimental
 canic.deployment_check.v1  = internal
+canic.build_provenance.v1  = stable
 ```
 
 Do not write CI policy against nested payload fields unless that payload schema
@@ -159,6 +161,20 @@ themselves.
 When an evidence path is redacted from normalized command provenance,
 `argv_redactions` records which argument was affected.
 
+Saved build provenance can be attached to passive adoption and deployment-check
+envelopes as input evidence:
+
+```text
+canic fleet adoption report <fleet> --profile <profile> --format envelope-json \
+  --build-provenance <path>
+canic deploy check <deployment> --format envelope-json \
+  --build-provenance <path>
+```
+
+These options fingerprint the supplied `canic.build_provenance.v1` envelope.
+They do not re-run builds, validate deployment truth from provenance alone, or
+turn provenance into authority.
+
 ## CI/GitOps Guidance
 
 Recommended automation behavior:
@@ -193,6 +209,7 @@ A minimal passive pipeline can write envelope artifacts under a CI artifact
 directory such as:
 
 ```text
+artifacts/canic/build-provenance.json
 artifacts/canic/adoption-envelope.json
 artifacts/canic/deployment-check-envelope.json
 artifacts/canic/baseline-deployment-check-envelope.json
@@ -207,10 +224,14 @@ provider or artifact layout.
 One conservative pipeline shape is:
 
 ```text
+canic build demo app --provenance artifacts/canic/build-provenance.json
+
 canic fleet adoption report demo --profile minimal --format envelope-json \
+  --build-provenance artifacts/canic/build-provenance.json \
   --output artifacts/canic/adoption-envelope.json
 
 canic deploy check demo-staging --format envelope-json \
+  --build-provenance artifacts/canic/build-provenance.json \
   > artifacts/canic/deployment-check-envelope.json
 
 canic evidence compare \
@@ -220,9 +241,11 @@ canic evidence compare \
   > artifacts/canic/envelope-compare.json
 ```
 
-This flow is read-only. It records adoption evidence, records deployment-check
-evidence, and compares the stable envelope contract from a previous baseline
-against the newly generated deployment-check envelope.
+The build step is ordinary artifact generation with one explicit provenance
+output. The adoption, deployment-check, and compare steps remain read-only:
+they fingerprint the saved build provenance as supplied evidence, record
+adoption/deployment-check evidence, and compare the stable envelope contract
+from a previous baseline against the newly generated deployment-check envelope.
 
 Pipeline policy should branch on envelope fields rather than nested payload
 DTOs:

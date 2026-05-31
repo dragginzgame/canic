@@ -45,6 +45,16 @@ metadata, build-profile, and artifact hash evidence after a successful build.
 It does not change deployment truth, install state, controllers, topology, or
 artifact registry state.
 
+Saved build provenance can be supplied back to passive evidence envelopes:
+
+```text
+canic fleet adoption report <fleet> --profile <profile> --format envelope-json --build-provenance <path>
+canic deploy check <deployment> --format envelope-json --build-provenance <path>
+```
+
+Those commands only fingerprint the saved provenance envelope as input
+evidence. They do not re-run builds or treat provenance as deployment truth.
+
 ## Canister Artifacts
 
 - Direct Cargo canister builds emit raw wasm under

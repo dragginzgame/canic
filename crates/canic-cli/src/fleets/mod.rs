@@ -18,6 +18,7 @@ use canic_host::{
         AdoptionSuggestedActionEffectV1, AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
         adoption_report_from_config_source,
     },
+    build_provenance::build_provenance_schema,
     deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1, RoleArtifactV1},
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
@@ -119,6 +120,7 @@ Examples:
   canic fleet adoption report demo --profile partial --deployment-check check.json
   canic fleet adoption report demo --profile partial --inventory inventory.json
   canic fleet adoption report demo --profile partial --cargo-metadata cargo-metadata.json
+  canic fleet adoption report demo --profile partial --format envelope-json --build-provenance build-provenance.json
   canic fleet adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
@@ -128,7 +130,8 @@ raw adoption payload nested inside. The report is read-only; --output writes
 only the requested report artifact. Evidence inputs are JSON files and are
 read-only. Use either --inventory or --deployment-check, not both. Use either
 --package-metadata or --cargo-metadata, not both. Deployment-check evidence
-also supplies plan role artifacts when present.";
+also supplies plan role artifacts when present. --build-provenance is
+fingerprinted only in envelope output.";
 
 ///
 /// FleetCommandError
@@ -275,6 +278,7 @@ struct AdoptionReportOptions {
     artifact_manifest: Option<PathBuf>,
     cargo_metadata: Option<PathBuf>,
     package_metadata: Option<PathBuf>,
+    build_provenance: Option<PathBuf>,
     output: Option<PathBuf>,
 }
 
@@ -765,21 +769,31 @@ impl AdoptionReportOptions {
         let matches = parse_matches(fleet_adoption_report_command(), args)
             .map_err(|_| FleetCommandError::Usage(adoption_report_usage()))?;
 
+        let format = parse_adoption_report_format(
+            string_option(&matches, "format").as_deref(),
+            adoption_report_usage,
+        )?;
+        let build_provenance = path_option(&matches, "build-provenance");
+        if build_provenance.is_some() && format != AdoptionReportFormat::EnvelopeJson {
+            return Err(FleetCommandError::Usage(format!(
+                "--build-provenance requires --format envelope-json\n\n{}",
+                adoption_report_usage()
+            )));
+        }
+
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
             profile: parse_adoption_profile(
                 string_option(&matches, "profile").as_deref(),
                 adoption_report_usage,
             )?,
-            format: parse_adoption_report_format(
-                string_option(&matches, "format").as_deref(),
-                adoption_report_usage,
-            )?,
+            format,
             deployment_check: path_option(&matches, "deployment-check"),
             inventory: path_option(&matches, "inventory"),
             artifact_manifest: path_option(&matches, "artifact-manifest"),
             cargo_metadata: path_option(&matches, "cargo-metadata"),
             package_metadata: path_option(&matches, "package-metadata"),
+            build_provenance,
             output: path_option(&matches, "output"),
         })
     }
@@ -1024,6 +1038,14 @@ fn fleet_adoption_report_command() -> ClapCommand {
                 .long("cargo-metadata")
                 .value_name("path")
                 .help("Read package metadata evidence from cargo metadata JSON"),
+        )
+        .arg(
+            clap::Arg::new("build-provenance")
+                .long("build-provenance")
+                .value_name("path")
+                .help(
+                    "Fingerprint a BuildProvenanceV1 evidence envelope; requires --format envelope-json",
+                ),
         )
         .arg(
             clap::Arg::new("output")
@@ -1748,6 +1770,13 @@ fn adoption_report_command_provenance(
         options.package_metadata.as_ref(),
         config_root,
     );
+    push_optional_path_arg(
+        &mut argv_normalized,
+        &mut argv_redactions,
+        "--build-provenance",
+        options.build_provenance.as_ref(),
+        config_root,
+    );
 
     CommandProvenanceV1 {
         name: "canic fleet adoption report".to_string(),
@@ -1823,6 +1852,13 @@ fn adoption_report_input_fingerprints(
             "canic.adoption_package_metadata.v1",
             "1",
         )),
+    )?;
+    push_optional_input_fingerprint(
+        &mut inputs,
+        "build_provenance",
+        options.build_provenance.as_deref(),
+        config_root,
+        Some(build_provenance_schema()),
     )?;
 
     Ok(inputs)

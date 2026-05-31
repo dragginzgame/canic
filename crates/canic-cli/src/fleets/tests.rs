@@ -133,6 +133,7 @@ fn parses_adoption_report_fleet_profile_and_default_text() {
     assert_eq!(options.artifact_manifest, None);
     assert_eq!(options.cargo_metadata, None);
     assert_eq!(options.package_metadata, None);
+    assert_eq!(options.build_provenance, None);
     assert_eq!(options.output, None);
 }
 
@@ -171,6 +172,7 @@ fn parses_adoption_report_json_output() {
         options.package_metadata,
         Some(PathBuf::from("packages.json"))
     );
+    assert_eq!(options.build_provenance, None);
     assert_eq!(options.output, Some(PathBuf::from("report.json")));
 }
 
@@ -187,6 +189,26 @@ fn parses_adoption_report_envelope_json_output() {
     .expect("parse adoption report options");
 
     assert_eq!(options.format, AdoptionReportFormat::EnvelopeJson);
+}
+
+// Ensure build provenance evidence is accepted only for stable envelope output.
+#[test]
+fn parses_adoption_report_build_provenance_envelope_input() {
+    let options = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("minimal"),
+        OsString::from("--format"),
+        OsString::from("envelope-json"),
+        OsString::from("--build-provenance"),
+        OsString::from("build-provenance.json"),
+    ])
+    .expect("parse adoption report options");
+
+    assert_eq!(
+        options.build_provenance,
+        Some(PathBuf::from("build-provenance.json"))
+    );
 }
 
 // Ensure adoption report can read cargo metadata evidence from an explicit path.
@@ -240,6 +262,25 @@ fn rejects_unknown_adoption_report_format() {
         err,
         FleetCommandError::Usage(message)
             if message.contains("invalid adoption report output format: yaml")
+    );
+}
+
+// Ensure provenance evidence cannot silently no-op on raw adoption report output.
+#[test]
+fn rejects_adoption_report_build_provenance_without_envelope_output() {
+    let err = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("minimal"),
+        OsString::from("--build-provenance"),
+        OsString::from("build-provenance.json"),
+    ])
+    .expect_err("build provenance requires envelope output");
+
+    std::assert_matches!(
+        err,
+        FleetCommandError::Usage(message)
+            if message.contains("--build-provenance requires --format envelope-json")
     );
 }
 
@@ -468,6 +509,7 @@ fn renders_adoption_report_text_for_declared_only_roles() {
         artifact_manifest: None,
         cargo_metadata: None,
         package_metadata: None,
+        build_provenance: None,
         output: None,
     };
 
@@ -510,6 +552,7 @@ fn writes_adoption_report_json_output_file() {
         artifact_manifest: None,
         cargo_metadata: None,
         package_metadata: None,
+        build_provenance: None,
         output: Some(out.clone()),
     };
 
@@ -544,6 +587,7 @@ fn writes_adoption_report_envelope_json_output_file() {
         artifact_manifest: Some(evidence.artifact_manifest),
         cargo_metadata: None,
         package_metadata: Some(evidence.package_metadata),
+        build_provenance: Some(evidence.build_provenance),
         output: Some(out.clone()),
     };
 
@@ -583,6 +627,22 @@ fn writes_adoption_report_envelope_json_output_file() {
             .any(|input| input["kind"] == "deployment_inventory")
     );
     assert!(
+        value["inputs"]
+            .as_array()
+            .expect("inputs array")
+            .iter()
+            .any(|input| input["kind"] == "build_provenance"
+                && input["schema"]["id"] == "canic.build_provenance.v1"
+                && input["schema"]["stability"] == "stable")
+    );
+    assert!(
+        value["command"]["argv_normalized"]
+            .as_array()
+            .expect("argv")
+            .iter()
+            .any(|arg| arg == "--build-provenance")
+    );
+    assert!(
         value["summary"]["missing_or_stale_evidence"]
             .as_array()
             .expect("missing evidence array")
@@ -607,6 +667,7 @@ fn adoption_report_reads_explicit_evidence_files() {
         artifact_manifest: Some(evidence.artifact_manifest),
         cargo_metadata: None,
         package_metadata: Some(evidence.package_metadata),
+        build_provenance: None,
         output: None,
     };
 
@@ -650,6 +711,7 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
         artifact_manifest: None,
         cargo_metadata: None,
         package_metadata: None,
+        build_provenance: None,
         output: None,
     };
 
@@ -696,6 +758,7 @@ fn adoption_report_artifact_manifest_overrides_deployment_check_artifacts() {
         artifact_manifest: Some(explicit_artifact_manifest),
         cargo_metadata: None,
         package_metadata: None,
+        build_provenance: None,
         output: None,
     };
 
@@ -739,6 +802,7 @@ fn renders_adoption_report_text_with_observed_canister_evidence() {
         artifact_manifest: None,
         cargo_metadata: None,
         package_metadata: None,
+        build_provenance: None,
         output: None,
     };
 
@@ -771,6 +835,7 @@ fn adoption_report_reads_package_metadata_from_cargo_metadata_file() {
         artifact_manifest: None,
         cargo_metadata: Some(evidence.cargo_metadata),
         package_metadata: None,
+        build_provenance: None,
         output: None,
     };
 
@@ -804,6 +869,7 @@ fn adoption_report_rejects_inventory_and_deployment_check_together() {
         artifact_manifest: None,
         cargo_metadata: None,
         package_metadata: None,
+        build_provenance: None,
         output: None,
     };
 
@@ -835,6 +901,7 @@ fn adoption_report_rejects_package_metadata_and_cargo_metadata_together() {
         artifact_manifest: None,
         cargo_metadata: Some(evidence.cargo_metadata),
         package_metadata: Some(evidence.package_metadata),
+        build_provenance: None,
         output: None,
     };
 
@@ -883,6 +950,7 @@ struct AdoptionEvidenceFiles {
     artifact_manifest: PathBuf,
     cargo_metadata: PathBuf,
     package_metadata: PathBuf,
+    build_provenance: PathBuf,
 }
 
 fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
@@ -892,6 +960,7 @@ fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
         artifact_manifest: root.join("artifact-manifest.json"),
         cargo_metadata: root.join("cargo-metadata.json"),
         package_metadata: root.join("package-metadata.json"),
+        build_provenance: root.join("build-provenance.json"),
     };
 
     write_json_fixture(&files.deployment_check, adoption_deployment_check_fixture());
@@ -902,11 +971,31 @@ fn write_adoption_evidence_files(root: &Path) -> AdoptionEvidenceFiles {
     );
     write_json_fixture(&files.cargo_metadata, adoption_cargo_metadata_fixture(root));
     write_json_fixture(&files.package_metadata, adoption_package_metadata_fixture());
+    write_json_fixture(&files.build_provenance, build_provenance_fixture());
     files
 }
 
 fn write_json_fixture(path: &Path, value: serde_json::Value) {
     fs::write(path, serde_json::to_vec(&value).expect("encode fixture")).expect("write fixture");
+}
+
+fn build_provenance_fixture() -> serde_json::Value {
+    serde_json::json!({
+        "envelope_schema": {
+            "id": "canic.evidence_envelope.v1",
+            "version": "1",
+            "stability": "stable"
+        },
+        "payload_schema": {
+            "id": "canic.build_provenance.v1",
+            "version": "1",
+            "stability": "stable"
+        },
+        "payload": {
+            "schema_version": 1,
+            "build_status": "success"
+        }
+    })
 }
 
 fn adoption_deployment_check_fixture() -> serde_json::Value {
@@ -1182,6 +1271,7 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("--artifact-manifest <path>"));
     assert!(text.contains("--cargo-metadata <path>"));
     assert!(text.contains("--package-metadata <path>"));
+    assert!(text.contains("--build-provenance <path>"));
     assert!(text.contains("--output <path>"));
     assert!(text.contains("brownfield"));
     assert!(text.contains("read-only"));
