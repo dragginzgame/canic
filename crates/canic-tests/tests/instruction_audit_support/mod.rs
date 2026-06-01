@@ -295,6 +295,7 @@ pub fn generate_instruction_footprint_report() {
 
     let verification_rows = verification_rows(
         &paths,
+        &metadata,
         &checkpoint_sites,
         query_unobservable_count,
         checkpoint_rows.len(),

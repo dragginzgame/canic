@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.3` refreshes the recurring instruction-footprint audit definition for
+  the maintained PocketIC runner and runtime probe scope, while explicitly
+  keeping host-side evidence commands out of the canister instruction matrix.
+  It also restores the explicit audit-only `leaf_probe` runtime config so the
+  probe does not fall back to generated compile-only standalone metadata, and
+  fixes baseline selection to use the latest prior retained report across days.
+
 - `0.57.2` keeps the recurring Wasm footprint audit aligned with hard-cut
   fleet role/package metadata by resolving Cargo package names from
   `[roles.<role>].package`, passing the selected fleet config into artifact

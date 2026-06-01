@@ -242,19 +242,46 @@ Measure and report:
 - available `perf!` checkpoints inside multi-step flows
 - explicit checkpoint-coverage gaps where `perf!` is absent
 
-### Default Canister Scope
+### Default Runtime Scope
 
-Default scope is the full `test` fleet from `icp.yaml` plus the implicit
-`wasm_store` canister:
+Default measurement is the maintained PocketIC instruction-audit scenario
+matrix, not the full installed fleet and not the host CLI surface.
 
-- `app`
-- `minimal`
-- `user_hub`
-- `user_shard`
-- `scale_hub`
-- `scale`
-- `wasm_store`
+Current runtime canisters in the scenario matrix:
+
+- `leaf_probe`
+- `root_probe`
+- `scaling_probe`
+- `test`
 - `root`
+
+These probe canisters are intentional. Query-side perf rows are not committed,
+so shared query paths must be sampled through local-only probe endpoints that
+return `QueryPerfSample` from the same call context.
+
+The recurring audit must not infer runtime scope from `icp.yaml`, from fleet
+role declarations, or from packaged/downstream proof scripts. Those files
+answer different questions.
+
+### Host-Side Surface Exclusion
+
+Post-0.51 Canic has important host-side evidence and report commands:
+
+- `canic build <fleet> <role> --provenance <path>`
+- `canic deploy check <deployment> --format envelope-json`
+- `canic evidence gate --policy <path> --envelope <path>`
+- `canic evidence gate --policy <path> --manifest <path>`
+- `canic deploy catalog list`
+- `canic deploy catalog inspect <deployment>`
+
+These are not canister runtime endpoints and must not be folded into endpoint
+instruction rows. If their behavior is relevant to a performance discussion,
+that belongs in a separate host-process timing/profiling audit, not this
+runtime instruction audit.
+
+This audit may mention them only as explicit non-scope evidence so future runs
+do not accidentally turn host evidence-envelope work into canister instruction
+drift.
 
 ### Default Endpoint Classes
 
@@ -292,6 +319,11 @@ subsystem:
 - sharding assignment/query flow
 - scaling/provisioning flow
 - bootstrap/install/publication flow
+
+The maintained runner currently samples these through a fixed scenario manifest
+under `crates/canic-tests/tests/instruction_audit_support/`. If this manifest
+changes, the report must treat the run as a method change unless at least one
+unchanged anchor scenario remains comparable.
 
 ## Argument Matrix (Mandatory)
 
@@ -501,12 +533,22 @@ For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence
 7. Flows lacking checkpoints were listed explicitly with proposed insertion
    sites where possible.
 8. Timer samples, if present, were isolated from endpoint scenario groups.
-9. Baseline path was selected according to daily baseline policy.
+9. Baseline path was selected from the latest prior retained
+   `instruction-footprint*.md` report, whether same-day or previous-day.
 10. Deltas versus baseline were recorded when comparable.
 11. Verification readout includes command outcomes with `PASS` / `FAIL` /
     `BLOCKED`.
 
 ## Execution Contract
+
+Canonical runner:
+
+- `bash scripts/ci/instruction-audit-report.sh`
+
+The runner writes the dated report and normalized artifacts under:
+
+- `docs/audits/reports/<YYYY-MM>/<YYYY-MM-DD>/instruction-footprint*.md`
+- `docs/audits/reports/<YYYY-MM>/<YYYY-MM-DD>/artifacts/instruction-footprint*/`
 
 Preferred execution environment:
 
@@ -515,22 +557,22 @@ Preferred execution environment:
 Use the local ICP CLI replica only when a scenario cannot be represented in
 PocketIC and the report explains why.
 
-No canonical runner script exists yet.
-
-Until one exists, each report must:
+Each report must:
 
 - list the exact commands used
 - emit the required normalized artifacts
 - state any manual steps explicitly
 
-Recommended command bundle:
+Runner command bundle:
 
-- `rg -n '^[[:space:]]*perf!\\(' crates`
-- `cargo test -p canic-tests --test delegation_flow -- --nocapture --test-threads=1`
-- `cargo test -p canic-tests --test root_replay -- --nocapture --test-threads=1`
-- `cargo test -p canic-tests --test root_hierarchy -- --nocapture --test-threads=1`
-- `cargo test -p canic-core --test pic_role_attestation -- --nocapture --test-threads=1`
-- any additional targeted flow tests needed by the scenario matrix
+- `bash scripts/ci/instruction-audit-report.sh`
+- internally, the script runs:
+  `cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture`
+
+The report generator also scans checkpoint call sites under `crates/`. The
+definition still accepts additional targeted flow tests, but they must be
+recorded as extra verification rows and must not replace the canonical runner
+unless the method tag changes.
 
 Required capture artifacts:
 

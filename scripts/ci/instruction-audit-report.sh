@@ -21,14 +21,17 @@ REPORT_PATH="$DAY_DIR/$RUN_STEM.md"
 ARTIFACTS_DIR="$DAY_DIR/artifacts/$RUN_STEM"
 mkdir -p "$ARTIFACTS_DIR"
 
-BASELINE_REPORT="N/A"
-if [[ "$RUN_INDEX" -gt 1 ]]; then
-  if [[ "$RUN_INDEX" -eq 2 ]]; then
-    BASELINE_REPORT="docs/audits/reports/$MONTH_DIR/$DATE_UTC/instruction-footprint.md"
-  else
-    PREV_INDEX=$((RUN_INDEX - 1))
-    BASELINE_REPORT="docs/audits/reports/$MONTH_DIR/$DATE_UTC/instruction-footprint-$PREV_INDEX.md"
-  fi
+BASELINE_REPORT="$(
+  find docs/audits/reports \
+    -type f \
+    \( -name 'instruction-footprint.md' -o -name 'instruction-footprint-[0-9]*.md' \) \
+    ! -path "${REPORT_PATH#$ROOT/}" \
+    -print \
+    | sort -V \
+    | tail -n 1
+)"
+if [[ -z "$BASELINE_REPORT" ]]; then
+  BASELINE_REPORT="N/A"
 fi
 
 CODE_SNAPSHOT="$(git rev-parse --short HEAD)"

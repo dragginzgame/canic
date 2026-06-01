@@ -1,4 +1,12 @@
 use super::*;
+use serde::Deserialize;
+use std::collections::BTreeMap;
+
+#[derive(Deserialize)]
+struct BaselinePerfRow {
+    avg_local_instructions: u64,
+    scenario_key: String,
+}
 
 // Scan the repo for concrete `perf!` checkpoint call sites.
 pub(super) fn scan_perf_callsites(workspace_root: &Path) -> Vec<String> {
@@ -91,9 +99,10 @@ pub(super) fn write_flow_checkpoint_log(path: &Path, checkpoint_sites: &[String]
     fs::write(path, body).expect("write flow checkpoints log");
 }
 
-// Assemble the verification table for the first instruction-footprint run.
+// Assemble the verification table for one instruction-footprint run.
 pub(super) fn verification_rows(
     paths: &AuditPaths,
+    metadata: &AuditMetadata,
     checkpoint_sites: &[String],
     query_unobservable_count: usize,
     measured_checkpoint_count: usize,
@@ -161,9 +170,20 @@ pub(super) fn verification_rows(
         },
         VerificationRow {
             command: "baseline comparison".to_string(),
-            status: "BLOCKED".to_string(),
-            notes: "First run of day for `instruction-footprint`; baseline deltas are `N/A`."
-                .to_string(),
+            status: if baseline_is_selected(metadata) {
+                "PARTIAL".to_string()
+            } else {
+                "BLOCKED".to_string()
+            },
+            notes: if baseline_is_selected(metadata) {
+                format!(
+                    "Latest prior `instruction-footprint` report selected as baseline: `{}`.",
+                    metadata.compared_baseline_report
+                )
+            } else {
+                "No prior `instruction-footprint` report was available; baseline deltas are `N/A`."
+                    .to_string()
+            },
         },
     ]
 }
@@ -241,6 +261,7 @@ pub(super) fn write_report(
     ordered.sort_by_key(|result| std::cmp::Reverse(result.row.avg_local_instructions));
 
     let hotspot_rows = ordered.iter().take(3).copied().collect::<Vec<_>>();
+    let baseline_rows = load_baseline_rows(&metadata.compared_baseline_report);
     let risk_score = risk_score(checkpoint_sites, query_unobservable_count, &hotspot_rows);
     let minor_line = scenarios::current_minor_line();
     let report_date = metadata
@@ -331,15 +352,35 @@ pub(super) fn write_report(
             "| Query endpoint perf visibility | PARTIAL | {query_unobservable_count} sampled query scenarios failed to return a usable local instruction counter through the probe path. |\n"
         ));
     }
-    out.push_str("| Baseline path selected by daily baseline discipline | PARTIAL | First run of day for `instruction-footprint`; baseline deltas are `N/A`. |\n\n");
+    if baseline_is_selected(metadata) {
+        out.push_str(&format!(
+            "| Baseline path selected | PASS | Latest prior `instruction-footprint` report selected: `{}`. |\n\n",
+            metadata.compared_baseline_report
+        ));
+    } else {
+        out.push_str("| Baseline path selected | PARTIAL | No prior `instruction-footprint` report was available; baseline deltas are `N/A`. |\n\n");
+    }
 
     out.push_str("## Comparison to Previous Relevant Run\n\n");
-    out.push_str("- First run of day for `instruction-footprint`; this report establishes the daily baseline.\n");
+    if baseline_is_selected(metadata) {
+        out.push_str(&format!(
+            "- Compared baseline report: `{}`.\n",
+            metadata.compared_baseline_report
+        ));
+    } else {
+        out.push_str("- No previous `instruction-footprint` report was available; this report establishes the first retained baseline.\n");
+    }
     out.push_str("- Query scenarios are now sampled through local-only `QueryPerfSample` probes because query-side perf rows are not committed, so their rows are directly comparable to later probe-backed reruns.\n");
     if query_unobservable_count > 0 {
         out.push_str("- One or more query probe calls still failed to return a usable local instruction counter, so those rows remain partial until the probe path is stable.\n");
     }
-    out.push_str("- Baseline drift values are `N/A` until a same-day rerun or later comparable run exists.\n\n");
+    if baseline_rows.is_some() {
+        out.push_str("- Baseline drift values are computed from matching scenario keys in the previous report's `perf-rows.json` artifact.\n\n");
+    } else if baseline_is_selected(metadata) {
+        out.push_str("- Baseline drift values are `N/A` where the selected baseline has no matching readable `perf-rows.json` artifact or matching scenario key.\n\n");
+    } else {
+        out.push_str("- Baseline drift values are `N/A` until a prior comparable run exists.\n\n");
+    }
 
     out.push_str("## Endpoint Matrix\n\n");
     out.push_str("| Canister | Endpoint | Scenario | Count | Total local instructions | Avg local instructions | Baseline delta | Notes |\n");
@@ -352,14 +393,16 @@ pub(super) fn write_report(
         } else {
             ""
         };
+        let baseline_delta = render_baseline_delta(&baseline_rows, &result.row);
         out.push_str(&format!(
-            "| `{}` | `{}` | `{}` | {} | {} | {} | N/A | {} |\n",
+            "| `{}` | `{}` | `{}` | {} | {} | {} | {} | {} |\n",
             result.scenario.canister,
             result.scenario.endpoint_or_flow,
             result.scenario.arg_class,
             result.row.count,
             result.row.total_local_instructions,
             result.row.avg_local_instructions,
+            baseline_delta,
             notes
         ));
     }
@@ -490,15 +533,22 @@ pub(super) fn write_report(
     }
     if let Some(top) = hotspot_rows.first() {
         out.push_str(&format!(
-            "| Highest sampled endpoint currently highest-cost | WARN | `{}` averages {} local instructions in this first baseline. |\n",
+            "| Highest sampled endpoint currently highest-cost | WARN | `{}` averages {} local instructions in this run. |\n",
             top.scenario.key, top.row.avg_local_instructions
         ));
     }
-    out.push_str("| Baseline drift not yet available | INFO | First run of day; deltas remain `N/A` until the next comparable rerun. |\n\n");
+    if baseline_is_selected(metadata) {
+        out.push_str(&format!(
+            "| Baseline drift source | INFO | Latest prior baseline path: `{}`. |\n\n",
+            metadata.compared_baseline_report
+        ));
+    } else {
+        out.push_str("| Baseline drift not yet available | INFO | No prior comparable report was selected; deltas remain `N/A`. |\n\n");
+    }
 
     out.push_str("## Risk Score\n\n");
     out.push_str(&format!("Risk Score: **{risk_score} / 10**\n\n"));
-    out.push_str("Interpretation: query visibility and stage attribution are now working for the sampled matrix. The remaining audit risk is mostly first-run comparability (`N/A` baseline deltas) plus a few endpoint-only paths that still do not have deeper internal stage attribution, not missing coverage of the critical flows themselves.\n\n");
+    out.push_str("Interpretation: query visibility and stage attribution are now working for the sampled matrix. The remaining audit risk is mostly baseline comparability plus a few endpoint-only paths that still do not have deeper internal stage attribution, not missing coverage of the critical flows themselves.\n\n");
 
     out.push_str("## Verification Readout\n\n");
     out.push_str("| Command | Status | Notes |\n| --- | --- | --- |\n");
@@ -515,7 +565,7 @@ pub(super) fn write_report(
     if checkpoint_sites.is_empty() {
         out.push_str("   Action: add first stable `perf!` checkpoints to the scaling, sharding, and root-capability workflows so the next rerun can move from endpoint-only totals to real flow-stage attribution.\n");
     } else {
-        out.push_str("   Action: rerun this audit after one concrete perf change so the next report has real comparable baseline deltas instead of first-run `N/A`, and only add deeper verifier-side auth checkpoints if that endpoint-total starts to matter.\n");
+        out.push_str("   Action: rerun this audit after one concrete perf change and compare against the latest prior retained report; only add deeper verifier-side auth checkpoints if that endpoint-total starts to matter.\n");
     }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
     out.push_str(&format!(
@@ -618,7 +668,7 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
     }
 }
 
-// Compute a bounded risk score for the first baseline.
+// Compute a bounded risk score for the current sampled matrix.
 fn risk_score(
     checkpoint_sites: &[String],
     query_unobservable_count: usize,
@@ -651,4 +701,50 @@ fn risk_score(
     }
 
     score.min(10)
+}
+
+fn baseline_is_selected(metadata: &AuditMetadata) -> bool {
+    metadata.compared_baseline_report != "N/A"
+}
+
+fn load_baseline_rows(baseline_report: &str) -> Option<BTreeMap<String, u64>> {
+    if baseline_report == "N/A" {
+        return None;
+    }
+
+    let report_path = Path::new(baseline_report);
+    let report_stem = report_path.file_stem()?.to_str()?;
+    let artifact_path = report_path
+        .parent()?
+        .join("artifacts")
+        .join(report_stem)
+        .join("perf-rows.json");
+    let rows = fs::read_to_string(artifact_path).ok()?;
+    let rows = serde_json::from_str::<Vec<BaselinePerfRow>>(&rows).ok()?;
+
+    Some(
+        rows.into_iter()
+            .map(|row| (row.scenario_key, row.avg_local_instructions))
+            .collect(),
+    )
+}
+
+fn render_baseline_delta(
+    baseline_rows: &Option<BTreeMap<String, u64>>,
+    current_row: &CanonicalPerfRow,
+) -> String {
+    let Some(rows) = baseline_rows else {
+        return "N/A".to_string();
+    };
+    let Some(baseline_avg) = rows.get(&current_row.scenario_key).copied() else {
+        return "N/A".to_string();
+    };
+
+    let delta = i128::from(current_row.avg_local_instructions) - i128::from(baseline_avg);
+    if baseline_avg == 0 {
+        return format!("{delta:+}");
+    }
+
+    let percent = (delta as f64 / baseline_avg as f64) * 100.0;
+    format!("{delta:+} ({percent:+.1}%)")
 }
