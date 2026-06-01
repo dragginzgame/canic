@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.2` keeps the recurring Wasm footprint audit aligned with hard-cut
+  fleet role/package metadata by resolving Cargo package names from
+  `[roles.<role>].package`, passing the selected fleet config into artifact
+  shrinking, and removing stale `minimal = N/A` baseline reporting.
+
 - `0.57.1` follows the refreshed layer-boundary audit: capability envelope and
   proof orchestration now lives under workflow, the public RPC API delegates
   thinly, and module-source resolver errors stay on Canic's internal error

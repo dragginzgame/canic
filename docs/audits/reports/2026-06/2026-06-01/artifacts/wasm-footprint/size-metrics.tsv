@@ -1,0 +1,7 @@
+canister	kind	built_wasm_bytes	built_wasm_gz_bytes	shrunk_wasm_bytes	shrunk_wasm_gz_bytes	shrink_delta_bytes	shrink_delta_percent	built_functions	shrunk_functions	built_exports	shrunk_exports
+app	leaf-canister	2237998	623563	2096807	571491	141191	6.31	4276	4276	19	19
+user_hub	leaf-canister	2415402	681119	2263151	621205	152251	6.30	4624	4624	23	23
+user_shard	leaf-canister	2325218	652287	2178673	599219	146545	6.30	4403	4403	21	21
+scale_hub	leaf-canister	2278226	635552	2134711	582392	143515	6.30	4351	4351	22	22
+scale_replica	leaf-canister	2254527	629477	2112445	576361	142082	6.30	4319	4319	20	20
+root	bundle-canister	4437230	1741610	4201747	1630812	235483	5.31	6810	6810	38	38

@@ -99,17 +99,20 @@ Measure and report:
 
 ### Default Canister Scope
 
-Default scope is the full `test` fleet from `icp.yaml` plus the implicit
-`wasm_store` canister:
+Default scope is the attached role set returned by
+`scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order`.
+As of this audit definition, that is:
 
 - `app`
-- `minimal`
 - `user_hub`
 - `user_shard`
 - `scale_hub`
-- `scale`
-- `wasm_store`
+- `scale_replica`
 - `root`
+
+The audit runner must resolve each role through `[roles.<role>].package` and
+then read the actual Cargo package name from that package manifest. It must not
+guess `canister_<role>` or infer package identity from role names.
 
 ### Default Profile
 
@@ -137,26 +140,21 @@ Profile mapping:
 
 Use these artifact classes consistently:
 
-### Minimal Baseline Rule
+### Shared Baseline Rule
 
-`minimal` is the canonical minimal leaf-canister baseline for wasm audits.
+If an explicit attached minimal/baseline role exists in the audited scope, use
+it as the shared Canic runtime floor. If no such role is attached, the audit
+must say so and use repeated retained hotspots across leaf canisters as the
+shared fan-in signal.
 
-This is a locked audit assumption:
-
-- `minimal` exists to measure the shared Canic runtime floor
-- `minimal` must remain on the standard non-root Canic runtime surface
-- `minimal` must not accumulate role-specific helpers beyond that shared surface
-- `minimal` must not accumulate provisioning helpers, RPC helpers, or other bespoke behavior
-- if `minimal` changes meaning, the audit definition is wrong until it is explicitly revised
-
-When comparing leaf canisters, interpret size above `minimal` as role-specific
-addition on top of the shared runtime floor.
+The audit must not print `minimal = N/A` as if that were a valid baseline.
+Missing baseline evidence is a report condition, not a size signal.
 
 ### Built Artifact
 
 The built artifact is the direct Cargo output before post-processing:
 
-- `target/wasm32-unknown-unknown/<profile>/canister_<name>.wasm`
+- `target/wasm32-unknown-unknown/<profile>/<cargo-package-name>.wasm`
 
 This is the primary baseline for "what the Rust build emitted before canister
 post-processing".
@@ -190,7 +188,8 @@ Required:
 - identify `root` as `bundle-canister`
 - compare `root` against its own prior baselines first
 - avoid using `root` alone to judge shared-runtime regressions in leaf canisters
-- use `minimal` as the shared-runtime floor and `root` as the bundle ceiling
+- use an explicit attached baseline role as the shared-runtime floor when one
+  exists, and `root` as the bundle ceiling
 
 ## Decision Rule
 
@@ -289,8 +288,8 @@ Every report generated from this audit must include:
 - concrete artifact outliers by canister
 - at least one retained-size hotspot table grounded in `twiggy`
 - explicit note when `root` growth is dominated by embedded child bundles
-- explicit note when feature canisters remain close to `minimal`, because that
-  signals shared-runtime baseline pressure
+- explicit note when feature canisters remain close to an attached baseline
+  role, or when no dedicated baseline role is attached
 - explicit comparison between `wasm-debug` and the audited profile, or an
   explicit `BLOCKED` note explaining why that comparison is absent
 
@@ -310,7 +309,9 @@ Suggested interpretation for this audit:
 
 Reports must watch for:
 
-- `minimal` approaching the same size class as more feature-heavy canisters
+- an attached baseline role approaching the same size class as more
+  feature-heavy canisters, or missing baseline evidence when no baseline role is
+  attached
 - `root` growing faster than the sum of child bundle changes
 - shrink delta collapsing unexpectedly, which can mean dead code is becoming live
 - `twiggy monos` showing repeated generic expansion in shared crates

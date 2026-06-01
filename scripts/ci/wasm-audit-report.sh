@@ -11,9 +11,13 @@ ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/ci/require_icp.sh"
 
-DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order)"
+TEST_FLEET_CONFIG="fleets/test/canic.toml"
+TEST_FLEET_ROOT="$(dirname "$TEST_FLEET_CONFIG")"
+TEST_FLEET_CONFIG_ABS="$ROOT_DIR/$TEST_FLEET_CONFIG"
+
+DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config "$TEST_FLEET_CONFIG" --ci-order)"
 mapfile -t DEFAULT_CANISTERS <<<"$DEFAULT_AUDIT_CANISTERS"
-DEFAULT_RELEASE_SET_TARGETS="$(bash scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --exclude-root)"
+DEFAULT_RELEASE_SET_TARGETS="$(bash scripts/ci/list-config-canisters.sh --config "$TEST_FLEET_CONFIG" --exclude-root)"
 mapfile -t DEFAULT_RELEASE_SET_CANISTERS <<<"$DEFAULT_RELEASE_SET_TARGETS"
 
 declare -a VERIFICATION_ROWS=()
@@ -77,6 +81,63 @@ gzip_deterministic() {
     gzip -n -c "$input" >"$output"
 }
 
+role_package_path() {
+    local role="$1"
+
+    awk -v role="$role" '
+        $0 == "[roles." role "]" || $0 == "[roles.\"" role "\"]" {in_role=1; next}
+        /^\[/ {in_role=0}
+        in_role && /^[[:space:]]*package[[:space:]]*=/ {
+            sub(/^[^=]*=[[:space:]]*/, "", $0)
+            gsub(/^[[:space:]]*"|"[[:space:]]*$/, "", $0)
+            print $0
+            exit
+        }
+    ' "$TEST_FLEET_CONFIG"
+}
+
+cargo_package_name_from_manifest() {
+    local manifest="$1"
+
+    awk '
+        $0 == "[package]" {in_package=1; next}
+        /^\[/ {in_package=0}
+        in_package && /^[[:space:]]*name[[:space:]]*=/ {
+            sub(/^[^=]*=[[:space:]]*/, "", $0)
+            gsub(/^[[:space:]]*"|"[[:space:]]*$/, "", $0)
+            print $0
+            exit
+        }
+    ' "$manifest"
+}
+
+cargo_package_name_for_role() {
+    local role="$1"
+    local package_path
+    local manifest
+    local package_name
+
+    package_path="$(role_package_path "$role")"
+    if [ -z "$package_path" ]; then
+        echo "role '$role' in $TEST_FLEET_CONFIG does not declare package" >&2
+        exit 1
+    fi
+
+    manifest="$TEST_FLEET_ROOT/$package_path/Cargo.toml"
+    if [ ! -f "$manifest" ]; then
+        echo "role '$role' package manifest not found: $manifest" >&2
+        exit 1
+    fi
+
+    package_name="$(cargo_package_name_from_manifest "$manifest")"
+    if [ -z "$package_name" ]; then
+        echo "role '$role' package manifest has no [package].name: $manifest" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "$package_name"
+}
+
 normalize_profile() {
     case "${WASM_PROFILE:-$DEFAULT_PROFILE}" in
     release)
@@ -110,6 +171,19 @@ select_canisters() {
     else
         CANISTERS=("${DEFAULT_CANISTERS[@]}")
     fi
+}
+
+has_selected_canister() {
+    local target="$1"
+    local canister
+
+    for canister in "${CANISTERS[@]}"; do
+        if [ "$canister" = "$target" ]; then
+            return 0
+        fi
+    done
+
+    return 1
 }
 
 capture_info_metrics() {
@@ -172,15 +246,20 @@ capture_hotspot_summary() {
 
 ensure_raw_canister() {
     local canister="$1"
+    local package_name
+    local package_target
 
     if [ -n "${BUILT_ALREADY[$canister]:-}" ]; then
         return
     fi
 
-    mkdir -p ".icp/local/canisters/$canister"
-    cargo build --target wasm32-unknown-unknown -p "canister_${canister}" $CARGO_PROFILE_FLAG --locked
+    package_name="$(cargo_package_name_for_role "$canister")"
+    package_target="${package_name//-/_}"
 
-    local source_wasm="target/wasm32-unknown-unknown/$PROFILE_DIR/canister_${canister}.wasm"
+    mkdir -p ".icp/local/canisters/$canister"
+    cargo build --target wasm32-unknown-unknown -p "$package_name" $CARGO_PROFILE_FLAG --locked
+
+    local source_wasm="target/wasm32-unknown-unknown/$PROFILE_DIR/$package_target.wasm"
     local raw_wasm="$CACHE_RAW_DIR/$canister.wasm"
     local raw_gz="$CACHE_RAW_DIR/$canister.wasm.gz"
 
@@ -224,7 +303,7 @@ build_and_cache_artifacts() {
     fi
 
     for canister in "${CANISTERS[@]}"; do
-        CANIC_WASM_PROFILE="$CANIC_BUILD_PROFILE" cargo run -q -p canic-host --example build_artifact -- "$canister"
+        CANIC_CONFIG_PATH="$TEST_FLEET_CONFIG_ABS" CANIC_WASM_PROFILE="$CANIC_BUILD_PROFILE" cargo run -q -p canic-host --example build_artifact -- "$canister"
     done
 
     for canister in "${CANISTERS[@]}"; do
@@ -652,18 +731,42 @@ EOF
 
 ## Dependency Fan-In Pressure
 
-- \`minimal\` remains the shared-runtime floor. If \`minimal\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
 - \`root\` is always interpreted as a control-plane outlier because it still carries the root runtime plus the bootstrap \`wasm_store.wasm.gz\` artifact during build.
 - Large retained hotspots that repeat across many per-canister Twiggy reports should be treated as shared fan-in pressure in crates such as \`canic-core\`, DTO/serialization glue, logging, metrics, auth, and lifecycle/runtime support.
+EOF
+
+    if has_selected_canister minimal; then
+        cat >>"$report_path" <<EOF
+- \`minimal\` remains the shared-runtime floor. If \`minimal\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
+EOF
+    else
+        cat >>"$report_path" <<EOF
+- No dedicated \`minimal\` shared-runtime baseline is attached in the current audited scope; treat repeated hotspots across leaf canisters as shared fan-in pressure until an explicit audit baseline role is attached.
+EOF
+    fi
+
+    cat >>"$report_path" <<EOF
 
 ## Early Warning Signals
 
 | Signal | Status | Evidence |
 | --- | --- | --- |
-| Minimal floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[minimal]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v minimal="${SHRUNK_WASM_BYTES[minimal]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - minimal) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrunk wasm = ${SHRUNK_WASM_BYTES[minimal]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
 | Root control-plane outlier | $( if [ "${SHRUNK_WASM_BYTES[root]:-0}" -gt 0 ]; then printf 'WARN'; else printf 'N/A'; fi ) | \`root\` shrunk wasm = ${SHRUNK_WASM_BYTES[root]:-N/A}. |
-| Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[minimal]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrink delta = ${SHRINK_DELTA_BYTES[minimal]:-N/A} bytes. |
 | Positive same-day baseline drift in current scope | $( if [ "$BASELINE_PATH" = "N/A" ]; then printf 'N/A'; elif [ "$BASELINE_GROWTH_COUNT" -gt 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | $( if [ "$BASELINE_PATH" = "N/A" ]; then printf 'First run of day; baseline drift is not comparable yet.'; else printf '%s canister(s) grew versus the selected same-day baseline.' "$BASELINE_GROWTH_COUNT"; fi ) |
+EOF
+
+    if has_selected_canister minimal; then
+        cat >>"$report_path" <<EOF
+| Minimal floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[minimal]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v minimal="${SHRUNK_WASM_BYTES[minimal]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - minimal) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrunk wasm = ${SHRUNK_WASM_BYTES[minimal]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
+| Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[minimal]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrink delta = ${SHRINK_DELTA_BYTES[minimal]:-N/A} bytes. |
+EOF
+    else
+        cat >>"$report_path" <<EOF
+| Dedicated minimal baseline present | N/A | No \`minimal\` baseline role is attached in the current audited scope. |
+EOF
+    fi
+
+    cat >>"$report_path" <<EOF
 
 ## Per-Canister Snapshot
 
@@ -724,7 +827,7 @@ EOF
    Action: investigate the canisters with positive same-day baseline deltas first and decide whether the added bytes are intentional or should come back down in the next rerun.
    Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
 2. Owner boundary: \`shared runtime baseline\`
-   Action: compare \`minimal\` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.
+   Action: $( if has_selected_canister minimal; then printf 'compare `minimal` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.'; else printf 'decide whether a dedicated audit baseline role should be attached, or keep using repeated leaf hotspots as the shared-runtime signal.'; fi )
    Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
 3. Owner boundary: \`bundle canister root\`
    Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
@@ -733,7 +836,7 @@ EOF
     else
         cat >>"$report_path" <<EOF
 1. Owner boundary: \`shared runtime baseline\`
-   Action: compare \`minimal\` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.
+   Action: $( if has_selected_canister minimal; then printf 'compare `minimal` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.'; else printf 'decide whether a dedicated audit baseline role should be attached, or keep using repeated leaf hotspots as the shared-runtime signal.'; fi )
    Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
 2. Owner boundary: \`bundle canister root\`
    Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
