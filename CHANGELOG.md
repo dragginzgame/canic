@@ -12,6 +12,20 @@ present.
 
 ## Unreleased
 
+## [0.55.x] - 2026-05-31 - V1 stabilization and readiness
+
+Detailed patch breakdown: [docs/changelog/0.55.md](docs/changelog/0.55.md)
+
+- `0.55.0` starts the v1 stabilization line with a design for proving the
+  compact operator story instead of adding another feature layer:
+  ```text
+  docs/design/0.55-v1-stabilization-readiness/0.55-design.md
+  ```
+  The line is scoped around docs/help alignment, stale-surface cleanup, a
+  practical local smoke proof, and a v1-candidate audit. It deliberately keeps
+  deployment groups, signing, locks, registry import, teardown, controller
+  mutation, active adoption/import, and broad live verification out of scope.
+
 ## [0.54.x] - 2026-05-31 - Passive deployment catalog
 
 Detailed patch breakdown: [docs/changelog/0.54.md](docs/changelog/0.54.md)

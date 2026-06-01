@@ -9,7 +9,18 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Current minor: `0.54.x` passive deployment catalog is closed. The design is:
+- Current minor: `0.55.x` v1 stabilization and readiness is active. The design
+  is:
+  ```text
+  docs/design/0.55-v1-stabilization-readiness/0.55-design.md
+  ```
+  `0.55.0` has started the line as a stabilization design only. It does not add
+  commands, DTOs, mutation authority, or new deployment-management concepts.
+  The line should prove the compact v1 operator story and close docs/help/test
+  gaps before Canic adds deployment groups, signing, locks, registry import,
+  teardown, controller mutation, active adoption/import, or broad live
+  verification.
+- Previous minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md
   ```
@@ -118,6 +129,26 @@ inspect only the files needed for the current task.
 
 ## Recent Work
 
+- Added the 0.55.0 v1 stabilization design:
+  ```text
+  docs/design/0.55-v1-stabilization-readiness/0.55-design.md
+  ```
+  The design frames 0.55 as a proof/readiness line for the existing compact
+  v1 surface:
+  ```text
+  canic fleet create <fleet>
+  canic scaffold canister <fleet> <role>
+  canic fleet role attach <fleet> <role> --subnet <subnet>
+  canic build <fleet> <role> --provenance <path>
+  canic deploy check <deployment> --format envelope-json
+  canic evidence gate --policy <path> --manifest <path>
+  canic deploy catalog list
+  canic deploy catalog inspect <deployment>
+  ```
+  It intentionally avoids new public DTO families, deployment groups, signing,
+  locks, registry import, teardown, controller mutation, topology mutation
+  beyond existing role lifecycle commands, install authority, and active
+  adoption/import.
 - Implemented the 0.54.0 passive deployment catalog:
   ```text
   canic deploy catalog list
