@@ -202,6 +202,18 @@ Expected behavior in a fresh checkout without deployment-target state:
 - legacy fleet-named state, if present, is ignored;
 - `inspect <deployment>` fails clearly until that deployment target is known.
 
+The maintained temporary-project smoke path is:
+
+```text
+scripts/ci/v1-readiness-smoke.sh
+```
+
+See:
+
+```text
+docs/operations/0.55-v1-local-smoke.md
+```
+
 ## What This Does Not Cover
 
 This walkthrough deliberately avoids:

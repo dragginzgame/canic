@@ -16,6 +16,18 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.55.md](docs/changelog/0.55.md)
 
+- `0.55.2` adds a maintained local smoke proof for the safe v1
+  setup/catalog/evidence subset:
+  ```text
+  scripts/ci/v1-readiness-smoke.sh
+  docs/operations/0.55-v1-local-smoke.md
+  ```
+  The smoke runs in a temporary project and proves fleet creation, canister
+  scaffold, declared-only inspection, explicit role attachment, empty local
+  catalog reporting, and passive evidence-gate evaluation without running
+  artifact builds, installs, live deployment checks, controller mutation,
+  registry import, teardown, or active adoption/import.
+
 - `0.55.1` adds a maintained v1 readiness checklist and aligns the current
   docs/help surface around the compact operator story:
   ```text

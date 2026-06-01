@@ -133,6 +133,23 @@ The checklist does not add authority. In particular, it does not:
 
 ## Local Smoke Expectations
 
+The maintained local smoke is:
+
+```text
+scripts/ci/v1-readiness-smoke.sh
+```
+
+It runs in a temporary project and proves the safe local subset of this
+checklist: fleet creation, canister scaffold, declared-only inspection,
+explicit role attachment, attached inspection, empty local deployment catalog,
+and policy evaluation of one saved envelope.
+
+Runbook:
+
+```text
+docs/operations/0.55-v1-local-smoke.md
+```
+
 In a fresh checkout without deployment-target state:
 
 ```text

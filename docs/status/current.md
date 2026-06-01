@@ -27,6 +27,15 @@ inspect only the files needed for the current task.
   canic evidence gate --policy <path> --envelope <path>
   canic evidence gate --policy <path> --manifest <path>
   ```
+  `0.55.2` has added a maintained local smoke proof:
+  ```text
+  scripts/ci/v1-readiness-smoke.sh
+  docs/operations/0.55-v1-local-smoke.md
+  ```
+  The smoke uses a temporary project and covers the safe local setup/catalog/
+  evidence-gate subset without running artifact builds, installs, live
+  deployment checks, controller mutation, registry import, teardown, or active
+  adoption/import.
 - Previous minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md
@@ -165,6 +174,17 @@ inspect only the files needed for the current task.
   installation guide, architecture index, and v1 operator walkthrough.
   `canic evidence gate --help` now includes examples for both single-envelope
   and project-manifest evaluation.
+- Added the 0.55.2 local smoke proof:
+  ```text
+  scripts/ci/v1-readiness-smoke.sh
+  docs/operations/0.55-v1-local-smoke.md
+  ```
+  The script runs in a temporary workspace and proves fleet creation, role
+  scaffold, declared-only inspection, explicit role attachment, attached
+  inspection, empty local deployment catalog output, and passive evidence-gate
+  evaluation. It documents that real artifact build/provenance, install, and
+  deployment-check evidence remain heavier manual/local-operator paths rather
+  than this fast smoke.
 - Implemented the 0.54.0 passive deployment catalog:
   ```text
   canic deploy catalog list

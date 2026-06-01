@@ -18,3 +18,7 @@ Current architecture notes:
 - [Evidence Envelopes](evidence-envelopes.md)
 - [V1 Readiness Checklist](v1-readiness-checklist.md)
 - [V1 Operator Walkthrough](v1-operator-walkthrough.md)
+
+Operational runbooks:
+
+- [0.55 V1 Local Smoke](../operations/0.55-v1-local-smoke.md)
