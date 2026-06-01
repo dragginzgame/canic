@@ -393,7 +393,7 @@ pub(super) fn write_report(
         } else {
             ""
         };
-        let baseline_delta = render_baseline_delta(&baseline_rows, &result.row);
+        let baseline_delta = render_baseline_delta(baseline_rows.as_ref(), &result.row);
         out.push_str(&format!(
             "| `{}` | `{}` | `{}` | {} | {} | {} | {} | {} |\n",
             result.scenario.canister,
@@ -730,7 +730,7 @@ fn load_baseline_rows(baseline_report: &str) -> Option<BTreeMap<String, u64>> {
 }
 
 fn render_baseline_delta(
-    baseline_rows: &Option<BTreeMap<String, u64>>,
+    baseline_rows: Option<&BTreeMap<String, u64>>,
     current_row: &CanonicalPerfRow,
 ) -> String {
     let Some(rows) = baseline_rows else {
@@ -745,6 +745,22 @@ fn render_baseline_delta(
         return format!("{delta:+}");
     }
 
-    let percent = (delta as f64 / baseline_avg as f64) * 100.0;
-    format!("{delta:+} ({percent:+.1}%)")
+    let percent_tenths = rounded_percent_tenths(delta, baseline_avg);
+    let sign = if percent_tenths < 0 { '-' } else { '+' };
+    let percent_abs = percent_tenths.abs();
+    format!(
+        "{delta:+} ({sign}{}.{:01}%)",
+        percent_abs / 10,
+        percent_abs % 10
+    )
+}
+
+fn rounded_percent_tenths(delta: i128, baseline_avg: u64) -> i128 {
+    let denominator = i128::from(baseline_avg);
+    let numerator = delta.saturating_mul(1_000);
+    if numerator >= 0 {
+        (numerator + denominator / 2) / denominator
+    } else {
+        (numerator - denominator / 2) / denominator
+    }
 }
