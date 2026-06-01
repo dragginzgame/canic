@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.9` refreshes and reruns the bootstrap-lifecycle-symmetry and
+  canonical-auth-boundary audits. It verifies lifecycle hooks remain
+  synchronous restore adapters that schedule bootstrap/user work through
+  lifecycle timers, and verifies public delegated-token auth plus protected
+  internal role predicates still converge on their canonical verification
+  boundaries.
+
 - `0.57.8` refreshes and reruns the access-purity audit for the current
   singular delegated-token audience and protected internal endpoint role
   predicate surface. It verifies access remains a thin endpoint boundary and

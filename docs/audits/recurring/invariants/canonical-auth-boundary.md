@@ -4,6 +4,14 @@
 
 Ensure every authenticated request enters through one canonical verification boundary.
 
+This audit distinguishes two current auth boundaries:
+
+- public delegated-token endpoint auth through `auth::authenticated(...)`,
+  which must run the full endpoint pipeline below;
+- protected internal caller-role predicates through `caller::has_role(...)` /
+  `caller::has_any_role(...)`, which must lower through the root-signed
+  internal invocation proof path, not through weaker endpoint-local checks.
+
 ## Risk Model / Invariant
 
 All authenticated execution paths must pass through the canonical authentication verifier before authorization or handler logic executes.
@@ -14,6 +22,7 @@ The canonical boundary must perform or invoke verification stages for:
 
 - token signature validation
 - trust-chain validation
+- singular audience verification
 - subject-caller binding
 - required-scope validation
 - freshness / expiry verification
@@ -50,8 +59,10 @@ Other invariants verify the correctness of individual verification stages:
 
 - endpoint or dispatcher changes
 - macro / DSL auth wiring changes
+- protected internal role predicate changes
 - internal/admin endpoint additions
 - migration or recovery auth-flow updates
+- delegated-token audience DTO changes
 
 ## Report Preamble (Required)
 
@@ -92,6 +103,9 @@ Current primary paths to inspect:
 rg -n 'access_stage|resolve_authenticated_identity|eval_access|auth::authenticated' \
   crates/canic-macros/src/endpoint -g '*.rs'
 
+rg -n 'protected_internal|verify_internal_invocation_proof|caller::has_role|caller::has_any_role' \
+  crates/canic-macros/src/endpoint crates/canic-core/src/api crates/canic/src/macros/endpoints -g '*.rs'
+
 rg -n 'delegated_token_verified|AuthOps::verify_token|enforce_subject_binding|enforce_required_scope|consume_update_token_once' \
   crates/canic-core/src/access/auth crates/canic-core/src/ops/auth -g '*.rs'
 ```
@@ -103,6 +117,10 @@ Confirm:
 - no internal-only path assumes prior verification without proof
 - no public helper exposes partial "verified token" semantics without caller
   binding and update replay consumption
+- no endpoint path accepts legacy plural role audience DTOs as delegated-token
+  endpoint audience
+- protected internal role predicates require root-signed internal invocation
+  proof verification before handler execution
 
 ### 3. Verify Ordering
 
@@ -174,6 +192,10 @@ Pressure score guidance:
   authorization
 - endpoint macro accepting authenticated endpoints without a first
   `DelegatedToken` argument
+- endpoint auth accepting `RolesOrPrincipals`, `DelegationAudience::Roles`, or
+  any other plural-role token audience as canonical delegated-token audience
+- protected internal `caller::has_role(...)` / `caller::has_any_role(...)`
+  endpoints reaching handlers without `verify_internal_invocation_proof`
 
 ## Severity
 

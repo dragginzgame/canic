@@ -8,6 +8,14 @@
 
 Verify that IC lifecycle entrypoints remain thin synchronous adapters that restore the minimum runtime environment and schedule bootstrap orchestration asynchronously through the lifecycle timer boundary.
 
+This audit tracks the current post-v1 startup surface:
+
+* ordinary Canic-managed canisters use `canic::start!()`;
+* root vs non-root lifecycle selection is compile-time cfg dispatch from
+  package metadata emitted by `canic::build!`;
+* `start_local!` and `start_wasm_store!` remain separate special-purpose
+  runtime modes and must still obey the same lifecycle timer boundary.
+
 ## Audit Type
 
 Architecture drift audit.
@@ -43,10 +51,12 @@ Drift in lifecycle startup structure can introduce:
 
 * lifecycle/startup changes
 * macro hook changes
+* package-metadata role dispatch changes in `canic::build!` or `canic::start!`
 * runtime restore/import changes
 * timer/bootstrap workflow changes
 * init/post-upgrade refactors
 * workflow boundary changes affecting bootstrap scheduling
+* changes to `start_local!` or `start_wasm_store!`
 
 ---
 
@@ -97,12 +107,14 @@ Audit these modules first:
 * `crates/canic-core/src/workflow/runtime/mod.rs`
 * `crates/canic-core/src/workflow/runtime/{root.rs,nonroot.rs}`
 * `crates/canic-core/src/workflow/bootstrap/*`
+* `crates/canic/src/macros/timer.rs`
 
 Optional supporting scope:
 
 * lifecycle-related tests in `crates/canic-tests/tests`
 * lifecycle-related tests in `crates/canic-core/tests`
 * root fixture uses of `start!(init = { ... })`
+* specialized uses of `start_local!` and `start_wasm_store!`
 
 ---
 
@@ -165,7 +177,14 @@ Run and record outputs or output references for these scans.
 
 ```bash
 rg -n 'init\(|post_upgrade\(|LifecycleApi::|TimerApi::set_lifecycle_timer|Duration::ZERO' \
-  crates/canic/src/macros/start.rs
+  crates/canic/src/macros/start.rs crates/canic/src/macros/timer.rs
+```
+
+#### Startup surface dispatch
+
+```bash
+rg -n 'macro_rules! start|macro_rules! start_local|macro_rules! start_wasm_store|canic_is_root|CANIC_CANISTER_ROLE|WASM_STORE|compile_error!' \
+  crates/canic/src/macros/start.rs crates/canic/src/macros/build.rs
 ```
 
 #### Lifecycle API delegation
@@ -213,7 +232,7 @@ rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' \
 #### Root fixture coverage
 
 ```bash
-rg -n 'start!\(|init = \{' canisters crates/canic-tests -g '*.rs'
+rg -n 'start!\(|start_local!\(|start_wasm_store!\(|init = \{' canisters crates/canic-tests crates/canic-wasm-store -g '*.rs'
 ```
 
 ---
@@ -242,6 +261,9 @@ Checklist:
 * [ ] Macros do not embed policy/ops/model/storage logic
 * [ ] Macros do not run async orchestration directly
 * [ ] User hooks are scheduled/delegated, not awaited
+* [ ] `start!()` root/non-root dispatch comes from build metadata cfgs
+* [ ] `start_local!` and `start_wasm_store!` stay special runtime modes, not
+  alternate ordinary fleet startup paths
 
 Findings:
 
