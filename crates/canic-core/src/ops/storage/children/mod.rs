@@ -15,8 +15,8 @@ use mapper::CanisterRecordMapper;
 ///
 /// CanisterChildrenOps
 ///
-/// Invariant: the children cache is updated only via topology cascade
-/// (workflow::cascade::topology::nonroot_cascade_topology).
+/// Invariant: the children cache is updated only via the topology cascade
+/// workflow.
 ///
 pub struct CanisterChildrenOps;
 

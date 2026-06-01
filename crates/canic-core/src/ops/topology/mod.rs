@@ -1,4 +1,4 @@
-//! Topology-related ops helpers for index access and policy inputs.
+//! Topology-related ops helpers for index access and policy-input views.
 
 pub mod index;
-pub mod policy;
+pub mod input;

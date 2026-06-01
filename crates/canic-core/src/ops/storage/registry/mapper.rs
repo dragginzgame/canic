@@ -1,5 +1,5 @@
 use crate::{
-    cdk::candid::Principal,
+    cdk::types::Principal,
     dto::canister::CanisterInfo,
     dto::topology::{AppRegistryEntry, AppRegistryResponse, SubnetRegistryEntry},
     storage::stable::registry::app::AppRegistryRecord,

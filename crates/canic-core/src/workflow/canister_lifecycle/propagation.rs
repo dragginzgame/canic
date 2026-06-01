@@ -6,7 +6,7 @@ use crate::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
         },
-        topology::policy::mapper::RegistryPolicyInputMapper,
+        topology::input::mapper::RegistryPolicyInputMapper,
     },
     workflow::{
         cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},

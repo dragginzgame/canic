@@ -18,7 +18,7 @@ use crate::{
             ProvisioningMetrics,
         },
         storage::registry::subnet::SubnetRegistryOps,
-        topology::policy::mapper::RegistryPolicyInputMapper,
+        topology::input::mapper::RegistryPolicyInputMapper,
     },
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,

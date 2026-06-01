@@ -5,12 +5,17 @@
 Verify that ops code remains narrow operational code and does not accumulate
 workflow orchestration or domain-policy ownership.
 
+This audit is scoped to `canic-core` runtime ops. Host-side evidence,
+provenance, policy-gate, catalog, and release-proof commands are outside this
+audit unless they feed canister runtime ops.
+
 ## Risk Model / Invariant
 
 Ops may own:
 
 - deterministic state access;
-- conversions between records, DTOs, views, and platform shapes;
+- conversions between records, DTOs, views, policy-input views, and platform
+  shapes;
 - platform calls;
 - atomic mutations;
 - narrow operational semantics.
@@ -26,6 +31,10 @@ Ops must not own:
 - endpoint semantics;
 - auth endpoint decisions;
 - business state machines.
+
+Ops mapper names may contain `PolicyInputMapper` when they only convert storage
+records into pure `domain/policy` input views. Ops must not define a `policy`
+module or policy decision types.
 
 ## Scope
 
@@ -47,6 +56,8 @@ Boundary comparison scope:
 - adding retry, replay, funding, lifecycle, RPC, auth, or metrics behavior;
 - adding state-machine-like mutation helpers;
 - changing endpoint auth/access lowering.
+- changing build/evidence/provenance host commands only when those changes
+  affect `canic-core/src/ops/**`.
 
 ## Checklist
 
@@ -85,13 +96,15 @@ Ops may consume domain policy outputs and may map storage records into policy
 inputs. Ops should not define domain policy types or named policy modules.
 
 ```bash
-rg -n 'struct .*Policy|enum .*Policy|impl .*Policy|mod policy|policy::' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
+rg -n 'struct .*Policy|enum .*Policy|impl .*Policy|mod policy|policy::|/policy/' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
 - pure policy definitions live in `domain/policy`;
 - mapper names ending in `PolicyInputMapper` are conversion helpers, not policy;
+- ops topology/placement mappers should live under `input` or `mapper` modules,
+  not an ops-owned `policy` module;
 - ops metric labels may reference policy error types only for bounded reporting.
 
 ### 4. Endpoint/Auth Semantics

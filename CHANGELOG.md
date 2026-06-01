@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.6` refreshes and reruns the ops-purity audit for the current compact
+  v1 runtime tree. It keeps ops scoped to runtime primitives, moves topology
+  policy-input mapping out of an ops-owned `policy` module path, normalizes
+  ops `Principal` imports to Canic's runtime type facade, and removes workflow
+  path comment noise from ops storage.
+
 - `0.57.5` refreshes and reruns the layer-violations audit for the current
   post-v1 runtime tree. It verifies that public RPC proof orchestration remains
   workflow-owned, updates the recurring audit definition for the current API

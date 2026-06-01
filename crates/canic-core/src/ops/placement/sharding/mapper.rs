@@ -1,5 +1,5 @@
 use crate::{
-    cdk::candid::Principal,
+    cdk::types::Principal,
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
     storage::stable::sharding::{ShardEntryRecord, ShardKey},
     view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState},
