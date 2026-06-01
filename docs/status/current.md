@@ -36,6 +36,14 @@ inspect only the files needed for the current task.
   evidence-gate subset without running artifact builds, installs, live
   deployment checks, controller mutation, registry import, teardown, or active
   adoption/import.
+  `0.55.3` has closed the line with a v1 candidate audit:
+  ```text
+  docs/audits/release-lines/0.55-closeout.md
+  ```
+  Verdict: PASS WITH FOLLOW-UPS. No blocker/high findings were found. The
+  remaining release-readiness follow-up is to run or document one heavier local
+  operator proof covering real build provenance plus deployment-check envelope
+  output against a known local deployment target before final v1 release.
 - Previous minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md
@@ -185,6 +193,15 @@ inspect only the files needed for the current task.
   evaluation. It documents that real artifact build/provenance, install, and
   deployment-check evidence remain heavier manual/local-operator paths rather
   than this fast smoke.
+- Added the 0.55.3 v1 candidate closeout audit:
+  ```text
+  docs/audits/release-lines/0.55-closeout.md
+  ```
+  The audit verifies the compact v1 command surface, CLI help, docs alignment,
+  local smoke proof, test coverage, and passive/active boundaries. Verdict:
+  PASS WITH FOLLOW-UPS, with the only release-readiness follow-up being a
+  heavier local operator proof for real build provenance and deployment-check
+  envelope evidence.
 - Implemented the 0.54.0 passive deployment catalog:
   ```text
   canic deploy catalog list

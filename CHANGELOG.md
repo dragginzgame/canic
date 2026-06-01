@@ -16,6 +16,18 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.55.md](docs/changelog/0.55.md)
 
+- `0.55.3` closes the v1 stabilization line with a candidate audit:
+  ```text
+  docs/audits/release-lines/0.55-closeout.md
+  ```
+  Verdict: PASS WITH FOLLOW-UPS. The audit verifies the compact v1 command
+  surface, docs/help alignment, local smoke proof, passive boundaries, and
+  absence of new deployment groups, signing, locks, registry import, teardown,
+  controller mutation, active adoption/import, or broad live verification.
+  The remaining follow-up is a heavier local operator proof covering real
+  build provenance and deployment-check envelope output against a known local
+  deployment target before final v1 release.
+
 - `0.55.2` adds a maintained local smoke proof for the safe v1
   setup/catalog/evidence subset:
   ```text
