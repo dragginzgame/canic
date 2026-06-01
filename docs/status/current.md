@@ -20,6 +20,13 @@ inspect only the files needed for the current task.
   gaps before Canic adds deployment groups, signing, locks, registry import,
   teardown, controller mutation, active adoption/import, or broad live
   verification.
+  `0.55.1` has added the maintained readiness checklist and aligned the current
+  docs/help surface:
+  ```text
+  docs/architecture/v1-readiness-checklist.md
+  canic evidence gate --policy <path> --envelope <path>
+  canic evidence gate --policy <path> --manifest <path>
+  ```
 - Previous minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md
@@ -149,6 +156,15 @@ inspect only the files needed for the current task.
   locks, registry import, teardown, controller mutation, topology mutation
   beyond existing role lifecycle commands, install authority, and active
   adoption/import.
+- Added the 0.55.1 v1 readiness checklist:
+  ```text
+  docs/architecture/v1-readiness-checklist.md
+  ```
+  The checklist names the compact command set, required files, expected
+  evidence outputs, and passive boundaries. It is linked from the root README,
+  installation guide, architecture index, and v1 operator walkthrough.
+  `canic evidence gate --help` now includes examples for both single-envelope
+  and project-manifest evaluation.
 - Implemented the 0.54.0 passive deployment catalog:
   ```text
   canic deploy catalog list

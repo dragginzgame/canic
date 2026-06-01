@@ -7,6 +7,12 @@ evidence against policy, and inspect the local deployment catalog.
 The walkthrough is about command boundaries. It is not an import, promotion,
 controller-mutation, teardown, signing, lock, or registry workflow.
 
+For the command/file checklist version of this workflow, use:
+
+```text
+docs/architecture/v1-readiness-checklist.md
+```
+
 ## Mental Model
 
 Canic keeps three names separate:

@@ -875,7 +875,7 @@ fn evidence_gate_command() -> ClapCommand {
                 .multiple(false),
         )
         .after_help(
-            "Reads exactly one policy file and either one existing EvidenceEnvelopeV1 or one project evidence manifest. The gate is passive: it does not run builds, deploy, discover live state, mutate inputs, or turn policy success into deployment truth.",
+            "Examples:\n  canic evidence gate --policy ci/canic-policy.toml --envelope artifacts/canic/build-provenance.json\n  canic evidence gate --policy ci/canic-policy.toml --manifest ci/canic-evidence.toml --format json --output artifacts/canic/policy-gate-report.json\n\nReads exactly one policy file and either one existing EvidenceEnvelopeV1 or one project evidence manifest. The gate is passive: it does not run builds, deploy, discover live state, mutate inputs, or turn policy success into deployment truth.",
         )
 }
 
@@ -974,6 +974,16 @@ mod tests {
             EvidenceGateInput::Manifest(PathBuf::from("evidence.toml"))
         );
         assert_eq!(options.format, EvidenceGateFormat::Text);
+    }
+
+    #[test]
+    fn gate_help_shows_v1_manifest_and_envelope_examples() {
+        let text = gate_usage();
+
+        assert!(text.contains("Usage: canic evidence gate"));
+        assert!(text.contains("canic evidence gate --policy ci/canic-policy.toml --envelope"));
+        assert!(text.contains("canic evidence gate --policy ci/canic-policy.toml --manifest"));
+        assert!(text.contains("does not run builds, deploy, discover live state"));
     }
 
     #[test]

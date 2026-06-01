@@ -205,6 +205,8 @@ The full schema lives in [`CONFIG.md`](CONFIG.md).
 
 For a complete root-plus-two-children example, see
 [`docs/getting-started/minimal-managed-fleet.md`](docs/getting-started/minimal-managed-fleet.md).
+For the compact v1-candidate command and evidence checklist, see
+[`docs/architecture/v1-readiness-checklist.md`](docs/architecture/v1-readiness-checklist.md).
 
 ## Build And Install Locally
 

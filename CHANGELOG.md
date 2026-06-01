@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.55.md](docs/changelog/0.55.md)
 
+- `0.55.1` adds a maintained v1 readiness checklist and aligns the current
+  docs/help surface around the compact operator story:
+  ```text
+  docs/architecture/v1-readiness-checklist.md
+  canic evidence gate --policy <path> --envelope <path>
+  canic evidence gate --policy <path> --manifest <path>
+  ```
+  The checklist records the command set, required files, expected evidence
+  outputs, and passive boundaries without adding deployment groups, signing,
+  locks, registry import, teardown, controller mutation, or active adoption.
+
 - `0.55.0` starts the v1 stabilization line with a design for proving the
   compact operator story instead of adding another feature layer:
   ```text
