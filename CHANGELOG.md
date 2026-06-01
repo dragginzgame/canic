@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.4` refreshes and reruns the auth-abstraction-equivalence and DRY
+  consolidation audits. It verifies the hard-cut singular delegated-token
+  audience model, checks compact v1 evidence/provenance/policy/catalog/proof
+  surfaces for duplication drift, and consolidates the duplicate
+  evidence-envelope command-provenance path normalization helper in the CLI.
+
 - `0.57.3` refreshes the recurring instruction-footprint audit definition for
   the maintained PocketIC runner and runtime probe scope, while explicitly
   keeping host-side evidence commands out of the canister instruction matrix.

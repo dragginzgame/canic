@@ -21,6 +21,8 @@ logic, not local formatting or tests that intentionally keep setup nearby.
 - ICP CLI response-shape changes
 - command-family additions or option rewrites
 - shared parser, registry, table, or installed-fleet changes
+- evidence envelope, provenance, policy-gate, or catalog output changes
+- packaged or installed release-proof script changes
 - large module splits or follow-up cleanup passes
 
 ## Report Preamble
@@ -80,6 +82,26 @@ Output conventions:
 rg -n "render_table|ColumnAlign|write_text|write_pretty_json|println!" crates/canic-cli crates/canic-host crates/canic-backup -g '*.rs'
 ```
 
+Evidence envelope and stable report ownership:
+
+```bash
+rg -n "EvidenceEnvelopeV1|ExitClassV1|InputFingerprintV1|PayloadSchemaRefV1|CommandProvenanceV1|EvidenceSummaryV1|EvidenceMessageV1" crates/canic-cli crates/canic-host crates/canic-core -g '*.rs'
+rg -n "BuildProvenanceV1|ProjectEvidenceManifestV1|PolicyGateReportV1|DeploymentCatalogReportV1|DeploymentCatalogEntryV1" crates/canic-cli crates/canic-host crates/canic-core -g '*.rs'
+rg -n "write_output|--output|OutputFormat|format json|envelope-json|write_pretty_json|write_text|serde_json::to_string_pretty" crates/canic-cli crates/canic-host -g '*.rs'
+```
+
+Evidence input and fingerprint ownership:
+
+```bash
+rg -n "file_input_fingerprint|InputFingerprintV1|payload_schema|build_provenance_schema|deployment_check_schema|policy_gate|evidence gate|manifest" crates/canic-cli crates/canic-host -g '*.rs'
+```
+
+Release proof script shape:
+
+```bash
+rg -n "target/debug/canic|CARGO_HOME|CARGO_TARGET_DIR|TMPDIR|mktemp|cargo package|path dependency|patch.crates-io|package root" scripts/ci docs/operations -g '*.sh' -g '*.md'
+```
+
 ## Evaluation Checklist
 
 ### Ownership Duplication
@@ -94,6 +116,10 @@ command family:
 - table rendering and output-file handling
 - command family help/version/subcommand dispatch
 - backup/restore manifest, journal, and receipt fixture construction
+- evidence envelope summary, payload schema, exit-class, and fingerprint
+  construction
+- output-file behavior for text, raw JSON, and envelope JSON report commands
+- v1 release proof script setup/isolation/package-root behavior
 
 ### Consolidation Quality
 
@@ -104,11 +130,28 @@ For each repeated pattern, decide whether to:
 - split a large file first because local ownership is unclear;
 - defer because abstraction would hide domain rules.
 
+Do not consolidate solely because names look similar. In particular:
+
+- do not merge active build provenance and passive report envelope paths if the
+  shared abstraction would hide different mutation boundaries;
+- do not collapse packaged proof scripts into one mega-script when each retained
+  script answers a distinct release question;
+- do not centralize command-domain parsing when local parsing encodes
+  command-specific safety or authority rules.
+
 ### Positive Evidence
 
 Reports must call out consolidation that is already working, such as shared
 table rendering, host-owned response parsing, host-owned registry parsing, or
-crate-local support modules.
+crate-local support modules. Current reports should also check for positive
+ownership around:
+
+- host-owned stable evidence envelope helpers;
+- host-owned build provenance schema and artifact hashing;
+- host-owned policy gate and project evidence manifest evaluation;
+- local-state-only deployment catalog construction;
+- retained installed/packaged proof scripts with clear, separate release
+  questions.
 
 ## Findings Format
 
@@ -137,6 +180,7 @@ Reports must include:
 | Runtime code duplication | `<0-10>` | `<notes>` |
 | CLI command duplication | `<0-10>` | `<notes>` |
 | Backup/restore fixture duplication | `<0-10>` | `<notes>` |
+| Evidence/report duplication | `<0-10>` | `<notes>` |
 | Script duplication | `<0-10>` | `<notes>` |
 | Overall | `<0-10>` | `<notes>` |
 

@@ -8,7 +8,7 @@ use crate::{
         globals::internal_network_arg,
         help::print_help_or_version,
     },
-    output, version_text,
+    evidence_support, output, version_text,
 };
 use canic_host::{
     build_provenance::build_provenance_schema,
@@ -86,9 +86,8 @@ use canic_host::{
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
-        InputPathDisplayV1, PayloadSchemaRefV1, command_path_for_root, deployment_check_schema,
-        evidence_envelope_schema, evidence_summary_exit_class, file_input_fingerprint,
-        json_payload_sha256,
+        InputPathDisplayV1, PayloadSchemaRefV1, deployment_check_schema, evidence_envelope_schema,
+        evidence_summary_exit_class, file_input_fingerprint, json_payload_sha256,
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
@@ -2539,7 +2538,7 @@ fn deployment_check_command_provenance(
         argv_normalized.push(options.truth.network.clone());
     }
     let mut argv_redactions = Vec::new();
-    push_optional_path_arg(
+    evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
         "--build-provenance",
@@ -2585,23 +2584,6 @@ fn deployment_check_input_fingerprints(
         );
     }
     Ok(inputs)
-}
-
-fn push_optional_path_arg(
-    args: &mut Vec<String>,
-    redactions: &mut Vec<String>,
-    flag: &str,
-    path: Option<&PathBuf>,
-    config_root: &Path,
-) {
-    if let Some(path) = path {
-        args.push(flag.to_string());
-        let display_path = command_path_for_root(path, config_root);
-        if display_path.starts_with("<redacted:") {
-            redactions.push(format!("{flag} absolute path outside config root"));
-        }
-        args.push(display_path);
-    }
 }
 
 fn deployment_check_source_config_fingerprint(

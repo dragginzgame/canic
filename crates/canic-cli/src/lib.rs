@@ -5,6 +5,7 @@ mod cycles;
 mod deploy;
 mod endpoints;
 mod evidence;
+mod evidence_support;
 mod fleets;
 mod info;
 mod install;
