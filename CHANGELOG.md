@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.56.md](docs/changelog/0.56.md)
 
+- `0.56.1` hardens the installed CLI smoke:
+  ```text
+  docs/operations/0.56-installed-cli-smoke.md
+  scripts/ci/verify-installed-canic-cli.sh
+  ```
+  The proof now asserts it is using the temporary installed binary rather than
+  `target/debug/canic`, isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and
+  `TMPDIR`, and runs the maintained v1 readiness smoke through that binary.
+
 - `0.56.0` proposes the tentative packaged downstream proof line and hard-cuts
   retained packaged/installed release probes to current v1 questions:
   ```text

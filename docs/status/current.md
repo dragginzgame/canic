@@ -36,6 +36,14 @@ inspect only the files needed for the current task.
   retained packaged/installed probe. The packaged downstream CLI fixture now
   uses current fleet-scoped role declarations instead of topology-only legacy
   config.
+  `0.56.1` has hardened the installed CLI smoke:
+  ```text
+  docs/operations/0.56-installed-cli-smoke.md
+  scripts/ci/verify-installed-canic-cli.sh
+  ```
+  The proof now asserts it is using the temporary installed binary rather than
+  `target/debug/canic`, isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and
+  `TMPDIR`, and runs the maintained v1 readiness smoke through that binary.
 - Previous minor: `0.55.x` v1 stabilization and readiness is closed. The design
   is:
   ```text
