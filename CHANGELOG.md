@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.56.md](docs/changelog/0.56.md)
 
+- `0.56.4` closes the packaged downstream proof line with a PASS audit:
+  ```text
+  docs/audits/release-lines/0.56-closeout.md
+  ```
+  The audit verifies the installed CLI proof, packaged downstream CLI proof,
+  packaged `wasm_store` bootstrap proof, declared Rust `1.91.0` MSRV lane, and
+  absence of new product surface or mutation authority.
+
 - `0.56.3` hardens the special packaged downstream `wasm_store` proof:
   ```text
   docs/operations/0.56-packaged-wasm-store.md

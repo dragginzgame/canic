@@ -9,7 +9,7 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Current minor: `0.56.x` v1 packaged downstream proofs is tentative. The
+- Current minor: `0.56.x` v1 packaged downstream proofs is closed. The
   design is:
   ```text
   docs/design/0.56-v1-packaged-downstream-proofs/0.56-design.md
@@ -64,6 +64,14 @@ inspect only the files needed for the current task.
   proof execution paths where practical, and verifies that the generated
   bootstrap wrapper points at packaged Canic sources. This remains an internal
   bootstrap/runtime proof, not ordinary downstream dependency guidance.
+  `0.56.4` has closed the line with:
+  ```text
+  docs/audits/release-lines/0.56-closeout.md
+  ```
+  Verdict: PASS. The audit verifies the installed CLI proof, packaged
+  downstream CLI proof, packaged `wasm_store` bootstrap proof, declared Rust
+  `1.91.0` MSRV lane, retained probe inventory, and absence of new product
+  surface or mutation authority.
 - Previous minor: `0.55.x` v1 stabilization and readiness is closed. The design
   is:
   ```text
