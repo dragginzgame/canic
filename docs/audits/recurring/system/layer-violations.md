@@ -275,11 +275,21 @@ Suggested scan:
 
 ```bash
 rg -n 'use crate::storage|crate::storage::|use crate::infra|crate::infra::' crates/canic-core/src/api -g '*.rs'
+rg -n 'crate::ops::|use crate::ops' crates/canic-core/src/api -g '*.rs'
+rg -n 'crate::api::|use crate::api' crates/canic-core/src/api -g '*.rs'
+rg -n 'IcOps::|MgmtOps::|Root.*Workflow|response_replay_first|verify_.*proof|validate_.*envelope' crates/canic-core/src/api -g '*.rs'
 ```
 
 Findings:
 
 - (file, line, why)
+
+API `ops` references are not automatically violations because endpoint
+adapters may need caller/time/environment material before delegating. They must
+be reviewed as drift signals. Flag as `Medium` when API owns multi-step
+security/business orchestration, proof verification, replay projection,
+metrics/logging branches, or direct workflow sequencing that should live behind
+a workflow/access seam.
 
 ### 2.2 Workflow Ownership
 
@@ -393,17 +403,26 @@ Check:
 
 - [ ] API maps internal errors to public boundary errors
 - [ ] Ops does not return API boundary error types
+- [ ] Ops traits and callbacks do not expose `dto::error::Error`
 - [ ] Storage/model does not depend on workflow error enums
 
 Suggested scan:
 
 ```bash
 rg -n 'dto::error::Error|ErrorCode' crates/canic-core/src/{ops,storage,workflow,api} -g '*.rs'
+rg -n 'dto::error::Error|ErrorCode' crates/canic-core/src/ops -g '*.rs'
+rg -n 'Result<[^>]+, Error>|Result<[^>]+, crate::dto::error::Error>' crates/canic-core/src/ops crates/canic-core/src/workflow -g '*.rs'
+rg -n 'InternalError::public\\(' crates/canic-core/src/{ops,workflow,storage,domain} -g '*.rs'
 ```
 
 Findings:
 
 - (file, line, why)
+
+`dto::error::Error` in API modules is expected. In workflow it is allowed only
+at explicit public RPC/DTO boundaries. In ops it is a violation unless a
+documented adapter is intentionally mapping a public canister response into an
+internal error at the edge.
 
 ## 4. Capability Enforcement Placement (0.11+)
 
@@ -415,16 +434,23 @@ Check:
 - [ ] API does not make capability allow/deny decisions directly
 - [ ] Ops does not inspect/branch on capability enums
 - [ ] Policy does not perform dispatch routing
+- [ ] Capability proof/envelope verification is not embedded in API modules
 
 Suggested scans:
 
 ```bash
 rg -n 'RootCapability|execute_root_capability|authorize\\(' crates/canic-core/src -g '*.rs'
+rg -n 'CapabilityProof|CapabilityEnvelope|verify_.*capability|validate_.*capability|RootCapabilityMetrics|project_replay_metadata' crates/canic-core/src/api crates/canic-core/src/workflow -g '*.rs'
+rg -n 'crate::api::auth|AuthApi::verify_role_attestation|IcOps::msg_caller|IcOps::now_secs|IcOps::canister_self' crates/canic-core/src/api/rpc crates/canic-core/src/workflow/rpc -g '*.rs'
 ```
 
 Findings:
 
 - (file, line, why)
+
+Classify API-local capability envelope/proof orchestration as at least
+`Medium` drift risk unless the API function only decodes boundary DTOs and
+delegates immediately to a workflow/access verifier.
 
 ## 5. Macro Boundary Check (`canic-macros`)
 

@@ -1,7 +1,6 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::{types::Principal, utils::hash::wasm_hash},
-    dto::error::Error,
     format::byte_size,
     ids::CanisterRole,
     ops::runtime::metrics::wasm_store::{
@@ -129,7 +128,7 @@ pub trait ModuleSourceResolver: Send + Sync {
     async fn approved_module_source(
         &self,
         role: &CanisterRole,
-    ) -> Result<ApprovedModuleSource, Error>;
+    ) -> Result<ApprovedModuleSource, InternalError>;
 }
 
 static MODULE_SOURCE_RESOLVER: OnceLock<&'static dyn ModuleSourceResolver> = OnceLock::new();
@@ -242,7 +241,7 @@ impl ModuleSourceRuntimeApi {
                     WasmStoreMetricOutcome::Failed,
                     WasmStoreMetricReason::StoreCall,
                 );
-                Err(InternalError::public(err))
+                Err(err)
             }
         }
     }

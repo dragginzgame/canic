@@ -215,87 +215,12 @@ impl AuthApi {
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), Error> {
-        let configured_min_accepted_epoch = ConfigOps::role_attestation_config()
-            .map_err(Error::from)?
-            .min_accepted_epoch_by_role
-            .get(attestation.payload.role.as_str())
-            .copied();
-        let min_accepted_epoch = verify_flow::resolve_min_accepted_epoch(
+        crate::workflow::runtime::auth::RuntimeAuthWorkflow::verify_role_attestation(
+            attestation,
             min_accepted_epoch,
-            configured_min_accepted_epoch,
-        );
-
-        let caller = IcOps::msg_caller();
-        let self_pid = IcOps::canister_self();
-        let now_secs = IcOps::now_secs();
-        let verifier_subnet = Some(EnvOps::subnet_pid().map_err(Error::from)?);
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-
-        let verify = || {
-            AuthOps::verify_role_attestation_cached(
-                attestation,
-                caller,
-                self_pid,
-                verifier_subnet,
-                now_secs,
-                min_accepted_epoch,
-            )
-            .map(|_| ())
-        };
-        let refresh = || async {
-            let key_set = RootAuthMaterialClient::new(root_pid)
-                .attestation_key_set()
-                .await?;
-            AuthOps::replace_attestation_key_set(key_set);
-            Ok(())
-        };
-
-        match verify_flow::verify_role_attestation_with_single_refresh(verify, refresh).await {
-            Ok(()) => Ok(()),
-            Err(verify_flow::RoleAttestationVerifyFlowError::Initial(err)) => {
-                verify_flow::record_attestation_verifier_rejection(&err);
-                verify_flow::log_attestation_verifier_rejection(
-                    &err,
-                    attestation,
-                    caller,
-                    self_pid,
-                    "cached",
-                );
-                Err(Self::map_auth_error(err.into()))
-            }
-            Err(verify_flow::RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
-                verify_flow::record_attestation_verifier_rejection(&trigger);
-                verify_flow::log_attestation_verifier_rejection(
-                    &trigger,
-                    attestation,
-                    caller,
-                    self_pid,
-                    "cache_miss_refresh",
-                );
-                record_attestation_refresh_failed();
-                log!(
-                    Topic::Auth,
-                    Warn,
-                    "role attestation refresh failed local={} caller={} key_id={} error={}",
-                    self_pid,
-                    caller,
-                    attestation.key_id,
-                    source
-                );
-                Err(Self::map_auth_error(source))
-            }
-            Err(verify_flow::RoleAttestationVerifyFlowError::PostRefresh(err)) => {
-                verify_flow::record_attestation_verifier_rejection(&err);
-                verify_flow::log_attestation_verifier_rejection(
-                    &err,
-                    attestation,
-                    caller,
-                    self_pid,
-                    "post_refresh",
-                );
-                Err(Self::map_auth_error(err.into()))
-            }
-        }
+        )
+        .await
+        .map_err(Self::map_auth_error)
     }
 
     /// Verify a root-signed, method-scoped internal invocation proof for this endpoint.

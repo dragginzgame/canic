@@ -1,8 +1,7 @@
-use crate::support;
 use async_trait::async_trait;
 use canic_core::{
     api::runtime::install::{ApprovedModuleSource, ModuleSourceResolver, ModuleSourceRuntimeApi},
-    dto::error::Error,
+    control_plane_support::error::InternalError,
     ids::CanisterRole,
 };
 
@@ -18,8 +17,8 @@ impl ModuleSourceResolver for TemplateModuleSourceResolver {
     async fn approved_module_source(
         &self,
         role: &CanisterRole,
-    ) -> Result<ApprovedModuleSource, Error> {
-        support::approved_module_source_for_role(role).await
+    ) -> Result<ApprovedModuleSource, InternalError> {
+        crate::workflow::runtime::template::resolved_approved_module_source_for_role(role).await
     }
 }
 

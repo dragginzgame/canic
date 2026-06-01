@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.1` follows the refreshed layer-boundary audit: capability envelope and
+  proof orchestration now lives under workflow, the public RPC API delegates
+  thinly, and module-source resolver errors stay on Canic's internal error
+  boundary. It also tightens packaged README posture for `canic-cli` and
+  `canic-host` around the compact v1 operator surface.
+
 - `0.57.0` starts a maintenance line for rotating recurring audits while
   waiting for real user feedback on the compact v1 surface. It refreshes the
   `publish-surface` recurring audit definition for the post-0.56 packaged

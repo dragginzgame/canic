@@ -2,15 +2,25 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     config::ConfigModel,
+    dto::auth::SignedRoleAttestation,
+    format::display_optional,
     ids::CanisterRole,
+    log,
     ops::{
-        auth::AuthOps,
+        auth::{AuthExpiryError, AuthOps, AuthOpsError, AuthValidationError},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
+        rpc::RpcOps,
         runtime::env::EnvOps,
+        runtime::metrics::auth::{
+            record_attestation_epoch_rejected, record_attestation_refresh_failed,
+            record_attestation_unknown_key_id, record_attestation_verify_failed,
+        },
     },
+    protocol,
     workflow::prelude::*,
 };
+use std::future::Future;
 
 ///
 /// DelegatedTokenSignerPrewarmPlan
@@ -102,6 +112,167 @@ impl RuntimeAuthWorkflow {
 
         AuthOps::publish_delegated_token_root_key_material().await
     }
+
+    /// Verify a role attestation, refreshing root keys once on unknown key.
+    pub async fn verify_role_attestation(
+        attestation: &SignedRoleAttestation,
+        min_accepted_epoch: u64,
+    ) -> Result<(), InternalError> {
+        let configured_min_accepted_epoch = ConfigOps::role_attestation_config()?
+            .min_accepted_epoch_by_role
+            .get(attestation.payload.role.as_str())
+            .copied();
+        let min_accepted_epoch =
+            resolve_min_accepted_epoch(min_accepted_epoch, configured_min_accepted_epoch);
+
+        let caller = IcOps::msg_caller();
+        let self_pid = IcOps::canister_self();
+        let now_secs = IcOps::now_secs();
+        let verifier_subnet = Some(EnvOps::subnet_pid()?);
+        let root_pid = EnvOps::root_pid()?;
+
+        let verify = || {
+            AuthOps::verify_role_attestation_cached(
+                attestation,
+                caller,
+                self_pid,
+                verifier_subnet,
+                now_secs,
+                min_accepted_epoch,
+            )
+            .map(|_| ())
+        };
+        let refresh = || async {
+            let key_set =
+                RpcOps::call_rpc_result(root_pid, protocol::CANIC_ATTESTATION_KEY_SET, ()).await?;
+            AuthOps::replace_attestation_key_set(key_set);
+            Ok(())
+        };
+
+        match verify_role_attestation_with_single_refresh(verify, refresh).await {
+            Ok(()) => Ok(()),
+            Err(RoleAttestationVerifyFlowError::Initial(err)) => {
+                record_attestation_verifier_rejection(&err);
+                log_attestation_verifier_rejection(&err, attestation, caller, self_pid, "cached");
+                Err(err.into())
+            }
+            Err(RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
+                record_attestation_verifier_rejection(&trigger);
+                log_attestation_verifier_rejection(
+                    &trigger,
+                    attestation,
+                    caller,
+                    self_pid,
+                    "cache_miss_refresh",
+                );
+                record_attestation_refresh_failed();
+                log!(
+                    Topic::Auth,
+                    Warn,
+                    "role attestation refresh failed local={} caller={} key_id={} error={}",
+                    self_pid,
+                    caller,
+                    attestation.key_id,
+                    source
+                );
+                Err(source)
+            }
+            Err(RoleAttestationVerifyFlowError::PostRefresh(err)) => {
+                record_attestation_verifier_rejection(&err);
+                log_attestation_verifier_rejection(
+                    &err,
+                    attestation,
+                    caller,
+                    self_pid,
+                    "post_refresh",
+                );
+                Err(err.into())
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum RoleAttestationVerifyFlowError {
+    Initial(AuthOpsError),
+    Refresh {
+        trigger: AuthOpsError,
+        source: InternalError,
+    },
+    PostRefresh(AuthOpsError),
+}
+
+async fn verify_role_attestation_with_single_refresh<Verify, Refresh, RefreshFuture>(
+    mut verify: Verify,
+    mut refresh: Refresh,
+) -> Result<(), RoleAttestationVerifyFlowError>
+where
+    Verify: FnMut() -> Result<(), AuthOpsError>,
+    Refresh: FnMut() -> RefreshFuture,
+    RefreshFuture: Future<Output = Result<(), InternalError>>,
+{
+    match verify() {
+        Ok(()) => Ok(()),
+        Err(
+            err @ AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }),
+        ) => {
+            refresh()
+                .await
+                .map_err(|source| RoleAttestationVerifyFlowError::Refresh {
+                    trigger: err,
+                    source,
+                })?;
+            verify().map_err(RoleAttestationVerifyFlowError::PostRefresh)
+        }
+        Err(err) => Err(RoleAttestationVerifyFlowError::Initial(err)),
+    }
+}
+
+fn resolve_min_accepted_epoch(explicit: u64, configured: Option<u64>) -> u64 {
+    if explicit > 0 {
+        explicit
+    } else {
+        configured.unwrap_or(0)
+    }
+}
+
+fn record_attestation_verifier_rejection(err: &AuthOpsError) {
+    record_attestation_verify_failed();
+    match err {
+        AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }) => {
+            record_attestation_unknown_key_id();
+        }
+        AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) => {
+            record_attestation_epoch_rejected();
+        }
+        _ => {}
+    }
+}
+
+fn log_attestation_verifier_rejection(
+    err: &AuthOpsError,
+    attestation: &SignedRoleAttestation,
+    caller: Principal,
+    self_pid: Principal,
+    phase: &str,
+) {
+    log!(
+        Topic::Auth,
+        Warn,
+        "role attestation rejected phase={} local={} caller={} subject={} role={} key_id={} audience={} subnet={} issued_at={} expires_at={} epoch={} error={}",
+        phase,
+        self_pid,
+        caller,
+        attestation.payload.subject,
+        attestation.payload.role,
+        attestation.key_id,
+        attestation.payload.audience,
+        display_optional(attestation.payload.subnet_id),
+        attestation.payload.issued_at,
+        attestation.payload.expires_at,
+        attestation.payload.epoch,
+        err
+    );
 }
 
 // Decide whether the root runtime must carry threshold-ECDSA management support.

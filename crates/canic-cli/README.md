@@ -1,13 +1,17 @@
 # canic-cli
 
 `canic-cli` publishes the `canic` operator binary. It is the command-line
-surface for installing local Canic fleets, selecting fleet configs, capturing
-canister snapshots, validating backup artifacts, and preparing guarded
-restores.
+surface for fleet setup, role lifecycle inspection, artifact builds, stable
+evidence output, passive deployment catalog inspection, policy gates, local
+fleet installs, snapshots, backup validation, and guarded restores.
 
-The CLI wraps ICP CLI for live snapshot and restore mutations. Canic
-owns the topology selection, manifests, journals, readiness checks, restore
-ordering, and runner state around those `icp` calls.
+The compact v1 operator path is deliberately explicit: create or select a
+fleet, scaffold and attach roles, build attached roles with provenance, check
+saved deployment evidence, gate that evidence with policy, and inspect known
+deployment-target state. Backup and restore commands remain available for
+snapshot workflows; where they perform live snapshot or restore mutations,
+Canic owns topology selection, manifests, journals, readiness checks, restore
+ordering, and runner state around the underlying `icp` calls.
 
 `canic-cli` intentionally keeps a narrow Rust library surface: external callers
 should treat the installed `canic` binary as the operator interface. Host-side
@@ -30,7 +34,30 @@ cargo install --locked canic-cli --version <version>
 ```
 
 Downstream projects should install the same `canic-cli` version as their
-`canic` crate dependency. The installed binary includes the artifact builder:
+`canic` crate dependency.
+
+## Compact V1 Operator Surface
+
+The maintained v1 command set keeps setup, build, evidence, policy, and local
+catalog inspection separate:
+
+```bash
+canic fleet create <fleet>
+canic scaffold canister <fleet> <role>
+canic fleet role attach <fleet> <role> --subnet <subnet>
+canic build <fleet> <role> --provenance artifacts/<role>-provenance.json
+canic deploy check <deployment> --format envelope-json
+canic evidence gate --policy policy.toml --envelope evidence.json
+canic evidence gate --policy policy.toml --manifest evidence-manifest.json
+canic deploy catalog list
+canic deploy catalog inspect <deployment>
+```
+
+These commands do not imply one-command deployment, controller mutation,
+artifact registry import, teardown, deployment groups, or signing. The only
+topology mutation in that list is the explicit `fleet role attach` command.
+
+The installed binary also includes the artifact builder:
 
 ```bash
 canic build <fleet> <role>
@@ -60,7 +87,10 @@ canic build \
 For a full local development setup, including ICP CLI, helper tools, and the
 `canic` CLI, use the root `INSTALLING.md` guide.
 
-## First Commands
+## Local Install And Registry Commands
+
+For local installed-fleet workflows, the CLI also exposes install, registry,
+replica, backup, and restore commands.
 
 Show local test-fleet canisters that already have ids:
 
@@ -151,7 +181,7 @@ The installed CLI version is visible in top-level help and from `canic
 --version`. The version flag is accepted at any command depth, so `canic backup
 verify --version` reports the binary version instead of running the command.
 
-## Happy Path
+## Backup Happy Path
 
 Create a topology-aware backup:
 

@@ -62,7 +62,12 @@ impl CapabilityProofVerifier for RoleAttestationVerifier<'_> {
             proof.capability_hash,
         )?;
 
-        crate::api::auth::AuthApi::verify_role_attestation(&proof.attestation, 0).await?;
+        crate::workflow::runtime::auth::RuntimeAuthWorkflow::verify_role_attestation(
+            &proof.attestation,
+            0,
+        )
+        .await
+        .map_err(Error::from)?;
         Ok(VerifiedCapability)
     }
 }

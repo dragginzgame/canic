@@ -1,5 +1,4 @@
 pub use crate::ops::storage::template::WasmStoreGcExecutionStats;
-pub use canic_core::api::runtime::install::ApprovedModuleSource;
 
 use crate::{
     config,
@@ -42,15 +41,6 @@ pub fn prepare_chunk_set(
 /// Stage one chunk into the current canister's local bootstrap source.
 pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     TemplateChunkedOps::publish_chunk_from_input(request).map_err(Error::from)
-}
-
-/// Resolve the currently approved module source for one role through the template-backed driver.
-pub async fn approved_module_source_for_role(
-    role: &CanisterRole,
-) -> Result<ApprovedModuleSource, Error> {
-    crate::workflow::runtime::template::resolved_approved_module_source_for_role(role)
-        .await
-        .map_err(Error::from)
 }
 
 /// Publish all root-local staged releases into the current subnet's selected wasm store.

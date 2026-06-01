@@ -1,4 +1,5 @@
 use crate::{
+    InternalError,
     cdk::types::Principal,
     dto::{
         capability::{
@@ -117,16 +118,20 @@ impl<'a> RootCapabilityProof<'a> {
     }
 }
 
-pub(super) async fn response_capability_v1_nonroot(
+pub async fn response_capability_v1_nonroot(
     envelope: NonrootCyclesCapabilityEnvelopeV1,
-) -> Result<NonrootCyclesCapabilityResponseV1, Error> {
-    nonroot::response_capability_v1_nonroot(envelope).await
+) -> Result<NonrootCyclesCapabilityResponseV1, InternalError> {
+    nonroot::response_capability_v1_nonroot(envelope)
+        .await
+        .map_err(InternalError::public)
 }
 
-pub(super) async fn response_capability_v1_root(
+pub async fn response_capability_v1_root(
     envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
-) -> Result<crate::dto::capability::RootCapabilityResponseV1, Error> {
-    root::response_capability_v1_root(envelope).await
+) -> Result<crate::dto::capability::RootCapabilityResponseV1, InternalError> {
+    root::response_capability_v1_root(envelope)
+        .await
+        .map_err(InternalError::public)
 }
 
 fn validate_root_capability_envelope(

@@ -15,7 +15,7 @@ For normal local setup, prefer the root
 script directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.57.0/scripts/dev/install_dev.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.57.1/scripts/dev/install_dev.sh | bash
 ```
 
 That script bootstraps Rust when needed and installs the pinned internal
@@ -27,7 +27,9 @@ This README documents the lower-level host library surface.
 This crate is not a general deployment framework and it is not the main Canic
 application facade. It owns host-side build/install/fleet/staging utilities
 for standard Canic root/bootstrap/store flows. For normal operator use, prefer
-`canic install` and other `canic` commands.
+the installed `canic` CLI and the compact v1 workflow documented in
+`docs/architecture/v1-operator-walkthrough.md`; use install commands only for
+the local managed-fleet flows that document them explicitly.
 
 It is also separate from:
 
