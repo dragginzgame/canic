@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.10` refreshes and reruns the security-boundary-ordering audit. It
+  verifies public delegated-token endpoint auth, protected internal role
+  endpoint proof ordering, root RPC replay sequencing, and capability
+  attestation cache reuse remain ordered across their trust boundaries.
+
 - `0.57.9` refreshes and reruns the bootstrap-lifecycle-symmetry and
   canonical-auth-boundary audits. It verifies lifecycle hooks remain
   synchronous restore adapters that schedule bootstrap/user work through

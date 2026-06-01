@@ -6,6 +6,16 @@ Audit security-sensitive ordering and invariant sequencing across auth, replay
 protection, endpoint guards, RPC capability handling, and delegated-token
 verification.
 
+This audit tracks the current hard-cut boundary split:
+
+- public delegated-token endpoint auth uses `auth::authenticated(...)`,
+  singular `DelegationAudience::{Role, Principal}`, subject/caller binding,
+  scope checks, and update-token replay consumption;
+- protected internal role endpoints use `caller::has_role(...)` /
+  `caller::has_any_role(...)` and must verify root-signed internal invocation
+  proof envelopes before decoding handler args or dispatching;
+- endpoint multi-role policy is not delegated-token multi-role audience.
+
 This is not a crypto audit. It is an enforcement-order and trust-boundary
 audit.
 
@@ -19,10 +29,18 @@ For endpoint delegated tokens, the required order is:
 2. verify token material;
 3. verify root/shard trust chain;
 4. enforce caller/subject binding;
-5. enforce audience/scope;
+5. enforce singular audience and scope;
 6. consume update-token replay marker for update calls;
 7. dispatch the endpoint implementation;
 8. record bounded success/denial metrics at the owning boundary.
+
+For protected internal role endpoints, the required order is:
+
+1. decode internal call envelope;
+2. validate envelope version, target canister, and target method;
+3. verify root-signed internal invocation proof against accepted roles;
+4. decode handler args;
+5. dispatch the endpoint implementation.
 
 For root RPC capabilities, replay reservation may happen before authorization
 only when every authorization or execution failure aborts the reservation.
@@ -37,6 +55,7 @@ Primary scope:
 - `crates/canic-core/src/ops/rpc/**`
 - `crates/canic-core/src/workflow/rpc/**`
 - `crates/canic-macros/src/endpoint/**`
+- `crates/canic/src/macros/endpoints/**`
 
 ## Checklist
 
@@ -50,6 +69,7 @@ Expected:
 
 - no replay/update token consumption before token verification;
 - no replay/update token consumption before subject binding and scope checks;
+- no plural delegated-token audience DTOs or compatibility shims;
 - handler dispatch occurs only after access evaluation succeeds.
 
 ### 2. Endpoint Macro Sequencing
@@ -65,6 +85,20 @@ Expected:
 - return on denial;
 - dispatch only after successful access evaluation.
 
+### 2a. Protected Internal Endpoint Sequencing
+
+```bash
+rg -n 'protected_internal|verify_internal_invocation_proof|decode_args|dispatch_update_async|caller::has_role|caller::has_any_role' crates/canic-macros/src/endpoint crates/canic/src/macros/endpoints -g '*.rs'
+```
+
+Expected:
+
+- protected internal wrappers validate the internal envelope before proof
+  verification;
+- protected internal wrappers verify internal invocation proof before handler
+  arg decode and dispatch;
+- protected role predicates remain internal-only and update-only.
+
 ### 3. Delegated Token Material Verification
 
 ```bash
@@ -76,6 +110,8 @@ Expected:
 - config and local shard/root binding checks happen before verifier success;
 - root cert signature verifies before claim authorization is accepted;
 - audience and scope checks complete before success is returned;
+- `DelegationAudience::Role` is singular and no plural roles/mixed audience
+  DTO is accepted;
 - metrics record bounded outcomes but are not authorization inputs.
 
 ### 4. RPC Replay Sequencing
