@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.7` refreshes and reruns the publish-surface audit for the current
+  hard-cut eight-crate package posture. It verifies package-local README
+  alignment, the `1.91.0` published MSRV contract, the small `canic` default
+  feature surface, the `canic-wasm-store` `cdylib`-only posture, retained
+  installed/packaged proof guardrails, and package verification for all current
+  published crates.
+
 - `0.57.6` refreshes and reruns the ops-purity audit for the current compact
   v1 runtime tree. It keeps ops scoped to runtime primitives, moves topology
   policy-input mapping out of an ops-owned `policy` module path, normalizes

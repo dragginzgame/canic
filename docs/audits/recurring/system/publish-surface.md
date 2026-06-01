@@ -247,6 +247,19 @@ Rules:
 * Unpublished support/test crates such as `canic-testing-internal` and
   `canic-tests` are excluded unless they accidentally look publishable.
 
+Current hard-cut package posture:
+
+* The current published crate count is eight. Do not reintroduce removed
+  historical crates into the current count when comparing old reports.
+* The declared published MSRV is the workspace `rust-version` (`1.91.0` at the
+  time this definition was refreshed); the internal Rust toolchain may be newer.
+* `canic`'s default feature set is intentionally small. If defaults change,
+  package-local README text must change with it.
+* `canic-wasm-store` must remain a `cdylib` canister artifact source, not an
+  ordinary `rlib` dependency surface.
+* Install URLs and release-script default versions are release-preparation
+  material; ordinary audit slices should verify posture without bumping them.
+
 ---
 
 ## Scope Defaults
@@ -380,6 +393,7 @@ Inspect:
 * README/docs mention of feature-dependent behavior
 * whether feature names reveal internal layout rather than user-facing intent
 * MSRV/package-version posture when it changes what published users can build
+* canister crate types when they shape downstream dependency expectations
 
 Produce:
 
@@ -400,6 +414,8 @@ Rules:
 * the published MSRV is package-contract evidence. If the internal toolchain is
   newer than the published MSRV, docs and package metadata must make that split
   understandable.
+* a canister artifact source such as `canic-wasm-store` must not ship an `rlib`
+  unless the package contract intentionally supports Rust-library reuse.
 
 ---
 
