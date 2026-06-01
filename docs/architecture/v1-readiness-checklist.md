@@ -150,6 +150,24 @@ Runbook:
 docs/operations/0.55-v1-local-smoke.md
 ```
 
+The heavier local operator proof is:
+
+```text
+scripts/ci/v1-operator-proof.sh
+```
+
+Runbook:
+
+```text
+docs/operations/0.55-v1-operator-proof.md
+```
+
+It builds `demo.app`, writes stable build provenance, registers an explicit
+local deployment target under a temporary proof root, and emits a
+deployment-check envelope that fingerprints the build provenance. The
+deployment check is expected to be blocked because the proof does not install
+or live-verify the deployment.
+
 In a fresh checkout without deployment-target state:
 
 ```text

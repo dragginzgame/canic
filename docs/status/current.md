@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-31
+Last updated: 2026-06-01
 
 ## Purpose
 
@@ -40,10 +40,17 @@ inspect only the files needed for the current task.
   ```text
   docs/audits/release-lines/0.55-closeout.md
   ```
-  Verdict: PASS WITH FOLLOW-UPS. No blocker/high findings were found. The
-  remaining release-readiness follow-up is to run or document one heavier local
-  operator proof covering real build provenance plus deployment-check envelope
-  output against a known local deployment target before final v1 release.
+  Verdict: PASS. No blocker/high findings were found.
+  `0.55.4` has resolved the release-readiness follow-up with:
+  ```text
+  scripts/ci/v1-operator-proof.sh
+  docs/operations/0.55-v1-operator-proof.md
+  ```
+  The proof builds `demo.app` with stable build provenance, registers an
+  explicit local deployment target under a temporary proof root, and emits a
+  deployment-check envelope that fingerprints the build provenance. The check
+  is expected to be blocked because the proof does not install the fleet,
+  verify a live root, or build every fleet artifact.
 - Previous minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md
@@ -199,9 +206,16 @@ inspect only the files needed for the current task.
   ```
   The audit verifies the compact v1 command surface, CLI help, docs alignment,
   local smoke proof, test coverage, and passive/active boundaries. Verdict:
-  PASS WITH FOLLOW-UPS, with the only release-readiness follow-up being a
-  heavier local operator proof for real build provenance and deployment-check
-  envelope evidence.
+  PASS.
+- Added the 0.55.4 v1 operator proof:
+  ```text
+  scripts/ci/v1-operator-proof.sh
+  docs/operations/0.55-v1-operator-proof.md
+  ```
+  It covers real build provenance and deployment-check envelope output against
+  an explicit registered local deployment target without installing, live
+  verifying, changing controllers, importing artifacts, or mutating repository
+  `.canic`/`.icp` state.
 - Implemented the 0.54.0 passive deployment catalog:
   ```text
   canic deploy catalog list

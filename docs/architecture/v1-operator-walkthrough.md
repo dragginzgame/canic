@@ -214,6 +214,24 @@ See:
 docs/operations/0.55-v1-local-smoke.md
 ```
 
+The heavier local operator proof for build provenance plus deployment-check
+envelope output is:
+
+```text
+scripts/ci/v1-operator-proof.sh
+```
+
+See:
+
+```text
+docs/operations/0.55-v1-operator-proof.md
+```
+
+That proof is still not a live install. It registers an explicit unverified
+local deployment target in a temporary proof root and expects the
+deployment-check envelope to be blocked while still proving the saved evidence
+chain.
+
 ## What This Does Not Cover
 
 This walkthrough deliberately avoids:

@@ -16,17 +16,25 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.55.md](docs/changelog/0.55.md)
 
+- `0.55.4` adds the heavier v1 operator proof:
+  ```text
+  scripts/ci/v1-operator-proof.sh
+  docs/operations/0.55-v1-operator-proof.md
+  ```
+  The proof builds `demo.app` with stable build provenance, registers an
+  explicit local deployment target under a temporary proof root, and emits a
+  deployment-check envelope that fingerprints the build provenance. The check
+  is expected to be `blocked_by_policy` because the proof does not install the
+  fleet, verify a live root, or build every fleet artifact.
+
 - `0.55.3` closes the v1 stabilization line with a candidate audit:
   ```text
   docs/audits/release-lines/0.55-closeout.md
   ```
-  Verdict: PASS WITH FOLLOW-UPS. The audit verifies the compact v1 command
+  Verdict: PASS. The audit verifies the compact v1 command
   surface, docs/help alignment, local smoke proof, passive boundaries, and
   absence of new deployment groups, signing, locks, registry import, teardown,
   controller mutation, active adoption/import, or broad live verification.
-  The remaining follow-up is a heavier local operator proof covering real
-  build provenance and deployment-check envelope output against a known local
-  deployment target before final v1 release.
 
 - `0.55.2` adds a maintained local smoke proof for the safe v1
   setup/catalog/evidence subset:
