@@ -12,6 +12,16 @@ present.
 
 ## Unreleased
 
+## [0.57.x] - 2026-06-01 - Audit rotation and feedback window
+
+Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
+
+- `0.57.0` starts a maintenance line for rotating recurring audits while
+  waiting for real user feedback on the compact v1 surface. It refreshes the
+  `publish-surface` recurring audit definition for the post-0.56 packaged
+  proof story without adding product surface, commands, DTOs, or mutation
+  authority.
+
 ## [0.56.x] - 2026-06-01 - V1 packaged downstream proofs
 
 Detailed patch breakdown: [docs/changelog/0.56.md](docs/changelog/0.56.md)

@@ -94,6 +94,8 @@ This audit exists to catch that drift before it becomes release confusion.
 * publishing/support-crate productization work
 * installer/tooling surface changes
 * changing package metadata fields that affect downstream discovery
+* changing installed CLI, packaged downstream, or generated bootstrap-wrapper
+  proof scripts
 
 ---
 
@@ -225,9 +227,9 @@ Use this map when judging intended downstream contract:
 | `crates/canic-cli`           | published operator CLI package exposing the `canic` binary                |
 | `crates/canic-core`          | lower-level runtime/support crate, not the primary beginner entry surface |
 | `crates/canic-control-plane` | lower-level control-plane support crate                                   |
-| `crates/canic-host`          | host-side build/install/fleet/release-set support library                 |
+| `crates/canic-host`          | host-side build, deployment-truth, evidence, fleet, and release support   |
 | `crates/canic-macros`        | proc-macro support crate, public but not a general facade                 |
-| `crates/canic-wasm-store`    | canonical published `wasm_store` canister crate                           |
+| `crates/canic-wasm-store`    | canonical special `wasm_store` canister crate                             |
 
 Rules:
 
@@ -235,6 +237,15 @@ Rules:
 * `canic-core`, `canic-control-plane`, and `canic-macros` may remain published while still being lower-level and thinner in documentation posture.
 * `canic-backup`, `canic-host`, `canic-cli`, and `canic-wasm-store` are published role-specific crates; their binary/README posture must clearly say so.
 * Lower-level published crates are allowed to be thinner than `canic`, but not allowed to be misleading about their role.
+* `canic-wasm-store` is special: its package posture may describe the
+  canonical bootstrap/runtime role, but must not imply ordinary users should
+  import Canic-managed canister crates as general rlib dependencies.
+* Removed historical crates such as `canic-cdk`, `canic-memory`, and
+  `canic-testkit` must not remain in the current published crate count. If a
+  baseline includes them, mark the comparison as partially comparable and
+  explain the hard cut.
+* Unpublished support/test crates such as `canic-testing-internal` and
+  `canic-tests` are excluded unless they accidentally look publishable.
 
 ---
 
@@ -247,6 +258,8 @@ Default scope for this audit includes:
 * package-local README/docs posture for those crates
 * package-local examples and binaries where present
 * package metadata affecting docs.rs or downstream discovery
+* installed CLI and packaged downstream proof docs/scripts when they shape the
+  package contract users are expected to trust
 
 If a crate’s package-local docs are excluded, package-contract judgment for that
 crate must be marked `BLOCKED` or explicitly narrowed.
@@ -366,6 +379,7 @@ Inspect:
 * feature-gated binaries/examples when relevant
 * README/docs mention of feature-dependent behavior
 * whether feature names reveal internal layout rather than user-facing intent
+* MSRV/package-version posture when it changes what published users can build
 
 Produce:
 
@@ -383,6 +397,40 @@ Rules:
 
 * features are a publish-surface concern only when they affect what downstream users reasonably think the crate supports
 * do not treat every undocumented feature as a violation; judge based on impact to package contract
+* the published MSRV is package-contract evidence. If the internal toolchain is
+  newer than the published MSRV, docs and package metadata must make that split
+  understandable.
+
+---
+
+### STEP 4A — Installed / Packaged Proof Surface
+
+Inspect retained release proofs when present:
+
+* `scripts/ci/verify-installed-canic-cli.sh`
+* `scripts/ci/verify-packaged-downstream-cli.sh`
+* `scripts/ci/verify-packaged-downstream-wasm-store.sh`
+* `docs/operations/0.56-v1-release-probes.md`
+* corresponding operation runbooks
+
+Produce:
+
+| Proof | Package Contract Claim | Repository Shortcut Guard | Current v1 Surface? | Risk |
+| ----- | ---------------------- | ------------------------- | ------------------- | ---- |
+
+Rules:
+
+* Installed CLI proof must distinguish the installed `canic` binary from
+  repository `target/debug/canic`.
+* Packaged downstream proofs must create package archives before downstream use
+  and must not pass by resolving repository crate paths after packaging.
+* Packaged downstream CLI proof should use current v1 command shapes, not stale
+  compatibility paths.
+* Packaged `wasm_store` proof must be described as a special bootstrap/runtime
+  proof, not ordinary canister dependency guidance.
+* A proof script is publish-surface evidence only when docs, package metadata,
+  or release process point users or maintainers at that packaged/installed
+  contract.
 
 ---
 
@@ -479,9 +527,20 @@ At minimum, the auditor must:
 2. inspect package-local README or equivalent public docs posture for each such crate
 3. inspect binaries/examples where present
 4. inspect default features and public package-shaping features
-5. compare package posture against the canonical crate-role map
-6. separate thinness from actual contract mismatch
-7. compare only against a comparable baseline
+5. inspect retained installed/packaged proof scripts when they are part of the
+   current release confidence story
+6. compare package posture against the canonical crate-role map
+7. separate thinness from actual contract mismatch
+8. compare only against a comparable baseline
+
+Recommended current package verification command:
+
+```bash
+cargo package -p canic -p canic-backup -p canic-cli -p canic-control-plane -p canic-core -p canic-host -p canic-macros -p canic-wasm-store --locked --allow-dirty
+```
+
+If the crate set differs, derive the publishable crate list from current
+manifests instead of copying an old report.
 
 ---
 

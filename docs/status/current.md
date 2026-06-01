@@ -9,7 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Current minor: `0.56.x` v1 packaged downstream proofs is closed. The
+- Current minor: `0.57.x` audit rotation and feedback window. This is a
+  maintenance line, not a new feature line. The purpose is to rotate the
+  recurring audits while real users try the compact v1 surface, then use that
+  feedback to decide what actually needs work. `0.57.0` starts with:
+  ```text
+  docs/audits/recurring/system/publish-surface.md
+  docs/changelog/0.57.md
+  ```
+  The publish-surface audit definition now reflects the current eight
+  published crates, the post-0.56 installed/packaged proof story, the declared
+  Rust `1.91.0` MSRV package contract, and the special `canic-wasm-store`
+  bootstrap/runtime posture. It adds no commands, DTOs, deployment groups,
+  signing, locks, registry import, teardown, controller mutation, or active
+  adoption/import.
+- Previous minor: `0.56.x` v1 packaged downstream proofs is closed. The
   design is:
   ```text
   docs/design/0.56-v1-packaged-downstream-proofs/0.56-design.md
