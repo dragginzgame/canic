@@ -12,9 +12,41 @@ present.
 
 ## Unreleased
 
+## [0.56.x] - 2026-06-01 - V1 packaged downstream proofs
+
+Detailed patch breakdown: [docs/changelog/0.56.md](docs/changelog/0.56.md)
+
+- `0.56.0` proposes the tentative packaged downstream proof line and hard-cuts
+  retained packaged/installed release probes to current v1 questions:
+  ```text
+  docs/design/0.56-v1-packaged-downstream-proofs/0.56-design.md
+  docs/operations/0.56-v1-release-probes.md
+  scripts/ci/verify-installed-canic-cli.sh
+  ```
+  The installed CLI probe now installs `canic` into a temporary root and runs
+  the maintained v1 readiness smoke through that installed binary instead of
+  building repo-local roles with the old role-only build shape. The packaged
+  downstream CLI fixture now uses current fleet-scoped role declarations. The
+  line is scoped to proving installed CLI and packaged downstream behavior
+  with current v1 command shapes. It is not a new product feature line and
+  keeps deployment groups, signing, locks, registry import, teardown,
+  controller mutation, active adoption/import, broad live verification, and
+  new stable public DTO families out of scope. Packaged proofs must use package
+  archives or unpacked package roots rather than repository path dependencies,
+  `target/debug/canic`, unpublished local crates, or repository `.canic` /
+  `.icp` state.
+
 ## [0.55.x] - 2026-05-31 - V1 stabilization and readiness
 
 Detailed patch breakdown: [docs/changelog/0.55.md](docs/changelog/0.55.md)
+
+- `0.55.5` adds the final post-0.55.4 closeout audit:
+  ```text
+  docs/audits/release-lines/0.55-final-closeout.md
+  ```
+  Verdict: PASS. The audit verifies the maintained v1 command surface, local
+  smoke proof, heavier operator proof, proof artifacts, docs/help alignment,
+  passive/active boundaries, and 0.54 passive-catalog transition.
 
 - `0.55.4` adds the heavier v1 operator proof:
   ```text

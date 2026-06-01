@@ -9,7 +9,34 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Current minor: `0.55.x` v1 stabilization and readiness is active. The design
+- Current minor: `0.56.x` v1 packaged downstream proofs is tentative. The
+  design is:
+  ```text
+  docs/design/0.56-v1-packaged-downstream-proofs/0.56-design.md
+  ```
+  `0.56.0` proposes a release-confidence line, not a new product feature line.
+  It should prove that the installed CLI and packaged Canic crates can support
+  the compact v1 story from clean downstream projects without repository-only
+  shortcuts or stale command shapes. It deliberately keeps deployment groups,
+  signing, locks, registry import, teardown, controller mutation, active
+  adoption/import, broad live verification, one-command deployment pipelines,
+  and new stable public DTO families out of scope. The packaged proof boundary
+  is strict: after package archives are created, proof paths must not pass via
+  repository path dependencies, `target/debug/canic`, unpublished local crates,
+  hard-coded local paths, or repository `.canic` / `.icp` state.
+  `0.56.0` also starts the retained release-probe hard cut:
+  ```text
+  docs/operations/0.56-v1-release-probes.md
+  scripts/ci/verify-installed-canic-cli.sh
+  ```
+  The installed CLI probe now installs `canic` into a temporary root and runs
+  the maintained v1 readiness smoke through the installed binary. The retained
+  probe inventory documents the release question, installed-CLI use,
+  packaged-crate use, temp-root behavior, and network assumptions for each
+  retained packaged/installed probe. The packaged downstream CLI fixture now
+  uses current fleet-scoped role declarations instead of topology-only legacy
+  config.
+- Previous minor: `0.55.x` v1 stabilization and readiness is closed. The design
   is:
   ```text
   docs/design/0.55-v1-stabilization-readiness/0.55-design.md
@@ -51,6 +78,14 @@ inspect only the files needed for the current task.
   deployment-check envelope that fingerprints the build provenance. The check
   is expected to be blocked because the proof does not install the fleet,
   verify a live root, or build every fleet artifact.
+  `0.55.5` has added the final post-0.55.4 closeout audit:
+  ```text
+  docs/audits/release-lines/0.55-final-closeout.md
+  ```
+  Verdict: PASS. The final audit supersedes the 0.55.3 candidate audit and
+  verifies the maintained v1 command surface, both proof scripts, proof
+  artifacts, docs/help alignment, passive/active boundaries, and 0.54
+  passive-catalog transition.
 - Previous minor: `0.54.x` passive deployment catalog is closed. The design is:
   ```text
   docs/design/0.54-passive-deployment-catalog/0.54-design.md

@@ -5,9 +5,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-installed-cli.XXXXXX")"
 INSTALL_ROOT="$TMP_ROOT/install-root"
 BIN_ROOT="$INSTALL_ROOT/bin"
-SPLIT_ICP_ROOT="$TMP_ROOT/split-icp-root"
-
-source "$ROOT/scripts/ci/require_icp.sh"
+PROOF_HOME="$TMP_ROOT/home"
+PROOF_CARGO_HOME="$TMP_ROOT/cargo-home"
 
 cleanup() {
     rm -rf "$TMP_ROOT"
@@ -16,44 +15,18 @@ cleanup() {
 trap cleanup EXIT
 
 main() {
-    require_icp_tools
-
     cargo install --offline --locked --path "$ROOT/crates/canic-cli" --root "$INSTALL_ROOT" >/dev/null
 
-    (
-        cd "$ROOT"
-        "$BIN_ROOT/canic" --network local build --profile fast --workspace "$ROOT" app >/dev/null
-        "$BIN_ROOT/canic" --network local build --profile fast --workspace "$ROOT" root >/dev/null
-    )
+    mkdir -p "$PROOF_HOME" "$PROOF_CARGO_HOME"
 
-    [ -s "$ROOT/.icp/local/canisters/app/app.wasm.gz" ] || {
-        echo "expected installed builder to emit app.wasm.gz" >&2
-        exit 1
-    }
+    HOME="$PROOF_HOME" \
+        CARGO_HOME="$PROOF_CARGO_HOME" \
+        CANIC_BIN="$BIN_ROOT/canic" \
+        "$ROOT/scripts/ci/v1-readiness-smoke.sh" > "$TMP_ROOT/v1-readiness-smoke.out"
 
-    [ -s "$ROOT/.icp/local/canisters/root/root.wasm.gz" ] || {
-        echo "expected installed builder to emit root.wasm.gz" >&2
-        exit 1
-    }
-
-    [ -s "$ROOT/.icp/local/canisters/root/root.release-set.json" ] || {
-        echo "expected installed canic CLI to emit root.release-set.json" >&2
-        exit 1
-    }
-
-    mkdir -p "$SPLIT_ICP_ROOT"
-    (
-        cd "$ROOT"
-        "$BIN_ROOT/canic" --network local build --profile fast --workspace "$ROOT" --icp-root "$SPLIT_ICP_ROOT" root >/dev/null
-    )
-
-    [ -s "$SPLIT_ICP_ROOT/.icp/local/canisters/wasm_store/wasm_store.wasm.gz" ] || {
-        echo "expected split-root probe to emit wasm_store.wasm.gz under --icp-root" >&2
-        exit 1
-    }
-
-    [ -s "$SPLIT_ICP_ROOT/.icp/local/canisters/root/root.wasm.gz" ] || {
-        echo "expected split-root probe to emit root.wasm.gz under --icp-root" >&2
+    grep -q 'v1 readiness smoke passed' "$TMP_ROOT/v1-readiness-smoke.out" || {
+        echo "expected installed canic CLI to pass v1 readiness smoke" >&2
+        sed -n '1,160p' "$TMP_ROOT/v1-readiness-smoke.out" >&2
         exit 1
     }
 
