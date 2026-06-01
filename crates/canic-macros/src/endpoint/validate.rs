@@ -64,7 +64,7 @@ pub fn validate(
     {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "caller::has_role(...) protected internal endpoints are update-only in 0.40 V1",
+            "caller::has_role(...) and caller::has_any_role(...) protected internal endpoints are update-only",
         ));
     }
 

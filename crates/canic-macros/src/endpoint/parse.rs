@@ -446,7 +446,7 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             if is_removed_has_app_role_path(&path) {
                 return Err(syn::Error::new_spanned(
                     &path,
-                    "caller::has_app_role(...) was removed in Canic 0.40; use root-signed caller::has_role(...) for protected internal endpoints",
+                    "caller::has_app_role(...) was removed; use root-signed caller::has_role(...) for protected internal endpoints",
                 ));
             }
 
@@ -874,7 +874,7 @@ mod tests {
         .expect_err("removed app role predicate must fail");
         assert!(
             err.to_string()
-                .contains("caller::has_app_role(...) was removed in Canic 0.40")
+                .contains("caller::has_app_role(...) was removed")
         );
     }
 

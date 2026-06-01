@@ -5,6 +5,11 @@
 Verify that access code remains a thin endpoint boundary and does not absorb
 workflow, policy, storage, transport, or business behavior.
 
+This audit covers the current hard-cut auth surface: delegated-token role
+audience is singular, while endpoint policy may still accept multiple caller
+roles through protected internal `caller::has_role(...)` /
+`caller::has_any_role(...)` predicates. Those are separate concepts.
+
 ## Risk Model / Invariant
 
 Access may:
@@ -44,6 +49,8 @@ Boundary comparison scope:
 - adding access predicates;
 - changing endpoint auth macro lowering;
 - changing delegated-token verification or delegated-session resolution;
+- changing delegated-token audience DTOs;
+- changing protected internal caller role predicates;
 - changing app/environment endpoint guards;
 - adding metrics to access paths.
 
@@ -104,6 +111,10 @@ rg -n 'serde_json|serde_yaml|from_str|parse\(|impl From|impl TryFrom|record_to|t
 Expected:
 
 - delegated-token first-argument decoding is allowed;
+- `authenticated(...)` endpoint predicates require the first endpoint argument
+  to be `DelegatedToken`;
+- delegated-token audience handling must not reintroduce multi-role audience
+  support;
 - broad payload parsing or conversion is a violation.
 
 ### 5. Auth State And Metrics
@@ -120,6 +131,24 @@ Expected:
 - direct runtime metric backend calls should stay isolated in
   `access/metrics.rs`;
 - auth state changes should stay narrow and endpoint-boundary related.
+
+### 6. Endpoint Macro Lowering
+
+The endpoint macro may generate access-boundary calls, but it must not hide
+workflow, policy, or topology mutation in generated code.
+
+```bash
+rg -n 'resolve_authenticated_identity|eval_access|protected_internal|verify_internal_invocation_proof|caller::has_role|caller::has_any_role|authenticated_arg_error|DelegatedToken' crates/canic-macros/src/endpoint crates/canic-core/src/access -g '*.rs'
+```
+
+Expected:
+
+- public endpoint wrappers authenticate, then evaluate access expressions, then
+  delegate to the user handler;
+- protected internal role predicates remain internal-only and update-only;
+- endpoint macro validation uses current behavior wording, not stale
+  version-specific compatibility language;
+- macro lowering does not perform role/deployment topology changes.
 
 ## Output Requirements
 

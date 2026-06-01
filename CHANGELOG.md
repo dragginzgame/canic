@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.8` refreshes and reruns the access-purity audit for the current
+  singular delegated-token audience and protected internal endpoint role
+  predicate surface. It verifies access remains a thin endpoint boundary and
+  removes stale versioned wording from endpoint macro diagnostics.
+
 - `0.57.7` refreshes and reruns the publish-surface audit for the current
   hard-cut eight-crate package posture. It verifies package-local README
   alignment, the `1.91.0` published MSRV contract, the small `canic` default

@@ -573,7 +573,7 @@ fn collect_protected_role_expr(
         AccessExprAst::Any(_) | AccessExprAst::Not(_) | AccessExprAst::Pred(_) => {
             Err(syn::Error::new(
                 proc_macro2::Span::call_site(),
-                "caller::has_role(...) protected endpoints may only combine attested role predicates in this 0.40 slice",
+                "caller::has_role(...) protected endpoints may only combine attested role predicates",
             ))
         }
     }
