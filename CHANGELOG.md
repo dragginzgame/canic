@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.56.md](docs/changelog/0.56.md)
 
+- `0.56.2` hardens the packaged downstream CLI proof:
+  ```text
+  docs/operations/0.56-packaged-downstream-cli.md
+  scripts/ci/verify-packaged-downstream-cli.sh
+  ```
+  The proof now rejects repository crate paths and `target/debug/canic` in the
+  packaged tool root, isolates proof execution paths where practical, and runs
+  current v1 read-only commands against a downstream project. It also packages
+  and patches `canic-control-plane` explicitly so local pre-publication
+  versions do not pass by resolving that dependency from crates.io.
+
 - `0.56.1` hardens the installed CLI smoke:
   ```text
   docs/operations/0.56-installed-cli-smoke.md

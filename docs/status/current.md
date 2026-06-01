@@ -44,6 +44,16 @@ inspect only the files needed for the current task.
   The proof now asserts it is using the temporary installed binary rather than
   `target/debug/canic`, isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and
   `TMPDIR`, and runs the maintained v1 readiness smoke through that binary.
+  `0.56.2` has hardened the packaged downstream CLI proof:
+  ```text
+  docs/operations/0.56-packaged-downstream-cli.md
+  scripts/ci/verify-packaged-downstream-cli.sh
+  ```
+  The proof now rejects repository crate paths and `target/debug/canic` in the
+  packaged tool root, isolates proof execution paths where practical, and runs
+  current v1 read-only commands against a downstream project. It also packages
+  and patches `canic-control-plane` explicitly so local pre-publication
+  versions do not pass by resolving that dependency from crates.io.
 - Previous minor: `0.55.x` v1 stabilization and readiness is closed. The design
   is:
   ```text
