@@ -54,6 +54,16 @@ inspect only the files needed for the current task.
   current v1 read-only commands against a downstream project. It also packages
   and patches `canic-control-plane` explicitly so local pre-publication
   versions do not pass by resolving that dependency from crates.io.
+  `0.56.3` has hardened the special packaged downstream `wasm_store` proof:
+  ```text
+  docs/operations/0.56-packaged-wasm-store.md
+  scripts/ci/verify-packaged-downstream-wasm-store.sh
+  ```
+  The proof now packages and patches same-version Canic sibling crates
+  explicitly, rejects repository crate paths and `target/debug/canic`, isolates
+  proof execution paths where practical, and verifies that the generated
+  bootstrap wrapper points at packaged Canic sources. This remains an internal
+  bootstrap/runtime proof, not ordinary downstream dependency guidance.
 - Previous minor: `0.55.x` v1 stabilization and readiness is closed. The design
   is:
   ```text

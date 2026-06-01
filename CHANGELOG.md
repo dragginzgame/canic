@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.56.md](docs/changelog/0.56.md)
 
+- `0.56.3` hardens the special packaged downstream `wasm_store` proof:
+  ```text
+  docs/operations/0.56-packaged-wasm-store.md
+  scripts/ci/verify-packaged-downstream-wasm-store.sh
+  ```
+  The proof now packages and patches same-version Canic sibling crates
+  explicitly, rejects repository crate paths and `target/debug/canic`, isolates
+  proof execution paths where practical, and verifies that the generated
+  bootstrap wrapper points at packaged Canic sources. This remains an internal
+  bootstrap/runtime proof, not ordinary downstream dependency guidance.
+
 - `0.56.2` hardens the packaged downstream CLI proof:
   ```text
   docs/operations/0.56-packaged-downstream-cli.md
