@@ -1,7 +1,7 @@
 use canic_host::evidence_envelope::command_path_for_root;
 use std::path::{Path, PathBuf};
 
-pub(crate) fn push_optional_path_arg(
+pub fn push_optional_path_arg(
     args: &mut Vec<String>,
     redactions: &mut Vec<String>,
     flag: &str,
