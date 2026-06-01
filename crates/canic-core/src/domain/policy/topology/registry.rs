@@ -1,5 +1,5 @@
 use crate::{
-    cdk::candid::Principal,
+    cdk::types::Principal,
     config::schema::{CanisterConfig, CanisterKind},
     ids::CanisterRole,
 };

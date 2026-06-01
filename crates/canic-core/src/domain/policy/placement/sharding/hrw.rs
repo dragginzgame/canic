@@ -1,6 +1,6 @@
 //! HRW (Highest Random Weight) shard selection.
 
-use crate::cdk::candid::Principal;
+use crate::cdk::types::Principal;
 use sha2::{Digest, Sha256};
 
 ///

@@ -1,7 +1,7 @@
 pub mod admissibility;
 pub mod authority;
 
-use crate::{InternalError, cdk::candid::Principal, domain::policy::PolicyError};
+use crate::{InternalError, cdk::types::Principal, domain::policy::PolicyError};
 use thiserror::Error as ThisError;
 
 ///

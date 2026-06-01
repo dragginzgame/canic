@@ -25,9 +25,14 @@ This audit verifies:
 - cross-layer data leakage
 - macro boundary correctness
 
-## 0.37 Focus Questions
+This audit is scoped to canister runtime layering in `canic-core`,
+`canic-macros`, and `canic` macro/facade code. Host/operator DTOs and command
+wrappers in `canic-host` / `canic-cli` are not evaluated as core
+endpoint/workflow/policy/ops layering unless they feed runtime APIs.
 
-For the 0.37 cleanup line, this audit must explicitly check:
+## Current Focus Questions
+
+For the current post-v1 tree, this audit must explicitly check:
 
 - forbidden drift patterns;
 - workflow constructing storage records;
@@ -38,6 +43,14 @@ For the 0.37 cleanup line, this audit must explicitly check:
 - policy importing DTOs;
 - policy performing async, IC, or storage work;
 - endpoint macros bypassing access/auth guards.
+- public RPC/API modules owning proof verification, replay projection, metrics,
+  dispatch orchestration, or other workflow behavior;
+- role-attestation verification drifting back from workflow/access ownership
+  into public API modules;
+- ops/workflow contracts leaking public `dto::error::Error` across internal
+  boundaries;
+- host-side operator evidence DTOs being incorrectly treated as core runtime
+  layer-boundary concerns.
 
 ## Run This Audit After
 
@@ -45,10 +58,12 @@ For the 0.37 cleanup line, this audit must explicitly check:
 - moving logic across `api/workflow/policy/ops/model`
 - macro/runtime dispatch changes
 - large feature merges
+- public RPC, capability, access/auth, or endpoint macro changes
+- canic-core error-boundary changes
 
 ## Canonical Layer Model
 
-From `docs/contracts/ARCHITECTURE.md`:
+From `AGENTS.md` and the current architecture contract:
 
 ```text
 endpoints/macros
@@ -69,6 +84,7 @@ Canonical path ownership for this audit:
 - `endpoints/macros`:
   - `crates/canic/src/macros/**`
   - `crates/canic-core/src/endpoints/**`
+  - `crates/canic-core/src/api/**` as the current core endpoint/API boundary
 - `workflow`:
   - `crates/canic-core/src/workflow/**`
 - `policy`:

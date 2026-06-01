@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.5` refreshes and reruns the layer-violations audit for the current
+  post-v1 runtime tree. It verifies that public RPC proof orchestration remains
+  workflow-owned, updates the recurring audit definition for the current API
+  boundary, and normalizes policy-layer `Principal` imports to Canic's runtime
+  type facade.
+
 - `0.57.4` refreshes and reruns the auth-abstraction-equivalence and DRY
   consolidation audits. It verifies the hard-cut singular delegated-token
   audience model, checks compact v1 evidence/provenance/policy/catalog/proof

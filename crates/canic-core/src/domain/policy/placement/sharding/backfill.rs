@@ -4,7 +4,7 @@
 //! shard placement decisions. It must never be persisted or exposed
 //! outside the policy layer.
 
-use crate::{cdk::candid::Principal, view::placement::sharding::ShardPlacement};
+use crate::{cdk::types::Principal, view::placement::sharding::ShardPlacement};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///

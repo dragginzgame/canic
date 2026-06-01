@@ -8,7 +8,7 @@ pub use metrics::{PoolMetrics, compute_pool_metrics};
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    cdk::candid::Principal,
+    cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
     view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement},
 };
