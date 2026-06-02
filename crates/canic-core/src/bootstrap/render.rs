@@ -3,7 +3,7 @@ use crate::{
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
         CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
-        FleetConfig, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
+        FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
         RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
         RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
@@ -470,11 +470,33 @@ fn render_u128_literal(value: u128) -> TokenStream {
 fn render_topup(policy: &TopupPolicy) -> TokenStream {
     let threshold = render_cycles(policy.threshold.to_u128());
     let amount = render_cycles(policy.amount.to_u128());
+    let icp_refill = render_option(policy.icp_refill.as_ref(), render_icp_refill_policy);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::TopupPolicy {
             threshold: #threshold,
             amount: #amount,
+            icp_refill: #icp_refill,
+        }
+    }
+}
+
+// Render the optional ICP-to-cycles refill policy.
+fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
+    let enabled = policy.enabled;
+    let min_hub_cycles_before_refill = render_cycles(policy.min_hub_cycles_before_refill.to_u128());
+    let max_refill_e8s_per_call = policy.max_refill_e8s_per_call;
+    let min_xdr_permyriad_per_icp = render_option(
+        policy.min_xdr_permyriad_per_icp.as_ref(),
+        |value| quote!(#value),
+    );
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::IcpRefillPolicy {
+            enabled: #enabled,
+            min_hub_cycles_before_refill: #min_hub_cycles_before_refill,
+            max_refill_e8s_per_call: #max_refill_e8s_per_call,
+            min_xdr_permyriad_per_icp: #min_xdr_permyriad_per_icp,
         }
     }
 }

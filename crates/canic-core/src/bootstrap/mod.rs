@@ -11,8 +11,8 @@ pub mod compiled {
         config::schema::{
             AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
             CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
-            FleetConfig, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-            RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
+            FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile,
+            PoolImport, RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
             RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
             ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
             TopupPolicy, Whitelist,
