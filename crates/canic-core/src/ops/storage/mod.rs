@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod children;
 pub mod cycles;
+pub mod icp_refill;
 pub mod index;
 pub mod intent;
 pub mod placement;

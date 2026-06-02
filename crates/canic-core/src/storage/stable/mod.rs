@@ -3,6 +3,7 @@ pub mod children;
 pub mod cycles;
 pub mod directory;
 pub mod env;
+pub mod icp_refill;
 pub mod index;
 pub mod intent;
 pub mod log;
@@ -92,8 +93,9 @@ pub mod memory {
         pub const CYCLE_TOPUP_EVENTS_ID: u8 = 30;
         pub const LOG_INDEX_ID: u8 = 31;
         pub const LOG_DATA_ID: u8 = 32;
+        pub const ICP_REFILL_RECORDS_ID: u8 = 33;
 
-        // Reserved: 33–38
+        // Reserved: 34–38
     }
 
     // ---------------------------------------------------------------------

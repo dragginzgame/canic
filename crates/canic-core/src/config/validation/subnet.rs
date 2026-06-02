@@ -1,6 +1,7 @@
 use crate::{
     config::schema::{
-        CanisterConfig, CanisterKind, ConfigSchemaError, NAME_MAX_BYTES, SubnetConfig, Validate,
+        CanisterConfig, CanisterKind, ConfigSchemaError, NAME_MAX_BYTES, SubnetConfig, TopupPolicy,
+        Validate,
     },
     ids::CanisterRole,
 };
@@ -56,6 +57,43 @@ fn validate_topup(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), C
     if amount.saturating_mul(2) > threshold {
         return Err(ConfigSchemaError::ValidationError(format!(
             "canister '{canister}' topup.amount must be <= 50% of topup.threshold (got amount={amount}, threshold={threshold})",
+        )));
+    }
+
+    validate_icp_refill(topup, canister)?;
+
+    Ok(())
+}
+
+fn validate_icp_refill(
+    topup: &TopupPolicy,
+    canister: &CanisterRole,
+) -> Result<(), ConfigSchemaError> {
+    let Some(icp_refill) = &topup.icp_refill else {
+        return Ok(());
+    };
+
+    if !icp_refill.enabled {
+        return Ok(());
+    }
+
+    let min_hub_cycles = icp_refill.min_hub_cycles_before_refill.to_u128();
+
+    if min_hub_cycles == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' topup.icp_refill.min_hub_cycles_before_refill must be > 0",
+        )));
+    }
+
+    if icp_refill.max_refill_e8s_per_call == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' topup.icp_refill.max_refill_e8s_per_call must be > 0",
+        )));
+    }
+
+    if icp_refill.min_xdr_permyriad_per_icp == Some(0) {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' topup.icp_refill.min_xdr_permyriad_per_icp must be > 0 when set",
         )));
     }
 

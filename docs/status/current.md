@@ -32,6 +32,17 @@ inspect only the files needed for the current task.
   fabrication dry-runs to say they bypass the canister refill endpoint, and
   pins hub self-refill to `CycleTrackerWorkflow`. Timer-driven self-refill may
   defer to 0.58.1 if it cannot stay inside the existing funding interval.
+  Initial implementation has started with passive refill DTOs, the MVP
+  `topup.icp_refill` config policy, validation for nonzero refill limits/rate
+  gate, and the authoritative stable `IcpRefillRecord` map plus storage ops:
+  ```text
+  crates/canic-core/src/dto/icp_refill.rs
+  crates/canic-core/src/storage/stable/icp_refill.rs
+  crates/canic-core/src/ops/storage/icp_refill.rs
+  ```
+  This is data/config/storage scaffolding only; IC infra, policy decisions,
+  workflow orchestration, endpoint macros, funding-chain hook, local
+  fabrication, and CLI delegation are still pending.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

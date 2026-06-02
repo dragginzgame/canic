@@ -316,6 +316,9 @@ pub struct TopupPolicy {
         deserialize_with = "Cycles::from_config"
     )]
     pub amount: Cycles,
+
+    #[serde(default)]
+    pub icp_refill: Option<IcpRefillPolicy>,
 }
 
 impl Default for TopupPolicy {
@@ -323,8 +326,32 @@ impl Default for TopupPolicy {
         Self {
             threshold: defaults::topup_threshold(),
             amount: defaults::topup_amount(),
+            icp_refill: None,
         }
     }
+}
+
+///
+/// IcpRefillPolicy
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IcpRefillPolicy {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+
+    #[serde(deserialize_with = "Cycles::from_config")]
+    pub min_hub_cycles_before_refill: Cycles,
+
+    pub max_refill_e8s_per_call: u64,
+
+    #[serde(default)]
+    pub min_xdr_permyriad_per_icp: Option<u64>,
+}
+
+const fn default_enabled() -> bool {
+    true
 }
 
 ///

@@ -63,6 +63,59 @@ fn inline_empty_topup_table_enables_default_topup() {
 }
 
 #[test]
+fn topup_icp_refill_parses_mvp_config() {
+    let cfg: CanisterConfig = toml::from_str(
+        r#"
+kind = "root"
+
+[topup]
+threshold = "10T"
+amount = "5T"
+
+[topup.icp_refill]
+min_hub_cycles_before_refill = "2T"
+max_refill_e8s_per_call = 100000000
+min_xdr_permyriad_per_icp = 40000
+"#,
+    )
+    .expect("icp refill mvp config should parse");
+
+    let topup = cfg.topup.expect("topup policy should be present");
+    let icp_refill = topup
+        .icp_refill
+        .expect("icp refill policy should be present");
+
+    assert!(icp_refill.enabled);
+    assert_eq!(icp_refill.min_hub_cycles_before_refill.to_u128(), 2 * TC);
+    assert_eq!(icp_refill.max_refill_e8s_per_call, 100_000_000);
+    assert_eq!(icp_refill.min_xdr_permyriad_per_icp, Some(40_000));
+}
+
+#[test]
+fn topup_icp_refill_rejects_followup_knobs() {
+    let err = toml::from_str::<CanisterConfig>(
+        r#"
+kind = "root"
+
+[topup]
+threshold = "10T"
+amount = "5T"
+
+[topup.icp_refill]
+min_hub_cycles_before_refill = "2T"
+max_refill_e8s_per_call = 100000000
+max_refill_e8s_per_day = 1000000000
+"#,
+    )
+    .expect_err("follow-up treasury knobs should not parse in 0.58 mvp config");
+
+    assert!(
+        err.to_string().contains("max_refill_e8s_per_day"),
+        "expected unknown max_refill_e8s_per_day field, got: {err}"
+    );
+}
+
+#[test]
 fn canister_config_rejects_legacy_delegated_auth_table() {
     let err = toml::from_str::<CanisterConfig>(
         r#"
@@ -625,6 +678,7 @@ fn topup_amount_above_half_threshold_fails() {
         topup: Some(TopupPolicy {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(6 * TC),
+            icp_refill: None,
         }),
         ..base_canister_config(CanisterKind::Singleton)
     };
@@ -649,6 +703,7 @@ fn topup_amount_equal_half_threshold_is_valid() {
         topup: Some(TopupPolicy {
             threshold: Cycles::new(50 * TC),
             amount: Cycles::new(25 * TC),
+            icp_refill: None,
         }),
         ..base_canister_config(CanisterKind::Singleton)
     };
@@ -673,6 +728,7 @@ fn topup_amount_below_half_threshold_is_valid() {
         topup: Some(TopupPolicy {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(4 * TC),
+            icp_refill: None,
         }),
         ..base_canister_config(CanisterKind::Singleton)
     };
@@ -708,6 +764,96 @@ fn default_topup_satisfies_half_threshold_invariant() {
     subnet
         .validate()
         .expect("expected default topup to satisfy half-threshold invariant");
+}
+
+#[test]
+fn topup_icp_refill_zero_hub_threshold_fails() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        topup: Some(TopupPolicy {
+            threshold: Cycles::new(10 * TC),
+            amount: Cycles::new(5 * TC),
+            icp_refill: Some(IcpRefillPolicy {
+                enabled: true,
+                min_hub_cycles_before_refill: Cycles::new(0),
+                max_refill_e8s_per_call: 100_000_000,
+                min_xdr_permyriad_per_icp: None,
+            }),
+        }),
+        ..base_canister_config(CanisterKind::Root)
+    };
+
+    canisters.insert(CanisterRole::ROOT, cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected zero icp refill hub threshold to fail");
+}
+
+#[test]
+fn topup_icp_refill_zero_max_refill_fails() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        topup: Some(TopupPolicy {
+            threshold: Cycles::new(10 * TC),
+            amount: Cycles::new(5 * TC),
+            icp_refill: Some(IcpRefillPolicy {
+                enabled: true,
+                min_hub_cycles_before_refill: Cycles::new(2 * TC),
+                max_refill_e8s_per_call: 0,
+                min_xdr_permyriad_per_icp: None,
+            }),
+        }),
+        ..base_canister_config(CanisterKind::Root)
+    };
+
+    canisters.insert(CanisterRole::ROOT, cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected zero icp refill max refill to fail");
+}
+
+#[test]
+fn topup_icp_refill_zero_rate_gate_fails() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        topup: Some(TopupPolicy {
+            threshold: Cycles::new(10 * TC),
+            amount: Cycles::new(5 * TC),
+            icp_refill: Some(IcpRefillPolicy {
+                enabled: true,
+                min_hub_cycles_before_refill: Cycles::new(2 * TC),
+                max_refill_e8s_per_call: 100_000_000,
+                min_xdr_permyriad_per_icp: Some(0),
+            }),
+        }),
+        ..base_canister_config(CanisterKind::Root)
+    };
+
+    canisters.insert(CanisterRole::ROOT, cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected zero icp refill rate gate to fail");
 }
 
 #[test]
