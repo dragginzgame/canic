@@ -31,7 +31,7 @@ impl_storable_bounded!(IcpRefillRecordKey, 16, false);
 /// IcpRefillRecord
 ///
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IcpRefillRecord {
     pub id: u64,
     pub operation_id: [u8; 32],
