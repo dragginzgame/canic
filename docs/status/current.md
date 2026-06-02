@@ -59,6 +59,31 @@ inspect only the files needed for the current task.
   rendering commands, explicit `deploy register` state registration, and the
   current install runner entrypoint. This is behavior-neutral CLI
   command-family cleanup; it does not change deploy command semantics.
+- Post-`0.57.12` DRY cleanup has moved passive `deploy external` command
+  parsing, help, output-format selection, dispatch, report builders, local
+  external artifact ID helpers, and `deploy check` evidence-envelope handling
+  into:
+  ```text
+  crates/canic-cli/src/deploy/external.rs
+  crates/canic-cli/src/deploy/check.rs
+  ```
+  This keeps behavior unchanged, keeps the existing direct builder/envelope
+  tests pointed at module-local helpers, and reduces the main deploy owner to
+  roughly 4.5k lines.
+- The deploy test body has been moved out of `deploy/mod.rs` into:
+  ```text
+  crates/canic-cli/src/deploy/tests/mod.rs
+  crates/canic-cli/src/deploy/tests/fixtures.rs
+  crates/canic-cli/src/deploy/tests/authority.rs
+  crates/canic-cli/src/deploy/tests/deploy_check.rs
+  crates/canic-cli/src/deploy/tests/external.rs
+  crates/canic-cli/src/deploy/tests/promote.rs
+  crates/canic-cli/src/deploy/tests/root.rs
+  ```
+  This is a mechanical layout cleanup so the production deploy owner stays
+  readable, with authority dry-run, `deploy check` parsing/status/envelope,
+  passive external lifecycle, passive promotion, and deployment-root tests
+  already separated from the shared fixture module.
 - Previous minor: `0.56.x` v1 packaged downstream proofs is closed. The
   design is:
   ```text
