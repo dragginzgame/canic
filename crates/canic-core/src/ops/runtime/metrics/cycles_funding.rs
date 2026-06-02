@@ -106,24 +106,47 @@ impl CyclesFundingMetrics {
         });
     }
 
+    fn record_total(metric: CyclesFundingMetricKey, cycles: u128) {
+        Self::record(metric, None, None, cycles);
+    }
+
+    fn record_child(metric: CyclesFundingMetricKey, child_principal: Principal, cycles: u128) {
+        Self::record(metric, Some(child_principal), None, cycles);
+    }
+
+    fn record_child_denial(
+        metric: CyclesFundingMetricKey,
+        child_principal: Principal,
+        reason: CyclesFundingDeniedReason,
+        cycles: u128,
+    ) {
+        Self::record(metric, Some(child_principal), Some(reason), cycles);
+    }
+
+    fn record_global_denial(
+        metric: CyclesFundingMetricKey,
+        reason: CyclesFundingDeniedReason,
+        cycles: u128,
+    ) {
+        Self::record(metric, None, Some(reason), cycles);
+    }
+
     // Record accepted funding demand from a child.
     pub fn record_requested(child_principal: Principal, cycles: u128) {
-        Self::record(CyclesFundingMetricKey::RequestedTotal, None, None, cycles);
-        Self::record(
+        Self::record_total(CyclesFundingMetricKey::RequestedTotal, cycles);
+        Self::record_child(
             CyclesFundingMetricKey::RequestedByChild,
-            Some(child_principal),
-            None,
+            child_principal,
             cycles,
         );
     }
 
     // Record successful funding granted to a child.
     pub fn record_granted(child_principal: Principal, cycles: u128) {
-        Self::record(CyclesFundingMetricKey::GrantedTotal, None, None, cycles);
-        Self::record(
+        Self::record_total(CyclesFundingMetricKey::GrantedTotal, cycles);
+        Self::record_child(
             CyclesFundingMetricKey::GrantedToChild,
-            Some(child_principal),
-            None,
+            child_principal,
             cycles,
         );
     }
@@ -134,19 +157,18 @@ impl CyclesFundingMetrics {
         cycles: u128,
         reason: CyclesFundingDeniedReason,
     ) {
-        Self::record(CyclesFundingMetricKey::DeniedTotal, None, None, cycles);
-        Self::record(
+        Self::record_total(CyclesFundingMetricKey::DeniedTotal, cycles);
+        Self::record_child_denial(
             CyclesFundingMetricKey::DeniedToChild,
-            Some(child_principal),
-            Some(reason),
+            child_principal,
+            reason,
             cycles,
         );
 
         if reason == CyclesFundingDeniedReason::KillSwitchDisabled {
-            Self::record(
+            Self::record_global_denial(
                 CyclesFundingMetricKey::DeniedGlobalKillSwitch,
-                None,
-                Some(reason),
+                reason,
                 cycles,
             );
         }

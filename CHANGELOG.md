@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.16` cleans up the 0.58-adjacent cycles CLI and runtime funding helper
+  surfaces ahead of the ICP refill primitive while preserving existing cycles
+  command behavior.
+
 - `0.57.15` continues the behavior-neutral deploy CLI DRY cleanup by
   regularizing command metadata, argument construction, usage rendering, and
   dispatch tests across the deploy command families while preserving command

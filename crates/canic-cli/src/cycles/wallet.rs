@@ -19,6 +19,43 @@ use canic_host::{
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
 
+#[derive(Clone, Copy)]
+struct WalletCommand {
+    name: &'static str,
+}
+
+const BALANCE_COMMAND: &str = "balance";
+const MINT_COMMAND: &str = "mint";
+const TRANSFER_COMMAND: &str = "transfer";
+const TOPUP_COMMAND: &str = "topup";
+
+const WALLET_COMMANDS: &[WalletCommand] = &[
+    WalletCommand {
+        name: BALANCE_COMMAND,
+    },
+    WalletCommand { name: MINT_COMMAND },
+    WalletCommand {
+        name: TRANSFER_COMMAND,
+    },
+    WalletCommand {
+        name: TOPUP_COMMAND,
+    },
+];
+
+const AMOUNT_ARG: &str = "amount";
+const CANISTER_OR_ROLE_ARG: &str = "canister-or-role";
+const CYCLES_AMOUNT_ARG: &str = "cycles-amount";
+const DEPLOYMENT_ARG: &str = "deployment";
+const DRY_RUN_ARG: &str = "dry-run";
+const FROM_SUBACCOUNT_ARG: &str = "from-subaccount";
+const ICP_AMOUNT_ARG: &str = "icp-amount";
+const JSON_ARG: &str = "json";
+const OF_PRINCIPAL_ARG: &str = "of-principal";
+const QUIET_ARG: &str = "quiet";
+const RECEIVER_ARG: &str = "receiver";
+const SUBACCOUNT_ARG: &str = "subaccount";
+const TO_SUBACCOUNT_ARG: &str = "to-subaccount";
+
 const CYCLES_USAGE: &str = "\
 Wrap ICP cycles commands with Canic deployment-target resolution
 
@@ -120,28 +157,28 @@ pub(super) fn run_cycles_command(
     args: Vec<OsString>,
 ) -> Result<(), CyclesCommandError> {
     match command {
-        "balance" => {
+        BALANCE_COMMAND => {
             if print_help_or_version(&args, balance_usage, version_text()) {
                 return Ok(());
             }
             let options = BalanceOptions::parse(args)?;
             run_balance(&options)
         }
-        "mint" => {
+        MINT_COMMAND => {
             if print_help_or_version(&args, mint_usage, version_text()) {
                 return Ok(());
             }
             let options = MintOptions::parse(args)?;
             run_mint(&options)
         }
-        "transfer" => {
+        TRANSFER_COMMAND => {
             if print_help_or_version(&args, transfer_usage, version_text()) {
                 return Ok(());
             }
             let options = TransferOptions::parse(args)?;
             run_transfer(&options)
         }
-        "topup" => {
+        TOPUP_COMMAND => {
             if print_help_or_version(&args, topup_usage, version_text()) {
                 return Ok(());
             }
@@ -153,24 +190,18 @@ pub(super) fn run_cycles_command(
 }
 
 pub(super) fn cycles_command() -> ClapCommand {
-    ClapCommand::new("cycles")
-        .bin_name("canic cycles")
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("balance").disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("mint").disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("transfer").disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("topup").disable_help_flag(true),
-        ))
+    WALLET_COMMANDS.iter().fold(
+        ClapCommand::new("cycles").bin_name("canic cycles"),
+        |command, spec| command.subcommand(wallet_passthrough_command(*spec)),
+    )
 }
 
 pub(super) fn cycles_usage() -> String {
     CYCLES_USAGE.to_string()
+}
+
+fn wallet_passthrough_command(spec: WalletCommand) -> ClapCommand {
+    passthrough_subcommand(ClapCommand::new(spec.name).disable_help_flag(true))
 }
 
 impl IcpTargetOptions {
@@ -191,10 +222,10 @@ impl BalanceOptions {
             .map_err(|_| CyclesCommandError::Usage(balance_usage()))?;
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
-            json: matches.get_flag("json"),
-            quiet: matches.get_flag("quiet"),
-            subaccount: string_option(&matches, "subaccount"),
-            of_principal: string_option(&matches, "of-principal"),
+            json: matches.get_flag(JSON_ARG),
+            quiet: matches.get_flag(QUIET_ARG),
+            subaccount: string_option(&matches, SUBACCOUNT_ARG),
+            of_principal: string_option(&matches, OF_PRINCIPAL_ARG),
         })
     }
 }
@@ -208,11 +239,11 @@ impl MintOptions {
             .map_err(|_| CyclesCommandError::Usage(mint_usage()))?;
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
-            icp_amount: string_option(&matches, "icp-amount"),
-            cycles_amount: string_option(&matches, "cycles-amount"),
-            from_subaccount: string_option(&matches, "from-subaccount"),
-            to_subaccount: string_option(&matches, "to-subaccount"),
-            json: matches.get_flag("json"),
+            icp_amount: string_option(&matches, ICP_AMOUNT_ARG),
+            cycles_amount: string_option(&matches, CYCLES_AMOUNT_ARG),
+            from_subaccount: string_option(&matches, FROM_SUBACCOUNT_ARG),
+            to_subaccount: string_option(&matches, TO_SUBACCOUNT_ARG),
+            json: matches.get_flag(JSON_ARG),
         })
     }
 }
@@ -226,13 +257,13 @@ impl TransferOptions {
             .map_err(|_| CyclesCommandError::Usage(transfer_usage()))?;
         let options = Self {
             target: IcpTargetOptions::parse(&matches),
-            amount: string_option(&matches, "amount").expect("clap requires amount"),
-            receiver: string_option(&matches, "receiver").expect("clap requires receiver"),
-            to_subaccount: string_option(&matches, "to-subaccount"),
-            from_subaccount: string_option(&matches, "from-subaccount"),
-            json: matches.get_flag("json"),
-            quiet: matches.get_flag("quiet"),
-            dry_run: matches.get_flag("dry-run"),
+            amount: string_option(&matches, AMOUNT_ARG).expect("clap requires amount"),
+            receiver: string_option(&matches, RECEIVER_ARG).expect("clap requires receiver"),
+            to_subaccount: string_option(&matches, TO_SUBACCOUNT_ARG),
+            from_subaccount: string_option(&matches, FROM_SUBACCOUNT_ARG),
+            json: matches.get_flag(JSON_ARG),
+            quiet: matches.get_flag(QUIET_ARG),
+            dry_run: matches.get_flag(DRY_RUN_ARG),
         };
         Ok(options)
     }
@@ -245,15 +276,15 @@ impl TopupOptions {
     {
         let matches = parse_matches(topup_command(), args)
             .map_err(|_| CyclesCommandError::Usage(topup_usage()))?;
-        let amount = string_option(&matches, "amount").expect("clap requires amount");
+        let amount = string_option(&matches, AMOUNT_ARG).expect("clap requires amount");
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            canister_or_role: string_option(&matches, "canister-or-role")
+            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
+            canister_or_role: string_option(&matches, CANISTER_OR_ROLE_ARG)
                 .expect("clap requires canister-or-role"),
             amount_cycles: parse_cycle_amount(&amount)?,
-            json: matches.get_flag("json"),
-            dry_run: matches.get_flag("dry-run"),
+            json: matches.get_flag(JSON_ARG),
+            dry_run: matches.get_flag(DRY_RUN_ARG),
         })
     }
 }
@@ -262,15 +293,15 @@ fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root()
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
     let mut command = icp_command(&options.target, &root);
-    command.args(["cycles", "balance"]);
-    append_optional_arg(&mut command, "--subaccount", options.subaccount.as_deref());
-    append_optional_arg(
+    command.args(["cycles", BALANCE_COMMAND]);
+    append_optional_long_arg(&mut command, SUBACCOUNT_ARG, options.subaccount.as_deref());
+    append_optional_long_arg(
         &mut command,
-        "--of-principal",
+        OF_PRINCIPAL_ARG,
         options.of_principal.as_deref(),
     );
-    append_flag(&mut command, "--json", options.json);
-    append_flag(&mut command, "--quiet", options.quiet);
+    append_long_flag(&mut command, JSON_ARG, options.json);
+    append_long_flag(&mut command, QUIET_ARG, options.quiet);
     append_target_args(&mut command, &options.target);
     run_or_print_command(&mut command, false)
 }
@@ -279,20 +310,20 @@ fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root()
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
     let mut command = icp_command(&options.target, &root);
-    command.args(["cycles", "mint"]);
-    append_optional_arg(&mut command, "--icp", options.icp_amount.as_deref());
-    append_optional_arg(&mut command, "--cycles", options.cycles_amount.as_deref());
-    append_optional_arg(
+    command.args(["cycles", MINT_COMMAND]);
+    append_optional_long_arg(&mut command, "icp", options.icp_amount.as_deref());
+    append_optional_long_arg(&mut command, "cycles", options.cycles_amount.as_deref());
+    append_optional_long_arg(
         &mut command,
-        "--from-subaccount",
+        FROM_SUBACCOUNT_ARG,
         options.from_subaccount.as_deref(),
     );
-    append_optional_arg(
+    append_optional_long_arg(
         &mut command,
-        "--to-subaccount",
+        TO_SUBACCOUNT_ARG,
         options.to_subaccount.as_deref(),
     );
-    append_flag(&mut command, "--json", options.json);
+    append_long_flag(&mut command, JSON_ARG, options.json);
     append_target_args(&mut command, &options.target);
     run_or_print_command(&mut command, false)
 }
@@ -302,21 +333,21 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
     let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
     let mut command = icp_command(&options.target, &root);
-    command.args(["cycles", "transfer"]);
+    command.args(["cycles", TRANSFER_COMMAND]);
     command.arg(&options.amount);
     command.arg(receiver);
-    append_optional_arg(
+    append_optional_long_arg(
         &mut command,
-        "--to-subaccount",
+        TO_SUBACCOUNT_ARG,
         options.to_subaccount.as_deref(),
     );
-    append_optional_arg(
+    append_optional_long_arg(
         &mut command,
-        "--from-subaccount",
+        FROM_SUBACCOUNT_ARG,
         options.from_subaccount.as_deref(),
     );
-    append_flag(&mut command, "--json", options.json);
-    append_flag(&mut command, "--quiet", options.quiet);
+    append_long_flag(&mut command, JSON_ARG, options.json);
+    append_long_flag(&mut command, QUIET_ARG, options.quiet);
     append_target_args(&mut command, &options.target);
     run_or_print_command(&mut command, options.dry_run)
 }
@@ -497,15 +528,15 @@ fn run_or_print_command(
     Ok(())
 }
 
-fn append_optional_arg(command: &mut std::process::Command, flag: &str, value: Option<&str>) {
+fn append_optional_long_arg(command: &mut std::process::Command, name: &str, value: Option<&str>) {
     if let Some(value) = value {
-        command.args([flag, value]);
+        command.arg(format!("--{name}")).arg(value);
     }
 }
 
-fn append_flag(command: &mut std::process::Command, flag: &str, enabled: bool) {
+fn append_long_flag(command: &mut std::process::Command, name: &str, enabled: bool) {
     if enabled {
-        command.arg(flag);
+        command.arg(format!("--{name}"));
     }
 }
 
@@ -547,20 +578,20 @@ fn target_label(role: Option<&str>, canister_id: &str) -> String {
 }
 
 fn balance_command() -> ClapCommand {
-    ClapCommand::new("balance")
+    ClapCommand::new(BALANCE_COMMAND)
         .bin_name("canic cycles balance")
         .about("Display the selected identity cycles balance")
         .disable_help_flag(true)
-        .arg(flag_arg("json").long("json"))
-        .arg(flag_arg("quiet").long("quiet").short('q'))
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG))
+        .arg(flag_arg(QUIET_ARG).long(QUIET_ARG).short('q'))
         .arg(
-            value_arg("subaccount")
-                .long("subaccount")
-                .value_name("subaccount"),
+            value_arg(SUBACCOUNT_ARG)
+                .long(SUBACCOUNT_ARG)
+                .value_name(SUBACCOUNT_ARG),
         )
         .arg(
-            value_arg("of-principal")
-                .long("of-principal")
+            value_arg(OF_PRINCIPAL_ARG)
+                .long(OF_PRINCIPAL_ARG)
                 .value_name("principal"),
         )
         .arg(internal_network_arg())
@@ -568,104 +599,105 @@ fn balance_command() -> ClapCommand {
 }
 
 fn mint_command() -> ClapCommand {
-    ClapCommand::new("mint")
+    ClapCommand::new(MINT_COMMAND)
         .bin_name("canic cycles mint")
         .about("Convert ICP to cycles")
         .disable_help_flag(true)
-        .arg(value_arg("icp-amount").long("icp").value_name("amount"))
+        .arg(value_arg(ICP_AMOUNT_ARG).long("icp").value_name("amount"))
         .arg(
-            value_arg("cycles-amount")
+            value_arg(CYCLES_AMOUNT_ARG)
                 .long("cycles")
                 .value_name("amount"),
         )
         .arg(
-            value_arg("from-subaccount")
-                .long("from-subaccount")
-                .value_name("subaccount"),
+            value_arg(FROM_SUBACCOUNT_ARG)
+                .long(FROM_SUBACCOUNT_ARG)
+                .value_name(SUBACCOUNT_ARG),
         )
         .arg(
-            value_arg("to-subaccount")
-                .long("to-subaccount")
-                .value_name("subaccount"),
+            value_arg(TO_SUBACCOUNT_ARG)
+                .long(TO_SUBACCOUNT_ARG)
+                .value_name(SUBACCOUNT_ARG),
         )
-        .arg(flag_arg("json").long("json"))
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
 }
 
 fn transfer_command() -> ClapCommand {
-    ClapCommand::new("transfer")
+    ClapCommand::new(TRANSFER_COMMAND)
         .bin_name("canic cycles transfer")
         .about("Transfer cycles to a principal or Canic deployment target")
         .disable_help_flag(true)
         .arg(
-            value_arg("amount")
-                .value_name("amount")
+            value_arg(AMOUNT_ARG)
+                .value_name(AMOUNT_ARG)
                 .required(true)
                 .help("Cycles amount to transfer"),
         )
         .arg(
-            value_arg("receiver")
+            value_arg(RECEIVER_ARG)
                 .value_name("receiver-or-deployment-target")
                 .required(true)
                 .help("Raw principal, or Canic selector like <deployment>/<role-or-canister>"),
         )
         .arg(
-            value_arg("to-subaccount")
-                .long("to-subaccount")
-                .value_name("subaccount"),
+            value_arg(TO_SUBACCOUNT_ARG)
+                .long(TO_SUBACCOUNT_ARG)
+                .value_name(SUBACCOUNT_ARG),
         )
         .arg(
-            value_arg("from-subaccount")
-                .long("from-subaccount")
-                .value_name("subaccount"),
+            value_arg(FROM_SUBACCOUNT_ARG)
+                .long(FROM_SUBACCOUNT_ARG)
+                .value_name(SUBACCOUNT_ARG),
         )
-        .arg(flag_arg("json").long("json"))
-        .arg(flag_arg("quiet").long("quiet").short('q'))
-        .arg(flag_arg("dry-run").long("dry-run"))
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG))
+        .arg(flag_arg(QUIET_ARG).long(QUIET_ARG).short('q'))
+        .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
 }
 
 fn topup_command() -> ClapCommand {
-    ClapCommand::new("topup")
+    ClapCommand::new(TOPUP_COMMAND)
         .bin_name("canic cycles topup")
         .about("Top up cycles for one installed deployment canister")
         .disable_help_flag(true)
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg(DEPLOYMENT_ARG)
+                .value_name(DEPLOYMENT_ARG)
                 .required(true),
         )
         .arg(
-            value_arg("canister-or-role")
-                .value_name("canister-or-role")
+            value_arg(CANISTER_OR_ROLE_ARG)
+                .value_name(CANISTER_OR_ROLE_ARG)
                 .required(true),
         )
-        .arg(value_arg("amount").value_name("amount").required(true))
-        .arg(flag_arg("json").long("json"))
-        .arg(flag_arg("dry-run").long("dry-run"))
+        .arg(value_arg(AMOUNT_ARG).value_name(AMOUNT_ARG).required(true))
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG))
+        .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
 }
 
 fn balance_usage() -> String {
-    let mut command = balance_command();
-    command.render_help().to_string()
+    render_usage(balance_command)
 }
 
 fn mint_usage() -> String {
-    let mut command = mint_command();
-    command.render_help().to_string()
+    render_usage(mint_command)
 }
 
 fn transfer_usage() -> String {
-    let mut command = transfer_command();
-    command.render_help().to_string()
+    render_usage(transfer_command)
 }
 
 fn topup_usage() -> String {
-    let mut command = topup_command();
+    render_usage(topup_command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
+    let mut command = command();
     command.render_help().to_string()
 }
 

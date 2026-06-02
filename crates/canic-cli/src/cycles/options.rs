@@ -10,6 +10,15 @@ use std::{ffi::OsString, path::PathBuf};
 const DEFAULT_SINCE_SECONDS: u64 = 24 * 60 * 60;
 const DEFAULT_LIMIT: u64 = 1_000;
 
+const COMMAND_NAME: &str = "cycles";
+const DEPLOYMENT_ARG: &str = "deployment";
+const JSON_ARG: &str = "json";
+const LIMIT_ARG: &str = "limit";
+const OUT_ARG: &str = "out";
+const SINCE_ARG: &str = "since";
+const SUBTREE_ARG: &str = "subtree";
+const VERBOSE_ARG: &str = "verbose";
+
 ///
 /// CyclesOptions
 ///
@@ -38,23 +47,23 @@ impl CyclesOptions {
     }
 
     fn from_matches(matches: &clap::ArgMatches) -> Result<Self, CyclesCommandError> {
-        let since_seconds = string_option(matches, "since")
+        let since_seconds = string_option(matches, SINCE_ARG)
             .map(|value| parse_duration(&value))
             .transpose()?
             .unwrap_or(DEFAULT_SINCE_SECONDS);
-        let limit = string_option(matches, "limit")
+        let limit = string_option(matches, LIMIT_ARG)
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|limit| *limit > 0)
             .unwrap_or(DEFAULT_LIMIT);
 
         Ok(Self {
-            deployment: string_option(matches, "deployment").expect("clap requires deployment"),
-            subtree: string_option(matches, "subtree"),
+            deployment: string_option(matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
+            subtree: string_option(matches, SUBTREE_ARG),
             since_seconds,
             limit,
-            json: matches.get_flag("json"),
-            verbose: matches.get_flag("verbose"),
-            out: path_option(matches, "out"),
+            json: matches.get_flag(JSON_ARG),
+            verbose: matches.get_flag(VERBOSE_ARG),
+            out: path_option(matches, OUT_ARG),
             network: string_option(matches, "network").unwrap_or_else(local_network),
             icp: string_option(matches, "icp").unwrap_or_else(default_icp),
         })
@@ -85,8 +94,7 @@ fn parse_duration(value: &str) -> Result<u64, CyclesCommandError> {
 }
 
 pub(super) fn info_usage() -> String {
-    let mut command = info_cycles_command();
-    command.render_help().to_string()
+    render_usage(info_cycles_command)
 }
 
 fn info_cycles_command() -> ClapCommand {
@@ -94,41 +102,46 @@ fn info_cycles_command() -> ClapCommand {
 }
 
 fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
-    ClapCommand::new("cycles")
+    ClapCommand::new(COMMAND_NAME)
         .bin_name(bin_name)
         .about("Summarize installed deployment cycle history")
         .disable_help_flag(true)
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg(DEPLOYMENT_ARG)
+                .value_name(DEPLOYMENT_ARG)
                 .required(true)
                 .help("Installed deployment target name to inspect"),
         )
         .arg(
-            value_arg("since")
-                .long("since")
+            value_arg(SINCE_ARG)
+                .long(SINCE_ARG)
                 .value_name("duration")
                 .help("Cycle history window; defaults to 24h"),
         )
         .arg(
-            value_arg("subtree")
-                .long("subtree")
+            value_arg(SUBTREE_ARG)
+                .long(SUBTREE_ARG)
                 .value_name("name-or-principal")
                 .help("Summarize one subtree anchored at a unique role name or canister principal"),
         )
         .arg(
-            value_arg("limit")
-                .long("limit")
+            value_arg(LIMIT_ARG)
+                .long(LIMIT_ARG)
                 .value_name("entries")
                 .help("Maximum tracker samples to fetch per canister; defaults to 1000"),
         )
-        .arg(flag_arg("json").long("json"))
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(
-            flag_arg("verbose").long("verbose").short('v').help(
+            flag_arg(VERBOSE_ARG).long(VERBOSE_ARG).short('v').help(
                 "Show diagnostic columns such as canister id, history, topups, and net total",
             ),
         )
-        .arg(value_arg("out").long("out").value_name("file"))
+        .arg(value_arg(OUT_ARG).long(OUT_ARG).value_name("file"))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
+    let mut command = command();
+    command.render_help().to_string()
 }

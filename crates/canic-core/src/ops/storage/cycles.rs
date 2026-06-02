@@ -58,7 +58,7 @@ pub struct CycleTopupEventOps;
 
 impl CycleTopupEventOps {
     pub fn record_scheduled(now: u64, requested_cycles: Cycles) {
-        CycleTopupEvents::record(
+        Self::record_event(
             now,
             requested_cycles,
             None,
@@ -68,7 +68,7 @@ impl CycleTopupEventOps {
     }
 
     pub fn record_ok(now: u64, requested_cycles: Cycles, transferred_cycles: Cycles) {
-        CycleTopupEvents::record(
+        Self::record_event(
             now,
             requested_cycles,
             Some(transferred_cycles),
@@ -78,13 +78,23 @@ impl CycleTopupEventOps {
     }
 
     pub fn record_err(now: u64, requested_cycles: Cycles, error: String) {
-        CycleTopupEvents::record(
+        Self::record_event(
             now,
             requested_cycles,
             None,
             CycleTopupEventStatus::RequestErr,
             Some(truncate_topup_error(error)),
         );
+    }
+
+    fn record_event(
+        now: u64,
+        requested_cycles: Cycles,
+        transferred_cycles: Option<Cycles>,
+        status: CycleTopupEventStatus,
+        error: Option<String>,
+    ) {
+        CycleTopupEvents::record(now, requested_cycles, transferred_cycles, status, error);
     }
 
     #[must_use]

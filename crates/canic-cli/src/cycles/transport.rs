@@ -31,6 +31,7 @@ use std::{
 };
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
+const ICP_JSON_OUTPUT: &str = "json";
 
 pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
     let registry = load_registry(options)?;
@@ -218,14 +219,11 @@ pub(super) fn summarize_cycle_tracker(
 }
 
 fn query_live_cycle_balance(options: &CyclesOptions, canister_id: &str) -> Option<u128> {
-    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
-    if let Some(root) = resolve_cycles_icp_root() {
-        icp = icp.with_cwd(root);
-    }
+    let icp = cycles_icp(options);
     icp.canister_query_output(
         canister_id,
         canic_core::protocol::CANIC_CYCLE_BALANCE,
-        Some("json"),
+        Some(ICP_JSON_OUTPUT),
     )
     .ok()
     .and_then(|output| parse_cycle_balance_response(&output))
@@ -281,17 +279,14 @@ fn query_topup_event_page(
     offset: u64,
     limit: u64,
 ) -> Result<crate::cycles::model::CycleTopupEventPage, String> {
-    let arg = format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})");
-    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
-    if let Some(root) = resolve_cycles_icp_root() {
-        icp = icp.with_cwd(root);
-    }
+    let arg = page_request_arg(offset, limit);
+    let icp = cycles_icp(options);
     let output = icp
         .canister_query_arg_output(
             canister_id,
             canic_core::protocol::CANIC_CYCLE_TOPUPS,
             &arg,
-            Some("json"),
+            Some(ICP_JSON_OUTPUT),
         )
         .map_err(|err| err.to_string())?;
 
@@ -318,23 +313,32 @@ fn query_cycle_tracker_page(
     offset: u64,
     limit: u64,
 ) -> Result<CycleTrackerPage, String> {
-    let arg = format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})");
-    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
-    if let Some(root) = resolve_cycles_icp_root() {
-        icp = icp.with_cwd(root);
-    }
+    let arg = page_request_arg(offset, limit);
+    let icp = cycles_icp(options);
     let output = icp
         .canister_query_arg_output(
             canister_id,
             canic_core::protocol::CANIC_CYCLE_TRACKER,
             &arg,
-            Some("json"),
+            Some(ICP_JSON_OUTPUT),
         )
         .map_err(|err| err.to_string())?;
 
     parse_cycle_tracker_page(&output)
         .or_else(|| parse_cycle_tracker_page_text(&output))
         .ok_or_else(|| "could not parse canic_cycle_tracker response".to_string())
+}
+
+fn cycles_icp(options: &CyclesOptions) -> IcpCli {
+    let icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = resolve_cycles_icp_root() {
+        return icp.with_cwd(root);
+    }
+    icp
+}
+
+fn page_request_arg(offset: u64, limit: u64) -> String {
+    format!("(record {{ offset = {offset} : nat64; limit = {limit} : nat64 }})")
 }
 
 fn signed_delta(latest: u128, baseline: u128) -> i128 {
