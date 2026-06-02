@@ -18,8 +18,10 @@ Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
 - `0.58.0` starts the ICP-to-cycles refill primitive line with a scoped design
   for canister-side CMC/ICP-ledger conversion, recovery, local fabrication,
-  funding-chain integration, and bounded metrics without adding a parallel
-  identity-funded CLI transfer engine.
+  funding-chain integration, MVP refill config, and bounded metrics without
+  adding a parallel identity-funded CLI transfer engine. The design pins the
+  hub self-refill hook, separates recovery records from top-up observability,
+  and keeps the thin CLI trigger outside the exit gate.
 
 ## [0.57.x] - 2026-06-01 - Audit rotation and feedback window
 

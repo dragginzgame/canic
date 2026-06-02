@@ -26,6 +26,12 @@ inspect only the files needed for the current task.
   order is DTOs/records first, then storage ops, IC infra, `ops::ic`, pure
   policy gates, workflow orchestration, opt-in endpoint/macros, funding-chain
   integration, local fabrication, and only then any thin CLI trigger.
+  The 0.58.0 design now explicitly limits `cfg.topup.icp_refill` to the MVP
+  controls, splits `IcpRefillRecord` recovery state from `CycleTopupEvent`
+  observability, defines the composable endpoint guard shape, requires local
+  fabrication dry-runs to say they bypass the canister refill endpoint, and
+  pins hub self-refill to `CycleTrackerWorkflow`. Timer-driven self-refill may
+  defer to 0.58.1 if it cannot stay inside the existing funding interval.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that
