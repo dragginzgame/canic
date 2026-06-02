@@ -23,6 +23,36 @@ inspect only the files needed for the current task.
   bootstrap/runtime posture. It adds no commands, DTOs, deployment groups,
   signing, locks, registry import, teardown, controller mutation, or active
   adoption/import.
+- The completed upstream ICP network launcher watch has been removed from CI
+  after it flagged a newer launcher candidate for manual testing. Historical
+  0.38 notes still document why the watch existed.
+- Ran the 2026-06-02 DRY consolidation audit:
+  ```text
+  docs/audits/reports/2026-06/2026-06-02/dry-consolidation.md
+  ```
+  Verdict: PASS, risk 4/10. No blocker or high-severity duplication issue was
+  found. Current watchpoints remain the large `deploy` CLI owner,
+  command-specific evidence envelope wrappers, narrow backup/snapshot registry
+  transport duplication, backup/restore test fixtures, and the large Wasm audit
+  shell subsystem.
+- Continued the DRY cleanup follow-up by moving deploy output-format enums,
+  parser helpers, passive catalog command handling, and passive comparison
+  command handling plus deployment-root, registration, and current-install
+  command handling into:
+  ```text
+  crates/canic-cli/src/deploy/output_format.rs
+  crates/canic-cli/src/deploy/catalog.rs
+  crates/canic-cli/src/deploy/compare.rs
+  crates/canic-cli/src/deploy/install.rs
+  crates/canic-cli/src/deploy/register.rs
+  crates/canic-cli/src/deploy/root.rs
+  ```
+  The new modules own shared JSON/text output-format parser glue and the
+  local-state-only `deploy catalog` command family plus the artifact-only
+  `deploy compare` command family and the deployment-root inspect/verify
+  namespace, explicit `deploy register` state registration, and the current
+  install runner entrypoint. This is behavior-neutral CLI command-family
+  cleanup; it does not change deploy command semantics.
 - Previous minor: `0.56.x` v1 packaged downstream proofs is closed. The
   design is:
   ```text

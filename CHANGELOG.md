@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.11` removes the completed upstream launcher watch after it flagged a
+  newer candidate for manual testing, and follows the DRY consolidation audit
+  by splitting deploy command-family glue into private CLI submodules without
+  changing command semantics.
+
 - `0.57.10` refreshes and reruns the security-boundary-ordering audit. It
   verifies public delegated-token endpoint auth, protected internal role
   endpoint proof ordering, root RPC replay sequencing, and capability

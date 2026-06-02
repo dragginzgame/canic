@@ -1,3 +1,10 @@
+mod catalog;
+mod compare;
+mod install;
+mod output_format;
+mod register;
+mod root;
+
 use crate::{
     cli::{
         clap::{
@@ -8,41 +15,35 @@ use crate::{
         globals::internal_network_arg,
         help::print_help_or_version,
     },
-    evidence_support, output, version_text,
+    evidence_support, version_text,
 };
 use canic_host::{
     build_provenance::build_provenance_schema,
     canister_build::CanisterBuildProfile,
-    deployment_catalog::{
-        DeploymentCatalogReportV1, DeploymentCatalogRequest, build_deployment_catalog_report,
-        deployment_catalog_report_text, inspect_deployment_catalog_report,
-    },
     deployment_truth::{
         ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
         ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
         AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
-        DeploymentCheckV1, DeploymentComparisonReportV1, DeploymentExecutionPreflightV1,
-        DeploymentPlanV1, DeploymentReceiptV1, DeploymentRootVerificationReportV1,
-        DeploymentRootVerificationRequestV1, ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1,
-        ExternalLifecyclePendingReportV1, ExternalLifecyclePlanV1,
-        ExternalUpgradeCompletionReportRequest, ExternalUpgradeCompletionReportV1,
-        ExternalUpgradeConsentEvidenceRequest, ExternalUpgradeConsentEvidenceV1,
-        ExternalUpgradeProposalReportV1, ExternalUpgradeVerificationCheckRequest,
-        ExternalUpgradeVerificationCheckV1, ExternalUpgradeVerificationPolicyRequest,
-        ExternalUpgradeVerificationPolicyV1, ExternalUpgradeVerificationReportRequest,
-        ExternalUpgradeVerificationReportV1, PromotionArtifactIdentityReportRequest,
-        PromotionArtifactIdentityReportV1, PromotionMaterializationIdentityReportRequest,
-        PromotionMaterializationIdentityReportV1, PromotionPlanTransformEvidenceRequest,
-        PromotionPlanTransformEvidenceV1, PromotionPlanTransformRequest, PromotionPlanTransformV1,
+        DeploymentCheckV1, DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
+        ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1,
+        ExternalLifecyclePlanV1, ExternalUpgradeCompletionReportRequest,
+        ExternalUpgradeCompletionReportV1, ExternalUpgradeConsentEvidenceRequest,
+        ExternalUpgradeConsentEvidenceV1, ExternalUpgradeProposalReportV1,
+        ExternalUpgradeVerificationCheckRequest, ExternalUpgradeVerificationCheckV1,
+        ExternalUpgradeVerificationPolicyRequest, ExternalUpgradeVerificationPolicyV1,
+        ExternalUpgradeVerificationReportRequest, ExternalUpgradeVerificationReportV1,
+        PromotionArtifactIdentityReportRequest, PromotionArtifactIdentityReportV1,
+        PromotionMaterializationIdentityReportRequest, PromotionMaterializationIdentityReportV1,
+        PromotionPlanTransformEvidenceRequest, PromotionPlanTransformEvidenceV1,
+        PromotionPlanTransformRequest, PromotionPlanTransformV1,
         PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
-        PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessStatusV1,
-        PromotionReadinessV1, PromotionTargetExecutionLineageRequest,
-        PromotionTargetExecutionLineageV1, PromotionWasmStoreCatalogEntryV1,
-        PromotionWasmStoreCatalogVerificationRequest, PromotionWasmStoreCatalogVerificationV1,
-        PromotionWasmStoreIdentityReportRequest, PromotionWasmStoreIdentityReportV1,
-        RolePromotionInputV1, RolePromotionPolicyV1, SafetyReportV1, SafetyStatusV1,
-        StagingReceiptV1, artifact_promotion_execution_receipt,
+        PromotionPolicyCheckV1, PromotionReadinessRequest, PromotionReadinessV1,
+        PromotionTargetExecutionLineageRequest, PromotionTargetExecutionLineageV1,
+        PromotionWasmStoreCatalogEntryV1, PromotionWasmStoreCatalogVerificationRequest,
+        PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreIdentityReportRequest,
+        PromotionWasmStoreIdentityReportV1, RolePromotionInputV1, RolePromotionPolicyV1,
+        SafetyReportV1, SafetyStatusV1, StagingReceiptV1, artifact_promotion_execution_receipt,
         artifact_promotion_execution_receipt_text, artifact_promotion_plan,
         artifact_promotion_plan_text, artifact_promotion_provenance_report,
         artifact_promotion_provenance_report_text,
@@ -52,15 +53,12 @@ use canic_host::{
         authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
         check_promotion_readiness, compare_plan_inventory_and_receipt,
         critical_external_fix_report_from_pending, critical_external_fix_report_text,
-        deployment_comparison_report_from_checks, deployment_comparison_report_text,
-        deployment_root_verification_receipt_text, deployment_root_verification_report_from_check,
-        deployment_root_verification_report_text, external_lifecycle_check_from_reports,
-        external_lifecycle_check_text, external_lifecycle_handoff_from_reports,
-        external_lifecycle_handoff_text, external_lifecycle_pending_report_from_plan,
-        external_lifecycle_pending_report_text, external_lifecycle_plan_from_check,
-        external_lifecycle_plan_text, external_upgrade_completion_report_from_evidence,
-        external_upgrade_completion_report_text, external_upgrade_consent_evidence_from_receipt,
-        external_upgrade_consent_evidence_text,
+        external_lifecycle_check_from_reports, external_lifecycle_check_text,
+        external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
+        external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
+        external_lifecycle_plan_from_check, external_lifecycle_plan_text,
+        external_upgrade_completion_report_from_evidence, external_upgrade_completion_report_text,
+        external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
         external_upgrade_proposal_report_text, external_upgrade_verification_check_from_policy,
         external_upgrade_verification_check_text,
@@ -78,8 +76,7 @@ use canic_host::{
         promotion_target_execution_lineage_text, promotion_wasm_store_catalog_verification,
         promotion_wasm_store_catalog_verification_text,
         promotion_wasm_store_identity_report_from_staging,
-        promotion_wasm_store_identity_report_text, validate_artifact_promotion_plan,
-        validate_deployment_comparison_report, validate_deployment_root_verification_report,
+        promotion_wasm_store_identity_report_text,
         validate_external_upgrade_verification_check_for_deployment_check,
         validate_external_upgrade_verification_check_for_policy,
     },
@@ -91,13 +88,16 @@ use canic_host::{
     },
     icp_config::resolve_current_canic_icp_root,
     install_root::{
-        InstallRootOptions, RegisterDeploymentStateOptions, VerifyDeploymentRootOptions,
-        check_install_deployment_truth, install_root,
-        latest_deployment_truth_receipt_path_from_root, register_deployment_state,
-        verify_registered_deployment_root,
+        InstallRootOptions, check_install_deployment_truth,
+        latest_deployment_truth_receipt_path_from_root,
     },
 };
-use clap::{ArgAction, Command as ClapCommand};
+use clap::Command as ClapCommand;
+use output_format::{
+    AuthorityOutputFormat, CheckOutputFormat, ExternalOutputFormat, PromotionOutputFormat,
+    parse_authority_output_format, parse_check_output_format, parse_external_output_format,
+    parse_promotion_output_format,
+};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::{
@@ -154,82 +154,6 @@ mutation flows through `canic deploy install <deployment> --plan <file>`.
 `canic install <fleet>` remains the fleet-template bootstrap entrypoint.
 Authority commands are dry-run reconciliation reports and do not mutate
 controller state.";
-const DEPLOY_CATALOG_HELP_AFTER: &str = "\
-Examples:
-  canic deploy catalog list
-  canic deploy catalog inspect demo-local
-  canic --network local deploy catalog list --format json --output catalog.json
-
-Catalog commands are read-only local-state reports. They list or inspect
-deployment targets recorded under .canic/<network>/deployments and do not query
-live deployments, create deployment truth, mutate topology, change
-controllers, install Wasm, or infer deployments from fleet-template names.";
-const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
-Examples:
-  canic deploy catalog list
-  canic deploy catalog list --format json
-  canic --network local deploy catalog list --format json --output catalog.json
-
-Lists deployment targets from existing local deployment-target state only. This
-does not refresh live state or infer deployments from fleet-template names.";
-const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy catalog inspect demo-local
-  canic deploy catalog inspect demo-local --format json
-  canic --network local deploy catalog inspect demo-local --format json --output demo-local.json
-
-Inspects one deployment target from existing local deployment-target state
-only. The deployment argument is a deployment target, not a fleet template.";
-const DEPLOY_ROOT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy root inspect --request root-verification.json
-  canic deploy root verify demo-local --from-check deployment-check.json
-  canic deploy root inspect --request root-verification.json --format text
-
-0.47 root commands are deployment-root scoped. Inspect builds passive
-root-verification reports without writing state. Verify records verified root
-state only when a registered deployment target and DeploymentCheckV1 source
-evidence match.";
-const DEPLOY_ROOT_INSPECT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy root inspect --request root-verification.json
-  canic deploy root inspect --request root-verification.json --format text
-
-Reads a DeploymentRootVerificationRequestV1-shaped JSON file and prints a
-DeploymentRootVerificationReportV1 JSON artifact by default, or host-owned
-passive text with --format text. EvidenceSatisfied means the supplied
-deployment-truth evidence is sufficient for a later explicit state transition;
-this command does not persist verified root state.";
-const DEPLOY_ROOT_VERIFY_HELP_AFTER: &str = "\
-Examples:
-  canic deploy root verify demo-local --from-check deployment-check.json
-  canic deploy root verify demo-local --from-check deployment-check.json --format text
-
-Verifies a registered deployment root from a deployment-truth check artifact
-and records verified root state only when deployment target identity and source
-evidence match. This is not full deployment verification and does not install
-code or mutate canisters.";
-const DEPLOY_COMPARE_HELP_AFTER: &str = "\
-Examples:
-  canic deploy compare --left staging-check.json --right prod-check.json
-  canic deploy compare --left staging-check.json --right prod-check.json --format text
-
-Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
-state, install code, or mutate deployments. Each input check's embedded
-diff/report is revalidated against its plan and inventory before comparison
-status is rendered.";
-const DEPLOY_REGISTER_HELP_AFTER: &str = "\
-Examples:
-  canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
-  canic --network local deploy register demo --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai --allow-unverified
-
-Registers minimal deployment-target local state for an existing root canister.
-This is an explicit 0.46 hard-cut recovery path. It does not migrate legacy
-fleet-template state, query live inventory, copy receipts, record
-artifact/controller truth, install code, or mutate canisters. Registered roots are marked
-not_verified until a later verification path records live evidence. The
---allow-unverified flag is required so unverified registration remains an
-explicit operator acknowledgement.";
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy plan demo
@@ -345,15 +269,6 @@ ExternalUpgradeCompletionReportV1 JSON by default, or host-owned passive text
 with --format text. Completion reports combine proposal, consent evidence, and
 verification-check evidence; only deployment-truth inventory verification can
 mark external lifecycle work verified complete.";
-const DEPLOY_INSTALL_HELP_AFTER: &str = "\
-Examples:
-  canic deploy install demo-local --plan promoted-plan.json
-  canic --network local deploy install demo-local --plan promoted-plan.json --profile fast
-
-Installs through the current install runner using a supplied DeploymentPlanV1
-or ArtifactPromotionPlanV1. The deployment-truth/preflight gate runs before
-mutation, and activation phases still execute through the current-install
-operation runner.";
 const DEPLOY_PROMOTE_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote plan --request promotion-plan.json
@@ -645,67 +560,12 @@ struct DeployCheckOptions {
 }
 
 ///
-/// DeployCatalogOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployCatalogOptions {
-    deployment: Option<String>,
-    network: String,
-    format: CatalogOutputFormat,
-    output: Option<PathBuf>,
-}
-
-///
 /// DeployResumeReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeployResumeReportOptions {
     truth: DeployTruthOptions,
     receipt: Option<PathBuf>,
-}
-
-///
-/// DeployInstallPlanOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployInstallPlanOptions {
-    deployment: String,
-    plan: PathBuf,
-    network: String,
-    profile: Option<CanisterBuildProfile>,
-}
-
-///
-/// DeployRegisterOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployRegisterOptions {
-    deployment: String,
-    fleet_template: String,
-    root: String,
-    network: String,
-    allow_unverified: bool,
-}
-
-///
-/// DeployInstallPlanInput
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployInstallPlanInput {
-    deployment_plan: DeploymentPlanV1,
-    artifact_promotion_plan: Option<ArtifactPromotionPlanV1>,
-}
-
-///
-/// DeployCompareOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployCompareOptions {
-    left: PathBuf,
-    right: PathBuf,
-    left_label: Option<String>,
-    right_label: Option<String>,
-    format: CompareOutputFormat,
 }
 
 /// DeployAuthorityOptions
@@ -755,95 +615,12 @@ struct DeployExternalInspectOptions {
 }
 
 ///
-/// DeployRootInspectOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployRootInspectOptions {
-    request: PathBuf,
-    format: RootOutputFormat,
-}
-
-///
-/// DeployRootVerifyOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployRootVerifyOptions {
-    deployment: String,
-    from_check: PathBuf,
-    network: String,
-    format: RootOutputFormat,
-}
-
-///
 /// DeployPromoteReportOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeployPromoteReportOptions {
     request: PathBuf,
     format: PromotionOutputFormat,
-}
-
-///
-/// AuthorityOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AuthorityOutputFormat {
-    Json,
-    Text,
-}
-
-///
-/// CheckOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CheckOutputFormat {
-    Json,
-    EnvelopeJson,
-}
-
-///
-/// CatalogOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CatalogOutputFormat {
-    Text,
-    Json,
-}
-
-///
-/// ExternalOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ExternalOutputFormat {
-    Json,
-    Text,
-}
-
-///
-/// PromotionOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PromotionOutputFormat {
-    Json,
-    Text,
-}
-
-///
-/// CompareOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CompareOutputFormat {
-    Json,
-    Text,
-}
-
-///
-/// RootOutputFormat
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RootOutputFormat {
-    Json,
-    Text,
 }
 
 #[derive(Deserialize)]
@@ -952,13 +729,13 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "authority" => run_authority(args),
-            "catalog" => run_catalog(args),
+            "catalog" => catalog::run(args),
             "external" => run_external(args),
             "promote" => run_promote(args),
-            "root" => run_root(args),
-            "install" => run_install(args),
-            "register" => run_register(args),
-            "compare" => run_compare(args),
+            "root" => root::run(args),
+            "install" => install::run(args),
+            "register" => register::run(args),
+            "compare" => compare::run(args),
             "plan" => run_plan(args),
             "inventory" => run_inventory(args),
             "diff" => run_diff(args),
@@ -968,185 +745,6 @@ where
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
     }
-}
-
-fn run_catalog<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, catalog_usage, version_text()) {
-        return Ok(());
-    }
-
-    match parse_subcommand(deploy_catalog_command(), args)
-        .map_err(|_| DeployCommandError::Usage(catalog_usage()))?
-    {
-        Some((command, args)) if command == "list" => run_catalog_list(args),
-        Some((command, args)) if command == "inspect" => run_catalog_inspect(args),
-        _ => {
-            println!("{}", catalog_usage());
-            Ok(())
-        }
-    }
-}
-
-fn run_catalog_list<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, catalog_list_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployCatalogOptions::parse_list(args)?;
-    let request = deployment_catalog_request(&options)?;
-    let report = build_deployment_catalog_report(&request)
-        .map_err(Box::<dyn std::error::Error>::from)
-        .map_err(DeployCommandError::from)?;
-    write_catalog_report(&options, &report)
-}
-
-fn run_catalog_inspect<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, catalog_inspect_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployCatalogOptions::parse_inspect(args)?;
-    let deployment = options
-        .deployment
-        .as_deref()
-        .expect("catalog inspect parser requires deployment");
-    let request = deployment_catalog_request(&options)?;
-    let report = inspect_deployment_catalog_report(&request, deployment)
-        .map_err(Box::<dyn std::error::Error>::from)
-        .map_err(DeployCommandError::from)?;
-    write_catalog_report(&options, &report)
-}
-
-fn run_root<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, root_usage, version_text()) {
-        return Ok(());
-    }
-
-    match parse_subcommand(deploy_root_command(), args)
-        .map_err(|_| DeployCommandError::Usage(root_usage()))?
-    {
-        Some((command, args)) if command == "inspect" => run_root_inspect(args),
-        Some((command, args)) if command == "verify" => run_root_verify(args),
-        _ => {
-            println!("{}", root_usage());
-            Ok(())
-        }
-    }
-}
-
-fn run_root_inspect<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, root_inspect_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployRootInspectOptions::parse(args)?;
-    let request = read_json_file::<DeploymentRootVerificationRequestV1>(&options.request)?;
-    let report = build_root_verification_report(request)?;
-    match options.format {
-        RootOutputFormat::Json => print_json(&report)?,
-        RootOutputFormat::Text => println!("{}", deployment_root_verification_report_text(&report)),
-    }
-    Ok(())
-}
-
-fn run_root_verify<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, root_verify_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployRootVerifyOptions::parse(args)?;
-    let check = read_json_file::<DeploymentCheckV1>(&options.from_check)?;
-    let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
-        deployment_name: options.deployment,
-        network: options.network,
-        deployment_check: check,
-        verified_at_unix_secs: None,
-        icp_root: resolve_current_canic_icp_root().ok(),
-    })
-    .map_err(DeployCommandError::from)?;
-    match options.format {
-        RootOutputFormat::Json => print_json(&receipt)?,
-        RootOutputFormat::Text => {
-            println!("{}", deployment_root_verification_receipt_text(&receipt));
-        }
-    }
-    Ok(())
-}
-
-fn run_install<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, deploy_install_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployInstallPlanOptions::parse(args)?;
-    let plan = read_install_deployment_plan(&options.plan)?;
-    let icp_root = resolve_current_canic_icp_root().ok();
-    install_root(options.into_install_root_options(plan, icp_root))
-        .map_err(DeployCommandError::from)
-}
-
-fn run_register<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, deploy_register_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployRegisterOptions::parse(args)?;
-    let state_path = register_deployment_state(options.into_register_options(None))
-        .map_err(DeployCommandError::from)?;
-    println!("Registered deployment state: {}", state_path.display());
-    println!("root_verification: not_verified");
-    Ok(())
-}
-
-fn run_compare<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, compare_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployCompareOptions::parse(args)?;
-    let format = options.format;
-    let report = build_deployment_comparison_report(options)?;
-    match format {
-        CompareOutputFormat::Json => print_json(&report)?,
-        CompareOutputFormat::Text => println!("{}", deployment_comparison_report_text(&report)),
-    }
-    Ok(())
 }
 
 fn run_promote<I>(args: I) -> Result<(), DeployCommandError>
@@ -1570,15 +1168,6 @@ fn build_promotion_materialization_identity_report(
         },
     )
     .map_err(|err| DeployCommandError::Check(Box::new(err)))
-}
-
-fn build_root_verification_report(
-    request: DeploymentRootVerificationRequestV1,
-) -> Result<DeploymentRootVerificationReportV1, DeployCommandError> {
-    let report = deployment_root_verification_report_from_check(request);
-    validate_deployment_root_verification_report(&report)
-        .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
-    Ok(report)
 }
 
 fn run_authority<I>(args: I) -> Result<(), DeployCommandError>
@@ -2328,45 +1917,6 @@ where
     Ok(())
 }
 
-fn build_deployment_comparison_report(
-    options: DeployCompareOptions,
-) -> Result<DeploymentComparisonReportV1, DeployCommandError> {
-    let left = read_json_file::<DeploymentCheckV1>(&options.left)?;
-    let right = read_json_file::<DeploymentCheckV1>(&options.right)?;
-    build_deployment_comparison_report_from_checks(
-        &left,
-        &right,
-        options.left_label.as_deref(),
-        options.right_label.as_deref(),
-    )
-}
-
-fn build_deployment_comparison_report_from_checks(
-    left: &DeploymentCheckV1,
-    right: &DeploymentCheckV1,
-    left_label: Option<&str>,
-    right_label: Option<&str>,
-) -> Result<DeploymentComparisonReportV1, DeployCommandError> {
-    let left_label = left_label.unwrap_or(left.plan.deployment_identity.deployment_name.as_str());
-    let right_label =
-        right_label.unwrap_or(right.plan.deployment_identity.deployment_name.as_str());
-    let report = deployment_comparison_report_from_checks(
-        local_deployment_comparison_report_id(left_label, right_label),
-        current_observed_at()?,
-        left_label,
-        right_label,
-        left,
-        right,
-    );
-    validate_deployment_comparison_report(&report)
-        .map_err(|err| DeployCommandError::Check(Box::new(err)))?;
-    Ok(report)
-}
-
-fn local_deployment_comparison_report_id(left_label: &str, right_label: &str) -> String {
-    format!("local:{left_label}:{right_label}:deployment-comparison")
-}
-
 fn load_deployment_check(
     options: DeployTruthOptions,
 ) -> Result<DeploymentCheckV1, DeployCommandError> {
@@ -2387,73 +1937,8 @@ where
     Ok(())
 }
 
-fn write_catalog_report(
-    options: &DeployCatalogOptions,
-    report: &DeploymentCatalogReportV1,
-) -> Result<(), DeployCommandError> {
-    match options.format {
-        CatalogOutputFormat::Text => output::write_text::<Box<dyn std::error::Error>>(
-            options.output.as_ref(),
-            &deployment_catalog_report_text(report),
-        )
-        .map_err(DeployCommandError::from),
-        CatalogOutputFormat::Json => output::write_pretty_json::<_, Box<dyn std::error::Error>>(
-            options.output.as_ref(),
-            report,
-        )
-        .map_err(DeployCommandError::from),
-    }
-}
-
-fn deployment_catalog_request(
-    options: &DeployCatalogOptions,
-) -> Result<DeploymentCatalogRequest, DeployCommandError> {
-    let icp_root = resolve_current_canic_icp_root()
-        .map_err(Box::<dyn std::error::Error>::from)
-        .map_err(DeployCommandError::from)?;
-    Ok(DeploymentCatalogRequest {
-        icp_root,
-        network: options.network.clone(),
-        generated_at: current_observed_at()?,
-    })
-}
-
 fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, DeployCommandError> {
     read_json_file(path)
-}
-
-fn read_install_deployment_plan(
-    path: &PathBuf,
-) -> Result<DeployInstallPlanInput, DeployCommandError> {
-    let bytes = fs::read(path).map_err(Box::<dyn std::error::Error>::from)?;
-    if let Ok(plan) = serde_json::from_slice::<ArtifactPromotionPlanV1>(&bytes) {
-        validate_artifact_promotion_plan(&plan).map_err(Box::<dyn std::error::Error>::from)?;
-        if plan.status != PromotionReadinessStatusV1::Ready {
-            return Err(DeployCommandError::Blocked(format!(
-                "artifact promotion plan {} is not ready",
-                plan.plan_id
-            )));
-        }
-        return Ok(DeployInstallPlanInput {
-            deployment_plan: plan.transform.promoted_plan.clone(),
-            artifact_promotion_plan: Some(plan),
-        });
-    }
-
-    serde_json::from_slice::<DeploymentPlanV1>(&bytes)
-        .map(|deployment_plan| DeployInstallPlanInput {
-            deployment_plan,
-            artifact_promotion_plan: None,
-        })
-        .map_err(|err| {
-            DeployCommandError::Check(
-                format!(
-                    "failed to decode {} as ArtifactPromotionPlanV1 or DeploymentPlanV1: {err}",
-                    path.display()
-                )
-                .into(),
-            )
-        })
 }
 
 fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>
@@ -2776,114 +2261,6 @@ impl DeployResumeReportOptions {
     }
 }
 
-impl DeployInstallPlanOptions {
-    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_install_command(), args)
-            .map_err(|_| DeployCommandError::Usage(deploy_install_usage()))?;
-        Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            plan: path_option(&matches, "plan").expect("clap requires plan"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            profile: string_option(&matches, "profile")
-                .as_deref()
-                .map(|profile| parse_profile(profile, deploy_install_usage))
-                .transpose()?,
-        })
-    }
-
-    fn into_install_root_options(
-        self,
-        plan: DeployInstallPlanInput,
-        icp_root: Option<std::path::PathBuf>,
-    ) -> InstallRootOptions {
-        let fleet_template = plan.deployment_plan.fleet_template.clone();
-        InstallRootOptions {
-            root_canister: root_canister_for_plan(&plan.deployment_plan),
-            root_build_target: DEFAULT_ROOT_TARGET.to_string(),
-            network: self.network,
-            deployment_name: Some(self.deployment),
-            icp_root,
-            build_profile: self.profile,
-            ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
-            config_path: Some(default_fleet_config_path(&fleet_template)),
-            expected_fleet: Some(fleet_template),
-            interactive_config_selection: false,
-            deployment_plan_override: Some(plan.deployment_plan),
-            artifact_promotion_plan_override: plan.artifact_promotion_plan,
-        }
-    }
-}
-
-impl DeployRegisterOptions {
-    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_register_command(), args)
-            .map_err(|_| DeployCommandError::Usage(deploy_register_usage()))?;
-        Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            fleet_template: string_option(&matches, "fleet-template")
-                .expect("clap requires fleet-template"),
-            root: string_option(&matches, "root").expect("clap requires root"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            allow_unverified: matches.get_flag("allow-unverified"),
-        })
-    }
-
-    fn into_register_options(
-        self,
-        icp_root: Option<std::path::PathBuf>,
-    ) -> RegisterDeploymentStateOptions {
-        RegisterDeploymentStateOptions {
-            deployment_name: self.deployment,
-            fleet_template: self.fleet_template,
-            root_canister_id: self.root,
-            network: self.network,
-            allow_unverified: self.allow_unverified,
-            icp_root,
-            workspace_root: None,
-        }
-    }
-}
-
-impl DeployCompareOptions {
-    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_compare_command(), args)
-            .map_err(|_| DeployCommandError::Usage(compare_usage()))?;
-        Ok(Self {
-            left: path_option(&matches, "left").expect("clap requires left"),
-            right: path_option(&matches, "right").expect("clap requires right"),
-            left_label: string_option(&matches, "left-label"),
-            right_label: string_option(&matches, "right-label"),
-            format: parse_compare_output_format(
-                string_option(&matches, "format").as_deref(),
-                compare_usage,
-            )?,
-        })
-    }
-}
-
-fn root_canister_for_plan(plan: &DeploymentPlanV1) -> String {
-    plan.trust_domain
-        .root_trust_anchor
-        .clone()
-        .or_else(|| plan.deployment_identity.root_principal.clone())
-        .or_else(|| {
-            plan.expected_canisters
-                .iter()
-                .find(|canister| canister.role == DEFAULT_ROOT_TARGET)
-                .and_then(|canister| canister.canister_id.clone())
-        })
-        .unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string())
-}
-
 impl DeployAuthorityOptions {
     fn parse<I>(
         args: I,
@@ -2991,42 +2368,6 @@ impl DeployExternalInspectOptions {
     }
 }
 
-impl DeployRootInspectOptions {
-    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_root_inspect_command(), args)
-            .map_err(|_| DeployCommandError::Usage(root_inspect_usage()))?;
-        Ok(Self {
-            request: path_option(&matches, "request").expect("clap requires request"),
-            format: parse_root_output_format(
-                string_option(&matches, "format").as_deref(),
-                root_inspect_usage,
-            )?,
-        })
-    }
-}
-
-impl DeployRootVerifyOptions {
-    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_root_verify_command(), args)
-            .map_err(|_| DeployCommandError::Usage(root_verify_usage()))?;
-        Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            from_check: path_option(&matches, "from-check").expect("clap requires from-check"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            format: parse_root_output_format(
-                string_option(&matches, "format").as_deref(),
-                root_verify_usage,
-            )?,
-        })
-    }
-}
-
 impl DeployPromoteReportOptions {
     fn parse<I>(
         args: I,
@@ -3122,60 +2463,6 @@ impl DeployCheckOptions {
     }
 }
 
-impl DeployCatalogOptions {
-    #[cfg(test)]
-    fn parse_list_test<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse_list(args)
-    }
-
-    #[cfg(test)]
-    fn parse_inspect_test<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        Self::parse_inspect(args)
-    }
-
-    fn parse_list<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_catalog_list_command(), args)
-            .map_err(|_| DeployCommandError::Usage(catalog_list_usage()))?;
-        Ok(Self {
-            deployment: None,
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            format: parse_catalog_output_format(
-                string_option(&matches, "format").as_deref(),
-                catalog_list_usage,
-            )?,
-            output: path_option(&matches, "output"),
-        })
-    }
-
-    fn parse_inspect<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_catalog_inspect_command(), args)
-            .map_err(|_| DeployCommandError::Usage(catalog_inspect_usage()))?;
-        Ok(Self {
-            deployment: Some(
-                string_option(&matches, "deployment").expect("clap requires deployment"),
-            ),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            format: parse_catalog_output_format(
-                string_option(&matches, "format").as_deref(),
-                catalog_inspect_usage,
-            )?,
-            output: path_option(&matches, "output"),
-        })
-    }
-}
-
 fn deploy_command() -> ClapCommand {
     ClapCommand::new("deploy")
         .bin_name("canic deploy")
@@ -3252,117 +2539,6 @@ fn deploy_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_HELP_AFTER)
-}
-
-fn deploy_catalog_command() -> ClapCommand {
-    ClapCommand::new("catalog")
-        .bin_name("canic deploy catalog")
-        .about("List or inspect known deployment targets")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("list")
-                .about("List known deployment targets from local state")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect one known deployment target from local state")
-                .disable_help_flag(true),
-        ))
-        .after_help(DEPLOY_CATALOG_HELP_AFTER)
-}
-
-fn deploy_catalog_list_command() -> ClapCommand {
-    ClapCommand::new("list")
-        .bin_name("canic deploy catalog list")
-        .about("List known deployment targets from local state")
-        .disable_help_flag(true)
-        .arg(catalog_format_arg())
-        .arg(catalog_output_arg())
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_CATALOG_LIST_HELP_AFTER)
-}
-
-fn deploy_catalog_inspect_command() -> ClapCommand {
-    ClapCommand::new("inspect")
-        .bin_name("canic deploy catalog inspect")
-        .about("Inspect one known deployment target from local state")
-        .disable_help_flag(true)
-        .arg(
-            value_arg("deployment")
-                .value_name("deployment")
-                .required(true)
-                .help("Deployment target name to inspect"),
-        )
-        .arg(catalog_format_arg())
-        .arg(catalog_output_arg())
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_CATALOG_INSPECT_HELP_AFTER)
-}
-
-fn deploy_root_command() -> ClapCommand {
-    ClapCommand::new("root")
-        .bin_name("canic deploy root")
-        .about("Inspect or verify deployment-root evidence")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect deployment-root verification evidence")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("verify")
-                .about("Verify a registered deployment root from check evidence")
-                .disable_help_flag(true),
-        ))
-        .after_help(DEPLOY_ROOT_HELP_AFTER)
-}
-
-fn deploy_root_inspect_command() -> ClapCommand {
-    ClapCommand::new("inspect")
-        .bin_name("canic deploy root inspect")
-        .about("Inspect deployment-root verification evidence")
-        .disable_help_flag(true)
-        .override_usage("canic deploy root inspect --request <file>")
-        .arg(
-            value_arg("request")
-                .long("request")
-                .value_name("file")
-                .required(true)
-                .help("DeploymentRootVerificationRequestV1 JSON file to inspect"),
-        )
-        .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("json|text")
-                .num_args(1)
-                .help("Output format; defaults to json"),
-        )
-        .after_help(DEPLOY_ROOT_INSPECT_HELP_AFTER)
-}
-
-fn deploy_root_verify_command() -> ClapCommand {
-    ClapCommand::new("verify")
-        .bin_name("canic deploy root verify")
-        .about("Verify a registered deployment root from check evidence")
-        .disable_help_flag(true)
-        .override_usage("canic deploy root verify <deployment> --from-check <file>")
-        .arg(
-            value_arg("deployment")
-                .value_name("deployment")
-                .required(true)
-                .help("Registered deployment target whose root should be verified"),
-        )
-        .arg(
-            value_arg("from-check")
-                .long("from-check")
-                .value_name("file")
-                .required(true)
-                .help("DeploymentCheckV1 JSON artifact carrying explicit root evidence"),
-        )
-        .arg(root_format_arg())
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_ROOT_VERIFY_HELP_AFTER)
 }
 
 fn deploy_external_command() -> ClapCommand {
@@ -3467,109 +2643,6 @@ fn deploy_promote_command() -> ClapCommand {
                 .disable_help_flag(true),
         ))
         .after_help(DEPLOY_PROMOTE_HELP_AFTER)
-}
-
-fn deploy_install_command() -> ClapCommand {
-    ClapCommand::new("install")
-        .bin_name("canic deploy install")
-        .about("Install through the current runner using a supplied deployment plan")
-        .disable_help_flag(true)
-        .override_usage("canic deploy install <deployment> --plan <file>")
-        .arg(
-            value_arg("deployment")
-                .required(true)
-                .help("Deployment target name that must match the supplied plan"),
-        )
-        .arg(
-            value_arg("plan")
-                .long("plan")
-                .value_name("file")
-                .required(true)
-                .help("DeploymentPlanV1 or ArtifactPromotionPlanV1 JSON file to install"),
-        )
-        .arg(
-            value_arg("profile")
-                .long("profile")
-                .value_name("debug|fast|release")
-                .num_args(1)
-                .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
-        )
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_INSTALL_HELP_AFTER)
-}
-
-fn deploy_register_command() -> ClapCommand {
-    ClapCommand::new("register")
-        .bin_name("canic deploy register")
-        .about("Register minimal deployment-target state")
-        .disable_help_flag(true)
-        .override_usage(
-            "canic deploy register <deployment> --fleet-template <fleet> --root <principal> --allow-unverified",
-        )
-        .arg(
-            value_arg("deployment")
-                .required(true)
-                .help("Deployment target name to register"),
-        )
-        .arg(
-            value_arg("fleet-template")
-                .long("fleet-template")
-                .value_name("fleet")
-                .required(true)
-                .help("Reusable fleet template this deployment target uses"),
-        )
-        .arg(
-            value_arg("root")
-                .long("root")
-                .value_name("principal")
-                .required(true)
-                .help("Existing root canister principal for this deployment"),
-        )
-        .arg(
-            clap::Arg::new("allow-unverified")
-                .long("allow-unverified")
-                .action(ArgAction::SetTrue)
-                .required(true)
-                .help("Acknowledge that the registered root is not live-verified"),
-        )
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_REGISTER_HELP_AFTER)
-}
-
-fn deploy_compare_command() -> ClapCommand {
-    ClapCommand::new("compare")
-        .bin_name("canic deploy compare")
-        .about("Compare two deployment truth check artifacts")
-        .disable_help_flag(true)
-        .override_usage("canic deploy compare --left <file> --right <file>")
-        .arg(
-            value_arg("left")
-                .long("left")
-                .value_name("file")
-                .required(true)
-                .help("Left DeploymentCheckV1 JSON artifact"),
-        )
-        .arg(
-            value_arg("right")
-                .long("right")
-                .value_name("file")
-                .required(true)
-                .help("Right DeploymentCheckV1 JSON artifact"),
-        )
-        .arg(
-            value_arg("left-label")
-                .long("left-label")
-                .value_name("label")
-                .help("Optional display label for the left artifact"),
-        )
-        .arg(
-            value_arg("right-label")
-                .long("right-label")
-                .value_name("label")
-                .help("Optional display label for the right artifact"),
-        )
-        .arg(compare_format_arg())
-        .after_help(DEPLOY_COMPARE_HELP_AFTER)
 }
 
 fn deploy_promote_inspect_command() -> ClapCommand {
@@ -4061,22 +3134,6 @@ fn check_format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
-fn catalog_format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("text|json")
-        .num_args(1)
-        .help("Output format; defaults to text")
-}
-
-fn catalog_output_arg() -> clap::Arg {
-    value_arg("output")
-        .long("output")
-        .value_name("path")
-        .num_args(1)
-        .help("Write the selected catalog output format to this path")
-}
-
 fn build_provenance_input_arg() -> clap::Arg {
     value_arg("build-provenance")
         .long("build-provenance")
@@ -4094,22 +3151,6 @@ fn external_format_arg() -> clap::Arg {
 }
 
 fn promotion_format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .help("Output format; defaults to json")
-}
-
-fn compare_format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .help("Output format; defaults to json")
-}
-
-fn root_format_arg() -> clap::Arg {
     value_arg("format")
         .long("format")
         .value_name("json|text")
@@ -4144,26 +3185,6 @@ fn report_usage() -> String {
 
 fn check_usage() -> String {
     let mut command = deploy_check_command();
-    command.render_help().to_string()
-}
-
-fn catalog_usage() -> String {
-    let mut command = deploy_catalog_command();
-    command.render_help().to_string()
-}
-
-fn catalog_list_usage() -> String {
-    let mut command = deploy_catalog_list_command();
-    command.render_help().to_string()
-}
-
-fn catalog_inspect_usage() -> String {
-    let mut command = deploy_catalog_inspect_command();
-    command.render_help().to_string()
-}
-
-fn compare_usage() -> String {
-    let mut command = deploy_compare_command();
     command.render_help().to_string()
 }
 
@@ -4234,31 +3255,6 @@ fn external_completion_usage() -> String {
 
 fn external_verify_usage() -> String {
     let mut command = deploy_external_verify_command();
-    command.render_help().to_string()
-}
-
-fn root_usage() -> String {
-    let mut command = deploy_root_command();
-    command.render_help().to_string()
-}
-
-fn root_inspect_usage() -> String {
-    let mut command = deploy_root_inspect_command();
-    command.render_help().to_string()
-}
-
-fn root_verify_usage() -> String {
-    let mut command = deploy_root_verify_command();
-    command.render_help().to_string()
-}
-
-fn deploy_install_usage() -> String {
-    let mut command = deploy_install_command();
-    command.render_help().to_string()
-}
-
-fn deploy_register_usage() -> String {
-    let mut command = deploy_register_command();
     command.render_help().to_string()
 }
 
@@ -4380,108 +3376,6 @@ fn parse_profile(
             usage()
         ))),
     }
-}
-
-fn parse_promotion_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<PromotionOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
-        "json" => Ok(PromotionOutputFormat::Json),
-        "text" => Ok(PromotionOutputFormat::Text),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid promotion output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn parse_check_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<CheckOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
-        "json" => Ok(CheckOutputFormat::Json),
-        "envelope-json" => Ok(CheckOutputFormat::EnvelopeJson),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid deployment check output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn parse_catalog_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<CatalogOutputFormat, DeployCommandError> {
-    match value.unwrap_or("text") {
-        "text" => Ok(CatalogOutputFormat::Text),
-        "json" => Ok(CatalogOutputFormat::Json),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid deployment catalog output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn parse_authority_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<AuthorityOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
-        "json" => Ok(AuthorityOutputFormat::Json),
-        "text" => Ok(AuthorityOutputFormat::Text),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid authority output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn parse_external_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<ExternalOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
-        "json" => Ok(ExternalOutputFormat::Json),
-        "text" => Ok(ExternalOutputFormat::Text),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid external lifecycle output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn parse_compare_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<CompareOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
-        "json" => Ok(CompareOutputFormat::Json),
-        "text" => Ok(CompareOutputFormat::Text),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid deployment comparison output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn parse_root_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<RootOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
-        "json" => Ok(RootOutputFormat::Json),
-        "text" => Ok(RootOutputFormat::Text),
-        other => Err(DeployCommandError::Usage(format!(
-            "invalid deployment root output format: {other}\n\n{}",
-            usage()
-        ))),
-    }
-}
-
-fn default_fleet_config_path(fleet: &str) -> String {
-    format!("fleets/{fleet}/canic.toml")
 }
 
 fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
@@ -4653,7 +3547,7 @@ mod tests {
 
     #[test]
     fn deploy_catalog_options_parse_list_defaults_to_text() {
-        let options = DeployCatalogOptions::parse_list_test([
+        let options = catalog::DeployCatalogOptions::parse_list_test([
             OsString::from("--__canic-network"),
             OsString::from("local"),
         ])
@@ -4661,13 +3555,13 @@ mod tests {
 
         assert_eq!(options.deployment, None);
         assert_eq!(options.network, "local");
-        assert_eq!(options.format, CatalogOutputFormat::Text);
+        assert_eq!(options.format, output_format::CatalogOutputFormat::Text);
         assert_eq!(options.output, None);
     }
 
     #[test]
     fn deploy_catalog_options_parse_inspect_json_output() {
-        let options = DeployCatalogOptions::parse_inspect_test([
+        let options = catalog::DeployCatalogOptions::parse_inspect_test([
             OsString::from("demo-local"),
             OsString::from("--format"),
             OsString::from("json"),
@@ -4678,13 +3572,13 @@ mod tests {
 
         assert_eq!(options.deployment.as_deref(), Some("demo-local"));
         assert_eq!(options.network, "local");
-        assert_eq!(options.format, CatalogOutputFormat::Json);
+        assert_eq!(options.format, output_format::CatalogOutputFormat::Json);
         assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
     }
 
     #[test]
     fn deploy_catalog_rejects_unknown_format() {
-        let err = DeployCatalogOptions::parse_list_test([
+        let err = catalog::DeployCatalogOptions::parse_list_test([
             OsString::from("--format"),
             OsString::from("envelope-json"),
         ])
@@ -4707,7 +3601,7 @@ mod tests {
         .expect("catalog command");
 
         assert_eq!(parsed.0, "catalog");
-        let nested = parse_subcommand(deploy_catalog_command(), parsed.1)
+        let nested = parse_subcommand(catalog::command(), parsed.1)
             .expect("parse nested catalog")
             .expect("catalog list command");
         assert_eq!(nested.0, "list");
@@ -4724,7 +3618,7 @@ mod tests {
         .expect("catalog command");
 
         assert_eq!(parsed.0, "catalog");
-        let nested = parse_subcommand(deploy_catalog_command(), parsed.1)
+        let nested = parse_subcommand(catalog::command(), parsed.1)
             .expect("parse nested catalog inspect")
             .expect("catalog inspect command");
         assert_eq!(nested.0, "inspect");
@@ -4733,9 +3627,9 @@ mod tests {
 
     #[test]
     fn deploy_catalog_help_documents_passive_deployment_target_scope() {
-        let help = catalog_usage();
-        let list_help = catalog_list_usage();
-        let inspect_help = catalog_inspect_usage();
+        let help = catalog::usage();
+        let list_help = catalog::list_usage();
+        let inspect_help = catalog::inspect_usage();
 
         assert!(help.contains("deployment targets recorded under .canic/<network>/deployments"));
         assert!(help.contains("do not query"));
@@ -4748,15 +3642,15 @@ mod tests {
     #[test]
     fn writes_catalog_json_output_file() {
         let out = temp_json_path("deploy-catalog-output.json");
-        let options = DeployCatalogOptions {
+        let options = catalog::DeployCatalogOptions {
             deployment: None,
             network: "local".to_string(),
-            format: CatalogOutputFormat::Json,
+            format: output_format::CatalogOutputFormat::Json,
             output: Some(out.clone()),
         };
         let report = sample_catalog_report();
 
-        write_catalog_report(&options, &report).expect("write catalog");
+        catalog::write_report(&options, &report).expect("write catalog");
         let value: serde_json::Value =
             serde_json::from_slice(&fs::read(&out).expect("read catalog")).expect("parse catalog");
 
@@ -4768,8 +3662,7 @@ mod tests {
 
     #[test]
     fn deploy_catalog_path_has_no_live_lookup_or_mutation_primitives() {
-        let source = include_str!("mod.rs");
-        let catalog_source = source_between(source, "fn run_catalog<I>", "fn run_root<I>");
+        let catalog_source = include_str!("catalog.rs");
         for forbidden in [
             "update_settings",
             "install_code",
@@ -4945,7 +3838,7 @@ mod tests {
 
     #[test]
     fn deploy_compare_parses_artifact_paths_and_text_format() {
-        let options = DeployCompareOptions::parse([
+        let options = compare::DeployCompareOptions::parse([
             OsString::from("--left"),
             OsString::from("staging-check.json"),
             OsString::from("--right"),
@@ -4963,7 +3856,7 @@ mod tests {
         assert_eq!(options.right, PathBuf::from("prod-check.json"));
         assert_eq!(options.left_label.as_deref(), Some("staging"));
         assert_eq!(options.right_label.as_deref(), Some("prod"));
-        assert_eq!(options.format, CompareOutputFormat::Text);
+        assert_eq!(options.format, output_format::CompareOutputFormat::Text);
     }
 
     #[test]
@@ -4972,9 +3865,8 @@ mod tests {
         let mut right = sample_authority_check();
         right.plan.deployment_identity.deployment_name = "prod".to_string();
 
-        let report =
-            build_deployment_comparison_report_from_checks(&left, &right, Some("stage"), None)
-                .expect("comparison report should build");
+        let report = compare::build_report_from_checks(&left, &right, Some("stage"), None)
+            .expect("comparison report should build");
 
         assert_eq!(report.report_id, "local:stage:prod:deployment-comparison");
         assert_eq!(report.left.label, "stage");
@@ -4985,7 +3877,7 @@ mod tests {
 
     #[test]
     fn deploy_compare_rejects_unknown_format() {
-        let result = DeployCompareOptions::parse([
+        let result = compare::DeployCompareOptions::parse([
             OsString::from("--left"),
             OsString::from("staging-check.json"),
             OsString::from("--right"),
@@ -5003,7 +3895,7 @@ mod tests {
 
     #[test]
     fn deploy_root_inspect_parses_request_and_text_format() {
-        let options = DeployRootInspectOptions::parse([
+        let options = root::DeployRootInspectOptions::parse([
             OsString::from("--request"),
             OsString::from("root-verification.json"),
             OsString::from("--format"),
@@ -5012,24 +3904,24 @@ mod tests {
         .expect("parse deploy root inspect");
 
         assert_eq!(options.request, PathBuf::from("root-verification.json"));
-        assert_eq!(options.format, RootOutputFormat::Text);
+        assert_eq!(options.format, output_format::RootOutputFormat::Text);
     }
 
     #[test]
     fn deploy_root_inspect_defaults_to_json() {
-        let options = DeployRootInspectOptions::parse([
+        let options = root::DeployRootInspectOptions::parse([
             OsString::from("--request"),
             OsString::from("root-verification.json"),
         ])
         .expect("parse deploy root inspect");
 
         assert_eq!(options.request, PathBuf::from("root-verification.json"));
-        assert_eq!(options.format, RootOutputFormat::Json);
+        assert_eq!(options.format, output_format::RootOutputFormat::Json);
     }
 
     #[test]
     fn deploy_root_inspect_rejects_unknown_format() {
-        let result = DeployRootInspectOptions::parse([
+        let result = root::DeployRootInspectOptions::parse([
             OsString::from("--request"),
             OsString::from("root-verification.json"),
             OsString::from("--format"),
@@ -5045,7 +3937,7 @@ mod tests {
 
     #[test]
     fn deploy_root_verify_parses_deployment_check_and_text_format() {
-        let options = DeployRootVerifyOptions::parse([
+        let options = root::DeployRootVerifyOptions::parse([
             OsString::from("demo-local"),
             OsString::from("--from-check"),
             OsString::from("deployment-check.json"),
@@ -5059,7 +3951,7 @@ mod tests {
         assert_eq!(options.deployment, "demo-local");
         assert_eq!(options.from_check, PathBuf::from("deployment-check.json"));
         assert_eq!(options.network, "ic");
-        assert_eq!(options.format, RootOutputFormat::Text);
+        assert_eq!(options.format, output_format::RootOutputFormat::Text);
     }
 
     #[test]
@@ -5371,9 +4263,9 @@ mod tests {
 
     #[test]
     fn deploy_root_help_documents_passive_boundary() {
-        let help = root_usage();
-        let inspect_help = root_inspect_usage();
-        let verify_help = root_verify_usage();
+        let help = root::usage();
+        let inspect_help = root::inspect_usage();
+        let verify_help = root::verify_usage();
 
         assert!(help.contains("Inspect or verify deployment-root evidence"));
         assert!(help.contains("deployment-root scoped"));
@@ -5575,7 +4467,7 @@ mod tests {
 
     #[test]
     fn deploy_compare_help_documents_passive_artifact_scope() {
-        let help = compare_usage();
+        let help = compare::usage();
 
         assert!(help.contains("Compare two deployment truth check artifacts"));
         assert!(help.contains("DeploymentCheckV1 JSON artifacts"));
@@ -5588,13 +4480,7 @@ mod tests {
 
     #[test]
     fn deploy_compare_path_has_no_live_lookup_or_mutation_primitives() {
-        let source = include_str!("mod.rs");
-        let compare_source = source_between(source, "fn run_compare<I>", "fn run_promote<I>");
-        let compare_builder_source = source_between(
-            source,
-            "fn build_deployment_comparison_report",
-            "fn load_deployment_check",
-        );
+        let compare_source = include_str!("compare.rs");
 
         for forbidden in [
             "update_settings",
@@ -5612,10 +4498,6 @@ mod tests {
             assert!(
                 !compare_source.contains(forbidden),
                 "deploy compare run path must stay passive; found forbidden token {forbidden}"
-            );
-            assert!(
-                !compare_builder_source.contains(forbidden),
-                "deploy compare builder must stay artifact-only; found forbidden token {forbidden}"
             );
         }
     }
@@ -5726,8 +4608,8 @@ mod tests {
 
     #[test]
     fn deploy_root_path_has_no_mutation_primitives() {
-        let source = include_str!("mod.rs");
-        let root_source = source_between(source, "fn run_root_inspect<I>", "fn run_root_verify<I>");
+        let source = include_str!("root.rs");
+        let root_source = source_between(source, "fn run_inspect<I>", "fn run_verify<I>");
         for forbidden in [
             "update_settings",
             "install_code",
@@ -5749,8 +4631,12 @@ mod tests {
 
     #[test]
     fn deploy_root_verify_path_has_no_controller_mutation_primitives() {
-        let source = include_str!("mod.rs");
-        let root_source = source_between(source, "fn run_root_verify<I>", "fn run_install<I>");
+        let source = include_str!("root.rs");
+        let root_source = source_between(
+            source,
+            "fn run_verify<I>",
+            "pub(super) fn build_verification_report",
+        );
         for forbidden in [
             "update_settings",
             "install_code",
@@ -6058,7 +4944,8 @@ mod tests {
             ]
         );
 
-        let options = DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");
+        let options =
+            install::DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");
         assert_eq!(options.deployment, "demo-local");
         assert_eq!(options.plan, PathBuf::from("promoted-plan.json"));
     }
@@ -6082,7 +4969,8 @@ mod tests {
 
         assert_eq!(parsed.0, "register");
 
-        let options = DeployRegisterOptions::parse(parsed.1).expect("parse register options");
+        let options =
+            register::DeployRegisterOptions::parse(parsed.1).expect("parse register options");
         assert_eq!(options.deployment, "demo-local");
         assert_eq!(options.fleet_template, "demo");
         assert_eq!(options.root, "uxrrr-q7777-77774-qaaaq-cai");
@@ -6105,7 +4993,7 @@ mod tests {
 
         assert_eq!(parsed.0, "root");
 
-        let root = parse_subcommand(deploy_root_command(), parsed.1)
+        let root = parse_subcommand(root::command(), parsed.1)
             .expect("parse nested root")
             .expect("root inspect command");
         assert_eq!(root.0, "inspect");
@@ -6135,7 +5023,7 @@ mod tests {
 
         assert_eq!(parsed.0, "root");
 
-        let root = parse_subcommand(deploy_root_command(), parsed.1)
+        let root = parse_subcommand(root::command(), parsed.1)
             .expect("parse nested root")
             .expect("root verify command");
         assert_eq!(root.0, "verify");
@@ -6151,7 +5039,7 @@ mod tests {
 
     #[test]
     fn deploy_register_builds_minimal_registration_options() {
-        let options = DeployRegisterOptions {
+        let options = register::DeployRegisterOptions {
             deployment: "demo-local".to_string(),
             fleet_template: "demo".to_string(),
             root: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
@@ -6171,7 +5059,7 @@ mod tests {
 
     #[test]
     fn deploy_register_requires_unverified_acknowledgement_flag() {
-        let err = DeployRegisterOptions::parse([
+        let err = register::DeployRegisterOptions::parse([
             OsString::from("demo-local"),
             OsString::from("--fleet-template"),
             OsString::from("demo"),
@@ -6209,17 +5097,19 @@ mod tests {
             ]
         );
 
-        let options = DeployCompareOptions::parse(parsed.1).expect("parse compare options");
+        let options =
+            compare::DeployCompareOptions::parse(parsed.1).expect("parse compare options");
         assert_eq!(options.left, PathBuf::from("staging-check.json"));
         assert_eq!(options.right, PathBuf::from("prod-check.json"));
     }
 
     #[test]
     fn deploy_install_path_uses_current_install_with_plan_override() {
-        let source = include_str!("mod.rs");
-        let install_source = source_between(source, "fn run_install<I>", "fn run_promote<I>");
+        let source = include_str!("install.rs");
+        let install_source =
+            source_between(source, "pub(super) fn run<I>", "pub(super) fn read_plan");
 
-        assert!(install_source.contains("read_install_deployment_plan"));
+        assert!(install_source.contains("read_plan"));
         assert!(install_source.contains("into_install_root_options"));
         assert!(install_source.contains("install_root"));
         for forbidden in [
@@ -6348,7 +5238,7 @@ mod tests {
 
     #[test]
     fn root_verification_report_builder_delegates_to_host_report() {
-        let report = build_root_verification_report(sample_root_verification_request())
+        let report = root::build_verification_report(sample_root_verification_request())
             .expect("build root verification report");
 
         assert_eq!(
@@ -7159,11 +6049,11 @@ mod tests {
         let mut identity = sample_deployment_identity();
         identity.deployment_name = "demo-local".to_string();
         let plan = sample_deployment_plan(identity);
-        let input = DeployInstallPlanInput {
+        let input = install::DeployInstallPlanInput {
             deployment_plan: plan,
             artifact_promotion_plan: None,
         };
-        let options = DeployInstallPlanOptions {
+        let options = install::DeployInstallPlanOptions {
             deployment: "demo-local".to_string(),
             plan: PathBuf::from("promoted-plan.json"),
             network: "local".to_string(),
@@ -7190,7 +6080,7 @@ mod tests {
         let plan = sample_deployment_plan(sample_deployment_identity());
         fs::write(&path, serde_json::to_vec(&plan).expect("encode plan")).expect("write plan");
 
-        let decoded = read_install_deployment_plan(&path).expect("decode deployment plan");
+        let decoded = install::read_plan(&path).expect("decode deployment plan");
 
         assert_eq!(decoded.deployment_plan.plan_id, "plan-1");
         assert_eq!(decoded.artifact_promotion_plan, None);
@@ -7203,7 +6093,7 @@ mod tests {
         let plan = sample_artifact_promotion_plan();
         fs::write(&path, serde_json::to_vec(&plan).expect("encode plan")).expect("write plan");
 
-        let decoded = read_install_deployment_plan(&path).expect("decode promotion plan");
+        let decoded = install::read_plan(&path).expect("decode promotion plan");
 
         assert_eq!(decoded.deployment_plan.plan_id, "promoted-plan-1");
         assert_eq!(
@@ -7222,7 +6112,7 @@ mod tests {
         let plan = sample_blocked_artifact_promotion_plan();
         fs::write(&path, serde_json::to_vec(&plan).expect("encode plan")).expect("write plan");
 
-        let result = read_install_deployment_plan(&path);
+        let result = install::read_plan(&path);
 
         std::assert_matches!(
             result,
@@ -7461,8 +6351,8 @@ mod tests {
         seed.repeat(64)
     }
 
-    fn sample_catalog_report() -> DeploymentCatalogReportV1 {
-        DeploymentCatalogReportV1 {
+    fn sample_catalog_report() -> canic_host::deployment_catalog::DeploymentCatalogReportV1 {
+        canic_host::deployment_catalog::DeploymentCatalogReportV1 {
             schema_version: 1,
             generated_at: "unix:54".to_string(),
             project_root: Some(".".to_string()),
