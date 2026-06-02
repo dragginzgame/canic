@@ -2,7 +2,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs,
     io::{self, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 // Write a pretty JSON payload to a requested file or stdout.
@@ -12,9 +12,7 @@ where
     E: From<io::Error> + From<serde_json::Error>,
 {
     if let Some(path) = out {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        ensure_parent_dir::<E>(path)?;
         let data = serde_json::to_vec_pretty(value)?;
         fs::write(path, data)?;
         return Ok(());
@@ -33,10 +31,7 @@ where
     T: Serialize,
     E: From<io::Error> + From<serde_json::Error>,
 {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
+    ensure_parent_dir::<E>(path)?;
     let data = serde_json::to_vec_pretty(value)?;
     fs::write(path, data)?;
     Ok(())
@@ -48,9 +43,7 @@ where
     E: From<io::Error>,
 {
     if let Some(path) = out {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        ensure_parent_dir::<E>(path)?;
         fs::write(path, text)?;
     } else {
         println!("{text}");
@@ -66,6 +59,16 @@ where
 {
     let data = fs::read_to_string(path)?;
     serde_json::from_str(&data).map_err(E::from)
+}
+
+fn ensure_parent_dir<E>(path: &Path) -> Result<(), E>
+where
+    E: From<io::Error>,
+{
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

@@ -2,6 +2,9 @@ use super::value_arg;
 use crate::cli::{clap::passthrough_subcommand, globals::internal_network_arg};
 use clap::Command as ClapCommand;
 
+pub(super) const DEPLOYMENT_ARG: &str = "deployment";
+pub(super) const PROFILE_ARG: &str = "profile";
+
 #[derive(Clone, Copy)]
 struct DeploySubcommand {
     name: &'static str,
@@ -131,14 +134,14 @@ pub fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> Cla
         .about(about)
         .disable_help_flag(true)
         .arg(
-            value_arg("deployment")
-                .value_name("deployment")
+            value_arg(DEPLOYMENT_ARG)
+                .value_name(DEPLOYMENT_ARG)
                 .required(true)
                 .help("Deployment target name to check"),
         )
         .arg(
-            value_arg("profile")
-                .long("profile")
+            value_arg(PROFILE_ARG)
+                .long(PROFILE_ARG)
                 .value_name("debug|fast|release")
                 .num_args(1)
                 .help("Expected canister wasm build profile"),
@@ -147,7 +150,11 @@ pub fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> Cla
 }
 
 pub fn usage() -> String {
-    let mut command = deploy_command();
+    render_usage(deploy_command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
+    let mut command = command();
     command.render_help().to_string()
 }
 

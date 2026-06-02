@@ -1,22 +1,24 @@
 use super::super::register as deploy_register;
 use super::*;
 
+fn register_required_args() -> Vec<OsString> {
+    vec![
+        OsString::from("demo-local"),
+        OsString::from("--fleet-template"),
+        OsString::from("demo"),
+        OsString::from("--root"),
+        OsString::from("uxrrr-q7777-77774-qaaaq-cai"),
+        OsString::from("--allow-unverified"),
+    ]
+}
+
 #[test]
 fn deploy_register_command_dispatches_register() {
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [
-            OsString::from("register"),
-            OsString::from("demo-local"),
-            OsString::from("--fleet-template"),
-            OsString::from("demo"),
-            OsString::from("--root"),
-            OsString::from("uxrrr-q7777-77774-qaaaq-cai"),
-            OsString::from("--allow-unverified"),
-        ],
-    )
-    .expect("parse deploy register")
-    .expect("register command");
+    let mut args = vec![OsString::from("register")];
+    args.extend(register_required_args());
+    let parsed = parse_subcommand(deploy_command(), args)
+        .expect("parse deploy register")
+        .expect("register command");
 
     assert_eq!(parsed.0, "register");
 
@@ -50,14 +52,10 @@ fn deploy_register_builds_minimal_registration_options() {
 
 #[test]
 fn deploy_register_requires_unverified_acknowledgement_flag() {
-    let err = deploy_register::DeployRegisterOptions::parse([
-        OsString::from("demo-local"),
-        OsString::from("--fleet-template"),
-        OsString::from("demo"),
-        OsString::from("--root"),
-        OsString::from("uxrrr-q7777-77774-qaaaq-cai"),
-    ])
-    .expect_err("register without acknowledgement should fail usage");
+    let mut args = register_required_args();
+    args.retain(|arg| arg != "--allow-unverified");
+    let err = deploy_register::DeployRegisterOptions::parse(args)
+        .expect_err("register without acknowledgement should fail usage");
 
     std::assert_matches!(err, DeployCommandError::Usage(_));
 }

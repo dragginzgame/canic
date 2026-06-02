@@ -3,29 +3,24 @@ use super::fixtures::*;
 use super::*;
 use canic_host::canister_build::CanisterBuildProfile;
 
+fn install_required_args() -> Vec<OsString> {
+    vec![
+        OsString::from("demo-local"),
+        OsString::from("--plan"),
+        OsString::from("promoted-plan.json"),
+    ]
+}
+
 #[test]
 fn deploy_install_command_dispatches_plan_install() {
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [
-            OsString::from("install"),
-            OsString::from("demo-local"),
-            OsString::from("--plan"),
-            OsString::from("promoted-plan.json"),
-        ],
-    )
-    .expect("parse deploy install")
-    .expect("install command");
+    let mut args = vec![OsString::from("install")];
+    args.extend(install_required_args());
+    let parsed = parse_subcommand(deploy_command(), args)
+        .expect("parse deploy install")
+        .expect("install command");
 
     assert_eq!(parsed.0, "install");
-    assert_eq!(
-        parsed.1,
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--plan"),
-            OsString::from("promoted-plan.json")
-        ]
-    );
+    assert_eq!(parsed.1, install_required_args());
 
     let options =
         deploy_install::DeployInstallPlanOptions::parse(parsed.1).expect("parse install plan");

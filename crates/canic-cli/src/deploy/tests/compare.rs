@@ -3,21 +3,27 @@ use super::super::output_format::CompareOutputFormat;
 use super::fixtures::*;
 use super::*;
 
-#[test]
-fn deploy_compare_parses_artifact_paths_and_text_format() {
-    let options = deploy_compare::DeployCompareOptions::parse([
+fn compare_required_args() -> Vec<OsString> {
+    vec![
         OsString::from("--left"),
         OsString::from("staging-check.json"),
         OsString::from("--right"),
         OsString::from("prod-check.json"),
+    ]
+}
+
+#[test]
+fn deploy_compare_parses_artifact_paths_and_text_format() {
+    let mut args = compare_required_args();
+    args.extend([
         OsString::from("--left-label"),
         OsString::from("staging"),
         OsString::from("--right-label"),
         OsString::from("prod"),
         OsString::from("--format"),
         OsString::from("text"),
-    ])
-    .expect("parse deploy compare");
+    ]);
+    let options = deploy_compare::DeployCompareOptions::parse(args).expect("parse deploy compare");
 
     assert_eq!(options.left, PathBuf::from("staging-check.json"));
     assert_eq!(options.right, PathBuf::from("prod-check.json"));
@@ -44,14 +50,9 @@ fn deploy_compare_builder_uses_existing_check_artifacts() {
 
 #[test]
 fn deploy_compare_rejects_unknown_format() {
-    let result = deploy_compare::DeployCompareOptions::parse([
-        OsString::from("--left"),
-        OsString::from("staging-check.json"),
-        OsString::from("--right"),
-        OsString::from("prod-check.json"),
-        OsString::from("--format"),
-        OsString::from("yaml"),
-    ]);
+    let mut args = compare_required_args();
+    args.extend([OsString::from("--format"), OsString::from("yaml")]);
+    let result = deploy_compare::DeployCompareOptions::parse(args);
 
     std::assert_matches!(
         result,
@@ -75,29 +76,14 @@ fn deploy_compare_help_documents_passive_artifact_scope() {
 
 #[test]
 fn deploy_compare_command_dispatches_compare() {
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [
-            OsString::from("compare"),
-            OsString::from("--left"),
-            OsString::from("staging-check.json"),
-            OsString::from("--right"),
-            OsString::from("prod-check.json"),
-        ],
-    )
-    .expect("parse deploy compare")
-    .expect("compare command");
+    let mut args = vec![OsString::from("compare")];
+    args.extend(compare_required_args());
+    let parsed = parse_subcommand(deploy_command(), args)
+        .expect("parse deploy compare")
+        .expect("compare command");
 
     assert_eq!(parsed.0, "compare");
-    assert_eq!(
-        parsed.1,
-        vec![
-            OsString::from("--left"),
-            OsString::from("staging-check.json"),
-            OsString::from("--right"),
-            OsString::from("prod-check.json")
-        ]
-    );
+    assert_eq!(parsed.1, compare_required_args());
 
     let options =
         deploy_compare::DeployCompareOptions::parse(parsed.1).expect("parse compare options");

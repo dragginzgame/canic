@@ -21,6 +21,21 @@ use canic_host::deployment_truth::{
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
+#[derive(Clone, Copy)]
+struct AuthorityCommand {
+    name: &'static str,
+    about: &'static str,
+    bin_name: &'static str,
+    help_after: &'static str,
+}
+
+const AUTHORITY_COMMANDS: &[AuthorityCommand] = &[
+    CHECK_COMMAND,
+    EVIDENCE_COMMAND,
+    REPORT_COMMAND,
+    RECEIPT_COMMAND,
+];
+
 const DEPLOY_AUTHORITY_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority check demo
@@ -71,6 +86,31 @@ Prints an evidence-only AuthorityReceiptV1 JSON by default, or a human-readable
 read-only summary with --format text. No controller changes are attempted.
 Success means the dry-run receipt was produced with zero attempted controller
 actions.";
+
+const CHECK_COMMAND: AuthorityCommand = AuthorityCommand {
+    name: "check",
+    about: "Print the local authority reconciliation plan",
+    bin_name: "canic deploy authority check",
+    help_after: DEPLOY_AUTHORITY_CHECK_HELP_AFTER,
+};
+const EVIDENCE_COMMAND: AuthorityCommand = AuthorityCommand {
+    name: "evidence",
+    about: "Print the local authority dry-run evidence",
+    bin_name: "canic deploy authority evidence",
+    help_after: DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER,
+};
+const REPORT_COMMAND: AuthorityCommand = AuthorityCommand {
+    name: "report",
+    about: "Print the local authority reconciliation report",
+    bin_name: "canic deploy authority report",
+    help_after: DEPLOY_AUTHORITY_REPORT_HELP_AFTER,
+};
+const RECEIPT_COMMAND: AuthorityCommand = AuthorityCommand {
+    name: "receipt",
+    about: "Print the local authority dry-run receipt",
+    bin_name: "canic deploy authority receipt",
+    help_after: DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER,
+};
 
 ///
 /// DeployAuthorityOptions
@@ -218,59 +258,32 @@ impl DeployAuthorityOptions {
 }
 
 pub(super) fn command() -> ClapCommand {
-    ClapCommand::new("authority")
-        .bin_name("canic deploy authority")
-        .about("Dry-run controller authority reconciliation")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("check")
-                .about("Print the local authority reconciliation plan")
+    AUTHORITY_COMMANDS
+        .iter()
+        .fold(
+            ClapCommand::new("authority")
+                .bin_name("canic deploy authority")
+                .about("Dry-run controller authority reconciliation")
                 .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("evidence")
-                .about("Print the local authority dry-run evidence")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("report")
-                .about("Print the local authority reconciliation report")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("receipt")
-                .about("Print the local authority dry-run receipt")
-                .disable_help_flag(true),
-        ))
+            |command, subcommand| command.subcommand(authority_passthrough_command(*subcommand)),
+        )
         .after_help(DEPLOY_AUTHORITY_HELP_AFTER)
 }
 
 pub(super) fn check_command() -> ClapCommand {
-    deploy_truth_leaf_command("check", "Print the local authority reconciliation plan")
-        .arg(format_arg())
-        .bin_name("canic deploy authority check")
-        .after_help(DEPLOY_AUTHORITY_CHECK_HELP_AFTER)
+    authority_leaf_command(CHECK_COMMAND)
 }
 
 pub(super) fn evidence_command() -> ClapCommand {
-    deploy_truth_leaf_command("evidence", "Print the local authority dry-run evidence")
-        .arg(format_arg())
-        .bin_name("canic deploy authority evidence")
-        .after_help(DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER)
+    authority_leaf_command(EVIDENCE_COMMAND)
 }
 
 pub(super) fn report_command() -> ClapCommand {
-    deploy_truth_leaf_command("report", "Print the local authority reconciliation report")
-        .arg(format_arg())
-        .bin_name("canic deploy authority report")
-        .after_help(DEPLOY_AUTHORITY_REPORT_HELP_AFTER)
+    authority_leaf_command(REPORT_COMMAND)
 }
 
 pub(super) fn receipt_command() -> ClapCommand {
-    deploy_truth_leaf_command("receipt", "Print the local authority dry-run receipt")
-        .arg(format_arg())
-        .bin_name("canic deploy authority receipt")
-        .after_help(DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER)
+    authority_leaf_command(RECEIPT_COMMAND)
 }
 
 fn format_arg() -> clap::Arg {
@@ -281,27 +294,42 @@ fn format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn authority_passthrough_command(spec: AuthorityCommand) -> ClapCommand {
+    passthrough_subcommand(
+        ClapCommand::new(spec.name)
+            .about(spec.about)
+            .disable_help_flag(true),
+    )
+}
+
+fn authority_leaf_command(spec: AuthorityCommand) -> ClapCommand {
+    deploy_truth_leaf_command(spec.name, spec.about)
+        .arg(format_arg())
+        .bin_name(spec.bin_name)
+        .after_help(spec.help_after)
+}
+
 pub(super) fn usage() -> String {
-    let mut command = command();
-    command.render_help().to_string()
+    render_usage(command)
 }
 
 pub(super) fn check_usage() -> String {
-    let mut command = check_command();
-    command.render_help().to_string()
+    render_usage(check_command)
 }
 
 pub(super) fn evidence_usage() -> String {
-    let mut command = evidence_command();
-    command.render_help().to_string()
+    render_usage(evidence_command)
 }
 
 pub(super) fn report_usage() -> String {
-    let mut command = report_command();
-    command.render_help().to_string()
+    render_usage(report_command)
 }
 
 pub(super) fn receipt_usage() -> String {
-    let mut command = receipt_command();
+    render_usage(receipt_command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
+    let mut command = command();
     command.render_help().to_string()
 }

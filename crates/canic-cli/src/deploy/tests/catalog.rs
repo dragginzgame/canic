@@ -51,36 +51,8 @@ fn deploy_catalog_rejects_unknown_format() {
 
 #[test]
 fn deploy_catalog_command_dispatches_list_and_inspect() {
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [OsString::from("catalog"), OsString::from("list")],
-    )
-    .expect("parse deploy catalog")
-    .expect("catalog command");
-
-    assert_eq!(parsed.0, "catalog");
-    let nested = parse_subcommand(deploy_catalog::command(), parsed.1)
-        .expect("parse nested catalog")
-        .expect("catalog list command");
-    assert_eq!(nested.0, "list");
-
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [
-            OsString::from("catalog"),
-            OsString::from("inspect"),
-            OsString::from("demo-local"),
-        ],
-    )
-    .expect("parse deploy catalog inspect")
-    .expect("catalog command");
-
-    assert_eq!(parsed.0, "catalog");
-    let nested = parse_subcommand(deploy_catalog::command(), parsed.1)
-        .expect("parse nested catalog inspect")
-        .expect("catalog inspect command");
-    assert_eq!(nested.0, "inspect");
-    assert_eq!(nested.1, vec![OsString::from("demo-local")]);
+    assert_catalog_dispatches_leaf("list", []);
+    assert_catalog_dispatches_leaf("inspect", [OsString::from("demo-local")]);
 }
 
 #[test]
@@ -116,4 +88,23 @@ fn writes_catalog_json_output_file() {
     assert_eq!(value["schema_version"], 1);
     assert_eq!(value["entries"][0]["deployment"], "demo-local");
     assert!(value.get("envelope_schema").is_none());
+}
+
+fn assert_catalog_dispatches_leaf<const N: usize>(command: &'static str, args: [OsString; N]) {
+    let expected_args = args.to_vec();
+    let parsed = parse_subcommand(
+        deploy_command(),
+        std::iter::once(OsString::from("catalog"))
+            .chain(std::iter::once(OsString::from(command)))
+            .chain(args),
+    )
+    .expect("parse deploy catalog")
+    .expect("catalog command");
+
+    assert_eq!(parsed.0, "catalog");
+    let nested = parse_subcommand(deploy_catalog::command(), parsed.1)
+        .expect("parse nested catalog")
+        .expect("catalog leaf command");
+    assert_eq!(nested.0, command);
+    assert_eq!(nested.1, expected_args);
 }

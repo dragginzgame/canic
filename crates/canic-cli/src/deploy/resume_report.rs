@@ -28,6 +28,8 @@ and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
 latest local receipt under .canic/<network>/deployment-receipts/<deployment>. It
 does not resume, install, or mutate state.";
 
+const RECEIPT_ARG: &str = "receipt";
+
 ///
 /// DeployResumeReportOptions
 ///
@@ -64,7 +66,7 @@ impl DeployResumeReportOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches, usage)?,
-            receipt: path_option(&matches, "receipt"),
+            receipt: path_option(&matches, RECEIPT_ARG),
         })
     }
 
@@ -105,16 +107,22 @@ pub(super) fn command() -> ClapCommand {
         "resume-report",
         "Print passive resume safety JSON from a prior deployment receipt",
     )
-    .arg(
-        value_arg("receipt")
-            .long("receipt")
-            .value_name("file")
-            .help("DeploymentReceiptV1 JSON file to compare with current deployment truth"),
-    )
+    .arg(receipt_arg())
     .after_help(DEPLOY_RESUME_REPORT_HELP_AFTER)
 }
 
+fn receipt_arg() -> clap::Arg {
+    value_arg(RECEIPT_ARG)
+        .long(RECEIPT_ARG)
+        .value_name("file")
+        .help("DeploymentReceiptV1 JSON file to compare with current deployment truth")
+}
+
 pub(super) fn usage() -> String {
+    render_usage(command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
     let mut command = command();
     command.render_help().to_string()
 }

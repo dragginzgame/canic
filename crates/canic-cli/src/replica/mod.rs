@@ -213,7 +213,7 @@ where
         .map_err(replica_icp_error)?;
     let local_gateway_reachable = local_replica_http_reachable(&icp_root);
     if local_gateway_reachable {
-        if !icp_cli_running && local_gateway_reachable {
+        if !icp_cli_running {
             println!(
                 "Replica already running: local (port {}, HTTP reachable; ICP CLI status stopped)",
                 replica_port_label(&icp_root)

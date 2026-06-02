@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.15` continues the behavior-neutral deploy CLI DRY cleanup by
+  regularizing command metadata, argument construction, usage rendering, and
+  dispatch tests across the deploy command families while preserving command
+  behavior.
+
 - `0.57.14` continues the behavior-neutral deploy CLI DRY cleanup by splitting
   passive promote/external command families and top-level deploy command
   construction into focused modules while preserving command behavior.

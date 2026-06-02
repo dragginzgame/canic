@@ -13,6 +13,7 @@ mod root;
 mod truth;
 
 pub use crate::cli::clap::value_arg;
+use command::{DEPLOYMENT_ARG, PROFILE_ARG};
 pub use command::{deploy_command, deploy_truth_leaf_command, usage};
 
 use crate::{
@@ -41,6 +42,7 @@ use thiserror::Error as ThisError;
 
 const DEFAULT_ROOT_TARGET: &str = "root";
 const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
+
 ///
 /// DeployCommandError
 ///
@@ -151,9 +153,9 @@ impl DeployTruthOptions {
         usage: fn() -> String,
     ) -> Result<Self, DeployCommandError> {
         Ok(Self {
-            deployment: string_option(matches, "deployment").expect("clap requires deployment"),
+            deployment: string_option(matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
             network: string_option(matches, "network").unwrap_or_else(local_network),
-            profile: string_option(matches, "profile")
+            profile: string_option(matches, PROFILE_ARG)
                 .as_deref()
                 .map(|profile| parse_profile(profile, usage))
                 .transpose()?,

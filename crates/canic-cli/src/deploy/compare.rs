@@ -27,6 +27,12 @@ state, install code, or mutate deployments. Each input check's embedded
 diff/report is revalidated against its plan and inventory before comparison
 status is rendered.";
 
+const LEFT_ARG: &str = "left";
+const RIGHT_ARG: &str = "right";
+const LEFT_LABEL_ARG: &str = "left-label";
+const RIGHT_LABEL_ARG: &str = "right-label";
+const FORMAT_ARG: &str = "format";
+
 ///
 /// DeployCompareOptions
 ///
@@ -105,12 +111,12 @@ impl DeployCompareOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            left: path_option(&matches, "left").expect("clap requires left"),
-            right: path_option(&matches, "right").expect("clap requires right"),
-            left_label: string_option(&matches, "left-label"),
-            right_label: string_option(&matches, "right-label"),
+            left: path_option(&matches, LEFT_ARG).expect("clap requires left"),
+            right: path_option(&matches, RIGHT_ARG).expect("clap requires right"),
+            left_label: string_option(&matches, LEFT_LABEL_ARG),
+            right_label: string_option(&matches, RIGHT_LABEL_ARG),
             format: parse_compare_output_format(
-                string_option(&matches, "format").as_deref(),
+                string_option(&matches, FORMAT_ARG).as_deref(),
                 usage,
             )?,
         })
@@ -123,45 +129,51 @@ pub(super) fn command() -> ClapCommand {
         .about("Compare two deployment truth check artifacts")
         .disable_help_flag(true)
         .override_usage("canic deploy compare --left <file> --right <file>")
-        .arg(
-            value_arg("left")
-                .long("left")
-                .value_name("file")
-                .required(true)
-                .help("Left DeploymentCheckV1 JSON artifact"),
-        )
-        .arg(
-            value_arg("right")
-                .long("right")
-                .value_name("file")
-                .required(true)
-                .help("Right DeploymentCheckV1 JSON artifact"),
-        )
-        .arg(
-            value_arg("left-label")
-                .long("left-label")
-                .value_name("label")
-                .help("Optional display label for the left artifact"),
-        )
-        .arg(
-            value_arg("right-label")
-                .long("right-label")
-                .value_name("label")
-                .help("Optional display label for the right artifact"),
-        )
+        .arg(input_file_arg(
+            LEFT_ARG,
+            "Left DeploymentCheckV1 JSON artifact",
+        ))
+        .arg(input_file_arg(
+            RIGHT_ARG,
+            "Right DeploymentCheckV1 JSON artifact",
+        ))
+        .arg(label_arg(
+            LEFT_LABEL_ARG,
+            "Optional display label for the left artifact",
+        ))
+        .arg(label_arg(
+            RIGHT_LABEL_ARG,
+            "Optional display label for the right artifact",
+        ))
         .arg(format_arg())
         .after_help(DEPLOY_COMPARE_HELP_AFTER)
 }
 
+fn input_file_arg(name: &'static str, help: &'static str) -> clap::Arg {
+    value_arg(name)
+        .long(name)
+        .value_name("file")
+        .required(true)
+        .help(help)
+}
+
+fn label_arg(name: &'static str, help: &'static str) -> clap::Arg {
+    value_arg(name).long(name).value_name("label").help(help)
+}
+
 fn format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
+    value_arg(FORMAT_ARG)
+        .long(FORMAT_ARG)
         .value_name("json|text")
         .num_args(1)
         .help("Output format; defaults to json")
 }
 
 pub(super) fn usage() -> String {
+    render_usage(command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
     let mut command = command();
     command.render_help().to_string()
 }

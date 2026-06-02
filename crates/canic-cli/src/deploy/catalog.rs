@@ -24,6 +24,16 @@ use canic_host::{
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
+#[derive(Clone, Copy)]
+struct CatalogCommand {
+    name: &'static str,
+    about: &'static str,
+    bin_name: &'static str,
+    help_after: &'static str,
+}
+
+const CATALOG_COMMANDS: &[CatalogCommand] = &[LIST_COMMAND, INSPECT_COMMAND];
+
 const DEPLOY_CATALOG_HELP_AFTER: &str = "\
 Examples:
   canic deploy catalog list
@@ -50,6 +60,19 @@ Examples:
 
 Inspects one deployment target from existing local deployment-target state
 only. The deployment argument is a deployment target, not a fleet template.";
+
+const LIST_COMMAND: CatalogCommand = CatalogCommand {
+    name: "list",
+    about: "List known deployment targets from local state",
+    bin_name: "canic deploy catalog list",
+    help_after: DEPLOY_CATALOG_LIST_HELP_AFTER,
+};
+const INSPECT_COMMAND: CatalogCommand = CatalogCommand {
+    name: "inspect",
+    about: "Inspect one known deployment target from local state",
+    bin_name: "canic deploy catalog inspect",
+    help_after: DEPLOY_CATALOG_INSPECT_HELP_AFTER,
+};
 
 ///
 /// DeployCatalogOptions
@@ -203,49 +226,29 @@ impl DeployCatalogOptions {
 }
 
 pub(super) fn command() -> ClapCommand {
-    ClapCommand::new("catalog")
-        .bin_name("canic deploy catalog")
-        .about("List or inspect known deployment targets")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("list")
-                .about("List known deployment targets from local state")
+    CATALOG_COMMANDS
+        .iter()
+        .fold(
+            ClapCommand::new("catalog")
+                .bin_name("canic deploy catalog")
+                .about("List or inspect known deployment targets")
                 .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect one known deployment target from local state")
-                .disable_help_flag(true),
-        ))
+            |command, subcommand| command.subcommand(catalog_passthrough_command(*subcommand)),
+        )
         .after_help(DEPLOY_CATALOG_HELP_AFTER)
 }
 
 fn list_command() -> ClapCommand {
-    ClapCommand::new("list")
-        .bin_name("canic deploy catalog list")
-        .about("List known deployment targets from local state")
-        .disable_help_flag(true)
-        .arg(format_arg())
-        .arg(output_arg())
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_CATALOG_LIST_HELP_AFTER)
+    catalog_leaf_command(LIST_COMMAND)
 }
 
 fn inspect_command() -> ClapCommand {
-    ClapCommand::new("inspect")
-        .bin_name("canic deploy catalog inspect")
-        .about("Inspect one known deployment target from local state")
-        .disable_help_flag(true)
-        .arg(
-            value_arg("deployment")
-                .value_name("deployment")
-                .required(true)
-                .help("Deployment target name to inspect"),
-        )
-        .arg(format_arg())
-        .arg(output_arg())
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_CATALOG_INSPECT_HELP_AFTER)
+    catalog_leaf_command(INSPECT_COMMAND).arg(
+        value_arg("deployment")
+            .value_name("deployment")
+            .required(true)
+            .help("Deployment target name to inspect"),
+    )
 }
 
 fn format_arg() -> clap::Arg {
@@ -264,17 +267,38 @@ fn output_arg() -> clap::Arg {
         .help("Write the selected catalog output format to this path")
 }
 
+fn catalog_passthrough_command(spec: CatalogCommand) -> ClapCommand {
+    passthrough_subcommand(
+        ClapCommand::new(spec.name)
+            .about(spec.about)
+            .disable_help_flag(true),
+    )
+}
+
+fn catalog_leaf_command(spec: CatalogCommand) -> ClapCommand {
+    ClapCommand::new(spec.name)
+        .bin_name(spec.bin_name)
+        .about(spec.about)
+        .disable_help_flag(true)
+        .arg(format_arg())
+        .arg(output_arg())
+        .arg(internal_network_arg())
+        .after_help(spec.help_after)
+}
+
 pub(super) fn usage() -> String {
-    let mut command = command();
-    command.render_help().to_string()
+    render_usage(command)
 }
 
 pub(super) fn list_usage() -> String {
-    let mut command = list_command();
-    command.render_help().to_string()
+    render_usage(list_command)
 }
 
 pub(super) fn inspect_usage() -> String {
-    let mut command = inspect_command();
+    render_usage(inspect_command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
+    let mut command = command();
     command.render_help().to_string()
 }

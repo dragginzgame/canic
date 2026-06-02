@@ -33,6 +33,10 @@ or ArtifactPromotionPlanV1. The deployment-truth/preflight gate runs before
 mutation, and activation phases still execute through the current-install
 operation runner.";
 
+const DEPLOYMENT_ARG: &str = "deployment";
+const PLAN_ARG: &str = "plan";
+const PROFILE_ARG: &str = "profile";
+
 ///
 /// DeployInstallPlanOptions
 ///
@@ -109,10 +113,10 @@ impl DeployInstallPlanOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            plan: path_option(&matches, "plan").expect("clap requires plan"),
+            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
+            plan: path_option(&matches, PLAN_ARG).expect("clap requires plan"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            profile: string_option(&matches, "profile")
+            profile: string_option(&matches, PROFILE_ARG)
                 .as_deref()
                 .map(|profile| parse_profile(profile, usage))
                 .transpose()?,
@@ -166,30 +170,40 @@ pub(super) fn command() -> ClapCommand {
         .about("Install through the current runner using a supplied deployment plan")
         .disable_help_flag(true)
         .override_usage("canic deploy install <deployment> --plan <file>")
-        .arg(
-            value_arg("deployment")
-                .required(true)
-                .help("Deployment target name that must match the supplied plan"),
-        )
-        .arg(
-            value_arg("plan")
-                .long("plan")
-                .value_name("file")
-                .required(true)
-                .help("DeploymentPlanV1 or ArtifactPromotionPlanV1 JSON file to install"),
-        )
-        .arg(
-            value_arg("profile")
-                .long("profile")
-                .value_name("debug|fast|release")
-                .num_args(1)
-                .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
-        )
+        .arg(deployment_arg())
+        .arg(plan_arg())
+        .arg(profile_arg())
         .arg(internal_network_arg())
         .after_help(DEPLOY_INSTALL_HELP_AFTER)
 }
 
+fn deployment_arg() -> clap::Arg {
+    value_arg(DEPLOYMENT_ARG)
+        .required(true)
+        .help("Deployment target name that must match the supplied plan")
+}
+
+fn plan_arg() -> clap::Arg {
+    value_arg(PLAN_ARG)
+        .long(PLAN_ARG)
+        .value_name("file")
+        .required(true)
+        .help("DeploymentPlanV1 or ArtifactPromotionPlanV1 JSON file to install")
+}
+
+fn profile_arg() -> clap::Arg {
+    value_arg(PROFILE_ARG)
+        .long(PROFILE_ARG)
+        .value_name("debug|fast|release")
+        .num_args(1)
+        .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release")
+}
+
 pub(super) fn usage() -> String {
+    render_usage(command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
     let mut command = command();
     command.render_help().to_string()
 }

@@ -39,6 +39,11 @@ Prints the local DeploymentCheckV1 JSON without installing or mutating state.
 Use --format envelope-json for the stable CI/GitOps evidence envelope.
 --build-provenance is fingerprinted only in envelope output.";
 
+const CHECK_COMMAND_NAME: &str = "check";
+const FORMAT_ARG: &str = "format";
+const BUILD_PROVENANCE_ARG: &str = "build-provenance";
+const BUILD_PROVENANCE_FLAG: &str = "--build-provenance";
+
 ///
 /// DeployCheckOptions
 ///
@@ -139,7 +144,7 @@ fn deployment_check_command_provenance(
     evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
-        "--build-provenance",
+        BUILD_PROVENANCE_FLAG,
         options.build_provenance.as_ref(),
         config_root,
     );
@@ -339,11 +344,11 @@ impl DeployCheckOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         let format =
-            parse_check_output_format(string_option(&matches, "format").as_deref(), usage)?;
-        let build_provenance = path_option(&matches, "build-provenance");
+            parse_check_output_format(string_option(&matches, FORMAT_ARG).as_deref(), usage)?;
+        let build_provenance = path_option(&matches, BUILD_PROVENANCE_ARG);
         if build_provenance.is_some() && format != CheckOutputFormat::EnvelopeJson {
             return Err(DeployCommandError::Usage(format!(
-                "--build-provenance requires --format envelope-json\n\n{}",
+                "{BUILD_PROVENANCE_FLAG} requires --format envelope-json\n\n{}",
                 usage()
             )));
         }
@@ -357,29 +362,36 @@ impl DeployCheckOptions {
 }
 
 pub(super) fn command() -> ClapCommand {
-    deploy_truth_leaf_command("check", "Print the local deployment truth check JSON")
-        .arg(check_format_arg())
-        .arg(build_provenance_input_arg())
-        .after_help(DEPLOY_CHECK_HELP_AFTER)
+    deploy_truth_leaf_command(
+        CHECK_COMMAND_NAME,
+        "Print the local deployment truth check JSON",
+    )
+    .arg(check_format_arg())
+    .arg(build_provenance_input_arg())
+    .after_help(DEPLOY_CHECK_HELP_AFTER)
 }
 
 fn check_format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
+    value_arg(FORMAT_ARG)
+        .long(FORMAT_ARG)
         .value_name("json|envelope-json")
         .num_args(1)
         .help("Output format; defaults to json")
 }
 
 fn build_provenance_input_arg() -> clap::Arg {
-    value_arg("build-provenance")
-        .long("build-provenance")
+    value_arg(BUILD_PROVENANCE_ARG)
+        .long(BUILD_PROVENANCE_ARG)
         .value_name("path")
         .num_args(1)
         .help("Fingerprint a BuildProvenanceV1 evidence envelope; requires --format envelope-json")
 }
 
 pub(super) fn usage() -> String {
+    render_usage(command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
     let mut command = command();
     command.render_help().to_string()
 }

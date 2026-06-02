@@ -8,10 +8,29 @@ use canic_host::{
 };
 use std::{ffi::OsString, fs, path::PathBuf};
 
+fn check_deployment_arg() -> OsString {
+    OsString::from("demo")
+}
+
+fn envelope_format_args() -> Vec<OsString> {
+    vec![
+        check_deployment_arg(),
+        OsString::from("--format"),
+        OsString::from("envelope-json"),
+    ]
+}
+
+fn build_provenance_args() -> Vec<OsString> {
+    vec![
+        OsString::from("--build-provenance"),
+        OsString::from("build-provenance.json"),
+    ]
+}
+
 #[test]
 fn deploy_check_parses_required_deployment() {
     let options = DeployTruthOptions::parse(
-        [OsString::from("demo")],
+        [check_deployment_arg()],
         deploy_check::command,
         deploy_check::usage,
     )
@@ -96,12 +115,8 @@ fn deploy_check_status_allows_warning_report() {
 
 #[test]
 fn deploy_check_parses_envelope_json_format() {
-    let options = deploy_check::DeployCheckOptions::parse([
-        OsString::from("demo"),
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
-    ])
-    .expect("parse deploy check");
+    let options = deploy_check::DeployCheckOptions::parse(envelope_format_args())
+        .expect("parse deploy check");
 
     assert_eq!(options.truth.deployment, "demo");
     assert_eq!(options.format, CheckOutputFormat::EnvelopeJson);
@@ -110,14 +125,9 @@ fn deploy_check_parses_envelope_json_format() {
 
 #[test]
 fn deploy_check_parses_build_provenance_envelope_input() {
-    let options = deploy_check::DeployCheckOptions::parse([
-        OsString::from("demo"),
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
-        OsString::from("--build-provenance"),
-        OsString::from("build-provenance.json"),
-    ])
-    .expect("parse deploy check");
+    let mut args = envelope_format_args();
+    args.extend(build_provenance_args());
+    let options = deploy_check::DeployCheckOptions::parse(args).expect("parse deploy check");
 
     assert_eq!(
         options.build_provenance,
@@ -127,12 +137,10 @@ fn deploy_check_parses_build_provenance_envelope_input() {
 
 #[test]
 fn deploy_check_rejects_build_provenance_without_envelope_output() {
-    let err = deploy_check::DeployCheckOptions::parse([
-        OsString::from("demo"),
-        OsString::from("--build-provenance"),
-        OsString::from("build-provenance.json"),
-    ])
-    .expect_err("build provenance requires envelope output");
+    let mut args = vec![check_deployment_arg()];
+    args.extend(build_provenance_args());
+    let err = deploy_check::DeployCheckOptions::parse(args)
+        .expect_err("build provenance requires envelope output");
 
     std::assert_matches!(
         err,

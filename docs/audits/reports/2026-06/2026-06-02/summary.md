@@ -13,6 +13,8 @@
 | `canic-cli-deploy-install-module-surface-hardening.md` | Modular MSH | `crates/canic-cli/src/deploy/install.rs` | PASS |
 | `canic-cli-metrics-module-surface-hardening.md` | Modular MSH | `crates/canic-cli/src/metrics/` | PASS |
 | `canic-cli-endpoints-module-surface-hardening.md` | Modular MSH | `crates/canic-cli/src/endpoints/` | PASS |
+| `canic-cli-status-module-surface-hardening.md` | Modular MSH | `crates/canic-cli/src/status/` | PASS |
+| `canic-cli-replica-module-surface-hardening.md` | Modular MSH | `crates/canic-cli/src/replica/` | PASS |
 
 ## Risk Index Summary
 
@@ -27,6 +29,8 @@
 | `canic-cli-deploy-install-module-surface-hardening.md` | 5 / 10 | Active install-runner CLI boundary is retained with owner; no safe immediate cleanup found. |
 | `canic-cli-metrics-module-surface-hardening.md` | 4 / 10 | Query-only runtime telemetry surface is retained with owner; no cleanup found. |
 | `canic-cli-endpoints-module-surface-hardening.md` | 4 / 10 | Read-only endpoint discovery surface is retained with owner; no cleanup found. |
+| `canic-cli-status-module-surface-hardening.md` | 4 / 10 | Diagnostic local project status surface is retained with owner; no cleanup found. |
+| `canic-cli-replica-module-surface-hardening.md` | 5 / 10 | Local ICP replica lifecycle surface is retained with owner; one minor redundant guard cleanup applied. |
 
 ## Method / Comparability Notes
 
@@ -46,6 +50,10 @@
 - `canic-cli-metrics-module-surface-hardening.md` uses `MSH-2.0` and is
   non-comparable because it is the first targeted MSH run for this module.
 - `canic-cli-endpoints-module-surface-hardening.md` uses `MSH-2.0` and is
+  non-comparable because it is the first targeted MSH run for this module.
+- `canic-cli-status-module-surface-hardening.md` uses `MSH-2.0` and is
+  non-comparable because it is the first targeted MSH run for this module.
+- `canic-cli-replica-module-surface-hardening.md` uses `MSH-2.0` and is
   non-comparable because it is the first targeted MSH run for this module.
 
 ## Key Findings
@@ -67,6 +75,11 @@
 - The endpoints module remains read-only and delegates installed deployment
   resolution to host helpers before reading live `candid:service` metadata or
   local role `.did` artifacts.
+- The status module remains diagnostic-only and delegates project readiness,
+  local replica status, and installed deployment truth reads to host helpers.
+- The replica module remains local-lifecycle scoped and delegates ICP replica
+  start/stop/status operations to host ICP CLI helpers with project, port, and
+  foreign-owner guards.
 - No mutation, ICP/DFX, network, or live deployment-truth observation primitive
   was found in the promote CLI path.
 - No install/register/write primitive was found in the deploy check CLI module.
@@ -82,6 +95,12 @@
   metrics code.
 - No update/install/create/delete/register primitive was found in inspected
   endpoints code.
+- No update/install/create/delete/register primitive was found in inspected
+  status code.
+- No canister/deployment update/install/create/delete/register primitive was
+  found in inspected replica code.
+- The replica module cleanup removed a redundant
+  `&& local_gateway_reachable` check inside an already-reachable branch.
 
 ## Verification Readout Rollup
 
@@ -96,6 +115,8 @@
 | `canic-cli-deploy-install-module-surface-hardening.md` | 2 | 0 | 0 |
 | `canic-cli-metrics-module-surface-hardening.md` | 2 | 0 | 0 |
 | `canic-cli-endpoints-module-surface-hardening.md` | 2 | 0 | 0 |
+| `canic-cli-status-module-surface-hardening.md` | 2 | 0 | 0 |
+| `canic-cli-replica-module-surface-hardening.md` | 2 | 0 | 0 |
 
 ## Follow-up Actions
 
@@ -107,5 +128,8 @@
 - No required follow-up from the deploy-install MSH run.
 - No required follow-up from the metrics MSH run.
 - No required follow-up from the endpoints MSH run.
+- No required follow-up from the status MSH run.
+- Replica MSH cleanup completed: removed the redundant
+  `&& local_gateway_reachable` conjunct in `run_start`.
 - Carry forward the DRY consolidation watchpoints documented in
   `dry-consolidation.md`.

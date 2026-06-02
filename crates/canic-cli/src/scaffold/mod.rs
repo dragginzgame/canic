@@ -278,8 +278,6 @@ fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, Scaffol
     let root_src_dir = root_dir.join("src");
     let app_dir = project_dir.join("app");
     let app_src_dir = app_dir.join("src");
-    fs::create_dir_all(&root_src_dir)?;
-    fs::create_dir_all(&app_src_dir)?;
 
     let config_path = project_dir.join("canic.toml");
     write_new_file(&config_path, &canic_toml(&options.name))?;
@@ -319,7 +317,6 @@ fn scaffold_canister(
     }
 
     let src_dir = canister_dir.join("src");
-    fs::create_dir_all(&src_dir)?;
 
     let package = options.role.clone();
     let package_name = canister_package_name(&options.fleet, &options.role);
@@ -683,6 +680,9 @@ fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandErro
         return Err(ScaffoldCommandError::TargetExists(
             path.display().to_string(),
         ));
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
     }
     fs::write(path, contents).map_err(ScaffoldCommandError::from)
 }

@@ -85,61 +85,24 @@ fn deploy_root_help_documents_passive_boundary() {
 
 #[test]
 fn deploy_root_command_dispatches_inspect() {
-    let parsed = parse_subcommand(
-        deploy_command(),
+    assert_root_dispatches_leaf(
+        "inspect",
         [
-            OsString::from("root"),
-            OsString::from("inspect"),
             OsString::from("--request"),
             OsString::from("root-verification.json"),
         ],
-    )
-    .expect("parse deploy root")
-    .expect("root command");
-
-    assert_eq!(parsed.0, "root");
-
-    let root = parse_subcommand(deploy_root::command(), parsed.1)
-        .expect("parse nested root")
-        .expect("root inspect command");
-    assert_eq!(root.0, "inspect");
-    assert_eq!(
-        root.1,
-        vec![
-            OsString::from("--request"),
-            OsString::from("root-verification.json")
-        ]
     );
 }
 
 #[test]
 fn deploy_root_command_dispatches_verify() {
-    let parsed = parse_subcommand(
-        deploy_command(),
+    assert_root_dispatches_leaf(
+        "verify",
         [
-            OsString::from("root"),
-            OsString::from("verify"),
             OsString::from("demo-local"),
             OsString::from("--from-check"),
             OsString::from("deployment-check.json"),
         ],
-    )
-    .expect("parse deploy root")
-    .expect("root command");
-
-    assert_eq!(parsed.0, "root");
-
-    let root = parse_subcommand(deploy_root::command(), parsed.1)
-        .expect("parse nested root")
-        .expect("root verify command");
-    assert_eq!(root.0, "verify");
-    assert_eq!(
-        root.1,
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--from-check"),
-            OsString::from("deployment-check.json")
-        ]
     );
 }
 
@@ -160,4 +123,24 @@ fn root_verification_report_builder_delegates_to_host_report() {
     assert_eq!(report.source_check_id, "check-1");
     assert_eq!(report.source_inventory_id, "inventory-1");
     assert_eq!(report.report_digest.len(), 64);
+}
+
+fn assert_root_dispatches_leaf<const N: usize>(command: &'static str, args: [OsString; N]) {
+    let expected_args = args.to_vec();
+    let parsed = parse_subcommand(
+        deploy_command(),
+        std::iter::once(OsString::from("root"))
+            .chain(std::iter::once(OsString::from(command)))
+            .chain(args),
+    )
+    .expect("parse deploy root")
+    .expect("root command");
+
+    assert_eq!(parsed.0, "root");
+
+    let root = parse_subcommand(deploy_root::command(), parsed.1)
+        .expect("parse nested root")
+        .expect("root leaf command");
+    assert_eq!(root.0, command);
+    assert_eq!(root.1, expected_args);
 }

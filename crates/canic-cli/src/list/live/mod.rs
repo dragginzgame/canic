@@ -18,7 +18,7 @@ use canic_host::{
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     thread,
 };
@@ -140,13 +140,10 @@ pub(super) fn resolve_wasm_sizes(
 
 fn check_ready_status(
     options: &ListOptions,
-    icp_root: Option<&std::path::Path>,
+    icp_root: Option<&Path>,
     canister: &str,
 ) -> Result<ReadyStatus, ListCommandError> {
-    let mut icp = IcpCli::new(&options.icp, None, options.network.clone());
-    if let Some(root) = icp_root {
-        icp = icp.with_cwd(root);
-    }
+    let icp = live_icp(&options.icp, options.network.clone(), icp_root);
     let Ok(output) = icp.canister_query_output(canister, "canic_ready", Some("json")) else {
         return Ok(ReadyStatus::Error);
     };
@@ -222,13 +219,10 @@ where
 fn query_cycle_balance_endpoint(
     icp: &str,
     network: Option<String>,
-    icp_root: Option<&std::path::Path>,
+    icp_root: Option<&Path>,
     canister: &str,
 ) -> Option<u128> {
-    let mut icp = IcpCli::new(icp, None, network);
-    if let Some(root) = icp_root {
-        icp = icp.with_cwd(root);
-    }
+    let icp = live_icp(icp, network, icp_root);
     icp.canister_query_output(
         canister,
         canic_core::protocol::CANIC_CYCLE_BALANCE,
@@ -241,16 +235,22 @@ fn query_cycle_balance_endpoint(
 fn query_canic_metadata_version(
     icp: &str,
     network: Option<String>,
-    icp_root: Option<&std::path::Path>,
+    icp_root: Option<&Path>,
     canister: &str,
 ) -> Option<String> {
-    let mut icp = IcpCli::new(icp, None, network);
-    if let Some(root) = icp_root {
-        icp = icp.with_cwd(root);
-    }
+    let icp = live_icp(icp, network, icp_root);
     icp.canister_query_output(canister, canic_core::protocol::CANIC_METADATA, Some("json"))
         .ok()
         .and_then(|output| parse_canic_metadata_version_response(&output))
+}
+
+fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {
+    let icp = IcpCli::new(icp, None, network);
+    if let Some(root) = icp_root {
+        icp.with_cwd(root)
+    } else {
+        icp
+    }
 }
 
 fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {

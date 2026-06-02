@@ -25,6 +25,11 @@ not_verified until a later verification path records live evidence. The
 --allow-unverified flag is required so unverified registration remains an
 explicit operator acknowledgement.";
 
+const DEPLOYMENT_ARG: &str = "deployment";
+const FLEET_TEMPLATE_ARG: &str = "fleet-template";
+const ROOT_ARG: &str = "root";
+const ALLOW_UNVERIFIED_ARG: &str = "allow-unverified";
+
 ///
 /// DeployRegisterOptions
 ///
@@ -62,12 +67,12 @@ impl DeployRegisterOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            fleet_template: string_option(&matches, "fleet-template")
+            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
+            fleet_template: string_option(&matches, FLEET_TEMPLATE_ARG)
                 .expect("clap requires fleet-template"),
-            root: string_option(&matches, "root").expect("clap requires root"),
+            root: string_option(&matches, ROOT_ARG).expect("clap requires root"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            allow_unverified: matches.get_flag("allow-unverified"),
+            allow_unverified: matches.get_flag(ALLOW_UNVERIFIED_ARG),
         })
     }
 
@@ -95,37 +100,49 @@ pub(super) fn command() -> ClapCommand {
         .override_usage(
             "canic deploy register <deployment> --fleet-template <fleet> --root <principal> --allow-unverified",
         )
-        .arg(
-            value_arg("deployment")
-                .required(true)
-                .help("Deployment target name to register"),
-        )
-        .arg(
-            value_arg("fleet-template")
-                .long("fleet-template")
-                .value_name("fleet")
-                .required(true)
-                .help("Reusable fleet template this deployment target uses"),
-        )
-        .arg(
-            value_arg("root")
-                .long("root")
-                .value_name("principal")
-                .required(true)
-                .help("Existing root canister principal for this deployment"),
-        )
-        .arg(
-            clap::Arg::new("allow-unverified")
-                .long("allow-unverified")
-                .action(ArgAction::SetTrue)
-                .required(true)
-                .help("Acknowledge that the registered root is not live-verified"),
-        )
+        .arg(deployment_arg())
+        .arg(fleet_template_arg())
+        .arg(root_arg())
+        .arg(allow_unverified_arg())
         .arg(internal_network_arg())
         .after_help(DEPLOY_REGISTER_HELP_AFTER)
 }
 
+fn deployment_arg() -> clap::Arg {
+    value_arg(DEPLOYMENT_ARG)
+        .required(true)
+        .help("Deployment target name to register")
+}
+
+fn fleet_template_arg() -> clap::Arg {
+    value_arg(FLEET_TEMPLATE_ARG)
+        .long(FLEET_TEMPLATE_ARG)
+        .value_name("fleet")
+        .required(true)
+        .help("Reusable fleet template this deployment target uses")
+}
+
+fn root_arg() -> clap::Arg {
+    value_arg(ROOT_ARG)
+        .long(ROOT_ARG)
+        .value_name("principal")
+        .required(true)
+        .help("Existing root canister principal for this deployment")
+}
+
+fn allow_unverified_arg() -> clap::Arg {
+    clap::Arg::new(ALLOW_UNVERIFIED_ARG)
+        .long(ALLOW_UNVERIFIED_ARG)
+        .action(ArgAction::SetTrue)
+        .required(true)
+        .help("Acknowledge that the registered root is not live-verified")
+}
+
 pub(super) fn usage() -> String {
+    render_usage(command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
     let mut command = command();
     command.render_help().to_string()
 }

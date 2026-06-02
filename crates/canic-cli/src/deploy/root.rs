@@ -26,6 +26,17 @@ use canic_host::{
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
+#[derive(Clone, Copy)]
+struct RootCommand {
+    name: &'static str,
+    about: &'static str,
+    bin_name: &'static str,
+    usage: &'static str,
+    help_after: &'static str,
+}
+
+const ROOT_COMMANDS: &[RootCommand] = &[INSPECT_COMMAND, VERIFY_COMMAND];
+
 const DEPLOY_ROOT_HELP_AFTER: &str = "\
 Examples:
   canic deploy root inspect --request root-verification.json
@@ -55,6 +66,21 @@ Verifies a registered deployment root from a deployment-truth check artifact
 and records verified root state only when deployment target identity and source
 evidence match. This is not full deployment verification and does not install
 code or mutate canisters.";
+
+const INSPECT_COMMAND: RootCommand = RootCommand {
+    name: "inspect",
+    about: "Inspect deployment-root verification evidence",
+    bin_name: "canic deploy root inspect",
+    usage: "canic deploy root inspect --request <file>",
+    help_after: DEPLOY_ROOT_INSPECT_HELP_AFTER,
+};
+const VERIFY_COMMAND: RootCommand = RootCommand {
+    name: "verify",
+    about: "Verify a registered deployment root from check evidence",
+    bin_name: "canic deploy root verify",
+    usage: "canic deploy root verify <deployment> --from-check <file>",
+    help_after: DEPLOY_ROOT_VERIFY_HELP_AFTER,
+};
 
 ///
 /// DeployRootInspectOptions
@@ -188,46 +214,30 @@ impl DeployRootVerifyOptions {
 }
 
 pub(super) fn command() -> ClapCommand {
-    ClapCommand::new("root")
-        .bin_name("canic deploy root")
-        .about("Inspect or verify deployment-root evidence")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("inspect")
-                .about("Inspect deployment-root verification evidence")
+    ROOT_COMMANDS
+        .iter()
+        .fold(
+            ClapCommand::new("root")
+                .bin_name("canic deploy root")
+                .about("Inspect or verify deployment-root evidence")
                 .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("verify")
-                .about("Verify a registered deployment root from check evidence")
-                .disable_help_flag(true),
-        ))
+            |command, subcommand| command.subcommand(root_passthrough_command(*subcommand)),
+        )
         .after_help(DEPLOY_ROOT_HELP_AFTER)
 }
 
 fn inspect_command() -> ClapCommand {
-    ClapCommand::new("inspect")
-        .bin_name("canic deploy root inspect")
-        .about("Inspect deployment-root verification evidence")
-        .disable_help_flag(true)
-        .override_usage("canic deploy root inspect --request <file>")
-        .arg(
-            value_arg("request")
-                .long("request")
-                .value_name("file")
-                .required(true)
-                .help("DeploymentRootVerificationRequestV1 JSON file to inspect"),
-        )
-        .arg(format_arg())
-        .after_help(DEPLOY_ROOT_INSPECT_HELP_AFTER)
+    root_leaf_command(INSPECT_COMMAND).arg(
+        value_arg("request")
+            .long("request")
+            .value_name("file")
+            .required(true)
+            .help("DeploymentRootVerificationRequestV1 JSON file to inspect"),
+    )
 }
 
 fn verify_command() -> ClapCommand {
-    ClapCommand::new("verify")
-        .bin_name("canic deploy root verify")
-        .about("Verify a registered deployment root from check evidence")
-        .disable_help_flag(true)
-        .override_usage("canic deploy root verify <deployment> --from-check <file>")
+    root_leaf_command(VERIFY_COMMAND)
         .arg(
             value_arg("deployment")
                 .value_name("deployment")
@@ -241,9 +251,7 @@ fn verify_command() -> ClapCommand {
                 .required(true)
                 .help("DeploymentCheckV1 JSON artifact carrying explicit root evidence"),
         )
-        .arg(format_arg())
         .arg(internal_network_arg())
-        .after_help(DEPLOY_ROOT_VERIFY_HELP_AFTER)
 }
 
 fn format_arg() -> clap::Arg {
@@ -254,17 +262,37 @@ fn format_arg() -> clap::Arg {
         .help("Output format; defaults to json")
 }
 
+fn root_passthrough_command(spec: RootCommand) -> ClapCommand {
+    passthrough_subcommand(
+        ClapCommand::new(spec.name)
+            .about(spec.about)
+            .disable_help_flag(true),
+    )
+}
+
+fn root_leaf_command(spec: RootCommand) -> ClapCommand {
+    ClapCommand::new(spec.name)
+        .bin_name(spec.bin_name)
+        .about(spec.about)
+        .disable_help_flag(true)
+        .override_usage(spec.usage)
+        .arg(format_arg())
+        .after_help(spec.help_after)
+}
+
 pub(super) fn usage() -> String {
-    let mut command = command();
-    command.render_help().to_string()
+    render_usage(command)
 }
 
 pub(super) fn inspect_usage() -> String {
-    let mut command = inspect_command();
-    command.render_help().to_string()
+    render_usage(inspect_command)
 }
 
 pub(super) fn verify_usage() -> String {
-    let mut command = verify_command();
+    render_usage(verify_command)
+}
+
+fn render_usage(command: fn() -> ClapCommand) -> String {
+    let mut command = command();
     command.render_help().to_string()
 }
