@@ -12,16 +12,16 @@ present.
 
 ## Unreleased
 
-- Continued DRY cleanup of the deploy CLI by moving passive `deploy external`
-  command handling/report builders and `deploy check` evidence-envelope output
-  into private deploy submodules, and by moving deploy unit tests out of the
-  production module with shared fixtures plus `authority`, `deploy_check`,
-  `external`, `promote`, and `root` test-family splits while preserving
-  command behavior and existing deploy tests.
-
 ## [0.57.x] - 2026-06-01 - Audit rotation and feedback window
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
+
+- `0.57.14` continues the behavior-neutral deploy CLI DRY cleanup by splitting
+  passive promote/external command families and top-level deploy command
+  construction into focused modules while preserving command behavior.
+
+- `0.57.13` finishes the behavior-neutral deploy CLI DRY cleanup and test
+  split, and records the 0.58 ICP-to-cycles conversion design.
 
 - `0.57.12` continues the DRY deploy CLI cleanup by moving authority dry-run
   resume-report, and passive deployment-truth command handling into private

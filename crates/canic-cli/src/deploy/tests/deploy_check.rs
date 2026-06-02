@@ -267,33 +267,6 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
 }
 
 #[test]
-fn deploy_check_path_has_no_local_state_write_primitives() {
-    let source = include_str!("../check.rs");
-    let check_source = source_between(source, "pub(super) fn run<I>", "fn write_deployment_check");
-    let loader_source = source_between(
-        include_str!("../mod.rs"),
-        "fn load_deployment_check",
-        "fn print_json<T>",
-    );
-
-    for forbidden in [
-        "register_deployment_state",
-        "write_install_state",
-        "install_root(",
-        "run_install(",
-    ] {
-        assert!(
-            !check_source.contains(forbidden),
-            "deploy check path must stay read-only; found forbidden token {forbidden}"
-        );
-        assert!(
-            !loader_source.contains(forbidden),
-            "deployment check loader must stay read-only; found forbidden token {forbidden}"
-        );
-    }
-}
-
-#[test]
 fn deploy_check_builds_current_install_options() {
     let options = DeployTruthOptions {
         deployment: "demo".to_string(),

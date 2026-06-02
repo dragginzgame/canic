@@ -1,0 +1,119 @@
+use super::super::catalog as deploy_catalog;
+use super::super::output_format::CatalogOutputFormat;
+use super::fixtures::*;
+use super::*;
+
+#[test]
+fn deploy_catalog_options_parse_list_defaults_to_text() {
+    let options = deploy_catalog::DeployCatalogOptions::parse_list_test([
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect("parse catalog list");
+
+    assert_eq!(options.deployment, None);
+    assert_eq!(options.network, "local");
+    assert_eq!(options.format, CatalogOutputFormat::Text);
+    assert_eq!(options.output, None);
+}
+
+#[test]
+fn deploy_catalog_options_parse_inspect_json_output() {
+    let options = deploy_catalog::DeployCatalogOptions::parse_inspect_test([
+        OsString::from("demo-local"),
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--output"),
+        OsString::from("catalog.json"),
+    ])
+    .expect("parse catalog inspect");
+
+    assert_eq!(options.deployment.as_deref(), Some("demo-local"));
+    assert_eq!(options.network, "local");
+    assert_eq!(options.format, CatalogOutputFormat::Json);
+    assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
+}
+
+#[test]
+fn deploy_catalog_rejects_unknown_format() {
+    let err = deploy_catalog::DeployCatalogOptions::parse_list_test([
+        OsString::from("--format"),
+        OsString::from("envelope-json"),
+    ])
+    .expect_err("catalog format is narrow in 0.54.0");
+
+    std::assert_matches!(
+        err,
+        DeployCommandError::Usage(message)
+            if message.contains("invalid deployment catalog output format")
+    );
+}
+
+#[test]
+fn deploy_catalog_command_dispatches_list_and_inspect() {
+    let parsed = parse_subcommand(
+        deploy_command(),
+        [OsString::from("catalog"), OsString::from("list")],
+    )
+    .expect("parse deploy catalog")
+    .expect("catalog command");
+
+    assert_eq!(parsed.0, "catalog");
+    let nested = parse_subcommand(deploy_catalog::command(), parsed.1)
+        .expect("parse nested catalog")
+        .expect("catalog list command");
+    assert_eq!(nested.0, "list");
+
+    let parsed = parse_subcommand(
+        deploy_command(),
+        [
+            OsString::from("catalog"),
+            OsString::from("inspect"),
+            OsString::from("demo-local"),
+        ],
+    )
+    .expect("parse deploy catalog inspect")
+    .expect("catalog command");
+
+    assert_eq!(parsed.0, "catalog");
+    let nested = parse_subcommand(deploy_catalog::command(), parsed.1)
+        .expect("parse nested catalog inspect")
+        .expect("catalog inspect command");
+    assert_eq!(nested.0, "inspect");
+    assert_eq!(nested.1, vec![OsString::from("demo-local")]);
+}
+
+#[test]
+fn deploy_catalog_help_documents_passive_deployment_target_scope() {
+    let help = deploy_catalog::usage();
+    let list_help = deploy_catalog::list_usage();
+    let inspect_help = deploy_catalog::inspect_usage();
+
+    assert!(help.contains("deployment targets recorded under .canic/<network>/deployments"));
+    assert!(help.contains("do not query"));
+    assert!(help.contains("infer deployments from fleet-template names"));
+    assert!(list_help.contains("--format <text|json>"));
+    assert!(list_help.contains("--output <path>"));
+    assert!(inspect_help.contains("deployment target, not a fleet template"));
+}
+
+#[test]
+fn writes_catalog_json_output_file() {
+    let out = temp_json_path("deploy-catalog-output.json");
+    let options = deploy_catalog::DeployCatalogOptions {
+        deployment: None,
+        network: "local".to_string(),
+        format: CatalogOutputFormat::Json,
+        output: Some(out.clone()),
+    };
+    let report = sample_catalog_report();
+
+    deploy_catalog::write_report(&options, &report).expect("write catalog");
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&out).expect("read catalog")).expect("parse catalog");
+
+    fs::remove_file(out).expect("clean catalog");
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["entries"][0]["deployment"], "demo-local");
+    assert!(value.get("envelope_schema").is_none());
+}

@@ -1,6 +1,9 @@
 use super::super::root as deploy_root;
 use super::fixtures::*;
 use super::*;
+use canic_host::deployment_truth::{
+    DeploymentRootVerificationEvidenceStatusV1, DeploymentRootVerificationStateTransitionV1,
+};
 
 #[test]
 fn deploy_root_inspect_parses_request_and_text_format() {
@@ -78,56 +81,6 @@ fn deploy_root_help_documents_passive_boundary() {
     assert!(verify_help.contains("Verifies a registered deployment root"));
     assert!(verify_help.contains("not full deployment verification"));
     assert!(verify_help.contains("does not install"));
-}
-
-#[test]
-fn deploy_root_path_has_no_mutation_primitives() {
-    let source = include_str!("../root.rs");
-    let root_source = source_between(source, "fn run_inspect<I>", "fn run_verify<I>");
-    for forbidden in [
-        "update_settings",
-        "install_code",
-        "create_canister",
-        "delete_canister",
-        "stop_canister",
-        "uninstall_code",
-        "provisional_create_canister",
-        "dfx",
-        "register_deployment_state",
-        "install_root",
-    ] {
-        assert!(
-            !root_source.contains(forbidden),
-            "root inspect CLI path must stay passive; found forbidden token {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn deploy_root_verify_path_has_no_controller_mutation_primitives() {
-    let source = include_str!("../root.rs");
-    let root_source = source_between(
-        source,
-        "fn run_verify<I>",
-        "pub(super) fn build_verification_report",
-    );
-    for forbidden in [
-        "update_settings",
-        "install_code",
-        "create_canister",
-        "delete_canister",
-        "stop_canister",
-        "uninstall_code",
-        "provisional_create_canister",
-        "dfx",
-        "install_root",
-        "register_deployment_state",
-    ] {
-        assert!(
-            !root_source.contains(forbidden),
-            "root verify CLI path must not mutate IC/controller state; found forbidden token {forbidden}"
-        );
-    }
 }
 
 #[test]

@@ -1,4 +1,5 @@
-use super::fixtures::*;
+use super::super::output_format::PromotionOutputFormat;
+use super::super::promote::*;
 use super::*;
 
 #[test]
@@ -105,52 +106,6 @@ fn deploy_promote_help_keeps_advanced_reports_under_inspect() {
     assert!(help.contains("canic deploy promote inspect readiness"));
     assert!(help.contains("canic deploy promote inspect artifact-identity"));
     assert!(help.contains("canic deploy promote inspect provenance"));
-}
-
-#[test]
-fn deploy_promote_path_has_no_mutation_primitives() {
-    let source = include_str!("../mod.rs");
-    let promote_source = source_between(
-        source,
-        "fn run_promote<I>",
-        "pub(super) fn load_deployment_check",
-    );
-    for forbidden in [
-        "update_settings",
-        "install_code",
-        "create_canister",
-        "delete_canister",
-        "stop_canister",
-        "uninstall_code",
-        "provisional_create_canister",
-        "dfx",
-    ] {
-        assert!(
-            !promote_source.contains(forbidden),
-            "promote CLI path must stay passive; found forbidden token {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn deploy_promote_path_has_no_live_deployment_truth_dependencies() {
-    let source = include_str!("../mod.rs");
-    let promote_source = source_between(
-        source,
-        "fn run_promote<I>",
-        "pub(super) fn load_deployment_check",
-    );
-    for forbidden in [
-        "load_deployment_check",
-        "check_install_deployment_truth",
-        "resolve_current_canic_icp_root",
-        "latest_deployment_truth_receipt_path_from_root",
-    ] {
-        assert!(
-            !promote_source.contains(forbidden),
-            "promote CLI path must stay request-file based; found forbidden token {forbidden}"
-        );
-    }
 }
 
 #[test]

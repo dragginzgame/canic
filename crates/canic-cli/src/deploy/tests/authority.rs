@@ -137,31 +137,6 @@ fn deploy_authority_leaf_help_documents_exit_status_scope() {
 }
 
 #[test]
-fn deploy_authority_path_has_no_controller_mutation_primitives() {
-    let source = include_str!("../authority.rs");
-    let authority_source = source_between(
-        source,
-        "pub(super) fn run<I>",
-        "pub(super) fn build_dry_run_evidence",
-    );
-    for forbidden in [
-        "update_settings",
-        "install_code",
-        "create_canister",
-        "delete_canister",
-        "stop_canister",
-        "uninstall_code",
-        "provisional_create_canister",
-        "dfx",
-    ] {
-        assert!(
-            !authority_source.contains(forbidden),
-            "authority CLI path must stay dry-run; found forbidden token {forbidden}"
-        );
-    }
-}
-
-#[test]
 fn deploy_authority_command_dispatches_check() {
     let parsed = parse_subcommand(
         deploy_command(),

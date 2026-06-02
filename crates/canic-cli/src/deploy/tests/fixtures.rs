@@ -1,11 +1,23 @@
-use super::*;
-
-pub(super) fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
-    let start_index = source.find(start).expect("source start marker");
-    let rest = &source[start_index..];
-    let end_index = rest.find(end).expect("source end marker");
-    &rest[..end_index]
-}
+use canic_host::deployment_truth::{
+    ArtifactDigestSourceV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
+    ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+    DeploymentCheckV1, DeploymentDiffV1, DeploymentIdentityV1, DeploymentInventoryV1,
+    DeploymentPlanV1, DeploymentRootObservationSourceV1, DeploymentRootObservationV1,
+    DeploymentRootVerificationRequestV1, DeploymentRootVerificationSourceV1,
+    DeploymentRootVerificationStateV1, ExpectedCanisterV1, LocalDeploymentConfigV1,
+    ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1, PreviousArtifactReceiptKindV1,
+    PromotionArtifactIdentityReportRequest, PromotionArtifactLevelV1,
+    PromotionPlanTransformRequest, ResumeSafetyV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
+    RoleArtifactV1, RolePromotionInputV1, SafetyReportV1, SafetyStatusV1, TrustDomainV1,
+    VerifierReadinessExpectationV1, VerifierReadinessObservationV1, artifact_promotion_plan,
+    compare_plan_to_inventory, promoted_deployment_plan_transform_from_inputs,
+    promotion_artifact_identity_report_from_inputs, promotion_readiness_from_inputs,
+    safety_report_from_diff,
+};
+use std::{
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub(super) fn sample_authority_check() -> DeploymentCheckV1 {
     let identity = sample_deployment_identity();
