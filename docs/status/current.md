@@ -9,7 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Current minor: `0.57.x` audit rotation and feedback window. This is a
+- Current minor: `0.58.x` ICP-to-cycles refill primitive. `0.58.0` starts
+  the line with:
+  ```text
+  docs/design/0.58-convert-icp/0.58-design.md
+  docs/changelog/0.58.md
+  ```
+  The line is scoped to a Canic-managed canister-side ICP refill primitive:
+  source canister transfers ICP to the CMC top-up account, records the ledger
+  block, calls direct `notify_top_up`, persists compact recovery state, and
+  integrates with the existing `cfg.topup` / `request_cycles` funding chain.
+  It deliberately does not add a parallel `canic icp convert` namespace,
+  overload `canic cycles topup --icp`, make identity-funded conversion the
+  primary shape, add a dedicated CLI retry verb, create a second funding
+  policy island, or add broad new query/metric families. The planned build
+  order is DTOs/records first, then storage ops, IC infra, `ops::ic`, pure
+  policy gates, workflow orchestration, opt-in endpoint/macros, funding-chain
+  integration, local fabrication, and only then any thin CLI trigger.
+- Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that
   feedback to decide what actually needs work. `0.57.0` starts with:

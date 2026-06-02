@@ -12,6 +12,15 @@ present.
 
 ## Unreleased
 
+## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
+
+Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
+
+- `0.58.0` starts the ICP-to-cycles refill primitive line with a scoped design
+  for canister-side CMC/ICP-ledger conversion, recovery, local fabrication,
+  funding-chain integration, and bounded metrics without adding a parallel
+  identity-funded CLI transfer engine.
+
 ## [0.57.x] - 2026-06-01 - Audit rotation and feedback window
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
