@@ -31,8 +31,10 @@ areas:
 1. `canic-cli/src/deploy/mod.rs` remains the largest CLI owner and repeats
    nested command-family and report-writing patterns; cleanup follow-up has
    moved output-format parsing, passive catalog handling, passive comparison
-   handling, deployment-root handling, explicit registration handling, and
-   current-install handling into private deploy submodules.
+   handling, deployment-root handling, authority dry-run handling,
+   resume-report handling, passive deployment-truth field rendering, explicit
+   registration handling, and current-install handling into private deploy
+   submodules.
 2. Evidence envelope wrapper construction is centralized at the DTO/schema
    level but remains command-specific for deployment check, fleet adoption, and
    policy gate envelopes.
@@ -65,7 +67,7 @@ Largest current operator files above the threshold:
 | Lines | File |
 | ---: | --- |
 | 13,427 | `crates/canic-host/src/deployment_truth/tests.rs` |
-| 6,452 | `crates/canic-cli/src/deploy/mod.rs` |
+| 5,950 | `crates/canic-cli/src/deploy/mod.rs` |
 | 5,279 | `crates/canic-host/src/deployment_truth/promotion.rs` |
 | 4,017 | `crates/canic-host/src/deployment_truth/lifecycle.rs` |
 | 3,907 | `crates/canic-host/src/install_root/tests.rs` |
@@ -126,13 +128,16 @@ Largest current scripts:
 Evidence:
 
 - `crates/canic-cli/src/deploy/mod.rs` was 7,562 lines before the follow-up
-  cleanup and is 6,452 lines after moving output-format parsing to
+  cleanup and is 5,950 lines after moving output-format parsing to
   `crates/canic-cli/src/deploy/output_format.rs` and passive catalog handling
   to `crates/canic-cli/src/deploy/catalog.rs`, and passive comparison handling
   to `crates/canic-cli/src/deploy/compare.rs`, and deployment-root handling to
   `crates/canic-cli/src/deploy/root.rs`, and explicit registration handling to
   `crates/canic-cli/src/deploy/register.rs`, and current-install handling to
-  `crates/canic-cli/src/deploy/install.rs`.
+  `crates/canic-cli/src/deploy/install.rs`, and authority dry-run handling to
+  `crates/canic-cli/src/deploy/authority.rs`, and resume-report handling to
+  `crates/canic-cli/src/deploy/resume_report.rs`, and passive
+  deployment-truth field rendering to `crates/canic-cli/src/deploy/truth.rs`.
 - The top-level deploy dispatcher fans into catalog, root verification,
   install, register, compare, promote, authority, external lifecycle,
   deployment truth, and deployment-check paths around
@@ -163,9 +168,12 @@ Follow-up applied:
 - Added `crates/canic-cli/src/deploy/output_format.rs`.
 - Added `crates/canic-cli/src/deploy/catalog.rs`.
 - Added `crates/canic-cli/src/deploy/compare.rs`.
+- Added `crates/canic-cli/src/deploy/authority.rs`.
 - Added `crates/canic-cli/src/deploy/install.rs`.
 - Added `crates/canic-cli/src/deploy/register.rs`.
+- Added `crates/canic-cli/src/deploy/resume_report.rs`.
 - Added `crates/canic-cli/src/deploy/root.rs`.
+- Added `crates/canic-cli/src/deploy/truth.rs`.
 - Moved deploy output-format enums and parsers out of
   `crates/canic-cli/src/deploy/mod.rs`.
 - Moved local-state-only `deploy catalog` parsing, help, request construction,
@@ -174,6 +182,15 @@ Follow-up applied:
   rendering, and dispatch out of `crates/canic-cli/src/deploy/mod.rs`.
 - Moved `deploy root` inspect/verify parsing, help, report construction,
   rendering, and dispatch out of `crates/canic-cli/src/deploy/mod.rs`.
+- Moved `deploy authority` check/evidence/report/receipt parsing, help, dry-run
+  artifact construction, rendering, and dispatch out of
+  `crates/canic-cli/src/deploy/mod.rs`.
+- Moved `deploy resume-report` parsing, help, latest-receipt lookup, receipt
+  decoding, resume-safety report construction, and dispatch out of
+  `crates/canic-cli/src/deploy/mod.rs`.
+- Moved passive `deploy plan`, `deploy inventory`, `deploy diff`, and
+  `deploy report` parsing, help, deployment-truth loading, field rendering, and
+  dispatch out of `crates/canic-cli/src/deploy/mod.rs`.
 - Moved explicit `deploy register` parsing, help, state-registration dispatch,
   and registration option conversion out of `crates/canic-cli/src/deploy/mod.rs`.
 - Moved `deploy install` parsing, help, plan decoding, current-install option

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-01
+Last updated: 2026-06-02
 
 ## Purpose
 
@@ -37,22 +37,28 @@ inspect only the files needed for the current task.
   shell subsystem.
 - Continued the DRY cleanup follow-up by moving deploy output-format enums,
   parser helpers, passive catalog command handling, and passive comparison
-  command handling plus deployment-root, registration, and current-install
-  command handling into:
+  command handling plus deployment-root, registration, current-install, and
+  authority dry-run, resume-report, and passive deployment-truth command
+  handling into:
   ```text
   crates/canic-cli/src/deploy/output_format.rs
   crates/canic-cli/src/deploy/catalog.rs
   crates/canic-cli/src/deploy/compare.rs
+  crates/canic-cli/src/deploy/authority.rs
   crates/canic-cli/src/deploy/install.rs
   crates/canic-cli/src/deploy/register.rs
+  crates/canic-cli/src/deploy/resume_report.rs
   crates/canic-cli/src/deploy/root.rs
+  crates/canic-cli/src/deploy/truth.rs
   ```
   The new modules own shared JSON/text output-format parser glue and the
   local-state-only `deploy catalog` command family plus the artifact-only
   `deploy compare` command family and the deployment-root inspect/verify
-  namespace, explicit `deploy register` state registration, and the current
-  install runner entrypoint. This is behavior-neutral CLI command-family
-  cleanup; it does not change deploy command semantics.
+  namespace, authority dry-run check/evidence/report/receipt namespace,
+  passive resume-safety report command, passive deployment-truth field
+  rendering commands, explicit `deploy register` state registration, and the
+  current install runner entrypoint. This is behavior-neutral CLI
+  command-family cleanup; it does not change deploy command semantics.
 - Previous minor: `0.56.x` v1 packaged downstream proofs is closed. The
   design is:
   ```text

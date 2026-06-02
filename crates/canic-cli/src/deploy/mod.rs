@@ -1,9 +1,12 @@
+mod authority;
 mod catalog;
 mod compare;
 mod install;
 mod output_format;
 mod register;
+mod resume_report;
 mod root;
+mod truth;
 
 use crate::{
     cli::{
@@ -24,8 +27,8 @@ use canic_host::{
         ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionExecutionReceiptV1,
         ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
         ArtifactPromotionProvenanceReportRequest, ArtifactPromotionProvenanceReportV1,
-        AuthorityDryRunEvidenceV1, BuildMaterializationEvidenceV1, CriticalExternalFixReportV1,
-        DeploymentCheckV1, DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
+        BuildMaterializationEvidenceV1, CriticalExternalFixReportV1, DeploymentCheckV1,
+        DeploymentExecutionPreflightV1, DeploymentPlanV1, DeploymentReceiptV1,
         ExternalLifecycleCheckV1, ExternalLifecycleHandoffV1, ExternalLifecyclePendingReportV1,
         ExternalLifecyclePlanV1, ExternalUpgradeCompletionReportRequest,
         ExternalUpgradeCompletionReportV1, ExternalUpgradeConsentEvidenceRequest,
@@ -46,19 +49,15 @@ use canic_host::{
         SafetyReportV1, SafetyStatusV1, StagingReceiptV1, artifact_promotion_execution_receipt,
         artifact_promotion_execution_receipt_text, artifact_promotion_plan,
         artifact_promotion_plan_text, artifact_promotion_provenance_report,
-        artifact_promotion_provenance_report_text,
-        authority_dry_run_evidence_from_check_with_local_ids,
-        authority_dry_run_receipt_from_check_with_local_id, authority_evidence_text,
-        authority_plan_text, authority_receipt_text, authority_report_from_check_with_local_id,
-        authority_report_text, build_authority_reconciliation_plan, check_promotion_policy,
-        check_promotion_readiness, compare_plan_inventory_and_receipt,
-        critical_external_fix_report_from_pending, critical_external_fix_report_text,
-        external_lifecycle_check_from_reports, external_lifecycle_check_text,
-        external_lifecycle_handoff_from_reports, external_lifecycle_handoff_text,
-        external_lifecycle_pending_report_from_plan, external_lifecycle_pending_report_text,
-        external_lifecycle_plan_from_check, external_lifecycle_plan_text,
-        external_upgrade_completion_report_from_evidence, external_upgrade_completion_report_text,
-        external_upgrade_consent_evidence_from_receipt, external_upgrade_consent_evidence_text,
+        artifact_promotion_provenance_report_text, check_promotion_policy,
+        check_promotion_readiness, critical_external_fix_report_from_pending,
+        critical_external_fix_report_text, external_lifecycle_check_from_reports,
+        external_lifecycle_check_text, external_lifecycle_handoff_from_reports,
+        external_lifecycle_handoff_text, external_lifecycle_pending_report_from_plan,
+        external_lifecycle_pending_report_text, external_lifecycle_plan_from_check,
+        external_lifecycle_plan_text, external_upgrade_completion_report_from_evidence,
+        external_upgrade_completion_report_text, external_upgrade_consent_evidence_from_receipt,
+        external_upgrade_consent_evidence_text,
         external_upgrade_proposal_report_from_lifecycle_plan,
         external_upgrade_proposal_report_text, external_upgrade_verification_check_from_policy,
         external_upgrade_verification_check_text,
@@ -87,16 +86,12 @@ use canic_host::{
         evidence_summary_exit_class, file_input_fingerprint, json_payload_sha256,
     },
     icp_config::resolve_current_canic_icp_root,
-    install_root::{
-        InstallRootOptions, check_install_deployment_truth,
-        latest_deployment_truth_receipt_path_from_root,
-    },
+    install_root::{InstallRootOptions, check_install_deployment_truth},
 };
 use clap::Command as ClapCommand;
 use output_format::{
-    AuthorityOutputFormat, CheckOutputFormat, ExternalOutputFormat, PromotionOutputFormat,
-    parse_authority_output_format, parse_check_output_format, parse_external_output_format,
-    parse_promotion_output_format,
+    CheckOutputFormat, ExternalOutputFormat, PromotionOutputFormat, parse_check_output_format,
+    parse_external_output_format, parse_promotion_output_format,
 };
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -154,30 +149,6 @@ mutation flows through `canic deploy install <deployment> --plan <file>`.
 `canic install <fleet>` remains the fleet-template bootstrap entrypoint.
 Authority commands are dry-run reconciliation reports and do not mutate
 controller state.";
-const DEPLOY_PLAN_HELP_AFTER: &str = "\
-Examples:
-  canic deploy plan demo
-  canic --network local deploy plan --profile fast demo
-
-Prints the local DeploymentPlanV1 JSON without installing or mutating state.";
-const DEPLOY_INVENTORY_HELP_AFTER: &str = "\
-Examples:
-  canic deploy inventory demo
-  canic --network local deploy inventory --profile fast demo
-
-Prints the local DeploymentInventoryV1 JSON without installing or mutating state.";
-const DEPLOY_DIFF_HELP_AFTER: &str = "\
-Examples:
-  canic deploy diff demo
-  canic --network local deploy diff --profile fast demo
-
-Prints the local DeploymentDiffV1 JSON without installing or mutating state.";
-const DEPLOY_REPORT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy report demo
-  canic --network local deploy report --profile fast demo
-
-Prints the local SafetyReportV1 JSON without installing or mutating state.";
 const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
@@ -188,17 +159,6 @@ Examples:
 Prints the local DeploymentCheckV1 JSON without installing or mutating state.
 Use --format envelope-json for the stable CI/GitOps evidence envelope.
 --build-provenance is fingerprinted only in envelope output.";
-const DEPLOY_AUTHORITY_HELP_AFTER: &str = "\
-Examples:
-  canic deploy authority check demo
-  canic deploy authority evidence demo
-  canic deploy authority report demo
-  canic deploy authority receipt demo
-  canic --network local deploy authority check --profile fast demo
-
-0.42 authority commands are dry-run reports. They do not apply controller
-changes. A successful command means the local authority artifact was produced,
-not that the deployment is globally safe or that controller state was changed.";
 const DEPLOY_EXTERNAL_HELP_AFTER: &str = "\
 Examples:
   canic deploy external plan demo
@@ -406,45 +366,6 @@ Examples:
 Reads a PromotionMaterializationIdentityReportRequest-shaped JSON file and
 prints PromotionMaterializationIdentityReportV1 JSON by default, or passive
 text with --format text.";
-const DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER: &str = "\
-Examples:
-  canic deploy authority evidence demo
-  canic deploy authority evidence --format text demo
-  canic --network local deploy authority evidence --profile fast demo
-
-Prints AuthorityDryRunEvidenceV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.
-Success means evidence generation succeeded, not that every deployment safety
-check is clean.";
-const DEPLOY_AUTHORITY_CHECK_HELP_AFTER: &str = "\
-Examples:
-  canic deploy authority check demo
-  canic deploy authority check --format text demo
-  canic --network local deploy authority check --profile fast demo
-
-Prints the local AuthorityReconciliationPlanV1 JSON by default, or a
-human-readable read-only summary with --format text. No controller changes are
-attempted. Success means the local plan was produced.";
-const DEPLOY_AUTHORITY_REPORT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy authority report demo
-  canic deploy authority report --format text demo
-  canic --network local deploy authority report --profile fast demo
-
-Prints the local AuthorityReportV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.
-Authority status is authority-scoped; it is not a whole-deployment safety
-verdict.";
-const DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy authority receipt demo
-  canic deploy authority receipt --format text demo
-  canic --network local deploy authority receipt --profile fast demo
-
-Prints an evidence-only AuthorityReceiptV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.
-Success means the dry-run receipt was produced with zero attempted controller
-actions.";
 const DEPLOY_EXTERNAL_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy external plan demo
@@ -513,17 +434,6 @@ ExternalUpgradeVerificationReportV1 JSON by default, or host-owned passive text
 with --format text. Verification reports package proposal/receipt structural
 evidence only; live inventory remains the source of truth for deployment
 state.";
-const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
-Examples:
-  canic deploy resume-report demo
-  canic deploy resume-report --receipt receipt.json demo
-  canic --network local deploy resume-report --receipt receipt.json --profile fast demo
-
-Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
-and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
-latest local receipt under .canic/<network>/deployment-receipts/<deployment>. It
-does not resume, install, or mutate state.";
-
 ///
 /// DeployCommandError
 ///
@@ -543,10 +453,10 @@ pub enum DeployCommandError {
 /// DeployTruthOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployTruthOptions {
-    deployment: String,
-    network: String,
-    profile: Option<CanisterBuildProfile>,
+pub(super) struct DeployTruthOptions {
+    pub(super) deployment: String,
+    pub(super) network: String,
+    pub(super) profile: Option<CanisterBuildProfile>,
 }
 
 ///
@@ -557,23 +467,6 @@ struct DeployCheckOptions {
     truth: DeployTruthOptions,
     format: CheckOutputFormat,
     build_provenance: Option<PathBuf>,
-}
-
-///
-/// DeployResumeReportOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployResumeReportOptions {
-    truth: DeployTruthOptions,
-    receipt: Option<PathBuf>,
-}
-
-/// DeployAuthorityOptions
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct DeployAuthorityOptions {
-    truth: DeployTruthOptions,
-    format: AuthorityOutputFormat,
 }
 
 ///
@@ -728,7 +621,7 @@ where
             Ok(())
         }
         Some((command, args)) => match command.as_str() {
-            "authority" => run_authority(args),
+            "authority" => authority::run(args),
             "catalog" => catalog::run(args),
             "external" => run_external(args),
             "promote" => run_promote(args),
@@ -736,11 +629,11 @@ where
             "install" => install::run(args),
             "register" => register::run(args),
             "compare" => compare::run(args),
-            "plan" => run_plan(args),
-            "inventory" => run_inventory(args),
-            "diff" => run_diff(args),
-            "report" => run_report(args),
-            "resume-report" => run_resume_report(args),
+            "plan" => truth::run_plan(args),
+            "inventory" => truth::run_inventory(args),
+            "diff" => truth::run_diff(args),
+            "report" => truth::run_report(args),
+            "resume-report" => resume_report::run(args),
             "check" => run_check(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },
@@ -1168,81 +1061,6 @@ fn build_promotion_materialization_identity_report(
         },
     )
     .map_err(|err| DeployCommandError::Check(Box::new(err)))
-}
-
-fn run_authority<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, authority_usage, version_text()) {
-        return Ok(());
-    }
-
-    match parse_subcommand(deploy_authority_command(), args)
-        .map_err(|_| DeployCommandError::Usage(authority_usage()))?
-    {
-        Some((command, args)) if command == "check" => run_authority_check(args),
-        Some((command, args)) if command == "evidence" => run_authority_evidence(args),
-        Some((command, args)) if command == "report" => run_authority_report(args),
-        Some((command, args)) if command == "receipt" => run_authority_receipt(args),
-        _ => {
-            println!("{}", authority_usage());
-            Ok(())
-        }
-    }
-}
-
-fn run_authority_evidence<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    run_authority_output(
-        args,
-        deploy_authority_evidence_command,
-        authority_evidence_usage,
-        build_authority_dry_run_evidence,
-        authority_evidence_text,
-    )
-}
-
-fn run_authority_receipt<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    run_authority_output(
-        args,
-        deploy_authority_receipt_command,
-        authority_receipt_usage,
-        build_authority_dry_run_receipt,
-        authority_receipt_text,
-    )
-}
-
-fn run_authority_report<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    run_authority_output(
-        args,
-        deploy_authority_report_command,
-        authority_report_usage,
-        |check| Ok(authority_report_from_check_with_local_id(check)),
-        authority_report_text,
-    )
-}
-
-fn run_authority_check<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    run_authority_output(
-        args,
-        deploy_authority_check_command,
-        authority_check_usage,
-        |check| Ok(build_authority_reconciliation_plan(check)),
-        authority_plan_text,
-    )
 }
 
 fn run_external<I>(args: I) -> Result<(), DeployCommandError>
@@ -1770,120 +1588,6 @@ fn local_external_artifact_id(check: &DeploymentCheckV1, suffix: &str) -> String
     )
 }
 
-fn run_authority_output<I, T>(
-    args: I,
-    command: impl FnOnce() -> ClapCommand,
-    usage: fn() -> String,
-    build: impl FnOnce(&DeploymentCheckV1) -> Result<T, DeployCommandError>,
-    render_text: impl FnOnce(&T) -> String,
-) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-    T: serde::Serialize,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployAuthorityOptions::parse(args, command, usage)?;
-    let check = load_deployment_check(options.truth)?;
-    let output = build(&check)?;
-    match options.format {
-        AuthorityOutputFormat::Json => print_json(&output)?,
-        AuthorityOutputFormat::Text => println!("{}", render_text(&output)),
-    }
-    Ok(())
-}
-
-fn build_authority_dry_run_evidence(
-    check: &DeploymentCheckV1,
-) -> Result<AuthorityDryRunEvidenceV1, DeployCommandError> {
-    let generated_at = current_observed_at()?;
-    authority_dry_run_evidence_from_check_with_local_ids(check, generated_at)
-        .map_err(|err| DeployCommandError::Check(Box::new(err)))
-}
-
-fn build_authority_dry_run_receipt(
-    check: &DeploymentCheckV1,
-) -> Result<canic_host::deployment_truth::AuthorityReceiptV1, DeployCommandError> {
-    let generated_at = current_observed_at()?;
-    authority_dry_run_receipt_from_check_with_local_id(check, generated_at)
-        .map_err(|err| DeployCommandError::Check(Box::new(err)))
-}
-
-fn run_plan<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, plan_usage, version_text()) {
-        return Ok(());
-    }
-
-    let check = load_deployment_check(DeployTruthOptions::parse(
-        args,
-        deploy_plan_command,
-        plan_usage,
-    )?)?;
-    print_json(&check.plan)?;
-    Ok(())
-}
-
-fn run_inventory<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, inventory_usage, version_text()) {
-        return Ok(());
-    }
-
-    let check = load_deployment_check(DeployTruthOptions::parse(
-        args,
-        deploy_inventory_command,
-        inventory_usage,
-    )?)?;
-    print_json(&check.inventory)?;
-    Ok(())
-}
-
-fn run_diff<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, diff_usage, version_text()) {
-        return Ok(());
-    }
-
-    let check = load_deployment_check(DeployTruthOptions::parse(
-        args,
-        deploy_diff_command,
-        diff_usage,
-    )?)?;
-    print_json(&check.diff)?;
-    Ok(())
-}
-
-fn run_report<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, report_usage, version_text()) {
-        return Ok(());
-    }
-
-    let check = load_deployment_check(DeployTruthOptions::parse(
-        args,
-        deploy_report_command,
-        report_usage,
-    )?)?;
-    print_json(&check.report)?;
-    Ok(())
-}
-
 fn run_check<I>(args: I) -> Result<(), DeployCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -1899,25 +1603,7 @@ where
     enforce_deployment_check_status(&check.report)
 }
 
-fn run_resume_report<I>(args: I) -> Result<(), DeployCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, resume_report_usage, version_text()) {
-        return Ok(());
-    }
-
-    let options = DeployResumeReportOptions::parse(args)?;
-    let receipt_path = options.receipt_path()?;
-    let receipt = read_deployment_receipt(&receipt_path)?;
-    let check = load_deployment_check(options.truth)?;
-    let diff = compare_plan_inventory_and_receipt(&check.plan, &check.inventory, &receipt);
-    print_json(&diff.resume_safety)?;
-    Ok(())
-}
-
-fn load_deployment_check(
+pub(super) fn load_deployment_check(
     options: DeployTruthOptions,
 ) -> Result<DeploymentCheckV1, DeployCommandError> {
     let icp_root = resolve_current_canic_icp_root().ok();
@@ -1928,7 +1614,7 @@ fn load_deployment_check(
     .map_err(DeployCommandError::from)
 }
 
-fn print_json<T>(value: &T) -> Result<(), DeployCommandError>
+pub(super) fn print_json<T>(value: &T) -> Result<(), DeployCommandError>
 where
     T: serde::Serialize,
 {
@@ -1937,11 +1623,7 @@ where
     Ok(())
 }
 
-fn read_deployment_receipt(path: &PathBuf) -> Result<DeploymentReceiptV1, DeployCommandError> {
-    read_json_file(path)
-}
-
-fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>
+pub(super) fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>
 where
     T: DeserializeOwned,
 {
@@ -2216,72 +1898,6 @@ fn enforce_deployment_check_status(report: &SafetyReportV1) -> Result<(), Deploy
     Ok(())
 }
 
-impl DeployResumeReportOptions {
-    fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches = parse_matches(deploy_resume_report_command(), args)
-            .map_err(|_| DeployCommandError::Usage(resume_report_usage()))?;
-        Ok(Self {
-            truth: DeployTruthOptions::from_matches(&matches, resume_report_usage)?,
-            receipt: path_option(&matches, "receipt"),
-        })
-    }
-
-    fn receipt_path(&self) -> Result<PathBuf, DeployCommandError> {
-        if let Some(path) = &self.receipt {
-            return Ok(path.clone());
-        }
-
-        let icp_root = resolve_current_canic_icp_root().map_err(|err| {
-            DeployCommandError::Usage(format!(
-                "could not discover current Canic project root for latest deployment receipt: {err}; pass --receipt <file>"
-            ))
-        })?;
-
-        latest_deployment_truth_receipt_path_from_root(
-            &icp_root,
-            &self.truth.network,
-            &self.truth.deployment,
-        )
-        .map_err(DeployCommandError::from)?
-        .ok_or_else(|| {
-            DeployCommandError::Usage(format!(
-                "no deployment receipt found under {} for deployment {}; pass --receipt <file>",
-                icp_root
-                    .join(".canic")
-                    .join(&self.truth.network)
-                    .join("deployment-receipts")
-                    .join(&self.truth.deployment)
-                    .display(),
-                self.truth.deployment
-            ))
-        })
-    }
-}
-
-impl DeployAuthorityOptions {
-    fn parse<I>(
-        args: I,
-        command: impl FnOnce() -> ClapCommand,
-        usage: fn() -> String,
-    ) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches =
-            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
-        Ok(Self {
-            truth: DeployTruthOptions::from_matches(&matches, usage)?,
-            format: parse_authority_output_format(
-                string_option(&matches, "format").as_deref(),
-                usage,
-            )?,
-        })
-    }
-}
-
 impl DeployExternalOptions {
     fn parse<I>(
         args: I,
@@ -2403,7 +2019,7 @@ impl DeployTruthOptions {
         Self::from_matches(&matches, usage)
     }
 
-    fn from_matches(
+    pub(super) fn from_matches(
         matches: &clap::ArgMatches,
         usage: fn() -> String,
     ) -> Result<Self, DeployCommandError> {
@@ -2853,62 +2469,6 @@ fn deploy_promote_report_command(
         .arg(promotion_format_arg())
 }
 
-fn deploy_authority_command() -> ClapCommand {
-    ClapCommand::new("authority")
-        .bin_name("canic deploy authority")
-        .about("Dry-run controller authority reconciliation")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("check")
-                .about("Print the local authority reconciliation plan")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("evidence")
-                .about("Print the local authority dry-run evidence")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("report")
-                .about("Print the local authority reconciliation report")
-                .disable_help_flag(true),
-        ))
-        .subcommand(passthrough_subcommand(
-            ClapCommand::new("receipt")
-                .about("Print the local authority dry-run receipt")
-                .disable_help_flag(true),
-        ))
-        .after_help(DEPLOY_AUTHORITY_HELP_AFTER)
-}
-
-fn deploy_authority_check_command() -> ClapCommand {
-    deploy_truth_leaf_command("check", "Print the local authority reconciliation plan")
-        .arg(authority_format_arg())
-        .bin_name("canic deploy authority check")
-        .after_help(DEPLOY_AUTHORITY_CHECK_HELP_AFTER)
-}
-
-fn deploy_authority_evidence_command() -> ClapCommand {
-    deploy_truth_leaf_command("evidence", "Print the local authority dry-run evidence")
-        .arg(authority_format_arg())
-        .bin_name("canic deploy authority evidence")
-        .after_help(DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER)
-}
-
-fn deploy_authority_report_command() -> ClapCommand {
-    deploy_truth_leaf_command("report", "Print the local authority reconciliation report")
-        .arg(authority_format_arg())
-        .bin_name("canic deploy authority report")
-        .after_help(DEPLOY_AUTHORITY_REPORT_HELP_AFTER)
-}
-
-fn deploy_authority_receipt_command() -> ClapCommand {
-    deploy_truth_leaf_command("receipt", "Print the local authority dry-run receipt")
-        .arg(authority_format_arg())
-        .bin_name("canic deploy authority receipt")
-        .after_help(DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER)
-}
-
 fn deploy_external_plan_command() -> ClapCommand {
     deploy_truth_leaf_command("plan", "Print the local external lifecycle plan")
         .arg(external_format_arg())
@@ -3056,26 +2616,6 @@ fn deploy_external_inspect_completion_command() -> ClapCommand {
         .after_help(DEPLOY_EXTERNAL_COMPLETION_HELP_AFTER)
 }
 
-fn deploy_plan_command() -> ClapCommand {
-    deploy_truth_leaf_command("plan", "Print the local deployment plan JSON")
-        .after_help(DEPLOY_PLAN_HELP_AFTER)
-}
-
-fn deploy_inventory_command() -> ClapCommand {
-    deploy_truth_leaf_command("inventory", "Print the local deployment inventory JSON")
-        .after_help(DEPLOY_INVENTORY_HELP_AFTER)
-}
-
-fn deploy_diff_command() -> ClapCommand {
-    deploy_truth_leaf_command("diff", "Print the local deployment diff JSON")
-        .after_help(DEPLOY_DIFF_HELP_AFTER)
-}
-
-fn deploy_report_command() -> ClapCommand {
-    deploy_truth_leaf_command("report", "Print the local deployment safety report JSON")
-        .after_help(DEPLOY_REPORT_HELP_AFTER)
-}
-
 fn deploy_check_command() -> ClapCommand {
     deploy_truth_leaf_command("check", "Print the local deployment truth check JSON")
         .arg(check_format_arg())
@@ -3083,21 +2623,7 @@ fn deploy_check_command() -> ClapCommand {
         .after_help(DEPLOY_CHECK_HELP_AFTER)
 }
 
-fn deploy_resume_report_command() -> ClapCommand {
-    deploy_truth_leaf_command(
-        "resume-report",
-        "Print passive resume safety JSON from a prior deployment receipt",
-    )
-    .arg(
-        value_arg("receipt")
-            .long("receipt")
-            .value_name("file")
-            .help("DeploymentReceiptV1 JSON file to compare with current deployment truth"),
-    )
-    .after_help(DEPLOY_RESUME_REPORT_HELP_AFTER)
-}
-
-fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> ClapCommand {
+pub(super) fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> ClapCommand {
     ClapCommand::new(name)
         .bin_name(format!("canic deploy {name}"))
         .about(about)
@@ -3116,14 +2642,6 @@ fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> ClapCom
                 .help("Expected canister wasm build profile"),
         )
         .arg(internal_network_arg())
-}
-
-fn authority_format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .help("Output format; defaults to json")
 }
 
 fn check_format_arg() -> clap::Arg {
@@ -3160,26 +2678,6 @@ fn promotion_format_arg() -> clap::Arg {
 
 fn usage() -> String {
     let mut command = deploy_command();
-    command.render_help().to_string()
-}
-
-fn plan_usage() -> String {
-    let mut command = deploy_plan_command();
-    command.render_help().to_string()
-}
-
-fn inventory_usage() -> String {
-    let mut command = deploy_inventory_command();
-    command.render_help().to_string()
-}
-
-fn diff_usage() -> String {
-    let mut command = deploy_diff_command();
-    command.render_help().to_string()
-}
-
-fn report_usage() -> String {
-    let mut command = deploy_report_command();
     command.render_help().to_string()
 }
 
@@ -3333,36 +2831,6 @@ fn promote_materialization_identity_usage() -> String {
     command.render_help().to_string()
 }
 
-fn authority_usage() -> String {
-    let mut command = deploy_authority_command();
-    command.render_help().to_string()
-}
-
-fn authority_check_usage() -> String {
-    let mut command = deploy_authority_check_command();
-    command.render_help().to_string()
-}
-
-fn authority_evidence_usage() -> String {
-    let mut command = deploy_authority_evidence_command();
-    command.render_help().to_string()
-}
-
-fn authority_report_usage() -> String {
-    let mut command = deploy_authority_report_command();
-    command.render_help().to_string()
-}
-
-fn authority_receipt_usage() -> String {
-    let mut command = deploy_authority_receipt_command();
-    command.render_help().to_string()
-}
-
-fn resume_report_usage() -> String {
-    let mut command = deploy_resume_report_command();
-    command.render_help().to_string()
-}
-
 fn parse_profile(
     value: &str,
     usage: fn() -> String,
@@ -3378,7 +2846,7 @@ fn parse_profile(
     }
 }
 
-fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
     Ok(format!(
         "unix:{}",
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
@@ -3803,25 +3271,31 @@ mod tests {
 
     #[test]
     fn deploy_leaf_commands_parse_like_check() {
-        let plan =
-            DeployTruthOptions::parse([OsString::from("demo")], deploy_plan_command, plan_usage)
-                .expect("parse deploy plan");
+        let plan = DeployTruthOptions::parse(
+            [OsString::from("demo")],
+            truth::plan_command,
+            truth::plan_usage,
+        )
+        .expect("parse deploy plan");
         let inventory = DeployTruthOptions::parse(
             [OsString::from("demo")],
-            deploy_inventory_command,
-            inventory_usage,
+            truth::inventory_command,
+            truth::inventory_usage,
         )
         .expect("parse deploy inventory");
-        let diff =
-            DeployTruthOptions::parse([OsString::from("demo")], deploy_diff_command, diff_usage)
-                .expect("parse deploy diff");
+        let diff = DeployTruthOptions::parse(
+            [OsString::from("demo")],
+            truth::diff_command,
+            truth::diff_usage,
+        )
+        .expect("parse deploy diff");
         let report = DeployTruthOptions::parse(
             [OsString::from("demo")],
-            deploy_report_command,
-            report_usage,
+            truth::report_command,
+            truth::report_usage,
         )
         .expect("parse deploy report");
-        let resume_report = DeployResumeReportOptions::parse([
+        let resume_report = resume_report::DeployResumeReportOptions::parse([
             OsString::from("--receipt"),
             OsString::from("receipt.json"),
             OsString::from("demo"),
@@ -3956,28 +3430,28 @@ mod tests {
 
     #[test]
     fn deploy_authority_leaf_commands_default_to_json() {
-        let authority_check = DeployAuthorityOptions::parse(
+        let authority_check = authority::DeployAuthorityOptions::parse(
             [OsString::from("demo")],
-            deploy_authority_check_command,
-            authority_check_usage,
+            authority::check_command,
+            authority::check_usage,
         )
         .expect("parse deploy authority check");
-        let authority_evidence = DeployAuthorityOptions::parse(
+        let authority_evidence = authority::DeployAuthorityOptions::parse(
             [OsString::from("demo")],
-            deploy_authority_evidence_command,
-            authority_evidence_usage,
+            authority::evidence_command,
+            authority::evidence_usage,
         )
         .expect("parse deploy authority evidence");
-        let authority_report = DeployAuthorityOptions::parse(
+        let authority_report = authority::DeployAuthorityOptions::parse(
             [OsString::from("demo")],
-            deploy_authority_report_command,
-            authority_report_usage,
+            authority::report_command,
+            authority::report_usage,
         )
         .expect("parse deploy authority report");
-        let authority_receipt = DeployAuthorityOptions::parse(
+        let authority_receipt = authority::DeployAuthorityOptions::parse(
             [OsString::from("demo")],
-            deploy_authority_receipt_command,
-            authority_receipt_usage,
+            authority::receipt_command,
+            authority::receipt_usage,
         )
         .expect("parse deploy authority receipt");
 
@@ -3988,61 +3462,73 @@ mod tests {
             authority_receipt,
         ] {
             assert_eq!(options.truth.deployment, "demo");
-            assert_eq!(options.format, AuthorityOutputFormat::Json);
+            assert_eq!(options.format, output_format::AuthorityOutputFormat::Json);
         }
     }
 
     #[test]
     fn deploy_authority_leaf_commands_parse_text_format() {
-        let authority_check = DeployAuthorityOptions::parse(
+        let authority_check = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("text"),
                 OsString::from("demo"),
             ],
-            deploy_authority_check_command,
-            authority_check_usage,
+            authority::check_command,
+            authority::check_usage,
         )
         .expect("parse deploy authority check text");
-        let authority_evidence = DeployAuthorityOptions::parse(
+        let authority_evidence = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("text"),
                 OsString::from("demo"),
             ],
-            deploy_authority_evidence_command,
-            authority_evidence_usage,
+            authority::evidence_command,
+            authority::evidence_usage,
         )
         .expect("parse deploy authority evidence text");
-        let authority_report = DeployAuthorityOptions::parse(
+        let authority_report = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("text"),
                 OsString::from("demo"),
             ],
-            deploy_authority_report_command,
-            authority_report_usage,
+            authority::report_command,
+            authority::report_usage,
         )
         .expect("parse deploy authority report text");
-        let authority_receipt = DeployAuthorityOptions::parse(
+        let authority_receipt = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("text"),
                 OsString::from("demo"),
             ],
-            deploy_authority_receipt_command,
-            authority_receipt_usage,
+            authority::receipt_command,
+            authority::receipt_usage,
         )
         .expect("parse deploy authority receipt text");
 
         assert_eq!(authority_check.truth.deployment, "demo");
-        assert_eq!(authority_check.format, AuthorityOutputFormat::Text);
+        assert_eq!(
+            authority_check.format,
+            output_format::AuthorityOutputFormat::Text
+        );
         assert_eq!(authority_evidence.truth.deployment, "demo");
-        assert_eq!(authority_evidence.format, AuthorityOutputFormat::Text);
+        assert_eq!(
+            authority_evidence.format,
+            output_format::AuthorityOutputFormat::Text
+        );
         assert_eq!(authority_report.truth.deployment, "demo");
-        assert_eq!(authority_report.format, AuthorityOutputFormat::Text);
+        assert_eq!(
+            authority_report.format,
+            output_format::AuthorityOutputFormat::Text
+        );
         assert_eq!(authority_receipt.truth.deployment, "demo");
-        assert_eq!(authority_receipt.format, AuthorityOutputFormat::Text);
+        assert_eq!(
+            authority_receipt.format,
+            output_format::AuthorityOutputFormat::Text
+        );
     }
 
     #[test]
@@ -4243,7 +3729,7 @@ mod tests {
 
     #[test]
     fn deploy_authority_command_help_does_not_claim_json_only_output() {
-        let help = authority_usage();
+        let help = authority::usage();
 
         assert!(help.contains("Print the local authority reconciliation plan"));
         assert!(help.contains("Print the local authority dry-run evidence"));
@@ -4392,9 +3878,9 @@ mod tests {
 
     #[test]
     fn deploy_authority_leaf_help_documents_exit_status_scope() {
-        let report_help = authority_report_usage();
-        let receipt_help = authority_receipt_usage();
-        let evidence_help = authority_evidence_usage();
+        let report_help = authority::report_usage();
+        let receipt_help = authority::receipt_usage();
+        let evidence_help = authority::evidence_usage();
 
         assert!(report_help.contains("Authority status is authority-scoped"));
         assert!(report_help.contains("whole-deployment safety"));
@@ -4505,7 +3991,11 @@ mod tests {
     #[test]
     fn deploy_check_path_has_no_local_state_write_primitives() {
         let source = include_str!("mod.rs");
-        let check_source = source_between(source, "fn run_check<I>", "fn run_resume_report<I>");
+        let check_source = source_between(
+            source,
+            "fn run_check<I>",
+            "pub(super) fn load_deployment_check",
+        );
         let loader_source = source_between(source, "fn load_deployment_check", "fn print_json<T>");
 
         for forbidden in [
@@ -4527,8 +4017,12 @@ mod tests {
 
     #[test]
     fn deploy_authority_path_has_no_controller_mutation_primitives() {
-        let source = include_str!("mod.rs");
-        let authority_source = source_between(source, "fn run_authority<I>", "fn run_plan<I>");
+        let source = include_str!("authority.rs");
+        let authority_source = source_between(
+            source,
+            "pub(super) fn run<I>",
+            "pub(super) fn build_dry_run_evidence",
+        );
         for forbidden in [
             "update_settings",
             "install_code",
@@ -4549,8 +4043,11 @@ mod tests {
     #[test]
     fn deploy_external_path_has_no_mutation_primitives() {
         let source = include_str!("mod.rs");
-        let external_source =
-            source_between(source, "fn run_external<I>", "fn run_authority_output<I");
+        let external_source = source_between(
+            source,
+            "fn run_external<I>",
+            "pub(super) fn load_deployment_check",
+        );
         for forbidden in [
             "update_settings",
             "install_code",
@@ -4571,7 +4068,7 @@ mod tests {
     #[test]
     fn deploy_promote_path_has_no_mutation_primitives() {
         let source = include_str!("mod.rs");
-        let promote_source = source_between(source, "fn run_promote<I>", "fn run_authority<I>");
+        let promote_source = source_between(source, "fn run_promote<I>", "fn run_external<I>");
         for forbidden in [
             "update_settings",
             "install_code",
@@ -4592,7 +4089,7 @@ mod tests {
     #[test]
     fn deploy_promote_path_has_no_live_deployment_truth_dependencies() {
         let source = include_str!("mod.rs");
-        let promote_source = source_between(source, "fn run_promote<I>", "fn run_authority<I>");
+        let promote_source = source_between(source, "fn run_promote<I>", "fn run_external<I>");
         for forbidden in [
             "load_deployment_check",
             "check_install_deployment_truth",
@@ -4675,7 +4172,7 @@ mod tests {
             vec![OsString::from("check"), OsString::from("demo")]
         );
 
-        let nested = parse_subcommand(deploy_authority_command(), parsed.1)
+        let nested = parse_subcommand(authority::command(), parsed.1)
             .expect("parse nested authority")
             .expect("authority check command");
         assert_eq!(nested.0, "check");
@@ -4701,7 +4198,7 @@ mod tests {
             vec![OsString::from("evidence"), OsString::from("demo")]
         );
 
-        let nested = parse_subcommand(deploy_authority_command(), parsed.1)
+        let nested = parse_subcommand(authority::command(), parsed.1)
             .expect("parse nested authority")
             .expect("authority evidence command");
         assert_eq!(nested.0, "evidence");
@@ -4727,7 +4224,7 @@ mod tests {
             vec![OsString::from("report"), OsString::from("demo")]
         );
 
-        let nested = parse_subcommand(deploy_authority_command(), parsed.1)
+        let nested = parse_subcommand(authority::command(), parsed.1)
             .expect("parse nested authority")
             .expect("authority report command");
         assert_eq!(nested.0, "report");
@@ -4753,7 +4250,7 @@ mod tests {
             vec![OsString::from("receipt"), OsString::from("demo")]
         );
 
-        let nested = parse_subcommand(deploy_authority_command(), parsed.1)
+        let nested = parse_subcommand(authority::command(), parsed.1)
             .expect("parse nested authority")
             .expect("authority receipt command");
         assert_eq!(nested.0, "receipt");
@@ -5182,7 +4679,7 @@ mod tests {
         let check = sample_authority_check();
 
         let evidence =
-            build_authority_dry_run_evidence(&check).expect("build authority dry-run evidence");
+            authority::build_dry_run_evidence(&check).expect("build authority dry-run evidence");
 
         assert_eq!(evidence.evidence_id, "local:local:demo:authority-evidence");
         assert_eq!(evidence.check_id, "check-1");
@@ -5219,7 +4716,7 @@ mod tests {
         let check = sample_authority_check();
 
         let receipt =
-            build_authority_dry_run_receipt(&check).expect("build authority dry-run receipt");
+            authority::build_dry_run_receipt(&check).expect("build authority dry-run receipt");
 
         assert_eq!(
             receipt.operation_id,
@@ -5743,14 +5240,14 @@ mod tests {
 
     #[test]
     fn authority_check_rejects_unknown_format() {
-        let result = DeployAuthorityOptions::parse(
+        let result = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("csv"),
                 OsString::from("demo"),
             ],
-            deploy_authority_check_command,
-            authority_check_usage,
+            authority::check_command,
+            authority::check_usage,
         );
 
         std::assert_matches!(
@@ -5762,14 +5259,14 @@ mod tests {
 
     #[test]
     fn authority_evidence_rejects_unknown_format() {
-        let result = DeployAuthorityOptions::parse(
+        let result = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("xml"),
                 OsString::from("demo"),
             ],
-            deploy_authority_evidence_command,
-            authority_evidence_usage,
+            authority::evidence_command,
+            authority::evidence_usage,
         );
 
         std::assert_matches!(
@@ -5781,14 +5278,14 @@ mod tests {
 
     #[test]
     fn authority_report_rejects_unknown_format() {
-        let result = DeployAuthorityOptions::parse(
+        let result = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("yaml"),
                 OsString::from("demo"),
             ],
-            deploy_authority_report_command,
-            authority_report_usage,
+            authority::report_command,
+            authority::report_usage,
         );
 
         std::assert_matches!(
@@ -5800,14 +5297,14 @@ mod tests {
 
     #[test]
     fn authority_receipt_rejects_unknown_format() {
-        let result = DeployAuthorityOptions::parse(
+        let result = authority::DeployAuthorityOptions::parse(
             [
                 OsString::from("--format"),
                 OsString::from("toml"),
                 OsString::from("demo"),
             ],
-            deploy_authority_receipt_command,
-            authority_receipt_usage,
+            authority::receipt_command,
+            authority::receipt_usage,
         );
 
         std::assert_matches!(
@@ -6019,8 +5516,9 @@ mod tests {
 
     #[test]
     fn deploy_resume_report_allows_latest_local_receipt_lookup() {
-        let resume_report = DeployResumeReportOptions::parse([OsString::from("demo")])
-            .expect("parse deploy resume-report");
+        let resume_report =
+            resume_report::DeployResumeReportOptions::parse([OsString::from("demo")])
+                .expect("parse deploy resume-report");
 
         assert_eq!(resume_report.truth.deployment, "demo");
         assert_eq!(resume_report.receipt, None);

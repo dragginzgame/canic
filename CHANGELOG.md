@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.57.md](docs/changelog/0.57.md)
 
+- `0.57.12` continues the DRY deploy CLI cleanup by moving authority dry-run
+  resume-report, and passive deployment-truth command handling into private
+  submodules while preserving command behavior, help text, output defaults, and
+  dry-run boundary coverage.
+
 - `0.57.11` removes the completed upstream launcher watch after it flagged a
   newer candidate for manual testing, and follows the DRY consolidation audit
   by splitting deploy command-family glue into private CLI submodules without
