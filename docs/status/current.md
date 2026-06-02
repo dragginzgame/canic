@@ -34,15 +34,29 @@ inspect only the files needed for the current task.
   defer to 0.58.1 if it cannot stay inside the existing funding interval.
   Initial implementation has started with passive refill DTOs, the MVP
   `topup.icp_refill` config policy, validation for nonzero refill limits/rate
-  gate, and the authoritative stable `IcpRefillRecord` map plus storage ops:
+  gate, the authoritative stable `IcpRefillRecord` map plus storage ops and
+  deterministic transition helpers, the low-level ICP ledger / CMC helper
+  layer, pure refill policy gates, and the manual canister-side refill
+  workflow skeleton:
   ```text
   crates/canic-core/src/dto/icp_refill.rs
   crates/canic-core/src/storage/stable/icp_refill.rs
   crates/canic-core/src/ops/storage/icp_refill.rs
+  crates/canic-core/src/infra/ic/icp_refill.rs
+  crates/canic-core/src/ops/ic/icp_refill.rs
+  crates/canic-core/src/domain/policy/icp_refill.rs
+  crates/canic-core/src/workflow/ic/icp_refill.rs
   ```
-  This is data/config/storage scaffolding only; IC infra, policy decisions,
-  workflow orchestration, endpoint macros, funding-chain hook, local
-  fabrication, and CLI delegation are still pending.
+  This now has the reusable manual workflow path that prepares an
+  `IcpRefillRecord`, executes `icrc1_transfer`, retries from the persisted
+  transfer identity for an existing `operation_id`, blocks stale pre-ledger
+  retry after the ICRC-1 24-hour deduplication window, updates persisted fee
+  on `BadFee`, validates ICP ledger decimals, retries/directly calls
+  `notify_top_up`, caps manual notify attempts at five, estimates dry-run
+  cycles from the current ICP/XDR rate, and maps ledger/CMC recovery states
+  through storage ops.
+  Endpoint macros, funding-chain timer hook, local fabrication, and CLI
+  delegation are still pending.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

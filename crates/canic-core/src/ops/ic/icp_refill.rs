@@ -1,0 +1,149 @@
+#![allow(dead_code)]
+
+use crate::{
+    InternalError,
+    cdk::{
+        candid::Nat,
+        icrc_ledger_types::icrc1::transfer::TransferArg,
+        types::{Account, Principal, Subaccount},
+    },
+    ids::BuildNetwork,
+    infra::{
+        InfraError,
+        ic::icp_refill::{
+            IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
+            IcpXdrConversionRateResponse, Icrc1TransferResult, NotifyTopUpArg, NotifyTopUpResult,
+        },
+    },
+    ops::ic::IcOpsError,
+};
+use thiserror::Error as ThisError;
+
+///
+/// IcpRefillOpsError
+///
+
+#[derive(Debug, ThisError)]
+pub enum IcpRefillOpsError {
+    #[error(transparent)]
+    Infra(#[from] InfraError),
+}
+
+impl From<IcpRefillOpsError> for InternalError {
+    fn from(err: IcpRefillOpsError) -> Self {
+        IcOpsError::from(err).into()
+    }
+}
+
+///
+/// IcpRefillOps
+///
+
+pub struct IcpRefillOps;
+
+impl IcpRefillOps {
+    #[must_use]
+    pub fn topup_memo() -> Vec<u8> {
+        IcpRefillInfra::topup_memo()
+    }
+
+    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<Subaccount, InternalError> {
+        IcpRefillInfra::cmc_topup_subaccount(target_canister)
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub fn cmc_topup_account(
+        cmc_canister_id: Principal,
+        target_canister: Principal,
+    ) -> Result<Account, InternalError> {
+        IcpRefillInfra::cmc_topup_account(cmc_canister_id, target_canister)
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    #[must_use]
+    pub const fn source_account(
+        source_canister: Principal,
+        source_subaccount: Option<Subaccount>,
+    ) -> Account {
+        IcpRefillInfra::source_account(source_canister, source_subaccount)
+    }
+
+    #[must_use]
+    pub fn transfer_arg(
+        from_subaccount: Option<Subaccount>,
+        to: Account,
+        amount_e8s: u64,
+        fee_e8s: u64,
+        memo: Vec<u8>,
+        created_at_time_ns: u64,
+    ) -> TransferArg {
+        IcpRefillInfra::transfer_arg(
+            from_subaccount,
+            to,
+            amount_e8s,
+            fee_e8s,
+            memo,
+            created_at_time_ns,
+        )
+    }
+
+    pub fn checked_block_index(block_index: Nat) -> Result<u64, InternalError> {
+        IcpRefillInfra::checked_block_index(block_index)
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub fn resolve_canisters(
+        network: BuildNetwork,
+        overrides: IcpRefillCanisterOverrides,
+    ) -> Result<IcpRefillCanisters, InternalError> {
+        IcpRefillInfra::resolve_canisters(network, overrides)
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, InternalError> {
+        IcpRefillInfra::icrc1_fee(ledger_id)
+            .await
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, InternalError> {
+        IcpRefillInfra::icrc1_decimals(ledger_id)
+            .await
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub async fn icrc1_transfer(
+        ledger_id: Principal,
+        args: TransferArg,
+    ) -> Result<Icrc1TransferResult, InternalError> {
+        IcpRefillInfra::icrc1_transfer(ledger_id, args)
+            .await
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub async fn notify_top_up(
+        cmc_id: Principal,
+        args: NotifyTopUpArg,
+    ) -> Result<NotifyTopUpResult, InternalError> {
+        IcpRefillInfra::notify_top_up(cmc_id, args)
+            .await
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+
+    pub async fn get_icp_xdr_conversion_rate(
+        cmc_id: Principal,
+    ) -> Result<IcpXdrConversionRateResponse, InternalError> {
+        IcpRefillInfra::get_icp_xdr_conversion_rate(cmc_id)
+            .await
+            .map_err(IcpRefillOpsError::from)
+            .map_err(InternalError::from)
+    }
+}

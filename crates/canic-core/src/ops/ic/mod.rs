@@ -29,6 +29,7 @@
 pub mod call;
 pub mod ecdsa;
 pub mod http;
+pub mod icp_refill;
 pub mod ledger;
 pub mod mgmt;
 pub mod network;
@@ -60,6 +61,9 @@ pub enum IcOpsError {
 
     #[error(transparent)]
     HttpOps(#[from] http::HttpOpsError),
+
+    #[error(transparent)]
+    IcpRefillOps(#[from] icp_refill::IcpRefillOpsError),
 
     #[error(transparent)]
     LedgerOps(#[from] ledger::LedgerOpsError),

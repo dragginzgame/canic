@@ -42,11 +42,13 @@ pub enum IcpRefillErrorCode {
     InvalidTransaction,
     LedgerTransferFailed,
     NotifyFailed,
+    NotifyMaxAttempts,
     Processing,
     RateGateDenied,
     Refunded,
     RequestDenied,
     TransactionTooOld,
+    TransferWindowStale,
 }
 
 ///

@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
+- `0.58.2` adds the ICP ledger/CMC helper layer, pure refill policy gates, and
+  the manual canister-side refill workflow with persisted retry identity,
+  duplicate recovery, stale-window protection, bad-fee retry preparation,
+  notify attempt capping, and dry-run estimates.
+
+- `0.58.1` starts the ICP refill implementation with passive request/status
+  DTOs, MVP `topup.icp_refill` config validation, authoritative refill record
+  storage, and generated bootstrap config support.
+
 - `0.58.0` starts the ICP-to-cycles refill primitive line with a scoped design
   for canister-side CMC/ICP-ledger conversion, recovery, local fabrication,
   funding-chain integration, MVP refill config, and bounded metrics without

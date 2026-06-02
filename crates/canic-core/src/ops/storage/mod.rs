@@ -30,6 +30,9 @@ pub enum StorageOpsError {
     IntentStoreOps(#[from] intent::IntentStoreOpsError),
 
     #[error(transparent)]
+    IcpRefillRecordOps(#[from] icp_refill::IcpRefillRecordOpsError),
+
+    #[error(transparent)]
     DirectoryRegistryOps(#[from] placement::directory::DirectoryRegistryOpsError),
 
     #[cfg(feature = "sharding")]

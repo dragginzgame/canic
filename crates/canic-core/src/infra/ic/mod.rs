@@ -6,6 +6,7 @@
 
 pub mod call;
 pub mod http;
+pub mod icp_refill;
 pub mod known;
 pub mod ledger;
 pub mod mgmt;
@@ -26,6 +27,9 @@ use thiserror::Error as ThisError;
 pub enum IcInfraError {
     #[error(transparent)]
     HttpInfra(#[from] http::HttpInfraError),
+
+    #[error(transparent)]
+    IcpRefillInfra(#[from] icp_refill::IcpRefillInfraError),
 
     #[error(transparent)]
     LedgerInfra(#[from] ledger::LedgerInfraError),

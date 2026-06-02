@@ -1,4 +1,5 @@
 pub mod call;
+pub mod icp_refill;
 pub mod ledger;
 pub mod mgmt;
 pub mod network;
