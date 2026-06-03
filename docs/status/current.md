@@ -106,7 +106,11 @@ inspect only the files needed for the current task.
   query-side instruction measurements. `0.58.7` makes endpoint attribute
   parsing drier: `name`, `internal`, and `composite` now share
   literal/boolean marker helpers, short access path decoding is centralized,
-  and parser tests cover the shared rejection paths.
+  and parser tests cover the shared rejection paths. `0.58.8` splits endpoint
+  macro parse, validate, and expand into directory modules with sibling
+  `tests.rs` modules, and moves access-plan synthesis into
+  `expand/access.rs`, so production macro files stay focused without changing
+  macro behavior.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

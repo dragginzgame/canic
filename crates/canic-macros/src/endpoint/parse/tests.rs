@@ -1,0 +1,254 @@
+use super::*;
+use quote::quote;
+
+#[test]
+fn name_only_is_forwarded_without_requires() {
+    let parsed = parse_args(quote!(name = "icrc10_supported_standards"))
+        .expect("name-only args should parse");
+
+    assert_eq!(parsed.forwarded.len(), 1);
+    assert_eq!(
+        parsed.export_name.as_ref().map(LitStr::value).as_deref(),
+        Some("icrc10_supported_standards")
+    );
+    assert!(parsed.requires.is_empty());
+    assert!(!parsed.internal);
+}
+
+#[test]
+fn composite_query_marker_is_forwarded_without_requires() {
+    let parsed = parse_args(quote!(composite)).expect("composite-only args should parse");
+
+    assert_eq!(parsed.query_mode, QueryMode::Composite);
+    assert_eq!(parsed.forwarded.len(), 1);
+    assert_eq!(parsed.forwarded[0].to_string(), "composite = true");
+    assert!(parsed.requires.is_empty());
+    assert!(!parsed.internal);
+}
+
+#[test]
+fn composite_query_true_is_forwarded() {
+    let parsed = parse_args(quote!(name = "wire_query", composite = true)).expect("parse args");
+
+    assert_eq!(parsed.query_mode, QueryMode::Composite);
+    assert_eq!(parsed.forwarded.len(), 2);
+    assert!(
+        parsed
+            .forwarded
+            .iter()
+            .any(|tokens| tokens.to_string() == "composite = true")
+    );
+}
+
+#[test]
+fn composite_query_false_is_rejected() {
+    let err = parse_args(quote!(composite = false)).expect_err("false composite");
+
+    assert!(err.to_string().contains("composite must be true"));
+}
+
+#[test]
+fn duplicate_composite_query_marker_is_rejected() {
+    let err = parse_args(quote!(composite, composite = true)).expect_err("duplicate");
+
+    assert!(err.to_string().contains("must appear only once"));
+}
+
+#[test]
+fn internal_false_marker_is_rejected() {
+    let err = parse_args(quote!(internal = false)).expect_err("false internal");
+
+    assert!(err.to_string().contains("internal must be true"));
+}
+
+#[test]
+fn internal_non_boolean_marker_is_rejected() {
+    let err = parse_args(quote!(internal = "yes")).expect_err("non-boolean internal");
+
+    assert!(
+        err.to_string()
+            .contains("internal must be set to a boolean literal")
+    );
+}
+
+#[test]
+fn composite_non_boolean_marker_is_rejected() {
+    let err = parse_args(quote!(composite = "yes")).expect_err("non-boolean composite");
+
+    assert!(
+        err.to_string()
+            .contains("composite must be set to a boolean literal")
+    );
+}
+
+#[test]
+fn payload_max_bytes_is_parsed() {
+    let parsed =
+        parse_args(quote!(payload(max_bytes = 64 * 1024))).expect("payload args should parse");
+
+    assert_eq!(
+        parsed.payload_max_bytes.expect("payload limit").to_string(),
+        "64 * 1024"
+    );
+}
+
+#[test]
+fn duplicate_name_is_rejected() {
+    let err = parse_args(quote!(name = "a", name = "b")).expect_err("duplicate name");
+    assert!(err.to_string().contains("must appear only once"));
+}
+
+#[test]
+fn duplicate_payload_is_rejected() {
+    let err = parse_args(quote!(payload(max_bytes = 1024), payload(max_bytes = 2048)))
+        .expect_err("duplicate payload");
+    assert!(err.to_string().contains("must appear only once"));
+}
+
+#[test]
+fn authenticated_allows_no_scope_argument() {
+    let parsed = parse_args(quote!(requires(auth::authenticated()))).expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
+        required_scope,
+    })) = &exprs[0]
+    else {
+        panic!("expected authenticated predicate");
+    };
+    assert!(required_scope.is_none());
+}
+
+#[test]
+fn grouped_access_expression_is_unwrapped() {
+    let parsed = parse_args(quote!(requires((caller::is_controller())))).expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerIsController)) =
+        &exprs[0]
+    else {
+        panic!("expected caller::is_controller predicate");
+    };
+}
+
+#[test]
+fn authenticated_allows_string_scope_argument() {
+    let parsed =
+        parse_args(quote!(requires(auth::authenticated("scope:test")))).expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
+        required_scope,
+    })) = &exprs[0]
+    else {
+        panic!("expected authenticated predicate");
+    };
+    let Some(AuthScopeArg::Literal(required_scope)) = required_scope else {
+        panic!("expected literal scope");
+    };
+    assert_eq!(required_scope, "scope:test");
+}
+
+#[test]
+fn authenticated_allows_path_scope_argument() {
+    let parsed =
+        parse_args(quote!(requires(auth::authenticated(cap::VERIFY)))).expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::Authenticated {
+        required_scope,
+    })) = &exprs[0]
+    else {
+        panic!("expected authenticated predicate");
+    };
+    let Some(AuthScopeArg::Expr(required_scope)) = required_scope else {
+        panic!("expected expr scope");
+    };
+    assert_eq!(required_scope.to_string(), "cap :: VERIFY");
+}
+
+#[test]
+fn attested_role_allows_path_role_argument() {
+    let parsed = parse_args(quote!(
+        internal,
+        requires(caller::has_role(canister::PROJECT_HUB))
+    ))
+    .expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole { role })) =
+        &exprs[0]
+    else {
+        panic!("expected attested caller role predicate");
+    };
+    let CanisterRoleArg::Expr(role) = role else {
+        panic!("expected path role");
+    };
+    assert_eq!(role.to_string(), "canister :: PROJECT_HUB");
+}
+
+#[test]
+fn attested_any_role_allows_role_array_argument() {
+    let parsed = parse_args(quote!(
+        internal,
+        requires(caller::has_any_role([canister::PROJECT_HUB, "admin_hub"]))
+    ))
+    .expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAnyRole {
+        roles,
+    })) = &exprs[0]
+    else {
+        panic!("expected attested any-role predicate");
+    };
+    assert_eq!(roles.len(), 2);
+}
+
+#[test]
+fn attested_any_role_rejects_empty_role_array() {
+    let err = parse_args(quote!(internal, requires(caller::has_any_role([]))))
+        .expect_err("empty role array must fail");
+    assert!(
+        err.to_string()
+            .contains("caller::has_any_role(...) role list must not be empty")
+    );
+}
+
+#[test]
+fn app_role_predicate_is_removed() {
+    let err = parse_args(quote!(
+        internal,
+        requires(caller::has_app_role("project_hub"))
+    ))
+    .expect_err("removed app role predicate must fail");
+    assert!(
+        err.to_string()
+            .contains("caller::has_app_role(...) was removed")
+    );
+}
+
+#[test]
+fn authenticated_rejects_multiple_arguments() {
+    let err = parse_args(quote!(requires(auth::authenticated("a", "b"))))
+        .expect_err("authenticated with two args must fail");
+    assert!(
+        err.to_string()
+            .contains("authenticated(...) accepts zero arguments or one string literal/path scope")
+    );
+}
+
+#[test]
+fn authenticated_rejects_bare_alias_path() {
+    let err = parse_args(quote!(requires(authenticated()))).expect_err("bare alias must fail");
+    assert!(
+        err.to_string()
+            .contains("built-in predicates must use short paths like auth::authenticated()")
+    );
+}

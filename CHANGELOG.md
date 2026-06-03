@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
+- `0.58.8` splits the endpoint macro pipeline into focused directory modules
+  and moves access-plan synthesis into its own expansion submodule without
+  changing macro behavior.
+
 - `0.58.7` cleans up endpoint attribute parsing by sharing marker helpers and
   access-path decoding while preserving the endpoint macro contract.
 
