@@ -10,6 +10,8 @@ pub struct IcpRefillPolicyInput {
     pub requested_amount_e8s: u64,
     pub observed_xdr_permyriad_per_icp: Option<u64>,
     pub in_flight_for_key: bool,
+    pub cycles_funding_enabled: bool,
+    pub funding_cooldown_retry_after_secs: Option<u64>,
 }
 
 ///
@@ -31,6 +33,10 @@ pub struct IcpRefillDecision {
 pub enum IcpRefillPolicyViolation {
     NotConfigured,
     Disabled,
+    CyclesFundingDisabled,
+    FundingCooldownActive {
+        retry_after_secs: u64,
+    },
     AmountZero,
     MaxRefillPerCall {
         requested_e8s: u64,
@@ -96,6 +102,9 @@ const fn evaluate_common(
     policy: &IcpRefillPolicy,
     input: IcpRefillPolicyInput,
 ) -> Result<IcpRefillDecision, IcpRefillPolicyViolation> {
+    if !input.cycles_funding_enabled {
+        return Err(IcpRefillPolicyViolation::CyclesFundingDisabled);
+    }
     if !policy.enabled {
         return Err(IcpRefillPolicyViolation::Disabled);
     }
@@ -110,6 +119,9 @@ const fn evaluate_common(
     }
     if input.in_flight_for_key {
         return Err(IcpRefillPolicyViolation::ConcurrentRefill);
+    }
+    if let Some(retry_after_secs) = input.funding_cooldown_retry_after_secs {
+        return Err(IcpRefillPolicyViolation::FundingCooldownActive { retry_after_secs });
     }
     if let Some(min_xdr_permyriad_per_icp) = policy.min_xdr_permyriad_per_icp {
         match input.observed_xdr_permyriad_per_icp {
@@ -156,6 +168,8 @@ mod tests {
             requested_amount_e8s: 50_000_000,
             observed_xdr_permyriad_per_icp: Some(45_000),
             in_flight_for_key: false,
+            cycles_funding_enabled: true,
+            funding_cooldown_retry_after_secs: None,
         }
     }
 
@@ -258,5 +272,63 @@ mod tests {
         let err = evaluate_manual_refill(Some(&policy()), input).expect_err("concurrent refill");
 
         assert_eq!(err, IcpRefillPolicyViolation::ConcurrentRefill);
+    }
+
+    #[test]
+    fn manual_refill_denies_when_cycles_funding_disabled() {
+        let mut input = input();
+        input.cycles_funding_enabled = false;
+
+        let err = evaluate_manual_refill(Some(&policy()), input).expect_err("kill switch");
+
+        assert_eq!(err, IcpRefillPolicyViolation::CyclesFundingDisabled);
+    }
+
+    #[test]
+    fn hub_self_refill_denies_when_cycles_funding_disabled() {
+        let mut input = input();
+        input.cycles_funding_enabled = false;
+        let topup = TopupPolicy {
+            icp_refill: Some(policy()),
+            ..TopupPolicy::default()
+        };
+
+        let err = evaluate_hub_self_refill(Some(&topup), input).expect_err("kill switch");
+
+        assert_eq!(err, IcpRefillPolicyViolation::CyclesFundingDisabled);
+    }
+
+    #[test]
+    fn manual_refill_denies_when_funding_cooldown_active() {
+        let mut input = input();
+        input.funding_cooldown_retry_after_secs = Some(11);
+
+        let err = evaluate_manual_refill(Some(&policy()), input).expect_err("cooldown");
+
+        assert_eq!(
+            err,
+            IcpRefillPolicyViolation::FundingCooldownActive {
+                retry_after_secs: 11
+            }
+        );
+    }
+
+    #[test]
+    fn hub_self_refill_denies_when_funding_cooldown_active() {
+        let mut input = input();
+        input.funding_cooldown_retry_after_secs = Some(12);
+        let topup = TopupPolicy {
+            icp_refill: Some(policy()),
+            ..TopupPolicy::default()
+        };
+
+        let err = evaluate_hub_self_refill(Some(&topup), input).expect_err("cooldown");
+
+        assert_eq!(
+            err,
+            IcpRefillPolicyViolation::FundingCooldownActive {
+                retry_after_secs: 12
+            }
+        );
     }
 }

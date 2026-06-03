@@ -8,13 +8,11 @@
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-canisters fmt-core cloc
 
-# in case we need to use this
-CARGO_ENV :=
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
-CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT) $(CARGO_ENV)
+CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
 ifneq ($(CANIC_WASM_PROFILE),)
 export CANIC_WASM_PROFILE
 CARGO_ENV := CANIC_WASM_PROFILE=$(CANIC_WASM_PROFILE) $(CARGO_ENV)

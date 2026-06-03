@@ -9,20 +9,30 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active maintainer-directed slice: resume the `0.58.x` ICP-refill work after
-  `0.58.10` shipped bounded ICP-refill rows under the existing
-  `cycles_funding` metrics family. The current follow-up adds focused
-  workflow regression coverage for the manual `notify_top_up` retry cap: the
-  fifth CMC `Processing` response or retryable notify failure becomes terminal
-  `Failed` state with `NotifyMaxAttempts`. The same slice expands focused
-  recovery coverage for CMC notify terminal variants and ledger transfer
-  mappings, including refunded, transaction-too-old, invalid-transaction,
-  bad-fee, duplicate, and stale transfer outcomes. It also adds `icp-refill`
-  facade doctests to the fast workspace lane so the endpoint macro's
-  missing-guard `compile_fail` contract is exercised during normal validation.
-  This closes the remaining design validation gaps for the notify-attempt cap,
-  recovery branch mapping, and the no-default-guard endpoint macro without
-  changing refill workflow behavior.
+- Active maintainer-directed slice: post-`0.58.11` ICP-refill hardening for
+  `0.58.12`. The current follow-up wires existing cycles-funding hooks into
+  pure ICP-refill policy evaluation. Manual and hub self-refill requests deny
+  with `CyclesFundingDisabled` while funding is disabled, and registered
+  direct-child refill targets consume the existing child funding cooldown
+  ledger through `FundingCooldownActive`. This closes the design gap that
+  refill must consume existing funding policy hooks without adding a new
+  refill-specific policy island or changing refill records, endpoints,
+  metrics, or CLI shape.
+- Post-`0.58.11` CI/setup lean cleanup has started by making the GitHub Actions
+  workflow reuse the existing Rust version envs for MSRV/internal toolchains
+  and by combining Cargo helper binary installation into one step per workflow
+  job. The same slice removes the dead initial Makefile `CARGO_ENV`
+  assignment while preserving the existing `ICP_ENVIRONMENT` command prefix.
+- `0.58.11` finalized the post-`0.58.10` ICP-refill validation follow-up. It
+  adds focused workflow regression coverage for the manual `notify_top_up`
+  retry cap: the fifth CMC `Processing` response or retryable notify failure
+  becomes terminal `Failed` state with `NotifyMaxAttempts`. It also expands
+  focused recovery coverage for CMC notify terminal variants and ledger
+  transfer mappings, including refunded, transaction-too-old,
+  invalid-transaction, bad-fee, duplicate, and stale transfer outcomes.
+  Finally, it adds `icp-refill` facade doctests to the fast workspace lane so
+  the endpoint macro's missing-guard `compile_fail` contract is exercised
+  during normal validation.
 - `0.58.9` paused the ICP-refill work long enough to action downstream Canic
   adoption feedback from the `canic-test` build. That follow-up adds:
   ```text

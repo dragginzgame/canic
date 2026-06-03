@@ -6,9 +6,12 @@ use crate::{
         types::{Cycles, Principal},
     },
     config::schema::{IcpRefillPolicy, TopupPolicy},
-    domain::policy::icp_refill::{
-        IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_hub_self_refill,
-        evaluate_manual_refill,
+    domain::policy::{
+        cycles_funding,
+        icp_refill::{
+            IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_hub_self_refill,
+            evaluate_manual_refill,
+        },
     },
     dto::icp_refill::{
         IcpRefillDryRun, IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest, IcpRefillResponse,
@@ -19,7 +22,12 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
-        storage::icp_refill::{IcpRefillRecordCreateInput, IcpRefillRecordOps},
+        runtime::cycles_funding::CyclesFundingLedgerOps,
+        storage::{
+            children::CanisterChildrenOps,
+            icp_refill::{IcpRefillRecordCreateInput, IcpRefillRecordOps},
+            state::app::AppStateOps,
+        },
     },
     storage::stable::icp_refill::IcpRefillRecord,
     workflow::ic::network::NetworkWorkflow,
@@ -160,6 +168,7 @@ impl IcpRefillWorkflow {
         )
         .await?;
         let now_ns = IcOps::now_nanos();
+        let now_secs = IcOps::now_secs();
         let request = IcpRefillRequest {
             operation_id: hub_self_refill_operation_id(
                 self_pid,
@@ -183,6 +192,8 @@ impl IcpRefillWorkflow {
                 &request,
                 observed_rate,
                 has_in_flight_record(&request),
+                AppStateOps::cycles_funding_enabled(),
+                funding_cooldown_retry_after_secs(&request, now_secs),
             ),
         )
         .map_err(policy_denied)?;
@@ -219,11 +230,21 @@ async fn prepare_context(
 ) -> Result<IcpRefillExecutionContext, InternalError> {
     let policy = current_icp_refill_policy()?;
     let in_flight_for_key = has_in_flight_record(request);
+    let cycles_funding_enabled = AppStateOps::cycles_funding_enabled();
+    let funding_cooldown_retry_after_secs =
+        funding_cooldown_retry_after_secs(request, IcOps::now_secs());
     let rate_gate_configured = policy_requires_rate(policy.as_ref());
     if !rate_gate_configured {
         evaluate_manual_refill(
             policy.as_ref(),
-            policy_input(0, request, None, in_flight_for_key),
+            policy_input(
+                0,
+                request,
+                None,
+                in_flight_for_key,
+                cycles_funding_enabled,
+                funding_cooldown_retry_after_secs,
+            ),
         )
         .map_err(policy_denied)?;
     }
@@ -239,7 +260,14 @@ async fn prepare_context(
     if rate_gate_configured {
         evaluate_manual_refill(
             policy.as_ref(),
-            policy_input(0, request, xdr_permyriad_per_icp, in_flight_for_key),
+            policy_input(
+                0,
+                request,
+                xdr_permyriad_per_icp,
+                in_flight_for_key,
+                cycles_funding_enabled,
+                funding_cooldown_retry_after_secs,
+            ),
         )
         .map_err(policy_denied)?;
     }
@@ -531,13 +559,29 @@ const fn policy_input(
     request: &IcpRefillRequest,
     observed_xdr_permyriad_per_icp: Option<u64>,
     in_flight_for_key: bool,
+    cycles_funding_enabled: bool,
+    funding_cooldown_retry_after_secs: Option<u64>,
 ) -> IcpRefillPolicyInput {
     IcpRefillPolicyInput {
         hub_cycles,
         requested_amount_e8s: request.amount_e8s,
         observed_xdr_permyriad_per_icp,
         in_flight_for_key,
+        cycles_funding_enabled,
+        funding_cooldown_retry_after_secs,
     }
+}
+
+fn funding_cooldown_retry_after_secs(request: &IcpRefillRequest, now_secs: u64) -> Option<u64> {
+    let (role, parent_pid) = CanisterChildrenOps::role_parent(request.target_canister)?;
+    if parent_pid != Some(request.source_canister) {
+        return None;
+    }
+
+    cycles_funding::policy_for_child_role(&role).cooldown_retry_after_secs(
+        CyclesFundingLedgerOps::snapshot(request.target_canister),
+        now_secs,
+    )
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {

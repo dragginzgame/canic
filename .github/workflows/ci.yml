@@ -26,12 +26,12 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      RUSTUP_TOOLCHAIN: 1.91.0
+      RUSTUP_TOOLCHAIN: ${{ env.CANIC_MSRV }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.91.0
+          toolchain: ${{ env.CANIC_MSRV }}
       - name: Install wasm target
         run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
@@ -42,19 +42,19 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      RUSTUP_TOOLCHAIN: 1.96.0
+      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.96.0
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
           components: rustfmt, clippy
       - uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
-      - name: Install fmt tools
-        run: cargo install cargo-sort cargo-sort-derives --locked
+      - name: Install Rust helper tools
+        run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
       - name: Install wasm target
         run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
       - name: Install actionlint
@@ -65,8 +65,6 @@ jobs:
       - name: Lint GitHub Actions workflows
         shell: bash
         run: "$ACTIONLINT_BIN"
-      - name: Install canister build tools
-        run: cargo install --locked candid-extractor
       - name: Install ICP CLI tools
         run: npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
       - name: Check ICP CLI tools
@@ -99,7 +97,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     env:
-      RUSTUP_TOOLCHAIN: 1.96.0
+      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,14 +105,14 @@ jobs:
           clean: true
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.96.0
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
           components: rustfmt, clippy
       - uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
-      - name: Install fmt tools
-        run: cargo install cargo-sort cargo-sort-derives --locked
+      - name: Install Rust helper tools
+        run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
       - name: Install wasm target
         run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
       - name: Install actionlint
@@ -125,8 +123,6 @@ jobs:
       - name: Lint GitHub Actions workflows
         shell: bash
         run: "$ACTIONLINT_BIN"
-      - name: Install canister build tools
-        run: cargo install --locked candid-extractor
       - name: Install ICP CLI tools
         run: npm install -g @icp-sdk/icp-cli @icp-sdk/ic-wasm
       - name: Check ICP CLI tools

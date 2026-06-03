@@ -20,13 +20,8 @@ impl FundingPolicy {
         requested_cycles: u128,
         now_secs: u64,
     ) -> Result<FundingDecision, FundingPolicyViolation> {
-        if self.cooldown_secs > 0 {
-            let earliest_next = ledger.last_granted_at.saturating_add(self.cooldown_secs);
-            if now_secs < earliest_next {
-                return Err(FundingPolicyViolation::CooldownActive {
-                    retry_after_secs: earliest_next.saturating_sub(now_secs),
-                });
-            }
+        if let Some(retry_after_secs) = self.cooldown_retry_after_secs(ledger, now_secs) {
+            return Err(FundingPolicyViolation::CooldownActive { retry_after_secs });
         }
 
         let remaining_budget = self.max_per_child.saturating_sub(ledger.granted_total);
@@ -56,6 +51,25 @@ impl FundingPolicy {
             clamped_max_per_request,
             clamped_max_per_child,
         })
+    }
+
+    /// Return the active cooldown window for an observed child grant ledger.
+    #[must_use]
+    pub const fn cooldown_retry_after_secs(
+        self,
+        ledger: FundingLedgerSnapshot,
+        now_secs: u64,
+    ) -> Option<u64> {
+        if self.cooldown_secs == 0 {
+            return None;
+        }
+
+        let earliest_next = ledger.last_granted_at.saturating_add(self.cooldown_secs);
+        if now_secs < earliest_next {
+            Some(earliest_next.saturating_sub(now_secs))
+        } else {
+            None
+        }
     }
 }
 
@@ -204,5 +218,21 @@ mod tests {
             }
             FundingPolicyViolation::MaxPerChild { .. } => panic!("expected cooldown violation"),
         }
+    }
+
+    #[test]
+    fn cooldown_retry_after_reports_active_window_only() {
+        let policy = FundingPolicy {
+            max_per_request: 1_000,
+            max_per_child: 10_000,
+            cooldown_secs: 20,
+        };
+        let ledger = FundingLedgerSnapshot {
+            granted_total: 100,
+            last_granted_at: 50,
+        };
+
+        assert_eq!(policy.cooldown_retry_after_secs(ledger, 60), Some(10));
+        assert_eq!(policy.cooldown_retry_after_secs(ledger, 70), None);
     }
 }
