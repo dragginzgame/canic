@@ -103,10 +103,10 @@ inspect only the files needed for the current task.
   perf rows include an explicit call-kind label (`query`, `composite_query`,
   or `update`) when those rows are durable. Ordinary query calls still do not
   commit perf counters; use same-call `QueryPerfSample<T>` probes for
-  query-side instruction measurements. Post-`0.58.6` cleanup has started by
-  making endpoint attribute parsing drier: `name`, `internal`, and
-  `composite` now share literal/boolean marker helpers, short access path
-  decoding is centralized, and parser tests cover the shared rejection paths.
+  query-side instruction measurements. `0.58.7` makes endpoint attribute
+  parsing drier: `name`, `internal`, and `composite` now share
+  literal/boolean marker helpers, short access path decoding is centralized,
+  and parser tests cover the shared rejection paths.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that
