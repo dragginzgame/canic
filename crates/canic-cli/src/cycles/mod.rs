@@ -57,6 +57,15 @@ pub enum CyclesCommandError {
     )]
     AmbiguousRole { deployment: String, role: String },
 
+    #[error("invalid {field}: {reason}")]
+    InvalidHexField { field: &'static str, reason: String },
+
+    #[error("invalid ICP e8s amount {value}; use a positive u64 e8s value")]
+    InvalidIcpE8sAmount { value: String },
+
+    #[error("canic cycles convert --fabricate only supports the local network, got {network}")]
+    FabricationRequiresLocal { network: String },
+
     #[error(transparent)]
     RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),
 

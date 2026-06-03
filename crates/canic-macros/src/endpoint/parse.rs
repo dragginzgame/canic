@@ -326,6 +326,8 @@ fn parse_expr_list(tokens: &TokenStream2) -> syn::Result<Vec<AccessExprAst>> {
 fn parse_expr(expr: Expr) -> syn::Result<AccessExprAst> {
     match expr {
         Expr::Call(call) => parse_call_expr(call),
+        Expr::Group(group) => parse_expr(*group.expr),
+        Expr::Paren(paren) => parse_expr(*paren.expr),
         other => Err(syn::Error::new_spanned(
             other,
             "expected access expression call (all/any/not/custom or built-in predicate)",
@@ -774,6 +776,19 @@ mod tests {
             panic!("expected authenticated predicate");
         };
         assert!(required_scope.is_none());
+    }
+
+    #[test]
+    fn grouped_access_expression_is_unwrapped() {
+        let parsed = parse_args(quote!(requires((caller::is_controller())))).expect("parse args");
+        let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+            panic!("expected requires(all)");
+        };
+        let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerIsController)) =
+            &exprs[0]
+        else {
+            panic!("expected caller::is_controller predicate");
+        };
     }
 
     #[test]

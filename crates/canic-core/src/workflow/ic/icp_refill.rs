@@ -7,9 +7,10 @@ use crate::{
         icrc_ledger_types::icrc1::transfer::TransferError,
         types::{Cycles, Principal},
     },
-    config::schema::IcpRefillPolicy,
+    config::schema::{IcpRefillPolicy, TopupPolicy},
     domain::policy::icp_refill::{
-        IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_manual_refill,
+        IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_hub_self_refill,
+        evaluate_manual_refill,
     },
     dto::icp_refill::{
         IcpRefillDryRun, IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest, IcpRefillResponse,
@@ -25,6 +26,7 @@ use crate::{
     storage::stable::icp_refill::IcpRefillRecord,
     workflow::ic::network::NetworkWorkflow,
 };
+use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 const TX_WINDOW_NANOS: u64 = 24 * 60 * 60 * 1_000_000_000;
@@ -132,6 +134,68 @@ impl IcpRefillWorkflow {
         let record = advance_record(record).await?;
 
         Ok(IcpRefillRecordOps::to_response(&record))
+    }
+
+    pub async fn execute_hub_self_refill(
+        hub_cycles: Cycles,
+    ) -> Result<IcpRefillResponse, InternalError> {
+        let self_pid = IcOps::canister_self();
+        if let Some(record) = find_resumable_hub_self_refill(self_pid) {
+            let request = request_from_record(&record);
+            return Self::execute_manual_refill(request).await;
+        }
+
+        let Some(topup) = current_topup_policy()? else {
+            return Err(IcpRefillWorkflowError::PolicyDenied(
+                IcpRefillPolicyViolation::NotConfigured,
+            )
+            .into());
+        };
+        let Some(icp_refill) = topup.icp_refill.as_ref() else {
+            return Err(IcpRefillWorkflowError::PolicyDenied(
+                IcpRefillPolicyViolation::NotConfigured,
+            )
+            .into());
+        };
+        let canisters = IcpRefillOps::resolve_canisters(
+            build_network(),
+            IcpRefillCanisterOverrides::default(),
+        )?;
+        let observed_rate = configured_rate(
+            Some(icp_refill),
+            canisters.cmc_canister_id,
+            RateQueryMode::WhenGateConfigured,
+        )
+        .await?;
+        let now_ns = IcOps::now_nanos();
+        let request = IcpRefillRequest {
+            operation_id: hub_self_refill_operation_id(
+                self_pid,
+                None,
+                self_pid,
+                icp_refill.max_refill_e8s_per_call,
+                now_ns,
+            ),
+            source_canister: self_pid,
+            source_subaccount: None,
+            target_canister: self_pid,
+            amount_e8s: icp_refill.max_refill_e8s_per_call,
+            dry_run: false,
+            mode: IcpRefillMode::Canister,
+        };
+
+        evaluate_hub_self_refill(
+            Some(&topup),
+            IcpRefillPolicyInput {
+                hub_cycles: hub_cycles.to_u128(),
+                requested_amount_e8s: request.amount_e8s,
+                observed_xdr_permyriad_per_icp: observed_rate,
+                in_flight_for_key: has_in_flight_record(&request),
+            },
+        )
+        .map_err(IcpRefillWorkflowError::PolicyDenied)?;
+
+        Self::execute_manual_refill(request).await
     }
 }
 
@@ -466,6 +530,10 @@ fn current_icp_refill_policy() -> Result<Option<IcpRefillPolicy>, InternalError>
         .and_then(|topup| topup.icp_refill))
 }
 
+fn current_topup_policy() -> Result<Option<TopupPolicy>, InternalError> {
+    Ok(ConfigOps::current_canister()?.topup)
+}
+
 fn has_in_flight_record(request: &IcpRefillRequest) -> bool {
     IcpRefillRecordOps::entries()
         .into_iter()
@@ -477,6 +545,30 @@ fn has_in_flight_record(request: &IcpRefillRequest) -> bool {
                 && is_in_flight(record.status)
                 && record.operation_id != request.operation_id
         })
+}
+
+fn find_resumable_hub_self_refill(self_pid: Principal) -> Option<IcpRefillRecord> {
+    IcpRefillRecordOps::entries()
+        .into_iter()
+        .map(|(_key, record)| record)
+        .find(|record| {
+            record.source_canister == self_pid
+                && record.source_subaccount.is_none()
+                && record.target_canister == self_pid
+                && is_resumable(record)
+        })
+}
+
+const fn request_from_record(record: &IcpRefillRecord) -> IcpRefillRequest {
+    IcpRefillRequest {
+        operation_id: record.operation_id,
+        source_canister: record.source_canister,
+        source_subaccount: record.source_subaccount,
+        target_canister: record.target_canister,
+        amount_e8s: record.amount_e8s,
+        dry_run: false,
+        mode: IcpRefillMode::Canister,
+    }
 }
 
 fn validate_retry_request_matches_record(
@@ -532,6 +624,10 @@ const fn is_in_flight(status: IcpRefillStatus) -> bool {
     )
 }
 
+const fn is_resumable(record: &IcpRefillRecord) -> bool {
+    is_in_flight(record.status) || can_retry_notify(record) || can_retry_bad_fee(record)
+}
+
 const fn can_retry_notify(record: &IcpRefillRecord) -> bool {
     record.ledger_block_index.is_some()
         && matches!(record.status, IcpRefillStatus::Failed)
@@ -574,6 +670,23 @@ fn dry_run_message(mode: IcpRefillMode) -> Option<String> {
             Some("mode=fabricate (does not call canister refill endpoint)".to_string())
         }
     }
+}
+
+fn hub_self_refill_operation_id(
+    source_canister: Principal,
+    source_subaccount: Option<[u8; 32]>,
+    target_canister: Principal,
+    amount_e8s: u64,
+    now_ns: u64,
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"canic:icp-refill:hub-self-refill:v1");
+    hasher.update(source_canister.as_slice());
+    hasher.update(source_subaccount.unwrap_or_default());
+    hasher.update(target_canister.as_slice());
+    hasher.update(amount_e8s.to_be_bytes());
+    hasher.update(now_ns.to_be_bytes());
+    hasher.finalize().into()
 }
 
 #[cfg(test)]
@@ -714,6 +827,29 @@ mod tests {
     }
 
     #[test]
+    fn hub_self_refill_resumes_in_flight_and_retryable_records() {
+        assert!(is_resumable(&sample_record(IcpRefillStatus::Requested)));
+        assert!(is_resumable(&sample_record(IcpRefillStatus::Transferred)));
+        assert!(is_resumable(&sample_record(
+            IcpRefillStatus::NotifyProcessing
+        )));
+
+        let mut notify_failed = sample_record(IcpRefillStatus::Failed);
+        notify_failed.error_code = Some(IcpRefillErrorCode::NotifyFailed);
+        notify_failed.ledger_block_index = Some(11);
+        assert!(is_resumable(&notify_failed));
+
+        let mut bad_fee = sample_record(IcpRefillStatus::Failed);
+        bad_fee.error_code = Some(IcpRefillErrorCode::BadFee);
+        assert!(is_resumable(&bad_fee));
+
+        let mut transfer_failed = sample_record(IcpRefillStatus::Failed);
+        transfer_failed.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed);
+        assert!(!is_resumable(&transfer_failed));
+        assert!(!is_resumable(&sample_record(IcpRefillStatus::Completed)));
+    }
+
+    #[test]
     fn bad_fee_retry_requires_no_block_index() {
         let mut record = sample_record(IcpRefillStatus::Failed);
         record.error_code = Some(IcpRefillErrorCode::BadFee);
@@ -748,5 +884,19 @@ mod tests {
         let err = validate_retry_request_matches_record(&request, &record)
             .expect_err("changed amount must fail");
         assert!(err.to_string().contains("amount_e8s"));
+    }
+
+    #[test]
+    fn hub_self_refill_operation_id_binds_identity_amount_and_time() {
+        let source = p(1);
+        let target = p(3);
+        let first = hub_self_refill_operation_id(source, None, target, 100, 1_000);
+        let same = hub_self_refill_operation_id(source, None, target, 100, 1_000);
+        let different_amount = hub_self_refill_operation_id(source, None, target, 101, 1_000);
+        let different_time = hub_self_refill_operation_id(source, None, target, 100, 1_001);
+
+        assert_eq!(first, same);
+        assert_ne!(first, different_amount);
+        assert_ne!(first, different_time);
     }
 }

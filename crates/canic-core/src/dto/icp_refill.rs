@@ -94,3 +94,14 @@ pub struct IcpRefillDryRun {
     pub estimated_cycles: Option<Cycles>,
     pub message: Option<String>,
 }
+
+///
+/// IcpRefillEndpointResponse
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+#[remain::sorted]
+pub enum IcpRefillEndpointResponse {
+    DryRun(IcpRefillDryRun),
+    Refill(IcpRefillResponse),
+}

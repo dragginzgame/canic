@@ -13,6 +13,7 @@ pub mod cascade;
 pub mod config;
 pub mod error;
 pub mod ic;
+pub mod icp_refill;
 pub mod lifecycle;
 pub mod memory;
 pub mod metadata;

@@ -2,6 +2,7 @@ pub mod query;
 
 use crate::{
     domain::policy,
+    dto::icp_refill::IcpRefillStatus,
     ops::{
         config::ConfigOps,
         ic::{IcOps, mgmt::MgmtOps},
@@ -11,6 +12,7 @@ use crate::{
     },
     workflow::{
         config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
+        ic::icp_refill::IcpRefillWorkflow,
         prelude::*,
         runtime::timer::TimerWorkflow,
     },
@@ -20,6 +22,7 @@ use std::{cell::RefCell, time::Duration};
 thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
     static TOPUP_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
+    static ICP_REFILL_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
 }
 
 const TRACKER_INTERVAL: Duration = WORKFLOW_CYCLE_TRACK_INTERVAL;
@@ -119,8 +122,15 @@ impl CycleTrackerWorkflow {
     fn track_internal(mode: CycleTrackingMode) {
         let sample = Self::read_standard_sample();
 
-        if mode.auto_topup_enabled() && !EnvOps::is_root() {
-            Self::evaluate_policies(sample.cycles.clone());
+        if mode.auto_topup_enabled() {
+            if EnvOps::is_root() {
+                if Self::check_hub_self_refill(sample.cycles.clone()) {
+                    CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
+                    return;
+                }
+            } else {
+                Self::evaluate_policies(sample.cycles.clone());
+            }
         }
 
         CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
@@ -139,15 +149,93 @@ impl CycleTrackerWorkflow {
     }
 
     fn evaluate_current_topup() {
+        let cycles = MgmtOps::canister_cycle_balance();
         if EnvOps::is_root() {
+            Self::check_hub_self_refill(cycles);
             return;
         }
 
-        Self::evaluate_policies(MgmtOps::canister_cycle_balance());
+        Self::evaluate_policies(cycles);
     }
 
     fn evaluate_policies(cycles: Cycles) {
         Self::check_auto_topup(cycles);
+    }
+
+    fn check_hub_self_refill(cycles: Cycles) -> bool {
+        let canister_cfg = match ConfigOps::current_canister() {
+            Ok(cfg) => cfg,
+            Err(err) => {
+                CyclesTopupMetrics::record_config_error();
+                log!(Topic::Cycles, Warn, "hub ICP self-refill skipped: {err}");
+                return false;
+            }
+        };
+        let Some(topup) = canister_cfg.topup else {
+            return false;
+        };
+        let Some(icp_refill) = topup.icp_refill else {
+            return false;
+        };
+        if !icp_refill.enabled {
+            return false;
+        }
+        if cycles.to_u128() >= icp_refill.min_hub_cycles_before_refill.to_u128() {
+            return false;
+        }
+
+        let should_refill = ICP_REFILL_IN_FLIGHT.with_borrow_mut(|in_flight| {
+            if *in_flight {
+                false
+            } else {
+                *in_flight = true;
+                true
+            }
+        });
+
+        if !should_refill {
+            CyclesTopupMetrics::record_request_in_flight();
+            return true;
+        }
+
+        CyclesTopupMetrics::record_request_scheduled();
+        IcOps::spawn(async move {
+            let result = IcpRefillWorkflow::execute_hub_self_refill(cycles.clone()).await;
+
+            ICP_REFILL_IN_FLIGHT.with_borrow_mut(|in_flight| {
+                *in_flight = false;
+            });
+
+            match result {
+                Ok(response) if response.status == IcpRefillStatus::Completed => {
+                    CyclesTopupMetrics::record_request_ok();
+                    log!(
+                        Topic::Cycles,
+                        Ok,
+                        "hub ICP self-refill completed operation_id={:?} cycles_sent={:?}",
+                        response.operation_id,
+                        response.cycles_sent
+                    );
+                }
+                Ok(response) => {
+                    CyclesTopupMetrics::record_request_err();
+                    log!(
+                        Topic::Cycles,
+                        Warn,
+                        "hub ICP self-refill advanced operation_id={:?} status={:?} error={:?}",
+                        response.operation_id,
+                        response.status,
+                        response.error_code
+                    );
+                }
+                Err(err) => {
+                    CyclesTopupMetrics::record_request_err();
+                    log!(Topic::Cycles, Error, "hub ICP self-refill failed: {err}");
+                }
+            }
+        });
+
+        true
     }
 
     fn check_auto_topup(cycles: Cycles) {

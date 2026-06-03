@@ -12,6 +12,19 @@ present.
 
 ## Unreleased
 
+- Adds the opt-in `icp-refill` facade feature and
+  `canic_emit_icp_refill_endpoints!(guard = ...)` endpoint macro so host
+  canisters can expose the manual ICP refill primitive behind their own access
+  expression; the endpoint branches dry-run/live requests through the existing
+  workflow and keeps retry on the same guarded update method.
+- Wires the configured hub self-refill hook into the existing cycle tracker
+  timer, so root canisters with `topup.icp_refill` enabled schedule/resume the
+  ICP refill workflow when their sampled cycle balance falls below the
+  configured threshold.
+- Adds `canic cycles convert` as the thin operator trigger for canister-side ICP
+  refill plus local-only fabrication, with dry-run output that explicitly marks
+  fabrication as bypassing the refill endpoint.
+
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)

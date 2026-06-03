@@ -11,6 +11,12 @@ pub mod auth {
     pub use crate::__internal::core::api::auth::AuthApi;
 }
 
+/// ICP-to-cycles refill endpoint helpers.
+#[cfg(feature = "icp-refill")]
+pub mod icp_refill {
+    pub use crate::__internal::core::api::icp_refill::IcpRefillApi;
+}
+
 /// Environment queries
 pub mod env {
     pub use crate::__internal::core::api::env::EnvQuery;

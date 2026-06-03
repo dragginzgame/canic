@@ -668,6 +668,25 @@ impl IcpCli {
         command_display(&command)
     }
 
+    /// Render a dry-run update call with an explicit Candid argument.
+    #[must_use]
+    pub fn canister_call_arg_output_display(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+    ) -> String {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method]);
+        command.arg(arg);
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
+        self.add_target_args(&mut command);
+        command_display(&command)
+    }
+
     fn add_target_args(&self, command: &mut Command) {
         add_target_args(command, self.environment(), self.network());
     }
@@ -1003,6 +1022,22 @@ mod tests {
         assert_eq!(
             icp.canister_query_output_display("root", "canic_ready", Some("json")),
             "icp canister call root canic_ready () --query --json -n ic"
+        );
+    }
+
+    // Ensure update-call previews preserve the explicit Candid argument.
+    #[test]
+    fn renders_argument_update_call() {
+        let icp = IcpCli::new("icp", None, Some("ic".to_string()));
+
+        assert_eq!(
+            icp.canister_call_arg_output_display(
+                "root",
+                "canic_icp_refill",
+                "(record { dry_run = true })",
+                Some("json")
+            ),
+            "icp canister call root canic_icp_refill (record { dry_run = true }) --json -n ic"
         );
     }
 

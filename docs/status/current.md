@@ -54,9 +54,24 @@ inspect only the files needed for the current task.
   on `BadFee`, validates ICP ledger decimals, retries/directly calls
   `notify_top_up`, caps manual notify attempts at five, estimates dry-run
   cycles from the current ICP/XDR rate, and maps ledger/CMC recovery states
-  through storage ops.
-  Endpoint macros, funding-chain timer hook, local fabrication, and CLI
-  delegation are still pending.
+  through storage ops. The facade now has an opt-in `icp-refill` feature plus
+  `canic_emit_icp_refill_endpoints!(guard = ...)`, which emits a guarded
+  `canic_icp_refill` update method that immediately delegates dry-run/live
+  requests to the workflow and keeps retry on the same endpoint. The existing
+  `CycleTrackerWorkflow` timer now has the pinned root hub self-refill hook:
+  when `topup.icp_refill` is enabled and the sampled hub balance is below
+  `min_hub_cycles_before_refill`, it schedules or resumes the ICP refill
+  workflow on the same timer path before any child grant fan-out. The cycles
+  CLI now has the retained thin trigger:
+  ```text
+  canic cycles convert <deployment> <role-or-canister> --source <role-or-canister> --icp-e8s <amount>
+  canic cycles convert <deployment> <role-or-canister> --fabricate --cycles <amount>
+  ```
+  Canister mode resolves the source and target from the installed deployment
+  registry and calls the guarded `canic_icp_refill` endpoint with the requested
+  Candid payload. Fabrication mode is rejected outside `local` and calls local
+  `provisional_top_up_canister`; its dry-run text/JSON carries the required
+  `mode=fabricate (does not call canister refill endpoint)` label.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

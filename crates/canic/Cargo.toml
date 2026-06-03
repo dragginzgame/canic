@@ -17,6 +17,7 @@ publish = true
 default = ["metrics"]
 metrics = []
 control-plane = ["dep:canic-control-plane"]
+icp-refill = []
 sharding = ["canic-core/sharding"]
 auth-crypto = ["canic-core/auth-crypto"]
 
