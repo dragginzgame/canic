@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
 
+- `0.59.7` centralizes instruction-footprint report status and baseline
+  sentinel labels while preserving rendered report output.
+
 - `0.59.6` clarifies direct instruction-audit estimate flag diagnostics by
   separating boolean flag parsing from positive integer parsing.
 

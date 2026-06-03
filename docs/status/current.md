@@ -9,6 +9,10 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.7` keeps instruction-footprint report output unchanged while
+  centralizing dynamic report status labels and the missing-baseline sentinel
+  in report support code. Focused coverage now pins baseline selection and
+  missing-baseline delta rendering to the same `N/A` sentinel.
 - `0.59.6` keeps estimate behavior unchanged while splitting boolean estimate
   flag parsing from positive integer source parsing. Direct
   `CANIC_INSTRUCTION_AUDIT_ESTIMATE_EXECUTION_CYCLES` misuse now reports a

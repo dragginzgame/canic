@@ -6,6 +6,10 @@ const ESTIMATE_SECTION_TITLE: &str = "## Execution Cycle Estimate";
 const ESTIMATE_SECTION_LABEL: &str =
     "Execution cycle estimate (instructions only, excludes message/byte/GC/platform fees).";
 const ESTIMATE_SECTION_TABLE_HEADER: &str = "| Scenario | Local instructions | Estimated instruction cycles | Cycles per billion instructions | Source | Formula |";
+const STATUS_PASS: &str = "PASS";
+const STATUS_PARTIAL: &str = "PARTIAL";
+const STATUS_BLOCKED: &str = "BLOCKED";
+const BASELINE_NOT_AVAILABLE: &str = "N/A";
 
 #[derive(Deserialize)]
 struct BaselinePerfRow {
@@ -82,9 +86,9 @@ pub(super) fn checkpoint_coverage_gaps(checkpoint_sites: &[String]) -> Vec<Check
                 .iter()
                 .any(|site| site.starts_with(insertion_site))
             {
-                "PASS".to_string()
+                STATUS_PASS.to_string()
             } else {
-                "PARTIAL".to_string()
+                STATUS_PARTIAL.to_string()
             },
             proposed_first_insertion_site: (*insertion_site).to_string(),
         })
@@ -115,13 +119,13 @@ pub(super) fn verification_rows(
     vec![
         VerificationRow {
             command: "cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture".to_string(),
-            status: "PASS".to_string(),
+            status: STATUS_PASS.to_string(),
             notes: "PocketIC runner completed and wrote the report plus normalized artifacts."
                 .to_string(),
         },
         VerificationRow {
             command: "fresh root harness profile per scenario".to_string(),
-            status: "PASS".to_string(),
+            status: STATUS_PASS.to_string(),
             notes:
                 "Each scenario used a fresh smallest-profile root bootstrap instead of sharing one cumulative perf table."
                     .to_string(),
@@ -129,12 +133,12 @@ pub(super) fn verification_rows(
         VerificationRow {
             command: "canic_metrics(MetricsKind::Runtime, PageRequest { limit=512, offset=0 })"
                 .to_string(),
-            status: "PASS".to_string(),
+            status: STATUS_PASS.to_string(),
             notes: format!("Update scenarios were sampled before/after through persisted perf rows, and query scenarios used local-only `QueryPerfSample` probe endpoints because query-side perf rows are not committed; normalized rows saved under `{}`.", paths.artifacts_dir.join("perf-rows.json").display()),
         },
         VerificationRow {
             command: "repo checkpoint scan".to_string(),
-            status: "PASS".to_string(),
+            status: STATUS_PASS.to_string(),
             notes: if checkpoint_sites.is_empty() {
                 "No `perf!` call sites are present in the current repo scan; flow checkpoint coverage remains partial.".to_string()
             } else {
@@ -144,9 +148,9 @@ pub(super) fn verification_rows(
         VerificationRow {
             command: "checkpoint delta capture".to_string(),
             status: if measured_checkpoint_count == 0 {
-                "PARTIAL".to_string()
+                STATUS_PARTIAL.to_string()
             } else {
-                "PASS".to_string()
+                STATUS_PASS.to_string()
             },
             notes: if measured_checkpoint_count == 0 {
                 "Sampled update scenarios did not produce any non-zero checkpoint deltas."
@@ -161,9 +165,9 @@ pub(super) fn verification_rows(
         VerificationRow {
             command: "query perf visibility".to_string(),
             status: if query_unobservable_count == 0 {
-                "PASS".to_string()
+                STATUS_PASS.to_string()
             } else {
-                "PARTIAL".to_string()
+                STATUS_PARTIAL.to_string()
             },
             notes: if query_unobservable_count == 0 {
                 "All sampled query scenarios returned `QueryPerfSample` local instruction counters through the local-only probe endpoints, which avoids relying on non-persisted query-side perf state.".to_string()
@@ -176,9 +180,9 @@ pub(super) fn verification_rows(
         VerificationRow {
             command: "baseline comparison".to_string(),
             status: if baseline_is_selected(metadata) {
-                "PARTIAL".to_string()
+                STATUS_PARTIAL.to_string()
             } else {
-                "BLOCKED".to_string()
+                STATUS_BLOCKED.to_string()
             },
             notes: if baseline_is_selected(metadata) {
                 format!(
@@ -344,7 +348,7 @@ pub(super) fn write_report(
     ));
     out.push_str(&format!(
         "| Checkpoint deltas recorded | {} | `artifacts/{artifacts_dir_name}/checkpoint-deltas.json` stores non-zero per-scenario checkpoint rows. |\n",
-        if checkpoint_rows.is_empty() { "PARTIAL" } else { "PASS" }
+        if checkpoint_rows.is_empty() { STATUS_PARTIAL } else { STATUS_PASS }
     ));
     out.push_str("| Fresh topology isolation used | PASS | Each scenario ran under a fresh smallest-profile root harness install instead of reusing one cumulative perf table. |\n");
     out.push_str(&format!(
@@ -466,11 +470,11 @@ pub(super) fn write_report(
     out.push_str("## Checkpoint Coverage Gaps\n\n");
     let covered_gaps = gaps
         .iter()
-        .filter(|gap| gap.status == "PASS")
+        .filter(|gap| gap.status == STATUS_PASS)
         .collect::<Vec<_>>();
     let uncovered_gaps = gaps
         .iter()
-        .filter(|gap| gap.status != "PASS")
+        .filter(|gap| gap.status != STATUS_PASS)
         .collect::<Vec<_>>();
     out.push_str("Critical flows with checkpoints:\n");
     if covered_gaps.is_empty() {
@@ -761,11 +765,11 @@ fn risk_score(
 }
 
 fn baseline_is_selected(metadata: &AuditMetadata) -> bool {
-    metadata.compared_baseline_report != "N/A"
+    metadata.compared_baseline_report != BASELINE_NOT_AVAILABLE
 }
 
 fn load_baseline_rows(baseline_report: &str) -> Option<BTreeMap<String, u64>> {
-    if baseline_report == "N/A" {
+    if baseline_report == BASELINE_NOT_AVAILABLE {
         return None;
     }
 
@@ -791,10 +795,10 @@ fn render_baseline_delta(
     current_row: &CanonicalPerfRow,
 ) -> String {
     let Some(rows) = baseline_rows else {
-        return "N/A".to_string();
+        return BASELINE_NOT_AVAILABLE.to_string();
     };
     let Some(baseline_avg) = rows.get(&current_row.scenario_key).copied() else {
-        return "N/A".to_string();
+        return BASELINE_NOT_AVAILABLE.to_string();
     };
 
     let delta = i128::from(current_row.avg_local_instructions) - i128::from(baseline_avg);
@@ -905,5 +909,40 @@ mod tests {
         assert!(out.contains("1000000"));
         assert!(out.contains("official-ic-cycle-costs-docs"));
         assert!(out.contains("canic-0.59-ic-cycle-costs-v1"));
+    }
+
+    fn metadata_with_baseline(compared_baseline_report: &str) -> AuditMetadata {
+        AuditMetadata {
+            code_snapshot: "test-snapshot".to_string(),
+            branch: "main".to_string(),
+            worktree: "clean".to_string(),
+            run_timestamp_utc: "2026-06-03T00:00:00Z".to_string(),
+            compared_baseline_report: compared_baseline_report.to_string(),
+        }
+    }
+
+    #[test]
+    fn baseline_selection_uses_report_sentinel() {
+        assert!(!baseline_is_selected(&metadata_with_baseline(
+            BASELINE_NOT_AVAILABLE
+        )));
+        assert!(baseline_is_selected(&metadata_with_baseline(
+            "docs/audits/reports/2026-06/2026-06-03/instruction-footprint.md"
+        )));
+    }
+
+    #[test]
+    fn baseline_delta_uses_report_sentinel_for_missing_data() {
+        let result = scenario_result(None);
+        let rows = BTreeMap::new();
+
+        assert_eq!(
+            render_baseline_delta(None, &result.row),
+            BASELINE_NOT_AVAILABLE
+        );
+        assert_eq!(
+            render_baseline_delta(Some(&rows), &result.row),
+            BASELINE_NOT_AVAILABLE
+        );
     }
 }
