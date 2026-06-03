@@ -534,7 +534,11 @@ fn perf_entries() -> Vec<MetricEntry> {
         .into_iter()
         .map(|entry| {
             let labels = match entry.key {
-                PerfKey::Endpoint(label) => vec!["endpoint".to_string(), label],
+                PerfKey::Endpoint { kind, name } => vec![
+                    "endpoint".to_string(),
+                    kind.metric_label().to_string(),
+                    name,
+                ],
                 PerfKey::Timer(label) => vec!["timer".to_string(), label],
                 PerfKey::Checkpoint { scope, label } => {
                     vec!["checkpoint".to_string(), scope, label]

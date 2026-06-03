@@ -100,7 +100,7 @@ impl IcOps {
 
     /// Return a metadata-hash caller principal on both IC and host targets.
     #[must_use]
-    #[allow(
+    #[expect(
         clippy::missing_const_for_fn,
         reason = "wasm path delegates to ic0-backed caller lookup, which is not const"
     )]
@@ -118,7 +118,7 @@ impl IcOps {
 
     /// Return a metadata-hash canister principal on both IC and host targets.
     #[must_use]
-    #[allow(
+    #[expect(
         clippy::missing_const_for_fn,
         reason = "wasm path delegates to ic0-backed canister lookup, which is not const"
     )]

@@ -831,7 +831,7 @@ pub fn deployment_receipt_from_check(
 /// Build a deployment receipt when the caller knows whether failure happened
 /// before or after mutation.
 #[must_use]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub fn deployment_receipt_from_check_with_status(
     check: &DeploymentCheckV1,
     operation_id: impl Into<String>,

@@ -16,7 +16,6 @@ pub static NNS_REGISTRY_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
 /// ICP_LEDGER_CANISTER
 ///
 
-#[allow(dead_code)]
 pub static ICP_LEDGER_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
     Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai")
         .expect("ICP ledger principal literal must be valid")
@@ -26,7 +25,6 @@ pub static ICP_LEDGER_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
 /// CYCLES_MINTING_CANISTER
 ///
 
-#[allow(dead_code)]
 pub static CYCLES_MINTING_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
     Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai")
         .expect("cycles minting canister principal literal must be valid")

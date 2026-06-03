@@ -1,5 +1,3 @@
-#![allow(clippy::cast_possible_truncation)]
-
 use crate::impl_storable_unbounded;
 use crate::{
     cdk::structures::{

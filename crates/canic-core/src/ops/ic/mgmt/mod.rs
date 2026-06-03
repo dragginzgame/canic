@@ -40,7 +40,7 @@ use crate::{
 };
 use std::future::Future;
 
-#[allow(
+#[expect(
     unused_imports,
     reason = "part of the public management ops type surface"
 )]

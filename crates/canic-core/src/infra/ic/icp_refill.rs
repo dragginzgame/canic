@@ -4,8 +4,6 @@
 //! checks and intentionally returns ledger/CMC result variants losslessly so
 //! workflow can apply recovery rules.
 
-#![allow(dead_code)]
-
 use crate::{
     cdk::{
         candid::{CandidType, Nat},
@@ -159,17 +157,6 @@ impl IcpRefillInfra {
             owner: cmc_canister_id,
             subaccount: Some(Self::cmc_topup_subaccount(target_canister)?),
         })
-    }
-
-    #[must_use]
-    pub const fn source_account(
-        source_canister: Principal,
-        source_subaccount: Option<Subaccount>,
-    ) -> Account {
-        Account {
-            owner: source_canister,
-            subaccount: source_subaccount,
-        }
     }
 
     #[must_use]

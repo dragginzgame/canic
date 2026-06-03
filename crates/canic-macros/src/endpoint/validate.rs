@@ -1,6 +1,6 @@
 use crate::endpoint::{
     EndpointKind,
-    parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, ParsedArgs},
+    parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, ParsedArgs, QueryMode},
 };
 use proc_macro2::TokenStream as TokenStream2;
 use syn::{FnArg, LitStr, Signature, Type};
@@ -26,6 +26,7 @@ pub struct ValidatedArgs {
     pub payload_max_bytes: Option<TokenStream2>,
     pub requires: Vec<AccessExprAst>,
     pub internal: bool,
+    pub query_mode: QueryMode,
 }
 
 pub fn validate(
@@ -38,6 +39,13 @@ pub fn validate(
         return Err(syn::Error::new_spanned(
             &sig.ident,
             "payload(...) is supported only on canic_update endpoints",
+        ));
+    }
+
+    if parsed.query_mode.is_composite() && matches!(kind, EndpointKind::Update) {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "composite is supported only on canic_query endpoints",
         ));
     }
 
@@ -81,6 +89,7 @@ pub fn validate(
         payload_max_bytes: parsed.payload_max_bytes,
         requires: parsed.requires,
         internal: parsed.internal,
+        query_mode: parsed.query_mode,
     })
 }
 
@@ -219,6 +228,7 @@ mod tests {
             requires_async: true,
             requires_fallible: true,
             internal: false,
+            query_mode: QueryMode::Plain,
         }
     }
 
@@ -238,6 +248,7 @@ mod tests {
             requires_async: true,
             requires_fallible: true,
             internal,
+            query_mode: QueryMode::Plain,
         }
     }
 
@@ -256,6 +267,7 @@ mod tests {
             requires_async: true,
             requires_fallible: true,
             internal,
+            query_mode: QueryMode::Plain,
         }
     }
 
@@ -359,12 +371,34 @@ mod tests {
             requires_async: false,
             requires_fallible: false,
             internal: false,
+            query_mode: QueryMode::Plain,
         };
 
         let err = validate(EndpointKind::Query, parsed, &sig, false).unwrap_err();
         assert!(
             err.to_string()
                 .contains("payload(...) is supported only on canic_update")
+        );
+    }
+
+    #[test]
+    fn composite_query_marker_is_query_only() {
+        let sig: Signature = syn::parse_quote!(fn hello() -> bool);
+        let parsed = ParsedArgs {
+            forwarded: vec![quote::quote!(composite = true)],
+            export_name: None,
+            payload_max_bytes: None,
+            requires: Vec::new(),
+            requires_async: false,
+            requires_fallible: false,
+            internal: false,
+            query_mode: QueryMode::Composite,
+        };
+
+        let err = validate(EndpointKind::Update, parsed, &sig, false).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("composite is supported only on canic_query")
         );
     }
 }

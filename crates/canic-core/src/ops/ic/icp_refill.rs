@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::{
     InternalError,
     cdk::{
@@ -47,10 +45,6 @@ impl IcpRefillOps {
         IcpRefillInfra::topup_memo()
     }
 
-    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<Subaccount, InternalError> {
-        map_infra(IcpRefillInfra::cmc_topup_subaccount(target_canister))
-    }
-
     pub fn cmc_topup_account(
         cmc_canister_id: Principal,
         target_canister: Principal,
@@ -59,14 +53,6 @@ impl IcpRefillOps {
             cmc_canister_id,
             target_canister,
         ))
-    }
-
-    #[must_use]
-    pub const fn source_account(
-        source_canister: Principal,
-        source_subaccount: Option<Subaccount>,
-    ) -> Account {
-        IcpRefillInfra::source_account(source_canister, source_subaccount)
     }
 
     #[must_use]

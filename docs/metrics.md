@@ -116,7 +116,7 @@ use the existing family-specific dimensions:
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `inter_canister_call` | `[method]` | Target canister principal | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
-| `perf` | `[endpoint, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
+| `perf` | `[endpoint, call_kind, name]`, `[timer, label]`, or `[checkpoint, scope, label]` | `None` | `CountAndU64` |
 | `platform_call` | `[surface, mode, outcome, reason]` | `None` | `Count` |
 | `pool` | `[operation, outcome, reason]` | `None` | `Count` |
 | `replay` | `[operation, outcome, reason]` | `None` | `Count` |
@@ -125,6 +125,11 @@ use the existing family-specific dimensions:
 | `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
 | `timer` | `[mode, label]` | `None` | `CountAndU64` |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
+
+Endpoint perf `call_kind` labels are `query`, `composite_query`, or `update`.
+Query and composite-query endpoint perf rows are only durable when sampled by a
+call path that commits state; ordinary query calls should use same-call
+`QueryPerfSample<T>` probes instead.
 
 ## Internal Counters
 

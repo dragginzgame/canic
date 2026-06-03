@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::{
     InternalError,
     cdk::{
@@ -78,10 +76,17 @@ impl IcpRefillRecordOps {
         IcpRefillRecords::entries(0, usize::MAX)
     }
 
-    pub fn find_by_operation_id(operation_id: [u8; 32]) -> Option<IcpRefillRecord> {
+    #[must_use]
+    pub fn records() -> Vec<IcpRefillRecord> {
         Self::entries()
             .into_iter()
             .map(|(_key, record)| record)
+            .collect()
+    }
+
+    pub fn find_by_operation_id(operation_id: [u8; 32]) -> Option<IcpRefillRecord> {
+        Self::records()
+            .into_iter()
             .find(|record| record.operation_id == operation_id)
     }
 

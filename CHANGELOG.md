@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
+- `0.58.6` adds composite query endpoint macro support and endpoint perf
+  call-kind labels while continuing the ICP refill and lint-suppression DRY
+  cleanup without changing the refill workflow or DTO surface.
+
 - `0.58.5` cleans up the ICP refill core by centralizing repeated infra error
   mapping, refill record status/error mutation helpers, and shared transfer
   retry stale-window handling without changing the workflow or DTO surface.

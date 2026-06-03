@@ -12,11 +12,22 @@ pub struct EndpointCall {
 /// EndpointCallKind
 ///
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EndpointCallKind {
     Query,
     QueryComposite,
     Update,
+}
+
+impl EndpointCallKind {
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Query => "query",
+            Self::QueryComposite => "composite_query",
+            Self::Update => "update",
+        }
+    }
 }
 
 ///

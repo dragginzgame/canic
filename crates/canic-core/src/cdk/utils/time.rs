@@ -6,7 +6,7 @@
 use std::time::SystemTime;
 
 // time_nanos
-#[allow(unreachable_code)]
+#[cfg_attr(target_arch = "wasm32", expect(unreachable_code))]
 fn time_nanos() -> u128 {
     #[cfg(target_arch = "wasm32")]
     {

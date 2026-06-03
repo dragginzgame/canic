@@ -44,7 +44,10 @@
 
 use crate::endpoint::{
     EndpointKind,
-    parse::{AccessExprAst, AccessPredicateAst, AuthScopeArg, BuiltinPredicate, CanisterRoleArg},
+    parse::{
+        AccessExprAst, AccessPredicateAst, AuthScopeArg, BuiltinPredicate, CanisterRoleArg,
+        QueryMode,
+    },
     validate::ValidatedArgs,
 };
 use proc_macro2::TokenStream as TokenStream2;
@@ -119,7 +122,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     let call_ident = format_ident!("__canic_call");
     let exported_method = exported_method(&args, &orig_name);
-    let call_decl = call_decl(kind, &call_ident, &exported_method);
+    let call_decl = call_decl(kind, args.query_mode, &call_ident, &exported_method);
 
     let access_stage = if is_protected_internal {
         quote!()
@@ -259,12 +262,20 @@ fn exported_method(args: &ValidatedArgs, name: &syn::Ident) -> TokenStream2 {
     }
 }
 
-fn call_decl(kind: EndpointKind, call: &syn::Ident, method_name: &TokenStream2) -> TokenStream2 {
-    let call_kind = match kind {
-        EndpointKind::Query => {
+fn call_decl(
+    kind: EndpointKind,
+    query_mode: QueryMode,
+    call: &syn::Ident,
+    method_name: &TokenStream2,
+) -> TokenStream2 {
+    let call_kind = match (kind, query_mode) {
+        (EndpointKind::Query, QueryMode::Composite) => {
+            quote!(::canic::__internal::core::ids::EndpointCallKind::QueryComposite)
+        }
+        (EndpointKind::Query, QueryMode::Plain) => {
             quote!(::canic::__internal::core::ids::EndpointCallKind::Query)
         }
-        EndpointKind::Update => {
+        (EndpointKind::Update, _) => {
             quote!(::canic::__internal::core::ids::EndpointCallKind::Update)
         }
     };
@@ -901,6 +912,7 @@ mod tests {
             payload_max_bytes: None,
             requires,
             internal: false,
+            query_mode: QueryMode::Plain,
         }
     }
 
@@ -938,6 +950,24 @@ mod tests {
         assert!(expanded.contains("register_update_limit"));
         assert!(expanded.contains("\"wire_ping\""));
         assert!(expanded.contains("64 * 1024"));
+    }
+
+    #[test]
+    fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
+        let mut args = make_args(Vec::new());
+        args.forwarded.push(quote!(composite = true));
+        args.query_mode = QueryMode::Composite;
+        let func: ItemFn = syn::parse_quote!(
+            fn ping() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+
+        let expanded = expand(EndpointKind::Query, args, func).to_string();
+        let compact = expanded.split_whitespace().collect::<String>();
+
+        assert!(compact.contains("query(composite=true)"));
+        assert!(compact.contains("EndpointCallKind::QueryComposite"));
     }
 
     #[test]

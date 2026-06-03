@@ -5,7 +5,7 @@ use crate::ops::runtime::metrics::sharding::{
 };
 use crate::{
     cdk::types::Principal,
-    ids::{AccessMetricKind, CanisterRole},
+    ids::{AccessMetricKind, CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
     ops::runtime::metrics::{
         auth::{AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface},
         canister_ops::{
@@ -48,6 +48,13 @@ use crate::{
     },
 };
 use std::time::Duration;
+
+fn endpoint_call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
+    EndpointCall {
+        endpoint: EndpointId::new(name),
+        kind,
+    }
+}
 
 #[test]
 fn auth_metrics_are_exposed_with_stable_labels() {
@@ -171,6 +178,39 @@ fn canister_ops_metrics_are_exposed_with_stable_labels() {
             "state_propagation",
         ],
         1,
+    );
+}
+
+#[test]
+fn perf_endpoint_metrics_include_call_kind_label() {
+    reset_for_tests();
+
+    perf::record_endpoint_call(endpoint_call("read_state", EndpointCallKind::Query), 10);
+    perf::record_endpoint_call(
+        endpoint_call("read_remote_state", EndpointCallKind::QueryComposite),
+        20,
+    );
+    perf::record_endpoint_call(endpoint_call("write_state", EndpointCallKind::Update), 30);
+
+    let entries = entries(MetricsKind::Runtime);
+
+    assert_metric_count_and_u64(
+        &entries,
+        &["perf", "endpoint", "query", "read_state"],
+        1,
+        10,
+    );
+    assert_metric_count_and_u64(
+        &entries,
+        &["perf", "endpoint", "composite_query", "read_remote_state"],
+        1,
+        20,
+    );
+    assert_metric_count_and_u64(
+        &entries,
+        &["perf", "endpoint", "update", "write_state"],
+        1,
+        30,
     );
 }
 
@@ -845,5 +885,25 @@ fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) 
     match &entry.value {
         MetricValue::Count(count) => assert_eq!(*count, expected),
         _ => panic!("metric entry should use Count"),
+    }
+}
+
+fn assert_metric_count_and_u64(
+    entries: &[MetricEntry],
+    labels: &[&str],
+    expected_count: u64,
+    expected_value: u64,
+) {
+    let entry = entries
+        .iter()
+        .find(|entry| entry.labels.iter().map(String::as_str).collect::<Vec<_>>() == labels)
+        .expect("metric entry should exist");
+
+    match &entry.value {
+        MetricValue::CountAndU64 { count, value_u64 } => {
+            assert_eq!(*count, expected_count);
+            assert_eq!(*value_u64, expected_value);
+        }
+        _ => panic!("metric entry should use CountAndU64"),
     }
 }

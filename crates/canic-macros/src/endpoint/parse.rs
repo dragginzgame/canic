@@ -88,6 +88,22 @@ pub enum AccessPredicateAst {
 }
 
 ///
+/// QueryMode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QueryMode {
+    Plain,
+    Composite,
+}
+
+impl QueryMode {
+    pub const fn is_composite(self) -> bool {
+        matches!(self, Self::Composite)
+    }
+}
+
+///
 /// ParsedArgs
 ///
 
@@ -100,6 +116,7 @@ pub struct ParsedArgs {
     pub requires_async: bool,
     pub requires_fallible: bool,
     pub internal: bool,
+    pub query_mode: QueryMode,
 }
 
 #[expect(clippy::too_many_lines)]
@@ -116,6 +133,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     let mut requires = Vec::new();
     let mut internal = false;
     let mut saw_name = false;
+    let mut query_mode = QueryMode::Plain;
     let mut export_name = None;
     let mut payload_max_bytes = None;
 
@@ -141,6 +159,16 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                     ));
                 }
                 internal = true;
+            }
+            Meta::Path(path) if path.is_ident("composite") => {
+                if query_mode.is_composite() {
+                    return Err(syn::Error::new_spanned(
+                        path,
+                        "composite query marker must appear only once",
+                    ));
+                }
+                forwarded.push(quote!(composite = true));
+                query_mode = QueryMode::Composite;
             }
             Meta::NameValue(nv) if nv.path.is_ident("name") => {
                 if saw_name {
@@ -204,6 +232,39 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                 }
                 internal = true;
             }
+            Meta::NameValue(nv) if nv.path.is_ident("composite") => {
+                if query_mode.is_composite() {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "composite query marker must appear only once",
+                    ));
+                }
+                let value = match &nv.value {
+                    Expr::Lit(expr) => match &expr.lit {
+                        syn::Lit::Bool(lit) => lit.value,
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                nv,
+                                "composite must be set to a boolean literal",
+                            ));
+                        }
+                    },
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            nv,
+                            "composite must be set to a boolean literal",
+                        ));
+                    }
+                };
+                if !value {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "composite must be true when specified",
+                    ));
+                }
+                forwarded.push(quote!(composite = true));
+                query_mode = QueryMode::Composite;
+            }
             Meta::List(list) => {
                 return Err(syn::Error::new_spanned(
                     list,
@@ -213,13 +274,13 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
             Meta::Path(path) => {
                 return Err(syn::Error::new_spanned(
                     path,
-                    "endpoint attributes must be expressed via requires(...), payload(...), internal, or name = \"...\"",
+                    "endpoint attributes must be expressed via requires(...), payload(...), internal, composite, or name = \"...\"",
                 ));
             }
             Meta::NameValue(nv) => {
                 return Err(syn::Error::new_spanned(
                     nv,
-                    "endpoint attributes must be expressed via requires(...), payload(...), internal, or name = \"...\"",
+                    "endpoint attributes must be expressed via requires(...), payload(...), internal, composite, or name = \"...\"",
                 ));
             }
         }
@@ -228,7 +289,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     if requires.is_empty() && !internal && forwarded.is_empty() && payload_max_bytes.is_none() {
         return Err(syn::Error::new_spanned(
             attr,
-            "expected requires(...), internal, name = \"...\", or payload(...)",
+            "expected requires(...), internal, composite, name = \"...\", or payload(...)",
         ));
     }
 
@@ -243,6 +304,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         requires_async,
         requires_fallible,
         internal,
+        query_mode,
     })
 }
 
@@ -255,6 +317,7 @@ const fn empty() -> ParsedArgs {
         requires_async: false,
         requires_fallible: false,
         internal: false,
+        query_mode: QueryMode::Plain,
     }
 }
 
@@ -737,6 +800,45 @@ mod tests {
         );
         assert!(parsed.requires.is_empty());
         assert!(!parsed.internal);
+    }
+
+    #[test]
+    fn composite_query_marker_is_forwarded_without_requires() {
+        let parsed = parse_args(quote!(composite)).expect("composite-only args should parse");
+
+        assert_eq!(parsed.query_mode, QueryMode::Composite);
+        assert_eq!(parsed.forwarded.len(), 1);
+        assert_eq!(parsed.forwarded[0].to_string(), "composite = true");
+        assert!(parsed.requires.is_empty());
+        assert!(!parsed.internal);
+    }
+
+    #[test]
+    fn composite_query_true_is_forwarded() {
+        let parsed = parse_args(quote!(name = "wire_query", composite = true)).expect("parse args");
+
+        assert_eq!(parsed.query_mode, QueryMode::Composite);
+        assert_eq!(parsed.forwarded.len(), 2);
+        assert!(
+            parsed
+                .forwarded
+                .iter()
+                .any(|tokens| tokens.to_string() == "composite = true")
+        );
+    }
+
+    #[test]
+    fn composite_query_false_is_rejected() {
+        let err = parse_args(quote!(composite = false)).expect_err("false composite");
+
+        assert!(err.to_string().contains("composite must be true"));
+    }
+
+    #[test]
+    fn duplicate_composite_query_marker_is_rejected() {
+        let err = parse_args(quote!(composite, composite = true)).expect_err("duplicate");
+
+        assert!(err.to_string().contains("must appear only once"));
     }
 
     #[test]

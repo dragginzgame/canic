@@ -68,7 +68,6 @@ impl_storable_bounded!(IcpRefillRecord, IcpRefillRecord::STORABLE_MAX_SIZE, fals
 /// IcpRefillRecords
 ///
 
-#[allow(dead_code)]
 pub struct IcpRefillRecords {
     map: StableBtreeMap<IcpRefillRecordKey, IcpRefillRecord, VirtualMemory<DefaultMemoryImpl>>,
 }
@@ -80,20 +79,17 @@ impl IcpRefillRecords {
         Self { map }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn insert(record: IcpRefillRecord) -> Option<IcpRefillRecord> {
         ICP_REFILL_RECORDS
             .with_borrow_mut(|records| records.map.insert(IcpRefillRecordKey(record.id), record))
     }
 
     #[must_use]
-    #[allow(dead_code)]
     pub(crate) fn get(id: u64) -> Option<IcpRefillRecord> {
         ICP_REFILL_RECORDS.with_borrow(|records| records.map.get(&IcpRefillRecordKey(id)))
     }
 
     #[must_use]
-    #[allow(dead_code)]
     pub(crate) fn entries(
         offset: usize,
         limit: usize,

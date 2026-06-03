@@ -45,7 +45,8 @@ inspect only the files needed for the current task.
   crates/canic-core/src/infra/ic/icp_refill.rs
   crates/canic-core/src/ops/ic/icp_refill.rs
   crates/canic-core/src/domain/policy/icp_refill.rs
-  crates/canic-core/src/workflow/ic/icp_refill.rs
+  crates/canic-core/src/workflow/ic/icp_refill/mod.rs
+  crates/canic-core/src/workflow/ic/icp_refill/tests.rs
   ```
   This now has the reusable manual workflow path that prepares an
   `IcpRefillRecord`, executes `icrc1_transfer`, retries from the persisted
@@ -84,11 +85,25 @@ inspect only the files needed for the current task.
   bootstrap `wasm_store` nested target hit `No space left on device`. The
   release removes the duplicate workflow-level canister artifact prebuild and
   has `scripts/ci/run-workspace-tests.sh` clear generated PocketIC wasm target
-  caches before each heavy PocketIC suite. Post-`0.58.4` cleanup has started
-  in the ICP refill core by centralizing repeated infra error mapping in
-  `ops::ic::icp_refill` and repeated status/error mutation helpers in
-  `ops::storage::icp_refill`; the shared workflow transfer stale-window branch
-  is now also a single helper for requested transfers and bad-fee retries.
+  caches before each heavy PocketIC suite. `0.58.5` cleaned up the ICP refill
+  core by centralizing repeated infra error mapping in `ops::ic::icp_refill`
+  and repeated status/error mutation helpers in `ops::storage::icp_refill`;
+  the shared workflow transfer stale-window branch is now also a single helper
+  for requested transfers and bad-fee retries. `0.58.6` splits the ICP refill
+  workflow into a directory module so the production workflow lives in
+  `mod.rs` and the workflow unit tests live in sibling `tests.rs`; removes
+  stale dead-code suppressions and unused ICP account wrappers; adds a
+  storage-level `records()` helper for callers that do not need stable-map
+  keys; avoids duplicate manual policy evaluation when no ICP/XDR rate gate is
+  configured; replaces intentional non-macro lint `allow(...)` attributes with
+  `expect(...)`; and deliberately leaves the `finish!` macro's generated
+  dead-code allow in place to avoid downstream false positives. `0.58.6` also
+  adds `#[canic_query(composite)]` support, forwards the marker to the CDK
+  query attribute, rejects composite markers on updates, and makes endpoint
+  perf rows include an explicit call-kind label (`query`, `composite_query`,
+  or `update`) when those rows are durable. Ordinary query calls still do not
+  commit perf counters; use same-call `QueryPerfSample<T>` probes for
+  query-side instruction measurements.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

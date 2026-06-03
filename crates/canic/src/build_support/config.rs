@@ -88,14 +88,12 @@ pub fn config_declares_role(config: &ConfigModel, fleet_name: &str, role_name: &
 
 /// Return the fleet name declared by a validated config.
 #[must_use]
-#[allow(dead_code)]
 pub fn config_fleet_name(config: &ConfigModel) -> Option<&str> {
     config.fleet_name()
 }
 
 /// Return whether a validated config attaches the requested fleet role.
 #[must_use]
-#[allow(dead_code)]
 pub fn config_attaches_role(config: &ConfigModel, fleet_name: &str, role_name: &str) -> bool {
     if config.fleet_name() != Some(fleet_name) {
         return false;

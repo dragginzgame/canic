@@ -7,13 +7,12 @@
 //! domain layering (endpoints → ops → model).
 //! Instrumentation modules are layer-neutral and may be used anywhere.
 
-use crate::ids::{EndpointCall, EndpointId};
+use crate::ids::{EndpointCall, EndpointCallKind, EndpointId};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
     /// Last snapshot used by the `perf!` macro.
     #[cfg(not(test))]
-    #[allow(clippy::missing_const_for_thread_local)]
     pub static PERF_LAST: RefCell<u64> = RefCell::new(perf_counter());
 
     // Unit tests run outside a canister context, so `perf_counter()` would trap.
@@ -72,9 +71,15 @@ pub fn perf_counter() -> u64 {
 
 #[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum PerfKey {
-    Endpoint(String),
+    Endpoint {
+        kind: EndpointCallKind,
+        name: String,
+    },
     Timer(String),
-    Checkpoint { scope: String, label: String },
+    Checkpoint {
+        scope: String,
+        label: String,
+    },
 }
 
 ///
@@ -125,8 +130,21 @@ pub fn record(key: PerfKey, delta: u64) {
 }
 
 pub fn record_endpoint(endpoint: EndpointId, delta_instructions: u64) {
+    record_endpoint_call(
+        EndpointCall {
+            endpoint,
+            kind: EndpointCallKind::Update,
+        },
+        delta_instructions,
+    );
+}
+
+pub fn record_endpoint_call(call: EndpointCall, delta_instructions: u64) {
     record(
-        PerfKey::Endpoint(endpoint.name.to_string()),
+        PerfKey::Endpoint {
+            kind: call.kind,
+            name: call.endpoint.name.to_string(),
+        },
         delta_instructions,
     );
 }
@@ -152,7 +170,7 @@ pub(crate) fn enter_endpoint() {
 
 /// End the most recent endpoint scope and record exclusive instructions.
 pub(crate) fn exit_endpoint(call: EndpointCall) {
-    exit_endpoint_at(call.endpoint, perf_counter());
+    exit_endpoint_at(call, perf_counter());
 }
 
 fn enter_endpoint_at(start: u64) {
@@ -173,11 +191,11 @@ fn enter_endpoint_at(start: u64) {
     });
 }
 
-fn exit_endpoint_at(endpoint: EndpointId, end: u64) {
+fn exit_endpoint_at(call: EndpointCall, end: u64) {
     PERF_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         let Some(frame) = stack.pop() else {
-            record_endpoint(endpoint, end);
+            record_endpoint_call(call, end);
             return;
         };
 
@@ -188,7 +206,7 @@ fn exit_endpoint_at(endpoint: EndpointId, end: u64) {
             parent.child_instructions = parent.child_instructions.saturating_add(total);
         }
 
-        record_endpoint(endpoint, exclusive);
+        record_endpoint_call(call, exclusive);
     });
 }
 
@@ -232,10 +250,25 @@ mod tests {
         PERF_LAST.with(|last| *last.borrow_mut() = now);
     }
 
-    fn entry_for(label: &str) -> PerfEntry {
+    fn call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
+        EndpointCall {
+            endpoint: crate::ids::EndpointId::new(name),
+            kind,
+        }
+    }
+
+    fn entry_for(kind: EndpointCallKind, label: &str) -> PerfEntry {
         entries()
             .into_iter()
-            .find(|entry| matches!(&entry.key, PerfKey::Endpoint(l) if l == label))
+            .find(|entry| {
+                matches!(
+                    &entry.key,
+                    PerfKey::Endpoint {
+                        kind: entry_kind,
+                        name
+                    } if *entry_kind == kind && name == label
+                )
+            })
             .expect("expected perf entry to exist")
     }
 
@@ -263,17 +296,39 @@ mod tests {
 
         enter_endpoint_at(200);
         checkpoint_at(230);
-        exit_endpoint_at(EndpointId::new("child"), 260);
+        exit_endpoint_at(call("child", EndpointCallKind::Query), 260);
 
-        exit_endpoint_at(EndpointId::new("parent"), 300);
+        exit_endpoint_at(call("parent", EndpointCallKind::Update), 300);
 
-        let parent = entry_for("parent");
-        let child = entry_for("child");
+        let parent = entry_for(EndpointCallKind::Update, "parent");
+        let child = entry_for(EndpointCallKind::Query, "child");
 
         assert_eq!(child.count, 1);
         assert_eq!(child.total_instructions, 60);
         assert_eq!(parent.count, 1);
         assert_eq!(parent.total_instructions, 140);
+    }
+
+    #[test]
+    fn endpoint_perf_keys_preserve_call_kind() {
+        reset();
+
+        record_endpoint_call(call("same_name", EndpointCallKind::Query), 10);
+        record_endpoint_call(call("same_name", EndpointCallKind::QueryComposite), 20);
+        record_endpoint_call(call("same_name", EndpointCallKind::Update), 30);
+
+        assert_eq!(
+            entry_for(EndpointCallKind::Query, "same_name").total_instructions,
+            10
+        );
+        assert_eq!(
+            entry_for(EndpointCallKind::QueryComposite, "same_name").total_instructions,
+            20
+        );
+        assert_eq!(
+            entry_for(EndpointCallKind::Update, "same_name").total_instructions,
+            30
+        );
     }
 
     #[test]

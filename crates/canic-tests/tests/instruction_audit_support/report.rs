@@ -189,7 +189,7 @@ pub(super) fn verification_rows(
 }
 
 // Write the markdown verification table consumed by the dated report.
-#[allow(clippy::format_push_string)]
+#[expect(clippy::format_push_string)]
 pub(super) fn write_verification_readout(path: &Path, rows: &[VerificationRow]) {
     let mut out = String::from("| Command | Status | Notes |\n| --- | --- | --- |\n");
     for row in rows {
@@ -213,7 +213,7 @@ where
 }
 
 // Write the normalized endpoint matrix as a simple TSV artifact.
-#[allow(clippy::format_push_string)]
+#[expect(clippy::format_push_string)]
 pub(super) fn write_endpoint_matrix_tsv(path: &Path, results: &[ScenarioResult]) {
     let mut out = String::from(
         "canister\tendpoint_or_flow\tscenario_key\tcount\ttotal_local_instructions\tavg_local_instructions\n",
@@ -235,7 +235,7 @@ pub(super) fn write_endpoint_matrix_tsv(path: &Path, results: &[ScenarioResult])
 }
 
 // Render the first dated instruction-footprint report from normalized results.
-#[allow(clippy::format_push_string, clippy::too_many_lines)]
+#[expect(clippy::format_push_string, clippy::too_many_lines)]
 pub(super) fn write_report(
     path: &Path,
     artifacts_dir: &Path,

@@ -34,7 +34,7 @@ fn signer_guard_success_records_perf_metric() {
     let pic = setup.pic.pic();
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
-    let labels = ["perf", "endpoint", "signer_guard_is_root"];
+    let labels = ["perf", "endpoint", "update", "signer_guard_is_root"];
 
     let before = metric_count_for_labels(pic, signer_id, MetricsKind::Runtime, &labels);
 

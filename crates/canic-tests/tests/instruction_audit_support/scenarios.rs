@@ -1,7 +1,7 @@
 use super::*;
 
 // Build the fixed scenario manifest for the first 0.20 instruction baseline.
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 pub(super) fn scenarios() -> Vec<AuditScenario> {
     let mut scenarios = vec![
         AuditScenario {
