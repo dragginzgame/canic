@@ -79,12 +79,16 @@ inspect only the files needed for the current task.
   ```
   The shared cycles wallet wrapper now owns only generic `icp cycles` command
   routing plus deployment-target resolver helpers used by convert/top-up.
-  Live 0.58.3 CI exposed runner disk exhaustion, not an attestation regression:
+  `0.58.4` fixed live CI runner disk exhaustion, not an attestation regression:
   `pic_role_attestation` failed while rebuilding the root test stub because the
   bootstrap `wasm_store` nested target hit `No space left on device`. The
-  0.58.4 working tree now removes the duplicate workflow-level canister
-  artifact prebuild and has `scripts/ci/run-workspace-tests.sh` clear generated
-  PocketIC wasm target caches before each heavy PocketIC suite.
+  release removes the duplicate workflow-level canister artifact prebuild and
+  has `scripts/ci/run-workspace-tests.sh` clear generated PocketIC wasm target
+  caches before each heavy PocketIC suite. Post-`0.58.4` cleanup has started
+  in the ICP refill core by centralizing repeated infra error mapping in
+  `ops::ic::icp_refill` and repeated status/error mutation helpers in
+  `ops::storage::icp_refill`; the shared workflow transfer stale-window branch
+  is now also a single helper for requested transfers and bad-fee retries.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

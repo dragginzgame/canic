@@ -17,7 +17,7 @@ use crate::{
         IcpRefillStatus,
     },
     ids::BuildNetwork,
-    infra::ic::icp_refill::{IcpRefillCanisterOverrides, NotifyTopUpError},
+    infra::ic::icp_refill::{IcpRefillCanisterOverrides, NotifyTopUpArg, NotifyTopUpError},
     ops::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
@@ -304,21 +304,11 @@ async fn transfer_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Int
 
 async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, InternalError> {
     let record = match record.status {
-        IcpRefillStatus::Requested => {
-            if transfer_window_stale(&record, IcOps::now_nanos()) {
-                IcpRefillRecordOps::mark_transfer_window_stale(record.id, IcOps::now_nanos())?
-            } else {
-                transfer_record(record).await?
-            }
-        }
+        IcpRefillStatus::Requested => transfer_unless_window_stale(record).await?,
         IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing => record,
         IcpRefillStatus::Failed if can_retry_notify(&record) => record,
         IcpRefillStatus::Failed if can_retry_bad_fee(&record) => {
-            if transfer_window_stale(&record, IcOps::now_nanos()) {
-                IcpRefillRecordOps::mark_transfer_window_stale(record.id, IcOps::now_nanos())?
-            } else {
-                transfer_record(record).await?
-            }
+            transfer_unless_window_stale(record).await?
         }
         IcpRefillStatus::Completed
         | IcpRefillStatus::Failed
@@ -334,6 +324,17 @@ async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inte
     }
 }
 
+async fn transfer_unless_window_stale(
+    record: IcpRefillRecord,
+) -> Result<IcpRefillRecord, InternalError> {
+    let now_ns = IcOps::now_nanos();
+    if transfer_window_stale(&record, now_ns) {
+        IcpRefillRecordOps::mark_transfer_window_stale(record.id, now_ns)
+    } else {
+        transfer_record(record).await
+    }
+}
+
 async fn notify_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, InternalError> {
     let Some(block_index) = record.ledger_block_index else {
         return IcpRefillRecordOps::mark_notify_failed(
@@ -344,7 +345,7 @@ async fn notify_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inter
     };
 
     let record = IcpRefillRecordOps::mark_notify_attempt_started(record.id, IcOps::now_nanos())?;
-    let args = crate::infra::ic::icp_refill::NotifyTopUpArg {
+    let args = NotifyTopUpArg {
         block_index,
         canister_id: record.target_canister,
     };
