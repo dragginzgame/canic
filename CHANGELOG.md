@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
 
+- `0.59.2` restores CI `RUSTUP_TOOLCHAIN` propagation for nested wasm builds,
+  removes the noisy ICP-refill macro `compile_fail` doctest from release
+  gates while preserving ordinary test coverage of the required missing-guard
+  compile-time error, and records the follow-up contract in the 0.59 design
+  doc.
+
 - `0.59.1` tightens the 0.59 estimate input contract so direct report
   environment sources cannot be supplied without estimate mode, and fixes CI
   workflow linting/toolchain setup so actionlint catches GitHub Actions context

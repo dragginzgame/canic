@@ -6,10 +6,6 @@
 ///
 /// The host canister must supply an access expression. Omitting the guard is a
 /// compile-time error.
-///
-/// ```compile_fail
-/// canic::canic_emit_icp_refill_endpoints!();
-/// ```
 #[macro_export]
 macro_rules! canic_emit_icp_refill_endpoints {
     (guard = $guard:expr $(,)?) => {
@@ -32,4 +28,17 @@ macro_rules! canic_emit_icp_refill_endpoints {
     ($($tt:tt)+) => {
         compile_error!("canic_emit_icp_refill_endpoints! syntax is guard = <access expression>");
     };
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn icp_refill_endpoint_macro_requires_guard_branch() {
+        let source = include_str!("icp_refill.rs");
+
+        assert!(
+            source.contains("compile_error!(\"canic_emit_icp_refill_endpoints! requires guard = <access expression>\")"),
+            "missing-guard macro branch should stay a compile-time error"
+        );
+    }
 }

@@ -9,6 +9,15 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.2` restores CI `RUSTUP_TOOLCHAIN` propagation through `$GITHUB_ENV`
+  so nested Cargo wasm builds use the toolchain that has
+  `wasm32-unknown-unknown` installed. It also removes the noisy ICP-refill
+  endpoint macro `compile_fail` doctest from the release-gate doc-test lane.
+  The missing-guard `compile_error!` branch remains covered by an ordinary
+  unit test, so the macro still requires host-supplied
+  `guard = <access expression>` without printing an expected red compiler
+  diagnostic during `make patch`. The 0.59 design doc now records this as
+  release-gate output hygiene, not a change to the estimate model.
 - `0.59.1` tightens the 0.59 report-input contract and fixes workflow linting.
   Direct environment-driven instruction-audit estimates now reject
   node-count/rate inputs when estimate mode is disabled, matching the shell
