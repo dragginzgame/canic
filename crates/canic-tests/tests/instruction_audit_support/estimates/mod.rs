@@ -6,6 +6,15 @@ pub(super) const FORMULA_VERSION: &str = "canic-0.59-ic-cycle-costs-v1";
 const BILLION: u128 = 1_000_000_000;
 const THIRTEEN_NODE_CYCLES_PER_BILLION: u128 = 1_000_000_000;
 const THIRTY_FOUR_NODE_CYCLES_PER_BILLION: u128 = 2_615_384_615;
+const OMITTED_COSTS: &[&str] = &[
+    "update_message_execution_base_fee",
+    "message_transmission_base_fee",
+    "payload_bytes",
+    "garbage_collection",
+    "callee_instructions",
+    "management_call_fees",
+    "storage_and_reservations",
+];
 const ENV_ESTIMATE_EXECUTION_CYCLES: &str = "CANIC_INSTRUCTION_AUDIT_ESTIMATE_EXECUTION_CYCLES";
 const ENV_ESTIMATE_NODE_COUNT: &str = "CANIC_INSTRUCTION_AUDIT_ESTIMATE_NODE_COUNT";
 const ENV_CYCLES_PER_BILLION_INSTRUCTIONS: &str =
@@ -94,7 +103,7 @@ pub(super) struct ExecutionCycleEstimate {
     pub overrode_node_count_table_rate: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub node_count_table_rate: Option<String>,
-    pub omitted_costs: Vec<&'static str>,
+    pub omitted_costs: &'static [&'static str],
 }
 
 impl EstimateOptions {
@@ -189,7 +198,7 @@ fn execution_cycle_estimate(
         rate_source: selection.rate_source,
         overrode_node_count_table_rate: selection.overrode_node_count_table_rate,
         node_count_table_rate: selection.node_count_table_rate.map(|rate| rate.to_string()),
-        omitted_costs: omitted_costs(),
+        omitted_costs: OMITTED_COSTS,
     })
 }
 
@@ -301,18 +310,6 @@ fn parse_positive_u128(field: &'static str, value: &str) -> Result<u128, Estimat
             field,
             value: value.to_string(),
         })
-}
-
-fn omitted_costs() -> Vec<&'static str> {
-    vec![
-        "update_message_execution_base_fee",
-        "message_transmission_base_fee",
-        "payload_bytes",
-        "garbage_collection",
-        "callee_instructions",
-        "management_call_fees",
-        "storage_and_reservations",
-    ]
 }
 
 #[cfg(test)]
@@ -531,6 +528,26 @@ mod tests {
             THIRTEEN_NODE_CYCLES_PER_BILLION.to_string()
         );
         assert_no_catalog_fields(&value);
+    }
+
+    #[test]
+    fn estimate_object_serializes_pinned_omitted_costs() {
+        let estimate = execution_cycle_estimate(1_000_000, "update", options_with_node_count(13))
+            .expect("estimate");
+        let value = serde_json::to_value(estimate).expect("serialize estimate");
+        let omitted = value["omitted_costs"]
+            .as_array()
+            .expect("omitted costs array");
+
+        assert_eq!(omitted.len(), OMITTED_COSTS.len());
+        for expected in OMITTED_COSTS {
+            assert!(
+                omitted
+                    .iter()
+                    .any(|actual| actual.as_str() == Some(*expected)),
+                "omitted cost should be serialized: {expected}"
+            );
+        }
     }
 
     fn assert_no_catalog_fields(value: &Value) {

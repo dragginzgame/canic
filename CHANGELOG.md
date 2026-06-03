@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
 
+- `0.59.3` keeps the offline estimate object lean by pinning the repeated
+  omitted-cost list as one static contract while preserving the serialized
+  JSON shape.
+
 - `0.59.2` restores CI `RUSTUP_TOOLCHAIN` propagation for nested wasm builds,
   removes the noisy ICP-refill macro `compile_fail` doctest from release
   gates while preserving ordinary test coverage of the required missing-guard
