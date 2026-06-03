@@ -9,6 +9,11 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.5` keeps estimate artifact behavior unchanged while pinning the
+  instruction-footprint markdown estimate section title, instructions-only
+  label, and table header as report constants. Report-rendering tests now prove
+  the estimate section is omitted when no rows have estimates and uses the
+  required instructions-only label when estimates are present.
 - `0.59.4` keeps the offline estimate artifact shape unchanged while pinning
   the remaining JSON contract labels (`kind`, `charge_model`,
   `subnet_source`, `source_meaning`, and `rate_source`) as named

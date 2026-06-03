@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
 
+- `0.59.5` pins the instruction-footprint markdown estimate section wording
+  and adds report-rendering coverage for the instructions-only estimate label.
+
 - `0.59.4` pins the remaining offline estimate JSON contract labels as named
   report-support constants while keeping literal-value tests and serialized
   output unchanged.

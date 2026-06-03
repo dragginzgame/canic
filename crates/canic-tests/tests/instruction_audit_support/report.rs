@@ -2,6 +2,11 @@ use super::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+const ESTIMATE_SECTION_TITLE: &str = "## Execution Cycle Estimate";
+const ESTIMATE_SECTION_LABEL: &str =
+    "Execution cycle estimate (instructions only, excludes message/byte/GC/platform fees).";
+const ESTIMATE_SECTION_TABLE_HEADER: &str = "| Scenario | Local instructions | Estimated instruction cycles | Cycles per billion instructions | Source | Formula |";
+
 #[derive(Deserialize)]
 struct BaselinePerfRow {
     avg_local_instructions: u64,
@@ -638,11 +643,12 @@ fn write_estimate_section(out: &mut String, results: &[ScenarioResult]) {
         return;
     }
 
-    out.push_str("## Execution Cycle Estimate\n\n");
-    out.push_str(
-        "Execution cycle estimate (instructions only, excludes message/byte/GC/platform fees).\n\n",
-    );
-    out.push_str("| Scenario | Local instructions | Estimated instruction cycles | Cycles per billion instructions | Source | Formula |\n");
+    out.push_str(ESTIMATE_SECTION_TITLE);
+    out.push_str("\n\n");
+    out.push_str(ESTIMATE_SECTION_LABEL);
+    out.push_str("\n\n");
+    out.push_str(ESTIMATE_SECTION_TABLE_HEADER);
+    out.push('\n');
     out.push_str("| --- | ---: | ---: | ---: | --- | --- |\n");
     for (result, estimate) in estimated_rows {
         out.push_str(&format!(
@@ -813,5 +819,91 @@ fn rounded_percent_tenths(delta: i128, baseline_avg: u64) -> i128 {
         (numerator + denominator / 2) / denominator
     } else {
         (numerator - denominator / 2) / denominator
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scenario_result(execution_cycle_estimate: Option<ExecutionCycleEstimate>) -> ScenarioResult {
+        ScenarioResult {
+            scenario: AuditScenario {
+                key: "test:test:minimal-valid",
+                canister: "test",
+                endpoint_or_flow: "test",
+                transport_mode: "update",
+                subject_kind: "endpoint",
+                subject_label: "test",
+                arg_class: "minimal-valid",
+                caller_class: "anonymous",
+                auth_state: "local-test-only",
+                replay_state: "n/a",
+                cache_state: "n/a",
+                topology_state: "standalone-test-ready",
+                freshness_model: "fresh-topology-per-scenario",
+                notes: "test row",
+            },
+            row: CanonicalPerfRow {
+                subject_kind: "endpoint".to_string(),
+                subject_label: "test".to_string(),
+                count: 1,
+                total_local_instructions: 1_000_000,
+                avg_local_instructions: 1_000_000,
+                scenario_key: "test:test:minimal-valid".to_string(),
+                scenario_labels: vec!["transport_mode=update".to_string()],
+                principal_scope: Some("anonymous".to_string()),
+                sample_origin: "update".to_string(),
+                execution_cycle_estimate,
+            },
+            checkpoint_rows: Vec::new(),
+        }
+    }
+
+    fn estimate() -> ExecutionCycleEstimate {
+        ExecutionCycleEstimate {
+            estimate_schema_version: 1,
+            kind: "per_instruction_component_only",
+            charge_model: "hypothetical_update_execution_component",
+            local_instructions: 1_000_000,
+            counter_id: PERF_COUNTER_ID,
+            sample_origin: "update".to_string(),
+            estimated_instruction_cycles: "1000000".to_string(),
+            cycles_per_billion_instructions: "1000000000".to_string(),
+            subnet_node_count: Some(13),
+            subnet_source: "flag",
+            source_meaning: "operator_supplied_pricing_assumption",
+            formula_version: "canic-0.59-ic-cycle-costs-v1",
+            rate_source: "official-ic-cycle-costs-docs",
+            overrode_node_count_table_rate: false,
+            node_count_table_rate: Some("1000000000".to_string()),
+            omitted_costs: &[],
+        }
+    }
+
+    #[test]
+    fn estimate_section_is_omitted_without_estimates() {
+        let mut out = String::new();
+        let results = vec![scenario_result(None)];
+
+        write_estimate_section(&mut out, &results);
+
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn estimate_section_renders_instruction_component_label() {
+        let mut out = String::new();
+        let results = vec![scenario_result(Some(estimate()))];
+
+        write_estimate_section(&mut out, &results);
+
+        assert!(out.contains(ESTIMATE_SECTION_TITLE));
+        assert!(out.contains(ESTIMATE_SECTION_LABEL));
+        assert!(out.contains(ESTIMATE_SECTION_TABLE_HEADER));
+        assert!(out.contains("test:test:minimal-valid"));
+        assert!(out.contains("1000000"));
+        assert!(out.contains("official-ic-cycle-costs-docs"));
+        assert!(out.contains("canic-0.59-ic-cycle-costs-v1"));
     }
 }
