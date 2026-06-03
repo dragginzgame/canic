@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
 
+- `0.59.4` pins the remaining offline estimate JSON contract labels as named
+  report-support constants while keeping literal-value tests and serialized
+  output unchanged.
+
 - `0.59.3` keeps the offline estimate object lean by pinning the repeated
   omitted-cost list as one static contract while preserving the serialized
   JSON shape.

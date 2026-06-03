@@ -9,6 +9,11 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.4` keeps the offline estimate artifact shape unchanged while pinning
+  the remaining JSON contract labels (`kind`, `charge_model`,
+  `subnet_source`, `source_meaning`, and `rate_source`) as named
+  report-support constants. Existing tests still assert literal values so label
+  changes remain deliberate.
 - `0.59.3` keeps the offline estimate object behavior unchanged while making
   the fixed `execution_cycle_estimate.omitted_costs` list a single static
   contract reused by every report row. The serialized JSON shape is unchanged

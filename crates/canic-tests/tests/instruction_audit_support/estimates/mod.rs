@@ -3,6 +3,13 @@ use std::env;
 
 pub(super) const ESTIMATE_SCHEMA_VERSION: u8 = 1;
 pub(super) const FORMULA_VERSION: &str = "canic-0.59-ic-cycle-costs-v1";
+const ESTIMATE_KIND_PER_INSTRUCTION_COMPONENT: &str = "per_instruction_component_only";
+const CHARGE_MODEL_UPDATE_EXECUTION_COMPONENT: &str = "hypothetical_update_execution_component";
+const SUBNET_SOURCE_FLAG: &str = "flag";
+const SUBNET_SOURCE_EXPLICIT_RATE: &str = "explicit-rate";
+const SOURCE_MEANING_OPERATOR_SUPPLIED: &str = "operator_supplied_pricing_assumption";
+const RATE_SOURCE_OFFICIAL_DOCS: &str = "official-ic-cycle-costs-docs";
+const RATE_SOURCE_OPERATOR_EXPLICIT: &str = "operator-explicit-rate";
 const BILLION: u128 = 1_000_000_000;
 const THIRTEEN_NODE_CYCLES_PER_BILLION: u128 = 1_000_000_000;
 const THIRTY_FOUR_NODE_CYCLES_PER_BILLION: u128 = 2_615_384_615;
@@ -184,8 +191,8 @@ fn execution_cycle_estimate(
 
     Ok(ExecutionCycleEstimate {
         estimate_schema_version: ESTIMATE_SCHEMA_VERSION,
-        kind: "per_instruction_component_only",
-        charge_model: "hypothetical_update_execution_component",
+        kind: ESTIMATE_KIND_PER_INSTRUCTION_COMPONENT,
+        charge_model: CHARGE_MODEL_UPDATE_EXECUTION_COMPONENT,
         local_instructions,
         counter_id: PERF_COUNTER_ID,
         sample_origin: sample_origin.to_string(),
@@ -193,7 +200,7 @@ fn execution_cycle_estimate(
         cycles_per_billion_instructions: selection.cycles_per_billion_instructions.to_string(),
         subnet_node_count: options.node_count,
         subnet_source: selection.subnet_source,
-        source_meaning: "operator_supplied_pricing_assumption",
+        source_meaning: SOURCE_MEANING_OPERATOR_SUPPLIED,
         formula_version: FORMULA_VERSION,
         rate_source: selection.rate_source,
         overrode_node_count_table_rate: selection.overrode_node_count_table_rate,
@@ -210,8 +217,8 @@ fn select_rate(options: EstimateOptions) -> Result<RateSelection, EstimateError>
             cycles_per_billion_instructions: explicit_rate,
             node_count_table_rate,
             overrode_node_count_table_rate: node_count_table_rate.is_some(),
-            subnet_source: "explicit-rate",
-            rate_source: "operator-explicit-rate",
+            subnet_source: SUBNET_SOURCE_EXPLICIT_RATE,
+            rate_source: RATE_SOURCE_OPERATOR_EXPLICIT,
         });
     }
 
@@ -226,8 +233,8 @@ fn select_rate(options: EstimateOptions) -> Result<RateSelection, EstimateError>
         cycles_per_billion_instructions: rate,
         node_count_table_rate: Some(rate),
         overrode_node_count_table_rate: false,
-        subnet_source: "flag",
-        rate_source: "official-ic-cycle-costs-docs",
+        subnet_source: SUBNET_SOURCE_FLAG,
+        rate_source: RATE_SOURCE_OFFICIAL_DOCS,
     })
 }
 
@@ -517,6 +524,11 @@ mod tests {
         let value = serde_json::to_value(estimate).expect("serialize estimate");
 
         assert_eq!(value["estimate_schema_version"], ESTIMATE_SCHEMA_VERSION);
+        assert_eq!(
+            value["counter_id"].as_u64(),
+            Some(u64::from(PERF_COUNTER_ID))
+        );
+        assert_eq!(value["sample_origin"], "update");
         assert_eq!(value["kind"], "per_instruction_component_only");
         assert_eq!(
             value["charge_model"],
@@ -526,6 +538,47 @@ mod tests {
         assert_eq!(
             value["cycles_per_billion_instructions"],
             THIRTEEN_NODE_CYCLES_PER_BILLION.to_string()
+        );
+        assert_eq!(value["subnet_node_count"].as_u64(), Some(13));
+        assert_eq!(value["subnet_source"], "flag");
+        assert_eq!(
+            value["source_meaning"],
+            "operator_supplied_pricing_assumption"
+        );
+        assert_eq!(value["formula_version"], FORMULA_VERSION);
+        assert_eq!(value["rate_source"], "official-ic-cycle-costs-docs");
+        assert_eq!(
+            value["overrode_node_count_table_rate"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            value["node_count_table_rate"],
+            THIRTEEN_NODE_CYCLES_PER_BILLION.to_string()
+        );
+        assert_no_catalog_fields(&value);
+    }
+
+    #[test]
+    fn estimate_object_serializes_explicit_rate_override_labels() {
+        let options = EstimateOptions {
+            enabled: true,
+            node_count: Some(34),
+            explicit_cycles_per_billion_instructions: Some(123_456_789),
+        };
+        let estimate = execution_cycle_estimate(1_000_000, "update", options).expect("estimate");
+        let value = serde_json::to_value(estimate).expect("serialize estimate");
+
+        assert_eq!(value["subnet_node_count"].as_u64(), Some(34));
+        assert_eq!(value["subnet_source"], "explicit-rate");
+        assert_eq!(value["rate_source"], "operator-explicit-rate");
+        assert_eq!(value["cycles_per_billion_instructions"], "123456789");
+        assert_eq!(
+            value["overrode_node_count_table_rate"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            value["node_count_table_rate"],
+            THIRTY_FOUR_NODE_CYCLES_PER_BILLION.to_string()
         );
         assert_no_catalog_fields(&value);
     }
