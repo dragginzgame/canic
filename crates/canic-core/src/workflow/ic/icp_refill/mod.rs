@@ -146,7 +146,7 @@ impl IcpRefillWorkflow {
         hub_cycles: Cycles,
     ) -> Result<IcpRefillResponse, InternalError> {
         let self_pid = IcOps::canister_self();
-        if let Some(record) = find_resumable_hub_self_refill(self_pid) {
+        if let Some(record) = IcpRefillRecordOps::find_resumable_hub_self_refill(self_pid) {
             let request = request_from_record(&record);
             return Self::execute_manual_refill(request).await;
         }
@@ -191,7 +191,7 @@ impl IcpRefillWorkflow {
                 hub_cycles.to_u128(),
                 &request,
                 observed_rate,
-                has_in_flight_record(&request),
+                in_flight_for_request(&request),
                 AppStateOps::cycles_funding_enabled(),
                 funding_cooldown_retry_after_secs(&request, now_secs),
             ),
@@ -215,6 +215,47 @@ struct IcpRefillExecutionContext {
 }
 
 ///
+/// ManualRefillPolicyPreflight
+///
+
+struct ManualRefillPolicyPreflight<'a> {
+    policy: Option<&'a IcpRefillPolicy>,
+    input: IcpRefillPolicyInput,
+    rate_gate_configured: bool,
+}
+
+impl<'a> ManualRefillPolicyPreflight<'a> {
+    fn new(policy: Option<&'a IcpRefillPolicy>, request: &IcpRefillRequest) -> Self {
+        let input = policy_input(
+            0,
+            request,
+            None,
+            in_flight_for_request(request),
+            AppStateOps::cycles_funding_enabled(),
+            funding_cooldown_retry_after_secs(request, IcOps::now_secs()),
+        );
+
+        Self {
+            policy,
+            input,
+            rate_gate_configured: policy_requires_rate(policy),
+        }
+    }
+
+    fn evaluate(&self, observed_xdr_permyriad_per_icp: Option<u64>) -> Result<(), InternalError> {
+        evaluate_manual_refill(
+            self.policy,
+            IcpRefillPolicyInput {
+                observed_xdr_permyriad_per_icp,
+                ..self.input
+            },
+        )
+        .map(|_decision| ())
+        .map_err(policy_denied)
+    }
+}
+
+///
 /// RateQueryMode
 ///
 
@@ -229,24 +270,9 @@ async fn prepare_context(
     rate_query_mode: RateQueryMode,
 ) -> Result<IcpRefillExecutionContext, InternalError> {
     let policy = current_icp_refill_policy()?;
-    let in_flight_for_key = has_in_flight_record(request);
-    let cycles_funding_enabled = AppStateOps::cycles_funding_enabled();
-    let funding_cooldown_retry_after_secs =
-        funding_cooldown_retry_after_secs(request, IcOps::now_secs());
-    let rate_gate_configured = policy_requires_rate(policy.as_ref());
-    if !rate_gate_configured {
-        evaluate_manual_refill(
-            policy.as_ref(),
-            policy_input(
-                0,
-                request,
-                None,
-                in_flight_for_key,
-                cycles_funding_enabled,
-                funding_cooldown_retry_after_secs,
-            ),
-        )
-        .map_err(policy_denied)?;
+    let policy_preflight = ManualRefillPolicyPreflight::new(policy.as_ref(), request);
+    if !policy_preflight.rate_gate_configured {
+        policy_preflight.evaluate(None)?;
     }
 
     let canisters =
@@ -257,19 +283,8 @@ async fn prepare_context(
     let xdr_permyriad_per_icp =
         configured_rate(policy.as_ref(), canisters.cmc_canister_id, rate_query_mode).await?;
 
-    if rate_gate_configured {
-        evaluate_manual_refill(
-            policy.as_ref(),
-            policy_input(
-                0,
-                request,
-                xdr_permyriad_per_icp,
-                in_flight_for_key,
-                cycles_funding_enabled,
-                funding_cooldown_retry_after_secs,
-            ),
-        )
-        .map_err(policy_denied)?;
+    if policy_preflight.rate_gate_configured {
+        policy_preflight.evaluate(xdr_permyriad_per_icp)?;
     }
 
     Ok(IcpRefillExecutionContext {
@@ -315,8 +330,8 @@ async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inte
     let record = match record.status {
         IcpRefillStatus::Requested => transfer_unless_window_stale(record).await?,
         IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing => record,
-        IcpRefillStatus::Failed if can_retry_notify(&record) => record,
-        IcpRefillStatus::Failed if can_retry_bad_fee(&record) => {
+        IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_notify(&record) => record,
+        IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_bad_fee(&record) => {
             transfer_unless_window_stale(record).await?
         }
         IcpRefillStatus::Completed
@@ -637,23 +652,13 @@ fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {
     IcpRefillWorkflowError::PolicyDenied(violation).into()
 }
 
-fn has_in_flight_record(request: &IcpRefillRequest) -> bool {
-    IcpRefillRecordOps::records().into_iter().any(|record| {
-        record.source_canister == request.source_canister
-            && record.source_subaccount == request.source_subaccount
-            && record.target_canister == request.target_canister
-            && is_in_flight(record.status)
-            && record.operation_id != request.operation_id
-    })
-}
-
-fn find_resumable_hub_self_refill(self_pid: Principal) -> Option<IcpRefillRecord> {
-    IcpRefillRecordOps::records().into_iter().find(|record| {
-        record.source_canister == self_pid
-            && record.source_subaccount.is_none()
-            && record.target_canister == self_pid
-            && is_resumable(record)
-    })
+fn in_flight_for_request(request: &IcpRefillRequest) -> bool {
+    IcpRefillRecordOps::has_in_flight_for_key(
+        request.source_canister,
+        request.source_subaccount,
+        request.target_canister,
+        request.operation_id,
+    )
 }
 
 const fn request_from_record(record: &IcpRefillRecord) -> IcpRefillRequest {
@@ -712,42 +717,18 @@ where
     .into())
 }
 
-const fn is_in_flight(status: IcpRefillStatus) -> bool {
-    matches!(
-        status,
-        IcpRefillStatus::Requested
-            | IcpRefillStatus::Transferred
-            | IcpRefillStatus::NotifyProcessing
-    )
-}
-
-const fn is_resumable(record: &IcpRefillRecord) -> bool {
-    is_in_flight(record.status) || can_retry_notify(record) || can_retry_bad_fee(record)
-}
-
-const fn can_retry_notify(record: &IcpRefillRecord) -> bool {
-    record.ledger_block_index.is_some()
-        && matches!(record.status, IcpRefillStatus::Failed)
-        && matches!(record.error_code, Some(IcpRefillErrorCode::NotifyFailed))
-}
-
-const fn can_retry_bad_fee(record: &IcpRefillRecord) -> bool {
-    record.ledger_block_index.is_none()
-        && matches!(record.status, IcpRefillStatus::Failed)
-        && matches!(record.error_code, Some(IcpRefillErrorCode::BadFee))
-}
-
 const fn should_notify(record: &IcpRefillRecord) -> bool {
     record.ledger_block_index.is_some()
         && (matches!(
             record.status,
             IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing
-        ) || can_retry_notify(record))
+        ) || IcpRefillRecordOps::can_retry_notify(record))
 }
 
 const fn transfer_window_stale(record: &IcpRefillRecord, now_ns: u64) -> bool {
     record.ledger_block_index.is_none()
-        && (matches!(record.status, IcpRefillStatus::Requested) || can_retry_bad_fee(record))
+        && (matches!(record.status, IcpRefillStatus::Requested)
+            || IcpRefillRecordOps::can_retry_bad_fee(record))
         && record.created_at_time_ns.saturating_add(TX_WINDOW_NANOS) < now_ns
 }
 

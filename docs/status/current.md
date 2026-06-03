@@ -9,13 +9,19 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active maintainer-directed slice: post-`0.58.13` cleanup for `0.58.14`.
-  The current follow-up centralizes ICP-refill completed-cycle `Nat` saturation
-  in storage ops, reuses one direct-child refill parent check in workflow, and
-  shares cycles-timer in-flight guard helpers between child top-up and hub
-  ICP self-refill. Refill metrics, grant-ledger reuse, and top-up scheduling
-  now share the same deterministic helper shapes without changing refill
-  records, endpoints, CLI, metrics labels, or funding semantics.
+- `0.58.15` finalized the post-`0.58.14` cleanup. It moves ICP-refill recovery
+  record status predicates and in-flight/resumable lookup filters into storage
+  ops, so workflow no longer scans the stable refill record set directly for
+  policy preflight or hub self-refill recovery. Manual refill policy preflight
+  now also shares one input builder across the rate-gated and non-rate-gated
+  paths.
+- `0.58.14` finalized the post-`0.58.13` cleanup. It centralizes ICP-refill
+  completed-cycle `Nat` saturation in storage ops, reuses one direct-child
+  refill parent check in workflow, and shares cycles-timer in-flight guard
+  helpers between child top-up and hub ICP self-refill. Refill metrics,
+  grant-ledger reuse, and top-up scheduling now share the same deterministic
+  helper shapes without changing refill records, endpoints, CLI, metrics
+  labels, or funding semantics.
 - `0.58.13` recorded successful registered direct-child ICP refills into the
   existing cycles-funding grant ledger after CMC `notify_top_up` completes,
   making budget/cooldown accounting observe completed direct-child refill
@@ -28,11 +34,6 @@ inspect only the files needed for the current task.
   `FundingCooldownActive`. This closes the design gap that refill must consume
   existing funding policy hooks without adding a new refill-specific policy
   island or changing refill records, endpoints, metrics, or CLI shape.
-- Post-`0.58.11` CI/setup lean cleanup has started by making the GitHub Actions
-  workflow reuse the existing Rust version envs for MSRV/internal toolchains
-  and by combining Cargo helper binary installation into one step per workflow
-  job. The same slice removes the dead initial Makefile `CARGO_ENV`
-  assignment while preserving the existing `ICP_ENVIRONMENT` command prefix.
 - `0.58.11` finalized the post-`0.58.10` ICP-refill validation follow-up. It
   adds focused workflow regression coverage for the manual `notify_top_up`
   retry cap: the fifth CMC `Processing` response or retryable notify failure

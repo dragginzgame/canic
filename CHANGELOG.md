@@ -12,13 +12,17 @@ present.
 
 ## Unreleased
 
-- Centralized ICP-refill completed-cycle saturation, direct-child refill parent
-  checks, and cycles-timer in-flight guard helpers so metrics, grant-ledger
-  reuse, and top-up scheduling share the same deterministic helper shape.
-
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
+
+- `0.58.15` keeps ICP-refill recovery lookup and status predicates in storage
+  ops and shares manual policy preflight input construction across rate-gated
+  and non-rate-gated refill paths.
+
+- `0.58.14` keeps the post-refill cleanup behavior-neutral by centralizing
+  completed-cycle saturation, direct-child parent checks, and cycles-timer
+  in-flight guards across metrics, grant-ledger reuse, and top-up scheduling.
 
 - `0.58.13` reuses the existing child funding grant ledger for successful
   registered direct-child ICP refills, so completed CMC notify totals feed the

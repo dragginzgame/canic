@@ -95,6 +95,61 @@ impl IcpRefillRecordOps {
             .find(|record| record.operation_id == operation_id)
     }
 
+    pub fn has_in_flight_for_key(
+        source_canister: Principal,
+        source_subaccount: Option<Subaccount>,
+        target_canister: Principal,
+        except_operation_id: [u8; 32],
+    ) -> bool {
+        Self::records().into_iter().any(|record| {
+            record.source_canister == source_canister
+                && record.source_subaccount == source_subaccount
+                && record.target_canister == target_canister
+                && Self::is_in_flight_status(record.status)
+                && record.operation_id != except_operation_id
+        })
+    }
+
+    pub fn find_resumable_hub_self_refill(self_pid: Principal) -> Option<IcpRefillRecord> {
+        Self::records().into_iter().find(|record| {
+            record.source_canister == self_pid
+                && record.source_subaccount.is_none()
+                && record.target_canister == self_pid
+                && Self::is_resumable(record)
+        })
+    }
+
+    #[must_use]
+    pub const fn is_in_flight_status(status: IcpRefillStatus) -> bool {
+        matches!(
+            status,
+            IcpRefillStatus::Requested
+                | IcpRefillStatus::Transferred
+                | IcpRefillStatus::NotifyProcessing
+        )
+    }
+
+    #[must_use]
+    pub const fn is_resumable(record: &IcpRefillRecord) -> bool {
+        Self::is_in_flight_status(record.status)
+            || Self::can_retry_notify(record)
+            || Self::can_retry_bad_fee(record)
+    }
+
+    #[must_use]
+    pub const fn can_retry_notify(record: &IcpRefillRecord) -> bool {
+        record.ledger_block_index.is_some()
+            && matches!(record.status, IcpRefillStatus::Failed)
+            && matches!(record.error_code, Some(IcpRefillErrorCode::NotifyFailed))
+    }
+
+    #[must_use]
+    pub const fn can_retry_bad_fee(record: &IcpRefillRecord) -> bool {
+        record.ledger_block_index.is_none()
+            && matches!(record.status, IcpRefillStatus::Failed)
+            && matches!(record.error_code, Some(IcpRefillErrorCode::BadFee))
+    }
+
     pub fn create_or_get(
         input: IcpRefillRecordCreateInput,
     ) -> Result<IcpRefillRecord, InternalError> {

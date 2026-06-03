@@ -55,12 +55,24 @@ fn stored_record(id: u64, operation_byte: u8, status: IcpRefillStatus) -> IcpRef
 
 #[test]
 fn in_flight_statuses_are_narrow() {
-    assert!(is_in_flight(IcpRefillStatus::Requested));
-    assert!(is_in_flight(IcpRefillStatus::Transferred));
-    assert!(is_in_flight(IcpRefillStatus::NotifyProcessing));
-    assert!(!is_in_flight(IcpRefillStatus::Completed));
-    assert!(!is_in_flight(IcpRefillStatus::Failed));
-    assert!(!is_in_flight(IcpRefillStatus::Refunded));
+    assert!(IcpRefillRecordOps::is_in_flight_status(
+        IcpRefillStatus::Requested
+    ));
+    assert!(IcpRefillRecordOps::is_in_flight_status(
+        IcpRefillStatus::Transferred
+    ));
+    assert!(IcpRefillRecordOps::is_in_flight_status(
+        IcpRefillStatus::NotifyProcessing
+    ));
+    assert!(!IcpRefillRecordOps::is_in_flight_status(
+        IcpRefillStatus::Completed
+    ));
+    assert!(!IcpRefillRecordOps::is_in_flight_status(
+        IcpRefillStatus::Failed
+    ));
+    assert!(!IcpRefillRecordOps::is_in_flight_status(
+        IcpRefillStatus::Refunded
+    ));
 }
 
 #[test]
@@ -130,11 +142,11 @@ fn notify_retry_only_allows_notify_failed_with_block_index() {
     let mut record = sample_record(IcpRefillStatus::Failed);
     record.error_code = Some(IcpRefillErrorCode::NotifyFailed);
     record.ledger_block_index = Some(10);
-    assert!(can_retry_notify(&record));
+    assert!(IcpRefillRecordOps::can_retry_notify(&record));
     assert!(should_notify(&record));
 
     record.ledger_block_index = None;
-    assert!(!can_retry_notify(&record));
+    assert!(!IcpRefillRecordOps::can_retry_notify(&record));
     assert!(!should_notify(&record));
 
     let mut transferred = sample_record(IcpRefillStatus::Transferred);
@@ -144,39 +156,45 @@ fn notify_retry_only_allows_notify_failed_with_block_index() {
 
 #[test]
 fn hub_self_refill_resumes_in_flight_and_retryable_records() {
-    assert!(is_resumable(&sample_record(IcpRefillStatus::Requested)));
-    assert!(is_resumable(&sample_record(IcpRefillStatus::Transferred)));
-    assert!(is_resumable(&sample_record(
+    assert!(IcpRefillRecordOps::is_resumable(&sample_record(
+        IcpRefillStatus::Requested
+    )));
+    assert!(IcpRefillRecordOps::is_resumable(&sample_record(
+        IcpRefillStatus::Transferred
+    )));
+    assert!(IcpRefillRecordOps::is_resumable(&sample_record(
         IcpRefillStatus::NotifyProcessing
     )));
 
     let mut notify_failed = sample_record(IcpRefillStatus::Failed);
     notify_failed.error_code = Some(IcpRefillErrorCode::NotifyFailed);
     notify_failed.ledger_block_index = Some(11);
-    assert!(is_resumable(&notify_failed));
+    assert!(IcpRefillRecordOps::is_resumable(&notify_failed));
 
     let mut bad_fee = sample_record(IcpRefillStatus::Failed);
     bad_fee.error_code = Some(IcpRefillErrorCode::BadFee);
-    assert!(is_resumable(&bad_fee));
+    assert!(IcpRefillRecordOps::is_resumable(&bad_fee));
 
     let mut transfer_failed = sample_record(IcpRefillStatus::Failed);
     transfer_failed.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed);
-    assert!(!is_resumable(&transfer_failed));
-    assert!(!is_resumable(&sample_record(IcpRefillStatus::Completed)));
+    assert!(!IcpRefillRecordOps::is_resumable(&transfer_failed));
+    assert!(!IcpRefillRecordOps::is_resumable(&sample_record(
+        IcpRefillStatus::Completed
+    )));
 }
 
 #[test]
 fn bad_fee_retry_requires_no_block_index() {
     let mut record = sample_record(IcpRefillStatus::Failed);
     record.error_code = Some(IcpRefillErrorCode::BadFee);
-    assert!(can_retry_bad_fee(&record));
+    assert!(IcpRefillRecordOps::can_retry_bad_fee(&record));
 
     record.ledger_block_index = Some(10);
-    assert!(!can_retry_bad_fee(&record));
+    assert!(!IcpRefillRecordOps::can_retry_bad_fee(&record));
 
     record.ledger_block_index = None;
     record.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed);
-    assert!(!can_retry_bad_fee(&record));
+    assert!(!IcpRefillRecordOps::can_retry_bad_fee(&record));
 }
 
 #[test]
@@ -339,7 +357,7 @@ fn notify_refunded_preserves_refund_block_index() {
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::Refunded));
     assert_eq!(record.refund_block_index, Some(55));
     assert_eq!(record.error_message.as_deref(), Some("refunded by cmc"));
-    assert!(!is_resumable(&record));
+    assert!(!IcpRefillRecordOps::is_resumable(&record));
 }
 
 #[test]
@@ -355,7 +373,7 @@ fn notify_transaction_too_old_preserves_min_block_index() {
         Some(IcpRefillErrorCode::TransactionTooOld)
     );
     assert_eq!(record.transaction_too_old_min_block_index, Some(56));
-    assert!(!is_resumable(&record));
+    assert!(!IcpRefillRecordOps::is_resumable(&record));
 }
 
 #[test]
@@ -375,7 +393,7 @@ fn notify_invalid_transaction_is_terminal() {
         Some(IcpRefillErrorCode::InvalidTransaction)
     );
     assert_eq!(record.error_message.as_deref(), Some("bad top-up block"));
-    assert!(!is_resumable(&record));
+    assert!(!IcpRefillRecordOps::is_resumable(&record));
 }
 
 #[test]
@@ -400,7 +418,7 @@ fn notify_other_error_stays_retryable_before_attempt_cap() {
         record.error_message.as_deref(),
         Some("notify_top_up error 12: cmc busy")
     );
-    assert!(can_retry_notify(&record));
+    assert!(IcpRefillRecordOps::can_retry_notify(&record));
 }
 
 #[test]
@@ -418,7 +436,7 @@ fn transfer_bad_fee_updates_persisted_fee() {
     assert_eq!(record.status, IcpRefillStatus::Failed);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::BadFee));
     assert_eq!(record.fee_e8s, 20_000);
-    assert!(can_retry_bad_fee(&record));
+    assert!(IcpRefillRecordOps::can_retry_bad_fee(&record));
 }
 
 #[test]
@@ -451,5 +469,5 @@ fn transfer_too_old_marks_retry_window_stale() {
         record.error_code,
         Some(IcpRefillErrorCode::TransferWindowStale)
     );
-    assert!(!is_resumable(&record));
+    assert!(!IcpRefillRecordOps::is_resumable(&record));
 }
