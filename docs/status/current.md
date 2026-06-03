@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 
 ## Purpose
 
@@ -71,7 +71,20 @@ inspect only the files needed for the current task.
   registry and calls the guarded `canic_icp_refill` endpoint with the requested
   Candid payload. Fabrication mode is rejected outside `local` and calls local
   `provisional_top_up_canister`; its dry-run text/JSON carries the required
-  `mode=fabricate (does not call canister refill endpoint)` label.
+  `mode=fabricate (does not call canister refill endpoint)` label. Post-0.58.3
+  cleanup has moved the command-specific convert parser, execution path,
+  Candid rendering, and tests into:
+  ```text
+  crates/canic-cli/src/cycles/convert/mod.rs
+  ```
+  The shared cycles wallet wrapper now owns only generic `icp cycles` command
+  routing plus deployment-target resolver helpers used by convert/top-up.
+  Live 0.58.3 CI exposed runner disk exhaustion, not an attestation regression:
+  `pic_role_attestation` failed while rebuilding the root test stub because the
+  bootstrap `wasm_store` nested target hit `No space left on device`. The
+  0.58.4 working tree now removes the duplicate workflow-level canister
+  artifact prebuild and has `scripts/ci/run-workspace-tests.sh` clear generated
+  PocketIC wasm target caches before each heavy PocketIC suite.
 - Previous minor: `0.57.x` audit rotation and feedback window. This is a
   maintenance line, not a new feature line. The purpose is to rotate the
   recurring audits while real users try the compact v1 surface, then use that

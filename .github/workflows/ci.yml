@@ -83,9 +83,6 @@ jobs:
         run: |
           BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
-      - name: Build canister wasm artifacts
-        shell: bash
-        run: bash scripts/ci/build-ci-wasm-artifacts.sh
       - name: Layering guards
         shell: bash
         run: bash scripts/ci/run-layering-guards.sh
@@ -146,9 +143,6 @@ jobs:
         run: |
           BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
-      - name: Build canister wasm artifacts
-        shell: bash
-        run: bash scripts/ci/build-ci-wasm-artifacts.sh
       - name: Forbidden crypto API guards
         shell: bash
         run: bash scripts/ci/run-forbidden-crypto-guards.sh

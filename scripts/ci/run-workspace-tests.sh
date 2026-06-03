@@ -62,8 +62,40 @@ run_guard() {
     record_summary "$label" "$elapsed" "guard"
 }
 
+clear_pocketic_wasm_targets() {
+    local label="$1"
+    local cleared=0
+    local target_dir
+    local target_dirs=(
+        "target/pic-wasm"
+        "target/pic-wasm-no-test-material"
+        "target/delegation_root_stub_bootstrap_wasm_store"
+        "target/delegation_root_stub_embedded_wasm"
+    )
+
+    for target_dir in "${target_dirs[@]}"; do
+        if [[ ! -e "$target_dir" ]]; then
+            continue
+        fi
+
+        if [[ "$cleared" -eq 0 ]]; then
+            echo "==> clearing PocketIC wasm build targets before $label"
+            cleared=1
+        fi
+        rm -rf "$target_dir"
+    done
+}
+
+run_pic_test() {
+    local label="$1"
+    shift
+    clear_pocketic_wasm_targets "$label"
+    run_test "$label" "$@"
+}
+
 prebuild_root_test_artifacts() {
     local label="prebuild local ICP artifacts for PocketIC root suites"
+    clear_pocketic_wasm_targets "$label"
     echo "==> $label"
     local started_at="$SECONDS"
     bash scripts/ci/build-ci-wasm-artifacts.sh
@@ -97,12 +129,12 @@ run_test "canic-core trap_guard" -p canic-core --test trap_guard
 
 # PocketIC-backed integration suites.
 prebuild_root_test_artifacts
-run_test "canic-tests pic_intent_race" -p canic-tests --test pic_intent_race
-run_test "canic-tests pic_sharding_bootstrap" -p canic-tests --test pic_sharding_bootstrap
-run_test "canic-tests pic_role_attestation" -p canic-tests --test pic_role_attestation
-run_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
-run_test "canic-tests root_suite" -p canic-tests --test root_suite
-run_test "canic-tests root_wasm_store_reconcile" -p canic-tests --test root_wasm_store_reconcile
-run_test "canic-tests instruction_audit" -p canic-tests --test instruction_audit
+run_pic_test "canic-tests pic_intent_race" -p canic-tests --test pic_intent_race
+run_pic_test "canic-tests pic_sharding_bootstrap" -p canic-tests --test pic_sharding_bootstrap
+run_pic_test "canic-tests pic_role_attestation" -p canic-tests --test pic_role_attestation
+run_pic_test "canic-tests lifecycle_boundary" -p canic-tests --test lifecycle_boundary
+run_pic_test "canic-tests root_suite" -p canic-tests --test root_suite
+run_pic_test "canic-tests root_wasm_store_reconcile" -p canic-tests --test root_wasm_store_reconcile
+run_pic_test "canic-tests instruction_audit" -p canic-tests --test instruction_audit
 
 print_summary
