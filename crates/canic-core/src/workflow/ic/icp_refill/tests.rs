@@ -111,13 +111,15 @@ fn ledger_decimals_validation_requires_icp_decimals() {
 fn transfer_window_stale_uses_strict_tx_window() {
     let record = sample_record(IcpRefillStatus::Requested);
 
-    assert!(!transfer_window_stale(
+    assert!(!IcpRefillRecordOps::transfer_window_stale(
         &record,
-        record.created_at_time_ns + TX_WINDOW_NANOS
+        record.created_at_time_ns + TX_WINDOW_NANOS,
+        TX_WINDOW_NANOS
     ));
-    assert!(transfer_window_stale(
+    assert!(IcpRefillRecordOps::transfer_window_stale(
         &record,
-        record.created_at_time_ns + TX_WINDOW_NANOS + 1
+        record.created_at_time_ns + TX_WINDOW_NANOS + 1,
+        TX_WINDOW_NANOS
     ));
 }
 
@@ -125,15 +127,17 @@ fn transfer_window_stale_uses_strict_tx_window() {
 fn transfer_window_stale_requires_requested_without_block_index() {
     let mut record = sample_record(IcpRefillStatus::Requested);
     record.ledger_block_index = Some(10);
-    assert!(!transfer_window_stale(
+    assert!(!IcpRefillRecordOps::transfer_window_stale(
         &record,
-        record.created_at_time_ns + TX_WINDOW_NANOS + 1
+        record.created_at_time_ns + TX_WINDOW_NANOS + 1,
+        TX_WINDOW_NANOS
     ));
 
     let record = sample_record(IcpRefillStatus::Failed);
-    assert!(!transfer_window_stale(
+    assert!(!IcpRefillRecordOps::transfer_window_stale(
         &record,
-        record.created_at_time_ns + TX_WINDOW_NANOS + 1
+        record.created_at_time_ns + TX_WINDOW_NANOS + 1,
+        TX_WINDOW_NANOS
     ));
 }
 
@@ -143,15 +147,15 @@ fn notify_retry_only_allows_notify_failed_with_block_index() {
     record.error_code = Some(IcpRefillErrorCode::NotifyFailed);
     record.ledger_block_index = Some(10);
     assert!(IcpRefillRecordOps::can_retry_notify(&record));
-    assert!(should_notify(&record));
+    assert!(IcpRefillRecordOps::should_notify(&record));
 
     record.ledger_block_index = None;
     assert!(!IcpRefillRecordOps::can_retry_notify(&record));
-    assert!(!should_notify(&record));
+    assert!(!IcpRefillRecordOps::should_notify(&record));
 
     let mut transferred = sample_record(IcpRefillStatus::Transferred);
     transferred.ledger_block_index = Some(11);
-    assert!(should_notify(&transferred));
+    assert!(IcpRefillRecordOps::should_notify(&transferred));
 }
 
 #[test]
@@ -202,9 +206,10 @@ fn transfer_window_stale_applies_to_bad_fee_retry() {
     let mut record = sample_record(IcpRefillStatus::Failed);
     record.error_code = Some(IcpRefillErrorCode::BadFee);
 
-    assert!(transfer_window_stale(
+    assert!(IcpRefillRecordOps::transfer_window_stale(
         &record,
-        record.created_at_time_ns + TX_WINDOW_NANOS + 1
+        record.created_at_time_ns + TX_WINDOW_NANOS + 1,
+        TX_WINDOW_NANOS
     ));
 }
 
@@ -212,10 +217,11 @@ fn transfer_window_stale_applies_to_bad_fee_retry() {
 fn retry_request_must_match_stored_operation_identity() {
     let record = sample_record(IcpRefillStatus::Requested);
     let mut request = request_for(&record);
-    validate_retry_request_matches_record(&request, &record).expect("matching retry");
+    IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)
+        .expect("matching retry");
 
     request.amount_e8s += 1;
-    let err = validate_retry_request_matches_record(&request, &record)
+    let err = IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)
         .expect_err("changed amount must fail");
     assert!(err.to_string().contains("amount_e8s"));
 }
@@ -336,7 +342,7 @@ fn notify_processing_before_attempt_cap_stays_retryable() {
 
     assert_eq!(record.status, IcpRefillStatus::NotifyProcessing);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::Processing));
-    assert!(should_notify(&record));
+    assert!(IcpRefillRecordOps::should_notify(&record));
 }
 
 #[test]
@@ -454,7 +460,7 @@ fn transfer_duplicate_records_recovered_block_index() {
     assert_eq!(record.status, IcpRefillStatus::Transferred);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::Duplicate));
     assert_eq!(record.ledger_block_index, Some(58));
-    assert!(should_notify(&record));
+    assert!(IcpRefillRecordOps::should_notify(&record));
 }
 
 #[test]

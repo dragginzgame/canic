@@ -4,7 +4,9 @@ use crate::{
         candid::Nat,
         types::{Principal, Subaccount},
     },
-    dto::icp_refill::{IcpRefillErrorCode, IcpRefillResponse, IcpRefillStatus},
+    dto::icp_refill::{
+        IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest, IcpRefillResponse, IcpRefillStatus,
+    },
     ops::storage::StorageOpsError,
     storage::stable::icp_refill::{IcpRefillRecord, IcpRefillRecordKey, IcpRefillRecords},
 };
@@ -26,6 +28,15 @@ pub enum IcpRefillRecordOpsError {
 
     #[error("ICP refill record {0} not found")]
     RecordNotFound(u64),
+
+    #[error(
+        "ICP refill retry request does not match stored operation {field}: request={request_value}, record={record_value}"
+    )]
+    RetryRequestMismatch {
+        field: &'static str,
+        request_value: String,
+        record_value: String,
+    },
 }
 
 impl From<IcpRefillRecordOpsError> for InternalError {
@@ -95,6 +106,30 @@ impl IcpRefillRecordOps {
             .find(|record| record.operation_id == operation_id)
     }
 
+    pub fn validate_retry_request_matches_record(
+        request: &IcpRefillRequest,
+        record: &IcpRefillRecord,
+    ) -> Result<(), InternalError> {
+        ensure_retry_field(
+            "source_canister",
+            request.source_canister,
+            record.source_canister,
+        )?;
+        ensure_retry_field(
+            "source_subaccount",
+            request.source_subaccount,
+            record.source_subaccount,
+        )?;
+        ensure_retry_field(
+            "target_canister",
+            request.target_canister,
+            record.target_canister,
+        )?;
+        ensure_retry_field("amount_e8s", request.amount_e8s, record.amount_e8s)?;
+
+        Ok(())
+    }
+
     pub fn has_in_flight_for_key(
         source_canister: Principal,
         source_subaccount: Option<Subaccount>,
@@ -148,6 +183,27 @@ impl IcpRefillRecordOps {
         record.ledger_block_index.is_none()
             && matches!(record.status, IcpRefillStatus::Failed)
             && matches!(record.error_code, Some(IcpRefillErrorCode::BadFee))
+    }
+
+    #[must_use]
+    pub const fn should_notify(record: &IcpRefillRecord) -> bool {
+        record.ledger_block_index.is_some()
+            && (matches!(
+                record.status,
+                IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing
+            ) || Self::can_retry_notify(record))
+    }
+
+    #[must_use]
+    pub const fn transfer_window_stale(
+        record: &IcpRefillRecord,
+        now_ns: u64,
+        retry_window_nanos: u64,
+    ) -> bool {
+        record.ledger_block_index.is_none()
+            && (matches!(record.status, IcpRefillStatus::Requested)
+                || Self::can_retry_bad_fee(record))
+            && record.created_at_time_ns.saturating_add(retry_window_nanos) < now_ns
     }
 
     pub fn create_or_get(
@@ -355,6 +411,19 @@ impl IcpRefillRecordOps {
     }
 
     #[must_use]
+    pub const fn to_request(record: &IcpRefillRecord) -> IcpRefillRequest {
+        IcpRefillRequest {
+            operation_id: record.operation_id,
+            source_canister: record.source_canister,
+            source_subaccount: record.source_subaccount,
+            target_canister: record.target_canister,
+            amount_e8s: record.amount_e8s,
+            dry_run: false,
+            mode: IcpRefillMode::Canister,
+        }
+    }
+
+    #[must_use]
     pub fn to_response(record: &IcpRefillRecord) -> IcpRefillResponse {
         IcpRefillResponse {
             operation_id: record.operation_id,
@@ -388,6 +457,26 @@ fn update_record(
     record.updated_at_ns = now_ns;
     IcpRefillRecordOps::insert(record.clone());
     Ok(record)
+}
+
+fn ensure_retry_field<T>(
+    field: &'static str,
+    request_value: T,
+    record_value: T,
+) -> Result<(), InternalError>
+where
+    T: Eq + std::fmt::Debug,
+{
+    if request_value == record_value {
+        return Ok(());
+    }
+
+    Err(IcpRefillRecordOpsError::RetryRequestMismatch {
+        field,
+        request_value: format!("{request_value:?}"),
+        record_value: format!("{record_value:?}"),
+    }
+    .into())
 }
 
 fn ensure_compatible_operation(

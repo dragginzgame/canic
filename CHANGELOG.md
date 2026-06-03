@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
+- `0.58.16` finishes the ICP-refill record-boundary cleanup by moving notify
+  eligibility, stale transfer-window checks, retry validation, and
+  stored-record-to-request conversion into storage ops.
+
 - `0.58.15` keeps ICP-refill recovery lookup and status predicates in storage
   ops and shares manual policy preflight input construction across rate-gated
   and non-rate-gated refill paths.

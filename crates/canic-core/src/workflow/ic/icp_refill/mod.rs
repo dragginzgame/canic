@@ -60,15 +60,6 @@ pub enum IcpRefillWorkflowError {
     #[error("ICP refill policy denied request: {0:?}")]
     PolicyDenied(IcpRefillPolicyViolation),
 
-    #[error(
-        "ICP refill retry request does not match stored operation {field}: request={request_value}, record={record_value}"
-    )]
-    RetryRequestMismatch {
-        field: &'static str,
-        request_value: String,
-        record_value: String,
-    },
-
     #[error("ICP refill Nat field {field} does not fit in u64: {value}")]
     NatU64Overflow { field: &'static str, value: Nat },
 
@@ -113,7 +104,7 @@ impl IcpRefillWorkflow {
     ) -> Result<IcpRefillResponse, InternalError> {
         validate_manual_request_shape(&request, false)?;
         if let Some(record) = IcpRefillRecordOps::find_by_operation_id(request.operation_id) {
-            validate_retry_request_matches_record(&request, &record)?;
+            IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
             let record = advance_record(record).await?;
             return Ok(IcpRefillRecordOps::to_response(&record));
         }
@@ -147,7 +138,7 @@ impl IcpRefillWorkflow {
     ) -> Result<IcpRefillResponse, InternalError> {
         let self_pid = IcOps::canister_self();
         if let Some(record) = IcpRefillRecordOps::find_resumable_hub_self_refill(self_pid) {
-            let request = request_from_record(&record);
+            let request = IcpRefillRecordOps::to_request(&record);
             return Self::execute_manual_refill(request).await;
         }
 
@@ -341,7 +332,7 @@ async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inte
         | IcpRefillStatus::TransactionTooOld => return Ok(record),
     };
 
-    if should_notify(&record) {
+    if IcpRefillRecordOps::should_notify(&record) {
         notify_record(record).await
     } else {
         Ok(record)
@@ -352,7 +343,7 @@ async fn transfer_unless_window_stale(
     record: IcpRefillRecord,
 ) -> Result<IcpRefillRecord, InternalError> {
     let now_ns = IcOps::now_nanos();
-    if transfer_window_stale(&record, now_ns) {
+    if IcpRefillRecordOps::transfer_window_stale(&record, now_ns, TX_WINDOW_NANOS) {
         IcpRefillRecordOps::mark_transfer_window_stale(record.id, now_ns)
     } else {
         transfer_record(record).await
@@ -659,77 +650,6 @@ fn in_flight_for_request(request: &IcpRefillRequest) -> bool {
         request.target_canister,
         request.operation_id,
     )
-}
-
-const fn request_from_record(record: &IcpRefillRecord) -> IcpRefillRequest {
-    IcpRefillRequest {
-        operation_id: record.operation_id,
-        source_canister: record.source_canister,
-        source_subaccount: record.source_subaccount,
-        target_canister: record.target_canister,
-        amount_e8s: record.amount_e8s,
-        dry_run: false,
-        mode: IcpRefillMode::Canister,
-    }
-}
-
-fn validate_retry_request_matches_record(
-    request: &IcpRefillRequest,
-    record: &IcpRefillRecord,
-) -> Result<(), InternalError> {
-    ensure_retry_field(
-        "source_canister",
-        request.source_canister,
-        record.source_canister,
-    )?;
-    ensure_retry_field(
-        "source_subaccount",
-        request.source_subaccount,
-        record.source_subaccount,
-    )?;
-    ensure_retry_field(
-        "target_canister",
-        request.target_canister,
-        record.target_canister,
-    )?;
-    ensure_retry_field("amount_e8s", request.amount_e8s, record.amount_e8s)?;
-
-    Ok(())
-}
-
-fn ensure_retry_field<T>(
-    field: &'static str,
-    request_value: T,
-    record_value: T,
-) -> Result<(), InternalError>
-where
-    T: Eq + std::fmt::Debug,
-{
-    if request_value == record_value {
-        return Ok(());
-    }
-
-    Err(IcpRefillWorkflowError::RetryRequestMismatch {
-        field,
-        request_value: format!("{request_value:?}"),
-        record_value: format!("{record_value:?}"),
-    }
-    .into())
-}
-
-const fn should_notify(record: &IcpRefillRecord) -> bool {
-    record.ledger_block_index.is_some()
-        && (matches!(
-            record.status,
-            IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing
-        ) || IcpRefillRecordOps::can_retry_notify(record))
-}
-
-const fn transfer_window_stale(record: &IcpRefillRecord, now_ns: u64) -> bool {
-    record.ledger_block_index.is_none()
-        && (matches!(record.status, IcpRefillStatus::Requested)
-            || IcpRefillRecordOps::can_retry_bad_fee(record))
-        && record.created_at_time_ns.saturating_add(TX_WINDOW_NANOS) < now_ns
 }
 
 fn build_network() -> BuildNetwork {

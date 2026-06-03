@@ -9,6 +9,12 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.58.16` finalized the post-`0.58.15` cleanup. It moves the remaining
+  ICP-refill recovery eligibility predicates for notify execution and stale
+  transfer-window detection into storage ops, leaving workflow to provide
+  policy timing and orchestrate transfer/notify steps. Retry request validation
+  and stored-record-to-request conversion now also live with the rest of the
+  refill record boundary helpers.
 - `0.58.15` finalized the post-`0.58.14` cleanup. It moves ICP-refill recovery
   record status predicates and in-flight/resumable lookup filters into storage
   ops, so workflow no longer scans the stable refill record set directly for
