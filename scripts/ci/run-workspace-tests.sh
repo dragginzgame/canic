@@ -109,6 +109,7 @@ run_guard "auth trust-chain guards" bash scripts/ci/run-auth-trust-chain-guards.
 
 # Compile and run all unit/lib/bin tests together first.
 run_test "workspace lib/bin tests" --workspace --lib --bins
+run_test "canic icp-refill doc tests" -p canic --features icp-refill --doc
 
 # Keep cheap release-surface contract tests in both the full and fast lanes so
 # version bumps and tagged installer drift fail before PocketIC-heavy work.

@@ -12,13 +12,25 @@ present.
 
 ## Unreleased
 
-- Added bounded ICP-refill rows under `cycles_funding` core metrics that
-  project persisted refill record status, error, requested amount, and
-  completed cycle totals into `canic_metrics`.
+- Added focused ICP-refill workflow coverage for the fifth notify attempt
+  terminal path, proving both CMC `Processing` and retryable notify failures
+  store `NotifyMaxAttempts`.
+
+- Added focused ICP-refill recovery coverage for CMC notify terminal variants
+  and ledger transfer mappings, including refunded, transaction-too-old,
+  invalid-transaction, bad-fee, duplicate, and stale transfer outcomes.
+
+- Added `icp-refill` facade doctests to the fast workspace test lane so the
+  endpoint macro's missing-guard `compile_fail` contract is exercised during
+  normal validation.
 
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
+
+- `0.58.10` adds bounded ICP-refill observability under existing
+  `cycles_funding` core metrics without adding a new metrics tier, query API,
+  or metric family.
 
 - `0.58.9` turns downstream adoption feedback into a local academic fleet
   runbook, project skill, sourceable canister ID exports, and sharper

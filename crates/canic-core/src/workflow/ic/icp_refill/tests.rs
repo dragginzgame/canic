@@ -44,6 +44,14 @@ fn request_for(record: &IcpRefillRecord) -> IcpRefillRequest {
     }
 }
 
+fn stored_record(id: u64, operation_byte: u8, status: IcpRefillStatus) -> IcpRefillRecord {
+    let mut record = sample_record(status);
+    record.id = id;
+    record.operation_id = [operation_byte; 32];
+    IcpRefillRecordOps::insert(record.clone());
+    record
+}
+
 #[test]
 fn in_flight_statuses_are_narrow() {
     assert!(is_in_flight(IcpRefillStatus::Requested));
@@ -205,4 +213,206 @@ fn hub_self_refill_operation_id_binds_identity_amount_and_time() {
     assert_eq!(first, same);
     assert_ne!(first, different_amount);
     assert_ne!(first, different_time);
+}
+
+#[test]
+fn fifth_notify_processing_attempt_is_terminal() {
+    let mut record = stored_record(10_001, 101, IcpRefillStatus::NotifyProcessing);
+    record.ledger_block_index = Some(42);
+    record.notify_attempts = MAX_NOTIFY_ATTEMPTS - 1;
+    IcpRefillRecordOps::insert(record.clone());
+
+    let record =
+        IcpRefillRecordOps::mark_notify_attempt_started(record.id, record.updated_at_ns + 1)
+            .expect("notify attempt should start");
+    assert_eq!(record.notify_attempts, MAX_NOTIFY_ATTEMPTS);
+
+    let record = mark_notify_processing(record.id, record.notify_attempts)
+        .expect("fifth processing attempt should be terminal");
+    assert_eq!(record.status, IcpRefillStatus::Failed);
+    assert_eq!(
+        record.error_code,
+        Some(IcpRefillErrorCode::NotifyMaxAttempts)
+    );
+    assert_eq!(
+        record.error_message.as_deref(),
+        Some("notify_top_up returned Processing after max attempts")
+    );
+}
+
+#[test]
+fn fifth_notify_failure_attempt_is_terminal() {
+    let mut record = stored_record(10_002, 102, IcpRefillStatus::Failed);
+    record.ledger_block_index = Some(43);
+    record.notify_attempts = MAX_NOTIFY_ATTEMPTS - 1;
+    record.error_code = Some(IcpRefillErrorCode::NotifyFailed);
+    IcpRefillRecordOps::insert(record.clone());
+
+    let record =
+        IcpRefillRecordOps::mark_notify_attempt_started(record.id, record.updated_at_ns + 1)
+            .expect("notify attempt should start");
+    assert_eq!(record.notify_attempts, MAX_NOTIFY_ATTEMPTS);
+
+    let record = mark_retryable_notify_failure(
+        record.id,
+        record.notify_attempts,
+        "notify_top_up transport error".to_string(),
+    )
+    .expect("fifth notify failure should be terminal");
+    assert_eq!(record.status, IcpRefillStatus::Failed);
+    assert_eq!(
+        record.error_code,
+        Some(IcpRefillErrorCode::NotifyMaxAttempts)
+    );
+    assert_eq!(
+        record.error_message.as_deref(),
+        Some("notify_top_up transport error")
+    );
+}
+
+#[test]
+fn notify_processing_before_attempt_cap_stays_retryable() {
+    let mut record = stored_record(10_003, 103, IcpRefillStatus::Transferred);
+    record.ledger_block_index = Some(44);
+    IcpRefillRecordOps::insert(record.clone());
+
+    let record = apply_notify_error(record.id, 1, NotifyTopUpError::Processing)
+        .expect("processing should remain retryable before cap");
+
+    assert_eq!(record.status, IcpRefillStatus::NotifyProcessing);
+    assert_eq!(record.error_code, Some(IcpRefillErrorCode::Processing));
+    assert!(should_notify(&record));
+}
+
+#[test]
+fn notify_refunded_preserves_refund_block_index() {
+    let record = stored_record(10_004, 104, IcpRefillStatus::Transferred);
+
+    let record = apply_notify_error(
+        record.id,
+        1,
+        NotifyTopUpError::Refunded {
+            block_index: Some(55),
+            reason: "refunded by cmc".to_string(),
+        },
+    )
+    .expect("refunded notify result should be recorded");
+
+    assert_eq!(record.status, IcpRefillStatus::Refunded);
+    assert_eq!(record.error_code, Some(IcpRefillErrorCode::Refunded));
+    assert_eq!(record.refund_block_index, Some(55));
+    assert_eq!(record.error_message.as_deref(), Some("refunded by cmc"));
+    assert!(!is_resumable(&record));
+}
+
+#[test]
+fn notify_transaction_too_old_preserves_min_block_index() {
+    let record = stored_record(10_005, 105, IcpRefillStatus::Transferred);
+
+    let record = apply_notify_error(record.id, 1, NotifyTopUpError::TransactionTooOld(56))
+        .expect("transaction-too-old notify result should be recorded");
+
+    assert_eq!(record.status, IcpRefillStatus::TransactionTooOld);
+    assert_eq!(
+        record.error_code,
+        Some(IcpRefillErrorCode::TransactionTooOld)
+    );
+    assert_eq!(record.transaction_too_old_min_block_index, Some(56));
+    assert!(!is_resumable(&record));
+}
+
+#[test]
+fn notify_invalid_transaction_is_terminal() {
+    let record = stored_record(10_006, 106, IcpRefillStatus::Transferred);
+
+    let record = apply_notify_error(
+        record.id,
+        1,
+        NotifyTopUpError::InvalidTransaction("bad top-up block".to_string()),
+    )
+    .expect("invalid transaction notify result should be recorded");
+
+    assert_eq!(record.status, IcpRefillStatus::InvalidTransaction);
+    assert_eq!(
+        record.error_code,
+        Some(IcpRefillErrorCode::InvalidTransaction)
+    );
+    assert_eq!(record.error_message.as_deref(), Some("bad top-up block"));
+    assert!(!is_resumable(&record));
+}
+
+#[test]
+fn notify_other_error_stays_retryable_before_attempt_cap() {
+    let mut record = stored_record(10_007, 107, IcpRefillStatus::Transferred);
+    record.ledger_block_index = Some(57);
+    IcpRefillRecordOps::insert(record.clone());
+
+    let record = apply_notify_error(
+        record.id,
+        1,
+        NotifyTopUpError::Other {
+            error_code: 12,
+            error_message: "cmc busy".to_string(),
+        },
+    )
+    .expect("other notify error should remain retryable before cap");
+
+    assert_eq!(record.status, IcpRefillStatus::Failed);
+    assert_eq!(record.error_code, Some(IcpRefillErrorCode::NotifyFailed));
+    assert_eq!(
+        record.error_message.as_deref(),
+        Some("notify_top_up error 12: cmc busy")
+    );
+    assert!(can_retry_notify(&record));
+}
+
+#[test]
+fn transfer_bad_fee_updates_persisted_fee() {
+    let record = stored_record(10_008, 108, IcpRefillStatus::Requested);
+
+    let record = apply_transfer_error(
+        record.id,
+        TransferError::BadFee {
+            expected_fee: Nat::from(20_000_u64),
+        },
+    )
+    .expect("bad fee should update persisted fee");
+
+    assert_eq!(record.status, IcpRefillStatus::Failed);
+    assert_eq!(record.error_code, Some(IcpRefillErrorCode::BadFee));
+    assert_eq!(record.fee_e8s, 20_000);
+    assert!(can_retry_bad_fee(&record));
+}
+
+#[test]
+fn transfer_duplicate_records_recovered_block_index() {
+    let record = stored_record(10_009, 109, IcpRefillStatus::Requested);
+
+    let record = apply_transfer_error(
+        record.id,
+        TransferError::Duplicate {
+            duplicate_of: Nat::from(58_u64),
+        },
+    )
+    .expect("duplicate transfer should recover block index");
+
+    assert_eq!(record.status, IcpRefillStatus::Transferred);
+    assert_eq!(record.error_code, Some(IcpRefillErrorCode::Duplicate));
+    assert_eq!(record.ledger_block_index, Some(58));
+    assert!(should_notify(&record));
+}
+
+#[test]
+fn transfer_too_old_marks_retry_window_stale() {
+    let record = stored_record(10_010, 110, IcpRefillStatus::Requested);
+
+    let record = apply_transfer_error(record.id, TransferError::TooOld)
+        .expect("too-old transfer should mark stale retry window");
+
+    assert_eq!(record.status, IcpRefillStatus::Failed);
+    assert_eq!(
+        record.error_code,
+        Some(IcpRefillErrorCode::TransferWindowStale)
+    );
+    assert!(!is_resumable(&record));
 }

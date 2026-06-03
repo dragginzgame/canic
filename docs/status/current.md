@@ -10,13 +10,19 @@ inspect only the files needed for the current task.
 ## Current Line
 
 - Active maintainer-directed slice: resume the `0.58.x` ICP-refill work after
-  `0.58.9` shipped the downstream Canic adoption feedback. The current
-  follow-up adds bounded ICP-refill rows under the existing
-  `cycles_funding` family in `MetricsKind::Core`, projecting persisted refill
-  records into phase/status counts, phase/error counts, requested ICP e8s by
-  target canister, and completed cycles by target canister. This closes the
-  0.58 design's bounded refill-observability gap without adding a new metrics
-  tier, adding a new metric family, or changing refill workflow behavior.
+  `0.58.10` shipped bounded ICP-refill rows under the existing
+  `cycles_funding` metrics family. The current follow-up adds focused
+  workflow regression coverage for the manual `notify_top_up` retry cap: the
+  fifth CMC `Processing` response or retryable notify failure becomes terminal
+  `Failed` state with `NotifyMaxAttempts`. The same slice expands focused
+  recovery coverage for CMC notify terminal variants and ledger transfer
+  mappings, including refunded, transaction-too-old, invalid-transaction,
+  bad-fee, duplicate, and stale transfer outcomes. It also adds `icp-refill`
+  facade doctests to the fast workspace lane so the endpoint macro's
+  missing-guard `compile_fail` contract is exercised during normal validation.
+  This closes the remaining design validation gaps for the notify-attempt cap,
+  recovery branch mapping, and the no-default-guard endpoint macro without
+  changing refill workflow behavior.
 - `0.58.9` paused the ICP-refill work long enough to action downstream Canic
   adoption feedback from the `canic-test` build. That follow-up adds:
   ```text
