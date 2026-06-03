@@ -70,7 +70,8 @@ invalid-input error for that canister.
 
 ### `Core`
 
-Core rows cover lifecycle, canister operation, and cycles behavior.
+Core rows cover lifecycle, canister operation, cycles behavior, and ICP refill
+record observability through the existing funding family.
 
 ### `Placement`
 
@@ -108,7 +109,7 @@ use the existing family-specific dimensions:
 | `auth` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `canister_ops` | `[operation, role, outcome, reason]` | `None` | `Count` |
 | `cascade` | `[operation, snapshot, outcome, reason]` | `None` | `Count` |
-| `cycles_funding` | `[metric]` or `[metric, reason]` | Child principal for child-scoped rows | `U128` |
+| `cycles_funding` | `[metric]`, `[metric, reason]`, or `[icp_refill, phase, metric, value]` | Child principal for child-scoped rows; target canister principal for ICP-refill target rows | `Count` or `U128` |
 | `cycles_topup` | `[metric]` | `None` | `Count` |
 | `delegated_auth` | `[delegated_auth_authority]` or `[operation, outcome, reason]` | Verified signer authority for authority rows | `Count` |
 | `directory` | `[operation, outcome, reason]` | `None` | `Count` |
@@ -130,6 +131,10 @@ Endpoint perf `call_kind` labels are `query`, `composite_query`, or `update`.
 Query and composite-query endpoint perf rows are only durable when sampled by a
 call path that commits state; ordinary query calls should use same-call
 `QueryPerfSample<T>` probes instead.
+
+ICP-refill `cycles_funding` rows use bounded `phase` labels: `preflight`,
+`transfer`, `notify`, or `fabricate`. Status and error labels are bounded by
+the refill status and error-code DTO enums.
 
 ## Internal Counters
 

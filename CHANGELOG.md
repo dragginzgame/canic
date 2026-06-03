@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Added bounded ICP-refill rows under `cycles_funding` core metrics that
+  project persisted refill record status, error, requested amount, and
+  completed cycle totals into `canic_metrics`.
+
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)

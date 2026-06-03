@@ -9,9 +9,16 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active maintainer-directed slice: pause the `0.58.x` ICP-refill work long
-  enough to action downstream Canic adoption feedback from the `canic-test`
-  build. The first follow-up adds:
+- Active maintainer-directed slice: resume the `0.58.x` ICP-refill work after
+  `0.58.9` shipped the downstream Canic adoption feedback. The current
+  follow-up adds bounded ICP-refill rows under the existing
+  `cycles_funding` family in `MetricsKind::Core`, projecting persisted refill
+  records into phase/status counts, phase/error counts, requested ICP e8s by
+  target canister, and completed cycles by target canister. This closes the
+  0.58 design's bounded refill-observability gap without adding a new metrics
+  tier, adding a new metric family, or changing refill workflow behavior.
+- `0.58.9` paused the ICP-refill work long enough to action downstream Canic
+  adoption feedback from the `canic-test` build. That follow-up adds:
   ```text
   docs/getting-started/local-academic-fleet.md
   .cursor/skills/canic-academic/SKILL.md

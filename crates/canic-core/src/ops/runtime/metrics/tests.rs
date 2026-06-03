@@ -4,7 +4,9 @@ use crate::ops::runtime::metrics::sharding::{
     ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
 };
 use crate::{
+    cdk::candid::Nat,
     cdk::types::Principal,
+    dto::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
     ids::{AccessMetricKind, CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
     ops::runtime::metrics::{
         auth::{AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface},
@@ -18,6 +20,7 @@ use crate::{
         },
         directory::{DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason},
         http::HttpMethod,
+        icp_refill::entries_from_records,
         intent::{
             IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
         },
@@ -46,6 +49,7 @@ use crate::{
             WasmStoreMetricSource,
         },
     },
+    storage::stable::icp_refill::IcpRefillRecord,
 };
 use std::time::Duration;
 
@@ -560,6 +564,105 @@ fn cycles_topup_metrics_are_exposed() {
 }
 
 #[test]
+fn icp_refill_metrics_project_bounded_record_state() {
+    let target = Principal::from_slice(&[22; 29]);
+    let other_target = Principal::from_slice(&[23; 29]);
+    let entries = prefix_entries(
+        "cycles_funding",
+        entries_from_records(&[
+            refill_record(
+                1,
+                target,
+                IcpRefillStatus::Completed,
+                None,
+                100,
+                Some(4_000),
+            ),
+            refill_record(
+                2,
+                target,
+                IcpRefillStatus::Failed,
+                Some(IcpRefillErrorCode::NotifyFailed),
+                200,
+                None,
+            ),
+            refill_record(
+                3,
+                other_target,
+                IcpRefillStatus::Failed,
+                Some(IcpRefillErrorCode::NotifyFailed),
+                300,
+                None,
+            ),
+        ]),
+    );
+
+    assert_metric_count(
+        &entries,
+        &[
+            "cycles_funding",
+            "icp_refill",
+            "notify",
+            "status",
+            "completed",
+        ],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &["cycles_funding", "icp_refill", "notify", "status", "failed"],
+        2,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "cycles_funding",
+            "icp_refill",
+            "notify",
+            "error",
+            "notify_failed",
+        ],
+        2,
+    );
+    assert_metric_u128(
+        &entries,
+        &[
+            "cycles_funding",
+            "icp_refill",
+            "transfer",
+            "amount_e8s",
+            "target",
+        ],
+        Some(target),
+        300,
+    );
+    assert_metric_u128(
+        &entries,
+        &[
+            "cycles_funding",
+            "icp_refill",
+            "transfer",
+            "amount_e8s",
+            "target",
+        ],
+        Some(other_target),
+        300,
+    );
+    assert_metric_u128(
+        &entries,
+        &[
+            "cycles_funding",
+            "icp_refill",
+            "notify",
+            "cycles_sent",
+            "target",
+        ],
+        Some(target),
+        4_000,
+    );
+}
+
+#[test]
 fn platform_call_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
@@ -717,6 +820,41 @@ fn reset_for_tests_clears_all_metric_families() {
 
     for kind in all_metric_kinds() {
         assert!(entries(*kind).is_empty());
+    }
+}
+
+fn refill_record(
+    id: u64,
+    target_canister: Principal,
+    status: IcpRefillStatus,
+    error_code: Option<IcpRefillErrorCode>,
+    amount_e8s: u64,
+    cycles_sent: Option<u128>,
+) -> IcpRefillRecord {
+    IcpRefillRecord {
+        id,
+        operation_id: [u8::try_from(id).expect("test id fits"); 32],
+        source_canister: Principal::from_slice(&[11; 29]),
+        source_subaccount: None,
+        target_canister,
+        ledger_canister_id: Principal::from_slice(&[12; 29]),
+        cmc_canister_id: Principal::from_slice(&[13; 29]),
+        cmc_to_account_owner: Principal::from_slice(&[13; 29]),
+        cmc_to_account_subaccount: Some([14; 32]),
+        amount_e8s,
+        fee_e8s: 10_000,
+        memo: b"TPUP\0\0\0\0".to_vec(),
+        created_at_time_ns: id,
+        ledger_block_index: None,
+        notify_attempts: 0,
+        cycles_sent: cycles_sent.map(Nat::from),
+        status,
+        error_code,
+        error_message: None,
+        refund_block_index: None,
+        transaction_too_old_min_block_index: None,
+        created_at_ns: id,
+        updated_at_ns: id,
     }
 }
 
@@ -905,5 +1043,25 @@ fn assert_metric_count_and_u64(
             assert_eq!(*value_u64, expected_value);
         }
         _ => panic!("metric entry should use CountAndU64"),
+    }
+}
+
+fn assert_metric_u128(
+    entries: &[MetricEntry],
+    labels: &[&str],
+    principal: Option<Principal>,
+    expected: u128,
+) {
+    let entry = entries
+        .iter()
+        .find(|entry| {
+            entry.labels.iter().map(String::as_str).collect::<Vec<_>>() == labels
+                && entry.principal == principal
+        })
+        .expect("metric entry should exist");
+
+    match &entry.value {
+        MetricValue::U128(value) => assert_eq!(*value, expected),
+        _ => panic!("metric entry should use U128"),
     }
 }

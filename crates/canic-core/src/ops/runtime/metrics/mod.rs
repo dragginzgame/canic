@@ -7,6 +7,7 @@ pub mod cycles_topup;
 pub mod delegated_auth;
 pub mod directory;
 pub mod http;
+pub mod icp_refill;
 pub mod intent;
 pub mod inter_canister_call;
 pub mod lifecycle;
@@ -38,6 +39,7 @@ use {
     delegated_auth::DelegatedAuthMetrics,
     directory::DirectoryMetrics,
     http::HttpMetrics,
+    icp_refill::IcpRefillMetrics,
     intent::IntentMetrics,
     inter_canister_call::InterCanisterCallMetrics,
     lifecycle::LifecycleMetrics,
@@ -496,7 +498,7 @@ fn root_capability_entries() -> Vec<MetricEntry> {
 /// Project cycles-funding counters into the unified public metrics row shape.
 #[must_use]
 fn cycles_funding_entries() -> Vec<MetricEntry> {
-    CyclesFundingMetrics::snapshot()
+    let mut entries = CyclesFundingMetrics::snapshot()
         .into_iter()
         .map(|(metric, child_principal, reason, cycles)| MetricEntry {
             labels: reason.map_or_else(
@@ -511,7 +513,9 @@ fn cycles_funding_entries() -> Vec<MetricEntry> {
             principal: child_principal,
             value: MetricValue::U128(cycles),
         })
-        .collect()
+        .collect::<Vec<_>>();
+    entries.extend(icp_refill_entries());
+    entries
 }
 
 /// Project auto-top-up decision counters into the unified public metrics row shape.
@@ -525,6 +529,12 @@ fn cycles_topup_entries() -> Vec<MetricEntry> {
             value: MetricValue::Count(count),
         })
         .collect()
+}
+
+/// Project ICP refill recovery records into bounded public funding metrics rows.
+#[must_use]
+fn icp_refill_entries() -> Vec<MetricEntry> {
+    IcpRefillMetrics::entries()
 }
 
 /// Project perf counters into the unified public metrics row shape.
