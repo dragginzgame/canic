@@ -100,9 +100,12 @@ impl IcOps {
 
     /// Return a metadata-hash caller principal on both IC and host targets.
     #[must_use]
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "wasm path delegates to ic0-backed caller lookup, which is not const"
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(
+            clippy::missing_const_for_fn,
+            reason = "wasm path delegates to ic0-backed caller lookup, which is not const"
+        )
     )]
     pub(crate) fn metadata_entropy_caller() -> Principal {
         #[cfg(target_arch = "wasm32")]
@@ -118,9 +121,12 @@ impl IcOps {
 
     /// Return a metadata-hash canister principal on both IC and host targets.
     #[must_use]
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "wasm path delegates to ic0-backed canister lookup, which is not const"
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(
+            clippy::missing_const_for_fn,
+            reason = "wasm path delegates to ic0-backed canister lookup, which is not const"
+        )
     )]
     pub(crate) fn metadata_entropy_canister() -> Principal {
         #[cfg(target_arch = "wasm32")]
