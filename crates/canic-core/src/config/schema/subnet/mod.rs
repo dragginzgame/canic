@@ -348,6 +348,15 @@ pub struct IcpRefillPolicy {
 
     #[serde(default)]
     pub min_xdr_permyriad_per_icp: Option<u64>,
+
+    #[serde(default)]
+    pub ledger_canister_id: Option<Principal>,
+
+    #[serde(default)]
+    pub cmc_canister_id: Option<Principal>,
+
+    #[serde(default)]
+    pub allow_ic_system_canister_overrides: bool,
 }
 
 const fn default_enabled() -> bool {

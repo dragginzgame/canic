@@ -150,7 +150,7 @@ impl IcpRefillWorkflow {
         };
         let canisters = IcpRefillOps::resolve_canisters(
             build_network(),
-            IcpRefillCanisterOverrides::default(),
+            refill_canister_overrides(Some(icp_refill)),
         )?;
         let observed_rate = configured_rate(
             Some(icp_refill),
@@ -266,8 +266,10 @@ async fn prepare_context(
         policy_preflight.evaluate(None)?;
     }
 
-    let canisters =
-        IcpRefillOps::resolve_canisters(build_network(), IcpRefillCanisterOverrides::default())?;
+    let canisters = IcpRefillOps::resolve_canisters(
+        build_network(),
+        refill_canister_overrides(policy.as_ref()),
+    )?;
     let fee = IcpRefillOps::icrc1_fee(canisters.ledger_canister_id).await?;
     let fee_e8s = checked_nat_u64("icrc1_fee", fee)?;
     validate_ledger_decimals(IcpRefillOps::icrc1_decimals(canisters.ledger_canister_id).await?)?;
@@ -539,6 +541,18 @@ const fn policy_requires_rate(policy: Option<&IcpRefillPolicy>) -> bool {
 
 const fn rate_required(policy: Option<&IcpRefillPolicy>, mode: RateQueryMode) -> bool {
     matches!(mode, RateQueryMode::Always) || policy_requires_rate(policy)
+}
+
+fn refill_canister_overrides(policy: Option<&IcpRefillPolicy>) -> IcpRefillCanisterOverrides {
+    let Some(policy) = policy else {
+        return IcpRefillCanisterOverrides::default();
+    };
+
+    IcpRefillCanisterOverrides {
+        ledger_canister_id: policy.ledger_canister_id,
+        cmc_canister_id: policy.cmc_canister_id,
+        allow_ic_overrides: policy.allow_ic_system_canister_overrides,
+    }
 }
 
 fn validate_ledger_decimals(decimals: u8) -> Result<(), InternalError> {

@@ -2,6 +2,7 @@ use super::*;
 use crate::cdk::types::TC;
 use crate::config::schema::{NAME_MAX_BYTES, Validate};
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
     CanisterConfig {
@@ -89,6 +90,45 @@ min_xdr_permyriad_per_icp = 40000
     assert_eq!(icp_refill.min_hub_cycles_before_refill.to_u128(), 2 * TC);
     assert_eq!(icp_refill.max_refill_e8s_per_call, 100_000_000);
     assert_eq!(icp_refill.min_xdr_permyriad_per_icp, Some(40_000));
+    assert_eq!(icp_refill.ledger_canister_id, None);
+    assert_eq!(icp_refill.cmc_canister_id, None);
+    assert!(!icp_refill.allow_ic_system_canister_overrides);
+}
+
+#[test]
+fn topup_icp_refill_parses_system_canister_overrides() {
+    let cfg: CanisterConfig = toml::from_str(
+        r#"
+kind = "root"
+
+[topup]
+threshold = "10T"
+amount = "5T"
+
+[topup.icp_refill]
+min_hub_cycles_before_refill = "2T"
+max_refill_e8s_per_call = 100000000
+ledger_canister_id = "ryjl3-tyaaa-aaaaa-aaaba-cai"
+cmc_canister_id = "rkp4c-7iaaa-aaaaa-aaaca-cai"
+allow_ic_system_canister_overrides = true
+"#,
+    )
+    .expect("icp refill canister ID overrides should parse");
+
+    let icp_refill = cfg
+        .topup
+        .and_then(|topup| topup.icp_refill)
+        .expect("icp refill policy should be present");
+
+    assert_eq!(
+        icp_refill.ledger_canister_id,
+        Some(Principal::from_str("ryjl3-tyaaa-aaaaa-aaaba-cai").expect("valid ledger principal"))
+    );
+    assert_eq!(
+        icp_refill.cmc_canister_id,
+        Some(Principal::from_str("rkp4c-7iaaa-aaaaa-aaaca-cai").expect("valid CMC principal"))
+    );
+    assert!(icp_refill.allow_ic_system_canister_overrides);
 }
 
 #[test]
@@ -779,6 +819,9 @@ fn topup_icp_refill_zero_hub_threshold_fails() {
                 min_hub_cycles_before_refill: Cycles::new(0),
                 max_refill_e8s_per_call: 100_000_000,
                 min_xdr_permyriad_per_icp: None,
+                ledger_canister_id: None,
+                cmc_canister_id: None,
+                allow_ic_system_canister_overrides: false,
             }),
         }),
         ..base_canister_config(CanisterKind::Root)
@@ -809,6 +852,9 @@ fn topup_icp_refill_zero_max_refill_fails() {
                 min_hub_cycles_before_refill: Cycles::new(2 * TC),
                 max_refill_e8s_per_call: 0,
                 min_xdr_permyriad_per_icp: None,
+                ledger_canister_id: None,
+                cmc_canister_id: None,
+                allow_ic_system_canister_overrides: false,
             }),
         }),
         ..base_canister_config(CanisterKind::Root)
@@ -839,6 +885,9 @@ fn topup_icp_refill_zero_rate_gate_fails() {
                 min_hub_cycles_before_refill: Cycles::new(2 * TC),
                 max_refill_e8s_per_call: 100_000_000,
                 min_xdr_permyriad_per_icp: Some(0),
+                ledger_canister_id: None,
+                cmc_canister_id: None,
+                allow_ic_system_canister_overrides: false,
             }),
         }),
         ..base_canister_config(CanisterKind::Root)

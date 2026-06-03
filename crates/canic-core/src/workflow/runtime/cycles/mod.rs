@@ -124,12 +124,12 @@ impl CycleTrackerWorkflow {
 
         if mode.auto_topup_enabled() {
             if EnvOps::is_root() {
-                if Self::check_hub_self_refill(sample.cycles.clone()) {
+                if Self::check_hub_self_refill(&sample.cycles) {
                     CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
                     return;
                 }
             } else {
-                Self::evaluate_policies(sample.cycles.clone());
+                Self::check_auto_topup(&sample.cycles);
             }
         }
 
@@ -151,18 +151,14 @@ impl CycleTrackerWorkflow {
     fn evaluate_current_topup() {
         let cycles = MgmtOps::canister_cycle_balance();
         if EnvOps::is_root() {
-            Self::check_hub_self_refill(cycles);
+            Self::check_hub_self_refill(&cycles);
             return;
         }
 
-        Self::evaluate_policies(cycles);
+        Self::check_auto_topup(&cycles);
     }
 
-    fn evaluate_policies(cycles: Cycles) {
-        Self::check_auto_topup(cycles);
-    }
-
-    fn check_hub_self_refill(cycles: Cycles) -> bool {
+    fn check_hub_self_refill(cycles: &Cycles) -> bool {
         let canister_cfg = match ConfigOps::current_canister() {
             Ok(cfg) => cfg,
             Err(err) => {
@@ -192,8 +188,9 @@ impl CycleTrackerWorkflow {
         }
 
         CyclesTopupMetrics::record_request_scheduled();
+        let hub_cycles = cycles.clone();
         IcOps::spawn(async move {
-            let result = IcpRefillWorkflow::execute_hub_self_refill(cycles.clone()).await;
+            let result = IcpRefillWorkflow::execute_hub_self_refill(hub_cycles).await;
 
             clear_in_flight(&ICP_REFILL_IN_FLIGHT);
 
@@ -229,7 +226,7 @@ impl CycleTrackerWorkflow {
         true
     }
 
-    fn check_auto_topup(cycles: Cycles) {
+    fn check_auto_topup(cycles: &Cycles) {
         let canister_cfg = match ConfigOps::current_canister() {
             Ok(cfg) => cfg,
             Err(err) => {
@@ -309,7 +306,7 @@ impl CycleTrackerWorkflow {
             );
         }
 
-        purged > 0
+        purged > 0 || purged_topups > 0
     }
 }
 

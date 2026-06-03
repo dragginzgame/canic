@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
+- `0.58.17` closes out Slice 58 by wiring ICP-refill system canister override
+  config into workflow resolution, tightening hub self-refill design notes, and
+  cleaning up cycle-tracker top-up dispatch.
+
 - `0.58.16` finishes the ICP-refill record-boundary cleanup by moving notify
   eligibility, stale transfer-window checks, retry validation, and
   stored-record-to-request conversion into storage ops.

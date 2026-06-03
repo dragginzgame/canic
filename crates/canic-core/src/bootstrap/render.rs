@@ -490,6 +490,9 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
         policy.min_xdr_permyriad_per_icp.as_ref(),
         |value| quote!(#value),
     );
+    let ledger_canister_id = render_option(policy.ledger_canister_id.as_ref(), render_principal);
+    let cmc_canister_id = render_option(policy.cmc_canister_id.as_ref(), render_principal);
+    let allow_ic_system_canister_overrides = policy.allow_ic_system_canister_overrides;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::IcpRefillPolicy {
@@ -497,6 +500,9 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
             min_hub_cycles_before_refill: #min_hub_cycles_before_refill,
             max_refill_e8s_per_call: #max_refill_e8s_per_call,
             min_xdr_permyriad_per_icp: #min_xdr_permyriad_per_icp,
+            ledger_canister_id: #ledger_canister_id,
+            cmc_canister_id: #cmc_canister_id,
+            allow_ic_system_canister_overrides: #allow_ic_system_canister_overrides,
         }
     }
 }
@@ -663,5 +669,34 @@ fn render_directory_pool(pool: &DirectoryPool) -> TokenStream {
             canister_role: #canister_role,
             key_name: #key_name,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cdk::types::{Cycles, TC};
+
+    fn principal(byte: u8) -> Principal {
+        Principal::from_slice(&[byte; 29])
+    }
+
+    #[test]
+    fn render_icp_refill_policy_preserves_system_canister_overrides() {
+        let rendered = render_icp_refill_policy(&IcpRefillPolicy {
+            enabled: true,
+            min_hub_cycles_before_refill: Cycles::new(2 * TC),
+            max_refill_e8s_per_call: 100_000_000,
+            min_xdr_permyriad_per_icp: Some(40_000),
+            ledger_canister_id: Some(principal(11)),
+            cmc_canister_id: Some(principal(12)),
+            allow_ic_system_canister_overrides: true,
+        })
+        .to_string();
+
+        assert!(rendered.contains("ledger_canister_id"));
+        assert!(rendered.contains("cmc_canister_id"));
+        assert!(rendered.contains("allow_ic_system_canister_overrides"));
+        assert!(rendered.contains("Principal :: from_slice"));
     }
 }

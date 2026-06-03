@@ -159,6 +159,9 @@ mod tests {
             min_hub_cycles_before_refill: Cycles::new(2 * TC),
             max_refill_e8s_per_call: 100_000_000,
             min_xdr_permyriad_per_icp: Some(40_000),
+            ledger_canister_id: None,
+            cmc_canister_id: None,
+            allow_ic_system_canister_overrides: false,
         }
     }
 

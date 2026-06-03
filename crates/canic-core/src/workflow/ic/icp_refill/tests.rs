@@ -1,4 +1,5 @@
 use super::*;
+use crate::cdk::types::TC;
 use std::str::FromStr;
 
 fn p(id: u8) -> Principal {
@@ -105,6 +106,33 @@ fn ledger_decimals_validation_requires_icp_decimals() {
     validate_ledger_decimals(8).expect("ICP decimals");
     let err = validate_ledger_decimals(6).expect_err("non-ICP decimals must fail");
     assert!(err.to_string().contains("decimals=8"));
+}
+
+#[test]
+fn refill_canister_overrides_follow_config_resolution_fields() {
+    assert_eq!(
+        refill_canister_overrides(None),
+        IcpRefillCanisterOverrides::default()
+    );
+
+    let policy = IcpRefillPolicy {
+        enabled: true,
+        min_hub_cycles_before_refill: Cycles::new(2 * TC),
+        max_refill_e8s_per_call: 100_000_000,
+        min_xdr_permyriad_per_icp: None,
+        ledger_canister_id: Some(p(11)),
+        cmc_canister_id: Some(p(12)),
+        allow_ic_system_canister_overrides: true,
+    };
+
+    assert_eq!(
+        refill_canister_overrides(Some(&policy)),
+        IcpRefillCanisterOverrides {
+            ledger_canister_id: Some(p(11)),
+            cmc_canister_id: Some(p(12)),
+            allow_ic_overrides: true,
+        }
+    );
 }
 
 #[test]
