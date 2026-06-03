@@ -9,6 +9,10 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.6` keeps estimate behavior unchanged while splitting boolean estimate
+  flag parsing from positive integer source parsing. Direct
+  `CANIC_INSTRUCTION_AUDIT_ESTIMATE_EXECUTION_CYCLES` misuse now reports a
+  boolean flag error instead of a positive-integer error.
 - `0.59.5` keeps estimate artifact behavior unchanged while pinning the
   instruction-footprint markdown estimate section title, instructions-only
   label, and table header as report constants. Report-rendering tests now prove

@@ -36,6 +36,7 @@ pub(super) enum EstimateError {
     MissingEstimateSource,
     EstimateSourceWithoutEstimateFlag,
     UnsupportedNodeCount(u16),
+    InvalidBooleanFlag { field: &'static str, value: String },
     InvalidPositiveInteger { field: &'static str, value: String },
     Overflow,
 }
@@ -53,6 +54,9 @@ impl std::fmt::Display for EstimateError {
                 formatter,
                 "unsupported --estimate-node-count {node_count}; use 13, 34, or provide --cycles-per-billion-instructions",
             ),
+            Self::InvalidBooleanFlag { field, value } => {
+                write!(formatter, "{field} must be 0, 1, true, or false, got {value:?}")
+            }
             Self::InvalidPositiveInteger { field, value } => {
                 write!(formatter, "{field} must be a positive integer, got {value:?}")
             }
@@ -267,15 +271,22 @@ const fn ceil_div(numerator: u128, denominator: u128) -> u128 {
 
 fn env_flag(name: &'static str) -> Result<bool, EstimateError> {
     match env::var(name) {
-        Ok(value) => match value.as_str() {
-            "" | "0" | "false" | "False" | "FALSE" => Ok(false),
-            "1" | "true" | "True" | "TRUE" => Ok(true),
-            _ => Err(EstimateError::InvalidPositiveInteger { field: name, value }),
-        },
+        Ok(value) => parse_env_flag(name, &value),
         Err(env::VarError::NotPresent) => Ok(false),
-        Err(env::VarError::NotUnicode(value)) => Err(EstimateError::InvalidPositiveInteger {
+        Err(env::VarError::NotUnicode(value)) => Err(EstimateError::InvalidBooleanFlag {
             field: name,
             value: value.to_string_lossy().into_owned(),
+        }),
+    }
+}
+
+fn parse_env_flag(field: &'static str, value: &str) -> Result<bool, EstimateError> {
+    match value {
+        "" | "0" | "false" | "False" | "FALSE" => Ok(false),
+        "1" | "true" | "True" | "TRUE" => Ok(true),
+        _ => Err(EstimateError::InvalidBooleanFlag {
+            field,
+            value: value.to_string(),
         }),
     }
 }
@@ -381,6 +392,26 @@ mod tests {
         .expect_err("missing source");
 
         assert!(matches!(err, EstimateError::MissingEstimateSource));
+    }
+
+    #[test]
+    fn estimate_flag_parser_accepts_boolean_values() {
+        assert!(!parse_env_flag("FLAG", "").expect("empty"));
+        assert!(!parse_env_flag("FLAG", "0").expect("zero"));
+        assert!(!parse_env_flag("FLAG", "false").expect("false"));
+        assert!(parse_env_flag("FLAG", "1").expect("one"));
+        assert!(parse_env_flag("FLAG", "true").expect("true"));
+    }
+
+    #[test]
+    fn estimate_flag_parser_rejects_non_boolean_values() {
+        let err = parse_env_flag("FLAG", "yes").expect_err("non-boolean flag");
+
+        assert!(matches!(err, EstimateError::InvalidBooleanFlag { .. }));
+        assert_eq!(
+            err.to_string(),
+            "FLAG must be 0, 1, true, or false, got \"yes\""
+        );
     }
 
     #[test]
