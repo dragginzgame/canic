@@ -12,13 +12,13 @@ present.
 
 ## Unreleased
 
-- Cleans up the ICP refill core by centralizing repeated infra error mapping,
-  refill record status/error mutation helpers, and the shared transfer retry
-  stale-window branch while preserving the existing workflow and DTO surface.
-
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
+
+- `0.58.5` cleans up the ICP refill core by centralizing repeated infra error
+  mapping, refill record status/error mutation helpers, and shared transfer
+  retry stale-window handling without changing the workflow or DTO surface.
 
 - `0.58.4` cleans up the cycles conversion CLI module boundary and reduces
   PocketIC CI disk pressure by removing duplicate prebuild work and clearing
