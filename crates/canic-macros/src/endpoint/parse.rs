@@ -1,6 +1,10 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Expr, Ident, LitStr, Meta, Path, Token, parse::Parser, punctuated::Punctuated};
+use syn::{
+    Expr, Ident, LitStr, Meta, MetaNameValue, Path, Token, parse::Parser, punctuated::Punctuated,
+};
+
+const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must be expressed via requires(...), payload(...), internal, composite, or name = \"...\"";
 
 //
 // ============================================================================
@@ -178,23 +182,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                     ));
                 }
 
-                let value = match &nv.value {
-                    Expr::Lit(expr) => match &expr.lit {
-                        syn::Lit::Str(lit) => lit,
-                        _ => {
-                            return Err(syn::Error::new_spanned(
-                                nv,
-                                "endpoint export name must be a string literal",
-                            ));
-                        }
-                    },
-                    _ => {
-                        return Err(syn::Error::new_spanned(
-                            nv,
-                            "endpoint export name must be a string literal",
-                        ));
-                    }
-                };
+                let value = parse_string_literal(&nv, "endpoint export name")?;
 
                 forwarded.push(quote!(name = #value));
                 export_name = Some(value.clone());
@@ -207,29 +195,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                         "internal endpoint marker must appear only once",
                     ));
                 }
-                let value = match &nv.value {
-                    Expr::Lit(expr) => match &expr.lit {
-                        syn::Lit::Bool(lit) => lit.value,
-                        _ => {
-                            return Err(syn::Error::new_spanned(
-                                nv,
-                                "internal must be set to a boolean literal",
-                            ));
-                        }
-                    },
-                    _ => {
-                        return Err(syn::Error::new_spanned(
-                            nv,
-                            "internal must be set to a boolean literal",
-                        ));
-                    }
-                };
-                if !value {
-                    return Err(syn::Error::new_spanned(
-                        nv,
-                        "internal must be true when specified",
-                    ));
-                }
+                parse_true_marker(&nv, "internal")?;
                 internal = true;
             }
             Meta::NameValue(nv) if nv.path.is_ident("composite") => {
@@ -239,29 +205,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                         "composite query marker must appear only once",
                     ));
                 }
-                let value = match &nv.value {
-                    Expr::Lit(expr) => match &expr.lit {
-                        syn::Lit::Bool(lit) => lit.value,
-                        _ => {
-                            return Err(syn::Error::new_spanned(
-                                nv,
-                                "composite must be set to a boolean literal",
-                            ));
-                        }
-                    },
-                    _ => {
-                        return Err(syn::Error::new_spanned(
-                            nv,
-                            "composite must be set to a boolean literal",
-                        ));
-                    }
-                };
-                if !value {
-                    return Err(syn::Error::new_spanned(
-                        nv,
-                        "composite must be true when specified",
-                    ));
-                }
+                parse_true_marker(&nv, "composite")?;
                 forwarded.push(quote!(composite = true));
                 query_mode = QueryMode::Composite;
             }
@@ -272,16 +216,10 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                 ));
             }
             Meta::Path(path) => {
-                return Err(syn::Error::new_spanned(
-                    path,
-                    "endpoint attributes must be expressed via requires(...), payload(...), internal, composite, or name = \"...\"",
-                ));
+                return Err(syn::Error::new_spanned(path, ENDPOINT_ATTR_HELP));
             }
             Meta::NameValue(nv) => {
-                return Err(syn::Error::new_spanned(
-                    nv,
-                    "endpoint attributes must be expressed via requires(...), payload(...), internal, composite, or name = \"...\"",
-                ));
+                return Err(syn::Error::new_spanned(nv, ENDPOINT_ATTR_HELP));
             }
         }
     }
@@ -306,6 +244,48 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         internal,
         query_mode,
     })
+}
+
+fn parse_string_literal<'a>(nv: &'a MetaNameValue, label: &'static str) -> syn::Result<&'a LitStr> {
+    if let Expr::Lit(expr) = &nv.value
+        && let syn::Lit::Str(lit) = &expr.lit
+    {
+        return Ok(lit);
+    }
+
+    Err(syn::Error::new_spanned(
+        nv,
+        format!("{label} must be a string literal"),
+    ))
+}
+
+fn parse_true_marker(nv: &MetaNameValue, marker: &'static str) -> syn::Result<()> {
+    let value = match &nv.value {
+        Expr::Lit(expr) => match &expr.lit {
+            syn::Lit::Bool(lit) => lit.value,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    nv,
+                    format!("{marker} must be set to a boolean literal"),
+                ));
+            }
+        },
+        _ => {
+            return Err(syn::Error::new_spanned(
+                nv,
+                format!("{marker} must be set to a boolean literal"),
+            ));
+        }
+    };
+
+    if value {
+        Ok(())
+    } else {
+        Err(syn::Error::new_spanned(
+            nv,
+            format!("{marker} must be true when specified"),
+        ))
+    }
 }
 
 const fn empty() -> ParsedArgs {
@@ -663,92 +643,53 @@ where
 //
 
 fn builtin_from_path(path: &Path) -> Option<BuiltinPredicate> {
-    if path.leading_colon.is_some() {
-        return None;
-    }
-    if path.segments.len() == 1 {
-        return None;
-    }
-    if path.segments.len() != 2 {
-        return None;
-    }
+    short_path_tail(path)?;
     builtin_from_path_tail(path)
 }
 
 fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
-    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
-    let last = names.next_back()?;
-    let module = names.next_back();
+    let (module, last) = path_tail(path)?;
+    let module = module.to_string();
+    let last = last.to_string();
 
-    match (module.as_deref(), last.as_str()) {
-        (Some("app"), "allows_updates") => Some(BuiltinPredicate::AppAllowsUpdates),
-        (Some("app"), "is_queryable") => Some(BuiltinPredicate::AppIsQueryable),
-        (Some("env"), "is_prime_subnet") => Some(BuiltinPredicate::SelfIsPrimeSubnet),
-        (Some("env"), "is_prime_root") => Some(BuiltinPredicate::SelfIsPrimeRoot),
-        (Some("caller"), "is_controller") => Some(BuiltinPredicate::CallerIsController),
-        (Some("caller"), "is_parent") => Some(BuiltinPredicate::CallerIsParent),
-        (Some("caller"), "is_child") => Some(BuiltinPredicate::CallerIsChild),
-        (Some("caller"), "is_root") => Some(BuiltinPredicate::CallerIsRoot),
-        (Some("caller"), "is_same_canister") => Some(BuiltinPredicate::CallerIsSameCanister),
-        (Some("caller"), "is_registered_to_subnet") => {
-            Some(BuiltinPredicate::CallerIsRegisteredToSubnet)
-        }
-        (Some("caller"), "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
-        (Some("env"), "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
-        (Some("env"), "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
+    match (module.as_str(), last.as_str()) {
+        ("app", "allows_updates") => Some(BuiltinPredicate::AppAllowsUpdates),
+        ("app", "is_queryable") => Some(BuiltinPredicate::AppIsQueryable),
+        ("env", "is_prime_subnet") => Some(BuiltinPredicate::SelfIsPrimeSubnet),
+        ("env", "is_prime_root") => Some(BuiltinPredicate::SelfIsPrimeRoot),
+        ("caller", "is_controller") => Some(BuiltinPredicate::CallerIsController),
+        ("caller", "is_parent") => Some(BuiltinPredicate::CallerIsParent),
+        ("caller", "is_child") => Some(BuiltinPredicate::CallerIsChild),
+        ("caller", "is_root") => Some(BuiltinPredicate::CallerIsRoot),
+        ("caller", "is_same_canister") => Some(BuiltinPredicate::CallerIsSameCanister),
+        ("caller", "is_registered_to_subnet") => Some(BuiltinPredicate::CallerIsRegisteredToSubnet),
+        ("caller", "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
+        ("env", "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
+        ("env", "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,
     }
 }
 
 fn is_authenticated_path(path: &Path) -> bool {
-    if path.leading_colon.is_some() {
-        return false;
-    }
-
-    if path.segments.len() != 2 {
-        return false;
-    }
-
-    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
-    let last = names.next_back();
-    let module = names.next_back();
-    matches!(
-        (module.as_deref(), last.as_deref()),
-        (Some("auth"), Some("authenticated"))
-    )
+    short_path_is(path, "auth", "authenticated")
 }
 
 fn caller_role_predicate_label(path: &Path) -> Option<&'static str> {
-    if path.leading_colon.is_some() {
+    let (module, last) = short_path_tail(path)?;
+    if module != "caller" {
         return None;
     }
-
-    if path.segments.len() != 2 {
-        return None;
-    }
-
-    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
-    let last = names.next_back();
-    let module = names.next_back();
-    match (module.as_deref(), last.as_deref()) {
-        (Some("caller"), Some("has_role")) => Some("caller::has_role"),
-        (Some("caller"), Some("has_any_role")) => Some("caller::has_any_role"),
-        _ => None,
+    if last == "has_role" {
+        Some("caller::has_role")
+    } else if last == "has_any_role" {
+        Some("caller::has_any_role")
+    } else {
+        None
     }
 }
 
 fn is_removed_has_app_role_path(path: &Path) -> bool {
-    if path.leading_colon.is_some() || path.segments.len() != 2 {
-        return false;
-    }
-
-    let mut names = path.segments.iter().map(|seg| seg.ident.to_string());
-    let last = names.next_back();
-    let module = names.next_back();
-    matches!(
-        (module.as_deref(), last.as_deref()),
-        (Some("caller"), Some("has_app_role"))
-    )
+    short_path_is(path, "caller", "has_app_role")
 }
 
 fn is_bare_authenticated_path(path: &Path) -> bool {
@@ -761,6 +702,30 @@ fn is_bare_authenticated_path(path: &Path) -> bool {
             .segments
             .last()
             .is_some_and(|seg| seg.ident == "authenticated")
+}
+
+fn path_tail(path: &Path) -> Option<(&Ident, &Ident)> {
+    if path.leading_colon.is_some() {
+        return None;
+    }
+
+    let mut segments = path.segments.iter().rev();
+    let last = &segments.next()?.ident;
+    let module = &segments.next()?.ident;
+    Some((module, last))
+}
+
+fn short_path_tail(path: &Path) -> Option<(&Ident, &Ident)> {
+    if path.segments.len() == 2 {
+        path_tail(path)
+    } else {
+        None
+    }
+}
+
+fn short_path_is(path: &Path, module: &str, last: &str) -> bool {
+    short_path_tail(path)
+        .is_some_and(|(found_module, found_last)| found_module == module && found_last == last)
 }
 
 fn path_ident(path: &Path) -> syn::Result<&Ident> {
@@ -839,6 +804,33 @@ mod tests {
         let err = parse_args(quote!(composite, composite = true)).expect_err("duplicate");
 
         assert!(err.to_string().contains("must appear only once"));
+    }
+
+    #[test]
+    fn internal_false_marker_is_rejected() {
+        let err = parse_args(quote!(internal = false)).expect_err("false internal");
+
+        assert!(err.to_string().contains("internal must be true"));
+    }
+
+    #[test]
+    fn internal_non_boolean_marker_is_rejected() {
+        let err = parse_args(quote!(internal = "yes")).expect_err("non-boolean internal");
+
+        assert!(
+            err.to_string()
+                .contains("internal must be set to a boolean literal")
+        );
+    }
+
+    #[test]
+    fn composite_non_boolean_marker_is_rejected() {
+        let err = parse_args(quote!(composite = "yes")).expect_err("non-boolean composite");
+
+        assert!(
+            err.to_string()
+                .contains("composite must be set to a boolean literal")
+        );
     }
 
     #[test]

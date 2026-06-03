@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Cleans up endpoint attribute parsing by sharing string/boolean marker
+  helpers for `name`, `internal`, and `composite`, consolidating short access
+  path decoding, and adding parser coverage for marker rejection cases.
+
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
