@@ -9,6 +9,8 @@
         test-canisters fmt-core cloc
 
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
+ACTIONLINT_VERSION ?= 1.7.8
+ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
@@ -86,11 +88,11 @@ install:
 
 # Install the shared Rust/Cargo/actionlint/Canic toolchain
 install-dev:
-	bash scripts/dev/install_dev.sh
+	ACTIONLINT_VERSION="$(ACTIONLINT_VERSION)" ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
 # Update the local Rust/Cargo/actionlint/ICP CLI development environment.
 update-dev:
-	bash scripts/dev/install_dev.sh --update-prereqs
+	ACTIONLINT_VERSION="$(ACTIONLINT_VERSION)" ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
 	cargo install --quiet \
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \

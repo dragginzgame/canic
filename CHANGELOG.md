@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
 
+- `0.59.1` tightens the 0.59 estimate input contract so direct report
+  environment sources cannot be supplied without estimate mode, and fixes CI
+  workflow linting/toolchain setup so actionlint catches GitHub Actions context
+  errors locally and in CI.
+
 - `0.59.0` starts the instruction-accounting line by hardening
   instruction-footprint artifacts around `performance_counter(1)` semantics,
   preserving message-kind `sample_origin`, and adding opt-in offline execution

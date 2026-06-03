@@ -9,6 +9,13 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.1` tightens the 0.59 report-input contract and fixes workflow linting.
+  Direct environment-driven instruction-audit estimates now reject
+  node-count/rate inputs when estimate mode is disabled, matching the shell
+  wrapper's `--estimate-execution-cycles` requirement. The CI workflow no
+  longer uses invalid job-level `${{ env.* }}` expressions for Rust toolchain
+  env, and `make install-dev` / `make update-dev` now pass the pinned
+  `ACTIONLINT_VERSION` and install directory into the shared dev setup.
 - `0.59.0` starts the instruction-accounting and offline estimate line:
   ```text
   docs/design/0.59-instruction-accounting-cost-estimates/0.59-design.md

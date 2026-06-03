@@ -18,6 +18,7 @@ const ENV_CYCLES_PER_BILLION_INSTRUCTIONS: &str =
 #[derive(Debug, Eq, PartialEq)]
 pub(super) enum EstimateError {
     MissingEstimateSource,
+    EstimateSourceWithoutEstimateFlag,
     UnsupportedNodeCount(u16),
     InvalidPositiveInteger { field: &'static str, value: String },
     Overflow,
@@ -28,6 +29,9 @@ impl std::fmt::Display for EstimateError {
         match self {
             Self::MissingEstimateSource => formatter.write_str(
                 "--estimate-execution-cycles requires --estimate-node-count or --cycles-per-billion-instructions",
+            ),
+            Self::EstimateSourceWithoutEstimateFlag => formatter.write_str(
+                "--estimate-node-count and --cycles-per-billion-instructions require --estimate-execution-cycles",
             ),
             Self::UnsupportedNodeCount(node_count) => write!(
                 formatter,
@@ -104,6 +108,11 @@ impl EstimateOptions {
 
     fn validate(self) -> Result<Self, EstimateError> {
         if !self.enabled {
+            if self.node_count.is_some() || self.explicit_cycles_per_billion_instructions.is_some()
+            {
+                return Err(EstimateError::EstimateSourceWithoutEstimateFlag);
+            }
+
             return Ok(Self::disabled());
         }
 
@@ -368,6 +377,35 @@ mod tests {
         .expect_err("missing source");
 
         assert!(matches!(err, EstimateError::MissingEstimateSource));
+    }
+
+    #[test]
+    fn estimate_sources_require_estimate_flag() {
+        let node_err = EstimateOptions {
+            enabled: false,
+            node_count: Some(13),
+            explicit_cycles_per_billion_instructions: None,
+        }
+        .validate()
+        .expect_err("node source without estimate flag");
+
+        assert!(matches!(
+            node_err,
+            EstimateError::EstimateSourceWithoutEstimateFlag
+        ));
+
+        let rate_err = EstimateOptions {
+            enabled: false,
+            node_count: None,
+            explicit_cycles_per_billion_instructions: Some(1_000_000_000),
+        }
+        .validate()
+        .expect_err("rate source without estimate flag");
+
+        assert!(matches!(
+            rate_err,
+            EstimateError::EstimateSourceWithoutEstimateFlag
+        ));
     }
 
     #[test]

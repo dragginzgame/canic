@@ -25,15 +25,13 @@ jobs:
   msrv:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    env:
-      RUSTUP_TOOLCHAIN: ${{ env.CANIC_MSRV }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ env.CANIC_MSRV }}
       - name: Install wasm target
-        run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
+        run: rustup target add --toolchain "$CANIC_MSRV" wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Check workspace MSRV
         run: cargo check --workspace --locked
@@ -41,8 +39,6 @@ jobs:
   checks:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    env:
-      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -56,7 +52,7 @@ jobs:
       - name: Install Rust helper tools
         run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
       - name: Install wasm target
-        run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
+        run: rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
       - name: Install actionlint
         shell: bash
         run: |
@@ -96,8 +92,6 @@ jobs:
   tag_checks:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
-    env:
-      RUSTUP_TOOLCHAIN: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,7 +108,7 @@ jobs:
       - name: Install Rust helper tools
         run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
       - name: Install wasm target
-        run: rustup target add --toolchain "$RUSTUP_TOOLCHAIN" wasm32-unknown-unknown
+        run: rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
       - name: Install actionlint
         shell: bash
         run: |
