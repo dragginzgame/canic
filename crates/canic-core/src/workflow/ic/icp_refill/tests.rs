@@ -1,4 +1,5 @@
 use super::*;
+use std::str::FromStr;
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
@@ -213,6 +214,42 @@ fn hub_self_refill_operation_id_binds_identity_amount_and_time() {
     assert_eq!(first, same);
     assert_ne!(first, different_amount);
     assert_ne!(first, different_time);
+}
+
+#[test]
+fn direct_child_refill_grant_records_matching_parent() {
+    let record = sample_record(IcpRefillStatus::Completed);
+
+    assert_eq!(
+        direct_child_refill_grant(&record, &Nat::from(123_u64), Some(record.source_canister)),
+        Some((record.target_canister, 123))
+    );
+}
+
+#[test]
+fn direct_child_refill_grant_ignores_non_child_targets() {
+    let record = sample_record(IcpRefillStatus::Completed);
+
+    assert_eq!(
+        direct_child_refill_grant(&record, &Nat::from(123_u64), None),
+        None
+    );
+    assert_eq!(
+        direct_child_refill_grant(&record, &Nat::from(123_u64), Some(p(9))),
+        None
+    );
+}
+
+#[test]
+fn direct_child_refill_grant_saturates_large_cycle_totals() {
+    let record = sample_record(IcpRefillStatus::Completed);
+    let too_large =
+        Nat::from_str("340282366920938463463374607431768211456").expect("u128 max plus one");
+
+    assert_eq!(
+        direct_child_refill_grant(&record, &too_large, Some(record.source_canister)),
+        Some((record.target_canister, u128::MAX))
+    );
 }
 
 #[test]

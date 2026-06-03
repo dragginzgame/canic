@@ -9,15 +9,19 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active maintainer-directed slice: post-`0.58.11` ICP-refill hardening for
-  `0.58.12`. The current follow-up wires existing cycles-funding hooks into
-  pure ICP-refill policy evaluation. Manual and hub self-refill requests deny
-  with `CyclesFundingDisabled` while funding is disabled, and registered
-  direct-child refill targets consume the existing child funding cooldown
-  ledger through `FundingCooldownActive`. This closes the design gap that
-  refill must consume existing funding policy hooks without adding a new
-  refill-specific policy island or changing refill records, endpoints,
-  metrics, or CLI shape.
+- Active maintainer-directed slice: `0.58.13` release-changelog prep for
+  ICP-refill grant ledger reuse. The follow-up records successful registered
+  direct-child ICP refills into the existing cycles-funding grant ledger after
+  CMC `notify_top_up` completes, making budget/cooldown accounting observe
+  completed direct-child refill grants without adding a refill-specific grant
+  store, changing refill records, or changing endpoint/CLI shape.
+- `0.58.12` wired existing cycles-funding hooks into pure ICP-refill policy
+  evaluation. Manual and hub self-refill requests deny with
+  `CyclesFundingDisabled` while funding is disabled, and registered direct-child
+  refill targets consume the existing child funding cooldown ledger through
+  `FundingCooldownActive`. This closes the design gap that refill must consume
+  existing funding policy hooks without adding a new refill-specific policy
+  island or changing refill records, endpoints, metrics, or CLI shape.
 - Post-`0.58.11` CI/setup lean cleanup has started by making the GitHub Actions
   workflow reuse the existing Rust version envs for MSRV/internal toolchains
   and by combining Cargo helper binary installation into one step per workflow

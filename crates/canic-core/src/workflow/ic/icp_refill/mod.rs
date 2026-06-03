@@ -361,7 +361,10 @@ async fn notify_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inter
 
     match IcpRefillOps::notify_top_up(record.cmc_canister_id, args).await {
         Ok(Ok(cycles_sent)) => {
-            IcpRefillRecordOps::mark_completed(record.id, cycles_sent, IcOps::now_nanos())
+            let record =
+                IcpRefillRecordOps::mark_completed(record.id, cycles_sent, IcOps::now_nanos())?;
+            record_direct_child_refill_grant(&record, IcOps::now_secs());
+            Ok(record)
         }
         Ok(Err(err)) => apply_notify_error(record.id, record.notify_attempts, err),
         Err(err) => {
@@ -582,6 +585,35 @@ fn funding_cooldown_retry_after_secs(request: &IcpRefillRequest, now_secs: u64) 
         CyclesFundingLedgerOps::snapshot(request.target_canister),
         now_secs,
     )
+}
+
+fn record_direct_child_refill_grant(record: &IcpRefillRecord, now_secs: u64) {
+    let Some(cycles_sent) = record.cycles_sent.as_ref() else {
+        return;
+    };
+    let Some((_role, parent_pid)) = CanisterChildrenOps::role_parent(record.target_canister) else {
+        return;
+    };
+    let Some((child, cycles)) = direct_child_refill_grant(record, cycles_sent, parent_pid) else {
+        return;
+    };
+
+    CyclesFundingLedgerOps::record_child_grant(child, cycles, now_secs);
+}
+
+fn direct_child_refill_grant(
+    record: &IcpRefillRecord,
+    cycles_sent: &Nat,
+    parent_pid: Option<Principal>,
+) -> Option<(Principal, u128)> {
+    if parent_pid != Some(record.source_canister) {
+        return None;
+    }
+
+    Some((
+        record.target_canister,
+        u128::try_from(cycles_sent.0.clone()).unwrap_or(u128::MAX),
+    ))
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {

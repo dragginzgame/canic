@@ -12,18 +12,17 @@ present.
 
 ## Unreleased
 
-- Extended ICP-refill policy evaluation to consume existing cycles-funding
-  hooks: manual and hub self-refill requests now deny while funding is disabled,
-  and registered direct-child refill targets consume the existing child funding
-  cooldown ledger.
-
-- Leans out CI/setup config by reusing the workflow Rust version envs,
-  installing Cargo helper binaries in one step per workflow job, and removing
-  a dead Makefile `CARGO_ENV` initializer.
-
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
+
+- `0.58.13` reuses the existing child funding grant ledger for successful
+  registered direct-child ICP refills, so completed CMC notify totals feed the
+  same budget and cooldown accounting as ordinary child grants.
+
+- `0.58.12` wires ICP-refill policy through existing cycles-funding kill
+  switch and child cooldown hooks, and leans out CI/setup helper installation
+  without adding a separate refill policy island.
 
 - `0.58.11` hardens ICP-refill validation by covering notify retry caps,
   CMC/ledger recovery mappings, and the feature-enabled endpoint macro
