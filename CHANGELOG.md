@@ -12,6 +12,16 @@ present.
 
 ## Unreleased
 
+## [0.59.x] - 2026-06-03 - Instruction accounting and offline cost estimates
+
+Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
+
+- `0.59.0` starts the instruction-accounting line by hardening
+  instruction-footprint artifacts around `performance_counter(1)` semantics,
+  preserving message-kind `sample_origin`, and adding opt-in offline execution
+  cycle estimates for update rows without introducing NNS/catalog lookup or
+  renaming real cycle funding surfaces.
+
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)

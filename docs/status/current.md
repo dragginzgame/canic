@@ -9,6 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.59.0` starts the instruction-accounting and offline estimate line:
+  ```text
+  docs/design/0.59-instruction-accounting-cost-estimates/0.59-design.md
+  docs/changelog/0.59.md
+  ```
+  The instruction-footprint audit now records explicit
+  `performance_counter(1)` / `counter_id = 1` metadata, keeps measured row
+  fields instruction-named, and preserves `sample_origin` as the message-kind
+  scope (`update`, `query`, or `composite_query`). Optional offline execution
+  cycle estimates are host/test-side report decoration only: callers must pass
+  `--estimate-execution-cycles` with either `--estimate-node-count 13|34` or
+  `--cycles-per-billion-instructions <cycles>`, update rows receive the
+  `execution_cycle_estimate` sibling object, query/composite-query rows are not
+  presented as charged query costs, and 0.59 adds no NNS/catalog/network lookup
+  or new cycles CLI namespace.
 - `0.58.16` finalized the post-`0.58.15` cleanup. It moves the remaining
   ICP-refill recovery eligibility predicates for notify execution and stale
   transfer-window detection into storage ops, leaving workflow to provide
@@ -70,7 +85,7 @@ inspect only the files needed for the current task.
   mismatch traps without changing the transport. The access contract now has a
   protected internal-call recipe section for generated clients, lower-level
   `CanicInternalClient`, and raw `icp` public-endpoint calls.
-- Current minor: `0.58.x` ICP-to-cycles refill primitive. `0.58.0` starts
+- Previous minor: `0.58.x` ICP-to-cycles refill primitive. `0.58.0` starts
   the line with:
   ```text
   docs/design/0.58-convert-icp/0.58-design.md

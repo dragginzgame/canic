@@ -112,13 +112,14 @@ Every captured perf sample must normalize into rows with these semantic fields:
 - `scenario_key`
 - `scenario_labels`
 - `principal_scope` when relevant
-- `sample_origin` (`metrics`, `checkpoint`, or derived)
+- `sample_origin` (`update`, `query`, or `composite_query`)
 
 Minimum expectations:
 
 - endpoint samples normalize to `subject_kind = endpoint`
 - timer samples normalize to `subject_kind = timer`
 - checkpoint samples normalize to `subject_kind = checkpoint`
+- report metadata records `counter_id = 1`
 
 The transport may change.
 
@@ -144,6 +145,9 @@ Current interpretation:
 - `count` = number of recorded executions
 - `total_local_instructions` = accumulated local instructions for that subject
 - `avg_local_instructions = total_local_instructions / count`
+- `sample_origin` = message-kind scope of the sample, so update, ordinary
+  query, and composite-query samples are not compared as if they had identical
+  counter semantics
 
 ### Query Sampling Rule
 
@@ -217,6 +221,63 @@ That means:
 - they do not represent total cycle cost
 
 Do not compare instruction counts directly to management-call cycle charges.
+
+### Optional Execution-Cycle Estimates
+
+The default audit remains instruction-only, network-free, and catalog-free.
+
+Reports may add offline estimate decoration only when the runner is called
+with:
+
+```text
+bash scripts/ci/instruction-audit-report.sh \
+  --estimate-execution-cycles \
+  --estimate-node-count 13
+```
+
+or with an explicit rate:
+
+```text
+bash scripts/ci/instruction-audit-report.sh \
+  --estimate-execution-cycles \
+  --cycles-per-billion-instructions <cycles>
+```
+
+Estimate mode is opt-in. `--estimate-execution-cycles` must fail unless a node
+count or explicit rate is supplied, and estimate source flags must fail without
+`--estimate-execution-cycles`.
+
+When estimates are enabled, update rows may include an
+`execution_cycle_estimate` sibling object. The measured instruction fields stay
+present and unchanged. Query and composite-query rows must not be decorated as
+charged query costs.
+
+0.59 supports only these table-backed node-count assumptions:
+
+- `13` -> `1_000_000_000` cycles per billion instructions
+- `34` -> `2_615_384_615` cycles per billion instructions
+
+Unsupported node counts are rejected unless
+`--cycles-per-billion-instructions` is also supplied. An explicit rate wins
+over the node-count table and must be recorded with
+`rate_source = operator-explicit-rate`.
+
+Estimate artifacts must record:
+
+- `estimate_schema_version = 1`
+- `kind = per_instruction_component_only`
+- `charge_model = hypothetical_update_execution_component`
+- `counter_id = 1`
+- `cycles_per_billion_instructions`
+- `estimated_instruction_cycles`
+- `formula_version`
+- `rate_source`
+- `omitted_costs`
+
+Cycle estimate values and rates serialize as decimal strings. 0.59 estimate
+artifacts must not include NNS/catalog-derived fields such as
+`subnet_principal`, `registry_version`, `catalog_schema_version`,
+`resolver_backend`, `routing_range`, or `geographic_scope`.
 
 ### Freshness Rule
 
@@ -568,6 +629,11 @@ Runner command bundle:
 - `bash scripts/ci/instruction-audit-report.sh`
 - internally, the script runs:
   `cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture`
+
+Optional estimate runner examples:
+
+- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-node-count 13`
+- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --cycles-per-billion-instructions 1000000000`
 
 The report generator also scans checkpoint call sites under `crates/`. The
 definition still accepts additional targeted flow tests, but they must be

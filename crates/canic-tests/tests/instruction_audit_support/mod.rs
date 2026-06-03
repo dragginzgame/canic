@@ -44,10 +44,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod estimates;
 mod execution;
 mod report;
 mod scenarios;
 
+use estimates::{
+    ExecutionCycleEstimate, apply_execution_cycle_estimates, estimate_options_from_env,
+};
 use execution::run_scenario;
 use report::{
     checkpoint_coverage_gaps, scan_perf_callsites, verification_rows, write_endpoint_matrix_tsv,
@@ -55,7 +59,9 @@ use report::{
 };
 use scenarios::{audit_metadata, audit_paths, scenarios, workspace_root};
 
-const METHOD_TAG: &str = "Method V1";
+const METHOD_TAG: &str = "Method V2";
+const PERF_COUNTER_ID: u8 = 1;
+const PERF_COUNTER_SOURCE: &str = "performance_counter(1)";
 const PERF_PAGE_LIMIT: u64 = 512;
 const CHECKPOINT_SCAN_ROOTS: &[&str] = &["crates"];
 const AUDIT_TIME_PROBE: &str = "audit_time_probe";
@@ -149,6 +155,8 @@ struct CanonicalPerfRow {
     scenario_labels: Vec<String>,
     principal_scope: Option<String>,
     sample_origin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution_cycle_estimate: Option<ExecutionCycleEstimate>,
 }
 
 ///
@@ -215,6 +223,10 @@ struct CheckpointCoverageGap {
 #[derive(Serialize)]
 struct MethodArtifact {
     method_tag: String,
+    counter_id: u8,
+    counter_source: String,
+    measured_unit: String,
+    counter_semantics: String,
     normalization: String,
     freshness_rule: String,
     checkpoint_rule: String,
@@ -251,6 +263,8 @@ pub fn generate_instruction_footprint_report() {
     let workspace_root = workspace_root();
     let paths = audit_paths();
     let metadata = audit_metadata();
+    let estimate_options =
+        estimate_options_from_env().unwrap_or_else(|err| panic!("invalid estimate options: {err}"));
     let scenarios = scenarios();
     let checkpoint_sites = scan_perf_callsites(&workspace_root);
 
@@ -268,10 +282,12 @@ pub fn generate_instruction_footprint_report() {
 
     write_json(&scenario_manifest_path, &scenarios);
 
-    let results = scenarios
+    let mut results = scenarios
         .iter()
         .map(run_scenario)
         .collect::<Vec<ScenarioResult>>();
+    apply_execution_cycle_estimates(&mut results, estimate_options)
+        .unwrap_or_else(|err| panic!("failed to estimate execution cycles: {err}"));
     let perf_rows = results
         .iter()
         .map(|result| &result.row)
@@ -302,12 +318,7 @@ pub fn generate_instruction_footprint_report() {
     );
     write_verification_readout(&verification_path, &verification_rows);
 
-    let method = MethodArtifact {
-        method_tag: METHOD_TAG.to_string(),
-        normalization: "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only QueryPerfSample probe endpoints because query-side perf rows are not committed, so the probe returns the measured local instruction counter alongside the real query result.".to_string(),
-        freshness_rule: "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.".to_string(),
-        checkpoint_rule: "Checkpoint deltas are diffed from `MetricsKind::Runtime` perf rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation.".to_string(),
-    };
+    let method = method_artifact();
     write_json(&method_path, &method);
 
     let environment = EnvironmentArtifact {
@@ -343,4 +354,131 @@ pub fn generate_instruction_footprint_report() {
         &checkpoint_sites,
         &gaps,
     );
+}
+
+fn method_artifact() -> MethodArtifact {
+    MethodArtifact {
+        method_tag: METHOD_TAG.to_string(),
+        counter_id: PERF_COUNTER_ID,
+        counter_source: PERF_COUNTER_SOURCE.to_string(),
+        measured_unit: "local_instructions".to_string(),
+        counter_semantics: "Local WebAssembly instruction counter for the current call context; excludes other canisters and is not a cycle-charge measurement.".to_string(),
+        normalization: "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only QueryPerfSample probe endpoints because query-side perf rows are not committed, so the probe returns the measured local instruction counter alongside the real query result.".to_string(),
+        freshness_rule: "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.".to_string(),
+        checkpoint_rule: "Checkpoint deltas are diffed from `MetricsKind::Runtime` perf rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation.".to_string(),
+    }
+}
+
+fn sample_origin_for_transport_mode(transport_mode: &str) -> &'static str {
+    match transport_mode {
+        "query" => "query",
+        "composite_query" => "composite_query",
+        "update" => "update",
+        _ => "unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    fn sample_row() -> CanonicalPerfRow {
+        CanonicalPerfRow {
+            subject_kind: "endpoint".to_string(),
+            subject_label: "canic_env".to_string(),
+            count: 1,
+            total_local_instructions: 123,
+            avg_local_instructions: 123,
+            scenario_key: "app:canic_env:minimal-valid".to_string(),
+            scenario_labels: vec!["transport_mode=query".to_string()],
+            principal_scope: Some("anonymous".to_string()),
+            sample_origin: sample_origin_for_transport_mode("query").to_string(),
+            execution_cycle_estimate: None,
+        }
+    }
+
+    #[test]
+    fn instruction_row_json_keys_do_not_use_cycle_cost_words() {
+        let value = serde_json::to_value(sample_row()).expect("serialize canonical row");
+        let keys = json_key_paths(&value);
+
+        assert!(
+            keys.iter().any(|key| key == "total_local_instructions"),
+            "instruction total field should remain explicit"
+        );
+        assert!(
+            keys.iter().any(|key| key == "avg_local_instructions"),
+            "instruction average field should remain explicit"
+        );
+
+        for key in keys {
+            assert!(
+                !measured_instruction_forbidden_key(&key),
+                "measured instruction row key must not use cycle-cost wording: {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn method_artifact_records_counter_one_instruction_semantics() {
+        let artifact = serde_json::to_value(method_artifact()).expect("serialize method artifact");
+
+        assert_eq!(artifact["counter_id"], PERF_COUNTER_ID);
+        assert_eq!(artifact["counter_source"], PERF_COUNTER_SOURCE);
+        assert_eq!(artifact["measured_unit"], "local_instructions");
+    }
+
+    #[test]
+    fn sample_origin_preserves_message_kind_scope() {
+        assert_eq!(sample_origin_for_transport_mode("update"), "update");
+        assert_eq!(sample_origin_for_transport_mode("query"), "query");
+        assert_eq!(
+            sample_origin_for_transport_mode("composite_query"),
+            "composite_query"
+        );
+    }
+
+    fn json_key_paths(value: &Value) -> Vec<String> {
+        let mut keys = Vec::new();
+        collect_json_key_paths(value, "", &mut keys);
+        keys
+    }
+
+    fn collect_json_key_paths(value: &Value, prefix: &str, keys: &mut Vec<String>) {
+        match value {
+            Value::Object(map) => {
+                for (key, child) in map {
+                    let path = if prefix.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{prefix}.{key}")
+                    };
+                    keys.push(path.clone());
+                    collect_json_key_paths(child, &path, keys);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    collect_json_key_paths(item, prefix, keys);
+                }
+            }
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+        }
+    }
+
+    fn measured_instruction_forbidden_key(key: &str) -> bool {
+        FORBIDDEN_MEASURED_KEY_PARTS
+            .iter()
+            .any(|part| key.contains(part))
+    }
+
+    const FORBIDDEN_MEASURED_KEY_PARTS: &[&str] = &[
+        "cycle",
+        "cycles",
+        "burn",
+        "charged",
+        "cycle_cost",
+        "cycle_delta",
+    ];
 }

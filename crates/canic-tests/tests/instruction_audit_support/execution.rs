@@ -34,7 +34,12 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
         if scenario.transport_mode == "query" {
             let total = execute_query_perf_probe(&setup.pic, scenario, target_pid);
             let (count, total) = query_perf_counts(total);
-            (count, total, "derived".to_string(), Vec::new())
+            (
+                count,
+                total,
+                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
+                Vec::new(),
+            )
         } else {
             let before = perf_entries(&setup.pic, target_pid);
             execute_scenario(&setup, scenario, &prepared);
@@ -49,7 +54,7 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
             (
                 count,
                 total_instructions,
-                "derived".to_string(),
+                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
                 checkpoint_rows,
             )
         };
@@ -79,6 +84,7 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
             ],
             principal_scope: Some(scenario.caller_class.to_string()),
             sample_origin,
+            execution_cycle_estimate: None,
         },
         checkpoint_rows,
     }
@@ -105,7 +111,12 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
         if scenario.transport_mode == "query" {
             let total = execute_query_perf_probe(fixture.pic(), scenario, target_pid);
             let (count, total) = query_perf_counts(total);
-            (count, total, "derived".to_string(), Vec::new())
+            (
+                count,
+                total,
+                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
+                Vec::new(),
+            )
         } else {
             let before = perf_entries(fixture.pic(), target_pid);
             execute_standalone_scenario(fixture.pic(), scenario, target_pid);
@@ -120,7 +131,7 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
             (
                 count,
                 total_instructions,
-                "derived".to_string(),
+                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
                 checkpoint_rows,
             )
         };
@@ -150,6 +161,7 @@ fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
             ],
             principal_scope: Some(scenario.caller_class.to_string()),
             sample_origin,
+            execution_cycle_estimate: None,
         },
         checkpoint_rows,
     })
@@ -201,7 +213,8 @@ fn run_query_only_standalone_result(
                 format!("method_tag={METHOD_TAG}"),
             ],
             principal_scope: Some(scenario.caller_class.to_string()),
-            sample_origin: "derived".to_string(),
+            sample_origin: sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
+            execution_cycle_estimate: None,
         },
         checkpoint_rows: Vec::new(),
     }

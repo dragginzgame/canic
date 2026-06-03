@@ -216,15 +216,16 @@ where
 #[expect(clippy::format_push_string)]
 pub(super) fn write_endpoint_matrix_tsv(path: &Path, results: &[ScenarioResult]) {
     let mut out = String::from(
-        "canister\tendpoint_or_flow\tscenario_key\tcount\ttotal_local_instructions\tavg_local_instructions\n",
+        "canister\tendpoint_or_flow\tscenario_key\tsample_origin\tcount\ttotal_local_instructions\tavg_local_instructions\n",
     );
 
     for result in results {
         out.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             result.scenario.canister,
             result.scenario.endpoint_or_flow,
             result.scenario.key,
+            result.row.sample_origin,
             result.row.count,
             result.row.total_local_instructions,
             result.row.avg_local_instructions
@@ -307,6 +308,10 @@ pub(super) fn write_report(
         metadata.code_snapshot
     ));
     out.push_str(&format!("- Method tag/version: `{METHOD_TAG}`\n"));
+    out.push_str(&format!("- Counter source: `{PERF_COUNTER_SOURCE}`\n"));
+    out.push_str(&format!("- Counter ID: `{PERF_COUNTER_ID}`\n"));
+    out.push_str("- Measured unit: `local_instructions`\n");
+    out.push_str("- Counter scope: local canister WebAssembly instructions in the current call context; excludes other canisters and is not a cycle-charge measurement.\n");
     out.push_str("- Comparability status: `partial`\n");
     out.push_str("- Auditor: `codex`\n");
     out.push_str(&format!(
@@ -382,9 +387,18 @@ pub(super) fn write_report(
         out.push_str("- Baseline drift values are `N/A` until a prior comparable run exists.\n\n");
     }
 
+    out.push_str("## Counter Semantics\n\n");
+    out.push_str(&format!(
+        "- Measured rows use `{PERF_COUNTER_SOURCE}` and store local instruction counts, not cycle charges.\n"
+    ));
+    out.push_str("- Update rows and query rows preserve `sample_origin`; do not compare replicated update samples, ordinary query probe samples, and future composite-query samples as if they had identical counter scope.\n");
+    out.push_str("- The audit intentionally omits message base fees, payload bytes, storage/reservation charges, management-call fees, callee instructions, and garbage collection.\n\n");
+
+    write_estimate_section(&mut out, results);
+
     out.push_str("## Endpoint Matrix\n\n");
-    out.push_str("| Canister | Endpoint | Scenario | Count | Total local instructions | Avg local instructions | Baseline delta | Notes |\n");
-    out.push_str("| --- | --- | --- | ---: | ---: | ---: | --- | --- |\n");
+    out.push_str("| Canister | Endpoint | Scenario | Sample origin | Count | Total local instructions | Avg local instructions | Baseline delta | Notes |\n");
+    out.push_str("| --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |\n");
     for result in results {
         let notes = if execution::query_perf_is_unobservable(&result.scenario, &result.row) {
             "probe failed to return a local instruction counter"
@@ -395,10 +409,11 @@ pub(super) fn write_report(
         };
         let baseline_delta = render_baseline_delta(baseline_rows.as_ref(), &result.row);
         out.push_str(&format!(
-            "| `{}` | `{}` | `{}` | {} | {} | {} | {} | {} |\n",
+            "| `{}` | `{}` | `{}` | `{}` | {} | {} | {} | {} | {} |\n",
             result.scenario.canister,
             result.scenario.endpoint_or_flow,
             result.scenario.arg_class,
+            result.row.sample_origin,
             result.row.count,
             result.row.total_local_instructions,
             result.row.avg_local_instructions,
@@ -605,6 +620,42 @@ pub(super) fn write_report(
     ));
 
     fs::write(path, out).expect("write instruction audit report");
+}
+
+#[expect(clippy::format_push_string)]
+fn write_estimate_section(out: &mut String, results: &[ScenarioResult]) {
+    let estimated_rows = results
+        .iter()
+        .filter_map(|result| {
+            result
+                .row
+                .execution_cycle_estimate
+                .as_ref()
+                .map(|estimate| (result, estimate))
+        })
+        .collect::<Vec<_>>();
+    if estimated_rows.is_empty() {
+        return;
+    }
+
+    out.push_str("## Execution Cycle Estimate\n\n");
+    out.push_str(
+        "Execution cycle estimate (instructions only, excludes message/byte/GC/platform fees).\n\n",
+    );
+    out.push_str("| Scenario | Local instructions | Estimated instruction cycles | Cycles per billion instructions | Source | Formula |\n");
+    out.push_str("| --- | ---: | ---: | ---: | --- | --- |\n");
+    for (result, estimate) in estimated_rows {
+        out.push_str(&format!(
+            "| `{}` | {} | {} | {} | `{}` | `{}` |\n",
+            result.scenario.key,
+            estimate.local_instructions,
+            estimate.estimated_instruction_cycles,
+            estimate.cycles_per_billion_instructions,
+            estimate.rate_source,
+            estimate.formula_version
+        ));
+    }
+    out.push('\n');
 }
 
 // Render one stable, backtick-quoted scope list for the report preamble.
