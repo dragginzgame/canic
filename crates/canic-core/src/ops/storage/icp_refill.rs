@@ -84,6 +84,11 @@ impl IcpRefillRecordOps {
             .collect()
     }
 
+    #[must_use]
+    pub fn nat_to_u128_saturating(value: &Nat) -> u128 {
+        u128::try_from(value.0.clone()).unwrap_or(u128::MAX)
+    }
+
     pub fn find_by_operation_id(operation_id: [u8; 32]) -> Option<IcpRefillRecord> {
         Self::records()
             .into_iter()

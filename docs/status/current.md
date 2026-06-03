@@ -9,12 +9,18 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Active maintainer-directed slice: `0.58.13` release-changelog prep for
-  ICP-refill grant ledger reuse. The follow-up records successful registered
-  direct-child ICP refills into the existing cycles-funding grant ledger after
-  CMC `notify_top_up` completes, making budget/cooldown accounting observe
-  completed direct-child refill grants without adding a refill-specific grant
-  store, changing refill records, or changing endpoint/CLI shape.
+- Active maintainer-directed slice: post-`0.58.13` cleanup for `0.58.14`.
+  The current follow-up centralizes ICP-refill completed-cycle `Nat` saturation
+  in storage ops, reuses one direct-child refill parent check in workflow, and
+  shares cycles-timer in-flight guard helpers between child top-up and hub
+  ICP self-refill. Refill metrics, grant-ledger reuse, and top-up scheduling
+  now share the same deterministic helper shapes without changing refill
+  records, endpoints, CLI, metrics labels, or funding semantics.
+- `0.58.13` recorded successful registered direct-child ICP refills into the
+  existing cycles-funding grant ledger after CMC `notify_top_up` completes,
+  making budget/cooldown accounting observe completed direct-child refill
+  grants without adding a refill-specific grant store, changing refill records,
+  or changing endpoint/CLI shape.
 - `0.58.12` wired existing cycles-funding hooks into pure ICP-refill policy
   evaluation. Manual and hub self-refill requests deny with
   `CyclesFundingDisabled` while funding is disabled, and registered direct-child

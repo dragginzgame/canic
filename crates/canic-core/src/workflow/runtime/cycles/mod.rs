@@ -17,7 +17,7 @@ use crate::{
         runtime::timer::TimerWorkflow,
     },
 };
-use std::{cell::RefCell, time::Duration};
+use std::{cell::RefCell, thread::LocalKey, time::Duration};
 
 thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
@@ -184,14 +184,7 @@ impl CycleTrackerWorkflow {
             return false;
         }
 
-        let should_refill = ICP_REFILL_IN_FLIGHT.with_borrow_mut(|in_flight| {
-            if *in_flight {
-                false
-            } else {
-                *in_flight = true;
-                true
-            }
-        });
+        let should_refill = mark_in_flight(&ICP_REFILL_IN_FLIGHT);
 
         if !should_refill {
             CyclesTopupMetrics::record_request_in_flight();
@@ -202,9 +195,7 @@ impl CycleTrackerWorkflow {
         IcOps::spawn(async move {
             let result = IcpRefillWorkflow::execute_hub_self_refill(cycles.clone()).await;
 
-            ICP_REFILL_IN_FLIGHT.with_borrow_mut(|in_flight| {
-                *in_flight = false;
-            });
+            clear_in_flight(&ICP_REFILL_IN_FLIGHT);
 
             match result {
                 Ok(response) if response.status == IcpRefillStatus::Completed => {
@@ -257,14 +248,7 @@ impl CycleTrackerWorkflow {
             return;
         };
 
-        let should_request = TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
-            if *in_flight {
-                false
-            } else {
-                *in_flight = true;
-                true
-            }
-        });
+        let should_request = mark_in_flight(&TOPUP_IN_FLIGHT);
 
         if !should_request {
             CyclesTopupMetrics::record_request_in_flight();
@@ -277,9 +261,7 @@ impl CycleTrackerWorkflow {
         IcOps::spawn(async move {
             let result = RequestOps::request_cycles(requested_cycles.to_u128()).await;
 
-            TOPUP_IN_FLIGHT.with_borrow_mut(|in_flight| {
-                *in_flight = false;
-            });
+            clear_in_flight(&TOPUP_IN_FLIGHT);
 
             match result {
                 Ok(res) => {
@@ -329,4 +311,21 @@ impl CycleTrackerWorkflow {
 
         purged > 0
     }
+}
+
+fn mark_in_flight(flag: &'static LocalKey<RefCell<bool>>) -> bool {
+    flag.with_borrow_mut(|in_flight| {
+        if *in_flight {
+            false
+        } else {
+            *in_flight = true;
+            true
+        }
+    })
+}
+
+fn clear_in_flight(flag: &'static LocalKey<RefCell<bool>>) {
+    flag.with_borrow_mut(|in_flight| {
+        *in_flight = false;
+    });
 }

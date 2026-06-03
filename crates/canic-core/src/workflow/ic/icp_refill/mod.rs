@@ -17,7 +17,7 @@ use crate::{
         IcpRefillDryRun, IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest, IcpRefillResponse,
         IcpRefillStatus,
     },
-    ids::BuildNetwork,
+    ids::{BuildNetwork, CanisterRole},
     infra::ic::icp_refill::{IcpRefillCanisterOverrides, NotifyTopUpArg, NotifyTopUpError},
     ops::{
         config::ConfigOps,
@@ -576,10 +576,7 @@ const fn policy_input(
 }
 
 fn funding_cooldown_retry_after_secs(request: &IcpRefillRequest, now_secs: u64) -> Option<u64> {
-    let (role, parent_pid) = CanisterChildrenOps::role_parent(request.target_canister)?;
-    if parent_pid != Some(request.source_canister) {
-        return None;
-    }
+    let role = direct_child_refill_role(request.target_canister, request.source_canister)?;
 
     cycles_funding::policy_for_child_role(&role).cooldown_retry_after_secs(
         CyclesFundingLedgerOps::snapshot(request.target_canister),
@@ -591,7 +588,8 @@ fn record_direct_child_refill_grant(record: &IcpRefillRecord, now_secs: u64) {
     let Some(cycles_sent) = record.cycles_sent.as_ref() else {
         return;
     };
-    let Some((_role, parent_pid)) = CanisterChildrenOps::role_parent(record.target_canister) else {
+    let Some((_child_role, parent_pid)) = CanisterChildrenOps::role_parent(record.target_canister)
+    else {
         return;
     };
     let Some((child, cycles)) = direct_child_refill_grant(record, cycles_sent, parent_pid) else {
@@ -606,14 +604,33 @@ fn direct_child_refill_grant(
     cycles_sent: &Nat,
     parent_pid: Option<Principal>,
 ) -> Option<(Principal, u128)> {
-    if parent_pid != Some(record.source_canister) {
+    if !direct_child_refill_parent_matches(parent_pid, record.source_canister) {
         return None;
     }
 
     Some((
         record.target_canister,
-        u128::try_from(cycles_sent.0.clone()).unwrap_or(u128::MAX),
+        IcpRefillRecordOps::nat_to_u128_saturating(cycles_sent),
     ))
+}
+
+fn direct_child_refill_role(
+    target_canister: Principal,
+    source_canister: Principal,
+) -> Option<CanisterRole> {
+    let (role, parent_pid) = CanisterChildrenOps::role_parent(target_canister)?;
+    if direct_child_refill_parent_matches(parent_pid, source_canister) {
+        Some(role)
+    } else {
+        None
+    }
+}
+
+fn direct_child_refill_parent_matches(
+    parent_pid: Option<Principal>,
+    source_canister: Principal,
+) -> bool {
+    parent_pid == Some(source_canister)
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {

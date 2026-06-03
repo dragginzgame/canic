@@ -48,7 +48,7 @@ pub(super) fn entries_from_records(records: &[IcpRefillRecord]) -> Vec<MetricEnt
             saturating_add_principal_value(
                 &mut cycles_by_target,
                 record.target_canister,
-                nat_to_u128_saturating(cycles_sent),
+                IcpRefillRecordOps::nat_to_u128_saturating(cycles_sent),
             );
         }
     }
@@ -132,10 +132,6 @@ fn saturating_add_principal_value(
 ) {
     let entry = totals.entry(principal).or_default();
     *entry = entry.saturating_add(value);
-}
-
-fn nat_to_u128_saturating(value: &crate::cdk::candid::Nat) -> u128 {
-    u128::try_from(value.0.clone()).unwrap_or(u128::MAX)
 }
 
 const fn record_phase(record: &IcpRefillRecord) -> &'static str {

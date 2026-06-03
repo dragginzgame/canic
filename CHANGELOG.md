@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Centralized ICP-refill completed-cycle saturation, direct-child refill parent
+  checks, and cycles-timer in-flight guard helpers so metrics, grant-ledger
+  reuse, and top-up scheduling share the same deterministic helper shape.
+
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
