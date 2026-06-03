@@ -1,4 +1,4 @@
-use crate::{cli::help::print_help_or_version, cycles, list, version_text};
+use crate::{cli::help::print_help_or_version, cycles, info_env, list, version_text};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -10,11 +10,13 @@ Usage: canic info <command> [OPTIONS]
 Commands:
   list     List installed deployment canisters
   cycles   Summarize deployment cycle history
+  env      Print sourceable canister ID exports
   help     Print this message or the help of the given subcommand(s)
 
 Examples:
   canic info list test --subtree scale_hub
-  canic info cycles test --subtree scale_hub";
+  canic info cycles test --subtree scale_hub
+  canic info env test";
 
 ///
 /// InfoCommandError
@@ -30,6 +32,9 @@ pub enum InfoCommandError {
 
     #[error("cycles: {0}")]
     Cycles(#[from] cycles::CyclesCommandError),
+
+    #[error("env: {0}")]
+    Env(#[from] info_env::InfoEnvCommandError),
 }
 
 /// Run the installed-deployment information command group.
@@ -48,6 +53,7 @@ where
     match command.to_str() {
         Some("list") => list::run_info(tail.iter().cloned()).map_err(InfoCommandError::from),
         Some("cycles") => cycles::run_info(tail.iter().cloned()).map_err(InfoCommandError::from),
+        Some("env") => info_env::run(tail.iter().cloned()).map_err(InfoCommandError::from),
         Some("help" | "--help" | "-h") => {
             println!("{}", usage());
             Ok(())

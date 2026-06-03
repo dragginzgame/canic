@@ -77,11 +77,16 @@ canic status
 canic replica start --background
 canic install --profile fast test
 canic info list test
+canic info env test
+canic medic test
 ```
 
 Useful next reads:
 
 * [INSTALLING.md](INSTALLING.md) - end-to-end installation and local operation.
+* [docs/getting-started/local-academic-fleet.md](docs/getting-started/local-academic-fleet.md)
+  - local named-target runbook for Canic, raw `icp`, sharding, metrics, and
+  install/upgrade traps.
 * [docs/architecture/v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md)
   - compact pre-v1 build, evidence, policy, and catalog flow.
 * [docs/architecture/v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md)

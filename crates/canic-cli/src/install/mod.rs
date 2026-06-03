@@ -20,6 +20,10 @@ Examples:
   canic install --profile fast test
 
 canic install uses fleets/<fleet>/canic.toml.
+Use it for fresh local creation or recreating local state after the ICP CLI
+replica lost canisters. For an existing canister that only needs new Wasm,
+inspect with canic info list and canic medic, then use the project upgrade
+flow.
 
 The selected canic.toml must include:
   [fleet]
@@ -36,6 +40,12 @@ pub enum InstallCommandError {
 
     #[error(transparent)]
     Install(#[from] Box<dyn std::error::Error>),
+
+    #[error("{source}\n\nHint: {hint}")]
+    InstallHint {
+        source: Box<dyn std::error::Error>,
+        hint: String,
+    },
 }
 
 ///
@@ -137,9 +147,11 @@ where
     }
 
     let options = InstallOptions::parse(args)?;
+    let fleet = options.fleet.clone();
+    let network = options.network.clone();
     let icp_root = resolve_current_canic_icp_root().ok();
     install_root(options.into_install_root_options_with_icp_root(icp_root))
-        .map_err(InstallCommandError::from)
+        .map_err(|err| install_error_with_context(err, &fleet, &network))
 }
 
 fn default_fleet_config_path(fleet: &str) -> String {
@@ -161,6 +173,33 @@ fn parse_profile(value: &str) -> Result<CanisterBuildProfile, InstallCommandErro
             usage()
         ))),
     }
+}
+
+fn install_error_with_context(
+    err: Box<dyn std::error::Error>,
+    fleet: &str,
+    network: &str,
+) -> InstallCommandError {
+    if install_error_needs_existing_deployment_hint(&err.to_string()) {
+        return InstallCommandError::InstallHint {
+            source: err,
+            hint: format!(
+                "If this deployment or canister already exists, run `canic --network {network} info list {fleet}` and `canic --network {network} medic {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
+            ),
+        };
+    }
+
+    InstallCommandError::Install(err)
+}
+
+fn install_error_needs_existing_deployment_hint(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("blocked install")
+        || lower.contains("preflight blocked")
+        || (lower.contains("already")
+            && (lower.contains("install")
+                || lower.contains("installed")
+                || lower.contains("canister")))
 }
 
 #[cfg(test)]

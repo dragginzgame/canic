@@ -15,6 +15,13 @@ use canic_host::{
 };
 use std::{path::PathBuf, sync::Arc, thread};
 
+const METRICS_UNAVAILABLE_HINT: &str =
+    "canic_metrics unavailable; check deployed Wasm and metrics profile";
+const METRICS_EMPTY_HINT: &str =
+    "no metrics rows; check whether this tier is enabled by the deployed role profile";
+const METRICS_NONZERO_EMPTY_HINT: &str =
+    "no nonzero metrics rows; rerun without --nonzero or check the deployed role profile";
+
 pub(super) fn metrics_report(
     options: &MetricsOptions,
 ) -> Result<MetricsReport, MetricsCommandError> {
@@ -78,6 +85,9 @@ fn metrics_canister_report(
             if options.nonzero {
                 entries.retain(|entry| !metric_value_is_zero(&entry.value));
             }
+            if entries.is_empty() {
+                return metrics_empty_report(entry, options.nonzero);
+            }
             MetricsCanisterReport {
                 role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
                 canister_id: entry.pid.clone(),
@@ -90,9 +100,26 @@ fn metrics_canister_report(
     }
 }
 
+fn metrics_empty_report(entry: &RegistryEntry, nonzero: bool) -> MetricsCanisterReport {
+    MetricsCanisterReport {
+        role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
+        canister_id: entry.pid.clone(),
+        status: "empty".to_string(),
+        entries: Vec::new(),
+        error: Some(
+            if nonzero {
+                METRICS_NONZERO_EMPTY_HINT
+            } else {
+                METRICS_EMPTY_HINT
+            }
+            .to_string(),
+        ),
+    }
+}
+
 fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
     let (status, error) = if error.contains("has no query method 'canic_metrics'") {
-        ("unavailable", "canic_metrics unavailable")
+        ("unavailable", METRICS_UNAVAILABLE_HINT)
     } else {
         ("error", error.lines().next().unwrap_or(error))
     };
@@ -190,23 +217,39 @@ fn metrics_installed_deployment_error(error: InstalledDeploymentError) -> Metric
 mod tests {
     use super::*;
 
-    // Ensure method-missing responses do not stretch the table with raw ICP output.
-    #[test]
-    fn shortens_metrics_unavailable_errors() {
-        let entry = RegistryEntry {
+    fn registry_entry() -> RegistryEntry {
+        RegistryEntry {
             pid: "aaaaa-aa".to_string(),
             role: Some("wasm_store".to_string()),
             kind: Some("wasm_store".to_string()),
             parent_pid: None,
             module_hash: None,
-        };
+        }
+    }
+
+    // Ensure method-missing responses do not stretch the table with raw ICP output.
+    #[test]
+    fn shortens_metrics_unavailable_errors() {
         let report = metrics_error_report(
-            &entry,
+            &registry_entry(),
             "icp command failed\nCanister has no query method 'canic_metrics'.",
         );
 
         assert_eq!(report.status, "unavailable");
-        assert_eq!(report.error.as_deref(), Some("canic_metrics unavailable"));
+        assert_eq!(report.error.as_deref(), Some(METRICS_UNAVAILABLE_HINT));
+    }
+
+    // Ensure empty successful metric tiers point operators at profile/deployed-Wasm checks.
+    #[test]
+    fn empty_metrics_reports_carry_profile_hint() {
+        let report = metrics_empty_report(&registry_entry(), false);
+
+        assert_eq!(report.status, "empty");
+        assert_eq!(report.error.as_deref(), Some(METRICS_EMPTY_HINT));
+
+        let filtered = metrics_empty_report(&registry_entry(), true);
+        assert_eq!(filtered.status, "empty");
+        assert_eq!(filtered.error.as_deref(), Some(METRICS_NONZERO_EMPTY_HINT));
     }
 
     // Ensure zero filtering treats every payload shape consistently.

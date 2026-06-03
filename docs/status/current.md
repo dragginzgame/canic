@@ -9,6 +9,27 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- Active maintainer-directed slice: pause the `0.58.x` ICP-refill work long
+  enough to action downstream Canic adoption feedback from the `canic-test`
+  build. The first follow-up adds:
+  ```text
+  docs/getting-started/local-academic-fleet.md
+  .cursor/skills/canic-academic/SKILL.md
+  ```
+  and promotes `canic info list` / `canic medic` plus target hygiene,
+  `CANIC_ROOT`-style canister ID naming, sourced shell helper rules, sharded
+  internal-call shape, metrics stale/deployed checks, and install-versus-upgrade
+  guidance into the README/install surfaces. The CLI help/diagnostic side now
+  also adds `canic info env <deployment>` for sourceable `CANIC_<ROLE>`
+  canister ID exports, nudges `canic install` users toward the project upgrade
+  flow for already-installed canisters, adds a blocked-install hint that points
+  at `info list` / `medic` and the project upgrade flow, and makes missing or
+  empty `canic_metrics` output point at deployed Wasm / metrics profile checks.
+  Protected internal-call validation now includes accepted caller roles and the
+  explicit generated-client call shape, which addresses hub-to-shard role
+  mismatch traps without changing the transport. The access contract now has a
+  protected internal-call recipe section for generated clients, lower-level
+  `CanicInternalClient`, and raw `icp` public-endpoint calls.
 - Current minor: `0.58.x` ICP-to-cycles refill primitive. `0.58.0` starts
   the line with:
   ```text

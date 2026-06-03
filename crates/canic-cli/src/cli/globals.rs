@@ -153,7 +153,7 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
     matches!(
         tail.first().and_then(|arg| arg.to_str()),
-        Some("cycles" | "list")
+        Some("cycles" | "env" | "list")
     )
 }
 

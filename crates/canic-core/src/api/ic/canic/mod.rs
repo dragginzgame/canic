@@ -128,8 +128,9 @@ impl CanicInternalClient {
     {
         if !endpoint.accepts_role(&caller_role) {
             return Err(Error::invalid(format!(
-                "caller role '{caller_role}' is not accepted by protected internal endpoint '{}'",
-                endpoint.method()
+                "caller role '{caller_role}' is not accepted by protected internal endpoint '{}'; accepted caller roles: [{}]. Use the generated endpoint descriptor with call_update(..., accepted_role, args).",
+                endpoint.method(),
+                endpoint.accepted_roles_label()
             )));
         }
 

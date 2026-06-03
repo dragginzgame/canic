@@ -56,6 +56,15 @@ impl ProtectedInternalEndpoint {
     }
 
     #[must_use]
+    pub fn accepted_roles_label(&self) -> String {
+        self.accepted_roles
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    #[must_use]
     pub fn accepts_role(&self, role: &CanisterRole) -> bool {
         self.accepted_roles.iter().any(|accepted| accepted == role)
     }
@@ -71,9 +80,10 @@ impl ProtectedInternalEndpoint {
     pub fn required_single_role(&self) -> Result<CanisterRole, Error> {
         self.single_role().cloned().ok_or_else(|| {
             Error::invalid(format!(
-                "protected internal endpoint '{}' accepts {} roles; choose a caller role explicitly",
+                "protected internal endpoint '{}' accepts {} roles [{}]; choose a caller role explicitly with call_update(..., caller_role, args)",
                 self.method(),
-                self.accepted_roles.len()
+                self.accepted_roles.len(),
+                self.accepted_roles_label()
             ))
         })
     }

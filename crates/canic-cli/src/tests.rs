@@ -105,6 +105,7 @@ fn command_family_help_returns_ok() {
         &["info", "help"],
         &["info", "list", "help"],
         &["info", "cycles", "help"],
+        &["info", "env", "help"],
         &["endpoints", "help"],
         &["evidence", "help"],
         &["evidence", "compare", "help"],
@@ -176,6 +177,7 @@ fn info_help_uses_deployment_target_wording() {
 
     assert!(text.contains("installed-deployment information commands"));
     assert!(text.contains("List installed deployment canisters"));
+    assert!(text.contains("Print sourceable canister ID exports"));
     assert!(!text.contains("deployed-fleet"));
     assert!(!text.contains("deployed fleet"));
 }
@@ -222,23 +224,6 @@ fn version_flags_return_ok() {
     );
     assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("info"),
-            OsString::from("list"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
-    assert!(
-        run([
-            OsString::from("info"),
-            OsString::from("cycles"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
     assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
@@ -289,6 +274,21 @@ fn version_flags_return_ok() {
         ])
         .is_ok()
     );
+}
+
+#[test]
+fn info_version_flags_return_ok() {
+    assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
+    for leaf in ["list", "cycles", "env"] {
+        assert!(
+            run([
+                OsString::from("info"),
+                OsString::from(leaf),
+                OsString::from("--version")
+            ])
+            .is_ok()
+        );
+    }
 }
 
 #[test]
@@ -434,10 +434,12 @@ fn global_icp_is_forwarded_only_to_replica_leaf_commands() {
 fn global_icp_is_forwarded_to_info_query_commands() {
     let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
+    let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("help")];
 
     apply_global_icp("info", &mut list_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut cycles_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("info", &mut env_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut help_tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
@@ -453,6 +455,15 @@ fn global_icp_is_forwarded_to_info_query_commands() {
         cycles_tail,
         vec![
             OsString::from("cycles"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        env_tail,
+        vec![
+            OsString::from("env"),
             OsString::from("test"),
             OsString::from(INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp")
@@ -704,10 +715,12 @@ fn global_network_is_forwarded_only_to_fleet_list() {
 fn global_network_is_forwarded_to_info_query_commands() {
     let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
+    let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("help")];
 
     apply_global_network("info", &mut list_tail, Some("local".to_string()));
     apply_global_network("info", &mut cycles_tail, Some("local".to_string()));
+    apply_global_network("info", &mut env_tail, Some("local".to_string()));
     apply_global_network("info", &mut help_tail, Some("local".to_string()));
 
     assert_eq!(
@@ -723,6 +736,15 @@ fn global_network_is_forwarded_to_info_query_commands() {
         cycles_tail,
         vec![
             OsString::from("cycles"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local")
+        ]
+    );
+    assert_eq!(
+        env_tail,
+        vec![
+            OsString::from("env"),
             OsString::from("test"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("local")

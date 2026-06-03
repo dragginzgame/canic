@@ -71,6 +71,90 @@ separate policy family.
 - Subnet-registry caller predicates are internal-only endpoint rules. Public
   user ingress should use `auth::authenticated(...)`.
 
+## Protected Internal Call Recipes
+
+For hub-to-shard or parent-to-child calls, prefer a generated internal client
+bound to the protected endpoint descriptor. The target endpoint declares the
+accepted caller role:
+
+```rust
+use canic::cdk::types::Principal;
+
+#[canic::canic_update(
+    internal,
+    name = "wire_assign_project",
+    requires(caller::has_role("project_hub"))
+)]
+async fn assign_project(user_id: Principal, project_id: Principal) -> Result<(), canic::Error> {
+    Ok(())
+}
+```
+
+The endpoint macro emits `canic_internal_endpoint_assign_project()`. The caller
+can use that descriptor with `canic_internal_client!`:
+
+```rust
+canic::canic_internal_client! {
+    pub struct ProjectHubInternalClient {
+        fn assign_project = canic_internal_endpoint_assign_project; (
+            user_id: Principal,
+            project_id: Principal,
+        ) -> ();
+    }
+}
+
+let client = ProjectHubInternalClient::new(shard_pid);
+client.assign_project(user_id, project_id).await?;
+```
+
+If the endpoint accepts multiple caller roles, choose the role explicitly in the
+client method declaration:
+
+```rust
+use canic::api::canister::CanisterRole;
+
+canic::canic_internal_client! {
+    pub struct ProjectHubInternalClient {
+        fn admin_repair = shared_multi_role_project_endpoint,
+            role = CanisterRole::new("admin_hub"); (
+            project_id: Principal,
+        ) -> ();
+    }
+}
+```
+
+For a one-off lower-level call, still pass the generated descriptor and the
+parent/hub caller role explicitly:
+
+```rust
+use canic::{
+    api::{canister::CanisterRole, ic::CanicInternalClient},
+    cdk::types::Principal,
+};
+
+let response: MyResponse = CanicInternalClient::new(shard_pid)
+    .call_update_result(
+        &canic_internal_endpoint_assign_project(),
+        CanisterRole::new("project_hub"),
+        (user_id, project_id),
+    )
+    .await?;
+```
+
+The third argument is a Candid argument tuple. Use `(arg,)` for one argument and
+`(a, b)` for two arguments.
+
+Raw `icp canister call` commands must call public, non-internal application
+endpoints. A raw call to a protected internal endpoint with the original Candid
+arguments is malformed because the protected wrapper expects Canic's internal
+envelope and proof. For external scripts, expose a public endpoint and call it
+with ordinary Candid:
+
+```bash
+env -u ICP_NETWORK icp canister call <shard> public_assign_project \
+  '(principal "<user>", principal "<project>")' -e academic
+```
+
 ## Error Boundary
 
 - Access predicates return `Result<_, AccessError>`.

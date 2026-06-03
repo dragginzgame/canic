@@ -218,6 +218,8 @@ canic status
 canic replica start --background
 canic install --profile fast test
 canic info list test
+canic info env test
+canic medic test
 ```
 
 Build one artifact without installing:
@@ -246,6 +248,13 @@ For build profiles, split workspace/ICP roots, custom canister roots, role
 metadata, and lower-level build/install commands, see
 [`crates/canic-host/README.md`](crates/canic-host/README.md).
 
+For downstream projects that use a named local ICP CLI target such as
+`academic`, use
+[`docs/getting-started/local-academic-fleet.md`](docs/getting-started/local-academic-fleet.md)
+for the short runbook on `canic --network ...`, raw `icp` target hygiene,
+`canic info env` / `CANIC_ROOT`-style canister ID variables, sourced shell
+helpers, sharded calls, metrics checks, and install versus upgrade decisions.
+
 ## Fleet Management
 
 Use `canic fleet list` to list config-defined fleets. Use
@@ -267,6 +276,12 @@ does not look right:
 ```bash
 canic medic test
 ```
+
+Use `canic info list <deployment>`, `canic info env <deployment>`, and
+`canic medic <deployment>` before changing fleet topology when local state
+looks wrong. `info list` shows the deployed root registry, `info env` prints
+sourceable `CANIC_<ROLE>` canister ID exports, and `fleet config` shows
+configured intent.
 
 Named-fleet commands default to the local ICP CLI environment. Pass top-level
 `--network <name>` for one command against another configured ICP CLI

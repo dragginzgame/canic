@@ -96,11 +96,14 @@ Show local test-fleet canisters that already have ids:
 
 ```bash
 canic --network local info list test
+canic --network local info env test
 ```
 
 `canic info list <name>` reads the installed root registry for that fleet.
 Use `--subtree <name-or-principal>` to print one subtree with that node as the
 rendered root.
+`canic info env <name>` prints sourceable `CANIC_<ROLE>` canister ID exports
+for scripts and local shell helpers.
 Live list sources call `canic_ready` for each listed canister and include a
 `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance column.
 
@@ -170,6 +173,12 @@ readiness:
 ```bash
 canic medic test
 ```
+
+For downstream projects that combine Canic commands with raw `icp` calls on a
+named local target such as `academic`, use the
+[local academic fleet runbook](../../docs/getting-started/local-academic-fleet.md).
+It covers target selection, canister ID helper naming, sourced shell helpers,
+sharded calls, metrics checks, and install versus upgrade decisions.
 
 Run command-specific help when you need exact flags:
 

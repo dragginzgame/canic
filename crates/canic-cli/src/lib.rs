@@ -8,6 +8,7 @@ mod evidence;
 mod evidence_support;
 mod fleets;
 mod info;
+mod info_env;
 mod install;
 mod list;
 mod medic;

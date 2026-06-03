@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.58.md](docs/changelog/0.58.md)
 
+- `0.58.9` turns downstream adoption feedback into a local academic fleet
+  runbook, project skill, sourceable canister ID exports, and sharper
+  install, metrics, and protected internal-call diagnostics.
+
 - `0.58.8` splits the endpoint macro pipeline into focused directory modules
   and moves access-plan synthesis into its own expansion submodule without
   changing macro behavior.

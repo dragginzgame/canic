@@ -120,6 +120,7 @@ fn install_requires_fleet_argument() {
 #[test]
 fn install_usage_explains_fleet_config() {
     let text = usage();
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     assert!(text.contains("Install and bootstrap a Canic fleet"));
     assert!(text.contains("Usage: canic install <fleet>"));
@@ -132,6 +133,32 @@ fn install_usage_explains_fleet_config() {
     assert!(!text.contains("--root-build-target"));
     assert!(!text.contains("--network"));
     assert!(text.contains("--profile"));
+    assert!(normalized.contains("fresh local creation"));
+    assert!(normalized.contains("project upgrade flow"));
     assert!(text.contains("[fleet]"));
     assert!(text.contains("name = \"test\""));
+}
+
+// Ensure existing-deployment install failures point at diagnostics and upgrade flow.
+#[test]
+fn install_existing_deployment_errors_get_action_hint() {
+    let err = install_error_with_context(
+        Box::new(std::io::Error::other("canister already has installed code")),
+        "demo",
+        "academic",
+    );
+    let message = err.to_string();
+
+    assert!(message.contains("canic --network academic info list demo"));
+    assert!(message.contains("canic --network academic medic demo"));
+    assert!(message.contains("project upgrade flow"));
+
+    std::assert_matches!(
+        install_error_with_context(
+            Box::new(std::io::Error::other("failed to read config")),
+            "demo",
+            "academic",
+        ),
+        InstallCommandError::Install(_)
+    );
 }

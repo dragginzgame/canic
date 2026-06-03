@@ -150,6 +150,7 @@ fn protected_internal_endpoint_descriptor_matches_roles() {
     );
 
     assert_eq!(endpoint.method(), "system_add_project_to_user");
+    assert_eq!(endpoint.accepted_roles_label(), "project_hub, admin_hub");
     assert!(endpoint.accepts_role(&CanisterRole::new("project_hub")));
     assert!(endpoint.accepts_role(&CanisterRole::new("admin_hub")));
     assert!(!endpoint.accepts_role(&CanisterRole::new("user_hub")));
@@ -187,6 +188,8 @@ fn protected_internal_endpoint_requires_explicit_role_when_ambiguous() {
         .required_single_role()
         .expect_err("multi-role endpoint should require explicit caller role");
     assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("project_hub, admin_hub"));
+    assert!(err.message.contains("call_update(..., caller_role, args)"));
 }
 
 #[test]
@@ -274,7 +277,14 @@ fn internal_client_rejects_unaccepted_explicit_role_locally() {
     ));
 
     match result {
-        Err(err) => assert_eq!(err.code, ErrorCode::InvalidInput),
+        Err(err) => {
+            assert_eq!(err.code, ErrorCode::InvalidInput);
+            assert!(err.message.contains("accepted caller roles: [project_hub]"));
+            assert!(
+                err.message
+                    .contains("call_update(..., accepted_role, args)")
+            );
+        }
         Ok(_) => panic!("unaccepted caller role should fail before transport"),
     }
 }
