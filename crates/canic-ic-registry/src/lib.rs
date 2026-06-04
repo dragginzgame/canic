@@ -1233,32 +1233,32 @@ mod tests {
             fetched_by: "test".to_string(),
         };
         let provider = Principal::self_authenticating(b"provider").to_text();
-        let operator_a = Principal::self_authenticating(b"operator-a").to_text();
-        let operator_b = Principal::self_authenticating(b"operator-b").to_text();
+        let primary_operator = Principal::self_authenticating(b"operator-a").to_text();
+        let secondary_operator = Principal::self_authenticating(b"operator-b").to_text();
         let node_a = Principal::self_authenticating(b"node-a").to_text();
         let node_b = Principal::self_authenticating(b"node-b").to_text();
         let node_c = Principal::self_authenticating(b"node-c").to_text();
         let inventory = NodeOperatorInventory {
             node_principals: BTreeSet::from([node_a.clone(), node_b.clone(), node_c.clone()]),
             node_records: BTreeMap::from([
-                (node_a, node_record(&operator_a)),
-                (node_b, node_record(&operator_a)),
-                (node_c, node_record(&operator_b)),
+                (node_a, node_record(&primary_operator)),
+                (node_b, node_record(&primary_operator)),
+                (node_c, node_record(&secondary_operator)),
             ]),
             node_operator_records: BTreeMap::from([
                 (
-                    operator_a.clone(),
+                    primary_operator.clone(),
                     NodeOperatorRecord {
-                        node_operator_principal_id: principal_raw(&operator_a),
+                        node_operator_principal_id: principal_raw(&primary_operator),
                         node_allowance: 4,
                         node_provider_principal_id: principal_raw(&provider),
                         dc_id: "dc-a".to_string(),
                     },
                 ),
                 (
-                    operator_b.clone(),
+                    secondary_operator.clone(),
                     NodeOperatorRecord {
-                        node_operator_principal_id: principal_raw(&operator_b),
+                        node_operator_principal_id: principal_raw(&secondary_operator),
                         node_allowance: 7,
                         node_provider_principal_id: principal_raw(&provider),
                         dc_id: "dc-b".to_string(),
@@ -1274,21 +1274,21 @@ mod tests {
         assert_eq!(list.registry_canister_id, MAINNET_REGISTRY_CANISTER_ID);
         assert_eq!(list.registry_version, 42);
         assert_eq!(list.node_operators.len(), 2);
-        let operator_a_row = list
+        let primary_result = list
             .node_operators
             .iter()
-            .find(|operator| operator.principal == operator_a)
-            .expect("operator a");
-        assert_eq!(operator_a_row.node_provider_principal, provider);
-        assert_eq!(operator_a_row.node_allowance, 4);
-        assert_eq!(operator_a_row.data_center_id, "dc-a");
-        assert_eq!(operator_a_row.node_count, Some(2));
-        let operator_b_row = list
+            .find(|operator| operator.principal == primary_operator)
+            .expect("primary operator");
+        assert_eq!(primary_result.node_provider_principal, provider);
+        assert_eq!(primary_result.node_allowance, 4);
+        assert_eq!(primary_result.data_center_id, "dc-a");
+        assert_eq!(primary_result.node_count, Some(2));
+        let secondary_result = list
             .node_operators
             .iter()
-            .find(|operator| operator.principal == operator_b)
-            .expect("operator b");
-        assert_eq!(operator_b_row.node_count, Some(1));
+            .find(|operator| operator.principal == secondary_operator)
+            .expect("secondary operator");
+        assert_eq!(secondary_result.node_count, Some(1));
     }
 
     #[test]
