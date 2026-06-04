@@ -16,6 +16,20 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.5` teaches the shared NNS registry adapter to reconstruct
+  high-capacity registry values through `get_chunk` with SHA-256 validation,
+  makes `canic subnet catalog list` compact by default with `--verbose` for the
+  full text view, and refreshes help text for the current catalog and
+  deployment surfaces.
+
+  ```text
+  canic help
+  canic subnet help
+  canic subnet catalog list
+  canic subnet catalog list --verbose
+  canic subnet catalog refresh help
+  ```
+
 - `0.60.4` records the operator proof for the catalog-derived estimate source:
   a live refresh, catalog list, known-canister routing lookup, and canonical
   instruction-footprint report all use the refreshed mainnet catalog without

@@ -60,6 +60,9 @@ pub struct UInt64Value {
 ///
 /// RegistryGetValueResponse
 ///
+/// This is the high-capacity `get_value` response wire shape. The upstream
+/// proto calls it `HighCapacityRegistryGetValueResponse`; Canic keeps the
+/// local name narrow because this adapter never exposes protobuf types.
 #[derive(Clone, Eq, prost::Message, PartialEq)]
 pub struct RegistryGetValueResponse {
     #[prost(message, optional, tag = "1")]

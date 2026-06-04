@@ -9,6 +9,19 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.60.5` covers the current registry/catalog/help cleanup batch. The shared
+  `canic-ic-registry` adapter reconstructs high-capacity NNS registry values
+  inside the adapter boundary: `get_value` responses with
+  `large_value_chunk_keys` trigger Candid `get_chunk` requests, each returned
+  chunk is SHA-256 validated before concatenation, and
+  missing/rejected/mismatched chunks produce typed registry fetch errors before
+  any catalog write. `canic subnet catalog list` is compact by default for
+  standard terminal widths, uses the first five characters of each subnet
+  principal, and omits wider metadata columns; `--verbose` restores the
+  full-principal/full-metadata text output. JSON output remains unchanged and
+  full-fidelity. `canic help`, `canic subnet help`, and
+  `canic subnet catalog help` now describe the refresh-capable catalog surface
+  instead of the whole namespace as cached-only.
 - `0.60.4` records the operator proof for the 0.60 catalog-derived estimate
   source. The proof refreshed the mainnet catalog at registry version `59015`,
   listed the cached catalog, resolved `mf7xa-laaaa-aaaar-qaaaa-cai` to

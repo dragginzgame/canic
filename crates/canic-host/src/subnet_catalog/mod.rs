@@ -567,6 +567,55 @@ pub fn parse_stale_after_duration(value: &str) -> Result<u64, SubnetCatalogHostE
 #[must_use]
 pub fn subnet_catalog_list_report_text(report: &SubnetCatalogListReport) -> String {
     let headers = [
+        "SUBNET", "KIND", "SPEC", "GEO", "NODES", "CHG", "RANGES", "STALE",
+    ];
+    let rows = report
+        .subnets
+        .iter()
+        .map(|subnet| {
+            [
+                compact_principal(&subnet.subnet_principal),
+                subnet.subnet_kind.as_str().to_string(),
+                subnet.subnet_specialization.as_str().to_string(),
+                subnet.geographic_scope.as_str().to_string(),
+                subnet
+                    .node_count
+                    .map_or_else(|| "unknown".to_string(), |count| count.to_string()),
+                yes_no(subnet.charges_apply_by_default).to_string(),
+                subnet.range_count.to_string(),
+                yes_no(report.catalog_stale).to_string(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let alignments = [
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Right,
+        ColumnAlign::Left,
+        ColumnAlign::Right,
+        ColumnAlign::Left,
+    ];
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "catalog: {} version {} stale {}",
+        report.network,
+        report.registry_version,
+        yes_no(report.catalog_stale)
+    ));
+    if rows.is_empty() {
+        lines.push("subnets: none".to_string());
+        return lines.join("\n");
+    }
+    lines.push(render_table(&headers, &rows, &alignments));
+    append_compact_range_lines(report, &mut lines);
+    lines.join("\n")
+}
+
+#[must_use]
+pub fn subnet_catalog_list_report_verbose_text(report: &SubnetCatalogListReport) -> String {
+    let headers = [
         "SUBNET",
         "KIND",
         "SPECIALIZATION",
@@ -1075,6 +1124,35 @@ fn append_range_lines(report: &SubnetCatalogListReport, lines: &mut Vec<String>)
     }
 }
 
+fn append_compact_range_lines(report: &SubnetCatalogListReport, lines: &mut Vec<String>) {
+    for subnet in &report.subnets {
+        if subnet.ranges.is_empty() {
+            continue;
+        }
+        lines.push(format!(
+            "ranges for {}:",
+            compact_principal(&subnet.subnet_principal)
+        ));
+        for range in &subnet.ranges {
+            lines.push(format!(
+                "  {}..{}",
+                compact_principal(&range.start_canister_id),
+                compact_principal(&range.end_canister_id)
+            ));
+        }
+        if subnet.ranges_shown < subnet.range_count {
+            lines.push(format!(
+                "  showing {} of {} ranges; use --range-limit or --format json",
+                subnet.ranges_shown, subnet.range_count
+            ));
+        }
+    }
+}
+
+fn compact_principal(value: &str) -> String {
+    value.chars().take(5).collect()
+}
+
 fn parse_utc_timestamp_secs(value: &str) -> Option<u64> {
     let value = value.strip_suffix('Z')?;
     let (date, time) = value.split_once('T')?;
@@ -1232,8 +1310,30 @@ mod tests {
         assert_eq!(report.subnets[0].range_count, 2);
         assert_eq!(report.subnets[0].ranges_shown, 1);
         assert!(text.contains("SUBNET"));
-        assert!(text.contains("SPECIALIZATION"));
+        assert!(text.contains("SPEC"));
+        assert!(!text.contains("SPECIALIZATION"));
+        for subnet in &report.subnets {
+            assert!(text.contains(&compact_principal(&subnet.subnet_principal)));
+            assert!(!text.contains(&subnet.subnet_principal));
+        }
+        assert!(!text.contains("FETCHED_AT"));
         assert!(text.contains("showing 1 of 2 ranges"));
+    }
+
+    #[test]
+    fn list_report_verbose_text_keeps_full_metadata() {
+        let root = temp_dir("canic-subnet-host-list-verbose");
+        write_catalog(&root, fixture_catalog());
+        let request = list_request(&root);
+
+        let report = build_subnet_catalog_list_report(&request).expect("list report");
+        let text = subnet_catalog_list_report_verbose_text(&report);
+
+        let _ = fs::remove_dir_all(root);
+        assert!(text.contains("catalog_path:"));
+        assert!(text.contains("SPECIALIZATION"));
+        assert!(text.contains("FETCHED_AT"));
+        assert!(text.contains(SUBNET_A));
     }
 
     #[test]

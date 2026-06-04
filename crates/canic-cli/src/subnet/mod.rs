@@ -26,7 +26,8 @@ use canic_host::{
         SubnetCatalogInfoRequest, SubnetCatalogListRequest, SubnetCatalogRefreshRequest,
         build_subnet_catalog_info_report, build_subnet_catalog_list_report,
         parse_stale_after_duration, refresh_subnet_catalog, subnet_catalog_info_report_text,
-        subnet_catalog_list_report_text, subnet_catalog_refresh_report_text,
+        subnet_catalog_list_report_text, subnet_catalog_list_report_verbose_text,
+        subnet_catalog_refresh_report_text,
     },
 };
 use canic_subnet_catalog::{
@@ -46,6 +47,7 @@ const DEFAULT_RANGE_LIMIT: usize = 50;
 const LIST_HELP_AFTER: &str = "\
 Examples:
   canic subnet catalog list
+  canic subnet catalog list --verbose
   canic --network ic subnet catalog list --format json
   canic subnet catalog list --kind application --specialization fiduciary";
 const INFO_HELP_AFTER: &str = "\
@@ -107,6 +109,7 @@ struct CatalogListOptions {
     format: OutputFormat,
     filters: SubnetCatalogFilters,
     show_ranges: bool,
+    verbose: bool,
     range_limit: usize,
     range_offset: usize,
     stale_after_seconds: u64,
@@ -202,7 +205,12 @@ where
     let report = build_subnet_catalog_list_report(&request)?;
     match options.format {
         OutputFormat::Text => {
-            println!("{}", subnet_catalog_list_report_text(&report));
+            let text = if options.verbose {
+                subnet_catalog_list_report_verbose_text(&report)
+            } else {
+                subnet_catalog_list_report_text(&report)
+            };
+            println!("{text}");
             Ok(())
         }
         OutputFormat::Json => write_pretty_json(None, &report),
@@ -296,6 +304,7 @@ impl CatalogListOptions {
                     .transpose()?,
             },
             show_ranges: matches.get_flag("show-ranges"),
+            verbose: matches.get_flag("verbose"),
             range_limit,
             range_offset,
             stale_after_seconds: parse_stale_after(string_option(&matches, "stale-after"))?,
@@ -547,17 +556,17 @@ fn now_unix_secs() -> Result<u64, SubnetCommandError> {
 fn subnet_command() -> ClapCommand {
     ClapCommand::new("subnet")
         .bin_name("canic subnet")
-        .about("Inspect cached IC network subnet metadata")
+        .about("Inspect and refresh IC subnet catalog metadata")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("catalog").about("Inspect cached IC network subnet metadata"),
+            ClapCommand::new("catalog").about("Inspect and refresh IC subnet catalog metadata"),
         ))
 }
 
 fn catalog_command() -> ClapCommand {
     ClapCommand::new("catalog")
         .bin_name("canic subnet catalog")
-        .about("Inspect cached IC network subnet metadata")
+        .about("Inspect and refresh IC subnet catalog metadata")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("list").about("List cached mainnet IC subnets"),
@@ -603,6 +612,11 @@ fn list_command() -> ClapCommand {
             flag_arg("show-ranges")
                 .long("show-ranges")
                 .help("Show cached routing ranges after the subnet table"),
+        )
+        .arg(
+            flag_arg("verbose")
+                .long("verbose")
+                .help("Show full subnet principals and catalog metadata in text output"),
         )
         .arg(
             value_arg("range-limit")
@@ -747,6 +761,7 @@ mod tests {
         assert_eq!(options.network, MAINNET_NETWORK);
         assert_eq!(options.format, OutputFormat::Text);
         assert_eq!(options.range_limit, DEFAULT_RANGE_LIMIT);
+        assert!(!options.verbose);
     }
 
     #[test]
@@ -761,6 +776,7 @@ mod tests {
             OsString::from("--format"),
             OsString::from("json"),
             OsString::from("--show-ranges"),
+            OsString::from("--verbose"),
             OsString::from("--range-limit"),
             OsString::from("12"),
         ])
@@ -777,6 +793,7 @@ mod tests {
         );
         assert_eq!(options.format, OutputFormat::Json);
         assert!(options.show_ranges);
+        assert!(options.verbose);
         assert_eq!(options.range_limit, 12);
     }
 
@@ -835,6 +852,14 @@ mod tests {
 
         assert!(text.contains("refresh"));
         assert!(refresh_usage().contains("canic subnet catalog refresh"));
+    }
+
+    #[test]
+    fn subnet_namespace_help_mentions_refresh() {
+        let text = usage();
+
+        assert!(text.contains("Inspect and refresh IC subnet catalog metadata"));
+        assert!(!text.contains("Inspect cached IC network subnet metadata"));
     }
 
     #[test]

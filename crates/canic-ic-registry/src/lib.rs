@@ -2,7 +2,7 @@
 
 pub(crate) mod proto;
 
-use candid::Principal;
+use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use canic_subnet_catalog::{
     CATALOG_SCHEMA_VERSION, CatalogError, ClassificationSource, GeographicScope, MAINNET_NETWORK,
     MAINNET_REGISTRY_CANISTER_ID, RoutingRange, SubnetCatalog, SubnetInfo, SubnetKind,
@@ -11,10 +11,11 @@ use canic_subnet_catalog::{
 use ic_agent::Agent;
 use prost::Message;
 use proto::{
-    CanisterId, RegistryErrorCode, RegistryGetLatestVersionResponse, RegistryGetValueRequest,
-    RegistryGetValueResponse, RoutingTable, SubnetId, SubnetListRecord, SubnetRecord, SubnetType,
-    UInt64Value, registry_get_value_response,
+    CanisterId, LargeValueChunkKeys, RegistryErrorCode, RegistryGetLatestVersionResponse,
+    RegistryGetValueRequest, RegistryGetValueResponse, RoutingTable, SubnetId, SubnetListRecord,
+    SubnetRecord, SubnetType, UInt64Value, registry_get_value_response,
 };
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 
@@ -83,10 +84,29 @@ pub enum RegistryFetchError {
     #[error("registry get_value for key {key} returned no value content")]
     MissingValue { key: String },
 
-    #[error(
-        "registry get_value for key {key} returned {chunks} large-value chunks; chunk retrieval is not implemented yet"
-    )]
-    ChunkedValue { key: String, chunks: usize },
+    #[error("failed to encode candid {message}: {reason}")]
+    CandidEncode {
+        message: &'static str,
+        reason: String,
+    },
+
+    #[error("failed to decode candid {message}: {reason}")]
+    CandidDecode {
+        message: &'static str,
+        reason: String,
+    },
+
+    #[error("registry get_chunk for sha256 {sha256} failed: {reason}")]
+    RegistryChunkRejected { sha256: String, reason: String },
+
+    #[error("registry get_chunk for sha256 {sha256} returned no chunk content")]
+    MissingChunkContent { sha256: String },
+
+    #[error("registry get_chunk for sha256 {sha256} returned content with sha256 {actual_sha256}")]
+    ChunkHashMismatch {
+        sha256: String,
+        actual_sha256: String,
+    },
 
     #[error("registry protobuf field {field} was missing")]
     MissingField { field: &'static str },
@@ -105,6 +125,31 @@ pub enum RegistryFetchError {
 
     #[error("failed to create Tokio runtime for registry refresh: {0}")]
     Runtime(String),
+}
+
+///
+/// RegistryValueContent
+///
+#[derive(Debug)]
+enum RegistryValueContent {
+    Value(Vec<u8>),
+    LargeValueChunkKeys(LargeValueChunkKeys),
+}
+
+///
+/// RegistryGetChunkRequest
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RegistryGetChunkRequest {
+    content_sha256: Option<Vec<u8>>,
+}
+
+///
+/// RegistryChunk
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RegistryChunk {
+    content: Option<Vec<u8>>,
 }
 
 pub fn fetch_mainnet_subnet_catalog(
@@ -260,6 +305,18 @@ async fn get_registry_value(
             reason: err.to_string(),
         })?;
     let response = decode_message::<RegistryGetValueResponse>("RegistryGetValueResponse", &bytes)?;
+    match registry_value_content_from_response(key, response)? {
+        RegistryValueContent::Value(value) => Ok(value),
+        RegistryValueContent::LargeValueChunkKeys(keys) => {
+            get_large_registry_value(agent, registry_canister, &keys).await
+        }
+    }
+}
+
+fn registry_value_content_from_response(
+    key: &str,
+    response: RegistryGetValueResponse,
+) -> Result<RegistryValueContent, RegistryFetchError> {
     if let Some(error) = response.error {
         return Err(RegistryFetchError::RegistryValue {
             key: key.to_string(),
@@ -268,17 +325,99 @@ async fn get_registry_value(
         });
     }
     match response.content {
-        Some(registry_get_value_response::Content::Value(value)) => Ok(value),
+        Some(registry_get_value_response::Content::Value(value)) => {
+            Ok(RegistryValueContent::Value(value))
+        }
         Some(registry_get_value_response::Content::LargeValueChunkKeys(keys)) => {
-            Err(RegistryFetchError::ChunkedValue {
-                key: key.to_string(),
-                chunks: keys.chunk_content_sha256s.len(),
-            })
+            Ok(RegistryValueContent::LargeValueChunkKeys(keys))
         }
         None => Err(RegistryFetchError::MissingValue {
             key: key.to_string(),
         }),
     }
+}
+
+async fn get_large_registry_value(
+    agent: &Agent,
+    registry_canister: &Principal,
+    keys: &LargeValueChunkKeys,
+) -> Result<Vec<u8>, RegistryFetchError> {
+    let mut value = Vec::new();
+    for chunk_sha256 in &keys.chunk_content_sha256s {
+        let chunk_content = get_registry_chunk(agent, registry_canister, chunk_sha256).await?;
+        append_validated_chunk(&mut value, chunk_sha256, chunk_content)?;
+    }
+    Ok(value)
+}
+
+async fn get_registry_chunk(
+    agent: &Agent,
+    registry_canister: &Principal,
+    content_sha256: &[u8],
+) -> Result<Vec<u8>, RegistryFetchError> {
+    let request = RegistryGetChunkRequest {
+        content_sha256: Some(content_sha256.to_vec()),
+    };
+    let arg = Encode!(&request).map_err(|err| RegistryFetchError::CandidEncode {
+        message: "RegistryGetChunkRequest",
+        reason: err.to_string(),
+    })?;
+    let bytes = agent
+        .query(registry_canister, "get_chunk")
+        .with_arg(arg)
+        .call()
+        .await
+        .map_err(|err| RegistryFetchError::AgentCall {
+            method: "get_chunk",
+            reason: err.to_string(),
+        })?;
+    let result = Decode!(&bytes, Result<RegistryChunk, String>).map_err(|err| {
+        RegistryFetchError::CandidDecode {
+            message: "Result<RegistryChunk, String>",
+            reason: err.to_string(),
+        }
+    })?;
+    match result {
+        Ok(chunk) => chunk
+            .content
+            .ok_or_else(|| RegistryFetchError::MissingChunkContent {
+                sha256: hex_bytes(content_sha256),
+            }),
+        Err(reason) => Err(RegistryFetchError::RegistryChunkRejected {
+            sha256: hex_bytes(content_sha256),
+            reason,
+        }),
+    }
+}
+
+fn append_validated_chunk(
+    value: &mut Vec<u8>,
+    expected_sha256: &[u8],
+    chunk_content: Vec<u8>,
+) -> Result<(), RegistryFetchError> {
+    let actual_sha256 = sha256_digest(&chunk_content);
+    if actual_sha256.as_slice() != expected_sha256 {
+        return Err(RegistryFetchError::ChunkHashMismatch {
+            sha256: hex_bytes(expected_sha256),
+            actual_sha256: hex_bytes(&actual_sha256),
+        });
+    }
+    value.extend(chunk_content);
+    Ok(())
+}
+
+fn sha256_digest(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[usize::from(byte >> 4)] as char);
+        out.push(HEX[usize::from(byte & 0x0f)] as char);
+    }
+    out
 }
 
 fn decode_message<T>(message: &'static str, bytes: &[u8]) -> Result<T, RegistryFetchError>
@@ -486,7 +625,7 @@ mod tests {
     }
 
     #[test]
-    fn get_value_response_reports_chunked_values() {
+    fn get_value_response_reports_large_value_chunk_keys() {
         let response = RegistryGetValueResponse {
             error: None,
             version: 1,
@@ -498,14 +637,59 @@ mod tests {
             timestamp_nanoseconds: 0,
         };
 
-        let err = value_from_response_for_test("routing_table", response).expect_err("chunked");
+        let content = registry_value_content_from_response("routing_table", response)
+            .expect("large value chunk keys");
+
+        match content {
+            RegistryValueContent::LargeValueChunkKeys(keys) => {
+                assert_eq!(keys.chunk_content_sha256s, vec![vec![1], vec![2]]);
+            }
+            RegistryValueContent::Value(value) => {
+                panic!("expected chunk keys, got inline value {value:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn registry_get_chunk_request_candid_round_trips() {
+        let request = RegistryGetChunkRequest {
+            content_sha256: Some(vec![1, 2, 3]),
+        };
+
+        let bytes = Encode!(&request).expect("encode");
+        let decoded = Decode!(&bytes, RegistryGetChunkRequest).expect("decode");
+
+        assert_eq!(decoded, request);
+    }
+
+    #[test]
+    fn validated_chunk_append_concatenates_matching_chunks() {
+        let first = b"hello ".to_vec();
+        let second = b"world".to_vec();
+        let first_hash = sha256_digest(&first);
+        let second_hash = sha256_digest(&second);
+        let mut value = Vec::new();
+
+        append_validated_chunk(&mut value, &first_hash, first).expect("first chunk");
+        append_validated_chunk(&mut value, &second_hash, second).expect("second chunk");
+
+        assert_eq!(value, b"hello world");
+    }
+
+    #[test]
+    fn validated_chunk_append_rejects_hash_mismatch() {
+        let expected = sha256_digest(b"expected");
+
+        let err = append_validated_chunk(&mut Vec::new(), &expected, b"actual".to_vec())
+            .expect_err("hash mismatch");
 
         assert!(matches!(
             err,
-            RegistryFetchError::ChunkedValue {
-                key,
-                chunks: 2
-            } if key == "routing_table"
+            RegistryFetchError::ChunkHashMismatch {
+                sha256,
+                actual_sha256
+            } if sha256 == hex_bytes(&expected)
+                && actual_sha256 == hex_bytes(&sha256_digest(b"actual"))
         ));
     }
 
@@ -522,7 +706,8 @@ mod tests {
             timestamp_nanoseconds: 0,
         };
 
-        let err = value_from_response_for_test("routing_table", response).expect_err("registry");
+        let err =
+            registry_value_content_from_response("routing_table", response).expect_err("registry");
 
         assert!(matches!(
             err,
@@ -576,31 +761,6 @@ mod tests {
         apply_mainnet_annotations(&mut catalog);
         catalog.validate()?;
         Ok(catalog)
-    }
-
-    fn value_from_response_for_test(
-        key: &str,
-        response: RegistryGetValueResponse,
-    ) -> Result<Vec<u8>, RegistryFetchError> {
-        if let Some(error) = response.error {
-            return Err(RegistryFetchError::RegistryValue {
-                key: key.to_string(),
-                code: registry_error_code(error.code).to_string(),
-                reason: error.reason,
-            });
-        }
-        match response.content {
-            Some(registry_get_value_response::Content::Value(value)) => Ok(value),
-            Some(registry_get_value_response::Content::LargeValueChunkKeys(keys)) => {
-                Err(RegistryFetchError::ChunkedValue {
-                    key: key.to_string(),
-                    chunks: keys.chunk_content_sha256s.len(),
-                })
-            }
-            None => Err(RegistryFetchError::MissingValue {
-                key: key.to_string(),
-            }),
-        }
     }
 
     fn subnet_list_record<const N: usize>(subnets: [&str; N]) -> SubnetListRecord {

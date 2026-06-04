@@ -51,7 +51,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "fleet",
-        about: "Manage fleet templates",
+        about: "Manage Canic fleets and roles",
         scope: CommandScope::Project,
     },
     CommandSpec {
@@ -66,7 +66,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "subnet",
-        about: "Inspect cached IC network subnet metadata",
+        about: "Inspect and refresh the IC subnet catalog",
         scope: CommandScope::Project,
     },
     CommandSpec {
@@ -81,12 +81,12 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "deploy",
-        about: "Check deployment truth before mutation",
+        about: "Inspect, register, and plan deployments",
         scope: CommandScope::Deployment,
     },
     CommandSpec {
         name: "evidence",
-        about: "Evaluate and compare stable evidence envelopes",
+        about: "Evaluate stable evidence envelopes",
         scope: CommandScope::Deployment,
     },
     CommandSpec {
@@ -126,7 +126,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "backup",
-        about: "Verify backup directories and journal status",
+        about: "Plan, inspect, and verify backups",
         scope: CommandScope::BackupRestore,
     },
     CommandSpec {
@@ -174,7 +174,7 @@ pub fn print_help_or_version(
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Operator CLI for Canic install, backup, and restore workflows")
+        .about("Operator CLI for Canic projects, deployments, IC subnet catalogs, backups, and ICP wallet workflows")
         .disable_version_flag(true)
         .arg(
             Arg::new("version")

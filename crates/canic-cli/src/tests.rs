@@ -66,6 +66,12 @@ fn usage_lists_command_families() {
     assert!(plain.contains("metrics"));
     assert!(plain.contains("    build"));
     assert!(plain.contains("    deploy"));
+    assert!(plain.contains("Manage Canic fleets and roles"));
+    assert!(plain.contains("Inspect and refresh the IC subnet catalog"));
+    assert!(plain.contains("Inspect, register, and plan deployments"));
+    assert!(plain.contains("Plan, inspect, and verify backups"));
+    assert!(!plain.contains("Inspect cached IC network subnet metadata"));
+    assert!(!plain.contains("Check deployment truth before mutation"));
     assert!(!plain.contains("    network"));
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
@@ -131,6 +137,7 @@ fn command_family_help_returns_ok() {
         &["subnet", "catalog", "help"],
         &["subnet", "catalog", "list", "help"],
         &["subnet", "catalog", "info", "help"],
+        &["subnet", "catalog", "refresh", "help"],
         &["restore", "help"],
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
