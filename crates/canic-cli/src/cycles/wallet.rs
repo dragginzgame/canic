@@ -1,6 +1,7 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, passthrough_subcommand, string_option, typed_option, value_arg,
+        flag_arg, parse_matches, passthrough_subcommand, render_usage, required_string,
+        required_typed, string_option, string_option_or_else, value_arg,
     },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
@@ -222,8 +223,8 @@ fn wallet_passthrough_command(spec: WalletCommand) -> ClapCommand {
 impl IcpTargetOptions {
     pub(super) fn parse(matches: &clap::ArgMatches) -> Self {
         Self {
-            network: string_option(matches, "network").unwrap_or_else(local_network),
-            icp: string_option(matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(matches, "network", local_network),
+            icp: string_option_or_else(matches, "icp", default_icp),
         }
     }
 }
@@ -272,8 +273,8 @@ impl TransferOptions {
             .map_err(|_| CyclesCommandError::Usage(transfer_usage()))?;
         let options = Self {
             target: IcpTargetOptions::parse(&matches),
-            amount: string_option(&matches, AMOUNT_ARG).expect("clap requires amount"),
-            receiver: string_option(&matches, RECEIVER_ARG).expect("clap requires receiver"),
+            amount: required_string(&matches, AMOUNT_ARG),
+            receiver: required_string(&matches, RECEIVER_ARG),
             to_subaccount: string_option(&matches, TO_SUBACCOUNT_ARG),
             from_subaccount: string_option(&matches, FROM_SUBACCOUNT_ARG),
             json: matches.get_flag(JSON_ARG),
@@ -293,10 +294,9 @@ impl TopupOptions {
             .map_err(|_| CyclesCommandError::Usage(topup_usage()))?;
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
-            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
-            canister_or_role: string_option(&matches, CANISTER_OR_ROLE_ARG)
-                .expect("clap requires canister-or-role"),
-            amount_cycles: typed_option(&matches, AMOUNT_ARG).expect("clap requires amount"),
+            deployment: required_string(&matches, DEPLOYMENT_ARG),
+            canister_or_role: required_string(&matches, CANISTER_OR_ROLE_ARG),
+            amount_cycles: required_typed(&matches, AMOUNT_ARG),
             json: matches.get_flag(JSON_ARG),
             dry_run: matches.get_flag(DRY_RUN_ARG),
         })
@@ -725,11 +725,6 @@ fn transfer_usage() -> String {
 
 fn topup_usage() -> String {
     render_usage(topup_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }
 
 fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesCommandError {

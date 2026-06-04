@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, typed_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, parse_usize, path_option, required_string, string_option,
+        string_option_or_else, typed_option, value_arg,
+    },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
@@ -35,12 +38,12 @@ impl BackupCreateOptions {
         let matches = parse_backup_options(backup_create_command(), create_usage, args)?;
 
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
+            deployment: required_string(&matches, "deployment"),
             subtree: string_option(&matches, "subtree"),
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(&matches, "network", local_network),
+            icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
 }
@@ -329,10 +332,4 @@ fn backup_target(matches: &ArgMatches) -> (Option<String>, Option<PathBuf>) {
     let backup_ref = string_option(matches, BACKUP_REF);
     let dir = path_option(matches, "dir");
     (backup_ref, dir)
-}
-
-fn parse_usize(value: &str) -> Result<usize, String> {
-    value
-        .parse::<usize>()
-        .map_err(|_| "must be a non-negative integer".to_string())
 }

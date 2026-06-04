@@ -9,7 +9,10 @@ use crate::endpoints::{
     parse::parse_candid_service_endpoints,
 };
 use crate::{
-    cli::clap::{flag_arg, parse_matches, string_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, render_usage, required_string, string_option,
+        string_option_or_else, value_arg,
+    },
     cli::defaults::default_icp,
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
@@ -81,10 +84,10 @@ impl EndpointsOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| EndpointsCommandError::Usage(usage()))?;
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            canister: string_option(&matches, "canister").expect("clap requires canister"),
+            fleet: required_string(&matches, "fleet"),
+            canister: required_string(&matches, "canister"),
             network: string_option(&matches, "network"),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             json: matches.get_flag("json"),
         })
     }
@@ -134,8 +137,7 @@ fn command() -> ClapCommand {
 }
 
 fn usage() -> String {
-    let mut command = command();
-    command.render_help().to_string()
+    render_usage(command)
 }
 
 #[cfg(test)]

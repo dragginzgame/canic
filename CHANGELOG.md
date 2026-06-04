@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.9` finishes another `canic-cli` hygiene pass by centralizing Clap help
+  rendering, required argument extraction, numeric value parsers, and defaulted
+  string lookup helpers without changing commands, flags, help text, JSON
+  output, or operational behavior.
+
 - `0.60.8` finishes the low-risk `canic-cli` Clap cleanup by moving evidence
   output formats and Canic-owned cycles amount/hex/e8s values to Clap parsers,
   removing stale manual parser error variants, and standardizing string

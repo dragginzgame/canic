@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
-        parse_matches, parse_subcommand, passthrough_subcommand, path_option, typed_option,
-        value_arg,
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
+        required_path, typed_option, value_arg,
     },
     cli::help::print_help_or_version,
     output, version_text,
@@ -87,8 +87,8 @@ impl EvidenceCompareOptions {
         let matches = parse_matches(evidence_compare_command(), args)
             .map_err(|_| EvidenceCommandError::Usage(compare_usage()))?;
         Ok(Self {
-            left: path_option(&matches, "left").expect("clap requires left"),
-            right: path_option(&matches, "right").expect("clap requires right"),
+            left: required_path(&matches, "left"),
+            right: required_path(&matches, "right"),
             format: typed_option(&matches, "format").unwrap_or(EvidenceCompareFormat::Text),
         })
     }
@@ -193,7 +193,7 @@ impl EvidenceGateOptions {
         let matches = parse_matches(evidence_gate_command(), args)
             .map_err(|_| EvidenceCommandError::Usage(gate_usage()))?;
         Ok(Self {
-            policy: path_option(&matches, "policy").expect("clap requires policy"),
+            policy: required_path(&matches, "policy"),
             input: if let Some(envelope) = path_option(&matches, "envelope") {
                 EvidenceGateInput::Envelope(envelope)
             } else {
@@ -810,18 +810,15 @@ fn render_target(target: &EvidenceTargetV1) -> String {
 }
 
 fn usage() -> String {
-    let mut command = evidence_command();
-    command.render_help().to_string()
+    render_usage(evidence_command)
 }
 
 fn compare_usage() -> String {
-    let mut command = evidence_compare_command();
-    command.render_help().to_string()
+    render_usage(evidence_compare_command)
 }
 
 fn gate_usage() -> String {
-    let mut command = evidence_gate_command();
-    command.render_help().to_string()
+    render_usage(evidence_gate_command)
 }
 
 fn evidence_command() -> ClapCommand {

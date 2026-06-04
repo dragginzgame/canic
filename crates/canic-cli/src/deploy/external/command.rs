@@ -1,5 +1,5 @@
 use super::super::{deploy_truth_leaf_command, output_format::parse_external_output_format};
-use crate::cli::clap::{passthrough_subcommand, value_arg};
+use crate::cli::clap::{passthrough_subcommand, render_usage, value_arg};
 use clap::Command as ClapCommand;
 
 #[derive(Clone, Copy)]
@@ -473,9 +473,4 @@ pub fn completion_usage() -> String {
 
 pub fn verify_usage() -> String {
     render_usage(verify_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

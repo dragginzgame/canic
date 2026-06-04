@@ -1,5 +1,5 @@
 use crate::{
-    cli::clap::{parse_matches, string_option, value_arg},
+    cli::clap::{parse_matches, render_usage, required_string, string_option_or_else, value_arg},
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
@@ -55,9 +55,9 @@ impl MedicOptions {
             parse_matches(medic_command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
 
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            deployment: required_string(&matches, "deployment"),
+            network: string_option_or_else(&matches, "network", local_network),
+            icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
 }
@@ -244,8 +244,7 @@ fn render_medic_report(checks: &[MedicCheck]) -> String {
 }
 
 fn usage() -> String {
-    let mut command = medic_command();
-    command.render_help().to_string()
+    render_usage(medic_command)
 }
 
 const fn medic_status_label(status: MedicStatus) -> &'static str {

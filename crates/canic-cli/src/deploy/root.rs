@@ -6,8 +6,8 @@ use super::{
 use crate::{
     cli::{
         clap::{
-            parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
-            typed_option,
+            parse_matches, parse_subcommand, passthrough_subcommand, render_usage, required_path,
+            required_string, string_option_or_else, typed_option,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -186,7 +186,7 @@ impl DeployRootInspectOptions {
         let matches = parse_matches(inspect_command(), args)
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
-            request: path_option(&matches, "request").expect("clap requires request"),
+            request: required_path(&matches, "request"),
             format: typed_option(&matches, "format").unwrap_or(RootOutputFormat::Json),
         })
     }
@@ -200,9 +200,9 @@ impl DeployRootVerifyOptions {
         let matches = parse_matches(verify_command(), args)
             .map_err(|_| DeployCommandError::Usage(verify_usage()))?;
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
-            from_check: path_option(&matches, "from-check").expect("clap requires from-check"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            deployment: required_string(&matches, "deployment"),
+            from_check: required_path(&matches, "from-check"),
+            network: string_option_or_else(&matches, "network", local_network),
             format: typed_option(&matches, "format").unwrap_or(RootOutputFormat::Json),
         })
     }
@@ -286,9 +286,4 @@ pub(super) fn inspect_usage() -> String {
 
 pub(super) fn verify_usage() -> String {
     render_usage(verify_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

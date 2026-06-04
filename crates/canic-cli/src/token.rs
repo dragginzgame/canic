@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, string_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, render_usage, required_string, string_option,
+        string_option_or_else, value_arg,
+    },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
@@ -188,8 +191,8 @@ fn split_token_command(args: Vec<OsString>) -> Result<TokenCommandRequest, Token
 impl IcpTargetOptions {
     fn parse(matches: &clap::ArgMatches) -> Self {
         Self {
-            network: string_option(matches, "network").unwrap_or_else(local_network),
-            icp: string_option(matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(matches, "network", local_network),
+            icp: string_option_or_else(matches, "icp", default_icp),
         }
     }
 }
@@ -216,8 +219,8 @@ impl TokenTransferOptions {
         let options = Self {
             target: IcpTargetOptions::parse(&matches),
             token,
-            amount: string_option(&matches, "amount").expect("clap requires amount"),
-            receiver: string_option(&matches, "receiver").expect("clap requires receiver"),
+            amount: required_string(&matches, "amount"),
+            receiver: required_string(&matches, "receiver"),
             to_subaccount: string_option(&matches, "to-subaccount"),
             from_subaccount: string_option(&matches, "from-subaccount"),
             json: matches.get_flag("json"),
@@ -438,13 +441,11 @@ fn usage() -> String {
 }
 
 fn balance_usage() -> String {
-    let mut command = balance_command();
-    command.render_help().to_string()
+    render_usage(balance_command)
 }
 
 fn transfer_usage() -> String {
-    let mut command = transfer_command();
-    command.render_help().to_string()
+    render_usage(transfer_command)
 }
 
 fn token_installed_deployment_error(error: InstalledDeploymentError) -> TokenCommandError {

@@ -1,7 +1,8 @@
 use crate::{
     cli::clap::{
-        parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
-        typed_option, value_arg,
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
+        required_string, required_typed, string_option, string_option_or_else, typed_option,
+        value_arg,
     },
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
@@ -606,7 +607,7 @@ impl FleetOptions {
             .map_err(|_| FleetCommandError::Usage(list_usage()))?;
 
         Ok(Self {
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            network: string_option_or_else(&matches, "network", local_network),
         })
     }
 }
@@ -620,7 +621,7 @@ impl DeleteFleetOptions {
             .map_err(|_| FleetCommandError::Usage(delete_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            fleet: required_string(&matches, "fleet"),
         })
     }
 }
@@ -642,7 +643,7 @@ impl FleetCheckOptions {
             .map_err(|_| FleetCommandError::Usage(check_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            fleet: required_string(&matches, "fleet"),
         })
     }
 }
@@ -664,7 +665,7 @@ impl RoleListOptions {
             .map_err(|_| FleetCommandError::Usage(role_list_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            fleet: required_string(&matches, "fleet"),
         })
     }
 }
@@ -686,8 +687,8 @@ impl RoleInspectOptions {
             .map_err(|_| FleetCommandError::Usage(role_inspect_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            role: string_option(&matches, "role").expect("clap requires role"),
+            fleet: required_string(&matches, "fleet"),
+            role: required_string(&matches, "role"),
         })
     }
 }
@@ -709,9 +710,9 @@ impl RoleDeclareOptions {
             .map_err(|_| FleetCommandError::Usage(role_declare_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            role: string_option(&matches, "role").expect("clap requires role"),
-            package: string_option(&matches, "package").expect("clap requires package"),
+            fleet: required_string(&matches, "fleet"),
+            role: required_string(&matches, "role"),
+            package: required_string(&matches, "package"),
         })
     }
 }
@@ -733,9 +734,9 @@ impl RoleAttachOptions {
             .map_err(|_| FleetCommandError::Usage(role_attach_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            role: string_option(&matches, "role").expect("clap requires role"),
-            subnet: string_option(&matches, "subnet").expect("clap requires subnet"),
+            fleet: required_string(&matches, "fleet"),
+            role: required_string(&matches, "role"),
+            subnet: required_string(&matches, "subnet"),
             kind: string_option(&matches, "kind").unwrap_or_else(|| "singleton".to_string()),
         })
     }
@@ -758,9 +759,9 @@ impl RoleRenameOptions {
             .map_err(|_| FleetCommandError::Usage(role_rename_usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            old_role: string_option(&matches, "old-role").expect("clap requires old role"),
-            new_role: string_option(&matches, "new-role").expect("clap requires new role"),
+            fleet: required_string(&matches, "fleet"),
+            old_role: required_string(&matches, "old-role"),
+            new_role: required_string(&matches, "new-role"),
         })
     }
 }
@@ -791,8 +792,8 @@ impl AdoptionReportOptions {
         }
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            profile: typed_option(&matches, "profile").expect("clap requires profile"),
+            fleet: required_string(&matches, "fleet"),
+            profile: required_typed(&matches, "profile"),
             format,
             deployment_check: path_option(&matches, "deployment-check"),
             inventory: path_option(&matches, "inventory"),
@@ -2280,18 +2281,15 @@ fn print_config_report(report: &IcpProjectConfigReport) {
 }
 
 fn usage() -> String {
-    let mut command = fleet_command();
-    command.render_help().to_string()
+    render_usage(fleet_command)
 }
 
 fn list_usage() -> String {
-    let mut command = fleet_list_command();
-    command.render_help().to_string()
+    render_usage(fleet_list_command)
 }
 
 fn check_usage() -> String {
-    let mut command = fleet_check_command();
-    command.render_help().to_string()
+    render_usage(fleet_check_command)
 }
 
 fn create_usage() -> String {
@@ -2299,48 +2297,39 @@ fn create_usage() -> String {
 }
 
 fn delete_usage() -> String {
-    let mut command = fleet_delete_command();
-    command.render_help().to_string()
+    render_usage(fleet_delete_command)
 }
 
 fn role_usage() -> String {
-    let mut command = fleet_role_command();
-    command.render_help().to_string()
+    render_usage(fleet_role_command)
 }
 
 fn adoption_usage() -> String {
-    let mut command = fleet_adoption_command();
-    command.render_help().to_string()
+    render_usage(fleet_adoption_command)
 }
 
 fn adoption_report_usage() -> String {
-    let mut command = fleet_adoption_report_command();
-    command.render_help().to_string()
+    render_usage(fleet_adoption_report_command)
 }
 
 fn role_list_usage() -> String {
-    let mut command = fleet_role_list_command();
-    command.render_help().to_string()
+    render_usage(fleet_role_list_command)
 }
 
 fn role_inspect_usage() -> String {
-    let mut command = fleet_role_inspect_command();
-    command.render_help().to_string()
+    render_usage(fleet_role_inspect_command)
 }
 
 fn role_declare_usage() -> String {
-    let mut command = fleet_role_declare_command();
-    command.render_help().to_string()
+    render_usage(fleet_role_declare_command)
 }
 
 fn role_attach_usage() -> String {
-    let mut command = fleet_role_attach_command();
-    command.render_help().to_string()
+    render_usage(fleet_role_attach_command)
 }
 
 fn role_rename_usage() -> String {
-    let mut command = fleet_role_rename_command();
-    command.render_help().to_string()
+    render_usage(fleet_role_rename_command)
 }
 
 #[cfg(test)]

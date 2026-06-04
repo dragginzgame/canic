@@ -1,6 +1,9 @@
 use crate::{
     cli::{
-        clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+        clap::{
+            flag_arg, parse_matches, path_option, render_usage, required_string,
+            string_option_or_else, value_arg,
+        },
         defaults::{default_icp, local_network},
         globals::{internal_icp_arg, internal_network_arg},
         help::print_help_or_version,
@@ -112,11 +115,11 @@ impl InfoEnvOptions {
             .map_err(|_| InfoEnvCommandError::Usage(usage()))?;
 
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
+            deployment: required_string(&matches, "deployment"),
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(&matches, "network", local_network),
+            icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
 }
@@ -331,8 +334,7 @@ fn shell_single_quote(value: &str) -> String {
 }
 
 fn usage() -> String {
-    let mut command = info_env_command();
-    command.render_help().to_string()
+    render_usage(info_env_command)
 }
 
 fn info_env_command() -> ClapCommand {

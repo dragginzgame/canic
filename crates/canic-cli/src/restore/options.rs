@@ -1,5 +1,7 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, path_option, string_option, string_option_or_else, value_arg,
+    },
     cli::defaults::default_icp,
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
@@ -249,7 +251,7 @@ impl RestoreRunOptions {
         Ok(Self {
             backup_ref: string_option(&matches, BACKUP_REF),
             journal: path_option(&matches, "journal"),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             network: string_option(&matches, "network"),
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
@@ -329,7 +331,7 @@ impl RestoreStatusOptions {
         Ok(Self {
             backup_ref: string_option(&matches, BACKUP_REF),
             journal: path_option(&matches, "journal"),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             network: string_option(&matches, "network"),
             out: path_option(&matches, "out"),
             require_ready: matches.get_flag("require-ready"),

@@ -2,7 +2,10 @@ use super::{
     DeployCommandError, DeployTruthOptions, deploy_truth_leaf_command, load_deployment_check,
     print_json,
 };
-use crate::{cli::help::print_help_or_version, version_text};
+use crate::{
+    cli::{clap::render_usage, help::print_help_or_version},
+    version_text,
+};
 use canic_host::deployment_truth::DeploymentCheckV1;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -144,9 +147,4 @@ pub(super) fn diff_usage() -> String {
 
 pub(super) fn report_usage() -> String {
     render_usage(report_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

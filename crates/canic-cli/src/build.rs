@@ -1,6 +1,9 @@
 use crate::{
     cli::{
-        clap::{parse_matches, string_option, typed_option, value_arg},
+        clap::{
+            parse_matches, render_usage, required_string, string_option, string_option_or_else,
+            typed_option, value_arg,
+        },
         defaults::local_network,
         globals::internal_network_arg,
         help::print_help_or_version,
@@ -97,9 +100,9 @@ impl BuildOptions {
             parse_matches(build_command(), args).map_err(|_| BuildCommandError::Usage(usage()))?;
 
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            role: string_option(&matches, "role").expect("clap requires role"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            fleet: required_string(&matches, "fleet"),
+            role: required_string(&matches, "role"),
+            network: string_option_or_else(&matches, "network", local_network),
             profile: typed_option(&matches, "profile"),
             workspace: string_option(&matches, "workspace"),
             icp_root: string_option(&matches, "icp-root"),
@@ -192,8 +195,7 @@ fn build_command() -> ClapCommand {
 }
 
 fn usage() -> String {
-    let mut command = build_command();
-    command.render_help().to_string()
+    render_usage(build_command)
 }
 
 fn validate_attached_role(options: &BuildOptions) -> Result<(), BuildCommandError> {

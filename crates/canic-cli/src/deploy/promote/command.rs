@@ -1,5 +1,5 @@
 use super::super::{output_format::parse_promotion_output_format, value_arg};
-use crate::cli::clap::passthrough_subcommand;
+use crate::cli::clap::{passthrough_subcommand, render_usage};
 use clap::Command as ClapCommand;
 
 #[derive(Clone, Copy)]
@@ -484,9 +484,4 @@ pub fn promote_policy_check_usage() -> String {
 
 pub fn promote_materialization_identity_usage() -> String {
     render_usage(deploy_promote_materialization_identity_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

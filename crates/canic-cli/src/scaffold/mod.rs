@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, string_option},
+    cli::clap::{
+        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
+        required_string,
+    },
     cli::help::print_help_or_version,
     version_text,
 };
@@ -110,7 +113,7 @@ impl ScaffoldOptions {
         let matches =
             parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
         Ok(Self {
-            name: string_option(&matches, "name").expect("clap requires name"),
+            name: required_string(&matches, "name"),
             #[cfg(test)]
             project_root: None,
             yes: matches.get_flag("yes"),
@@ -138,8 +141,8 @@ impl CanisterScaffoldOptions {
         let matches =
             parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
         Ok(Self {
-            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            role: string_option(&matches, "role").expect("clap requires role"),
+            fleet: required_string(&matches, "fleet"),
+            role: required_string(&matches, "role"),
             #[cfg(test)]
             project_root: None,
         })
@@ -534,18 +537,15 @@ fn scaffold_canister_command() -> ClapCommand {
 }
 
 pub fn usage() -> String {
-    let mut command = scaffold_command();
-    command.render_help().to_string()
+    render_usage(scaffold_command)
 }
 
 pub fn fleet_create_usage() -> String {
-    let mut command = fleet_create_command();
-    command.render_help().to_string()
+    render_usage(fleet_create_command)
 }
 
 pub fn scaffold_canister_usage() -> String {
-    let mut command = scaffold_canister_command();
-    command.render_help().to_string()
+    render_usage(scaffold_canister_command)
 }
 
 fn confirm_scaffold<R, W>(

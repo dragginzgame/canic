@@ -1,5 +1,5 @@
 use crate::{
-    cli::clap::{parse_matches, string_option},
+    cli::clap::{parse_matches, render_usage, string_option_or_else},
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
@@ -129,8 +129,8 @@ impl StatusOptions {
             .map_err(|_| StatusCommandError::Usage(usage()))?;
 
         Ok(Self {
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(&matches, "network", local_network),
+            icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
 }
@@ -403,8 +403,7 @@ fn status_command() -> ClapCommand {
 }
 
 fn usage() -> String {
-    let mut command = status_command();
-    command.render_help().to_string()
+    render_usage(status_command)
 }
 
 #[cfg(test)]

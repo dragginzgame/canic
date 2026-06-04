@@ -1,7 +1,7 @@
 mod download;
 
 use crate::{
-    cli::clap::{parse_subcommand, passthrough_subcommand},
+    cli::clap::{parse_subcommand, passthrough_subcommand, render_usage},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -106,8 +106,7 @@ where
 }
 
 fn usage() -> String {
-    let mut command = snapshot_command();
-    command.render_help().to_string()
+    render_usage(snapshot_command)
 }
 
 fn snapshot_command() -> ClapCommand {

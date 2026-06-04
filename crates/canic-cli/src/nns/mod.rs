@@ -4,8 +4,9 @@ mod tests;
 use crate::{
     cli::{
         clap::{
-            flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, path_option,
-            string_option, typed_option, value_arg,
+            flag_arg, parse_matches, parse_positive_usize, parse_subcommand, parse_usize,
+            passthrough_subcommand, path_option, render_help, required_string, string_option,
+            string_option_or_else, typed_option, value_arg,
         },
         defaults::default_icp,
         globals::{internal_icp_arg, internal_network_arg},
@@ -334,10 +335,10 @@ impl CatalogInfoOptions {
         let matches = parse_matches(info_command(), args)
             .map_err(|_| NnsCommandError::Usage(info_usage()))?;
         Ok(Self {
-            input: string_option(&matches, "input").expect("clap requires input"),
+            input: required_string(&matches, "input"),
             network: string_option(&matches, "network")
                 .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             format: typed_option(&matches, "format").unwrap_or(OutputFormat::Text),
             forced: typed_option(&matches, "as"),
         })
@@ -522,20 +523,6 @@ fn parse_refresh_lock_stale_after(value: &str) -> Result<u64, String> {
     parse_stale_after_duration(value).map_err(|err| err.to_string())
 }
 
-fn parse_usize(value: &str) -> Result<usize, String> {
-    value
-        .parse::<usize>()
-        .map_err(|_| "must be a non-negative integer".to_string())
-}
-
-fn parse_positive_usize(value: &str) -> Result<usize, String> {
-    let value = parse_usize(value)?;
-    if value == 0 {
-        return Err("must be greater than zero".to_string());
-    }
-    Ok(value)
-}
-
 fn cache_request(icp_root: &Path, network: &str) -> SubnetCatalogCacheRequest {
     SubnetCatalogCacheRequest {
         icp_root: PathBuf::from(icp_root),
@@ -712,25 +699,21 @@ fn refresh_command() -> ClapCommand {
 }
 
 fn usage() -> String {
-    render_usage(nns_command())
+    render_help(nns_command())
 }
 
 fn subnet_usage() -> String {
-    render_usage(subnet_command())
+    render_help(subnet_command())
 }
 
 fn list_usage() -> String {
-    render_usage(list_command())
+    render_help(list_command())
 }
 
 fn info_usage() -> String {
-    render_usage(info_command())
+    render_help(info_command())
 }
 
 fn refresh_usage() -> String {
-    render_usage(refresh_command())
-}
-
-fn render_usage(mut command: ClapCommand) -> String {
-    command.render_help().to_string()
+    render_help(refresh_command())
 }

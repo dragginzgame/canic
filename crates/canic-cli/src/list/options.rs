@@ -1,6 +1,9 @@
 use super::ListCommandError;
 use crate::{
-    cli::clap::{flag_arg, parse_matches, string_option, value_arg},
+    cli::clap::{
+        defined_string_option, defined_string_or_else, flag_arg, parse_matches, render_usage,
+        required_string, string_option, value_arg,
+    },
     cli::defaults::default_icp,
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
@@ -57,17 +60,13 @@ impl ListOptions {
     fn from_matches(matches: &clap::ArgMatches, source: ListSource, target_arg: &str) -> Self {
         Self {
             source,
-            target: string_option(matches, target_arg).expect("clap requires target"),
-            subtree: optional_defined_string(matches, "subtree"),
+            target: required_string(matches, target_arg),
+            subtree: defined_string_option(matches, "subtree"),
             network: string_option(matches, "network"),
-            icp: optional_defined_string(matches, "icp").unwrap_or_else(default_icp),
+            icp: defined_string_or_else(matches, "icp", default_icp),
             verbose: matches.get_flag("verbose"),
         }
     }
-}
-
-fn optional_defined_string(matches: &clap::ArgMatches, id: &str) -> Option<String> {
-    matches.try_get_one::<String>(id).ok().flatten().cloned()
 }
 
 ///
@@ -132,11 +131,9 @@ fn base_list_options(command: ClapCommand) -> ClapCommand {
 }
 
 pub(super) fn info_usage() -> String {
-    let mut command = info_list_command();
-    command.render_help().to_string()
+    render_usage(info_list_command)
 }
 
 pub(super) fn config_usage() -> String {
-    let mut command = config_command();
-    command.render_help().to_string()
+    render_usage(config_command)
 }

@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, string_option, typed_option},
+        clap::{parse_matches, render_usage, required_path, string_option, typed_option},
         help::print_help_or_version,
     },
     version_text,
@@ -111,8 +111,8 @@ impl DeployCompareOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            left: path_option(&matches, LEFT_ARG).expect("clap requires left"),
-            right: path_option(&matches, RIGHT_ARG).expect("clap requires right"),
+            left: required_path(&matches, LEFT_ARG),
+            right: required_path(&matches, RIGHT_ARG),
             left_label: string_option(&matches, LEFT_LABEL_ARG),
             right_label: string_option(&matches, RIGHT_LABEL_ARG),
             format: typed_option(&matches, FORMAT_ARG).unwrap_or(CompareOutputFormat::Json),
@@ -169,9 +169,4 @@ fn format_arg() -> clap::Arg {
 
 pub(super) fn usage() -> String {
     render_usage(command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

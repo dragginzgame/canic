@@ -1,7 +1,10 @@
 use super::{DEFAULT_READY_TIMEOUT_SECONDS, DEFAULT_ROOT_TARGET, DeployCommandError, value_arg};
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, string_option, typed_option},
+        clap::{
+            parse_matches, render_usage, required_path, required_string, string_option_or_else,
+            typed_option,
+        },
         defaults::local_network,
         globals::internal_network_arg,
         help::print_help_or_version,
@@ -110,9 +113,9 @@ impl DeployInstallPlanOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
-            plan: path_option(&matches, PLAN_ARG).expect("clap requires plan"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            deployment: required_string(&matches, DEPLOYMENT_ARG),
+            plan: required_path(&matches, PLAN_ARG),
+            network: string_option_or_else(&matches, "network", local_network),
             profile: typed_option(&matches, PROFILE_ARG),
         })
     }
@@ -196,9 +199,4 @@ fn profile_arg() -> clap::Arg {
 
 pub(super) fn usage() -> String {
     render_usage(command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

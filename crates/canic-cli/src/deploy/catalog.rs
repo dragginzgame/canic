@@ -6,8 +6,8 @@ use super::{
 use crate::{
     cli::{
         clap::{
-            parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
-            typed_option,
+            parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
+            required_string, string_option_or_else, typed_option,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -197,7 +197,7 @@ impl DeployCatalogOptions {
             .map_err(|_| DeployCommandError::Usage(list_usage()))?;
         Ok(Self {
             deployment: None,
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            network: string_option_or_else(&matches, "network", local_network),
             format: typed_option(&matches, "format").unwrap_or(CatalogOutputFormat::Text),
             output: path_option(&matches, "output"),
         })
@@ -210,10 +210,8 @@ impl DeployCatalogOptions {
         let matches = parse_matches(inspect_command(), args)
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
-            deployment: Some(
-                string_option(&matches, "deployment").expect("clap requires deployment"),
-            ),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            deployment: Some(required_string(&matches, "deployment")),
+            network: string_option_or_else(&matches, "network", local_network),
             format: typed_option(&matches, "format").unwrap_or(CatalogOutputFormat::Text),
             output: path_option(&matches, "output"),
         })
@@ -292,9 +290,4 @@ pub(super) fn list_usage() -> String {
 
 pub(super) fn inspect_usage() -> String {
     render_usage(inspect_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, typed_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, parse_positive_u64, path_option, render_usage, required_string,
+        string_option, string_option_or_else, typed_option, value_arg,
+    },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     metrics::{MetricsCommandError, model::MetricsKind},
@@ -38,7 +41,7 @@ impl MetricsOptions {
         let limit = typed_option(&matches, "limit").unwrap_or(DEFAULT_LIMIT);
 
         Ok(Self {
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
+            deployment: required_string(&matches, "deployment"),
             kind,
             role: string_option(&matches, "role"),
             canister: string_option(&matches, "canister"),
@@ -46,8 +49,8 @@ impl MetricsOptions {
             limit,
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(&matches, "network", local_network),
+            icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
 }
@@ -66,17 +69,8 @@ fn parse_metrics_kind(value: &str) -> Result<MetricsKind, String> {
     }
 }
 
-fn parse_positive_u64(value: &str) -> Result<u64, String> {
-    value
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| "must be a positive integer".to_string())
-}
-
 pub(super) fn usage() -> String {
-    let mut command = metrics_command();
-    command.render_help().to_string()
+    render_usage(metrics_command)
 }
 
 fn metrics_command() -> ClapCommand {

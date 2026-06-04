@@ -6,7 +6,9 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, parse_subcommand, passthrough_subcommand, typed_option},
+        clap::{
+            parse_matches, parse_subcommand, passthrough_subcommand, render_usage, typed_option,
+        },
         help::print_help_or_version,
     },
     version_text,
@@ -327,9 +329,4 @@ pub(super) fn report_usage() -> String {
 
 pub(super) fn receipt_usage() -> String {
     render_usage(receipt_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

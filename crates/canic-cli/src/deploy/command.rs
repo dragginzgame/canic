@@ -1,5 +1,8 @@
 use super::{parse_profile, value_arg};
-use crate::cli::{clap::passthrough_subcommand, globals::internal_network_arg};
+use crate::cli::{
+    clap::{passthrough_subcommand, render_usage},
+    globals::internal_network_arg,
+};
 use clap::Command as ClapCommand;
 
 pub(super) const DEPLOYMENT_ARG: &str = "deployment";
@@ -152,11 +155,6 @@ pub fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> Cla
 
 pub fn usage() -> String {
     render_usage(deploy_command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }
 
 fn deploy_passthrough_command(spec: DeploySubcommand) -> ClapCommand {

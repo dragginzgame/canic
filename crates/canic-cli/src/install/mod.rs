@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{parse_matches, string_option, typed_option, value_arg},
+    cli::clap::{
+        parse_matches, render_usage, required_string, string_option_or_else, typed_option,
+        value_arg,
+    },
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
     cli::help::print_help_or_version,
@@ -66,11 +69,11 @@ impl InstallOptions {
     {
         let matches = parse_matches(install_command(), args)
             .map_err(|_| InstallCommandError::Usage(usage()))?;
-        let fleet = string_option(&matches, "fleet").expect("clap requires fleet");
+        let fleet = required_string(&matches, "fleet");
 
         Ok(Self {
             fleet,
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            network: string_option_or_else(&matches, "network", local_network),
             profile: typed_option(&matches, "profile"),
         })
     }
@@ -157,8 +160,7 @@ fn default_fleet_config_path(fleet: &str) -> String {
 }
 
 fn usage() -> String {
-    let mut command = install_command();
-    command.render_help().to_string()
+    render_usage(install_command)
 }
 
 fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {

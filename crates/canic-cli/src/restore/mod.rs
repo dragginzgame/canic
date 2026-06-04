@@ -4,7 +4,7 @@ mod io;
 mod options;
 
 use crate::{
-    cli::clap::{parse_subcommand, passthrough_subcommand},
+    cli::clap::{parse_subcommand, passthrough_subcommand, render_usage},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -291,33 +291,27 @@ fn restore_status_runner_config(
 }
 
 fn usage() -> String {
-    let mut command = restore_command();
-    command.render_help().to_string()
+    render_usage(restore_command)
 }
 
 fn plan_usage() -> String {
-    let mut command = options::restore_plan_command();
-    command.render_help().to_string()
+    render_usage(options::restore_plan_command)
 }
 
 fn apply_usage() -> String {
-    let mut command = options::restore_apply_command();
-    command.render_help().to_string()
+    render_usage(options::restore_apply_command)
 }
 
 fn prepare_usage() -> String {
-    let mut command = options::restore_prepare_command();
-    command.render_help().to_string()
+    render_usage(options::restore_prepare_command)
 }
 
 fn run_usage() -> String {
-    let mut command = options::restore_run_command();
-    command.render_help().to_string()
+    render_usage(options::restore_run_command)
 }
 
 fn status_usage() -> String {
-    let mut command = options::restore_status_command();
-    command.render_help().to_string()
+    render_usage(options::restore_status_command)
 }
 
 fn restore_command() -> ClapCommand {

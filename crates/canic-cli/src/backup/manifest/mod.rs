@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{parse_matches, parse_subcommand, passthrough_subcommand, path_option, value_arg},
+    cli::clap::{
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
+        required_path, value_arg,
+    },
     cli::help::print_help_or_version,
     output, version_text,
 };
@@ -48,7 +51,7 @@ impl ManifestValidateOptions {
             .map_err(|_| ManifestCommandError::Usage(validate_usage()))?;
 
         Ok(Self {
-            manifest: path_option(&matches, "manifest").expect("clap requires manifest"),
+            manifest: required_path(&matches, "manifest"),
             out: path_option(&matches, "out"),
         })
     }
@@ -118,13 +121,11 @@ fn write_validation_summary(
 }
 
 fn usage() -> String {
-    let mut command = manifest_command();
-    command.render_help().to_string()
+    render_usage(manifest_command)
 }
 
 fn validate_usage() -> String {
-    let mut command = manifest_validate_command();
-    command.render_help().to_string()
+    render_usage(manifest_validate_command)
 }
 
 fn manifest_command() -> ClapCommand {

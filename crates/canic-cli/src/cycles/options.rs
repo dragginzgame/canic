@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, typed_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, parse_positive_u64, path_option, render_usage, required_string,
+        string_option, string_option_or_else, typed_option, value_arg,
+    },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cycles::CyclesCommandError,
@@ -51,15 +54,15 @@ impl CyclesOptions {
         let limit = typed_option(matches, LIMIT_ARG).unwrap_or(DEFAULT_LIMIT);
 
         Self {
-            deployment: string_option(matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
+            deployment: required_string(matches, DEPLOYMENT_ARG),
             subtree: string_option(matches, SUBTREE_ARG),
             since_seconds,
             limit,
             json: matches.get_flag(JSON_ARG),
             verbose: matches.get_flag(VERBOSE_ARG),
             out: path_option(matches, OUT_ARG),
-            network: string_option(matches, "network").unwrap_or_else(local_network),
-            icp: string_option(matches, "icp").unwrap_or_else(default_icp),
+            network: string_option_or_else(matches, "network", local_network),
+            icp: string_option_or_else(matches, "icp", default_icp),
         }
     }
 }
@@ -87,14 +90,6 @@ fn parse_duration(value: &str) -> Result<u64, String> {
 
 fn invalid_duration(value: &str) -> String {
     format!("invalid duration {value}; use values like 1h, 6h, 24h, 7d, or 30m")
-}
-
-fn parse_positive_u64(value: &str) -> Result<u64, String> {
-    value
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| "must be a positive integer".to_string())
 }
 
 pub(super) fn info_usage() -> String {
@@ -145,9 +140,4 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
         .arg(value_arg(OUT_ARG).long(OUT_ARG).value_name("file"))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

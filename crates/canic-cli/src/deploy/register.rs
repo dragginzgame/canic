@@ -1,7 +1,7 @@
 use super::{DeployCommandError, value_arg};
 use crate::{
     cli::{
-        clap::{parse_matches, string_option},
+        clap::{parse_matches, render_usage, required_string, string_option_or_else},
         defaults::local_network,
         globals::internal_network_arg,
         help::print_help_or_version,
@@ -67,11 +67,10 @@ impl DeployRegisterOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
-            fleet_template: string_option(&matches, FLEET_TEMPLATE_ARG)
-                .expect("clap requires fleet-template"),
-            root: string_option(&matches, ROOT_ARG).expect("clap requires root"),
-            network: string_option(&matches, "network").unwrap_or_else(local_network),
+            deployment: required_string(&matches, DEPLOYMENT_ARG),
+            fleet_template: required_string(&matches, FLEET_TEMPLATE_ARG),
+            root: required_string(&matches, ROOT_ARG),
+            network: string_option_or_else(&matches, "network", local_network),
             allow_unverified: matches.get_flag(ALLOW_UNVERIFIED_ARG),
         })
     }
@@ -140,9 +139,4 @@ fn allow_unverified_arg() -> clap::Arg {
 
 pub(super) fn usage() -> String {
     render_usage(command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

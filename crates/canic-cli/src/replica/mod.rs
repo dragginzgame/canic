@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, string_option,
-        typed_option, value_arg,
+        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
+        string_option_or_else, typed_option, value_arg,
     },
     cli::defaults::default_icp,
     cli::globals::internal_icp_arg,
@@ -115,7 +115,7 @@ impl ReplicaOptions {
         let matches = parse_matches(replica_start_command(), args)
             .map_err(|_| ReplicaCommandError::Usage(start_usage()))?;
         Ok(Self {
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             port: typed_option(&matches, "port"),
             background: matches.get_flag("background"),
             debug: matches.get_flag("debug"),
@@ -130,7 +130,7 @@ impl ReplicaOptions {
         let matches = parse_matches(replica_status_command(), args)
             .map_err(|_| ReplicaCommandError::Usage(status_usage()))?;
         Ok(Self {
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             port: None,
             background: false,
             debug: matches.get_flag("debug"),
@@ -145,7 +145,7 @@ impl ReplicaOptions {
         let matches = parse_matches(replica_stop_command(), args)
             .map_err(|_| ReplicaCommandError::Usage(stop_usage()))?;
         Ok(Self {
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
             port: None,
             background: false,
             debug: matches.get_flag("debug"),
@@ -586,23 +586,19 @@ fn replica_leaf_command(
 }
 
 fn usage() -> String {
-    let mut command = replica_command();
-    command.render_help().to_string()
+    render_usage(replica_command)
 }
 
 fn start_usage() -> String {
-    let mut command = replica_start_command();
-    command.render_help().to_string()
+    render_usage(replica_start_command)
 }
 
 fn status_usage() -> String {
-    let mut command = replica_status_command();
-    command.render_help().to_string()
+    render_usage(replica_status_command)
 }
 
 fn stop_usage() -> String {
-    let mut command = replica_stop_command();
-    command.render_help().to_string()
+    render_usage(replica_stop_command)
 }
 
 #[cfg(test)]

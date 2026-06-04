@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, typed_option},
+        clap::{parse_matches, path_option, render_usage, typed_option},
         defaults::local_network,
         help::print_help_or_version,
     },
@@ -389,9 +389,4 @@ fn build_provenance_input_arg() -> clap::Arg {
 
 pub(super) fn usage() -> String {
     render_usage(command)
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }

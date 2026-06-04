@@ -4,7 +4,10 @@ use super::wallet::{
 };
 use crate::{
     cli::{
-        clap::{flag_arg, parse_matches, string_option, typed_option, value_arg},
+        clap::{
+            flag_arg, parse_matches, render_usage, required_string, string_option, typed_option,
+            value_arg,
+        },
         globals::{internal_icp_arg, internal_network_arg},
     },
     cycles::CyclesCommandError,
@@ -71,9 +74,8 @@ impl ConvertOptions {
             parse_matches(command(), args).map_err(|_| CyclesCommandError::Usage(usage()))?;
         let options = Self {
             target: IcpTargetOptions::parse(&matches),
-            deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
-            canister_or_role: string_option(&matches, CANISTER_OR_ROLE_ARG)
-                .expect("clap requires canister-or-role"),
+            deployment: required_string(&matches, DEPLOYMENT_ARG),
+            canister_or_role: required_string(&matches, CANISTER_OR_ROLE_ARG),
             source_canister_or_role: string_option(&matches, SOURCE_ARG),
             amount_e8s: typed_option(&matches, ICP_E8S_ARG),
             cycles_amount: typed_option(&matches, CYCLES_AMOUNT_ARG),
@@ -480,11 +482,6 @@ fn command() -> ClapCommand {
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
-}
-
-fn render_usage(command: fn() -> ClapCommand) -> String {
-    let mut command = command();
-    command.render_help().to_string()
 }
 
 #[cfg(test)]

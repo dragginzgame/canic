@@ -1,7 +1,10 @@
 use super::SnapshotCommandError;
 use crate::support::path_stamp::{current_backup_directory_stamp, file_safe_component};
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, path_option, render_usage, required_string, string_option,
+        string_option_or_else, value_arg,
+    },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
@@ -61,7 +64,7 @@ impl SnapshotDownloadOptions {
         Ok(Self {
             canister: string_option(&matches, "canister"),
             out: path_option(&matches, "out"),
-            deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
+            deployment: required_string(&matches, "deployment"),
             root: string_option(&matches, "root"),
             include_children,
             recursive,
@@ -70,7 +73,7 @@ impl SnapshotDownloadOptions {
                 matches.get_flag("resume-after-snapshot"),
             ),
             network: string_option(&matches, "network"),
-            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
+            icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
 }
@@ -102,8 +105,7 @@ fn snapshot_download_command() -> ClapCommand {
 }
 
 pub(super) fn download_usage() -> String {
-    let mut command = snapshot_download_command();
-    command.render_help().to_string()
+    render_usage(snapshot_download_command)
 }
 
 pub(super) fn download_snapshots(
