@@ -16,6 +16,18 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.4` records the operator proof for the catalog-derived estimate source:
+  a live refresh, catalog list, known-canister routing lookup, and canonical
+  instruction-footprint report all use the refreshed mainnet catalog without
+  changing measured instruction rows.
+
+  ```text
+  target/debug/canic subnet catalog refresh --format json
+  target/debug/canic subnet catalog list --format json
+  target/debug/canic subnet catalog info mf7xa-laaaa-aaaar-qaaaa-cai --format json
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal mf7xa-laaaa-aaaar-qaaaa-cai
+  ```
+
 - `0.60.3` lets instruction-audit execution-cycle estimates use the refreshed
   mainnet subnet catalog as an optional source, while preserving explicit-rate
   and explicit-node-count precedence and omitting catalog-derived estimates

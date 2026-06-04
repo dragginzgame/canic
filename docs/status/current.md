@@ -9,6 +9,26 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.60.4` records the operator proof for the 0.60 catalog-derived estimate
+  source. The proof refreshed the mainnet catalog at registry version `59015`,
+  listed the cached catalog, resolved `mf7xa-laaaa-aaaar-qaaaa-cai` to
+  fiduciary application subnet
+  `pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae`, and
+  generated:
+  ```text
+  docs/audits/reports/2026-06/2026-06-04/instruction-footprint.md
+  docs/audits/reports/2026-06/2026-06-04/artifacts/instruction-footprint/
+  ```
+  The report records `rate_source = nns-registry-cache`,
+  `formula_version = base_13_node_linear_v1`,
+  `cycles_per_billion_instructions = 2615384616`, and `catalog_stale = false`.
+  Proof commands:
+  ```text
+  target/debug/canic subnet catalog refresh --format json
+  target/debug/canic subnet catalog list --format json
+  target/debug/canic subnet catalog info mf7xa-laaaa-aaaar-qaaaa-cai --format json
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal mf7xa-laaaa-aaaar-qaaaa-cai
+  ```
 - `0.60.3` wires the refreshed mainnet subnet catalog into instruction-audit
   execution-cycle estimates as an optional cached source. The report path
   still performs no live NNS lookup; operators refresh first with

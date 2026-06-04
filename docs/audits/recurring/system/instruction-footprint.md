@@ -243,16 +243,38 @@ bash scripts/ci/instruction-audit-report.sh \
   --cycles-per-billion-instructions <cycles>
 ```
 
-Estimate mode is opt-in. `--estimate-execution-cycles` must fail unless a node
-count or explicit rate is supplied, and estimate source flags must fail without
-`--estimate-execution-cycles`.
+0.60.3 also permits a cached mainnet subnet catalog source after the operator
+has refreshed the catalog explicitly:
+
+```text
+canic subnet catalog refresh
+
+bash scripts/ci/instruction-audit-report.sh \
+  --estimate-execution-cycles \
+  --estimate-canister-principal <canister-principal>
+```
+
+Stale cached catalog data is omitted by default. Use this only when a report
+intentionally accepts stale mainnet metadata:
+
+```text
+bash scripts/ci/instruction-audit-report.sh \
+  --estimate-execution-cycles \
+  --estimate-canister-principal <canister-principal> \
+  --allow-stale-subnet-catalog
+```
+
+Estimate mode is opt-in. `--estimate-execution-cycles` must fail unless an
+estimate source is supplied, and estimate source flags must fail without
+`--estimate-execution-cycles`. Catalog stale controls must also fail unless a
+catalog canister principal is supplied.
 
 When estimates are enabled, update rows may include an
 `execution_cycle_estimate` sibling object. The measured instruction fields stay
 present and unchanged. Query and composite-query rows must not be decorated as
 charged query costs.
 
-0.59 supports only these table-backed node-count assumptions:
+The explicit node-count source supports only these table-backed assumptions:
 
 - `13` -> `1_000_000_000` cycles per billion instructions
 - `34` -> `2_615_384_615` cycles per billion instructions
@@ -261,6 +283,17 @@ Unsupported node counts are rejected unless
 `--cycles-per-billion-instructions` is also supplied. An explicit rate wins
 over the node-count table and must be recorded with
 `rate_source = operator-explicit-rate`.
+
+Catalog-derived estimates accept any positive cached application-subnet
+`node_count` and use:
+
+```text
+catalog_cycles_per_billion_instructions = ceil(1_000_000_000 * node_count / 13)
+```
+
+Catalog-derived estimates are omitted when the cache is missing, stale by
+default, unresolved, missing a positive node count, or resolved to a
+non-application subnet. The report itself must still complete.
 
 Estimate artifacts must record:
 
@@ -274,10 +307,32 @@ Estimate artifacts must record:
 - `rate_source`
 - `omitted_costs`
 
-Cycle estimate values and rates serialize as decimal strings. 0.59 estimate
-artifacts must not include NNS/catalog-derived fields such as
-`subnet_principal`, `registry_version`, `catalog_schema_version`,
-`resolver_backend`, `routing_range`, or `geographic_scope`.
+Cycle estimate values and rates serialize as decimal strings.
+
+Explicit-rate and explicit-node-count estimate artifacts must not include
+NNS/catalog-derived fields such as `subnet_principal`, `registry_version`,
+`catalog_schema_version`, `resolver_backend`, `routing_range`, or
+`geographic_scope`.
+
+Catalog-derived estimate artifacts must record the catalog provenance used to
+select the rate:
+
+- `subnet_source = nns-registry-cache`
+- `registry_canister_id`
+- `registry_version`
+- `subnet_principal`
+- `subnet_node_count`
+- `subnet_kind`
+- `subnet_kind_source`
+- `subnet_specialization`
+- `subnet_specialization_source`
+- `geographic_scope`
+- `geographic_scope_source`
+- `catalog_schema_version`
+- `catalog_stale`
+- `resolver_backend`
+- `matched_canister_principal`
+- `matched_routing_range`
 
 ### Freshness Rule
 
@@ -634,6 +689,8 @@ Optional estimate runner examples:
 
 - `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-node-count 13`
 - `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --cycles-per-billion-instructions 1000000000`
+- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal>`
+- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --allow-stale-subnet-catalog`
 
 The report generator also scans checkpoint call sites under `crates/`. The
 definition still accepts additional targeted flow tests, but they must be
