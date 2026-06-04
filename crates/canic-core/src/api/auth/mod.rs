@@ -154,6 +154,7 @@ impl AuthApi {
         request: DelegationProofIssueRequest,
     ) -> Result<DelegationProof, Error> {
         EnvOps::require_root().map_err(Error::from)?;
+        Self::validate_delegation_request_caller(IcOps::msg_caller(), request.shard_pid)?;
         let max_cert_ttl_secs = Self::delegated_token_max_ttl_secs()?;
         let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
         AuthOps::sign_delegation_proof(SignDelegationProofInput {
@@ -332,6 +333,19 @@ impl AuthApi {
             .max_ttl_secs
             .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS))
     }
+
+    fn validate_delegation_request_caller(
+        caller: Principal,
+        shard_pid: Principal,
+    ) -> Result<(), Error> {
+        if caller == shard_pid {
+            return Ok(());
+        }
+
+        Err(Error::forbidden(format!(
+            "delegation request caller {caller} must match shard_pid {shard_pid}"
+        )))
+    }
 }
 
 impl AuthApi {
@@ -408,9 +422,14 @@ impl AuthApi {
 mod tests {
     use super::AuthApi;
     use crate::{
+        cdk::types::Principal,
         dto::error::ErrorCode,
         ops::auth::{AuthExpiryError, AuthOpsError},
     };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
 
     #[test]
     fn internal_invocation_not_yet_valid_maps_to_non_retryable_proof_expiry() {
@@ -422,5 +441,16 @@ mod tests {
         ));
 
         assert_eq!(err.code, ErrorCode::AuthProofExpired);
+    }
+
+    #[test]
+    fn delegation_request_caller_must_match_requested_shard() {
+        AuthApi::validate_delegation_request_caller(p(2), p(2)).expect("matching shard");
+
+        let err = AuthApi::validate_delegation_request_caller(p(1), p(2))
+            .expect_err("mismatched caller must fail");
+
+        assert_eq!(err.code, ErrorCode::Forbidden);
+        assert!(err.message.contains("must match shard_pid"));
     }
 }

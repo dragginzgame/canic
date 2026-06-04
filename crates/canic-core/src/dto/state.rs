@@ -11,6 +11,27 @@ pub enum AppCommand {
 }
 
 //
+// AppCommandResponse
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum AppCommandResponse {
+    Status(SetStateResponse<AppStatus>),
+    CyclesFundingEnabled(SetStateResponse<bool>),
+}
+
+//
+// SetStateResponse
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct SetStateResponse<T> {
+    pub previous: T,
+    pub current: T,
+    pub changed: bool,
+}
+
+//
 // AppStatus
 //
 

@@ -1,0 +1,363 @@
+//! Replay policy inventory for Canic-owned endpoint surfaces.
+//!
+//! This is Slice A scaffolding for the 0.61 replay-safety work. It records the
+//! intended replay and cost policy for endpoints emitted by Canic macros. Later
+//! slices wire these classifications into shared replay receipts and cost
+//! guards.
+
+///
+/// EndpointKind
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EndpointKind {
+    Query,
+    Update,
+}
+
+///
+/// ReplayPolicy
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReplayPolicy {
+    QueryOrReadOnly,
+    ResponseIdempotent {
+        command_kind: &'static str,
+    },
+    ReplayProtected {
+        command_kind: &'static str,
+        requires_operation_id: bool,
+    },
+    MonotonicTransition {
+        command_kind: &'static str,
+    },
+    SnapshotConvergent {
+        command_kind: &'static str,
+    },
+    IntentionallyNonIdempotent {
+        command_kind: &'static str,
+        reason: &'static str,
+    },
+}
+
+///
+/// CostClass
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CostClass {
+    None,
+    ThresholdEcdsaSign,
+    ManagementDeployment,
+    ValueTransfer,
+    DurablePublish,
+}
+
+///
+/// ReplayImplementationStatus
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReplayImplementationStatus {
+    Implemented,
+    ReleaseBlocker,
+}
+
+///
+/// EndpointReplayPolicy
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EndpointReplayPolicy {
+    pub endpoint: &'static str,
+    pub endpoint_kind: EndpointKind,
+    pub replay_policy: ReplayPolicy,
+    pub implementation_status: ReplayImplementationStatus,
+    pub cost_class: CostClass,
+    pub quota_policy: Option<&'static str>,
+    pub cycle_reserve_policy: Option<&'static str>,
+}
+
+const SIGNING_QUOTA_V1: &str = "signing.quota.v1";
+const SIGNING_RESERVE_V1: &str = "signing.cycle_reserve.v1";
+const DEPLOYMENT_QUOTA_V1: &str = "deployment.quota.v1";
+const DEPLOYMENT_RESERVE_V1: &str = "deployment.cycle_reserve.v1";
+const VALUE_TRANSFER_QUOTA_V1: &str = "value_transfer.quota.v1";
+const VALUE_TRANSFER_RESERVE_V1: &str = "value_transfer.cycle_reserve.v1";
+const DURABLE_PUBLISH_QUOTA_V1: &str = "durable_publish.quota.v1";
+const DURABLE_PUBLISH_RESERVE_V1: &str = "durable_publish.cycle_reserve.v1";
+
+pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
+    update_response_idempotent("canic_app", "app.command.v1"),
+    update_replay_blocker(
+        "canic_attestation_key_set",
+        "auth.attestation_key_set.v1",
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_canister_status",
+        "management.canister_status.v1",
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_canister_upgrade",
+        "management.canister_upgrade.v1",
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_icp_refill",
+        "icp.refill.v1",
+        CostClass::ValueTransfer,
+        Some(VALUE_TRANSFER_QUOTA_V1),
+        Some(VALUE_TRANSFER_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_pool_admin",
+        "pool.admin.v1",
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_request_delegation",
+        "auth.issue_delegation_proof.v1",
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_request_internal_invocation_proof",
+        "auth.issue_internal_invocation_proof.v1",
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_request_role_attestation",
+        "auth.issue_role_attestation.v1",
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
+    update_replay_blocker(
+        "canic_response_capability_v1",
+        "root.capability_rpc.v1",
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    update_snapshot_convergent("canic_sync_state", "cascade.sync_state.v1"),
+    update_snapshot_convergent("canic_sync_topology", "cascade.sync_topology.v1"),
+    update_monotonic_publish(
+        "canic_template_prepare_admin",
+        "wasm_store.template_prepare_admin.v1",
+    ),
+    update_monotonic_publish(
+        "canic_template_publish_chunk_admin",
+        "wasm_store.template_publish_chunk_admin.v1",
+    ),
+    update_monotonic_publish(
+        "canic_template_stage_manifest_admin",
+        "wasm_store.template_stage_manifest_admin.v1",
+    ),
+    update_response_idempotent(
+        "canic_wasm_store_bootstrap_resume_root_admin",
+        "wasm_store.bootstrap_resume.ensure_v1",
+    ),
+    update_monotonic_publish("canic_wasm_store_admin", "wasm_store.admin.v1"),
+    update_monotonic_publish("canic_wasm_store_begin_gc", "wasm_store.begin_gc.v1"),
+    update_monotonic_publish("canic_wasm_store_chunk", "wasm_store.chunk.v1"),
+    update_monotonic_publish("canic_wasm_store_complete_gc", "wasm_store.complete_gc.v1"),
+    update_monotonic_publish("canic_wasm_store_info", "wasm_store.info.v1"),
+    update_monotonic_publish("canic_wasm_store_prepare", "wasm_store.prepare.v1"),
+    update_monotonic_publish("canic_wasm_store_prepare_gc", "wasm_store.prepare_gc.v1"),
+    update_monotonic_publish(
+        "canic_wasm_store_publish_chunk",
+        "wasm_store.publish_chunk.v1",
+    ),
+    update_monotonic_publish(
+        "canic_wasm_store_stage_manifest",
+        "wasm_store.stage_manifest.v1",
+    ),
+];
+
+#[must_use]
+pub const fn endpoint_replay_policy_manifest() -> &'static [EndpointReplayPolicy] {
+    ENDPOINT_REPLAY_POLICY_MANIFEST
+}
+
+const fn update_response_idempotent(
+    endpoint: &'static str,
+    command_kind: &'static str,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::None,
+        quota_policy: None,
+        cycle_reserve_policy: None,
+    }
+}
+
+const fn update_replay_blocker(
+    endpoint: &'static str,
+    command_kind: &'static str,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::ReplayProtected {
+            command_kind,
+            requires_operation_id: true,
+        },
+        implementation_status: ReplayImplementationStatus::ReleaseBlocker,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
+    }
+}
+
+const fn update_monotonic_publish(
+    endpoint: &'static str,
+    command_kind: &'static str,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::MonotonicTransition { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::DurablePublish,
+        quota_policy: Some(DURABLE_PUBLISH_QUOTA_V1),
+        cycle_reserve_policy: Some(DURABLE_PUBLISH_RESERVE_V1),
+    }
+}
+
+const fn update_snapshot_convergent(
+    endpoint: &'static str,
+    command_kind: &'static str,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::None,
+        quota_policy: None,
+        cycle_reserve_policy: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn endpoint_manifest_entries_are_unique() {
+        let mut seen = BTreeSet::new();
+        for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
+            assert!(
+                seen.insert(entry.endpoint),
+                "duplicate replay policy entry for {}",
+                entry.endpoint
+            );
+        }
+    }
+
+    #[test]
+    fn emitted_canic_update_endpoints_have_replay_policy_entries() {
+        let emitted = emitted_update_endpoint_names();
+        let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| entry.endpoint_kind == EndpointKind::Update)
+            .map(|entry| entry.endpoint)
+            .collect::<BTreeSet<_>>();
+
+        let missing = emitted.difference(&manifest).copied().collect::<Vec<_>>();
+
+        assert!(
+            missing.is_empty(),
+            "missing replay policy entries for update endpoints: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn costed_manifest_entries_declare_guards() {
+        for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
+            if entry.cost_class == CostClass::None {
+                continue;
+            }
+            assert!(
+                entry.quota_policy.is_some(),
+                "costed entry {} missing quota policy",
+                entry.endpoint
+            );
+            assert!(
+                entry.cycle_reserve_policy.is_some(),
+                "costed entry {} missing cycle-reserve policy",
+                entry.endpoint
+            );
+        }
+    }
+
+    #[test]
+    fn intentionally_non_idempotent_entries_must_state_reason() {
+        for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
+            if let ReplayPolicy::IntentionallyNonIdempotent { reason, .. } = entry.replay_policy {
+                assert!(
+                    !reason.trim().is_empty(),
+                    "non-idempotent entry {} must state a reason",
+                    entry.endpoint
+                );
+            }
+        }
+    }
+
+    fn emitted_update_endpoint_names() -> BTreeSet<&'static str> {
+        [
+            include_str!("../../canic/src/macros/endpoints/root.rs"),
+            include_str!("../../canic/src/macros/endpoints/shared.rs"),
+            include_str!("../../canic/src/macros/endpoints/wasm_store.rs"),
+            include_str!("../../canic/src/macros/endpoints/nonroot.rs"),
+            include_str!("../../canic/src/macros/endpoints/icp_refill.rs"),
+        ]
+        .into_iter()
+        .flat_map(update_endpoint_names_from_source)
+        .collect()
+    }
+
+    fn update_endpoint_names_from_source(source: &'static str) -> Vec<&'static str> {
+        let lines = source.lines().collect::<Vec<_>>();
+        let mut names = Vec::new();
+        for (index, line) in lines.iter().enumerate() {
+            if !line.contains("#[$crate::canic_update") {
+                continue;
+            }
+            let Some(name) = lines
+                .iter()
+                .skip(index + 1)
+                .take(6)
+                .find_map(|candidate| endpoint_name_from_fn_line(candidate))
+            else {
+                panic!("canic_update endpoint attribute without following function");
+            };
+            names.push(name);
+        }
+        names
+    }
+
+    fn endpoint_name_from_fn_line(line: &'static str) -> Option<&'static str> {
+        let marker = "fn ";
+        let start = line.find(marker)? + marker.len();
+        let rest = &line[start..];
+        let end = rest.find('(')?;
+        Some(&rest[..end])
+    }
+}

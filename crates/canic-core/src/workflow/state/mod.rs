@@ -2,7 +2,7 @@ pub mod query;
 
 use crate::{
     InternalError,
-    dto::state::AppCommand,
+    dto::state::{AppCommand, AppCommandResponse},
     ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
     workflow::{
         cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
@@ -29,9 +29,13 @@ impl AppStateWorkflow {
     ///
     /// Returns internal [`InternalError`]. Public error mapping is handled
     /// exclusively at the API boundary.
-    pub async fn execute_command(cmd: AppCommand) -> Result<(), InternalError> {
+    pub async fn execute_command(cmd: AppCommand) -> Result<AppCommandResponse, InternalError> {
         EnvOps::require_root()?;
-        AppStateOps::apply_command(cmd)?;
+        let response = AppStateOps::apply_command(cmd);
+        if !app_command_response_changed(response) {
+            return Ok(response);
+        }
+
         RuntimeAuthWorkflow::publish_root_delegated_key_to_subnet_state().await?;
 
         let snapshot = StateSnapshotBuilder::new()?
@@ -40,6 +44,13 @@ impl AppStateWorkflow {
             .build();
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
-        Ok(())
+        Ok(response)
+    }
+}
+
+const fn app_command_response_changed(response: AppCommandResponse) -> bool {
+    match response {
+        AppCommandResponse::Status(status) => status.changed,
+        AppCommandResponse::CyclesFundingEnabled(enabled) => enabled.changed,
     }
 }

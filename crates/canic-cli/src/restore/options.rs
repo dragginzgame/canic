@@ -57,7 +57,7 @@ impl RestorePlanOptions {
         let matches = parse_matches(restore_plan_command(), args)
             .map_err(|_| RestoreCommandError::Usage(plan_usage()))?;
 
-        let options = Self {
+        Ok(Self {
             manifest: path_option(&matches, "manifest"),
             backup_ref: string_option(&matches, BACKUP_REF),
             backup_dir: path_option(&matches, "backup-dir"),
@@ -65,12 +65,7 @@ impl RestorePlanOptions {
             out: path_option(&matches, "out"),
             require_verified: matches.get_flag("require-verified"),
             require_restore_ready: matches.get_flag("require-restore-ready"),
-        };
-        if options.require_verified && options.manifest.is_some() {
-            return Err(RestoreCommandError::Usage(plan_usage()));
-        }
-
-        Ok(options)
+        })
     }
 }
 
@@ -90,7 +85,11 @@ pub(super) fn restore_plan_command() -> ClapCommand {
         .arg(value_arg("backup-dir").long("backup-dir").value_name("dir"))
         .arg(value_arg("mapping").long("mapping").value_name("file"))
         .arg(value_arg("out").long("out").value_name("file"))
-        .arg(flag_arg("require-verified").long("require-verified"))
+        .arg(
+            flag_arg("require-verified")
+                .long("require-verified")
+                .conflicts_with("manifest"),
+        )
         .arg(flag_arg("require-restore-ready").long("require-restore-ready"))
         .after_help(RESTORE_PLAN_HELP_AFTER)
 }

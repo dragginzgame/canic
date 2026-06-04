@@ -10,7 +10,7 @@
 //! - Delegated tokens are self-validating and must not require verifier-local proof cache state.
 //! - All temporal validation (iat/exp/now) is enforced before access is granted.
 //! - Endpoint-required scopes are enforced against delegated token claims.
-//! - Update-call tokens are consumed once by `(issuer_shard_pid, subject, cert_hash, nonce)`.
+//! - Token nonces are entropy only; domain replay safety belongs to operation receipts.
 
 mod identity;
 mod predicates;

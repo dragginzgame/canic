@@ -114,14 +114,15 @@ operations. Ops must not own endpoint subject binding or generated endpoint
 authorization semantics.
 
 ```bash
-rg -n 'verify_caller|authenticated_with_scope|requires\(|canic_update|canic_query|endpoint|DelegatedToken|consume_delegated_token_use|verify_delegated_token' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
+rg -n 'verify_caller|authenticated_with_scope|requires\(|canic_update|canic_query|endpoint|DelegatedToken|verify_delegated_token' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
 - endpoint auth semantics stay in access/macros/API guard paths;
-- ops auth remains token-material verification, replay consumption, key
-  resolution, and bounded metrics.
+- ops auth remains token-material verification, key resolution, and bounded
+  metrics. Domain replay protection belongs to replay receipt ops, not
+  delegated-token verification.
 
 ### 5. Metrics Coordination
 

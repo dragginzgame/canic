@@ -21,9 +21,6 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum StorageOpsError {
     #[error(transparent)]
-    AppStateOps(#[from] state::app::AppStateOpsError),
-
-    #[error(transparent)]
     IndexOps(#[from] index::IndexOpsError),
 
     #[error(transparent)]

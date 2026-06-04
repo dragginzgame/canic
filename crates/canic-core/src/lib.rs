@@ -40,6 +40,7 @@ pub mod memory;
 mod memory_macros;
 pub mod perf;
 pub mod protocol;
+pub mod replay_policy;
 #[doc(hidden)]
 pub mod shared_support;
 #[cfg(test)]

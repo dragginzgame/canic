@@ -7,7 +7,9 @@
 macro_rules! canic_emit_root_admin_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_controller()))]
-        async fn canic_app(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error> {
+        async fn canic_app(
+            cmd: ::canic::dto::state::AppCommand,
+        ) -> Result<::canic::dto::state::AppCommandResponse, ::canic::Error> {
             $crate::__internal::core::api::state::AppStateApi::execute_command(cmd).await
         }
 

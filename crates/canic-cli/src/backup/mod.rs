@@ -1,4 +1,4 @@
-use crate::{cli::clap::parse_subcommand, cli::help::print_help_or_version, version_text};
+use crate::{cli::clap::parse_required_subcommand, cli::help::print_help_or_version, version_text};
 use canic_backup::{
     discovery::DiscoveryError, execution::BackupExecutionJournalError,
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
@@ -161,11 +161,8 @@ where
         return Ok(());
     }
 
-    let Some((command, args)) =
-        parse_subcommand(backup_command(), args).map_err(|_| BackupCommandError::Usage(usage()))?
-    else {
-        return Err(BackupCommandError::Usage(usage()));
-    };
+    let (command, args) = parse_required_subcommand(backup_command(), args)
+        .map_err(|_| BackupCommandError::Usage(usage()))?;
 
     match command.as_str() {
         "create" => {

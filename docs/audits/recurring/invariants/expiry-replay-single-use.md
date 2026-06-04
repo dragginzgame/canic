@@ -8,18 +8,20 @@ Ensure credentials are rejected when stale, replayed, or reused beyond the syste
 
 A credential must be rejected unless it satisfies the system's freshness rules.
 
-Freshness rules include expiry validation, replay protection where applicable, and enforcement of single-use semantics where required.
+Freshness rules include expiry validation, replay protection where applicable,
+and enforcement of single-use semantics where a specific domain protocol
+requires them.
 
 Credentials must be rejected when:
 
 - expired
 - not yet valid (if applicable)
 - replayed where replay protection applies (for credentials/requests with nonce, request-id, or `jti`-style identifiers)
-- reused after single-use consumption (if applicable)
+- reused after domain-level single-use consumption (if applicable)
 
-Single-use update credentials must be consumed before protected mutation so a
-second active use fails closed. Query credentials remain stateless unless a
-specific endpoint opts into durable replay protection.
+Delegated tokens are TTL-bounded bearer credentials. Reusing a valid delegated
+token is allowed unless the invoked domain command has its own replay receipt
+or single-use operation model.
 
 ## Why This Matters
 
@@ -61,8 +63,7 @@ exp
 nbf
 nonce
 replay
-used_token
-token_uses
+operation_id
 seen_jti
 issued_at
 ```
@@ -71,17 +72,22 @@ Confirm:
 
 - expiry is enforced centrally
 - replay/nonce checks are enforced where required
-- replay protection is enforced for credentials/requests carrying nonce, request-id, or `jti` identifiers
-- update-call delegated tokens are consumed once by `(issuer_shard_pid, subject, cert_hash, nonce)`
-- query-call delegated tokens do not write durable consumed-token state
+- replay protection is enforced for credentials/requests carrying domain
+  operation IDs, request IDs, or `jti` identifiers
+- delegated-token nonce is informational entropy only and is not consumed by
+  the verifier
+- query and update delegated-token verification have the same bearer-token reuse
+  semantics
 - freshness logic is not optional in production paths
 
 ### 2. Verify State Interaction
 
-Confirm replay markers or nonce records are updated atomically with the protected action they guard.
+Confirm replay markers or nonce records are updated atomically with the domain
+operation they guard.
 
-For update-call delegated tokens, confirm active consumed-token markers are
-written before protected mutation and expire at the token expiry boundary.
+For delegated-token authentication, confirm endpoint verification does not write
+verifier-local token-use state. Replay-sensitive mutations must use domain
+operation receipts.
 
 For root capability requests, confirm per-caller replay reservation limits are
 checked before global capacity so one caller cannot fill the shared replay
@@ -96,20 +102,18 @@ When applicable, verify skew tolerance does not exceed token TTL.
 ### 4. Test Expectations
 
 - expired token => rejection
-- reused token or nonce => rejection
-- reused update delegated token => rejection
-- repeated query delegated token => success without durable consumption
+- reused domain operation ID with different payload/actor => rejection
+- repeated delegated token within TTL => bearer-token verification succeeds
+  unless a domain replay receipt rejects the invoked command
 - token used before `nbf` => rejection (if applicable)
 - fresh token / nonce => success
 
 Current suggested commands:
 
 ```bash
-cargo test -p canic-core --lib update_token_consume_rejects_active_replay -- --nocapture
-cargo test -p canic-core --lib query_token_consume_is_stateless -- --nocapture
-cargo test -p canic-core --lib consume_rejects_active_replay -- --nocapture
-cargo test -p canic-core --lib consume_allows_nonce_after_expiry_prune -- --nocapture
-cargo test -p canic-core --lib consume_fails_closed_at_capacity -- --nocapture
+cargo test -p canic-core --lib delegated_auth_guard_has_no_verifier_local_use_store -- --nocapture
+cargo test -p canic-core --lib auth_state_decode_drops_legacy_delegated_token_use_markers -- --nocapture
+cargo test -p canic-core --lib replay_policy -- --nocapture
 cargo test -p canic-core --lib reserve_root_replay_rejects_caller_capacity_before_global_capacity -- --nocapture
 ```
 
@@ -129,9 +133,8 @@ git log --name-only -n 20 -- crates/
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
 | `ops/auth/verify.rs` | `verify_time_bounds` | canonical expiry/nbf checks | High |
-| `access/auth/token.rs` | `consume_update_token_once` | update/query delegated-token consumption boundary | High |
-| `storage/stable/auth/token_uses.rs` | `consume_delegated_token_use` | durable consumed-token marker insertion/pruning | High |
-| `ops/auth/token.rs` | `consume_delegated_token_use` | ops boundary for delegated-token replay consumption | High |
+| `access/auth/token.rs` | `delegated_token_verified`, `verify_token` | delegated-token bearer verification boundary | High |
+| `replay_policy.rs` | `ENDPOINT_REPLAY_POLICY_MANIFEST` | endpoint replay classification inventory | High |
 | `ops/replay/guard.rs` | replay guard decision surface | duplicate/conflict/ttl handling | High |
 | `ops/replay/mod.rs` | reserve/commit/abort replay markers and per-caller cap | root replay freshness state transitions | Medium |
 | `workflow/rpc/request/handler/replay.rs` | replay preflight orchestration | replay gate integration point | Medium |

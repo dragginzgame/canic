@@ -12,17 +12,30 @@ present.
 
 ## Unreleased
 
+## [0.61.x] - 2026-06-04 - System replay protection
+
+Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
+
+- `0.61.0` starts the replay-safety hardening branch with a replay-policy
+  manifest for Canic-emitted update endpoints, a hard cut of verifier-local
+  delegated-token update consumption, response-idempotent `canic_app`
+  set-style commands, and an early caller/shard guard for delegation proof
+  issuance.
+
 ## [0.60.x] - 2026-06-04 - NNS subnet inspection
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
 - `0.60.10` adds a read-only NNS governance view for node providers:
-  `canic nns node-provider list` queries the mainnet NNS governance canister,
-  renders a narrow text table by default, and keeps reward-account detail in
+  `canic nns node-provider list` and `canic nns node-provider info` query the
+  mainnet NNS governance canister, render compact five-character principals by
+  default, and keep full-principal/reward-account detail in verbose text and
   JSON output.
 
   ```text
   canic nns node-provider list
+  canic nns node-provider list --verbose
+  canic nns node-provider info <node-provider-prefix>
   canic nns node-provider list --format json
   ```
 

@@ -123,7 +123,7 @@ Access may call narrow auth/session/replay ops and emit normalized access
 metrics through the access metrics facade.
 
 ```bash
-rg -n 'AuthStateOps|consume_delegated_token_use|clear_delegated_session|Metrics::|metrics::|ops::runtime::metrics' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs'
+rg -n 'AuthStateOps|clear_delegated_session|Metrics::|metrics::|ops::runtime::metrics' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -131,6 +131,7 @@ Expected:
 - direct runtime metric backend calls should stay isolated in
   `access/metrics.rs`;
 - auth state changes should stay narrow and endpoint-boundary related.
+- delegated-token authentication must not write verifier-local token-use state.
 
 ### 6. Endpoint Macro Lowering
 

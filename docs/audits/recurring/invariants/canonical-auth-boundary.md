@@ -36,13 +36,13 @@ Auth fragmentation creates bypass risk when internal helpers, macros, or special
 
 The canonical endpoint authentication pipeline must follow this structure:
 
-`token verification -> subject binding -> required-scope validation -> update replay consumption when needed -> authorization success -> handler execution`
+`token verification -> subject binding -> required-scope validation -> authorization success -> handler execution`
 
 Token-material verification is not by itself the endpoint boundary. Any helper
 that verifies signatures, freshness, audience, or scopes without also binding
-the verified subject to the caller and consuming update tokens must remain
-private to a narrower workflow and must not be exported as endpoint
-authorization.
+the verified subject to the caller must remain private to a narrower workflow
+and must not be exported as endpoint authorization. Domain replay protection is
+not part of delegated-token verification.
 
 ## Relationship to Other Invariants
 
@@ -106,7 +106,7 @@ rg -n 'access_stage|resolve_authenticated_identity|eval_access|auth::authenticat
 rg -n 'protected_internal|verify_internal_invocation_proof|caller::has_role|caller::has_any_role' \
   crates/canic-macros/src/endpoint crates/canic-core/src/api crates/canic/src/macros/endpoints -g '*.rs'
 
-rg -n 'delegated_token_verified|AuthOps::verify_token|enforce_subject_binding|enforce_required_scope|consume_update_token_once' \
+rg -n 'delegated_token_verified|AuthOps::verify_token|enforce_subject_binding|enforce_required_scope' \
   crates/canic-core/src/access/auth crates/canic-core/src/ops/auth -g '*.rs'
 ```
 
@@ -116,7 +116,10 @@ Confirm:
 - no special-case endpoint duplicates weaker auth logic
 - no internal-only path assumes prior verification without proof
 - no public helper exposes partial "verified token" semantics without caller
-  binding and update replay consumption
+  binding and endpoint-required scope enforcement
+- delegated-token verification remains bearer-token verification; domain replay
+  protection must live in command operation receipts, not verifier-local token
+  use state
 - no endpoint path accepts legacy plural role audience DTOs as delegated-token
   endpoint audience
 - protected internal role predicates require root-signed internal invocation
@@ -126,7 +129,7 @@ Confirm:
 
 Confirm canonical stage ordering:
 
-`token verification -> subject binding -> required-scope validation -> update replay consumption when needed -> authorization success -> handler execution`
+`token verification -> subject binding -> required-scope validation -> authorization success -> handler execution`
 
 The generated endpoint wrapper must resolve transport caller and authenticated
 subject before access evaluation, and handler code must run only after
@@ -160,7 +163,7 @@ git log --name-only -n 20 -- crates/
 | `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | central auth dispatch boundary | High |
 | `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | routes authenticated predicates into delegated-token verification | High |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint auth ordering owner | High |
-| `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token`, `consume_delegated_token_use` | token-material verification and replay consumption | High |
+| `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token` | token-material verification | High |
 | `crates/canic-core/src/api/auth/mod.rs` | `verify_token_material` | private partial verifier for delegated-session bootstrap only | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.

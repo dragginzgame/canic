@@ -1,6 +1,28 @@
 use super::*;
-use canic_host::registry::RegistryEntry;
-use std::collections::BTreeMap;
+use super::{
+    node_provider::{
+        NodeProviderInfoOptions, NodeProviderListOptions, node_provider_info_usage,
+        node_provider_list_usage, node_provider_usage,
+    },
+    subnet::{
+        CatalogInfoOptions, CatalogListOptions, CatalogRefreshOptions, DEFAULT_RANGE_LIMIT,
+        info_usage, list_usage, refresh_usage, resolve_canister_or_role,
+        should_retry_info_as_deployment_target, subnet_usage,
+    },
+};
+use canic_host::{
+    installed_deployment::{
+        InstalledDeploymentRegistry, InstalledDeploymentResolution, InstalledDeploymentSource,
+        ResolvedDeploymentTopology,
+    },
+    nns_node_provider::DEFAULT_NNS_GOVERNANCE_SOURCE_ENDPOINT,
+    registry::RegistryEntry,
+    subnet_catalog::SubnetCatalogHostError,
+};
+use canic_subnet_catalog::{
+    CatalogError, GeographicScope, MAINNET_NETWORK, ResolveAs, SubnetKind, SubnetSpecialization,
+};
+use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 #[test]
 fn list_defaults_to_mainnet_ic_catalog() {
@@ -155,15 +177,35 @@ fn node_provider_list_parses_defaults_and_json_format() {
         defaults.source_endpoint,
         DEFAULT_NNS_GOVERNANCE_SOURCE_ENDPOINT
     );
+    assert!(!defaults.verbose);
 
     let options = NodeProviderListOptions::parse([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
         OsString::from("https://icp-api.io"),
+        OsString::from("--verbose"),
     ])
     .expect("parse node-provider list");
 
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+    assert!(options.verbose);
+}
+
+#[test]
+fn node_provider_info_parses_input_and_json_format() {
+    let options = NodeProviderInfoOptions::parse([
+        OsString::from("ryjl"),
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse node-provider info");
+
+    assert_eq!(options.input, "ryjl");
+    assert_eq!(options.network, MAINNET_NETWORK);
     assert_eq!(options.format, OutputFormat::Json);
     assert_eq!(options.source_endpoint, "https://icp-api.io");
 }
@@ -173,11 +215,16 @@ fn node_provider_help_is_advertised_under_nns() {
     let nns = usage();
     let node_provider = node_provider_usage();
     let list = node_provider_list_usage();
+    let info = node_provider_info_usage();
 
     assert!(nns.contains("node-provider"));
     assert!(node_provider.contains("List mainnet NNS node providers"));
+    assert!(node_provider.contains("Show one mainnet NNS node provider"));
     assert!(list.contains("canic nns node-provider list"));
+    assert!(list.contains("--verbose"));
     assert!(list.contains("--format json"));
+    assert!(info.contains("canic nns node-provider info"));
+    assert!(info.contains("node-provider|node-provider-prefix"));
 }
 
 #[test]
@@ -230,16 +277,16 @@ fn nns_namespace_help_mentions_subnet() {
 #[test]
 fn role_resolution_reports_ambiguity() {
     let resolution = InstalledDeploymentResolution {
-        source: canic_host::installed_deployment::InstalledDeploymentSource::IcpCli,
+        source: InstalledDeploymentSource::IcpCli,
         state: sample_state(),
-        registry: canic_host::installed_deployment::InstalledDeploymentRegistry {
+        registry: InstalledDeploymentRegistry {
             root_canister_id: "aaaaa-aa".to_string(),
             entries: vec![
                 registry_entry("ryjl3-tyaaa-aaaaa-aaaba-cai", "backend"),
                 registry_entry("rrkah-fqaaa-aaaaa-aaaaq-cai", "backend"),
             ],
         },
-        topology: canic_host::installed_deployment::ResolvedDeploymentTopology {
+        topology: ResolvedDeploymentTopology {
             root_canister_id: "aaaaa-aa".to_string(),
             children_by_parent: BTreeMap::default(),
             roles_by_canister: BTreeMap::default(),

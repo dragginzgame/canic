@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
-        parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
-        required_path, typed_option, value_arg,
+        parse_matches, parse_required_subcommand, passthrough_subcommand, path_option,
+        render_usage, required_path, typed_option, value_arg,
     },
     cli::help::print_help_or_version,
     output, version_text,
@@ -238,11 +238,8 @@ where
         return Ok(());
     }
 
-    let Some((command, args)) = parse_subcommand(evidence_command(), args)
-        .map_err(|_| EvidenceCommandError::Usage(usage()))?
-    else {
-        return Err(EvidenceCommandError::Usage(usage()));
-    };
+    let (command, args) = parse_required_subcommand(evidence_command(), args)
+        .map_err(|_| EvidenceCommandError::Usage(usage()))?;
 
     match command.as_str() {
         "compare" => {

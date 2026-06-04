@@ -4,7 +4,7 @@ mod io;
 mod options;
 
 use crate::{
-    cli::clap::{parse_subcommand, passthrough_subcommand, render_usage},
+    cli::clap::{parse_required_subcommand, passthrough_subcommand, render_usage},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -53,11 +53,8 @@ where
         return Ok(());
     }
 
-    let Some((command, args)) = parse_subcommand(restore_command(), args)
-        .map_err(|_| RestoreCommandError::Usage(usage()))?
-    else {
-        return Err(RestoreCommandError::Usage(usage()));
-    };
+    let (command, args) = parse_required_subcommand(restore_command(), args)
+        .map_err(|_| RestoreCommandError::Usage(usage()))?;
 
     match command.as_str() {
         "plan" => {

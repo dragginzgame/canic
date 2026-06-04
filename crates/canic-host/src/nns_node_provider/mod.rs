@@ -6,12 +6,14 @@ use canic_ic_registry::{
     DEFAULT_MAINNET_ENDPOINT, MainnetNodeProviderList, MainnetRegistryFetchRequest,
     RegistryFetchError, fetch_mainnet_node_provider_list,
 };
-use canic_subnet_catalog::MAINNET_NETWORK;
+use canic_subnet_catalog::{MAINNET_NETWORK, canonical_principal_text};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 pub const DEFAULT_NNS_GOVERNANCE_SOURCE_ENDPOINT: &str = DEFAULT_MAINNET_ENDPOINT;
 pub const NNS_NODE_PROVIDER_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_NODE_PROVIDER_INFO_REPORT_SCHEMA_VERSION: u32 = 1;
+const COMPACT_PRINCIPAL_CHARS: usize = 5;
 
 ///
 /// NnsNodeProviderListRequest
@@ -20,6 +22,17 @@ pub const NNS_NODE_PROVIDER_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
 pub struct NnsNodeProviderListRequest {
     pub network: String,
     pub source_endpoint: String,
+    pub now_unix_secs: u64,
+}
+
+///
+/// NnsNodeProviderInfoRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NnsNodeProviderInfoRequest {
+    pub network: String,
+    pub source_endpoint: String,
+    pub input: String,
     pub now_unix_secs: u64,
 }
 
@@ -44,6 +57,27 @@ pub struct NnsNodeProviderListReport {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NnsNodeProviderRow {
     pub node_provider_principal: String,
+    pub name: Option<String>,
+    pub node_count: Option<u32>,
+    pub reward_account_hex: Option<String>,
+}
+
+///
+/// NnsNodeProviderInfoReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsNodeProviderInfoReport {
+    pub schema_version: u32,
+    pub input: String,
+    pub resolved_from: String,
+    pub network: String,
+    pub governance_canister_id: String,
+    pub fetched_at: String,
+    pub source_endpoint: String,
+    pub fetched_by: String,
+    pub node_provider_principal: String,
+    pub name: Option<String>,
+    pub node_count: Option<u32>,
     pub reward_account_hex: Option<String>,
 }
 
@@ -59,12 +93,27 @@ pub enum NnsNodeProviderHostError {
 
     #[error("live NNS governance node-provider query failed: {0}")]
     GovernanceQuery(#[from] RegistryFetchError),
+
+    #[error("node provider {input:?} did not match the mainnet NNS node-provider list")]
+    NodeProviderNotFound { input: String },
+
+    #[error("node-provider prefix {prefix:?} is ambiguous; matches: {matches:?}")]
+    AmbiguousNodeProviderPrefix {
+        prefix: String,
+        matches: Vec<String>,
+    },
 }
 
 pub fn build_nns_node_provider_list_report(
     request: &NnsNodeProviderListRequest,
 ) -> Result<NnsNodeProviderListReport, NnsNodeProviderHostError> {
     build_nns_node_provider_list_report_with_source(request, &LiveNnsNodeProviderSource)
+}
+
+pub fn build_nns_node_provider_info_report(
+    request: &NnsNodeProviderInfoRequest,
+) -> Result<NnsNodeProviderInfoReport, NnsNodeProviderHostError> {
+    build_nns_node_provider_info_report_with_source(request, &LiveNnsNodeProviderSource)
 }
 
 fn build_nns_node_provider_list_report_with_source(
@@ -79,6 +128,33 @@ fn build_nns_node_provider_list_report_with_source(
     Ok(node_provider_report_from_list(list))
 }
 
+fn build_nns_node_provider_info_report_with_source(
+    request: &NnsNodeProviderInfoRequest,
+    source: &dyn NnsNodeProviderSource,
+) -> Result<NnsNodeProviderInfoReport, NnsNodeProviderHostError> {
+    let list_request = NnsNodeProviderListRequest {
+        network: request.network.clone(),
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    };
+    let report = build_nns_node_provider_list_report_with_source(&list_request, source)?;
+    let (provider, resolved_from) = resolve_node_provider(&report, &request.input)?;
+    Ok(NnsNodeProviderInfoReport {
+        schema_version: NNS_NODE_PROVIDER_INFO_REPORT_SCHEMA_VERSION,
+        input: request.input.clone(),
+        resolved_from,
+        network: report.network,
+        governance_canister_id: report.governance_canister_id,
+        fetched_at: report.fetched_at,
+        source_endpoint: report.source_endpoint,
+        fetched_by: report.fetched_by,
+        node_provider_principal: provider.node_provider_principal,
+        name: provider.name,
+        node_count: provider.node_count,
+        reward_account_hex: provider.reward_account_hex,
+    })
+}
+
 #[must_use]
 pub fn nns_node_provider_list_report_text(report: &NnsNodeProviderListReport) -> String {
     let mut lines = Vec::new();
@@ -91,20 +167,90 @@ pub fn nns_node_provider_list_report_text(report: &NnsNodeProviderListReport) ->
         return lines.join("\n");
     }
 
-    let headers = ["#", "NODE_PROVIDER"];
+    let headers = ["NODE_PROVIDER", "NAME", "NODES"];
     let rows = report
         .node_providers
         .iter()
-        .enumerate()
-        .map(|(index, provider)| {
+        .map(|provider| {
             [
-                (index + 1).to_string(),
-                provider.node_provider_principal.clone(),
+                compact_principal(&provider.node_provider_principal),
+                text_or_dash(provider.name.as_deref()).to_string(),
+                node_count_text(provider.node_count),
             ]
         })
         .collect::<Vec<_>>();
-    let alignments = [ColumnAlign::Right, ColumnAlign::Left];
+    let alignments = [ColumnAlign::Left, ColumnAlign::Left, ColumnAlign::Right];
     lines.push(render_table(&headers, &rows, &alignments));
+    lines.join("\n")
+}
+
+#[must_use]
+pub fn nns_node_provider_list_report_verbose_text(report: &NnsNodeProviderListReport) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!("source_endpoint: {}", report.source_endpoint));
+    lines.push(format!("fetched_by: {}", report.fetched_by));
+    if report.node_providers.is_empty() {
+        lines.push("node providers: none".to_string());
+        return lines.join("\n");
+    }
+
+    let headers = [
+        "NODE_PROVIDER",
+        "NAME",
+        "NODES",
+        "REWARD_ACCOUNT",
+        "FETCHED_AT",
+    ];
+    let rows = report
+        .node_providers
+        .iter()
+        .map(|provider| {
+            [
+                provider.node_provider_principal.clone(),
+                text_or_dash(provider.name.as_deref()).to_string(),
+                node_count_text(provider.node_count),
+                text_or_dash(provider.reward_account_hex.as_deref()).to_string(),
+                report.fetched_at.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let alignments = [
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Right,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+    ];
+    lines.push(render_table(&headers, &rows, &alignments));
+    lines.join("\n")
+}
+
+#[must_use]
+pub fn nns_node_provider_info_report_text(report: &NnsNodeProviderInfoReport) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!("input: {}", report.input));
+    lines.push(format!("resolved_from: {}", report.resolved_from));
+    lines.push(format!(
+        "node_provider_principal: {}",
+        report.node_provider_principal
+    ));
+    lines.push(format!("name: {}", text_or_dash(report.name.as_deref())));
+    lines.push(format!(
+        "node_count: {}",
+        node_count_text(report.node_count)
+    ));
+    lines.push(format!(
+        "reward_account_hex: {}",
+        text_or_dash(report.reward_account_hex.as_deref())
+    ));
+    lines.push(format!(
+        "governance_canister_id: {}",
+        report.governance_canister_id
+    ));
+    lines.push(format!("network: {}", report.network));
+    lines.push(format!("fetched_at: {}", report.fetched_at));
+    lines.push(format!("source_endpoint: {}", report.source_endpoint));
+    lines.push(format!("fetched_by: {}", report.fetched_by));
     lines.join("\n")
 }
 
@@ -114,6 +260,8 @@ fn node_provider_report_from_list(list: MainnetNodeProviderList) -> NnsNodeProvi
         .into_iter()
         .map(|provider| NnsNodeProviderRow {
             node_provider_principal: provider.principal,
+            name: None,
+            node_count: None,
             reward_account_hex: provider.reward_account_hex,
         })
         .collect::<Vec<_>>();
@@ -162,6 +310,61 @@ impl NnsNodeProviderSource for LiveNnsNodeProviderSource {
     }
 }
 
+fn resolve_node_provider(
+    report: &NnsNodeProviderListReport,
+    input: &str,
+) -> Result<(NnsNodeProviderRow, String), NnsNodeProviderHostError> {
+    if let Ok(principal) = canonical_principal_text(input)
+        && let Some(provider) = report
+            .node_providers
+            .iter()
+            .find(|provider| provider.node_provider_principal == principal)
+    {
+        return Ok((provider.clone(), "node_provider_principal".to_string()));
+    }
+
+    let prefix = input.trim().to_ascii_lowercase();
+    if prefix.is_empty() {
+        return Err(NnsNodeProviderHostError::NodeProviderNotFound {
+            input: input.to_string(),
+        });
+    }
+    let matches = report
+        .node_providers
+        .iter()
+        .filter(|provider| provider.node_provider_principal.starts_with(&prefix))
+        .cloned()
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [provider] => Ok((
+            provider.clone(),
+            "node_provider_principal_prefix".to_string(),
+        )),
+        [] => Err(NnsNodeProviderHostError::NodeProviderNotFound {
+            input: input.to_string(),
+        }),
+        _ => Err(NnsNodeProviderHostError::AmbiguousNodeProviderPrefix {
+            prefix,
+            matches: matches
+                .into_iter()
+                .map(|provider| provider.node_provider_principal)
+                .collect(),
+        }),
+    }
+}
+
+fn compact_principal(value: &str) -> String {
+    value.chars().take(COMPACT_PRINCIPAL_CHARS).collect()
+}
+
+fn node_count_text(value: Option<u32>) -> String {
+    value.map_or_else(|| "unknown".to_string(), |count| count.to_string())
+}
+
+fn text_or_dash(value: Option<&str>) -> &str {
+    value.filter(|text| !text.is_empty()).unwrap_or("-")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,6 +403,8 @@ mod tests {
         assert_eq!(report.fetched_at, "2026-06-04T00:00:00Z");
         assert_eq!(report.node_provider_count, 2);
         assert_eq!(report.node_providers[0].node_provider_principal, "aaaaa-aa");
+        assert_eq!(report.node_providers[0].name, None);
+        assert_eq!(report.node_providers[0].node_count, None);
         assert_eq!(
             report.node_providers[0].reward_account_hex.as_deref(),
             Some("abcd")
@@ -218,6 +423,8 @@ mod tests {
             node_provider_count: 1,
             node_providers: vec![NnsNodeProviderRow {
                 node_provider_principal: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+                name: Some("DFINITY".to_string()),
+                node_count: Some(13),
                 reward_account_hex: Some("abcd".to_string()),
             }],
         };
@@ -226,8 +433,126 @@ mod tests {
 
         assert!(text.contains("node_providers: ic count 1"));
         assert!(text.contains("NODE_PROVIDER"));
-        assert!(text.contains("ryjl3-tyaaa-aaaaa-aaaba-cai"));
+        assert!(text.contains("ryjl3"));
+        assert!(text.contains("DFINITY"));
+        assert!(text.contains("13"));
+        assert!(!text.contains("ryjl3-tyaaa-aaaaa-aaaba-cai"));
         assert!(!text.contains("abcd"));
+    }
+
+    #[test]
+    fn node_provider_verbose_text_keeps_full_metadata() {
+        let report = node_provider_report_fixture();
+
+        let text = nns_node_provider_list_report_verbose_text(&report);
+
+        assert!(text.contains("source_endpoint: https://icp-api.io"));
+        assert!(text.contains("ryjl3-tyaaa-aaaaa-aaaba-cai"));
+        assert!(text.contains("abcd"));
+        assert!(text.contains("FETCHED_AT"));
+    }
+
+    #[test]
+    fn node_provider_info_resolves_exact_principal() {
+        let request = NnsNodeProviderInfoRequest {
+            network: MAINNET_NETWORK.to_string(),
+            source_endpoint: "https://icp-api.io".to_string(),
+            input: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+            now_unix_secs: 1_780_531_200,
+        };
+        let report = build_nns_node_provider_info_report_with_source(
+            &request,
+            &FixtureNodeProviderSource {
+                node_providers: vec![MainnetNodeProvider {
+                    principal: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+                    reward_account_hex: Some("abcd".to_string()),
+                }],
+            },
+        )
+        .expect("node provider info");
+
+        assert_eq!(report.input, "ryjl3-tyaaa-aaaaa-aaaba-cai");
+        assert_eq!(report.resolved_from, "node_provider_principal");
+        assert_eq!(
+            report.node_provider_principal,
+            "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        );
+        assert_eq!(report.reward_account_hex.as_deref(), Some("abcd"));
+    }
+
+    #[test]
+    fn node_provider_info_resolves_unique_prefix() {
+        let report = node_provider_report_fixture();
+
+        let (provider, resolved_from) =
+            resolve_node_provider(&report, "ryjl").expect("prefix resolves");
+
+        assert_eq!(resolved_from, "node_provider_principal_prefix");
+        assert_eq!(
+            provider.node_provider_principal,
+            "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        );
+    }
+
+    #[test]
+    fn node_provider_info_rejects_ambiguous_prefix() {
+        let report = NnsNodeProviderListReport {
+            schema_version: 1,
+            network: MAINNET_NETWORK.to_string(),
+            governance_canister_id: MAINNET_GOVERNANCE_CANISTER_ID.to_string(),
+            fetched_at: "2026-06-04T00:00:00Z".to_string(),
+            source_endpoint: "https://icp-api.io".to_string(),
+            fetched_by: "test".to_string(),
+            node_provider_count: 2,
+            node_providers: vec![
+                NnsNodeProviderRow {
+                    node_provider_principal: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+                    name: None,
+                    node_count: None,
+                    reward_account_hex: None,
+                },
+                NnsNodeProviderRow {
+                    node_provider_principal: "rwlgt-iiaaa-aaaaa-aaaaa-cai".to_string(),
+                    name: None,
+                    node_count: None,
+                    reward_account_hex: None,
+                },
+            ],
+        };
+
+        let err = resolve_node_provider(&report, "r").expect_err("ambiguous");
+
+        assert!(matches!(
+            err,
+            NnsNodeProviderHostError::AmbiguousNodeProviderPrefix { prefix, matches }
+                if prefix == "r" && matches.len() == 2
+        ));
+    }
+
+    #[test]
+    fn node_provider_info_text_renders_detail_lines() {
+        let report = NnsNodeProviderInfoReport {
+            schema_version: 1,
+            input: "ryjl".to_string(),
+            resolved_from: "node_provider_principal_prefix".to_string(),
+            network: MAINNET_NETWORK.to_string(),
+            governance_canister_id: MAINNET_GOVERNANCE_CANISTER_ID.to_string(),
+            fetched_at: "2026-06-04T00:00:00Z".to_string(),
+            source_endpoint: "https://icp-api.io".to_string(),
+            fetched_by: "test".to_string(),
+            node_provider_principal: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+            name: None,
+            node_count: None,
+            reward_account_hex: Some("abcd".to_string()),
+        };
+
+        let text = nns_node_provider_info_report_text(&report);
+
+        assert!(text.contains("resolved_from: node_provider_principal_prefix"));
+        assert!(text.contains("node_provider_principal: ryjl3-tyaaa-aaaaa-aaaba-cai"));
+        assert!(text.contains("name: -"));
+        assert!(text.contains("node_count: unknown"));
+        assert!(text.contains("reward_account_hex: abcd"));
     }
 
     #[test]
@@ -247,6 +572,32 @@ mod tests {
         .expect_err("local rejected");
 
         assert!(err.to_string().contains("supports only the mainnet `ic`"));
+    }
+
+    fn node_provider_report_fixture() -> NnsNodeProviderListReport {
+        NnsNodeProviderListReport {
+            schema_version: 1,
+            network: MAINNET_NETWORK.to_string(),
+            governance_canister_id: MAINNET_GOVERNANCE_CANISTER_ID.to_string(),
+            fetched_at: "2026-06-04T00:00:00Z".to_string(),
+            source_endpoint: "https://icp-api.io".to_string(),
+            fetched_by: "test".to_string(),
+            node_provider_count: 2,
+            node_providers: vec![
+                NnsNodeProviderRow {
+                    node_provider_principal: "aaaaa-aa".to_string(),
+                    name: None,
+                    node_count: None,
+                    reward_account_hex: None,
+                },
+                NnsNodeProviderRow {
+                    node_provider_principal: "ryjl3-tyaaa-aaaaa-aaaba-cai".to_string(),
+                    name: Some("DFINITY".to_string()),
+                    node_count: Some(13),
+                    reward_account_hex: Some("abcd".to_string()),
+                },
+            ],
+        }
     }
 
     ///

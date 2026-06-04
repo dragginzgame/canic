@@ -9,18 +9,72 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.0` has started from
+  `docs/design/0.61-replay-protection/0.61-design.md` Slice A. The current
+  branch adds `canic-core::replay_policy`, a manifest that classifies
+  Canic-emitted update endpoints by replay policy, implementation status, cost
+  class, quota policy, and cycle-reserve policy. Manifest tests compare the
+  static inventory against the facade macro files that emit Canic-owned update
+  endpoints.
+- The branch also hard-cuts verifier-local delegated-token update consumption:
+  `access/auth/token.rs` no longer calls a consumed-use path, auth ops/storage
+  no longer expose consumed-token APIs, `storage/stable/auth/token_uses.rs` is
+  removed, and `AuthStateRecord` no longer contains the consumed-token field.
+  Delegated tokens are TTL-bounded bearer credentials again; replay-sensitive
+  commands must use domain replay receipts in later 0.61 slices. A focused
+  upgrade-shape test proves old serialized auth state with historical consumed
+  markers decodes into the new state shape while dropping that removed field.
+- `canic_app` set-style commands are now response-idempotent for the 0.61
+  replay-safety line. The root endpoint returns `AppCommandResponse`; repeated
+  `SetStatus` and `SetCyclesFundingEnabled` requests return success with
+  `changed = false` instead of already-in-state errors, while actual changes
+  still cascade root state.
+- Local root delegation-proof issuance now rejects
+  `msg_caller() != request.shard_pid` at the API boundary before delegated-token
+  config lookup or threshold ECDSA signing. This fixes the authorization
+  ordering finding, but delegation-proof response replay/caching is still a
+  later 0.61 blocker.
+- The worktree also currently contains separate uncommitted NNS node-provider
+  follow-up work outside the 0.61 replay line:
+  ```text
+  canic nns node-provider list --verbose
+  canic nns node-provider info <node-provider|prefix>
+  ```
+  Focused host/CLI tests for that dirty NNS surface pass.
+- A separate `canic-cli` cleanup pass is also dirty. The shared Clap helper
+  `parse_required_subcommand` now centralizes required-subcommand parsing for
+  the backup, backup manifest, cycles, evidence, NNS, restore, and snapshot
+  routers. `restore plan --require-verified` now declares its conflict with
+  `--manifest` in Clap instead of post-parse validation. The NNS CLI module is
+  split into a thin namespace dispatcher plus `nns/subnet.rs` and
+  `nns/node_provider.rs`. Routers that intentionally print usage and return OK
+  when no subcommand is supplied were left unchanged. The pass also includes a
+  clippy-only nested-`if let` cleanup in the dirty NNS node-provider resolver.
+  Validation:
+  ```text
+  cargo test -p canic-cli --lib nns -- --nocapture
+  cargo test -p canic-cli --lib -- --nocapture
+  cargo clippy -p canic-cli --all-targets --all-features -- -D warnings
+  cargo test -p canic-host nns_node_provider -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
 - `0.60.10` adds the first non-subnet NNS inspection view:
   ```text
   canic nns node-provider list
+  canic nns node-provider list --verbose
+  canic nns node-provider info <node-provider-prefix>
   canic nns node-provider list --format json
   ```
   The command queries the mainnet NNS governance canister
   `rrkah-fqaaa-aaaaa-aaaaq-cai` with the Candid `list_node_providers` query,
   keeps the live call inside `canic-ic-registry`, shapes report/text output in
-  `canic-host`, and exposes the surface through `canic-cli`. Text output is a
-  narrow provider-principal table; JSON includes optional reward-account hex.
-  The command is mainnet-only in 0.60 and rejects non-`ic` networks like the
-  existing NNS subnet commands.
+  `canic-host`, and exposes the surface through `canic-cli`. Non-verbose text
+  mirrors the subnet list style with five-character provider principals plus
+  name/node-count columns; verbose text and JSON keep full principals and
+  reward-account detail. `info` resolves exact provider principals or unique
+  provider-principal prefixes. The command is mainnet-only in 0.60 and rejects
+  non-`ic` networks like the existing NNS subnet commands.
 - `0.60.6` moves the public NNS subnet inspection surface from
   `canic subnet catalog ...` to `canic nns subnet ...`, records packaged
   downstream CLI proof for the current 0.60 subnet catalog line, and simplifies

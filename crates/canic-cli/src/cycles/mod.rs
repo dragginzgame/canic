@@ -7,7 +7,7 @@ mod transport;
 mod wallet;
 
 use crate::{
-    cli::{clap::parse_subcommand, help::print_help_or_version},
+    cli::{clap::parse_required_subcommand, help::print_help_or_version},
     cycles::{
         options::{CyclesOptions, info_usage},
         render::write_cycles_report,
@@ -86,11 +86,8 @@ where
         return Ok(());
     }
 
-    let Some((command, args)) = parse_subcommand(cycles_command(), args)
-        .map_err(|_| CyclesCommandError::Usage(cycles_usage()))?
-    else {
-        return Err(CyclesCommandError::Usage(cycles_usage()));
-    };
+    let (command, args) = parse_required_subcommand(cycles_command(), args)
+        .map_err(|_| CyclesCommandError::Usage(cycles_usage()))?;
 
     wallet::run_cycles_command(&command, args)
 }

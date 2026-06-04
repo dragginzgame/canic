@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
-        parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
-        required_path, value_arg,
+        parse_matches, parse_required_subcommand, passthrough_subcommand, path_option,
+        render_usage, required_path, value_arg,
     },
     cli::help::print_help_or_version,
     output, version_text,
@@ -81,11 +81,8 @@ where
         return Ok(());
     }
 
-    let Some((command, args)) = parse_subcommand(manifest_command(), args)
-        .map_err(|_| ManifestCommandError::Usage(usage()))?
-    else {
-        return Err(ManifestCommandError::Usage(usage()));
-    };
+    let (command, args) = parse_required_subcommand(manifest_command(), args)
+        .map_err(|_| ManifestCommandError::Usage(usage()))?;
 
     match command.as_str() {
         "validate" => {

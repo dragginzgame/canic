@@ -39,6 +39,17 @@ where
     }))
 }
 
+pub fn parse_required_subcommand<I>(
+    command: Command,
+    args: I,
+) -> Result<(String, Vec<OsString>), clap::Error>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    parse_subcommand(command.subcommand_required(true), args)
+        .map(|subcommand| subcommand.expect("clap requires a subcommand"))
+}
+
 pub fn value_arg(id: &'static str) -> Arg {
     Arg::new(id).num_args(1)
 }

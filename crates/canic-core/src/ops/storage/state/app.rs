@@ -1,11 +1,12 @@
 use crate::{
-    InternalError,
-    dto::state::{AppCommand, AppStateInput, AppStateResponse, AppStatus},
+    dto::state::{
+        AppCommand, AppCommandResponse, AppStateInput, AppStateResponse, AppStatus,
+        SetStateResponse,
+    },
+    ops::prelude::*,
     ops::storage::state::mapper::{AppStateCommandMapper, AppStateMapper},
-    ops::{prelude::*, storage::StorageOpsError},
     storage::stable::state::app::{AppMode, AppState, AppStateRecord},
 };
-use thiserror::Error as ThisError;
 
 ///
 /// AppStateCommand
@@ -15,25 +16,6 @@ use thiserror::Error as ThisError;
 pub enum AppStateCommand {
     SetStatus(AppStatus),
     SetCyclesFundingEnabled(bool),
-}
-
-///
-/// AppStateOpsError
-///
-
-#[derive(Debug, ThisError)]
-pub enum AppStateOpsError {
-    #[error("app is already in {0} mode")]
-    AlreadyInMode(AppMode),
-
-    #[error("cycles funding already set to {0}")]
-    CyclesFundingAlreadySet(bool),
-}
-
-impl From<AppStateOpsError> for InternalError {
-    fn from(err: AppStateOpsError) -> Self {
-        StorageOpsError::from(err).into()
-    }
 }
 
 ///
@@ -76,41 +58,48 @@ impl AppStateOps {
     // Commands
     // -------------------------------------------------------------
 
-    pub fn execute_command(cmd: AppStateCommand) -> Result<(), InternalError> {
+    pub fn execute_command(cmd: AppStateCommand) -> AppCommandResponse {
         match cmd {
             AppStateCommand::SetStatus(status) => {
                 let old_mode = AppState::get_mode();
-                let new_mode = match status {
-                    AppStatus::Active => AppMode::Enabled,
-                    AppStatus::Readonly => AppMode::Readonly,
-                    AppStatus::Stopped => AppMode::Disabled,
-                };
+                let previous = mode_to_status(old_mode);
+                let new_mode = status_to_mode(status);
+                let changed = old_mode != new_mode;
 
-                if old_mode == new_mode {
-                    return Err(AppStateOpsError::AlreadyInMode(old_mode).into());
+                if changed {
+                    AppState::set_mode(new_mode);
+                    log!(Topic::App, Ok, "app: mode changed {old_mode} -> {new_mode}");
                 }
 
-                AppState::set_mode(new_mode);
-                log!(Topic::App, Ok, "app: mode changed {old_mode} -> {new_mode}");
+                AppCommandResponse::Status(SetStateResponse {
+                    previous,
+                    current: status,
+                    changed,
+                })
             }
             AppStateCommand::SetCyclesFundingEnabled(enabled) => {
                 let old = AppState::cycles_funding_enabled();
-                if old == enabled {
-                    return Err(AppStateOpsError::CyclesFundingAlreadySet(old).into());
+                let changed = old != enabled;
+
+                if changed {
+                    AppState::set_cycles_funding_enabled(enabled);
+                    log!(
+                        Topic::App,
+                        Ok,
+                        "app: cycles_funding_enabled changed {old} -> {enabled}"
+                    );
                 }
-                AppState::set_cycles_funding_enabled(enabled);
-                log!(
-                    Topic::App,
-                    Ok,
-                    "app: cycles_funding_enabled changed {old} -> {enabled}"
-                );
+
+                AppCommandResponse::CyclesFundingEnabled(SetStateResponse {
+                    previous: old,
+                    current: enabled,
+                    changed,
+                })
             }
         }
-
-        Ok(())
     }
 
-    pub fn apply_command(cmd: AppCommand) -> Result<(), InternalError> {
+    pub fn apply_command(cmd: AppCommand) -> AppCommandResponse {
         let internal = AppStateCommandMapper::dto_to_record(cmd);
         Self::execute_command(internal)
     }
@@ -153,5 +142,105 @@ impl AppStateOps {
     pub fn import_input(view: AppStateInput) {
         let record = AppStateMapper::input_to_record(view);
         AppState::import(record);
+    }
+}
+
+const fn status_to_mode(status: AppStatus) -> AppMode {
+    match status {
+        AppStatus::Active => AppMode::Enabled,
+        AppStatus::Readonly => AppMode::Readonly,
+        AppStatus::Stopped => AppMode::Disabled,
+    }
+}
+
+const fn mode_to_status(mode: AppMode) -> AppStatus {
+    match mode {
+        AppMode::Enabled => AppStatus::Active,
+        AppMode::Readonly => AppStatus::Readonly,
+        AppMode::Disabled => AppStatus::Stopped,
+    }
+}
+
+///
+/// TESTS
+///
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reset_state(mode: AppMode, cycles_funding_enabled: bool) {
+        AppStateOps::import(AppStateRecord {
+            mode,
+            cycles_funding_enabled,
+        });
+    }
+
+    #[test]
+    fn set_status_changes_state_and_reports_previous_current() {
+        reset_state(AppMode::Disabled, true);
+
+        let response = AppStateOps::apply_command(AppCommand::SetStatus(AppStatus::Active));
+
+        assert_eq!(AppStateOps::get_mode(), AppMode::Enabled);
+        assert_eq!(
+            response,
+            AppCommandResponse::Status(SetStateResponse {
+                previous: AppStatus::Stopped,
+                current: AppStatus::Active,
+                changed: true,
+            })
+        );
+    }
+
+    #[test]
+    fn set_status_replay_returns_unchanged_success() {
+        reset_state(AppMode::Enabled, true);
+
+        let response = AppStateOps::apply_command(AppCommand::SetStatus(AppStatus::Active));
+
+        assert_eq!(AppStateOps::get_mode(), AppMode::Enabled);
+        assert_eq!(
+            response,
+            AppCommandResponse::Status(SetStateResponse {
+                previous: AppStatus::Active,
+                current: AppStatus::Active,
+                changed: false,
+            })
+        );
+    }
+
+    #[test]
+    fn set_cycles_funding_changes_state_and_reports_previous_current() {
+        reset_state(AppMode::Enabled, true);
+
+        let response = AppStateOps::apply_command(AppCommand::SetCyclesFundingEnabled(false));
+
+        assert!(!AppStateOps::cycles_funding_enabled());
+        assert_eq!(
+            response,
+            AppCommandResponse::CyclesFundingEnabled(SetStateResponse {
+                previous: true,
+                current: false,
+                changed: true,
+            })
+        );
+    }
+
+    #[test]
+    fn set_cycles_funding_replay_returns_unchanged_success() {
+        reset_state(AppMode::Enabled, false);
+
+        let response = AppStateOps::apply_command(AppCommand::SetCyclesFundingEnabled(false));
+
+        assert!(!AppStateOps::cycles_funding_enabled());
+        assert_eq!(
+            response,
+            AppCommandResponse::CyclesFundingEnabled(SetStateResponse {
+                previous: false,
+                current: false,
+                changed: false,
+            })
+        );
     }
 }

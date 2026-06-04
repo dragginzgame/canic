@@ -1,7 +1,7 @@
 mod download;
 
 use crate::{
-    cli::clap::{parse_subcommand, passthrough_subcommand, render_usage},
+    cli::clap::{parse_required_subcommand, passthrough_subcommand, render_usage},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -68,11 +68,8 @@ where
         return Ok(());
     }
 
-    let Some((command, args)) = parse_subcommand(snapshot_command(), args)
-        .map_err(|_| SnapshotCommandError::Usage(usage()))?
-    else {
-        return Err(SnapshotCommandError::Usage(usage()));
-    };
+    let (command, args) = parse_required_subcommand(snapshot_command(), args)
+        .map_err(|_| SnapshotCommandError::Usage(usage()))?;
 
     match command.as_str() {
         "download" => run_download(args),

@@ -67,8 +67,9 @@ rg -n 'consume|scope|subject|verify|bind|return Err|return Ok' crates/canic-core
 
 Expected:
 
-- no replay/update token consumption before token verification;
-- no replay/update token consumption before subject binding and scope checks;
+- no domain replay receipt lookup or reservation before token verification;
+- no domain replay receipt lookup or reservation before subject binding and
+  scope checks;
 - no plural delegated-token audience DTOs or compatibility shims;
 - handler dispatch occurs only after access evaluation succeeds.
 
