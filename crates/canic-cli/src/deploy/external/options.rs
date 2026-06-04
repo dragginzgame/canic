@@ -1,8 +1,5 @@
-use super::super::{
-    DeployCommandError, DeployTruthOptions,
-    output_format::{ExternalOutputFormat, parse_external_output_format},
-};
-use crate::cli::clap::{parse_matches, path_option, string_option};
+use super::super::{DeployCommandError, DeployTruthOptions, output_format::ExternalOutputFormat};
+use crate::cli::clap::{parse_matches, path_option, string_option, typed_option};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
@@ -56,11 +53,8 @@ impl DeployExternalOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            truth: DeployTruthOptions::from_matches(&matches, usage)?,
-            format: parse_external_output_format(
-                string_option(&matches, "format").as_deref(),
-                usage,
-            )?,
+            truth: DeployTruthOptions::from_matches(&matches),
+            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
         })
     }
 }
@@ -77,11 +71,8 @@ impl DeployExternalCriticalFixOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            truth: DeployTruthOptions::from_matches(&matches, usage)?,
-            format: parse_external_output_format(
-                string_option(&matches, "format").as_deref(),
-                usage,
-            )?,
+            truth: DeployTruthOptions::from_matches(&matches),
+            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
             fix_id: string_option(&matches, "fix-id").expect("clap requires fix-id"),
             severity: string_option(&matches, "severity").expect("clap requires severity"),
         })
@@ -101,10 +92,7 @@ impl DeployExternalVerifyOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: path_option(&matches, "request").expect("clap requires request"),
-            format: parse_external_output_format(
-                string_option(&matches, "format").as_deref(),
-                usage,
-            )?,
+            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
         })
     }
 }
@@ -122,10 +110,7 @@ impl DeployExternalInspectOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: path_option(&matches, "request").expect("clap requires request"),
-            format: parse_external_output_format(
-                string_option(&matches, "format").as_deref(),
-                usage,
-            )?,
+            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
         })
     }
 }

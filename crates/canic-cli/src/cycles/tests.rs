@@ -31,7 +31,15 @@ fn parses_duration_selectors() {
             OsString::from("--since"),
             OsString::from("0h"),
         ]),
-        Err(CyclesCommandError::InvalidDuration(_))
+        Err(CyclesCommandError::Usage(_))
+    );
+    std::assert_matches!(
+        options::CyclesOptions::parse_info([
+            OsString::from("test"),
+            OsString::from("--limit"),
+            OsString::from("0"),
+        ]),
+        Err(CyclesCommandError::Usage(_))
     );
 }
 

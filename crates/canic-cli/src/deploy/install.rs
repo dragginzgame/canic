@@ -1,10 +1,7 @@
-use super::{
-    DEFAULT_READY_TIMEOUT_SECONDS, DEFAULT_ROOT_TARGET, DeployCommandError, parse_profile,
-    value_arg,
-};
+use super::{DEFAULT_READY_TIMEOUT_SECONDS, DEFAULT_ROOT_TARGET, DeployCommandError, value_arg};
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, string_option},
+        clap::{parse_matches, path_option, string_option, typed_option},
         defaults::local_network,
         globals::internal_network_arg,
         help::print_help_or_version,
@@ -116,10 +113,7 @@ impl DeployInstallPlanOptions {
             deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
             plan: path_option(&matches, PLAN_ARG).expect("clap requires plan"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            profile: string_option(&matches, PROFILE_ARG)
-                .as_deref()
-                .map(|profile| parse_profile(profile, usage))
-                .transpose()?,
+            profile: typed_option(&matches, PROFILE_ARG),
         })
     }
 
@@ -196,6 +190,7 @@ fn profile_arg() -> clap::Arg {
         .long(PROFILE_ARG)
         .value_name("debug|fast|release")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(super::parse_profile))
         .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release")
 }
 

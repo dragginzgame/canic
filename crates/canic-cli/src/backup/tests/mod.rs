@@ -342,6 +342,11 @@ fn backup_target_options_reject_missing_or_duplicate_selectors() {
     ])
     .expect_err("duplicate selector rejects");
     std::assert_matches!(duplicate, BackupCommandError::Usage(_));
+
+    let invalid_keep =
+        BackupPruneOptions::parse([OsString::from("--keep"), OsString::from("banana")])
+            .expect_err("invalid keep rejects");
+    std::assert_matches!(invalid_keep, BackupCommandError::Usage(_));
 }
 
 // Ensure backup status reads the journal and reports resume actions.

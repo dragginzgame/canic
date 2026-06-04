@@ -1,5 +1,5 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    cli::clap::{flag_arg, parse_matches, path_option, string_option, typed_option, value_arg},
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
@@ -8,7 +8,7 @@ use super::{
     BackupCommandError, create_usage, inspect_usage, list_usage, prune_usage, status_usage,
     verify_usage,
 };
-use clap::{ArgMatches, Command as ClapCommand};
+use clap::{ArgGroup, ArgMatches, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
 
 const BACKUP_REF: &str = "backup-ref";
@@ -133,18 +133,10 @@ impl BackupPruneOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_backup_options(backup_prune_command(), prune_usage, args)?;
-        let keep = string_option(&matches, "keep")
-            .map(|value| {
-                value
-                    .parse::<usize>()
-                    .map_err(|_| BackupCommandError::Usage(prune_usage()))
-            })
-            .transpose()?;
-
         Ok(Self {
             dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("backups")),
             failed: matches.get_flag("failed"),
-            keep,
+            keep: typed_option(&matches, "keep"),
             dry_run: matches.get_flag("dry-run"),
             out: path_option(&matches, "out"),
         })
@@ -171,6 +163,7 @@ pub(super) fn backup_prune_command() -> ClapCommand {
             value_arg("keep")
                 .long("keep")
                 .value_name("count")
+                .value_parser(clap::builder::ValueParser::new(parse_usize))
                 .help("Keep the newest count entries from `canic backup list`"),
         )
         .arg(
@@ -199,7 +192,7 @@ impl BackupInspectOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_backup_options(backup_inspect_command(), inspect_usage, args)?;
-        let (backup_ref, dir) = parse_backup_target(&matches, inspect_usage)?;
+        let (backup_ref, dir) = backup_target(&matches);
 
         Ok(Self {
             backup_ref,
@@ -236,7 +229,7 @@ impl BackupVerifyOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_backup_options(backup_verify_command(), verify_usage, args)?;
-        let (backup_ref, dir) = parse_backup_target(&matches, verify_usage)?;
+        let (backup_ref, dir) = backup_target(&matches);
 
         Ok(Self {
             backup_ref,
@@ -272,7 +265,7 @@ impl BackupStatusOptions {
         I: IntoIterator<Item = OsString>,
     {
         let matches = parse_backup_options(backup_status_command(), status_usage, args)?;
-        let (backup_ref, dir) = parse_backup_target(&matches, status_usage)?;
+        let (backup_ref, dir) = backup_target(&matches);
 
         Ok(Self {
             backup_ref,
@@ -324,16 +317,22 @@ fn backup_dir_out_command(
                 .help("Explicit backup directory path"),
         )
         .arg(value_arg("out").long("out").value_name("file"))
+        .group(
+            ArgGroup::new("backup-source")
+                .args([BACKUP_REF, "dir"])
+                .required(true)
+                .multiple(false),
+        )
 }
 
-fn parse_backup_target(
-    matches: &ArgMatches,
-    usage: fn() -> String,
-) -> Result<(Option<String>, Option<PathBuf>), BackupCommandError> {
+fn backup_target(matches: &ArgMatches) -> (Option<String>, Option<PathBuf>) {
     let backup_ref = string_option(matches, BACKUP_REF);
     let dir = path_option(matches, "dir");
-    match (&backup_ref, &dir) {
-        (Some(_), Some(_)) | (None, None) => Err(BackupCommandError::Usage(usage())),
-        _ => Ok((backup_ref, dir)),
-    }
+    (backup_ref, dir)
+}
+
+fn parse_usize(value: &str) -> Result<usize, String> {
+    value
+        .parse::<usize>()
+        .map_err(|_| "must be a non-negative integer".to_string())
 }

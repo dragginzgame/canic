@@ -51,6 +51,13 @@ pub fn string_option(matches: &ArgMatches, id: &str) -> Option<String> {
     matches.get_one::<String>(id).cloned()
 }
 
+pub fn typed_option<T>(matches: &ArgMatches, id: &str) -> Option<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    matches.get_one::<T>(id).cloned()
+}
+
 pub fn path_option(matches: &ArgMatches, id: &str) -> Option<PathBuf> {
     string_option(matches, id).map(PathBuf::from)
 }

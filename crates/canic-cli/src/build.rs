@@ -1,6 +1,6 @@
 use crate::{
     cli::{
-        clap::{parse_matches, string_option, value_arg},
+        clap::{parse_matches, string_option, typed_option, value_arg},
         defaults::local_network,
         globals::internal_network_arg,
         help::print_help_or_version,
@@ -100,10 +100,7 @@ impl BuildOptions {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
             role: string_option(&matches, "role").expect("clap requires role"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            profile: string_option(&matches, "profile")
-                .as_deref()
-                .map(parse_profile)
-                .transpose()?,
+            profile: typed_option(&matches, "profile"),
             workspace: string_option(&matches, "workspace"),
             icp_root: string_option(&matches, "icp-root"),
             config: string_option(&matches, "config"),
@@ -180,6 +177,7 @@ fn build_command() -> ClapCommand {
                 .long("profile")
                 .value_name("debug|fast|release")
                 .num_args(1)
+                .value_parser(clap::builder::ValueParser::new(parse_profile))
                 .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
         )
         .arg(
@@ -348,15 +346,14 @@ fn normalize_build_path(path: &str) -> PathBuf {
     }
 }
 
-fn parse_profile(value: &str) -> Result<CanisterBuildProfile, BuildCommandError> {
+fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {
     match value {
         "debug" => Ok(CanisterBuildProfile::Debug),
         "fast" => Ok(CanisterBuildProfile::Fast),
         "release" => Ok(CanisterBuildProfile::Release),
-        _ => Err(BuildCommandError::Usage(format!(
-            "invalid build profile: {value}\n\n{}",
-            usage()
-        ))),
+        _ => Err(format!(
+            "invalid build profile {value}; use debug, fast, or release"
+        )),
     }
 }
 

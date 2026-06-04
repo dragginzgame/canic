@@ -16,18 +16,43 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.7` moves remaining simple `canic-cli` option validation onto Clap
+  value parsers and typed match extraction, so invalid values fail at the CLI
+  parse boundary without changing command names, flags, JSON shapes, NNS
+  catalog behavior, or output columns.
+
+- `0.60.6` moves the public subnet inspection surface under `canic nns`, records
+  packaged downstream CLI proof for the 0.60 subnet catalog line, and
+  simplifies catalog stale-cache help. The publishable crate chain packages
+  cleanly, an isolated downstream CLI build still works with
+  `canic-subnet-catalog`, `canic-ic-registry`, `canic-host`, and `canic-cli` in
+  the graph, and `canic nns subnet list/info` now use the 7-day freshness
+  default with `canic nns subnet refresh` as the force-refresh path instead of
+  exposing stale-policy knobs on read-only inspection commands. `canic nns
+  subnet info <x>` also accepts unique cached subnet-principal prefixes for
+  subnet lookups. README and current operator docs now point at the final
+  `canic nns subnet ...` namespace.
+
+  ```text
+  canic nns subnet list
+  canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
+  canic nns subnet info <subnet-prefix>
+  canic nns subnet refresh
+  bash scripts/ci/verify-packaged-downstream-cli.sh
+  ```
+
 - `0.60.5` teaches the shared NNS registry adapter to reconstruct
   high-capacity registry values through `get_chunk` with SHA-256 validation,
-  makes `canic subnet catalog list` compact by default with `--verbose` for the
+  makes `canic nns subnet list` compact by default with `--verbose` for the
   full text view, and refreshes help text for the current catalog and
   deployment surfaces.
 
   ```text
   canic help
-  canic subnet help
-  canic subnet catalog list
-  canic subnet catalog list --verbose
-  canic subnet catalog refresh help
+  canic nns help
+  canic nns subnet list
+  canic nns subnet list --verbose
+  canic nns subnet refresh help
   ```
 
 - `0.60.4` records the operator proof for the catalog-derived estimate source:
@@ -36,9 +61,9 @@ Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
   changing measured instruction rows.
 
   ```text
-  target/debug/canic subnet catalog refresh --format json
-  target/debug/canic subnet catalog list --format json
-  target/debug/canic subnet catalog info mf7xa-laaaa-aaaar-qaaaa-cai --format json
+  target/debug/canic nns subnet refresh --format json
+  target/debug/canic nns subnet list --format json
+  target/debug/canic nns subnet info mf7xa-laaaa-aaaar-qaaaa-cai --format json
   bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal mf7xa-laaaa-aaaar-qaaaa-cai
   ```
 
@@ -59,31 +84,30 @@ Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
   refresh failure.
 
   ```text
-  canic subnet catalog refresh
-  canic --network ic subnet catalog refresh
-  canic subnet catalog refresh --dry-run --output <path>
+  canic nns subnet refresh
+  canic --network ic nns subnet refresh
+  canic nns subnet refresh --dry-run --output <path>
   ```
 
-- `0.60.1` renames the cached subnet inspection command group from
-  `canic subnet network ...` to `canic subnet catalog ...`, preserving the
-  mainnet-only `--network ic` behavior and clarifying the cached-only
+- `0.60.1` refines the cached subnet inspection command wording, preserving
+  the mainnet-only `--network ic` behavior and clarifying the cached-only
   missing-catalog error.
 
   ```text
-  canic subnet catalog list
-  canic --network ic subnet catalog list
-  canic subnet catalog info <subnet-principal|canister-principal|deployment-target>
+  canic nns subnet list
+  canic --network ic nns subnet list
+  canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
   ```
 
 - `0.60.0` starts the NNS subnet inspection line with a cached mainnet IC
-  subnet catalog schema/resolver and read-only `canic subnet network list/info`
-  commands over local cache data. Live refresh and estimate integration remain
+  subnet catalog schema/resolver and read-only NNS subnet inspection commands
+  over local cache data. Live refresh and estimate integration remain
   deferred to later 0.60 patches.
 
   ```text
-  canic subnet network list
-  canic --network ic subnet network list
-  canic subnet network info <subnet-principal|canister-principal|deployment-target>
+  canic nns subnet list
+  canic --network ic nns subnet list
+  canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
   ```
 
 ## [0.59.x] - 2026-06-03 - Instruction accounting and offline cost estimates

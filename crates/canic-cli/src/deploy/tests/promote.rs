@@ -233,11 +233,7 @@ fn promote_policy_check_rejects_unknown_format() {
         promote_policy_check_usage,
     );
 
-    std::assert_matches!(
-        result,
-        Err(DeployCommandError::Usage(message))
-            if message.contains("invalid promotion output format: csv")
-    );
+    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }
 
 type PromoteCommandFactory = fn() -> ClapCommand;

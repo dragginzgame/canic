@@ -1,5 +1,5 @@
 use crate::{
-    cli::clap::{parse_matches, string_option, value_arg},
+    cli::clap::{parse_matches, string_option, typed_option, value_arg},
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
     cli::help::print_help_or_version,
@@ -71,10 +71,7 @@ impl InstallOptions {
         Ok(Self {
             fleet,
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            profile: string_option(&matches, "profile")
-                .as_deref()
-                .map(parse_profile)
-                .transpose()?,
+            profile: typed_option(&matches, "profile"),
         })
     }
 
@@ -130,6 +127,7 @@ fn install_command() -> ClapCommand {
                 .long("profile")
                 .value_name("debug|fast|release")
                 .num_args(1)
+                .value_parser(clap::builder::ValueParser::new(parse_profile))
                 .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
         )
         .arg(internal_network_arg())
@@ -163,15 +161,14 @@ fn usage() -> String {
     command.render_help().to_string()
 }
 
-fn parse_profile(value: &str) -> Result<CanisterBuildProfile, InstallCommandError> {
+fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {
     match value {
         "debug" => Ok(CanisterBuildProfile::Debug),
         "fast" => Ok(CanisterBuildProfile::Fast),
         "release" => Ok(CanisterBuildProfile::Release),
-        _ => Err(InstallCommandError::Usage(format!(
-            "invalid build profile: {value}\n\n{}",
-            usage()
-        ))),
+        _ => Err(format!(
+            "invalid build profile {value}; use debug, fast, or release"
+        )),
     }
 }
 

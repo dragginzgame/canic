@@ -391,9 +391,5 @@ fn external_plan_rejects_unknown_format() {
         deploy_external::plan_usage,
     );
 
-    std::assert_matches!(
-        result,
-        Err(DeployCommandError::Usage(message))
-            if message.contains("invalid external lifecycle output format: yaml")
-    );
+    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }

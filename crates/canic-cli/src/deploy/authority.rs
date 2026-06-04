@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, parse_subcommand, passthrough_subcommand, string_option},
+        clap::{parse_matches, parse_subcommand, passthrough_subcommand, typed_option},
         help::print_help_or_version,
     },
     version_text,
@@ -248,11 +248,8 @@ impl DeployAuthorityOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            truth: DeployTruthOptions::from_matches(&matches, usage)?,
-            format: parse_authority_output_format(
-                string_option(&matches, "format").as_deref(),
-                usage,
-            )?,
+            truth: DeployTruthOptions::from_matches(&matches),
+            format: typed_option(&matches, "format").unwrap_or(AuthorityOutputFormat::Json),
         })
     }
 }
@@ -291,6 +288,9 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(
+            parse_authority_output_format,
+        ))
         .help("Output format; defaults to json")
 }
 

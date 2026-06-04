@@ -65,7 +65,7 @@ impl DeployResumeReportOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
-            truth: DeployTruthOptions::from_matches(&matches, usage)?,
+            truth: DeployTruthOptions::from_matches(&matches),
             receipt: path_option(&matches, RECEIPT_ARG),
         })
     }

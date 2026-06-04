@@ -251,9 +251,5 @@ fn assert_authority_rejects_unknown_format(
         usage,
     );
 
-    std::assert_matches!(
-        result,
-        Err(DeployCommandError::Usage(message))
-            if message.contains(&format!("invalid authority output format: {format}"))
-    );
+    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }

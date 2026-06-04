@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, string_option},
+        clap::{parse_matches, path_option, string_option, typed_option},
         help::print_help_or_version,
     },
     version_text,
@@ -115,10 +115,7 @@ impl DeployCompareOptions {
             right: path_option(&matches, RIGHT_ARG).expect("clap requires right"),
             left_label: string_option(&matches, LEFT_LABEL_ARG),
             right_label: string_option(&matches, RIGHT_LABEL_ARG),
-            format: parse_compare_output_format(
-                string_option(&matches, FORMAT_ARG).as_deref(),
-                usage,
-            )?,
+            format: typed_option(&matches, FORMAT_ARG).unwrap_or(CompareOutputFormat::Json),
         })
     }
 }
@@ -166,6 +163,7 @@ fn format_arg() -> clap::Arg {
         .long(FORMAT_ARG)
         .value_name("json|text")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(parse_compare_output_format))
         .help("Output format; defaults to json")
 }
 

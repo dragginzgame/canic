@@ -219,12 +219,12 @@ pub struct SubnetCatalogRefreshReport {
 #[derive(Debug, ThisError)]
 pub enum SubnetCatalogHostError {
     #[error(
-        "`canic subnet catalog` supports only the mainnet `ic` network in 0.60\n\nThe cached subnet catalog describes the public Internet Computer mainnet.\nLocal replica subnet discovery is not implemented yet.\n\nTry:\n  canic --network ic subnet catalog list"
+        "`canic nns subnet` supports only the mainnet `ic` network in 0.60\n\nThe cached NNS subnet data describes the public Internet Computer mainnet.\nLocal replica subnet discovery is not implemented yet.\n\nTry:\n  canic --network ic nns subnet list"
     )]
     UnsupportedNetwork { network: String },
 
     #[error(
-        "subnet catalog cache is missing at {}\n\nRun `canic subnet catalog refresh` to fetch the public Internet Computer mainnet catalog, or populate this path with a valid Canic subnet catalog JSON.",
+        "subnet catalog cache is missing at {}\n\nRun `canic nns subnet refresh` to fetch the public Internet Computer mainnet catalog, or populate this path with a valid Canic subnet catalog JSON.",
         path.display()
     )]
     MissingCatalog { path: PathBuf },
@@ -465,7 +465,7 @@ pub fn build_subnet_catalog_info_report(
     } else {
         cached
             .catalog
-            .resolve_principal(&request.input, request.forced)?
+            .resolve_principal_or_prefix(&request.input, request.forced)?
     };
     let (charges_apply_to_subject, charge_applicability_reason) =
         charge_applicability(resolved.resolved_as, resolved.subnet.subnet_kind);
@@ -1291,9 +1291,9 @@ mod tests {
         let message = err.to_string();
 
         let _ = fs::remove_dir_all(root);
-        assert!(message.contains("Run `canic subnet catalog refresh`"));
+        assert!(message.contains("Run `canic nns subnet refresh`"));
         assert!(message.contains("public Internet Computer mainnet catalog"));
-        assert!(message.contains("canic subnet catalog refresh"));
+        assert!(message.contains("canic nns subnet refresh"));
     }
 
     #[test]
@@ -1353,6 +1353,38 @@ mod tests {
             "charged_user_canister_subnet"
         );
         assert_eq!(report.cycles_per_billion_instructions, Some(2_615_384_616));
+    }
+
+    #[test]
+    fn info_report_resolves_unique_subnet_prefix() {
+        let root = temp_dir("canic-subnet-host-info-subnet-prefix");
+        write_catalog(&root, fixture_catalog());
+        let request = info_request(&root, "rwl");
+
+        let report = build_subnet_catalog_info_report(&request).expect("info report");
+
+        let _ = fs::remove_dir_all(root);
+        assert_eq!(report.input_principal, "rwl");
+        assert_eq!(report.resolved_as, "subnet");
+        assert_eq!(report.resolved_from, "subnet_principal_prefix");
+        assert_eq!(report.subnet_principal, SUBNET_A);
+        assert_eq!(report.matched_canister_principal, None);
+    }
+
+    #[test]
+    fn info_report_rejects_canister_prefix() {
+        let root = temp_dir("canic-subnet-host-info-canister-prefix");
+        write_catalog(&root, fixture_catalog());
+        let request = info_request(&root, "ryj");
+
+        let err = build_subnet_catalog_info_report(&request).expect_err("canister prefix rejected");
+
+        let _ = fs::remove_dir_all(root);
+        std::assert_matches!(
+            err,
+            SubnetCatalogHostError::Catalog(CatalogError::PrincipalPrefixNotFound { prefix })
+                if prefix == "ryj"
+        );
     }
 
     #[test]

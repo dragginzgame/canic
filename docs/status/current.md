@@ -9,19 +9,59 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.60.5` covers the current registry/catalog/help cleanup batch. The shared
+- `0.60.6` moves the public NNS subnet inspection surface from
+  `canic subnet catalog ...` to `canic nns subnet ...`, records packaged
+  downstream CLI proof for the current 0.60 subnet catalog line, and simplifies
+  catalog stale-cache help. The verifier packages the publishable crate chain,
+  repoints an isolated downstream CLI consumer at the packaged archives, builds
+  offline, and runs basic CLI probes outside the workspace source tree. This
+  proves `canic-subnet-catalog`, `canic-ic-registry`, `canic-host`, and
+  `canic-cli` remain package-ready after the 0.60.5 registry chunking, compact
+  list, and help cleanup changes. `canic nns subnet list/info` now use the
+  7-day freshness default internally, keep stale status visible in output, and
+  direct operators to the existing force-refresh path. `canic nns subnet info`
+  also accepts unique cached subnet-principal prefixes for subnet lookups, so
+  compact inputs can resolve when they identify exactly one subnet principal:
+  ```text
+  canic nns subnet list
+  canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
+  canic nns subnet info <subnet-prefix>
+  canic nns subnet refresh
+  ```
+  No cache paths, catalog JSON fields, estimate fields, or registry transport
+  behavior change in this patch. The catalog resolver API intentionally gains
+  subnet-prefix resolution and typed prefix errors. Validation:
+  ```text
+  cargo test -p canic --test workspace_manifest publishable_members_do_not_depend_on_unpublished_workspace_members -- --nocapture
+  cargo test -p canic-subnet-catalog -- --nocapture
+  cargo test -p canic-host subnet_catalog -- --nocapture
+  cargo test -p canic-cli --lib nns -- --nocapture
+  cargo test -p canic-cli --lib -- --nocapture
+  cargo build -p canic-cli
+  target/debug/canic nns help
+  target/debug/canic nns subnet help
+  target/debug/canic nns subnet list help
+  target/debug/canic nns subnet info help
+  target/debug/canic nns subnet refresh help
+  target/debug/canic nns subnet info tdb
+  target/debug/canic nns subnet info ryjl3-tyaaa-aaaaa-aaaba-cai
+  bash scripts/ci/verify-packaged-downstream-cli.sh
+  cargo test -p canic --test changelog_governance -- --nocapture
+  make fmt-check
+  git diff --check
+  ```
+- `0.60.5` covers the registry/catalog/help cleanup batch. The shared
   `canic-ic-registry` adapter reconstructs high-capacity NNS registry values
   inside the adapter boundary: `get_value` responses with
   `large_value_chunk_keys` trigger Candid `get_chunk` requests, each returned
   chunk is SHA-256 validated before concatenation, and
   missing/rejected/mismatched chunks produce typed registry fetch errors before
-  any catalog write. `canic subnet catalog list` is compact by default for
-  standard terminal widths, uses the first five characters of each subnet
+  any catalog write. The current `canic nns subnet list` surface is compact by
+  default for standard terminal widths, uses the first five characters of each subnet
   principal, and omits wider metadata columns; `--verbose` restores the
   full-principal/full-metadata text output. JSON output remains unchanged and
-  full-fidelity. `canic help`, `canic subnet help`, and
-  `canic subnet catalog help` now describe the refresh-capable catalog surface
-  instead of the whole namespace as cached-only.
+  full-fidelity. `canic help`, `canic nns help`, and
+  `canic nns subnet help` describe the refresh-capable NNS subnet surface.
 - `0.60.4` records the operator proof for the 0.60 catalog-derived estimate
   source. The proof refreshed the mainnet catalog at registry version `59015`,
   listed the cached catalog, resolved `mf7xa-laaaa-aaaar-qaaaa-cai` to
@@ -35,17 +75,17 @@ inspect only the files needed for the current task.
   The report records `rate_source = nns-registry-cache`,
   `formula_version = base_13_node_linear_v1`,
   `cycles_per_billion_instructions = 2615384616`, and `catalog_stale = false`.
-  Proof commands:
+  Current equivalent proof commands:
   ```text
-  target/debug/canic subnet catalog refresh --format json
-  target/debug/canic subnet catalog list --format json
-  target/debug/canic subnet catalog info mf7xa-laaaa-aaaar-qaaaa-cai --format json
+  target/debug/canic nns subnet refresh --format json
+  target/debug/canic nns subnet list --format json
+  target/debug/canic nns subnet info mf7xa-laaaa-aaaar-qaaaa-cai --format json
   bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal mf7xa-laaaa-aaaar-qaaaa-cai
   ```
 - `0.60.3` wires the refreshed mainnet subnet catalog into instruction-audit
   execution-cycle estimates as an optional cached source. The report path
   still performs no live NNS lookup; operators refresh first with
-  `canic subnet catalog refresh` and then opt in with:
+  `canic nns subnet refresh` and then opt in with:
   ```text
   bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal>
   bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --allow-stale-subnet-catalog
@@ -62,11 +102,11 @@ inspect only the files needed for the current task.
 - `0.60.2` adds live mainnet NNS subnet catalog refresh behind the shared
   `canic-ic-registry` adapter. `canic-host` owns the refresh lock and atomic
   cache replacement for `.canic/subnet-catalog/ic/catalog.json`; `canic-cli`
-  now exposes:
+  now exposes the current surface:
   ```text
-  canic subnet catalog refresh
-  canic --network ic subnet catalog refresh
-  canic subnet catalog refresh --dry-run --output <path>
+  canic nns subnet refresh
+  canic --network ic nns subnet refresh
+  canic nns subnet refresh --dry-run --output <path>
   ```
   The command remains mainnet-only in 0.60, rejects non-`ic` networks, writes
   through `<canic-cache-root>/subnet-catalog/ic/refresh.lock` and
@@ -74,17 +114,16 @@ inspect only the files needed for the current task.
   failure. Protobuf transport and registry value decoding stay inside
   `canic-ic-registry`; host/CLI surfaces remain protobuf-free. Instruction
   audit estimate integration lands in `0.60.3`.
-- `0.60.1` renames the cached NNS subnet inspection surface from
-  `canic subnet network ...` to `canic subnet catalog ...`, preserving the
-  mainnet-only `--network ic` behavior and clarifying the cached-only
-  missing-catalog error. `canic-cli` now exposes:
+- `0.60.1` was the intermediate cached NNS subnet inspection rename from
+  `canic subnet network ...` to `canic subnet catalog ...`; `0.60.6` supersedes
+  that public route with `canic nns subnet ...`. The current CLI exposes:
   ```text
-  canic subnet catalog list
-  canic --network ic subnet catalog list
-  canic subnet catalog info <subnet-principal|canister-principal|deployment-target>
+  canic nns subnet list
+  canic --network ic nns subnet list
+  canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
   ```
-  The command group defaults to mainnet `ic`, rejects non-`ic` networks in
-  0.60.1, requires an existing local catalog file, and does not include
+  The historical 0.60.1 route defaulted to mainnet `ic`, rejected non-`ic`
+  networks, required an existing local catalog file, and did not include
   instruction-audit estimate integration yet.
 - `0.60.0` starts the NNS subnet inspection line with cached mainnet IC subnet
   catalog support. The new pure `canic-subnet-catalog` crate owns schema

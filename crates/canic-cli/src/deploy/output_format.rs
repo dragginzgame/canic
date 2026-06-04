@@ -1,5 +1,3 @@
-use super::DeployCommandError;
-
 ///
 /// AuthorityOutputFormat
 ///
@@ -63,124 +61,81 @@ pub(super) enum RootOutputFormat {
     Text,
 }
 
-pub(super) fn parse_promotion_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<PromotionOutputFormat, DeployCommandError> {
+pub(super) fn parse_promotion_output_format(value: &str) -> Result<PromotionOutputFormat, String> {
     parse_json_text_output_format(
         value,
-        "json",
         "promotion",
         PromotionOutputFormat::Json,
         PromotionOutputFormat::Text,
-        usage,
     )
 }
 
-pub(super) fn parse_check_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<CheckOutputFormat, DeployCommandError> {
-    match value.unwrap_or("json") {
+pub(super) fn parse_check_output_format(value: &str) -> Result<CheckOutputFormat, String> {
+    match value {
         "json" => Ok(CheckOutputFormat::Json),
         "envelope-json" => Ok(CheckOutputFormat::EnvelopeJson),
-        other => invalid_output_format("deployment check", other, usage),
+        other => invalid_output_format("deployment check", other),
     }
 }
 
-pub(super) fn parse_catalog_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<CatalogOutputFormat, DeployCommandError> {
+pub(super) fn parse_catalog_output_format(value: &str) -> Result<CatalogOutputFormat, String> {
     parse_json_text_output_format(
         value,
-        "text",
         "deployment catalog",
         CatalogOutputFormat::Json,
         CatalogOutputFormat::Text,
-        usage,
     )
 }
 
-pub(super) fn parse_authority_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<AuthorityOutputFormat, DeployCommandError> {
+pub(super) fn parse_authority_output_format(value: &str) -> Result<AuthorityOutputFormat, String> {
     parse_json_text_output_format(
         value,
-        "json",
         "authority",
         AuthorityOutputFormat::Json,
         AuthorityOutputFormat::Text,
-        usage,
     )
 }
 
-pub(super) fn parse_external_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<ExternalOutputFormat, DeployCommandError> {
+pub(super) fn parse_external_output_format(value: &str) -> Result<ExternalOutputFormat, String> {
     parse_json_text_output_format(
         value,
-        "json",
         "external lifecycle",
         ExternalOutputFormat::Json,
         ExternalOutputFormat::Text,
-        usage,
     )
 }
 
-pub(super) fn parse_compare_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<CompareOutputFormat, DeployCommandError> {
+pub(super) fn parse_compare_output_format(value: &str) -> Result<CompareOutputFormat, String> {
     parse_json_text_output_format(
         value,
-        "json",
         "deployment comparison",
         CompareOutputFormat::Json,
         CompareOutputFormat::Text,
-        usage,
     )
 }
 
-pub(super) fn parse_root_output_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<RootOutputFormat, DeployCommandError> {
+pub(super) fn parse_root_output_format(value: &str) -> Result<RootOutputFormat, String> {
     parse_json_text_output_format(
         value,
-        "json",
         "deployment root",
         RootOutputFormat::Json,
         RootOutputFormat::Text,
-        usage,
     )
 }
 
 fn parse_json_text_output_format<T>(
-    value: Option<&str>,
-    default: &str,
+    value: &str,
     context: &str,
     json: T,
     text: T,
-    usage: fn() -> String,
-) -> Result<T, DeployCommandError> {
-    debug_assert!(matches!(default, "json" | "text"));
-    match value.unwrap_or(default) {
+) -> Result<T, String> {
+    match value {
         "json" => Ok(json),
         "text" => Ok(text),
-        other => invalid_output_format(context, other, usage),
+        other => invalid_output_format(context, other),
     }
 }
 
-fn invalid_output_format<T>(
-    context: &str,
-    value: &str,
-    usage: fn() -> String,
-) -> Result<T, DeployCommandError> {
-    Err(DeployCommandError::Usage(format!(
-        "invalid {context} output format: {value}\n\n{}",
-        usage()
-    )))
+fn invalid_output_format<T>(context: &str, value: &str) -> Result<T, String> {
+    Err(format!("invalid {context} output format: {value}"))
 }

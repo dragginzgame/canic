@@ -1,4 +1,4 @@
-use super::super::value_arg;
+use super::super::{output_format::parse_promotion_output_format, value_arg};
 use crate::cli::clap::passthrough_subcommand;
 use clap::Command as ClapCommand;
 
@@ -416,6 +416,9 @@ fn promotion_format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(
+            parse_promotion_output_format,
+        ))
         .help("Output format; defaults to json")
 }
 

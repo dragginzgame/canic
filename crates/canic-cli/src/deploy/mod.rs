@@ -18,7 +18,7 @@ pub use command::{deploy_command, deploy_truth_leaf_command, usage};
 
 use crate::{
     cli::{
-        clap::{parse_matches, parse_subcommand, string_option},
+        clap::{parse_matches, parse_subcommand, string_option, typed_option},
         defaults::local_network,
         help::print_help_or_version,
     },
@@ -145,21 +145,15 @@ impl DeployTruthOptions {
     {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
-        Self::from_matches(&matches, usage)
+        Ok(Self::from_matches(&matches))
     }
 
-    pub(super) fn from_matches(
-        matches: &clap::ArgMatches,
-        usage: fn() -> String,
-    ) -> Result<Self, DeployCommandError> {
-        Ok(Self {
+    pub(super) fn from_matches(matches: &clap::ArgMatches) -> Self {
+        Self {
             deployment: string_option(matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
             network: string_option(matches, "network").unwrap_or_else(local_network),
-            profile: string_option(matches, PROFILE_ARG)
-                .as_deref()
-                .map(|profile| parse_profile(profile, usage))
-                .transpose()?,
-        })
+            profile: typed_option(matches, PROFILE_ARG),
+        }
     }
 
     fn into_install_root_options_with_icp_root(
@@ -183,18 +177,14 @@ impl DeployTruthOptions {
     }
 }
 
-fn parse_profile(
-    value: &str,
-    usage: fn() -> String,
-) -> Result<CanisterBuildProfile, DeployCommandError> {
+fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {
     match value {
         "debug" => Ok(CanisterBuildProfile::Debug),
         "fast" => Ok(CanisterBuildProfile::Fast),
         "release" => Ok(CanisterBuildProfile::Release),
-        _ => Err(DeployCommandError::Usage(format!(
-            "invalid build profile: {value}\n\n{}",
-            usage()
-        ))),
+        _ => Err(format!(
+            "invalid build profile {value}; use debug, fast, or release"
+        )),
     }
 }
 

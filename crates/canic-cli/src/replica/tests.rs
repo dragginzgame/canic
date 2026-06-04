@@ -32,7 +32,7 @@ fn rejects_invalid_replica_start_port() {
     let error = ReplicaOptions::parse_start([OsString::from("--port"), OsString::from("0")])
         .expect_err("port 0 should be invalid");
 
-    std::assert_matches!(error, ReplicaCommandError::InvalidPort { .. });
+    std::assert_matches!(error, ReplicaCommandError::Usage(_));
 }
 
 // Ensure foreground mode is the default, matching ICP CLI.

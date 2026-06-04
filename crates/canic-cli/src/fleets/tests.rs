@@ -240,10 +240,7 @@ fn rejects_unknown_adoption_profile() {
     ])
     .expect_err("unknown profile should fail");
 
-    std::assert_matches!(
-        err,
-        FleetCommandError::Usage(message) if message.contains("invalid adoption profile: import")
-    );
+    std::assert_matches!(err, FleetCommandError::Usage(_));
 }
 
 // Ensure unsupported adoption report formats fail through usage.
@@ -258,11 +255,7 @@ fn rejects_unknown_adoption_report_format() {
     ])
     .expect_err("unknown format should fail");
 
-    std::assert_matches!(
-        err,
-        FleetCommandError::Usage(message)
-            if message.contains("invalid adoption report output format: yaml")
-    );
+    std::assert_matches!(err, FleetCommandError::Usage(_));
 }
 
 // Ensure provenance evidence cannot silently no-op on raw adoption report output.

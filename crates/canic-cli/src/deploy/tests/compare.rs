@@ -54,11 +54,7 @@ fn deploy_compare_rejects_unknown_format() {
     args.extend([OsString::from("--format"), OsString::from("yaml")]);
     let result = deploy_compare::DeployCompareOptions::parse(args);
 
-    std::assert_matches!(
-        result,
-        Err(DeployCommandError::Usage(message))
-            if message.contains("invalid deployment comparison output format: yaml")
-    );
+    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }
 
 #[test]

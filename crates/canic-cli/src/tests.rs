@@ -41,8 +41,8 @@ fn usage_lists_command_families() {
     assert!(plain.find("    status") < plain.find("    fleet"));
     assert!(plain.find("    fleet") < plain.find("    scaffold"));
     assert!(plain.find("    scaffold") < plain.find("    replica"));
-    assert!(plain.find("    replica") < plain.find("    subnet"));
-    assert!(plain.find("    subnet") < plain.find("    install"));
+    assert!(plain.find("    replica") < plain.find("    nns"));
+    assert!(plain.find("    nns") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    evidence"));
@@ -67,17 +67,18 @@ fn usage_lists_command_families() {
     assert!(plain.contains("    build"));
     assert!(plain.contains("    deploy"));
     assert!(plain.contains("Manage Canic fleets and roles"));
-    assert!(plain.contains("Inspect and refresh the IC subnet catalog"));
+    assert!(plain.contains("Inspect cached NNS registry data"));
     assert!(plain.contains("Inspect, register, and plan deployments"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
     assert!(!plain.contains("Inspect cached IC network subnet metadata"));
+    assert!(!plain.contains("Inspect and refresh the IC subnet catalog"));
     assert!(!plain.contains("Check deployment truth before mutation"));
     assert!(!plain.contains("    network"));
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
     assert!(plain.contains("fleet"));
     assert!(plain.contains("replica"));
-    assert!(plain.contains("subnet"));
+    assert!(plain.contains("nns"));
     assert!(plain.contains("install"));
     assert!(plain.contains("snapshot"));
     assert!(plain.contains("backup"));
@@ -133,11 +134,11 @@ fn command_family_help_returns_ok() {
         &["replica", "start", "help"],
         &["replica", "status", "help"],
         &["replica", "stop", "help"],
-        &["subnet", "help"],
-        &["subnet", "catalog", "help"],
-        &["subnet", "catalog", "list", "help"],
-        &["subnet", "catalog", "info", "help"],
-        &["subnet", "catalog", "refresh", "help"],
+        &["nns", "help"],
+        &["nns", "subnet", "help"],
+        &["nns", "subnet", "list", "help"],
+        &["nns", "subnet", "info", "help"],
+        &["nns", "subnet", "refresh", "help"],
         &["restore", "help"],
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
@@ -177,6 +178,14 @@ fn top_level_fleet_config_command_is_removed() {
 fn top_level_backup_manifest_command_is_removed() {
     std::assert_matches!(
         run([OsString::from("manifest"), OsString::from("help")]),
+        Err(CliError::Usage(_))
+    );
+}
+
+#[test]
+fn top_level_subnet_command_is_removed() {
+    std::assert_matches!(
+        run([OsString::from("subnet"), OsString::from("help")]),
         Err(CliError::Usage(_))
     );
 }
@@ -290,20 +299,20 @@ fn version_flags_return_ok() {
 }
 
 #[test]
-fn subnet_version_flags_return_ok() {
-    assert!(run([OsString::from("subnet"), OsString::from("--version")]).is_ok());
+fn nns_version_flags_return_ok() {
+    assert!(run([OsString::from("nns"), OsString::from("--version")]).is_ok());
     assert!(
         run([
+            OsString::from("nns"),
             OsString::from("subnet"),
-            OsString::from("catalog"),
             OsString::from("--version")
         ])
         .is_ok()
     );
     assert!(
         run([
+            OsString::from("nns"),
             OsString::from("subnet"),
-            OsString::from("catalog"),
             OsString::from("list"),
             OsString::from("--version")
         ])
@@ -311,8 +320,8 @@ fn subnet_version_flags_return_ok() {
     );
     assert!(
         run([
+            OsString::from("nns"),
             OsString::from("subnet"),
-            OsString::from("catalog"),
             OsString::from("info"),
             OsString::from("--version")
         ])
@@ -321,25 +330,25 @@ fn subnet_version_flags_return_ok() {
 }
 
 #[test]
-fn global_icp_is_forwarded_to_subnet_catalog_info_only() {
-    let mut list_tail = vec![OsString::from("catalog"), OsString::from("list")];
+fn global_icp_is_forwarded_to_nns_subnet_info_only() {
+    let mut list_tail = vec![OsString::from("subnet"), OsString::from("list")];
     let mut info_tail = vec![
-        OsString::from("catalog"),
+        OsString::from("subnet"),
         OsString::from("info"),
         OsString::from("demo/root"),
     ];
 
-    apply_global_icp("subnet", &mut list_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp("subnet", &mut info_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("nns", &mut list_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("nns", &mut info_tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
         list_tail,
-        vec![OsString::from("catalog"), OsString::from("list")]
+        vec![OsString::from("subnet"), OsString::from("list")]
     );
     assert_eq!(
         info_tail,
         vec![
-            OsString::from("catalog"),
+            OsString::from("subnet"),
             OsString::from("info"),
             OsString::from("demo/root"),
             OsString::from(INTERNAL_ICP_OPTION),
@@ -581,23 +590,23 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
 }
 
 #[test]
-fn global_network_is_forwarded_to_subnet_catalog_namespace() {
-    let mut list_tail = vec![OsString::from("catalog"), OsString::from("list")];
+fn global_network_is_forwarded_to_nns_subnet_namespace() {
+    let mut list_tail = vec![OsString::from("subnet"), OsString::from("list")];
     let mut info_tail = vec![
-        OsString::from("catalog"),
+        OsString::from("subnet"),
         OsString::from("info"),
         OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai"),
     ];
     let mut family_tail = Vec::new();
 
-    apply_global_network("subnet", &mut list_tail, Some("ic".to_string()));
-    apply_global_network("subnet", &mut info_tail, Some("ic".to_string()));
-    apply_global_network("subnet", &mut family_tail, Some("ic".to_string()));
+    apply_global_network("nns", &mut list_tail, Some("ic".to_string()));
+    apply_global_network("nns", &mut info_tail, Some("ic".to_string()));
+    apply_global_network("nns", &mut family_tail, Some("ic".to_string()));
 
     assert_eq!(
         list_tail,
         vec![
-            OsString::from("catalog"),
+            OsString::from("subnet"),
             OsString::from("list"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("ic")
@@ -606,7 +615,7 @@ fn global_network_is_forwarded_to_subnet_catalog_namespace() {
     assert_eq!(
         info_tail,
         vec![
-            OsString::from("catalog"),
+            OsString::from("subnet"),
             OsString::from("info"),
             OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai"),
             OsString::from(INTERNAL_NETWORK_OPTION),

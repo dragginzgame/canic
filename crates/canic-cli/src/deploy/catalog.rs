@@ -7,6 +7,7 @@ use crate::{
     cli::{
         clap::{
             parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
+            typed_option,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -197,10 +198,7 @@ impl DeployCatalogOptions {
         Ok(Self {
             deployment: None,
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            format: parse_catalog_output_format(
-                string_option(&matches, "format").as_deref(),
-                list_usage,
-            )?,
+            format: typed_option(&matches, "format").unwrap_or(CatalogOutputFormat::Text),
             output: path_option(&matches, "output"),
         })
     }
@@ -216,10 +214,7 @@ impl DeployCatalogOptions {
                 string_option(&matches, "deployment").expect("clap requires deployment"),
             ),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            format: parse_catalog_output_format(
-                string_option(&matches, "format").as_deref(),
-                inspect_usage,
-            )?,
+            format: typed_option(&matches, "format").unwrap_or(CatalogOutputFormat::Text),
             output: path_option(&matches, "output"),
         })
     }
@@ -256,6 +251,7 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("text|json")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(parse_catalog_output_format))
         .help("Output format; defaults to text")
 }
 

@@ -60,6 +60,9 @@ walkthrough.
   or teardown authority. See
   [v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md) and
   [v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md).
+* **NNS subnet inspection:** The operator CLI can refresh and inspect cached
+  public IC subnet metadata from the NNS registry without mutating deployments
+  or canisters.
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
   fleet configs and replica status, installs fleets, captures topology-aware
   snapshots, validates backup manifests, and drives guarded restore planning.
@@ -79,6 +82,14 @@ canic install --profile fast test
 canic info list test
 canic info env test
 canic medic test
+```
+
+To inspect the cached public IC subnet catalog:
+
+```bash
+canic nns subnet refresh
+canic nns subnet list
+canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```
 
 Useful next reads:

@@ -1,4 +1,4 @@
-use super::super::deploy_truth_leaf_command;
+use super::super::{deploy_truth_leaf_command, output_format::parse_external_output_format};
 use crate::cli::clap::{passthrough_subcommand, value_arg};
 use clap::Command as ClapCommand;
 
@@ -385,6 +385,9 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(
+            parse_external_output_format,
+        ))
         .help("Output format; defaults to json")
 }
 

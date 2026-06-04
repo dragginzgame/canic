@@ -247,7 +247,7 @@ bash scripts/ci/instruction-audit-report.sh \
 has refreshed the catalog explicitly:
 
 ```text
-canic subnet catalog refresh
+canic nns subnet refresh
 
 bash scripts/ci/instruction-audit-report.sh \
   --estimate-execution-cycles \

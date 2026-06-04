@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
         parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
-        value_arg,
+        typed_option, value_arg,
     },
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
@@ -781,10 +781,7 @@ impl AdoptionReportOptions {
         let matches = parse_matches(fleet_adoption_report_command(), args)
             .map_err(|_| FleetCommandError::Usage(adoption_report_usage()))?;
 
-        let format = parse_adoption_report_format(
-            string_option(&matches, "format").as_deref(),
-            adoption_report_usage,
-        )?;
+        let format = typed_option(&matches, "format").unwrap_or(AdoptionReportFormat::Text);
         let build_provenance = path_option(&matches, "build-provenance");
         if build_provenance.is_some() && format != AdoptionReportFormat::EnvelopeJson {
             return Err(FleetCommandError::Usage(format!(
@@ -795,10 +792,7 @@ impl AdoptionReportOptions {
 
         Ok(Self {
             fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
-            profile: parse_adoption_profile(
-                string_option(&matches, "profile").as_deref(),
-                adoption_report_usage,
-            )?,
+            profile: typed_option(&matches, "profile").expect("clap requires profile"),
             format,
             deployment_check: path_option(&matches, "deployment-check"),
             inventory: path_option(&matches, "inventory"),
@@ -811,37 +805,24 @@ impl AdoptionReportOptions {
     }
 }
 
-fn parse_adoption_profile(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<AdoptionProfileV1, FleetCommandError> {
+fn parse_adoption_profile(value: &str) -> Result<AdoptionProfileV1, String> {
     match value {
-        Some("brownfield") => Ok(AdoptionProfileV1::Brownfield),
-        Some("partial") => Ok(AdoptionProfileV1::Partial),
-        Some("standalone") => Ok(AdoptionProfileV1::Standalone),
-        Some("leaf-only") => Ok(AdoptionProfileV1::LeafOnly),
-        Some("hybrid-external-wasm") => Ok(AdoptionProfileV1::HybridExternalWasm),
-        Some("minimal") => Ok(AdoptionProfileV1::Minimal),
-        Some(other) => Err(FleetCommandError::Usage(format!(
-            "invalid adoption profile: {other}\n\n{}",
-            usage()
-        ))),
-        None => Err(FleetCommandError::Usage(usage())),
+        "brownfield" => Ok(AdoptionProfileV1::Brownfield),
+        "partial" => Ok(AdoptionProfileV1::Partial),
+        "standalone" => Ok(AdoptionProfileV1::Standalone),
+        "leaf-only" => Ok(AdoptionProfileV1::LeafOnly),
+        "hybrid-external-wasm" => Ok(AdoptionProfileV1::HybridExternalWasm),
+        "minimal" => Ok(AdoptionProfileV1::Minimal),
+        other => Err(format!("invalid adoption profile: {other}")),
     }
 }
 
-fn parse_adoption_report_format(
-    value: Option<&str>,
-    usage: fn() -> String,
-) -> Result<AdoptionReportFormat, FleetCommandError> {
-    match value.unwrap_or("text") {
+fn parse_adoption_report_format(value: &str) -> Result<AdoptionReportFormat, String> {
+    match value {
         "text" => Ok(AdoptionReportFormat::Text),
         "json" => Ok(AdoptionReportFormat::Json),
         "envelope-json" => Ok(AdoptionReportFormat::EnvelopeJson),
-        other => Err(FleetCommandError::Usage(format!(
-            "invalid adoption report output format: {other}\n\n{}",
-            usage()
-        ))),
+        other => Err(format!("invalid adoption report output format: {other}")),
     }
 }
 
@@ -1018,12 +999,16 @@ fn fleet_adoption_report_command() -> ClapCommand {
                 .long("profile")
                 .value_name("profile")
                 .required(true)
+                .value_parser(clap::builder::ValueParser::new(parse_adoption_profile))
                 .help("Adoption profile to evaluate"),
         )
         .arg(
             clap::Arg::new("format")
                 .long("format")
                 .value_name("text|json|envelope-json")
+                .value_parser(clap::builder::ValueParser::new(
+                    parse_adoption_report_format,
+                ))
                 .help("Report output format"),
         )
         .arg(

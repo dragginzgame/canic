@@ -25,7 +25,24 @@ fn parses_metric_kind_selectors() {
             OsString::from("--kind"),
             OsString::from("cycles"),
         ]),
-        Err(MetricsCommandError::InvalidKind(_))
+        Err(MetricsCommandError::Usage(_))
+    );
+
+    std::assert_matches!(
+        MetricsOptions::parse([
+            OsString::from("test"),
+            OsString::from("--limit"),
+            OsString::from("banana"),
+        ]),
+        Err(MetricsCommandError::Usage(_))
+    );
+    std::assert_matches!(
+        MetricsOptions::parse([
+            OsString::from("test"),
+            OsString::from("--limit"),
+            OsString::from("0"),
+        ]),
+        Err(MetricsCommandError::Usage(_))
     );
 }
 

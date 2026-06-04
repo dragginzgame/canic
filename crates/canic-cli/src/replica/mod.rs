@@ -1,6 +1,7 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, string_option, value_arg,
+        flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, string_option,
+        typed_option, value_arg,
     },
     cli::defaults::default_icp,
     cli::globals::internal_icp_arg,
@@ -115,7 +116,7 @@ impl ReplicaOptions {
             .map_err(|_| ReplicaCommandError::Usage(start_usage()))?;
         Ok(Self {
             icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
-            port: parse_port_option(&matches)?,
+            port: typed_option(&matches, "port"),
             background: matches.get_flag("background"),
             debug: matches.get_flag("debug"),
             json: false,
@@ -407,23 +408,18 @@ fn print_command_output(output: &str) {
     }
 }
 
-fn parse_port_option(matches: &clap::ArgMatches) -> Result<Option<u16>, ReplicaCommandError> {
-    let Some(value) = string_option(matches, "port") else {
-        return Ok(None);
-    };
-    let Ok(port) = value.parse::<u16>() else {
-        return Err(ReplicaCommandError::InvalidPort { value });
-    };
-    if port == 0 {
-        return Err(ReplicaCommandError::InvalidPort { value });
-    }
-    Ok(Some(port))
-}
-
 fn replica_port_label(icp_root: &Path) -> String {
     configured_local_gateway_port_from_root(icp_root)
         .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
         .to_string()
+}
+
+fn parse_replica_port(value: &str) -> Result<u16, String> {
+    value
+        .parse::<u16>()
+        .ok()
+        .filter(|port| *port > 0)
+        .ok_or_else(|| "expected 1..65535".to_string())
 }
 
 fn local_replica_http_reachable(icp_root: &Path) -> bool {
@@ -547,6 +543,7 @@ fn replica_start_command() -> ClapCommand {
         value_arg("port")
             .long("port")
             .value_name("PORT")
+            .value_parser(clap::builder::ValueParser::new(parse_replica_port))
             .help("Require icp.yaml to use this local gateway port"),
     )
     .after_help(REPLICA_START_HELP_AFTER)

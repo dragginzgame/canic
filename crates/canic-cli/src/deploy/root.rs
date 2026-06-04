@@ -7,6 +7,7 @@ use crate::{
     cli::{
         clap::{
             parse_matches, parse_subcommand, passthrough_subcommand, path_option, string_option,
+            typed_option,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -186,10 +187,7 @@ impl DeployRootInspectOptions {
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
             request: path_option(&matches, "request").expect("clap requires request"),
-            format: parse_root_output_format(
-                string_option(&matches, "format").as_deref(),
-                inspect_usage,
-            )?,
+            format: typed_option(&matches, "format").unwrap_or(RootOutputFormat::Json),
         })
     }
 }
@@ -205,10 +203,7 @@ impl DeployRootVerifyOptions {
             deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
             from_check: path_option(&matches, "from-check").expect("clap requires from-check"),
             network: string_option(&matches, "network").unwrap_or_else(local_network),
-            format: parse_root_output_format(
-                string_option(&matches, "format").as_deref(),
-                verify_usage,
-            )?,
+            format: typed_option(&matches, "format").unwrap_or(RootOutputFormat::Json),
         })
     }
 }
@@ -259,6 +254,7 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .value_parser(clap::builder::ValueParser::new(parse_root_output_format))
         .help("Output format; defaults to json")
 }
 

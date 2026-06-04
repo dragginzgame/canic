@@ -1,5 +1,5 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    cli::clap::{flag_arg, parse_matches, path_option, string_option, typed_option, value_arg},
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cycles::CyclesCommandError,
@@ -43,20 +43,14 @@ impl CyclesOptions {
     {
         let matches = parse_matches(info_cycles_command(), args)
             .map_err(|_| CyclesCommandError::Usage(info_usage()))?;
-        Self::from_matches(&matches)
+        Ok(Self::from_matches(&matches))
     }
 
-    fn from_matches(matches: &clap::ArgMatches) -> Result<Self, CyclesCommandError> {
-        let since_seconds = string_option(matches, SINCE_ARG)
-            .map(|value| parse_duration(&value))
-            .transpose()?
-            .unwrap_or(DEFAULT_SINCE_SECONDS);
-        let limit = string_option(matches, LIMIT_ARG)
-            .and_then(|value| value.parse::<u64>().ok())
-            .filter(|limit| *limit > 0)
-            .unwrap_or(DEFAULT_LIMIT);
+    fn from_matches(matches: &clap::ArgMatches) -> Self {
+        let since_seconds = typed_option(matches, SINCE_ARG).unwrap_or(DEFAULT_SINCE_SECONDS);
+        let limit = typed_option(matches, LIMIT_ARG).unwrap_or(DEFAULT_LIMIT);
 
-        Ok(Self {
+        Self {
             deployment: string_option(matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
             subtree: string_option(matches, SUBTREE_ARG),
             since_seconds,
@@ -66,31 +60,41 @@ impl CyclesOptions {
             out: path_option(matches, OUT_ARG),
             network: string_option(matches, "network").unwrap_or_else(local_network),
             icp: string_option(matches, "icp").unwrap_or_else(default_icp),
-        })
+        }
     }
 }
 
-fn parse_duration(value: &str) -> Result<u64, CyclesCommandError> {
+fn parse_duration(value: &str) -> Result<u64, String> {
     let value = value.trim();
     let digits = value
         .chars()
         .take_while(char::is_ascii_digit)
         .collect::<String>();
     let suffix = value[digits.len()..].trim();
-    let amount = digits
-        .parse::<u64>()
-        .map_err(|_| CyclesCommandError::InvalidDuration(value.to_string()))?;
+    let amount = digits.parse::<u64>().map_err(|_| invalid_duration(value))?;
     let multiplier = match suffix {
         "s" | "" => 1,
         "m" => 60,
         "h" => 60 * 60,
         "d" => 24 * 60 * 60,
-        _ => return Err(CyclesCommandError::InvalidDuration(value.to_string())),
+        _ => return Err(invalid_duration(value)),
     };
     amount
         .checked_mul(multiplier)
         .filter(|seconds| *seconds > 0)
-        .ok_or_else(|| CyclesCommandError::InvalidDuration(value.to_string()))
+        .ok_or_else(|| invalid_duration(value))
+}
+
+fn invalid_duration(value: &str) -> String {
+    format!("invalid duration {value}; use values like 1h, 6h, 24h, 7d, or 30m")
+}
+
+fn parse_positive_u64(value: &str) -> Result<u64, String> {
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| "must be a positive integer".to_string())
 }
 
 pub(super) fn info_usage() -> String {
@@ -116,6 +120,7 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
             value_arg(SINCE_ARG)
                 .long(SINCE_ARG)
                 .value_name("duration")
+                .value_parser(clap::builder::ValueParser::new(parse_duration))
                 .help("Cycle history window; defaults to 24h"),
         )
         .arg(
@@ -128,6 +133,7 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
             value_arg(LIMIT_ARG)
                 .long(LIMIT_ARG)
                 .value_name("entries")
+                .value_parser(clap::builder::ValueParser::new(parse_positive_u64))
                 .help("Maximum tracker samples to fetch per canister; defaults to 1000"),
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))

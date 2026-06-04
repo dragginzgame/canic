@@ -1,4 +1,4 @@
-use super::value_arg;
+use super::{parse_profile, value_arg};
 use crate::cli::{clap::passthrough_subcommand, globals::internal_network_arg};
 use clap::Command as ClapCommand;
 
@@ -144,6 +144,7 @@ pub fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> Cla
                 .long(PROFILE_ARG)
                 .value_name("debug|fast|release")
                 .num_args(1)
+                .value_parser(clap::builder::ValueParser::new(parse_profile))
                 .help("Expected canister wasm build profile"),
         )
         .arg(internal_network_arg())

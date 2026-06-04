@@ -121,6 +121,63 @@ fn forced_interpretations_are_explicit() {
 }
 
 #[test]
+fn resolver_accepts_unique_subnet_principal_prefix() {
+    let catalog = fixture_catalog();
+
+    let resolved = catalog
+        .resolve_principal_or_prefix("rwl", None)
+        .expect("subnet prefix resolves");
+
+    assert_eq!(resolved.resolved_as, ResolvedSubnetSubject::Subnet);
+    assert_eq!(resolved.resolved_from, "subnet_principal_prefix");
+    assert_eq!(resolved.input_principal, "rwl");
+    assert_eq!(resolved.subnet.subnet_principal, SUBNET_A);
+}
+
+#[test]
+fn resolver_rejects_canister_boundary_prefix() {
+    let catalog = fixture_catalog();
+
+    let err = catalog
+        .resolve_principal_or_prefix("ryj", None)
+        .expect_err("partial canister principals are not accepted");
+
+    std::assert_matches!(
+        err,
+        CatalogError::PrincipalPrefixNotFound { prefix } if prefix == "ryj"
+    );
+}
+
+#[test]
+fn resolver_rejects_ambiguous_principal_prefix() {
+    let mut catalog = fixture_catalog();
+    catalog.subnets.push(SubnetInfo {
+        subnet_principal: "r7inp-6aaaa-aaaaa-aaabq-cai".to_string(),
+        subnet_kind: SubnetKind::Application,
+        subnet_kind_source: ClassificationSource::Registry,
+        subnet_specialization: SubnetSpecialization::None,
+        subnet_specialization_source: ClassificationSource::Computed,
+        geographic_scope: GeographicScope::Global,
+        geographic_scope_source: ClassificationSource::Computed,
+        subnet_label: "application".to_string(),
+        subnet_label_source: ClassificationSource::Computed,
+        node_count: Some(13),
+        charges_apply_by_default: true,
+    });
+    catalog.validate().expect("valid ambiguous fixture");
+
+    let err = catalog
+        .resolve_principal_or_prefix("r", None)
+        .expect_err("ambiguous prefix fails");
+
+    std::assert_matches!(
+        err,
+        CatalogError::AmbiguousPrincipalPrefix { prefix, matches }
+            if prefix == "r" && matches.len() > 1
+    );
+}
+
+#[test]
 fn validation_rejects_unknown_routing_subnet_and_reversed_range() {
     let mut unknown = fixture_catalog();
     unknown.routing_ranges[0].subnet_principal = "uxrrr-q7777-77774-qaaaq-cai".to_string();

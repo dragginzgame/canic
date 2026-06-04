@@ -51,6 +51,7 @@ canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy catalog list
 canic deploy catalog inspect <deployment>
+canic nns subnet list
 ```
 
 These commands do not imply one-command deployment, controller mutation,
@@ -86,6 +87,21 @@ canic build \
 
 For a full local development setup, including ICP CLI, helper tools, and the
 `canic` CLI, use the root `INSTALLING.md` guide.
+
+## NNS Subnet Inspection
+
+Public IC subnet metadata is inspected through the `nns` namespace:
+
+```bash
+canic nns subnet refresh
+canic nns subnet list
+canic nns subnet list --verbose
+canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
+```
+
+`list` and `info` read the cached mainnet catalog and report stale status.
+Use `refresh` to force a new NNS registry read. The command group defaults to
+`--network ic` and rejects local or custom networks in 0.60.
 
 ## Local Install And Registry Commands
 

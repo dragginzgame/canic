@@ -1,5 +1,5 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, path_option, string_option, value_arg},
+    cli::clap::{flag_arg, parse_matches, path_option, string_option, typed_option, value_arg},
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     metrics::{MetricsCommandError, model::MetricsKind},
@@ -34,14 +34,8 @@ impl MetricsOptions {
     {
         let matches = parse_matches(metrics_command(), args)
             .map_err(|_| MetricsCommandError::Usage(usage()))?;
-        let kind = string_option(&matches, "kind")
-            .map(|value| parse_metrics_kind(&value))
-            .transpose()?
-            .unwrap_or(MetricsKind::Core);
-        let limit = string_option(&matches, "limit")
-            .and_then(|value| value.parse::<u64>().ok())
-            .filter(|limit| *limit > 0)
-            .unwrap_or(DEFAULT_LIMIT);
+        let kind = typed_option(&matches, "kind").unwrap_or(MetricsKind::Core);
+        let limit = typed_option(&matches, "limit").unwrap_or(DEFAULT_LIMIT);
 
         Ok(Self {
             deployment: string_option(&matches, "deployment").expect("clap requires deployment"),
@@ -58,7 +52,7 @@ impl MetricsOptions {
     }
 }
 
-fn parse_metrics_kind(value: &str) -> Result<MetricsKind, MetricsCommandError> {
+fn parse_metrics_kind(value: &str) -> Result<MetricsKind, String> {
     match value {
         "core" => Ok(MetricsKind::Core),
         "placement" => Ok(MetricsKind::Placement),
@@ -66,8 +60,18 @@ fn parse_metrics_kind(value: &str) -> Result<MetricsKind, MetricsCommandError> {
         "runtime" => Ok(MetricsKind::Runtime),
         "security" => Ok(MetricsKind::Security),
         "storage" => Ok(MetricsKind::Storage),
-        _ => Err(MetricsCommandError::InvalidKind(value.to_string())),
+        _ => Err(format!(
+            "invalid metrics kind {value}; use core, placement, platform, runtime, security, or storage"
+        )),
     }
+}
+
+fn parse_positive_u64(value: &str) -> Result<u64, String> {
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| "must be a positive integer".to_string())
 }
 
 pub(super) fn usage() -> String {
@@ -90,6 +94,7 @@ fn metrics_command() -> ClapCommand {
             value_arg("kind")
                 .long("kind")
                 .value_name("kind")
+                .value_parser(clap::builder::ValueParser::new(parse_metrics_kind))
                 .help("Metrics tier to query; defaults to core"),
         )
         .arg(
@@ -108,6 +113,7 @@ fn metrics_command() -> ClapCommand {
             value_arg("limit")
                 .long("limit")
                 .value_name("entries")
+                .value_parser(clap::builder::ValueParser::new(parse_positive_u64))
                 .help("Maximum metric rows to fetch per canister; defaults to 1000"),
         )
         .arg(flag_arg("nonzero").long("nonzero"))

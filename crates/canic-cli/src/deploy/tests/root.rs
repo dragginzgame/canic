@@ -40,11 +40,7 @@ fn deploy_root_inspect_rejects_unknown_format() {
         OsString::from("yaml"),
     ]);
 
-    std::assert_matches!(
-        result,
-        Err(DeployCommandError::Usage(message))
-            if message.contains("invalid deployment root output format: yaml")
-    );
+    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }
 
 #[test]
