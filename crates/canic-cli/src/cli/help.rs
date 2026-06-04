@@ -65,6 +65,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Project,
     },
     CommandSpec {
+        name: "subnet",
+        about: "Inspect cached IC network subnet metadata",
+        scope: CommandScope::Project,
+    },
+    CommandSpec {
         name: "install",
         about: "Install and bootstrap a Canic fleet",
         scope: CommandScope::Deployment,

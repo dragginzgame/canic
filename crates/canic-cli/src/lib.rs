@@ -19,6 +19,7 @@ mod restore;
 mod scaffold;
 mod snapshot;
 mod status;
+mod subnet;
 mod support;
 #[cfg(test)]
 mod test_support;
@@ -95,6 +96,9 @@ pub enum CliError {
     #[error("status: {0}")]
     Status(#[from] status::StatusCommandError),
 
+    #[error("subnet: {0}")]
+    Subnet(#[from] subnet::SubnetCommandError),
+
     #[error("token: {0}")]
     Token(#[from] token::TokenCommandError),
 }
@@ -157,6 +161,7 @@ where
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
+        "subnet" => subnet::run(tail).map_err(CliError::from),
         "token" => token::run(tail).map_err(CliError::from),
         "restore" => restore::run(tail).map_err(CliError::from),
         _ => unreachable!("top-level dispatch command only defines known commands"),

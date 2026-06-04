@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-03
+Last updated: 2026-06-04
 
 ## Purpose
 
@@ -9,6 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.60.0` starts the NNS subnet inspection line with cached mainnet IC subnet
+  catalog support. The new pure `canic-subnet-catalog` crate owns schema
+  validation, future-schema rejection, and canonical principal-byte routing
+  resolution. `canic-host` owns the cache path
+  `.canic/subnet-catalog/ic/catalog.json`, stale-cache reporting, and list/info
+  report preparation. `canic-cli` now exposes the read-only cached inspection
+  surface:
+  ```text
+  canic subnet network list
+  canic --network ic subnet network list
+  canic subnet network info <subnet-principal|canister-principal|deployment-target>
+  ```
+  The command group defaults to mainnet `ic`, rejects non-`ic` networks in
+  0.60.0, and does not include live `refresh` or instruction-audit estimate
+  integration yet.
 - `0.59.7` keeps instruction-footprint report output unchanged while
   centralizing dynamic report status labels and the missing-baseline sentinel
   in report support code. Focused coverage now pins baseline selection and

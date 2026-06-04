@@ -345,6 +345,7 @@ dependencies = [
  "canic-backup",
  "canic-core",
  "canic-host",
+ "canic-subnet-catalog",
  "clap",
  "serde",
  "serde_json",
@@ -395,6 +396,7 @@ version = "0.59.7"
 dependencies = [
  "candid",
  "canic-core",
+ "canic-subnet-catalog",
  "flate2",
  "serde",
  "serde_bytes",
@@ -412,6 +414,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "canic-subnet-catalog"
+version = "0.59.7"
+dependencies = [
+ "candid",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -1,33 +1,23 @@
 [package]
-name = "canic-host"
+name = "canic-subnet-catalog"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 license = { workspace = true }
-description = "Host-side build, install, deployment, and fleet-template library for Canic workspaces"
+description = "Pure cached IC subnet catalog model and resolver for Canic host tools"
 readme = "README.md"
-documentation = "https://docs.rs/canic-host"
+documentation = "https://docs.rs/canic-subnet-catalog"
 homepage = { workspace = true }
 repository = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[package.metadata.cargo-machete]
-ignored = ["serde_bytes"]
-
 [dependencies]
 candid = { workspace = true }
-canic-core = { workspace = true }
-canic-subnet-catalog = { workspace = true }
-flate2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_bytes = { workspace = true }
-serde_cbor = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 thiserror = { workspace = true }
-toml = { workspace = true }
 
 [lints]
 workspace = true

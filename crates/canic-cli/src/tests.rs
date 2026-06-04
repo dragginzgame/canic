@@ -41,7 +41,8 @@ fn usage_lists_command_families() {
     assert!(plain.find("    status") < plain.find("    fleet"));
     assert!(plain.find("    fleet") < plain.find("    scaffold"));
     assert!(plain.find("    scaffold") < plain.find("    replica"));
-    assert!(plain.find("    replica") < plain.find("    install"));
+    assert!(plain.find("    replica") < plain.find("    subnet"));
+    assert!(plain.find("    subnet") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    evidence"));
@@ -70,6 +71,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("    status"));
     assert!(plain.contains("fleet"));
     assert!(plain.contains("replica"));
+    assert!(plain.contains("subnet"));
     assert!(plain.contains("install"));
     assert!(plain.contains("snapshot"));
     assert!(plain.contains("backup"));
@@ -125,6 +127,10 @@ fn command_family_help_returns_ok() {
         &["replica", "start", "help"],
         &["replica", "status", "help"],
         &["replica", "stop", "help"],
+        &["subnet", "help"],
+        &["subnet", "network", "help"],
+        &["subnet", "network", "list", "help"],
+        &["subnet", "network", "info", "help"],
         &["restore", "help"],
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
@@ -273,6 +279,65 @@ fn version_flags_return_ok() {
             OsString::from("--version")
         ])
         .is_ok()
+    );
+}
+
+#[test]
+fn subnet_version_flags_return_ok() {
+    assert!(run([OsString::from("subnet"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("subnet"),
+            OsString::from("network"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("subnet"),
+            OsString::from("network"),
+            OsString::from("list"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("subnet"),
+            OsString::from("network"),
+            OsString::from("info"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+}
+
+#[test]
+fn global_icp_is_forwarded_to_subnet_network_info_only() {
+    let mut list_tail = vec![OsString::from("network"), OsString::from("list")];
+    let mut info_tail = vec![
+        OsString::from("network"),
+        OsString::from("info"),
+        OsString::from("demo/root"),
+    ];
+
+    apply_global_icp("subnet", &mut list_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("subnet", &mut info_tail, Some("/tmp/icp".to_string()));
+
+    assert_eq!(
+        list_tail,
+        vec![OsString::from("network"), OsString::from("list")]
+    );
+    assert_eq!(
+        info_tail,
+        vec![
+            OsString::from("network"),
+            OsString::from("info"),
+            OsString::from("demo/root"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
     );
 }
 
@@ -506,6 +571,42 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
             OsString::from("ic")
         ]
     );
+}
+
+#[test]
+fn global_network_is_forwarded_to_subnet_network_namespace() {
+    let mut list_tail = vec![OsString::from("network"), OsString::from("list")];
+    let mut info_tail = vec![
+        OsString::from("network"),
+        OsString::from("info"),
+        OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai"),
+    ];
+    let mut family_tail = Vec::new();
+
+    apply_global_network("subnet", &mut list_tail, Some("ic".to_string()));
+    apply_global_network("subnet", &mut info_tail, Some("ic".to_string()));
+    apply_global_network("subnet", &mut family_tail, Some("ic".to_string()));
+
+    assert_eq!(
+        list_tail,
+        vec![
+            OsString::from("network"),
+            OsString::from("list"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert_eq!(
+        info_tail,
+        vec![
+            OsString::from("network"),
+            OsString::from("info"),
+            OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic")
+        ]
+    );
+    assert!(family_tail.is_empty());
 }
 
 #[test]

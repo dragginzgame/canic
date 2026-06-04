@@ -12,6 +12,21 @@ present.
 
 ## Unreleased
 
+## [0.60.x] - 2026-06-04 - NNS subnet inspection
+
+Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
+
+- `0.60.0` starts the NNS subnet inspection line with a cached mainnet IC
+  subnet catalog schema/resolver and read-only `canic subnet network list/info`
+  commands over local cache data. Live refresh and estimate integration remain
+  deferred to later 0.60 patches.
+
+  ```text
+  canic subnet network list
+  canic --network ic subnet network list
+  canic subnet network info <subnet-principal|canister-principal|deployment-target>
+  ```
+
 ## [0.59.x] - 2026-06-03 - Instruction accounting and offline cost estimates
 
 Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
@@ -49,6 +64,11 @@ Detailed patch breakdown: [docs/changelog/0.59.md](docs/changelog/0.59.md)
   preserving message-kind `sample_origin`, and adding opt-in offline execution
   cycle estimates for update rows without introducing NNS/catalog lookup or
   renaming real cycle funding surfaces.
+
+  ```text
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-node-count <13|34>
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --cycles-per-billion-instructions <cycles>
+  ```
 
 ## [0.58.x] - 2026-06-02 - ICP-to-cycles refill primitive
 
