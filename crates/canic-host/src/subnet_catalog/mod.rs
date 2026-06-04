@@ -12,8 +12,8 @@ use std::{
 use thiserror::Error as ThisError;
 
 pub const DEFAULT_STALE_AFTER_SECONDS: u64 = 7 * 24 * 60 * 60;
-pub const SUBNET_NETWORK_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
-pub const SUBNET_NETWORK_INFO_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const SUBNET_CATALOG_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const SUBNET_CATALOG_INFO_REPORT_SCHEMA_VERSION: u32 = 1;
 const BASE_13_NODE_CYCLES_PER_BILLION_INSTRUCTIONS: u128 = 1_000_000_000;
 const FORMULA_VERSION: &str = "base_13_node_linear_v1";
 
@@ -46,10 +46,10 @@ pub struct SubnetCatalogFilters {
 }
 
 ///
-/// SubnetNetworkListRequest
+/// SubnetCatalogListRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetNetworkListRequest {
+pub struct SubnetCatalogListRequest {
     pub cache: SubnetCatalogCacheRequest,
     pub now_unix_secs: u64,
     pub stale_after_seconds: u64,
@@ -60,10 +60,10 @@ pub struct SubnetNetworkListRequest {
 }
 
 ///
-/// SubnetNetworkInfoRequest
+/// SubnetCatalogInfoRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetNetworkInfoRequest {
+pub struct SubnetCatalogInfoRequest {
     pub cache: SubnetCatalogCacheRequest,
     pub input: String,
     pub forced: Option<ResolveAs>,
@@ -94,10 +94,10 @@ pub struct CatalogStaleStatus {
 }
 
 ///
-/// SubnetNetworkListReport
+/// SubnetCatalogListReport
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetNetworkListReport {
+pub struct SubnetCatalogListReport {
     pub schema_version: u32,
     pub network: String,
     pub catalog_path: String,
@@ -108,14 +108,14 @@ pub struct SubnetNetworkListReport {
     pub catalog_stale: bool,
     pub stale_reason: String,
     pub resolver_backend: String,
-    pub subnets: Vec<SubnetNetworkSubnetRow>,
+    pub subnets: Vec<SubnetCatalogSubnetRow>,
 }
 
 ///
-/// SubnetNetworkSubnetRow
+/// SubnetCatalogSubnetRow
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetNetworkSubnetRow {
+pub struct SubnetCatalogSubnetRow {
     pub subnet_principal: String,
     pub subnet_kind: SubnetKind,
     pub subnet_kind_source: ClassificationSource,
@@ -135,10 +135,10 @@ pub struct SubnetNetworkSubnetRow {
 }
 
 ///
-/// SubnetNetworkInfoReport
+/// SubnetCatalogInfoReport
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetNetworkInfoReport {
+pub struct SubnetCatalogInfoReport {
     pub schema_version: u32,
     pub input_principal: String,
     pub resolved_as: String,
@@ -176,14 +176,17 @@ pub struct SubnetNetworkInfoReport {
 #[derive(Debug, ThisError)]
 pub enum SubnetCatalogHostError {
     #[error(
-        "`canic subnet network` supports only the mainnet `ic` network in 0.60\n\nThe cached subnet catalog describes the public Internet Computer mainnet.\nLocal replica subnet discovery is not implemented yet.\n\nTry:\n  canic --network ic subnet network list"
+        "`canic subnet catalog` supports only the mainnet `ic` network in 0.60\n\nThe cached subnet catalog describes the public Internet Computer mainnet.\nLocal replica subnet discovery is not implemented yet.\n\nTry:\n  canic --network ic subnet catalog list"
     )]
     UnsupportedNetwork { network: String },
 
-    #[error("subnet network catalog cache is missing at {}", path.display())]
+    #[error(
+        "subnet catalog cache is missing at {}\n\n0.60.1 reads cached mainnet catalog data only and does not fetch the NNS registry live yet.\nPopulate this path with a valid Canic subnet catalog JSON, or use the planned `canic subnet catalog refresh` follow-up once it lands.",
+        path.display()
+    )]
     MissingCatalog { path: PathBuf },
 
-    #[error("failed to read subnet network catalog at {}: {source}", path.display())]
+    #[error("failed to read subnet catalog at {}: {source}", path.display())]
     ReadCatalog { path: PathBuf, source: io::Error },
 
     #[error(
@@ -231,9 +234,9 @@ pub fn load_cached_subnet_catalog(
     Ok(CachedSubnetCatalog { path, catalog })
 }
 
-pub fn build_subnet_network_list_report(
-    request: &SubnetNetworkListRequest,
-) -> Result<SubnetNetworkListReport, SubnetCatalogHostError> {
+pub fn build_subnet_catalog_list_report(
+    request: &SubnetCatalogListRequest,
+) -> Result<SubnetCatalogListReport, SubnetCatalogHostError> {
     let cached = load_cached_subnet_catalog(&request.cache)?;
     let stale = catalog_stale_status(
         &cached.catalog,
@@ -248,8 +251,8 @@ pub fn build_subnet_network_list_report(
         .map(|subnet| subnet_row(&cached.catalog, subnet, request))
         .collect::<Vec<_>>();
 
-    Ok(SubnetNetworkListReport {
-        schema_version: SUBNET_NETWORK_LIST_REPORT_SCHEMA_VERSION,
+    Ok(SubnetCatalogListReport {
+        schema_version: SUBNET_CATALOG_LIST_REPORT_SCHEMA_VERSION,
         network: cached.catalog.network,
         catalog_path: cached.path.display().to_string(),
         catalog_schema_version: cached.catalog.catalog_schema_version,
@@ -263,9 +266,9 @@ pub fn build_subnet_network_list_report(
     })
 }
 
-pub fn build_subnet_network_info_report(
-    request: &SubnetNetworkInfoRequest,
-) -> Result<SubnetNetworkInfoReport, SubnetCatalogHostError> {
+pub fn build_subnet_catalog_info_report(
+    request: &SubnetCatalogInfoRequest,
+) -> Result<SubnetCatalogInfoReport, SubnetCatalogHostError> {
     let cached = load_cached_subnet_catalog(&request.cache)?;
     let stale = catalog_stale_status(
         &cached.catalog,
@@ -294,8 +297,8 @@ pub fn build_subnet_network_info_report(
         .is_some()
         .then(|| FORMULA_VERSION.to_string());
 
-    Ok(SubnetNetworkInfoReport {
-        schema_version: SUBNET_NETWORK_INFO_REPORT_SCHEMA_VERSION,
+    Ok(SubnetCatalogInfoReport {
+        schema_version: SUBNET_CATALOG_INFO_REPORT_SCHEMA_VERSION,
         input_principal: resolved.input_principal,
         resolved_as: resolved.resolved_as.as_str().to_string(),
         resolved_from: resolved.resolved_from,
@@ -382,7 +385,7 @@ pub fn parse_stale_after_duration(value: &str) -> Result<u64, SubnetCatalogHostE
 }
 
 #[must_use]
-pub fn subnet_network_list_report_text(report: &SubnetNetworkListReport) -> String {
+pub fn subnet_catalog_list_report_text(report: &SubnetCatalogListReport) -> String {
     let headers = [
         "SUBNET",
         "KIND",
@@ -440,7 +443,7 @@ pub fn subnet_network_list_report_text(report: &SubnetNetworkListReport) -> Stri
 }
 
 #[must_use]
-pub fn subnet_network_info_report_text(report: &SubnetNetworkInfoReport) -> String {
+pub fn subnet_catalog_info_report_text(report: &SubnetCatalogInfoReport) -> String {
     let mut lines = Vec::new();
     lines.push(format!("input_principal: {}", report.input_principal));
     lines.push(format!("resolved_as: {}", report.resolved_as));
@@ -546,8 +549,8 @@ fn subnet_matches_filters(subnet: &SubnetInfo, filters: SubnetCatalogFilters) ->
 fn subnet_row(
     catalog: &SubnetCatalog,
     subnet: &SubnetInfo,
-    request: &SubnetNetworkListRequest,
-) -> SubnetNetworkSubnetRow {
+    request: &SubnetCatalogListRequest,
+) -> SubnetCatalogSubnetRow {
     let ranges = catalog.routing_ranges_for_subnet(&subnet.subnet_principal);
     let range_count = ranges.len();
     let shown_ranges = if request.show_ranges {
@@ -560,7 +563,7 @@ fn subnet_row(
     } else {
         Vec::new()
     };
-    SubnetNetworkSubnetRow {
+    SubnetCatalogSubnetRow {
         subnet_principal: subnet.subnet_principal.clone(),
         subnet_kind: subnet.subnet_kind,
         subnet_kind_source: subnet.subnet_kind_source,
@@ -609,7 +612,7 @@ const fn ceil_div(numerator: u128, denominator: u128) -> u128 {
     numerator.div_ceil(denominator)
 }
 
-fn append_range_lines(report: &SubnetNetworkListReport, lines: &mut Vec<String>) {
+fn append_range_lines(report: &SubnetCatalogListReport, lines: &mut Vec<String>) {
     for subnet in &report.subnets {
         if subnet.ranges.is_empty() {
             continue;
@@ -728,13 +731,30 @@ mod tests {
     }
 
     #[test]
+    fn missing_catalog_error_explains_cached_only_slice() {
+        let root = temp_dir("canic-subnet-host-missing");
+        let request = SubnetCatalogCacheRequest {
+            icp_root: root.clone(),
+            network: MAINNET_NETWORK.to_string(),
+        };
+
+        let err = load_cached_subnet_catalog(&request).expect_err("cache missing");
+        let message = err.to_string();
+
+        let _ = fs::remove_dir_all(root);
+        assert!(message.contains("0.60.1 reads cached mainnet catalog data only"));
+        assert!(message.contains("does not fetch the NNS registry live yet"));
+        assert!(message.contains("canic subnet catalog refresh"));
+    }
+
+    #[test]
     fn list_report_loads_cached_catalog_and_caps_ranges() {
         let root = temp_dir("canic-subnet-host-list");
         write_catalog(&root, fixture_catalog());
         let request = list_request(&root);
 
-        let report = build_subnet_network_list_report(&request).expect("list report");
-        let text = subnet_network_list_report_text(&report);
+        let report = build_subnet_catalog_list_report(&request).expect("list report");
+        let text = subnet_catalog_list_report_text(&report);
 
         let _ = fs::remove_dir_all(root);
         assert_eq!(report.subnets.len(), 2);
@@ -751,7 +771,7 @@ mod tests {
         write_catalog(&root, fixture_catalog());
         let request = info_request(&root, CANISTER_A);
 
-        let report = build_subnet_network_info_report(&request).expect("info report");
+        let report = build_subnet_catalog_info_report(&request).expect("info report");
 
         let _ = fs::remove_dir_all(root);
         assert_eq!(report.resolved_as, "canister");
@@ -773,7 +793,7 @@ mod tests {
         write_catalog(&root, catalog);
         let request = info_request(&root, CANISTER_A);
 
-        let report = build_subnet_network_info_report(&request).expect("info report");
+        let report = build_subnet_catalog_info_report(&request).expect("info report");
 
         let _ = fs::remove_dir_all(root);
         assert!(!report.charges_apply_to_subject);
@@ -807,8 +827,8 @@ mod tests {
         );
     }
 
-    fn list_request(root: &Path) -> SubnetNetworkListRequest {
-        SubnetNetworkListRequest {
+    fn list_request(root: &Path) -> SubnetCatalogListRequest {
+        SubnetCatalogListRequest {
             cache: cache_request(root),
             now_unix_secs: 1_780_531_300,
             stale_after_seconds: DEFAULT_STALE_AFTER_SECONDS,
@@ -819,8 +839,8 @@ mod tests {
         }
     }
 
-    fn info_request(root: &Path, input: &str) -> SubnetNetworkInfoRequest {
-        SubnetNetworkInfoRequest {
+    fn info_request(root: &Path, input: &str) -> SubnetCatalogInfoRequest {
+        SubnetCatalogInfoRequest {
             cache: cache_request(root),
             input: input.to_string(),
             forced: None,

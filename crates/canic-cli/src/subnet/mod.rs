@@ -21,10 +21,10 @@ use canic_host::{
     release_set::icp_root,
     subnet_catalog::{
         DEFAULT_STALE_AFTER_SECONDS, ResolvedDeploymentTarget, SubnetCatalogCacheRequest,
-        SubnetCatalogFilters, SubnetCatalogHostError, SubnetNetworkInfoRequest,
-        SubnetNetworkListRequest, build_subnet_network_info_report,
-        build_subnet_network_list_report, parse_stale_after_duration,
-        subnet_network_info_report_text, subnet_network_list_report_text,
+        SubnetCatalogFilters, SubnetCatalogHostError, SubnetCatalogInfoRequest,
+        SubnetCatalogListRequest, build_subnet_catalog_info_report,
+        build_subnet_catalog_list_report, parse_stale_after_duration,
+        subnet_catalog_info_report_text, subnet_catalog_list_report_text,
     },
 };
 use canic_subnet_catalog::{
@@ -43,14 +43,14 @@ use thiserror::Error as ThisError;
 const DEFAULT_RANGE_LIMIT: usize = 50;
 const LIST_HELP_AFTER: &str = "\
 Examples:
-  canic subnet network list
-  canic --network ic subnet network list --format json
-  canic subnet network list --kind application --specialization fiduciary";
+  canic subnet catalog list
+  canic --network ic subnet catalog list --format json
+  canic subnet catalog list --kind application --specialization fiduciary";
 const INFO_HELP_AFTER: &str = "\
 Examples:
-  canic subnet network info ryjl3-tyaaa-aaaaa-aaaba-cai
-  canic subnet network info <deployment>
-  canic subnet network info <deployment>/<role-or-canister>";
+  canic subnet catalog info ryjl3-tyaaa-aaaaa-aaaba-cai
+  canic subnet catalog info <deployment>
+  canic subnet catalog info <deployment>/<role-or-canister>";
 
 ///
 /// SubnetCommandError
@@ -92,10 +92,10 @@ enum OutputFormat {
 }
 
 ///
-/// NetworkListOptions
+/// CatalogListOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct NetworkListOptions {
+struct CatalogListOptions {
     network: String,
     format: OutputFormat,
     filters: SubnetCatalogFilters,
@@ -106,10 +106,10 @@ struct NetworkListOptions {
 }
 
 ///
-/// NetworkInfoOptions
+/// CatalogInfoOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct NetworkInfoOptions {
+struct CatalogInfoOptions {
     input: String,
     network: String,
     icp: String,
@@ -133,33 +133,33 @@ where
     };
 
     match command.as_str() {
-        "network" => run_network(args),
+        "catalog" => run_catalog(args),
         _ => unreachable!("subnet dispatch command only defines known commands"),
     }
 }
 
-fn run_network<I>(args: I) -> Result<(), SubnetCommandError>
+fn run_catalog<I>(args: I) -> Result<(), SubnetCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, network_usage, version_text()) {
+    if print_help_or_version(&args, catalog_usage, version_text()) {
         return Ok(());
     }
-    let Some((command, args)) = parse_subcommand(network_command(), args)
-        .map_err(|_| SubnetCommandError::Usage(network_usage()))?
+    let Some((command, args)) = parse_subcommand(catalog_command(), args)
+        .map_err(|_| SubnetCommandError::Usage(catalog_usage()))?
     else {
-        return Err(SubnetCommandError::Usage(network_usage()));
+        return Err(SubnetCommandError::Usage(catalog_usage()));
     };
 
     match command.as_str() {
-        "list" => run_network_list(args),
-        "info" => run_network_info(args),
-        _ => unreachable!("subnet network dispatch command only defines known commands"),
+        "list" => run_catalog_list(args),
+        "info" => run_catalog_info(args),
+        _ => unreachable!("subnet catalog dispatch command only defines known commands"),
     }
 }
 
-fn run_network_list<I>(args: I) -> Result<(), SubnetCommandError>
+fn run_catalog_list<I>(args: I) -> Result<(), SubnetCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
@@ -167,9 +167,9 @@ where
     if print_help_or_version(&args, list_usage, version_text()) {
         return Ok(());
     }
-    let options = NetworkListOptions::parse(args)?;
+    let options = CatalogListOptions::parse(args)?;
     let icp_root = icp_root().map_err(|err| SubnetCommandError::Usage(err.to_string()))?;
-    let request = SubnetNetworkListRequest {
+    let request = SubnetCatalogListRequest {
         cache: cache_request(&icp_root, &options.network),
         now_unix_secs: now_unix_secs()?,
         stale_after_seconds: options.stale_after_seconds,
@@ -178,17 +178,17 @@ where
         range_limit: options.range_limit,
         range_offset: options.range_offset,
     };
-    let report = build_subnet_network_list_report(&request)?;
+    let report = build_subnet_catalog_list_report(&request)?;
     match options.format {
         OutputFormat::Text => {
-            println!("{}", subnet_network_list_report_text(&report));
+            println!("{}", subnet_catalog_list_report_text(&report));
             Ok(())
         }
         OutputFormat::Json => write_pretty_json(None, &report),
     }
 }
 
-fn run_network_info<I>(args: I) -> Result<(), SubnetCommandError>
+fn run_catalog_info<I>(args: I) -> Result<(), SubnetCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
@@ -196,10 +196,10 @@ where
     if print_help_or_version(&args, info_usage, version_text()) {
         return Ok(());
     }
-    let options = NetworkInfoOptions::parse(args)?;
+    let options = CatalogInfoOptions::parse(args)?;
     let icp_root = icp_root().map_err(|err| SubnetCommandError::Usage(err.to_string()))?;
     let resolved_target = resolved_target_for_info(&options, &icp_root)?;
-    let request = SubnetNetworkInfoRequest {
+    let request = SubnetCatalogInfoRequest {
         cache: cache_request(&icp_root, &options.network),
         input: options.input,
         forced: options.forced,
@@ -207,17 +207,17 @@ where
         now_unix_secs: now_unix_secs()?,
         stale_after_seconds: options.stale_after_seconds,
     };
-    let report = build_subnet_network_info_report(&request)?;
+    let report = build_subnet_catalog_info_report(&request)?;
     match options.format {
         OutputFormat::Text => {
-            println!("{}", subnet_network_info_report_text(&report));
+            println!("{}", subnet_catalog_info_report_text(&report));
             Ok(())
         }
         OutputFormat::Json => write_pretty_json(None, &report),
     }
 }
 
-impl NetworkListOptions {
+impl CatalogListOptions {
     fn parse<I>(args: I) -> Result<Self, SubnetCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -254,7 +254,7 @@ impl NetworkListOptions {
     }
 }
 
-impl NetworkInfoOptions {
+impl CatalogInfoOptions {
     fn parse<I>(args: I) -> Result<Self, SubnetCommandError>
     where
         I: IntoIterator<Item = OsString>,
@@ -276,7 +276,7 @@ impl NetworkInfoOptions {
 }
 
 fn resolved_target_for_info(
-    options: &NetworkInfoOptions,
+    options: &CatalogInfoOptions,
     icp_root: &Path,
 ) -> Result<Option<ResolvedDeploymentTarget>, SubnetCommandError> {
     if canonical_principal_text(&options.input).is_ok() {
@@ -292,7 +292,7 @@ fn resolved_target_for_info(
 
 fn resolve_deployment_target(
     input: &str,
-    options: &NetworkInfoOptions,
+    options: &CatalogInfoOptions,
     icp_root: &Path,
 ) -> Result<ResolvedDeploymentTarget, SubnetCommandError> {
     if let Some((deployment, target)) = split_deployment_selector(input) {
@@ -472,13 +472,13 @@ fn subnet_command() -> ClapCommand {
         .about("Inspect cached IC network subnet metadata")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
-            ClapCommand::new("network").about("Inspect cached IC network subnet metadata"),
+            ClapCommand::new("catalog").about("Inspect cached IC network subnet metadata"),
         ))
 }
 
-fn network_command() -> ClapCommand {
-    ClapCommand::new("network")
-        .bin_name("canic subnet network")
+fn catalog_command() -> ClapCommand {
+    ClapCommand::new("catalog")
+        .bin_name("canic subnet catalog")
         .about("Inspect cached IC network subnet metadata")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
@@ -491,7 +491,7 @@ fn network_command() -> ClapCommand {
 
 fn list_command() -> ClapCommand {
     ClapCommand::new("list")
-        .bin_name("canic subnet network list")
+        .bin_name("canic subnet catalog list")
         .about("List cached mainnet IC subnets")
         .disable_help_flag(true)
         .arg(
@@ -552,7 +552,7 @@ fn list_command() -> ClapCommand {
 
 fn info_command() -> ClapCommand {
     ClapCommand::new("info")
-        .bin_name("canic subnet network info")
+        .bin_name("canic subnet catalog info")
         .about("Resolve a subnet, canister, or deployment target to cached subnet info")
         .disable_help_flag(true)
         .arg(
@@ -594,8 +594,8 @@ fn usage() -> String {
     command.render_help().to_string()
 }
 
-fn network_usage() -> String {
-    let mut command = network_command();
+fn catalog_usage() -> String {
+    let mut command = catalog_command();
     command.render_help().to_string()
 }
 
@@ -616,7 +616,7 @@ mod tests {
 
     #[test]
     fn list_defaults_to_mainnet_ic_catalog() {
-        let options = NetworkListOptions::parse([]).expect("parse list");
+        let options = CatalogListOptions::parse([]).expect("parse list");
 
         assert_eq!(options.network, MAINNET_NETWORK);
         assert_eq!(options.format, OutputFormat::Text);
@@ -625,7 +625,7 @@ mod tests {
 
     #[test]
     fn list_parses_filters_and_json_format() {
-        let options = NetworkListOptions::parse([
+        let options = CatalogListOptions::parse([
             OsString::from("--kind"),
             OsString::from("application"),
             OsString::from("--specialization"),
@@ -663,9 +663,9 @@ mod tests {
     }
 
     #[test]
-    fn network_local_is_rejected_with_pinned_message() {
+    fn catalog_local_is_rejected_with_pinned_message() {
         let err = run([
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("list"),
             OsString::from("--__canic-network"),
             OsString::from("local"),
@@ -674,16 +674,16 @@ mod tests {
 
         let message = err.to_string();
         assert!(message.contains("supports only the mainnet `ic` network in 0.60"));
-        assert!(message.contains("canic --network ic subnet network list"));
+        assert!(message.contains("canic --network ic subnet catalog list"));
     }
 
     #[test]
     fn refresh_is_not_advertised_in_cached_only_slice() {
-        let text = network_usage();
+        let text = catalog_usage();
 
         assert!(!text.contains("refresh"));
         std::assert_matches!(
-            run([OsString::from("network"), OsString::from("refresh")]),
+            run([OsString::from("catalog"), OsString::from("refresh")]),
             Err(SubnetCommandError::Usage(_))
         );
     }

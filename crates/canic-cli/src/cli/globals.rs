@@ -165,12 +165,12 @@ fn subnet_leaf_accepts_global_icp(tail: &[OsString]) -> bool {
             tail.first().and_then(|arg| arg.to_str()),
             tail.get(1).and_then(|arg| arg.to_str())
         ),
-        (Some("network"), Some("info"))
+        (Some("catalog"), Some("info"))
     )
 }
 
 fn subnet_leaf_accepts_global_network(tail: &[OsString]) -> bool {
-    tail.first().and_then(|arg| arg.to_str()) == Some("network")
+    tail.first().and_then(|arg| arg.to_str()) == Some("catalog")
 }
 
 fn deploy_leaf_accepts_global_network(tail: &[OsString]) -> bool {

@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.1` renames the cached subnet inspection command group from
+  `canic subnet network ...` to `canic subnet catalog ...`, preserving the
+  mainnet-only `--network ic` behavior and clarifying the cached-only
+  missing-catalog error.
+
+  ```text
+  canic subnet catalog list
+  canic --network ic subnet catalog list
+  canic subnet catalog info <subnet-principal|canister-principal|deployment-target>
+  ```
+
 - `0.60.0` starts the NNS subnet inspection line with a cached mainnet IC
   subnet catalog schema/resolver and read-only `canic subnet network list/info`
   commands over local cache data. Live refresh and estimate integration remain

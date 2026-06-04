@@ -128,9 +128,9 @@ fn command_family_help_returns_ok() {
         &["replica", "status", "help"],
         &["replica", "stop", "help"],
         &["subnet", "help"],
-        &["subnet", "network", "help"],
-        &["subnet", "network", "list", "help"],
-        &["subnet", "network", "info", "help"],
+        &["subnet", "catalog", "help"],
+        &["subnet", "catalog", "list", "help"],
+        &["subnet", "catalog", "info", "help"],
         &["restore", "help"],
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
@@ -288,7 +288,7 @@ fn subnet_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("subnet"),
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("--version")
         ])
         .is_ok()
@@ -296,7 +296,7 @@ fn subnet_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("subnet"),
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("list"),
             OsString::from("--version")
         ])
@@ -305,7 +305,7 @@ fn subnet_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("subnet"),
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("info"),
             OsString::from("--version")
         ])
@@ -314,10 +314,10 @@ fn subnet_version_flags_return_ok() {
 }
 
 #[test]
-fn global_icp_is_forwarded_to_subnet_network_info_only() {
-    let mut list_tail = vec![OsString::from("network"), OsString::from("list")];
+fn global_icp_is_forwarded_to_subnet_catalog_info_only() {
+    let mut list_tail = vec![OsString::from("catalog"), OsString::from("list")];
     let mut info_tail = vec![
-        OsString::from("network"),
+        OsString::from("catalog"),
         OsString::from("info"),
         OsString::from("demo/root"),
     ];
@@ -327,12 +327,12 @@ fn global_icp_is_forwarded_to_subnet_network_info_only() {
 
     assert_eq!(
         list_tail,
-        vec![OsString::from("network"), OsString::from("list")]
+        vec![OsString::from("catalog"), OsString::from("list")]
     );
     assert_eq!(
         info_tail,
         vec![
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("info"),
             OsString::from("demo/root"),
             OsString::from(INTERNAL_ICP_OPTION),
@@ -574,10 +574,10 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
 }
 
 #[test]
-fn global_network_is_forwarded_to_subnet_network_namespace() {
-    let mut list_tail = vec![OsString::from("network"), OsString::from("list")];
+fn global_network_is_forwarded_to_subnet_catalog_namespace() {
+    let mut list_tail = vec![OsString::from("catalog"), OsString::from("list")];
     let mut info_tail = vec![
-        OsString::from("network"),
+        OsString::from("catalog"),
         OsString::from("info"),
         OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai"),
     ];
@@ -590,7 +590,7 @@ fn global_network_is_forwarded_to_subnet_network_namespace() {
     assert_eq!(
         list_tail,
         vec![
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("list"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("ic")
@@ -599,7 +599,7 @@ fn global_network_is_forwarded_to_subnet_network_namespace() {
     assert_eq!(
         info_tail,
         vec![
-            OsString::from("network"),
+            OsString::from("catalog"),
             OsString::from("info"),
             OsString::from("ryjl3-tyaaa-aaaaa-aaaba-cai"),
             OsString::from(INTERNAL_NETWORK_OPTION),
