@@ -9,14 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.1` is underway from
+- `0.61.2` is underway from
   `docs/design/0.61-replay-protection/0.61-design.md` Slice B. The current
-  branch adds the shared replay-core vocabulary in `ops::replay::model`:
-  32-byte `OperationId`, command kinds, replay actors, receipt/status/effect
-  types, common replay error classifications, versioned payload hashing, and
-  bounded terminal-error bytes. Existing root replay guard/key boundaries now
-  accept `OperationId` instead of raw `[u8; 32]` request IDs, while preserving
-  root replay behavior and the existing root DTO metadata shape. Validation:
+  branch now has the shared replay-core vocabulary in `ops::replay::model` and
+  the first shared stable receipt store/API in `ops::replay::receipt`.
+  Stable memory ID `21` is reserved for `canic.core.replay_receipts.v1`; stored
+  receipts bind command kind, 32-byte `OperationId`, replay actor, payload hash
+  schema/version, status, optional committed response bytes, and optional
+  external-effect descriptor. The new receipt API can reserve fresh operations,
+  classify duplicates, return committed responses, reject actor/payload
+  mismatches, report pending/in-flight/recovery-required receipts, and commit
+  bounded terminal failures. Existing root replay guard/key boundaries accept
+  `OperationId` instead of raw `[u8; 32]` request IDs, but root RPC replay still
+  uses the legacy root replay store; migrating root replay onto the shared
+  receipt primitive remains required before any 0.61 release candidate.
+  Validation:
   ```text
   cargo test -p canic-core ops::replay --lib -- --nocapture
   cargo test -p canic-core --lib -- --nocapture

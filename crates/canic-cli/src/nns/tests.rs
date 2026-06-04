@@ -5,6 +5,7 @@ use super::{
         node_provider_info_usage, node_provider_list_usage, node_provider_refresh_usage,
         node_provider_usage,
     },
+    registry::{RegistryVersionOptions, registry_usage, registry_version_usage},
     subnet::{
         CatalogInfoOptions, CatalogListOptions, CatalogRefreshOptions, DEFAULT_RANGE_LIMIT,
         info_usage, list_usage, refresh_usage, resolve_canister_or_role,
@@ -19,6 +20,7 @@ use canic_host::{
     nns_node_provider::{
         DEFAULT_NNS_SOURCE_ENDPOINT, DEFAULT_NODE_PROVIDER_REFRESH_LOCK_STALE_SECONDS,
     },
+    nns_registry::DEFAULT_NNS_REGISTRY_SOURCE_ENDPOINT,
     registry::RegistryEntry,
     subnet_catalog::SubnetCatalogHostError,
 };
@@ -248,6 +250,29 @@ fn node_provider_refresh_parses_defaults_and_export_options() {
 }
 
 #[test]
+fn registry_version_parses_defaults_and_json_format() {
+    let defaults = RegistryVersionOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(
+        defaults.source_endpoint,
+        DEFAULT_NNS_REGISTRY_SOURCE_ENDPOINT
+    );
+
+    let options = RegistryVersionOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse registry version");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
 fn node_provider_help_is_advertised_under_nns() {
     let nns = usage();
     let node_provider = node_provider_usage();
@@ -269,6 +294,18 @@ fn node_provider_help_is_advertised_under_nns() {
 }
 
 #[test]
+fn registry_help_is_advertised_under_nns() {
+    let nns = usage();
+    let registry = registry_usage();
+    let version = registry_version_usage();
+
+    assert!(nns.contains("registry"));
+    assert!(registry.contains("Show the latest mainnet NNS registry version"));
+    assert!(version.contains("canic nns registry version"));
+    assert!(version.contains("--format json"));
+}
+
+#[test]
 fn node_provider_local_is_rejected_with_pinned_message() {
     let err = run([
         OsString::from("node-provider"),
@@ -281,6 +318,21 @@ fn node_provider_local_is_rejected_with_pinned_message() {
     let message = err.to_string();
     assert!(message.contains("supports only the mainnet `ic` network in 0.60"));
     assert!(message.contains("canic --network ic nns node-provider list"));
+}
+
+#[test]
+fn registry_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("registry"),
+        OsString::from("version"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns registry version"));
 }
 
 #[test]

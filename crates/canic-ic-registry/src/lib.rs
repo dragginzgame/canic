@@ -56,6 +56,19 @@ impl MainnetRegistryFetchRequest {
 }
 
 ///
+/// MainnetRegistryVersion
+///
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct MainnetRegistryVersion {
+    pub network: String,
+    pub registry_canister_id: String,
+    pub registry_version: u64,
+    pub fetched_at: String,
+    pub fetched_by: String,
+    pub source_endpoint: String,
+}
+
+///
 /// MainnetNodeProviderList
 ///
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -219,6 +232,16 @@ pub fn fetch_mainnet_subnet_catalog(
     runtime.block_on(fetch_mainnet_subnet_catalog_async(request))
 }
 
+pub fn fetch_mainnet_registry_version(
+    request: &MainnetRegistryFetchRequest,
+) -> Result<MainnetRegistryVersion, RegistryFetchError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| RegistryFetchError::Runtime(err.to_string()))?;
+    runtime.block_on(fetch_mainnet_registry_version_async(request))
+}
+
 pub fn fetch_mainnet_node_provider_list(
     request: &MainnetRegistryFetchRequest,
 ) -> Result<MainnetNodeProviderList, RegistryFetchError> {
@@ -227,6 +250,33 @@ pub fn fetch_mainnet_node_provider_list(
         .build()
         .map_err(|err| RegistryFetchError::Runtime(err.to_string()))?;
     runtime.block_on(fetch_mainnet_node_provider_list_async(request))
+}
+
+pub async fn fetch_mainnet_registry_version_async(
+    request: &MainnetRegistryFetchRequest,
+) -> Result<MainnetRegistryVersion, RegistryFetchError> {
+    let agent = Agent::builder()
+        .with_url(&request.endpoint)
+        .build()
+        .map_err(|err| RegistryFetchError::AgentBuild {
+            endpoint: request.endpoint.clone(),
+            reason: err.to_string(),
+        })?;
+    let registry_canister = Principal::from_text(MAINNET_REGISTRY_CANISTER_ID).map_err(|err| {
+        RegistryFetchError::InvalidPrincipal {
+            field: "registry_canister_id",
+            reason: err.to_string(),
+        }
+    })?;
+    let registry_version = get_latest_version(&agent, &registry_canister).await?;
+    Ok(MainnetRegistryVersion {
+        network: MAINNET_NETWORK.to_string(),
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version,
+        fetched_at: request.fetched_at.clone(),
+        fetched_by: request.fetched_by.clone(),
+        source_endpoint: request.endpoint.clone(),
+    })
 }
 
 pub async fn fetch_mainnet_subnet_catalog_async(

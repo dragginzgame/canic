@@ -88,6 +88,7 @@ To inspect the cached public IC subnet catalog:
 
 ```bash
 canic nns subnet refresh
+canic nns registry version
 canic nns subnet list
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```

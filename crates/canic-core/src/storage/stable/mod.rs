@@ -78,8 +78,9 @@ pub mod memory {
     pub mod auth {
         pub const AUTH_STATE_ID: u8 = 19;
         pub const ROOT_REPLAY_ID: u8 = 20;
+        pub const REPLAY_RECEIPTS_ID: u8 = 21;
 
-        // Reserved: 21–28
+        // Reserved: 22–28
     }
 
     // ---------------------------------------------------------------------

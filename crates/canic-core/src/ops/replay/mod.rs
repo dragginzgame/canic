@@ -7,6 +7,7 @@ use self::{guard::ReplayPending, slot as replay_slot};
 pub mod guard;
 pub mod key;
 pub mod model;
+pub mod receipt;
 pub mod slot;
 pub mod ttl;
 

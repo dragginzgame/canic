@@ -2,7 +2,14 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     cdk::types::Principal,
     eager_static,
-    storage::{prelude::*, stable::memory::auth::ROOT_REPLAY_ID},
+    ops::replay::model::{
+        CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
+        ReplayActor, ReplayReceipt, ReplayReceiptStatus,
+    },
+    storage::{
+        prelude::*,
+        stable::memory::auth::{REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
+    },
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
@@ -14,6 +21,14 @@ eager_static! {
         StableBtreeMap<ReplaySlotKey, RootReplayRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!("canic.core.root_replay.v1", RootReplayStore, ROOT_REPLAY_ID)),
+    );
+}
+
+eager_static! {
+    static REPLAY_RECEIPTS: RefCell<
+        StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(
+        StableBtreeMap::init(crate::ic_memory_key!("canic.core.replay_receipts.v1", ReplayReceiptStore, REPLAY_RECEIPTS_ID)),
     );
 }
 
@@ -47,6 +62,116 @@ impl Storable for ReplaySlotKey {
         }
 
         Self(out)
+    }
+}
+
+///
+/// ReplayReceiptSlotKey
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct ReplayReceiptSlotKey(pub [u8; 32]);
+
+impl Storable for ReplayReceiptSlotKey {
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 32,
+        is_fixed_size: true,
+    };
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.0.to_vec())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let bytes = bytes.as_ref();
+        let mut out = [0u8; 32];
+
+        if bytes.len() == 32 {
+            out.copy_from_slice(bytes);
+        }
+
+        Self(out)
+    }
+}
+
+///
+/// ReplayReceiptRecord
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReplayReceiptRecord {
+    pub schema_version: u32,
+    pub command_kind: String,
+    pub operation_id: [u8; 32],
+    pub actor: ReplayActor,
+    pub payload_hash_schema_version: u32,
+    pub payload_hash: [u8; 32],
+    pub status: ReplayReceiptStatus,
+    pub created_at_ns: u64,
+    pub updated_at_ns: u64,
+    pub response_schema_version: Option<u32>,
+    pub response_bytes: Option<Vec<u8>>,
+    pub effect: Option<ExternalEffectDescriptor>,
+}
+
+impl ReplayReceiptRecord {
+    pub fn from_receipt(receipt: ReplayReceipt) -> Self {
+        Self {
+            schema_version: receipt.schema_version,
+            command_kind: receipt.command_kind.as_str().to_string(),
+            operation_id: receipt.operation_id.into_bytes(),
+            actor: receipt.actor,
+            payload_hash_schema_version: receipt.payload_hash_schema_version,
+            payload_hash: receipt.payload_hash,
+            status: receipt.status,
+            created_at_ns: receipt.created_at_ns,
+            updated_at_ns: receipt.updated_at_ns,
+            response_schema_version: receipt.response_schema_version,
+            response_bytes: receipt.response_bytes,
+            effect: receipt.effect,
+        }
+    }
+
+    pub fn into_receipt(self) -> Result<ReplayReceipt, String> {
+        if self.schema_version != REPLAY_RECEIPT_SCHEMA_VERSION {
+            return Err(format!(
+                "unsupported replay receipt schema version {}",
+                self.schema_version
+            ));
+        }
+        Ok(ReplayReceipt {
+            schema_version: self.schema_version,
+            command_kind: CommandKind::new(self.command_kind)
+                .map_err(|err| format!("invalid replay receipt command kind: {err:?}"))?,
+            operation_id: OperationId::from_bytes(self.operation_id),
+            actor: self.actor,
+            payload_hash_schema_version: self.payload_hash_schema_version,
+            payload_hash: self.payload_hash,
+            status: self.status,
+            created_at_ns: self.created_at_ns,
+            updated_at_ns: self.updated_at_ns,
+            response_schema_version: self.response_schema_version,
+            response_bytes: self.response_bytes,
+            effect: self.effect,
+        })
+    }
+}
+
+impl Storable for ReplayReceiptRecord {
+    const BOUND: Bound = Bound::Unbounded;
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.clone().into_bytes())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        serde_cbor::to_vec(&self).expect("replay receipt record serializes to cbor")
+    }
+
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
+        serde_cbor::from_slice(bytes.as_ref()).expect("replay receipt record decodes from cbor")
     }
 }
 
@@ -201,10 +326,41 @@ impl RootReplayStore {
     }
 }
 
+///
+/// ReplayReceiptStore
+///
+pub struct ReplayReceiptStore;
+
+impl ReplayReceiptStore {
+    #[must_use]
+    pub(crate) fn get(key: ReplayReceiptSlotKey) -> Option<ReplayReceiptRecord> {
+        REPLAY_RECEIPTS.with_borrow(|map| map.get(&key))
+    }
+
+    pub(crate) fn upsert(key: ReplayReceiptSlotKey, record: ReplayReceiptRecord) {
+        REPLAY_RECEIPTS.with_borrow_mut(|map| {
+            map.insert(key, record);
+        });
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn len() -> usize {
+        REPLAY_RECEIPTS.with_borrow(|map| usize::try_from(map.len()).unwrap_or(usize::MAX))
+    }
+}
+
 #[cfg(test)]
 impl RootReplayStore {
     pub(crate) fn reset_for_tests() {
         ROOT_REPLAY.with_borrow_mut(StableBtreeMap::clear_new);
+    }
+}
+
+#[cfg(test)]
+impl ReplayReceiptStore {
+    pub(crate) fn reset_for_tests() {
+        REPLAY_RECEIPTS.with_borrow_mut(StableBtreeMap::clear_new);
     }
 }
 
@@ -214,6 +370,23 @@ mod tests {
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
+    }
+
+    fn receipt_record_fixture() -> ReplayReceiptRecord {
+        ReplayReceiptRecord {
+            schema_version: REPLAY_RECEIPT_SCHEMA_VERSION,
+            command_kind: "test.command.v1".to_string(),
+            operation_id: [9; 32],
+            actor: ReplayActor::direct_caller(p(1)),
+            payload_hash_schema_version: 1,
+            payload_hash: [7; 32],
+            status: ReplayReceiptStatus::Reserved,
+            created_at_ns: 100,
+            updated_at_ns: 100,
+            response_schema_version: None,
+            response_bytes: None,
+            effect: None,
+        }
     }
 
     // round_trip_record
@@ -256,5 +429,23 @@ mod tests {
             expires_at: 222,
             response_bytes: vec![1, 2, 3, 4, 5, 6],
         });
+    }
+
+    #[test]
+    fn replay_receipt_record_round_trips_through_cbor_storable() {
+        let record = receipt_record_fixture();
+        let encoded = record.clone().into_bytes();
+        let decoded = ReplayReceiptRecord::from_bytes(Cow::Owned(encoded));
+
+        assert_eq!(decoded, record);
+    }
+
+    #[test]
+    fn replay_receipt_record_converts_to_shared_receipt() {
+        let record = receipt_record_fixture();
+        let receipt = record.clone().into_receipt().expect("receipt");
+        let round_trip = ReplayReceiptRecord::from_receipt(receipt);
+
+        assert_eq!(round_trip, record);
     }
 }

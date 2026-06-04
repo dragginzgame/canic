@@ -135,6 +135,8 @@ fn command_family_help_returns_ok() {
         &["replica", "status", "help"],
         &["replica", "stop", "help"],
         &["nns", "help"],
+        &["nns", "registry", "help"],
+        &["nns", "registry", "version", "help"],
         &["nns", "subnet", "help"],
         &["nns", "subnet", "list", "help"],
         &["nns", "subnet", "info", "help"],
@@ -301,6 +303,23 @@ fn version_flags_return_ok() {
 #[test]
 fn nns_version_flags_return_ok() {
     assert!(run([OsString::from("nns"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("nns"),
+            OsString::from("registry"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("nns"),
+            OsString::from("registry"),
+            OsString::from("version"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
     assert!(
         run([
             OsString::from("nns"),
