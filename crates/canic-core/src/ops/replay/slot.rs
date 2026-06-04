@@ -1,91 +1,63 @@
-use crate::{
-    ops::replay::guard::ReplayPending,
-    ops::storage::replay::RootReplayOps,
-    storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
+use crate::ops::{
+    replay::{
+        ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
+        guard::{ReplayPending, secs_to_ns},
+        receipt::{abort_reserved_receipt, commit_receipt_response, reserve_receipt_token},
+    },
+    storage::replay::ReplayReceiptOps,
 };
 
-/// get_root_slot
+/// reserve_root_slot
 ///
-/// Read a replay record from the root replay store.
-#[must_use]
-pub fn get_root_slot(key: ReplaySlotKey) -> Option<RootReplayRecord> {
-    RootReplayOps::get(key)
-}
-
-/// upsert_root_slot
-///
-/// Insert or replace a replay record in the root replay store.
-#[cfg(test)]
-pub fn upsert_root_slot(key: ReplaySlotKey, record: RootReplayRecord) {
-    RootReplayOps::upsert(key, record);
+/// Persist a reserved replay receipt before capability execution.
+pub fn reserve_root_slot(pending: &ReplayPending) {
+    reserve_receipt_token(&pending.receipt_token);
 }
 
 /// commit_root_slot
 ///
-/// Persist a reserved replay reservation marker before capability execution.
-pub fn reserve_root_slot(pending: ReplayPending) {
-    RootReplayOps::upsert(
-        pending.slot_key,
-        RootReplayRecord {
-            caller: pending.caller,
-            payload_hash: pending.payload_hash,
-            issued_at: pending.issued_at,
-            expires_at: pending.expires_at,
-            response_bytes: vec![],
-        },
-    );
-}
-
-/// commit_root_slot
-///
-/// Persist canonical replay response bytes for an already-reserved replay slot.
-pub fn commit_root_slot(pending: ReplayPending, response_bytes: Vec<u8>) {
-    RootReplayOps::upsert(
-        pending.slot_key,
-        RootReplayRecord {
-            caller: pending.caller,
-            payload_hash: pending.payload_hash,
-            issued_at: pending.issued_at,
-            expires_at: pending.expires_at,
-            response_bytes,
-        },
+/// Persist canonical replay response bytes for an already-reserved replay receipt.
+pub fn commit_root_slot(pending: &ReplayPending, response_bytes: Vec<u8>) {
+    commit_receipt_response(
+        &pending.receipt_token,
+        ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
+        response_bytes,
+        secs_to_ns(pending.issued_at),
     );
 }
 
 /// root_slot_len
 ///
-/// Return the number of replay entries currently stored.
+/// Return the number of replay receipts currently stored.
 #[must_use]
 pub fn root_slot_len() -> usize {
-    RootReplayOps::len()
+    ReplayReceiptOps::len()
 }
 
 /// active_root_slot_len_for_caller
 ///
-/// Return the number of non-expired replay entries currently stored for a caller.
+/// Return the number of non-expired replay receipts currently stored for a caller.
 #[must_use]
-pub fn active_root_slot_len_for_caller(caller: crate::cdk::types::Principal, now: u64) -> usize {
-    RootReplayOps::active_len_for_caller(caller, now)
-}
-
-/// has_root_slot
-///
-/// Return whether a replay slot already exists in stable replay storage.
-#[must_use]
-pub fn has_root_slot(key: ReplaySlotKey) -> bool {
-    get_root_slot(key).is_some()
+pub fn active_root_slot_len_for_caller(
+    caller: crate::cdk::types::Principal,
+    now_secs: u64,
+) -> usize {
+    ReplayReceiptOps::active_len_for_actor(
+        crate::ops::replay::model::ReplayActor::direct_caller(caller),
+        secs_to_ns(now_secs),
+    )
 }
 
 /// purge_root_expired
 ///
-/// Purge expired replay records up to the provided scan limit.
-pub fn purge_root_expired(now: u64, limit: usize) -> usize {
-    RootReplayOps::purge_expired(now, limit)
+/// Purge expired replay receipts up to the provided scan limit.
+pub fn purge_root_expired(now_ns: u64, limit: usize) -> usize {
+    ReplayReceiptOps::purge_expired(now_ns, limit)
 }
 
 /// remove_root_slot
 ///
-/// Remove a replay slot entry from stable replay storage.
-pub fn remove_root_slot(key: ReplaySlotKey) -> Option<RootReplayRecord> {
-    RootReplayOps::remove(key)
+/// Remove a reserved replay receipt from stable replay storage.
+pub fn remove_root_slot(pending: &ReplayPending) {
+    abort_reserved_receipt(&pending.receipt_token);
 }

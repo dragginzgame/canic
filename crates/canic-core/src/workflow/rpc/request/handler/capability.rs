@@ -20,6 +20,7 @@ pub(super) enum RootCapability {
 #[derive(Clone, Copy)]
 pub(super) struct RootCapabilityDescriptor {
     pub(super) name: &'static str,
+    pub(super) command_kind: &'static str,
     pub(super) key: RootCapabilityMetricKey,
 }
 
@@ -35,26 +36,32 @@ impl RootCapability {
         match self {
             Self::Provision(_) => RootCapabilityDescriptor {
                 name: "Provision",
+                command_kind: "root.provision.v1",
                 key: RootCapabilityMetricKey::Provision,
             },
             Self::Upgrade(_) => RootCapabilityDescriptor {
                 name: "Upgrade",
+                command_kind: "root.upgrade.v1",
                 key: RootCapabilityMetricKey::Upgrade,
             },
             Self::RecycleCanister(_) => RootCapabilityDescriptor {
                 name: "RecycleCanister",
+                command_kind: "root.recycle_canister.v1",
                 key: RootCapabilityMetricKey::RecycleCanister,
             },
             Self::RequestCycles(_) => RootCapabilityDescriptor {
                 name: "RequestCycles",
+                command_kind: "root.request_cycles.v1",
                 key: RootCapabilityMetricKey::RequestCycles,
             },
             Self::IssueRoleAttestation(_) => RootCapabilityDescriptor {
                 name: "IssueRoleAttestation",
+                command_kind: "root.issue_role_attestation.v1",
                 key: RootCapabilityMetricKey::IssueRoleAttestation,
             },
             Self::IssueInternalInvocationProof(_) => RootCapabilityDescriptor {
                 name: "IssueInternalInvocationProof",
+                command_kind: "root.issue_internal_invocation_proof.v1",
                 key: RootCapabilityMetricKey::IssueInternalInvocationProof,
             },
         }

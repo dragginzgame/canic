@@ -5,7 +5,6 @@ use candid::{decode_one, encode_one};
 use self::{guard::ReplayPending, slot as replay_slot};
 
 pub mod guard;
-pub mod key;
 pub mod model;
 pub mod receipt;
 pub mod slot;
@@ -13,6 +12,7 @@ pub mod ttl;
 
 const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR2";
 const ROOT_REPLAY_COMPACT_CYCLES_V1: u8 = 0;
+const ROOT_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 ///
 /// ReplayReserveError
@@ -51,23 +51,21 @@ pub enum ReplayDecodeError {
 ///
 /// Persist a pending replay reservation marker before capability execution.
 pub fn reserve_root_replay(
-    pending: ReplayPending,
+    pending: &ReplayPending,
     max_entries: usize,
     max_entries_per_caller: usize,
 ) -> Result<(), ReplayReserveError> {
-    if !replay_slot::has_root_slot(pending.slot_key) {
-        if replay_slot::active_root_slot_len_for_caller(pending.caller, pending.issued_at)
-            >= max_entries_per_caller
-        {
-            return Err(ReplayReserveError::CallerCapacityReached {
-                caller: pending.caller,
-                max_entries: max_entries_per_caller,
-            });
-        }
+    if replay_slot::active_root_slot_len_for_caller(pending.caller, pending.issued_at)
+        >= max_entries_per_caller
+    {
+        return Err(ReplayReserveError::CallerCapacityReached {
+            caller: pending.caller,
+            max_entries: max_entries_per_caller,
+        });
+    }
 
-        if replay_slot::root_slot_len() >= max_entries {
-            return Err(ReplayReserveError::CapacityReached { max_entries });
-        }
+    if replay_slot::root_slot_len() >= max_entries {
+        return Err(ReplayReserveError::CapacityReached { max_entries });
     }
 
     replay_slot::reserve_root_slot(pending);
@@ -82,7 +80,7 @@ pub fn commit_root_replay(
     response: &Response,
 ) -> Result<(), ReplayCommitError> {
     let response_bytes = encode_root_replay_response(response)?;
-    replay_slot::commit_root_slot(pending, response_bytes);
+    replay_slot::commit_root_slot(&pending, response_bytes);
     Ok(())
 }
 
@@ -91,7 +89,7 @@ pub fn commit_root_replay(
 /// Persist a cached cycles response without rebuilding the enum wrapper at the call site.
 pub fn commit_root_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
     let response_bytes = encode_root_cycles_replay_response(response);
-    replay_slot::commit_root_slot(pending, response_bytes);
+    replay_slot::commit_root_slot(&pending, response_bytes);
 }
 
 /// decode_root_replay_response
@@ -124,7 +122,7 @@ pub fn decode_root_cycles_replay_response(
 ///
 /// Remove an in-flight replay reservation after failed capability execution.
 pub fn abort_root_replay(pending: ReplayPending) {
-    let _ = replay_slot::remove_root_slot(pending.slot_key);
+    replay_slot::remove_root_slot(&pending);
 }
 
 fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCommitError> {
@@ -215,7 +213,16 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        ops::{replay::model::OperationId, storage::replay::RootReplayOps},
+        ops::{
+            replay::{
+                guard::secs_to_ns,
+                model::{CommandKind, OperationId, ReplayActor},
+                receipt::{
+                    ReplayReceiptDecision, ReplayReceiptReserveInput, prepare_replay_receipt,
+                },
+            },
+            storage::replay::ReplayReceiptOps,
+        },
     };
 
     fn p(id: u8) -> Principal {
@@ -223,9 +230,23 @@ mod tests {
     }
 
     fn pending(caller: Principal, request_id: [u8; 32]) -> ReplayPending {
+        let command_kind = CommandKind::new("root.test.v1").expect("command kind");
+        let operation_id = OperationId::from_bytes(request_id);
+        let receipt_input = ReplayReceiptReserveInput::new(
+            command_kind,
+            operation_id,
+            ReplayActor::direct_caller(caller),
+            [7u8; 32],
+            secs_to_ns(1_000),
+        )
+        .with_expires_at_ns(secs_to_ns(1_300));
+        let receipt_token = match prepare_replay_receipt(receipt_input).expect("prepare") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh receipt token, got {other:?}"),
+        };
         ReplayPending {
             caller,
-            slot_key: key::root_slot_key(caller, p(9), OperationId::from_bytes(request_id)),
+            receipt_token: Box::new(receipt_token),
             payload_hash: [7u8; 32],
             issued_at: 1_000,
             expires_at: 1_300,
@@ -255,12 +276,12 @@ mod tests {
 
     #[test]
     fn reserve_root_replay_rejects_caller_capacity_before_global_capacity() {
-        RootReplayOps::reset_for_tests();
+        ReplayReceiptOps::reset_for_tests();
 
-        let caller = p(1);
-        reserve_root_replay(pending(caller, [1u8; 32]), 10, 1).expect("first reservation");
+        let caller = p(240);
+        reserve_root_replay(&pending(caller, [1u8; 32]), 10, 1).expect("first reservation");
 
-        let err = reserve_root_replay(pending(caller, [2u8; 32]), 10, 1)
+        let err = reserve_root_replay(&pending(caller, [2u8; 32]), 10, 1)
             .expect_err("same caller should hit caller cap");
         assert_eq!(
             err,
@@ -270,7 +291,7 @@ mod tests {
             }
         );
 
-        reserve_root_replay(pending(p(2), [3u8; 32]), 10, 1)
+        reserve_root_replay(&pending(p(241), [3u8; 32]), 10, 1)
             .expect("other caller should still reserve");
     }
 }

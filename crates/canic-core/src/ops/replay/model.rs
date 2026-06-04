@@ -197,6 +197,7 @@ pub struct ReplayReceipt {
     pub status: ReplayReceiptStatus,
     pub created_at_ns: u64,
     pub updated_at_ns: u64,
+    pub expires_at_ns: Option<u64>,
     pub response_schema_version: Option<u32>,
     pub response_bytes: Option<Vec<u8>>,
     pub effect: Option<ExternalEffectDescriptor>,

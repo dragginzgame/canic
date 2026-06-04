@@ -96,6 +96,7 @@ Public IC subnet metadata is inspected through the `nns` namespace:
 canic nns subnet refresh
 canic nns registry version
 canic nns subnet list
+canic nns node-operator list
 canic nns subnet list --verbose
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```

@@ -1,28 +1,19 @@
+#[cfg(test)]
+use crate::cdk::types::Principal;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
-    cdk::types::Principal,
     eager_static,
     ops::replay::model::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
         ReplayActor, ReplayReceipt, ReplayReceiptStatus,
     },
-    storage::{
-        prelude::*,
-        stable::memory::auth::{REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
-    },
+    storage::{prelude::*, stable::memory::auth::REPLAY_RECEIPTS_ID},
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
+#[cfg(test)]
 const ROOT_REPLAY_RECORD_MIN_BYTES: usize = 1 + 32 + 8 + 8 + 4;
-
-eager_static! {
-    static ROOT_REPLAY: RefCell<
-        StableBtreeMap<ReplaySlotKey, RootReplayRecord, VirtualMemory<DefaultMemoryImpl>>
-    > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.root_replay.v1", RootReplayStore, ROOT_REPLAY_ID)),
-    );
-}
 
 eager_static! {
     static REPLAY_RECEIPTS: RefCell<
@@ -30,39 +21,6 @@ eager_static! {
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!("canic.core.replay_receipts.v1", ReplayReceiptStore, REPLAY_RECEIPTS_ID)),
     );
-}
-
-///
-/// ReplaySlotKey
-///
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct ReplaySlotKey(pub [u8; 32]);
-
-impl Storable for ReplaySlotKey {
-    const BOUND: Bound = Bound::Bounded {
-        max_size: 32,
-        is_fixed_size: true,
-    };
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.0.to_vec())
-    }
-
-    fn into_bytes(self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-
-    fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let bytes = bytes.as_ref();
-        let mut out = [0u8; 32];
-
-        if bytes.len() == 32 {
-            out.copy_from_slice(bytes);
-        }
-
-        Self(out)
-    }
 }
 
 ///
@@ -111,6 +69,8 @@ pub struct ReplayReceiptRecord {
     pub status: ReplayReceiptStatus,
     pub created_at_ns: u64,
     pub updated_at_ns: u64,
+    #[serde(default)]
+    pub expires_at_ns: Option<u64>,
     pub response_schema_version: Option<u32>,
     pub response_bytes: Option<Vec<u8>>,
     pub effect: Option<ExternalEffectDescriptor>,
@@ -128,6 +88,7 @@ impl ReplayReceiptRecord {
             status: receipt.status,
             created_at_ns: receipt.created_at_ns,
             updated_at_ns: receipt.updated_at_ns,
+            expires_at_ns: receipt.expires_at_ns,
             response_schema_version: receipt.response_schema_version,
             response_bytes: receipt.response_bytes,
             effect: receipt.effect,
@@ -152,6 +113,7 @@ impl ReplayReceiptRecord {
             status: self.status,
             created_at_ns: self.created_at_ns,
             updated_at_ns: self.updated_at_ns,
+            expires_at_ns: self.expires_at_ns,
             response_schema_version: self.response_schema_version,
             response_bytes: self.response_bytes,
             effect: self.effect,
@@ -179,6 +141,7 @@ impl Storable for ReplayReceiptRecord {
 /// RootReplayRecord
 ///
 
+#[cfg(test)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootReplayRecord {
     pub caller: Principal,
@@ -188,6 +151,7 @@ pub struct RootReplayRecord {
     pub response_bytes: Vec<u8>,
 }
 
+#[cfg(test)]
 impl Storable for RootReplayRecord {
     const BOUND: Bound = Bound::Unbounded;
 
@@ -275,58 +239,6 @@ impl Storable for RootReplayRecord {
 }
 
 ///
-/// RootReplayStore
-///
-
-pub struct RootReplayStore;
-
-impl RootReplayStore {
-    #[must_use]
-    pub(crate) fn get(key: ReplaySlotKey) -> Option<RootReplayRecord> {
-        ROOT_REPLAY.with_borrow(|map| map.get(&key))
-    }
-
-    pub(crate) fn upsert(key: ReplaySlotKey, record: RootReplayRecord) {
-        ROOT_REPLAY.with_borrow_mut(|map| {
-            map.insert(key, record);
-        });
-    }
-
-    pub(crate) fn remove(key: ReplaySlotKey) -> Option<RootReplayRecord> {
-        ROOT_REPLAY.with_borrow_mut(|map| map.remove(&key))
-    }
-
-    #[must_use]
-    pub(crate) fn len() -> usize {
-        ROOT_REPLAY.with_borrow(|map| usize::try_from(map.len()).unwrap_or(usize::MAX))
-    }
-
-    #[must_use]
-    pub(crate) fn active_len_for_caller(caller: Principal, now: u64) -> usize {
-        ROOT_REPLAY.with_borrow(|map| {
-            map.iter()
-                .filter(|entry| entry.value().caller == caller && now <= entry.value().expires_at)
-                .count()
-        })
-    }
-
-    pub(crate) fn collect_expired(now: u64, limit: usize) -> Vec<ReplaySlotKey> {
-        let mut expired = Vec::new();
-        ROOT_REPLAY.with_borrow(|map| {
-            for entry in map.iter() {
-                if entry.value().expires_at < now {
-                    expired.push(*entry.key());
-                    if expired.len() >= limit {
-                        break;
-                    }
-                }
-            }
-        });
-        expired
-    }
-}
-
-///
 /// ReplayReceiptStore
 ///
 pub struct ReplayReceiptStore;
@@ -343,17 +255,47 @@ impl ReplayReceiptStore {
         });
     }
 
-    #[cfg(test)]
+    pub(crate) fn remove(key: ReplayReceiptSlotKey) -> Option<ReplayReceiptRecord> {
+        REPLAY_RECEIPTS.with_borrow_mut(|map| map.remove(&key))
+    }
+
     #[must_use]
     pub(crate) fn len() -> usize {
         REPLAY_RECEIPTS.with_borrow(|map| usize::try_from(map.len()).unwrap_or(usize::MAX))
     }
-}
 
-#[cfg(test)]
-impl RootReplayStore {
-    pub(crate) fn reset_for_tests() {
-        ROOT_REPLAY.with_borrow_mut(StableBtreeMap::clear_new);
+    #[must_use]
+    pub(crate) fn active_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .filter(|entry| {
+                    entry.value().actor == actor
+                        && entry
+                            .value()
+                            .expires_at_ns
+                            .is_none_or(|expires_at_ns| now_ns <= expires_at_ns)
+                })
+                .count()
+        })
+    }
+
+    pub(crate) fn collect_expired(now_ns: u64, limit: usize) -> Vec<ReplayReceiptSlotKey> {
+        let mut expired = Vec::new();
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            for entry in map.iter() {
+                if entry
+                    .value()
+                    .expires_at_ns
+                    .is_some_and(|expires_at_ns| expires_at_ns < now_ns)
+                {
+                    expired.push(*entry.key());
+                    if expired.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        });
+        expired
     }
 }
 
@@ -383,6 +325,7 @@ mod tests {
             status: ReplayReceiptStatus::Reserved,
             created_at_ns: 100,
             updated_at_ns: 100,
+            expires_at_ns: Some(200),
             response_schema_version: None,
             response_bytes: None,
             effect: None,

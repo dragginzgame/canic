@@ -15,7 +15,7 @@ use crate::{
         replay::{
             self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            model::OperationId,
+            model::{CommandKind, OperationId},
         },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
@@ -388,7 +388,8 @@ fn check_cycles_replay(
 
     let decision = replay_ops::guard::evaluate_root_replay(RootReplayGuardInput {
         caller: ctx.caller,
-        target_canister: ctx.self_pid,
+        command_kind: CommandKind::new("root.request_cycles.v1")
+            .expect("root request cycles command kind is valid"),
         operation_id: OperationId::from_bytes(metadata.request_id),
         ttl_seconds: metadata.ttl_seconds,
         payload_hash,
@@ -406,7 +407,7 @@ fn check_cycles_replay(
                 ReplayMetricReason::Fresh,
             );
             replay_ops::reserve_root_replay(
-                pending,
+                &pending,
                 MAX_ROOT_REPLAY_ENTRIES,
                 MAX_ROOT_REPLAY_ENTRIES_PER_CALLER,
             )
@@ -470,6 +471,9 @@ fn check_cycles_replay(
             );
             Err(RpcWorkflowError::ReplayExpired("RequestCycles").into())
         }
+        ReplayDecision::DecodeFailed(message) => Err(map_replay_decode_error(
+            ReplayDecodeError::DecodeFailed(message),
+        )),
     }
 }
 
@@ -494,6 +498,9 @@ fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
                 max_ttl_seconds,
             }
             .into()
+        }
+        ReplayGuardError::ReceiptDecodeFailed(message) => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
         }
     }
 }

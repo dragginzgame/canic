@@ -27,6 +27,7 @@ pub struct ReplayReceiptReserveInput {
     pub payload_hash_schema_version: u32,
     pub payload_hash: [u8; 32],
     pub now_ns: u64,
+    pub expires_at_ns: Option<u64>,
 }
 
 impl ReplayReceiptReserveInput {
@@ -45,7 +46,14 @@ impl ReplayReceiptReserveInput {
             payload_hash_schema_version: REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
             payload_hash,
             now_ns,
+            expires_at_ns: None,
         }
+    }
+
+    #[must_use]
+    pub const fn with_expires_at_ns(mut self, expires_at_ns: u64) -> Self {
+        self.expires_at_ns = Some(expires_at_ns);
+        self
     }
 }
 
@@ -80,6 +88,7 @@ pub enum ReplayReceiptDecision {
     OperationInProgress,
     ActorMismatch,
     PayloadMismatch,
+    Expired,
     RecoveryRequired(RecoveryReason),
     TerminalFailed {
         error_code: ReplayTerminalErrorCode,
@@ -99,6 +108,16 @@ pub enum ReplayReceiptStoreError {
 pub fn reserve_or_replay_receipt(
     input: ReplayReceiptReserveInput,
 ) -> Result<ReplayReceiptDecision, ReplayReceiptStoreError> {
+    let decision = prepare_replay_receipt(input)?;
+    if let ReplayReceiptDecision::Fresh(token) = &decision {
+        reserve_receipt_token(token);
+    }
+    Ok(decision)
+}
+
+pub fn prepare_replay_receipt(
+    input: ReplayReceiptReserveInput,
+) -> Result<ReplayReceiptDecision, ReplayReceiptStoreError> {
     let key = ReplayReceiptOps::slot_key(&input.command_kind, input.operation_id);
     let Some(existing) = ReplayReceiptOps::get(key) else {
         let receipt = ReplayReceipt {
@@ -111,11 +130,11 @@ pub fn reserve_or_replay_receipt(
             status: ReplayReceiptStatus::Reserved,
             created_at_ns: input.now_ns,
             updated_at_ns: input.now_ns,
+            expires_at_ns: input.expires_at_ns,
             response_schema_version: None,
             response_bytes: None,
             effect: None,
         };
-        ReplayReceiptOps::upsert(key, ReplayReceiptRecord::from_receipt(receipt.clone()));
         return Ok(ReplayReceiptDecision::Fresh(ReplayReceiptToken {
             key,
             receipt,
@@ -126,6 +145,13 @@ pub fn reserve_or_replay_receipt(
         .into_receipt()
         .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
     Ok(classify_existing_receipt(&input, existing))
+}
+
+pub fn reserve_receipt_token(token: &ReplayReceiptToken) {
+    ReplayReceiptOps::upsert(
+        token.key,
+        ReplayReceiptRecord::from_receipt(token.receipt.clone()),
+    );
 }
 
 pub fn mark_external_effect_in_flight(
@@ -178,10 +204,21 @@ pub fn mark_recovery_required(token: &ReplayReceiptToken, reason: RecoveryReason
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
 }
 
+pub fn abort_reserved_receipt(token: &ReplayReceiptToken) {
+    let _ = ReplayReceiptOps::remove(token.key);
+}
+
 fn classify_existing_receipt(
     input: &ReplayReceiptReserveInput,
     existing: ReplayReceipt,
 ) -> ReplayReceiptDecision {
+    if existing
+        .expires_at_ns
+        .is_some_and(|expires_at_ns| input.now_ns >= expires_at_ns)
+    {
+        return ReplayReceiptDecision::Expired;
+    }
+
     if existing.actor != input.actor {
         return ReplayReceiptDecision::ActorMismatch;
     }

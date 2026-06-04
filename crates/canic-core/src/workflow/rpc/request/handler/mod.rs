@@ -78,7 +78,7 @@ struct RootContext {
     now: u64,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct PreparedExecution {
     pending: ReplayPending,
     authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,

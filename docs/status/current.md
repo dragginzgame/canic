@@ -9,26 +9,47 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.2` is underway from
-  `docs/design/0.61-replay-protection/0.61-design.md` Slice B. The current
-  branch now has the shared replay-core vocabulary in `ops::replay::model` and
-  the first shared stable receipt store/API in `ops::replay::receipt`.
-  Stable memory ID `21` is reserved for `canic.core.replay_receipts.v1`; stored
-  receipts bind command kind, 32-byte `OperationId`, replay actor, payload hash
-  schema/version, status, optional committed response bytes, and optional
-  external-effect descriptor. The new receipt API can reserve fresh operations,
-  classify duplicates, return committed responses, reject actor/payload
-  mismatches, report pending/in-flight/recovery-required receipts, and commit
-  bounded terminal failures. Existing root replay guard/key boundaries accept
-  `OperationId` instead of raw `[u8; 32]` request IDs, but root RPC replay still
-  uses the legacy root replay store; migrating root replay onto the shared
-  receipt primitive remains required before any 0.61 release candidate.
+- `0.61.3` is underway from
+  `docs/design/0.61-replay-protection/0.61-design.md` Slice B. Root RPC replay
+  now uses the shared replay receipt store instead of the legacy root replay
+  map. Root capability replay prepares shared receipt tokens, checks receipt
+  capacity, explicitly reserves fresh receipts, commits response bytes to
+  shared receipts, returns committed receipt responses for duplicate requests,
+  aborts reserved receipts on policy/execution failure, and purges expired
+  receipts through shared receipt storage. The active legacy `RootReplayOps`
+  and root replay slot-key module are removed; the old `RootReplayRecord`
+  binary encoding remains test-only as historical stable-shape coverage.
+  Explicit root command kinds are now:
+  `root.provision.v1`, `root.upgrade.v1`, `root.recycle_canister.v1`,
+  `root.request_cycles.v1`, `root.issue_role_attestation.v1`, and
+  `root.issue_internal_invocation_proof.v1`. Delegation-proof issuance and pool
+  `CreateEmpty` replay protection remain later 0.61 slices.
+  The same in-progress 0.61.3 batch also adds the next broad NNS inspection
+  surfaces:
+  ```text
+  canic nns registry version
+  canic nns node-operator refresh
+  canic nns node-operator list
+  canic nns node-operator list --verbose
+  canic nns node-operator info <node-operator-prefix>
+  canic nns node-operator list --format json
+  ```
+  Node-operator metadata is derived from mainnet registry subnet membership,
+  node records, and node-operator records, then cached at
+  `.canic/node-operator/ic/operators.json`; refresh uses
+  `.canic/node-operator/ic/refresh.lock` and atomic cache replacement. Registry
+  version is a live read against the canonical NNS registry canister.
   Validation:
   ```text
   cargo test -p canic-core ops::replay --lib -- --nocapture
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
   cargo test -p canic-core --lib -- --nocapture
   cargo clippy -p canic-core --all-targets --all-features -- -D warnings
   cargo test -p canic --test changelog_governance -- --nocapture
+  cargo test -p canic-ic-registry node_operator -- --nocapture
+  cargo test -p canic-host nns_node_operator --lib -- --nocapture
+  cargo test -p canic-cli --lib nns -- --nocapture
+  cargo clippy -p canic-ic-registry -p canic-host -p canic-cli --lib -- -D warnings
   cargo fmt --all -- --check
   git diff --check
   ```
@@ -58,26 +79,6 @@ inspect only the files needed for the current task.
   config lookup or threshold ECDSA signing. This fixes the authorization
   ordering finding, but delegation-proof response replay/caching is still a
   later 0.61 blocker.
-- The worktree also currently contains separate uncommitted NNS node-provider
-  follow-up work outside the 0.61 replay line:
-  ```text
-  canic nns node-provider list --verbose
-  canic nns node-provider info <node-provider|prefix>
-  canic nns node-provider refresh
-  ```
-  Focused registry/host/CLI tests for that dirty NNS surface pass. The live
-  adapter derives assigned-node counts from mainnet subnet membership,
-  node-record, and node-operator-record registry data. `list` and `info` are
-  cache-first and auto-populate `.canic/node-provider/ic/providers.json` on a
-  first cache miss; `refresh` force-refreshes through a local lock and atomic
-  cache replacement. The data path remains IC-native through NNS governance and
-  registry canister calls. Provider names remain nullable because those native
-  records do not expose a canonical display name; text output does not render a
-  name column, and dashboard display names are intentionally not imported by
-  this surface. The cached NNS subnet and
-  node-provider surfaces now share host `cache_file` refresh-lock/atomic-write
-  helpers and the CLI refresh-lock duration parser now comes from shared host
-  `duration` support.
 - `0.60.10` adds the first non-subnet NNS inspection view:
   ```text
   canic nns node-provider list

@@ -11,7 +11,7 @@ use crate::{
         replay::{
             self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            model::OperationId,
+            model::{CommandKind, OperationId},
         },
         runtime::metrics::replay::{
             ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
@@ -22,8 +22,6 @@ use crate::{
     },
     workflow::rpc::RpcWorkflowError,
 };
-#[cfg(test)]
-use crate::{ops::replay::key as replay_key, storage::stable::replay::ReplaySlotKey};
 use sha2::{Digest, Sha256};
 
 /// ReplayPreflight
@@ -54,6 +52,7 @@ pub(super) fn check_replay(
 
     let decision = replay::evaluate_root_replay(
         ctx,
+        replay_input.descriptor.command_kind,
         OperationId::from_bytes(replay_input.metadata.request_id),
         replay_input.metadata.ttl_seconds,
         replay_input.payload_hash,
@@ -69,7 +68,7 @@ pub(super) fn check_replay(
                 ReplayMetricReason::Fresh,
             );
             replay_ops::reserve_root_replay(
-                pending,
+                &pending,
                 MAX_ROOT_REPLAY_ENTRIES,
                 MAX_ROOT_REPLAY_ENTRIES_PER_CALLER,
             )
@@ -138,6 +137,9 @@ pub(super) fn check_replay(
             );
             Err(RpcWorkflowError::ReplayExpired(replay_input.descriptor.name).into())
         }
+        ReplayDecision::DecodeFailed(message) => Err(map_replay_decode_error(
+            ReplayDecodeError::DecodeFailed(message),
+        )),
     }
 }
 
@@ -167,6 +169,9 @@ fn map_replay_guard_error(
                 max_ttl_seconds,
             }
             .into()
+        }
+        ReplayGuardError::ReceiptDecodeFailed(message) => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
         }
     }
 }
@@ -372,18 +377,6 @@ pub(super) fn finish_payload_hash(hasher: Sha256) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-/// replay_slot_key
-///
-/// Build current root replay slot key (test helper passthrough).
-#[cfg(test)]
-pub(super) fn replay_slot_key(
-    caller: Principal,
-    target_canister: Principal,
-    request_id: [u8; 32],
-) -> ReplaySlotKey {
-    replay_key::root_slot_key(caller, target_canister, OperationId::from_bytes(request_id))
-}
-
 /// hash_domain_separated
 ///
 /// Build deterministic domain-separated hash values for replay payloads.
@@ -405,13 +398,16 @@ mod replay {
     /// Call the ops replay guard with workflow root replay context.
     pub(super) fn evaluate_root_replay(
         ctx: &RootContext,
+        command_kind: &'static str,
         operation_id: OperationId,
         ttl_seconds: u64,
         payload_hash: [u8; 32],
     ) -> Result<ReplayDecision, ReplayGuardError> {
+        let command_kind =
+            CommandKind::new(command_kind).expect("root replay command kind constants are valid");
         crate::ops::replay::guard::evaluate_root_replay(RootReplayGuardInput {
             caller: ctx.caller,
-            target_canister: ctx.self_pid,
+            command_kind,
             operation_id,
             ttl_seconds,
             payload_hash,

@@ -90,6 +90,7 @@ To inspect the cached public IC subnet catalog:
 canic nns subnet refresh
 canic nns registry version
 canic nns subnet list
+canic nns node-operator list
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```
 

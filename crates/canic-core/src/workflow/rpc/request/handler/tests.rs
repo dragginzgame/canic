@@ -12,6 +12,13 @@ use crate::{
     },
     ids::CanisterRole,
     ops::{
+        replay::{
+            guard::secs_to_ns,
+            model::{
+                CommandKind, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+                REPLAY_RECEIPT_SCHEMA_VERSION, ReplayActor, ReplayReceiptStatus,
+            },
+        },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
             metrics::cycles_funding::{
@@ -19,17 +26,16 @@ use crate::{
             },
         },
         storage::{
-            index::app::AppIndexOps, registry::subnet::SubnetRegistryOps, replay::RootReplayOps,
+            index::app::AppIndexOps, registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps,
             state::app::AppStateOps,
         },
     },
     storage::stable::env::{Env, EnvRecord},
     storage::stable::index::app::AppIndexRecord,
-    storage::stable::replay::{ReplaySlotKey, RootReplayRecord},
+    storage::stable::replay::ReplayReceiptRecord,
     storage::stable::state::app::{AppMode, AppStateRecord},
 };
 use candid::encode_one;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 fn p(id: u8) -> Principal {
@@ -41,6 +47,41 @@ fn meta(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
         request_id: [id; 32],
         ttl_seconds,
     }
+}
+
+fn seed_root_replay_receipt(
+    command_kind: &'static str,
+    caller: Principal,
+    request_id: [u8; 32],
+    payload_hash: [u8; 32],
+    expires_at_secs: u64,
+    response_bytes: Option<Vec<u8>>,
+) {
+    let command_kind = CommandKind::new(command_kind).expect("command kind");
+    let operation_id = OperationId::from_bytes(request_id);
+    let key = ReplayReceiptOps::slot_key(&command_kind, operation_id);
+    ReplayReceiptOps::upsert(
+        key,
+        ReplayReceiptRecord {
+            schema_version: REPLAY_RECEIPT_SCHEMA_VERSION,
+            command_kind: command_kind.as_str().to_string(),
+            operation_id: operation_id.into_bytes(),
+            actor: ReplayActor::direct_caller(caller),
+            payload_hash_schema_version: REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+            payload_hash,
+            status: if response_bytes.is_some() {
+                ReplayReceiptStatus::Committed
+            } else {
+                ReplayReceiptStatus::Reserved
+            },
+            created_at_ns: secs_to_ns(1),
+            updated_at_ns: secs_to_ns(1),
+            expires_at_ns: Some(secs_to_ns(expires_at_secs)),
+            response_schema_version: response_bytes.as_ref().map(|_| 1),
+            response_bytes,
+            effect: None,
+        },
+    );
 }
 
 ///
@@ -328,7 +369,7 @@ fn authorize_allows_provision_in_root_context() {
 
 #[test]
 fn preflight_authorize_then_replay_denies_before_replay_validation() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(1),
@@ -356,7 +397,7 @@ fn preflight_authorize_then_replay_denies_before_replay_validation() {
 
 #[test]
 fn preflight_replay_then_authorize_validates_replay_before_policy() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(1),
@@ -384,7 +425,7 @@ fn preflight_replay_then_authorize_validates_replay_before_policy() {
 
 #[test]
 fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(1),
@@ -1039,30 +1080,8 @@ fn payload_hash_includes_capability_variant_discriminant() {
 }
 
 #[test]
-fn replay_slot_key_binds_caller_target_and_request_id() {
-    let request_id = [9u8; 32];
-    let key = replay::replay_slot_key(p(1), p(2), request_id);
-
-    assert_ne!(
-        key,
-        replay::replay_slot_key(p(3), p(2), request_id),
-        "caller must affect replay key"
-    );
-    assert_ne!(
-        key,
-        replay::replay_slot_key(p(1), p(4), request_id),
-        "target must affect replay key"
-    );
-    assert_ne!(
-        key,
-        replay::replay_slot_key(p(1), p(2), [8u8; 32]),
-        "request_id must affect replay key"
-    );
-}
-
-#[test]
 fn check_replay_rejects_invalid_ttl() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(1),
@@ -1094,8 +1113,8 @@ fn check_replay_rejects_invalid_ttl() {
 }
 
 #[test]
-fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
-    RootReplayOps::reset_for_tests();
+fn check_replay_rejects_expired_entry() {
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(7),
@@ -1111,53 +1130,19 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
     let replay_input = capability.replay_input().expect("metadata");
     let payload_hash = replay_input.payload_hash;
     let request_id = replay_input.metadata.request_id;
-    let target_key = replay::replay_slot_key(ctx.caller, ctx.self_pid, request_id);
     let response_bytes = encode_one(Response::Cycles(CyclesResponse {
         cycles_transferred: 500,
     }))
     .expect("encode");
 
-    RootReplayOps::upsert(
-        target_key,
-        RootReplayRecord {
-            caller: ctx.caller,
-            payload_hash,
-            issued_at: 9_900,
-            expires_at: 9_999,
-            response_bytes: response_bytes.clone(),
-        },
+    seed_root_replay_receipt(
+        replay_input.descriptor.command_kind,
+        ctx.caller,
+        request_id,
+        payload_hash,
+        9_999,
+        Some(response_bytes),
     );
-
-    // Force purge limit exhaustion before reaching target_key by seeding
-    // 256 lexicographically smaller expired entries.
-    let mut seeded = 0usize;
-    let mut nonce = 0u64;
-    while seeded < REPLAY_PURGE_SCAN_LIMIT {
-        let mut hasher = Sha256::new();
-        hasher.update(nonce.to_be_bytes());
-        let candidate: [u8; 32] = hasher.finalize().into();
-        nonce = nonce.saturating_add(1);
-        assert!(
-            nonce < 1_000_000,
-            "failed to seed replay filler keys before nonce overflow"
-        );
-
-        if candidate >= target_key.0 {
-            continue;
-        }
-
-        RootReplayOps::upsert(
-            ReplaySlotKey(candidate),
-            RootReplayRecord {
-                caller: ctx.caller,
-                payload_hash: [0u8; 32],
-                issued_at: 9_000,
-                expires_at: 9_100,
-                response_bytes: response_bytes.clone(),
-            },
-        );
-        seeded += 1;
-    }
 
     let err = RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must expire");
     assert!(
@@ -1168,7 +1153,7 @@ fn check_replay_rejects_expired_entry_when_purge_limit_exceeded() {
 
 #[test]
 fn check_replay_returns_cached_response_for_duplicate_same_payload() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(1),
@@ -1207,7 +1192,7 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
 
 #[test]
 fn check_replay_rejects_conflicting_payload_for_same_request_id() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(3),
@@ -1246,48 +1231,44 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
 
 #[test]
 fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let ok = encode_one(Response::UpgradeCanister(UpgradeCanisterResponse {})).expect("encode");
 
     for i in 0..5u8 {
-        RootReplayOps::upsert(
-            ReplaySlotKey([i; 32]),
-            RootReplayRecord {
-                caller: p(i),
-                payload_hash: [i; 32],
-                issued_at: 0,
-                expires_at: 10,
-                response_bytes: ok.clone(),
-            },
+        seed_root_replay_receipt(
+            "root.upgrade.v1",
+            p(i),
+            [i; 32],
+            [i; 32],
+            10,
+            Some(ok.clone()),
         );
     }
 
     for i in 200..202u8 {
-        RootReplayOps::upsert(
-            ReplaySlotKey([i; 32]),
-            RootReplayRecord {
-                caller: p(i),
-                payload_hash: [i; 32],
-                issued_at: 0,
-                expires_at: 999,
-                response_bytes: ok.clone(),
-            },
+        seed_root_replay_receipt(
+            "root.upgrade.v1",
+            p(i),
+            [i; 32],
+            [i; 32],
+            999,
+            Some(ok.clone()),
         );
     }
 
-    let purged = RootReplayOps::purge_expired(100, 3);
+    let purged = ReplayReceiptOps::purge_expired(secs_to_ns(100), 3);
     assert_eq!(purged, 3, "purge must stop at the configured limit");
     assert_eq!(
-        RootReplayOps::len(),
+        ReplayReceiptOps::len(),
         4,
         "expected 4 entries after first purge"
     );
 
-    let purged = RootReplayOps::purge_expired(100, 10);
+    let purged = ReplayReceiptOps::purge_expired(secs_to_ns(100), 10);
     assert_eq!(purged, 2, "remaining expired entries must be purged");
     assert_eq!(
-        RootReplayOps::len(),
+        ReplayReceiptOps::len(),
         2,
         "only unexpired entries should remain"
     );
@@ -1295,7 +1276,7 @@ fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
 
 #[test]
 fn check_replay_rejects_when_capacity_reached() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let response_bytes = encode_one(Response::Cycles(CyclesResponse {
         cycles_transferred: 1,
@@ -1303,18 +1284,16 @@ fn check_replay_rejects_when_capacity_reached() {
     .expect("encode");
 
     for i in 0..MAX_ROOT_REPLAY_ENTRIES {
-        let mut key = [0u8; 32];
-        key[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        let mut request_id = [0u8; 32];
+        request_id[..8].copy_from_slice(&(i as u64).to_be_bytes());
 
-        RootReplayOps::upsert(
-            ReplaySlotKey(key),
-            RootReplayRecord {
-                caller: p(u8::try_from(i % 250).expect("modulo keeps caller byte below u8 max")),
-                payload_hash: [0u8; 32],
-                issued_at: 0,
-                expires_at: 5_000,
-                response_bytes: response_bytes.clone(),
-            },
+        seed_root_replay_receipt(
+            "root.request_cycles.v1",
+            p(u8::try_from(i % 250).expect("modulo keeps caller byte below u8 max")),
+            request_id,
+            [0u8; 32],
+            5_000,
+            Some(response_bytes.clone()),
         );
     }
 
@@ -1340,7 +1319,7 @@ fn check_replay_rejects_when_capacity_reached() {
 
 #[test]
 fn check_replay_rejects_when_caller_capacity_reached() {
-    RootReplayOps::reset_for_tests();
+    ReplayReceiptOps::reset_for_tests();
 
     let caller = p(9);
     let response_bytes = encode_one(Response::Cycles(CyclesResponse {
@@ -1349,19 +1328,17 @@ fn check_replay_rejects_when_caller_capacity_reached() {
     .expect("encode");
 
     for i in 0..MAX_ROOT_REPLAY_ENTRIES_PER_CALLER {
-        let mut key = [0u8; 32];
-        key[..8].copy_from_slice(&(i as u64).to_be_bytes());
-        key[31] = 200;
+        let mut request_id = [0u8; 32];
+        request_id[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        request_id[31] = 200;
 
-        RootReplayOps::upsert(
-            ReplaySlotKey(key),
-            RootReplayRecord {
-                caller,
-                payload_hash: [0u8; 32],
-                issued_at: 0,
-                expires_at: 5_000,
-                response_bytes: response_bytes.clone(),
-            },
+        seed_root_replay_receipt(
+            "root.request_cycles.v1",
+            caller,
+            request_id,
+            [0u8; 32],
+            5_000,
+            Some(response_bytes.clone()),
         );
     }
 

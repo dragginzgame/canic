@@ -12,13 +12,17 @@ present.
 
 ## Unreleased
 
-- Add the first broad NNS inspection foundation command,
-  `canic nns registry version`, which queries the canonical mainnet NNS
-  registry canister for the latest registry version with text and JSON output.
-
 ## [0.61.x] - 2026-06-04 - System replay protection
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
+
+- `0.61.3` migrates root RPC replay onto the shared replay receipt store. Root
+  capability replay now uses explicit root command kinds, receipt-backed
+  reserve/commit/abort, receipt TTL expiry, active actor capacity checks, and
+  committed response replay. It also adds `canic nns registry version` as the
+  first broad NNS inspection foundation command and exposes cached
+  `canic nns node-operator list/info/refresh` metadata derived from mainnet
+  registry node/operator records.
 
 - `0.61.2` adds the shared stable replay receipt store and
   reserve/replay/commit API, with command-kind-scoped receipt keys, stored

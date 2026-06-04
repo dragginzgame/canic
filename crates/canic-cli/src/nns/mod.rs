@@ -1,3 +1,4 @@
+mod node_operator;
 mod node_provider;
 mod registry;
 mod subnet;
@@ -14,8 +15,8 @@ use crate::{
     version_text,
 };
 use canic_host::{
-    nns_node_provider::NnsNodeProviderHostError, nns_registry::NnsRegistryHostError,
-    subnet_catalog::SubnetCatalogHostError,
+    nns_node_operator::NnsNodeOperatorHostError, nns_node_provider::NnsNodeProviderHostError,
+    nns_registry::NnsRegistryHostError, subnet_catalog::SubnetCatalogHostError,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -39,6 +40,9 @@ pub enum NnsCommandError {
 
     #[error(transparent)]
     NodeProviderHost(#[from] NnsNodeProviderHostError),
+
+    #[error(transparent)]
+    NodeOperatorHost(#[from] NnsNodeOperatorHostError),
 
     #[error(transparent)]
     RegistryHost(#[from] NnsRegistryHostError),
@@ -85,6 +89,7 @@ where
     match command.as_str() {
         "subnet" => subnet::run(args),
         "node-provider" => node_provider::run(args),
+        "node-operator" => node_operator::run(args),
         "registry" => registry::run(args),
         _ => unreachable!("nns dispatch command only defines known commands"),
     }
@@ -132,6 +137,9 @@ fn nns_command() -> ClapCommand {
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("node-provider").about("Inspect NNS node-provider metadata"),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("node-operator").about("Inspect NNS node-operator metadata"),
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("registry").about("Inspect NNS registry metadata"),
