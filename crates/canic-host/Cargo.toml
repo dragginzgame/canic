@@ -19,6 +19,7 @@ ignored = ["serde_bytes"]
 [dependencies]
 candid = { workspace = true }
 canic-core = { workspace = true }
+canic-ic-registry = { workspace = true }
 canic-subnet-catalog = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

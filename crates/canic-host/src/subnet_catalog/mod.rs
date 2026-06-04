@@ -1,19 +1,27 @@
 use crate::table::{ColumnAlign, render_table};
+use canic_ic_registry::{
+    DEFAULT_MAINNET_ENDPOINT, MainnetRegistryFetchRequest, RegistryFetchError,
+    fetch_mainnet_subnet_catalog,
+};
 use canic_subnet_catalog::{
     CatalogError, ClassificationSource, GeographicScope, MAINNET_NETWORK, ResolveAs,
     ResolvedSubnetSubject, RoutingRange, SubnetCatalog, SubnetInfo, SubnetKind,
-    SubnetSpecialization, parse_catalog_json,
+    SubnetSpecialization, catalog_to_pretty_json, parse_catalog_json,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
+    io::Write,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
 
 pub const DEFAULT_STALE_AFTER_SECONDS: u64 = 7 * 24 * 60 * 60;
+pub const DEFAULT_REFRESH_LOCK_STALE_SECONDS: u64 = 30 * 60;
+pub const DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT: &str = DEFAULT_MAINNET_ENDPOINT;
 pub const SUBNET_CATALOG_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const SUBNET_CATALOG_INFO_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const SUBNET_CATALOG_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 const BASE_13_NODE_CYCLES_PER_BILLION_INSTRUCTIONS: u128 = 1_000_000_000;
 const FORMULA_VERSION: &str = "base_13_node_linear_v1";
 
@@ -70,6 +78,19 @@ pub struct SubnetCatalogInfoRequest {
     pub resolved_target: Option<ResolvedDeploymentTarget>,
     pub now_unix_secs: u64,
     pub stale_after_seconds: u64,
+}
+
+///
+/// SubnetCatalogRefreshRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubnetCatalogRefreshRequest {
+    pub cache: SubnetCatalogCacheRequest,
+    pub source_endpoint: String,
+    pub now_unix_secs: u64,
+    pub lock_stale_after_seconds: u64,
+    pub dry_run: bool,
+    pub output_path: Option<PathBuf>,
 }
 
 ///
@@ -171,6 +192,28 @@ pub struct SubnetCatalogInfoReport {
 }
 
 ///
+/// SubnetCatalogRefreshReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetCatalogRefreshReport {
+    pub schema_version: u32,
+    pub network: String,
+    pub catalog_path: String,
+    pub refresh_lock_path: String,
+    pub output_path: Option<String>,
+    pub registry_canister_id: String,
+    pub registry_version: u64,
+    pub fetched_at: String,
+    pub source_endpoint: String,
+    pub fetched_by: String,
+    pub dry_run: bool,
+    pub wrote_catalog: bool,
+    pub replaced_existing_catalog: bool,
+    pub subnet_count: usize,
+    pub routing_range_count: usize,
+}
+
+///
 /// SubnetCatalogHostError
 ///
 #[derive(Debug, ThisError)]
@@ -181,7 +224,7 @@ pub enum SubnetCatalogHostError {
     UnsupportedNetwork { network: String },
 
     #[error(
-        "subnet catalog cache is missing at {}\n\n0.60.1 reads cached mainnet catalog data only and does not fetch the NNS registry live yet.\nPopulate this path with a valid Canic subnet catalog JSON, or use the planned `canic subnet catalog refresh` follow-up once it lands.",
+        "subnet catalog cache is missing at {}\n\nRun `canic subnet catalog refresh` to fetch the public Internet Computer mainnet catalog, or populate this path with a valid Canic subnet catalog JSON.",
         path.display()
     )]
     MissingCatalog { path: PathBuf },
@@ -199,6 +242,61 @@ pub enum SubnetCatalogHostError {
     )]
     InvalidStaleDuration { value: String },
 
+    #[error("subnet catalog refresh is already in progress; lock exists at {} since unix_ms={started_at_unix_ms}", path.display())]
+    RefreshAlreadyInProgress {
+        path: PathBuf,
+        started_at_unix_ms: u64,
+    },
+
+    #[error("failed to create subnet catalog directory at {}: {source}", path.display())]
+    CreateCatalogDirectory { path: PathBuf, source: io::Error },
+
+    #[error("failed to create refresh lock at {}: {source}", path.display())]
+    CreateRefreshLock { path: PathBuf, source: io::Error },
+
+    #[error("failed to read refresh lock at {}: {source}", path.display())]
+    ReadRefreshLock { path: PathBuf, source: io::Error },
+
+    #[error("failed to parse refresh lock at {}: {source}", path.display())]
+    ParseRefreshLock {
+        path: PathBuf,
+        source: serde_json::Error,
+    },
+
+    #[error("failed to write refresh lock at {}: {source}", path.display())]
+    WriteRefreshLock { path: PathBuf, source: io::Error },
+
+    #[error("failed to remove refresh lock at {}: {source}", path.display())]
+    RemoveRefreshLock { path: PathBuf, source: io::Error },
+
+    #[error("live NNS registry refresh failed: {0}")]
+    RegistryRefresh(#[from] RegistryFetchError),
+
+    #[error("refreshed subnet catalog network mismatch: requested {requested}, fetched {actual}")]
+    RefreshNetworkMismatch { requested: String, actual: String },
+
+    #[error("failed to write subnet catalog temp file at {}: {source}", path.display())]
+    WriteCatalogTemp { path: PathBuf, source: io::Error },
+
+    #[error("failed to sync subnet catalog temp file at {}: {source}", path.display())]
+    SyncCatalogTemp { path: PathBuf, source: io::Error },
+
+    #[error("failed to replace subnet catalog at {} from {}: {source}", catalog_path.display(), temp_path.display())]
+    ReplaceCatalog {
+        temp_path: PathBuf,
+        catalog_path: PathBuf,
+        source: io::Error,
+    },
+
+    #[error("failed to sync subnet catalog directory at {}: {source}", path.display())]
+    SyncCatalogDirectory { path: PathBuf, source: io::Error },
+
+    #[error("failed to write refreshed subnet catalog output at {}: {source}", path.display())]
+    WriteRefreshOutput { path: PathBuf, source: io::Error },
+
+    #[error("failed to sync refreshed subnet catalog output at {}: {source}", path.display())]
+    SyncRefreshOutput { path: PathBuf, source: io::Error },
+
     #[error(transparent)]
     Catalog(#[from] CatalogError),
 }
@@ -210,6 +308,15 @@ pub fn subnet_catalog_path(icp_root: &Path, network: &str) -> PathBuf {
         .join("subnet-catalog")
         .join(network)
         .join("catalog.json")
+}
+
+#[must_use]
+pub fn subnet_catalog_refresh_lock_path(icp_root: &Path, network: &str) -> PathBuf {
+    icp_root
+        .join(".canic")
+        .join("subnet-catalog")
+        .join(network)
+        .join("refresh.lock")
 }
 
 pub fn load_cached_subnet_catalog(
@@ -232,6 +339,79 @@ pub fn load_cached_subnet_catalog(
         });
     }
     Ok(CachedSubnetCatalog { path, catalog })
+}
+
+pub fn refresh_subnet_catalog(
+    request: &SubnetCatalogRefreshRequest,
+) -> Result<SubnetCatalogRefreshReport, SubnetCatalogHostError> {
+    refresh_subnet_catalog_with_source(request, &LiveNnsRegistryRefreshSource)
+}
+
+fn refresh_subnet_catalog_with_source(
+    request: &SubnetCatalogRefreshRequest,
+    source: &dyn SubnetCatalogRefreshSource,
+) -> Result<SubnetCatalogRefreshReport, SubnetCatalogHostError> {
+    enforce_mainnet_network(&request.cache.network)?;
+    let catalog_path = subnet_catalog_path(&request.cache.icp_root, &request.cache.network);
+    let lock_path =
+        subnet_catalog_refresh_lock_path(&request.cache.icp_root, &request.cache.network);
+    let catalog_dir = catalog_path
+        .parent()
+        .expect("subnet catalog path always has parent")
+        .to_path_buf();
+    fs::create_dir_all(&catalog_dir).map_err(|source| {
+        SubnetCatalogHostError::CreateCatalogDirectory {
+            path: catalog_dir.clone(),
+            source,
+        }
+    })?;
+    let lock = acquire_refresh_lock(
+        &lock_path,
+        &catalog_path,
+        &request.cache.network,
+        request.now_unix_secs,
+        request.lock_stale_after_seconds,
+    )?;
+    let replaced_existing_catalog = catalog_path.is_file();
+    let fetched_at = format_utc_timestamp_secs(request.now_unix_secs);
+    let mut fetch_request = MainnetRegistryFetchRequest::new(fetched_at);
+    fetch_request.endpoint.clone_from(&request.source_endpoint);
+    let catalog = source.fetch_catalog(&fetch_request)?;
+    if catalog.network != request.cache.network {
+        return Err(SubnetCatalogHostError::RefreshNetworkMismatch {
+            requested: request.cache.network.clone(),
+            actual: catalog.network,
+        });
+    }
+    catalog.validate()?;
+    let catalog_json = catalog_to_pretty_json(&catalog)?;
+    if let Some(output_path) = &request.output_path {
+        write_refresh_output(output_path, &catalog_json)?;
+    }
+    if !request.dry_run {
+        write_catalog_atomically(&catalog_path, &catalog_json)?;
+    }
+    lock.release()?;
+    Ok(SubnetCatalogRefreshReport {
+        schema_version: SUBNET_CATALOG_REFRESH_REPORT_SCHEMA_VERSION,
+        network: catalog.network,
+        catalog_path: catalog_path.display().to_string(),
+        refresh_lock_path: lock_path.display().to_string(),
+        output_path: request
+            .output_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        registry_canister_id: catalog.registry_canister_id,
+        registry_version: catalog.registry_version,
+        fetched_at: catalog.fetched_at,
+        source_endpoint: catalog.source_endpoint,
+        fetched_by: catalog.fetched_by,
+        dry_run: request.dry_run,
+        wrote_catalog: !request.dry_run,
+        replaced_existing_catalog,
+        subnet_count: catalog.subnets.len(),
+        routing_range_count: catalog.routing_ranges.len(),
+    })
 }
 
 pub fn build_subnet_catalog_list_report(
@@ -527,6 +707,29 @@ pub fn subnet_catalog_info_report_text(report: &SubnetCatalogInfoReport) -> Stri
     lines.join("\n")
 }
 
+#[must_use]
+pub fn subnet_catalog_refresh_report_text(report: &SubnetCatalogRefreshReport) -> String {
+    [
+        format!("network: {}", report.network),
+        format!("catalog_path: {}", report.catalog_path),
+        format!("refresh_lock_path: {}", report.refresh_lock_path),
+        format!("registry_canister_id: {}", report.registry_canister_id),
+        format!("registry_version: {}", report.registry_version),
+        format!("fetched_at: {}", report.fetched_at),
+        format!("source_endpoint: {}", report.source_endpoint),
+        format!("fetched_by: {}", report.fetched_by),
+        format!("dry_run: {}", yes_no(report.dry_run)),
+        format!("wrote_catalog: {}", yes_no(report.wrote_catalog)),
+        format!(
+            "replaced_existing_catalog: {}",
+            yes_no(report.replaced_existing_catalog)
+        ),
+        format!("subnet_count: {}", report.subnet_count),
+        format!("routing_range_count: {}", report.routing_range_count),
+    ]
+    .join("\n")
+}
+
 fn enforce_mainnet_network(network: &str) -> Result<(), SubnetCatalogHostError> {
     if network == MAINNET_NETWORK {
         return Ok(());
@@ -534,6 +737,245 @@ fn enforce_mainnet_network(network: &str) -> Result<(), SubnetCatalogHostError> 
     Err(SubnetCatalogHostError::UnsupportedNetwork {
         network: network.to_string(),
     })
+}
+
+trait SubnetCatalogRefreshSource {
+    fn fetch_catalog(
+        &self,
+        request: &MainnetRegistryFetchRequest,
+    ) -> Result<SubnetCatalog, SubnetCatalogHostError>;
+}
+
+///
+/// LiveNnsRegistryRefreshSource
+///
+struct LiveNnsRegistryRefreshSource;
+
+impl SubnetCatalogRefreshSource for LiveNnsRegistryRefreshSource {
+    fn fetch_catalog(
+        &self,
+        request: &MainnetRegistryFetchRequest,
+    ) -> Result<SubnetCatalog, SubnetCatalogHostError> {
+        Ok(fetch_mainnet_subnet_catalog(request)?)
+    }
+}
+
+///
+/// RefreshLockFile
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct RefreshLockFile {
+    schema_version: u32,
+    network: String,
+    pid: u32,
+    started_at_unix_ms: u64,
+    catalog_path: String,
+}
+
+///
+/// RefreshLockGuard
+///
+#[derive(Debug)]
+struct RefreshLockGuard {
+    path: PathBuf,
+    active: bool,
+}
+
+impl RefreshLockGuard {
+    fn release(mut self) -> Result<(), SubnetCatalogHostError> {
+        fs::remove_file(&self.path).map_err(|source| {
+            SubnetCatalogHostError::RemoveRefreshLock {
+                path: self.path.clone(),
+                source,
+            }
+        })?;
+        self.active = false;
+        Ok(())
+    }
+}
+
+impl Drop for RefreshLockGuard {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
+fn acquire_refresh_lock(
+    lock_path: &Path,
+    catalog_path: &Path,
+    network: &str,
+    now_unix_secs: u64,
+    lock_stale_after_seconds: u64,
+) -> Result<RefreshLockGuard, SubnetCatalogHostError> {
+    let now_unix_ms = now_unix_secs.saturating_mul(1_000);
+    for attempt in 0..2 {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(lock_path)
+        {
+            Ok(mut file) => {
+                let lock = RefreshLockFile {
+                    schema_version: 1,
+                    network: network.to_string(),
+                    pid: std::process::id(),
+                    started_at_unix_ms: now_unix_ms,
+                    catalog_path: catalog_path.display().to_string(),
+                };
+                let data = serde_json::to_vec_pretty(&lock).map_err(|source| {
+                    SubnetCatalogHostError::ParseRefreshLock {
+                        path: lock_path.to_path_buf(),
+                        source,
+                    }
+                })?;
+                file.write_all(&data).map_err(|source| {
+                    SubnetCatalogHostError::WriteRefreshLock {
+                        path: lock_path.to_path_buf(),
+                        source,
+                    }
+                })?;
+                file.sync_all()
+                    .map_err(|source| SubnetCatalogHostError::WriteRefreshLock {
+                        path: lock_path.to_path_buf(),
+                        source,
+                    })?;
+                return Ok(RefreshLockGuard {
+                    path: lock_path.to_path_buf(),
+                    active: true,
+                });
+            }
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                let existing = read_refresh_lock(lock_path)?;
+                if lock_is_stale(
+                    existing.started_at_unix_ms,
+                    now_unix_ms,
+                    lock_stale_after_seconds,
+                ) && attempt == 0
+                {
+                    fs::remove_file(lock_path).map_err(|source| {
+                        SubnetCatalogHostError::RemoveRefreshLock {
+                            path: lock_path.to_path_buf(),
+                            source,
+                        }
+                    })?;
+                    continue;
+                }
+                return Err(SubnetCatalogHostError::RefreshAlreadyInProgress {
+                    path: lock_path.to_path_buf(),
+                    started_at_unix_ms: existing.started_at_unix_ms,
+                });
+            }
+            Err(source) => {
+                return Err(SubnetCatalogHostError::CreateRefreshLock {
+                    path: lock_path.to_path_buf(),
+                    source,
+                });
+            }
+        }
+    }
+    Err(SubnetCatalogHostError::CreateRefreshLock {
+        path: lock_path.to_path_buf(),
+        source: io::Error::new(io::ErrorKind::AlreadyExists, "refresh lock retry exhausted"),
+    })
+}
+
+fn read_refresh_lock(lock_path: &Path) -> Result<RefreshLockFile, SubnetCatalogHostError> {
+    let data = fs::read(lock_path).map_err(|source| SubnetCatalogHostError::ReadRefreshLock {
+        path: lock_path.to_path_buf(),
+        source,
+    })?;
+    serde_json::from_slice(&data).map_err(|source| SubnetCatalogHostError::ParseRefreshLock {
+        path: lock_path.to_path_buf(),
+        source,
+    })
+}
+
+fn lock_is_stale(started_at_unix_ms: u64, now_unix_ms: u64, stale_after_seconds: u64) -> bool {
+    now_unix_ms
+        .saturating_sub(started_at_unix_ms)
+        .gt(&stale_after_seconds.saturating_mul(1_000))
+}
+
+fn write_catalog_atomically(
+    catalog_path: &Path,
+    catalog_json: &str,
+) -> Result<(), SubnetCatalogHostError> {
+    let catalog_dir = catalog_path
+        .parent()
+        .expect("subnet catalog path always has parent");
+    let temp_path = catalog_dir.join(format!("catalog.json.tmp.{}", std::process::id()));
+    {
+        let mut temp = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(|source| SubnetCatalogHostError::WriteCatalogTemp {
+                path: temp_path.clone(),
+                source,
+            })?;
+        temp.write_all(catalog_json.as_bytes()).map_err(|source| {
+            SubnetCatalogHostError::WriteCatalogTemp {
+                path: temp_path.clone(),
+                source,
+            }
+        })?;
+        temp.sync_all()
+            .map_err(|source| SubnetCatalogHostError::SyncCatalogTemp {
+                path: temp_path.clone(),
+                source,
+            })?;
+    }
+    fs::rename(&temp_path, catalog_path).map_err(|source| {
+        SubnetCatalogHostError::ReplaceCatalog {
+            temp_path: temp_path.clone(),
+            catalog_path: catalog_path.to_path_buf(),
+            source,
+        }
+    })?;
+    sync_directory(catalog_dir)
+}
+
+fn write_refresh_output(
+    output_path: &Path,
+    catalog_json: &str,
+) -> Result<(), SubnetCatalogHostError> {
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|source| {
+            SubnetCatalogHostError::CreateCatalogDirectory {
+                path: parent.to_path_buf(),
+                source,
+            }
+        })?;
+    }
+    let mut output = fs::File::create(output_path).map_err(|source| {
+        SubnetCatalogHostError::WriteRefreshOutput {
+            path: output_path.to_path_buf(),
+            source,
+        }
+    })?;
+    output
+        .write_all(catalog_json.as_bytes())
+        .map_err(|source| SubnetCatalogHostError::WriteRefreshOutput {
+            path: output_path.to_path_buf(),
+            source,
+        })?;
+    output
+        .sync_all()
+        .map_err(|source| SubnetCatalogHostError::SyncRefreshOutput {
+            path: output_path.to_path_buf(),
+            source,
+        })
+}
+
+fn sync_directory(path: &Path) -> Result<(), SubnetCatalogHostError> {
+    fs::File::open(path)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|source| SubnetCatalogHostError::SyncCatalogDirectory {
+            path: path.to_path_buf(),
+            source,
+        })
 }
 
 fn subnet_matches_filters(subnet: &SubnetInfo, filters: SubnetCatalogFilters) -> bool {
@@ -665,6 +1107,35 @@ fn parse_utc_timestamp_secs(value: &str) -> Option<u64> {
     u64::try_from(seconds).ok()
 }
 
+fn format_utc_timestamp_secs(value: u64) -> String {
+    let days = i64::try_from(value / 86_400).unwrap_or(i64::MAX);
+    let seconds_of_day = value % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let days = days + 719_468;
+    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    (
+        year,
+        u32::try_from(month).expect("civil month is in u32 range"),
+        u32::try_from(day).expect("civil day is in u32 range"),
+    )
+}
+
 fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
     let month = i64::from(month);
     let day = i64::from(day);
@@ -742,8 +1213,8 @@ mod tests {
         let message = err.to_string();
 
         let _ = fs::remove_dir_all(root);
-        assert!(message.contains("0.60.1 reads cached mainnet catalog data only"));
-        assert!(message.contains("does not fetch the NNS registry live yet"));
+        assert!(message.contains("Run `canic subnet catalog refresh`"));
+        assert!(message.contains("public Internet Computer mainnet catalog"));
         assert!(message.contains("canic subnet catalog refresh"));
     }
 
@@ -827,6 +1298,110 @@ mod tests {
         );
     }
 
+    #[test]
+    fn refresh_writes_catalog_atomically_and_removes_lock() {
+        let root = temp_dir("canic-subnet-host-refresh");
+        let mut catalog = fixture_catalog();
+        catalog.registry_version = 987_654;
+        catalog.fetched_at = "1970-01-01T00:00:00Z".to_string();
+        catalog.source_endpoint = DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT.to_string();
+        let source = FixtureRefreshSource::ok(catalog);
+        let request = refresh_request(&root);
+
+        let report =
+            refresh_subnet_catalog_with_source(&request, &source).expect("refresh catalog");
+        let cached = load_cached_subnet_catalog(&cache_request(&root)).expect("cached catalog");
+        let lock_path = PathBuf::from(&report.refresh_lock_path);
+
+        let _ = fs::remove_dir_all(root);
+        assert!(report.wrote_catalog);
+        assert!(!report.replaced_existing_catalog);
+        assert_eq!(report.registry_version, 987_654);
+        assert_eq!(cached.catalog.registry_version, 987_654);
+        assert!(!lock_path.exists());
+    }
+
+    #[test]
+    fn refresh_dry_run_writes_output_without_replacing_cache() {
+        let root = temp_dir("canic-subnet-host-refresh-dry-run");
+        let mut catalog = fixture_catalog();
+        catalog.fetched_at = "1970-01-01T00:00:00Z".to_string();
+        catalog.source_endpoint = DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT.to_string();
+        let output_path = root.join("catalog-export.json");
+        let source = FixtureRefreshSource::ok(catalog);
+        let mut request = refresh_request(&root);
+        request.dry_run = true;
+        request.output_path = Some(output_path.clone());
+
+        let report = refresh_subnet_catalog_with_source(&request, &source).expect("dry-run");
+
+        assert!(!report.wrote_catalog);
+        assert!(!subnet_catalog_path(&request.cache.icp_root, MAINNET_NETWORK).exists());
+        assert!(output_path.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn refresh_failure_preserves_existing_catalog_and_removes_lock() {
+        let root = temp_dir("canic-subnet-host-refresh-failure");
+        write_catalog(&root, fixture_catalog());
+        let source = FixtureRefreshSource::err();
+        let request = refresh_request(&root);
+
+        let err = refresh_subnet_catalog_with_source(&request, &source).expect_err("refresh fails");
+        let cached = load_cached_subnet_catalog(&cache_request(&root)).expect("cached catalog");
+        let lock_path = subnet_catalog_refresh_lock_path(&root, MAINNET_NETWORK);
+
+        std::assert_matches!(err, SubnetCatalogHostError::InvalidStaleDuration { .. });
+        assert_eq!(cached.catalog.registry_version, 123_456);
+        assert!(!lock_path.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn refresh_existing_fresh_lock_fails_fast() {
+        let root = temp_dir("canic-subnet-host-refresh-locked");
+        let request = refresh_request(&root);
+        let lock_path = subnet_catalog_refresh_lock_path(&root, MAINNET_NETWORK);
+        write_refresh_lock_for_test(&lock_path, &request, request.now_unix_secs * 1_000);
+
+        let err = refresh_subnet_catalog_with_source(&request, &FixtureRefreshSource::err())
+            .expect_err("lock held");
+
+        let _ = fs::remove_dir_all(root);
+        std::assert_matches!(err, SubnetCatalogHostError::RefreshAlreadyInProgress { .. });
+    }
+
+    #[test]
+    fn refresh_removes_stale_lock_and_retries_once() {
+        let root = temp_dir("canic-subnet-host-refresh-stale-lock");
+        let mut catalog = fixture_catalog();
+        catalog.fetched_at = "1970-01-01T00:00:00Z".to_string();
+        catalog.source_endpoint = DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT.to_string();
+        let source = FixtureRefreshSource::ok(catalog);
+        let request = refresh_request(&root);
+        let lock_path = subnet_catalog_refresh_lock_path(&root, MAINNET_NETWORK);
+        let stale_started_at =
+            (request.now_unix_secs - request.lock_stale_after_seconds - 1) * 1_000;
+        write_refresh_lock_for_test(&lock_path, &request, stale_started_at);
+
+        let report =
+            refresh_subnet_catalog_with_source(&request, &source).expect("stale lock removed");
+
+        assert!(report.wrote_catalog);
+        assert!(!lock_path.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn utc_timestamp_formatter_is_deterministic() {
+        assert_eq!(format_utc_timestamp_secs(0), "1970-01-01T00:00:00Z");
+        assert_eq!(
+            format_utc_timestamp_secs(1_780_531_200),
+            "2026-06-04T00:00:00Z"
+        );
+    }
+
     fn list_request(root: &Path) -> SubnetCatalogListRequest {
         SubnetCatalogListRequest {
             cache: cache_request(root),
@@ -865,6 +1440,77 @@ mod tests {
             serde_json::to_vec_pretty(&catalog).expect("serialize catalog"),
         )
         .expect("write catalog");
+    }
+
+    fn refresh_request(root: &Path) -> SubnetCatalogRefreshRequest {
+        SubnetCatalogRefreshRequest {
+            cache: cache_request(root),
+            source_endpoint: DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT.to_string(),
+            now_unix_secs: 1_780_531_200,
+            lock_stale_after_seconds: DEFAULT_REFRESH_LOCK_STALE_SECONDS,
+            dry_run: false,
+            output_path: None,
+        }
+    }
+
+    fn write_refresh_lock_for_test(
+        lock_path: &Path,
+        request: &SubnetCatalogRefreshRequest,
+        started_at_unix_ms: u64,
+    ) {
+        fs::create_dir_all(lock_path.parent().expect("lock parent")).expect("create parent");
+        let lock = RefreshLockFile {
+            schema_version: 1,
+            network: request.cache.network.clone(),
+            pid: 12345,
+            started_at_unix_ms,
+            catalog_path: subnet_catalog_path(&request.cache.icp_root, &request.cache.network)
+                .display()
+                .to_string(),
+        };
+        fs::write(
+            lock_path,
+            serde_json::to_vec_pretty(&lock).expect("serialize lock"),
+        )
+        .expect("write lock");
+    }
+
+    ///
+    /// FixtureRefreshSource
+    ///
+    struct FixtureRefreshSource {
+        catalog: Option<SubnetCatalog>,
+        fail: bool,
+    }
+
+    impl FixtureRefreshSource {
+        fn ok(catalog: SubnetCatalog) -> Self {
+            Self {
+                catalog: Some(catalog),
+                fail: false,
+            }
+        }
+
+        fn err() -> Self {
+            Self {
+                catalog: None,
+                fail: true,
+            }
+        }
+    }
+
+    impl SubnetCatalogRefreshSource for FixtureRefreshSource {
+        fn fetch_catalog(
+            &self,
+            _request: &MainnetRegistryFetchRequest,
+        ) -> Result<SubnetCatalog, SubnetCatalogHostError> {
+            if self.fail {
+                return Err(SubnetCatalogHostError::InvalidStaleDuration {
+                    value: "fixture".to_string(),
+                });
+            }
+            Ok(self.catalog.clone().expect("fixture catalog"))
+        }
     }
 
     fn fixture_catalog() -> SubnetCatalog {

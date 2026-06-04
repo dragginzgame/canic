@@ -1,8 +1,8 @@
 use crate::{
     cli::{
         clap::{
-            flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, string_option,
-            value_arg,
+            flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, path_option,
+            string_option, value_arg,
         },
         defaults::default_icp,
         globals::{internal_icp_arg, internal_network_arg},
@@ -20,11 +20,13 @@ use canic_host::{
     },
     release_set::icp_root,
     subnet_catalog::{
-        DEFAULT_STALE_AFTER_SECONDS, ResolvedDeploymentTarget, SubnetCatalogCacheRequest,
-        SubnetCatalogFilters, SubnetCatalogHostError, SubnetCatalogInfoRequest,
-        SubnetCatalogListRequest, build_subnet_catalog_info_report,
-        build_subnet_catalog_list_report, parse_stale_after_duration,
-        subnet_catalog_info_report_text, subnet_catalog_list_report_text,
+        DEFAULT_REFRESH_LOCK_STALE_SECONDS, DEFAULT_STALE_AFTER_SECONDS,
+        DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, ResolvedDeploymentTarget,
+        SubnetCatalogCacheRequest, SubnetCatalogFilters, SubnetCatalogHostError,
+        SubnetCatalogInfoRequest, SubnetCatalogListRequest, SubnetCatalogRefreshRequest,
+        build_subnet_catalog_info_report, build_subnet_catalog_list_report,
+        parse_stale_after_duration, refresh_subnet_catalog, subnet_catalog_info_report_text,
+        subnet_catalog_list_report_text, subnet_catalog_refresh_report_text,
     },
 };
 use canic_subnet_catalog::{
@@ -51,6 +53,11 @@ Examples:
   canic subnet catalog info ryjl3-tyaaa-aaaaa-aaaba-cai
   canic subnet catalog info <deployment>
   canic subnet catalog info <deployment>/<role-or-canister>";
+const REFRESH_HELP_AFTER: &str = "\
+Examples:
+  canic subnet catalog refresh
+  canic --network ic subnet catalog refresh --format json
+  canic subnet catalog refresh --dry-run --output .canic/subnet-catalog/ic/catalog.preview.json";
 
 ///
 /// SubnetCommandError
@@ -118,6 +125,19 @@ struct CatalogInfoOptions {
     stale_after_seconds: u64,
 }
 
+///
+/// CatalogRefreshOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CatalogRefreshOptions {
+    network: String,
+    format: OutputFormat,
+    source_endpoint: String,
+    lock_stale_after_seconds: u64,
+    dry_run: bool,
+    output_path: Option<PathBuf>,
+}
+
 pub fn run<I>(args: I) -> Result<(), SubnetCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -155,6 +175,7 @@ where
     match command.as_str() {
         "list" => run_catalog_list(args),
         "info" => run_catalog_info(args),
+        "refresh" => run_catalog_refresh(args),
         _ => unreachable!("subnet catalog dispatch command only defines known commands"),
     }
 }
@@ -217,6 +238,34 @@ where
     }
 }
 
+fn run_catalog_refresh<I>(args: I) -> Result<(), SubnetCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, refresh_usage, version_text()) {
+        return Ok(());
+    }
+    let options = CatalogRefreshOptions::parse(args)?;
+    let icp_root = icp_root().map_err(|err| SubnetCommandError::Usage(err.to_string()))?;
+    let request = SubnetCatalogRefreshRequest {
+        cache: cache_request(&icp_root, &options.network),
+        source_endpoint: options.source_endpoint,
+        now_unix_secs: now_unix_secs()?,
+        lock_stale_after_seconds: options.lock_stale_after_seconds,
+        dry_run: options.dry_run,
+        output_path: options.output_path,
+    };
+    let report = refresh_subnet_catalog(&request)?;
+    match options.format {
+        OutputFormat::Text => {
+            println!("{}", subnet_catalog_refresh_report_text(&report));
+            Ok(())
+        }
+        OutputFormat::Json => write_pretty_json(None, &report),
+    }
+}
+
 impl CatalogListOptions {
     fn parse<I>(args: I) -> Result<Self, SubnetCommandError>
     where
@@ -271,6 +320,29 @@ impl CatalogInfoOptions {
                 .map(|value| parse_resolve_as(&value))
                 .transpose()?,
             stale_after_seconds: parse_stale_after(string_option(&matches, "stale-after"))?,
+        })
+    }
+}
+
+impl CatalogRefreshOptions {
+    fn parse<I>(args: I) -> Result<Self, SubnetCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(refresh_command(), args)
+            .map_err(|_| SubnetCommandError::Usage(refresh_usage()))?;
+        Ok(Self {
+            network: string_option(&matches, "network")
+                .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
+            format: parse_format(string_option(&matches, "format").as_deref())?,
+            source_endpoint: string_option(&matches, "source-endpoint")
+                .unwrap_or_else(|| DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT.to_string()),
+            lock_stale_after_seconds: parse_refresh_lock_stale_after(string_option(
+                &matches,
+                "lock-stale-after",
+            ))?,
+            dry_run: matches.get_flag("dry-run"),
+            output_path: path_option(&matches, "output"),
         })
     }
 }
@@ -440,6 +512,12 @@ fn parse_stale_after(value: Option<String>) -> Result<u64, SubnetCommandError> {
     })
 }
 
+fn parse_refresh_lock_stale_after(value: Option<String>) -> Result<u64, SubnetCommandError> {
+    value.map_or(Ok(DEFAULT_REFRESH_LOCK_STALE_SECONDS), |value| {
+        parse_stale_after_duration(&value).map_err(SubnetCommandError::from)
+    })
+}
+
 fn parse_usize_option(
     matches: &clap::ArgMatches,
     id: &str,
@@ -487,6 +565,9 @@ fn catalog_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(ClapCommand::new("info").about(
             "Resolve a subnet, canister, or deployment target to cached subnet info",
         )))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("refresh").about("Fetch and cache the mainnet IC subnet catalog"),
+        ))
 }
 
 fn list_command() -> ClapCommand {
@@ -589,6 +670,46 @@ fn info_command() -> ClapCommand {
         .after_help(INFO_HELP_AFTER)
 }
 
+fn refresh_command() -> ClapCommand {
+    ClapCommand::new("refresh")
+        .bin_name("canic subnet catalog refresh")
+        .about("Fetch and cache the mainnet IC subnet catalog")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("format")
+                .long("format")
+                .value_name("text|json")
+                .help("Output format; defaults to text"),
+        )
+        .arg(
+            value_arg("source-endpoint")
+                .long("source-endpoint")
+                .value_name("url")
+                .help("IC API endpoint used for the NNS registry query"),
+        )
+        .arg(
+            value_arg("lock-stale-after")
+                .long("lock-stale-after")
+                .value_name("duration")
+                .help(
+                    "Treat an existing refresh lock as stale after this duration; defaults to 30m",
+                ),
+        )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Fetch and validate without replacing the cached catalog"),
+        )
+        .arg(
+            value_arg("output")
+                .long("output")
+                .value_name("path")
+                .help("Also write the fetched catalog JSON to this path"),
+        )
+        .arg(internal_network_arg())
+        .after_help(REFRESH_HELP_AFTER)
+}
+
 fn usage() -> String {
     let mut command = subnet_command();
     command.render_help().to_string()
@@ -606,6 +727,11 @@ fn list_usage() -> String {
 
 fn info_usage() -> String {
     let mut command = info_command();
+    command.render_help().to_string()
+}
+
+fn refresh_usage() -> String {
+    let mut command = refresh_command();
     command.render_help().to_string()
 }
 
@@ -663,6 +789,32 @@ mod tests {
     }
 
     #[test]
+    fn refresh_parses_defaults_and_export_options() {
+        let options = CatalogRefreshOptions::parse([
+            OsString::from("--format"),
+            OsString::from("json"),
+            OsString::from("--source-endpoint"),
+            OsString::from("https://icp-api.io"),
+            OsString::from("--lock-stale-after"),
+            OsString::from("5m"),
+            OsString::from("--dry-run"),
+            OsString::from("--output"),
+            OsString::from("catalog.preview.json"),
+        ])
+        .expect("parse refresh");
+
+        assert_eq!(options.network, MAINNET_NETWORK);
+        assert_eq!(options.format, OutputFormat::Json);
+        assert_eq!(options.source_endpoint, "https://icp-api.io");
+        assert_eq!(options.lock_stale_after_seconds, 300);
+        assert!(options.dry_run);
+        assert_eq!(
+            options.output_path,
+            Some(PathBuf::from("catalog.preview.json"))
+        );
+    }
+
+    #[test]
     fn catalog_local_is_rejected_with_pinned_message() {
         let err = run([
             OsString::from("catalog"),
@@ -678,14 +830,11 @@ mod tests {
     }
 
     #[test]
-    fn refresh_is_not_advertised_in_cached_only_slice() {
+    fn refresh_is_advertised_as_catalog_command() {
         let text = catalog_usage();
 
-        assert!(!text.contains("refresh"));
-        std::assert_matches!(
-            run([OsString::from("catalog"), OsString::from("refresh")]),
-            Err(SubnetCommandError::Usage(_))
-        );
+        assert!(text.contains("refresh"));
+        assert!(refresh_usage().contains("canic subnet catalog refresh"));
     }
 
     #[test]

@@ -9,6 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.60.2` adds live mainnet NNS subnet catalog refresh behind the shared
+  `canic-ic-registry` adapter. `canic-host` owns the refresh lock and atomic
+  cache replacement for `.canic/subnet-catalog/ic/catalog.json`; `canic-cli`
+  now exposes:
+  ```text
+  canic subnet catalog refresh
+  canic --network ic subnet catalog refresh
+  canic subnet catalog refresh --dry-run --output <path>
+  ```
+  The command remains mainnet-only in 0.60, rejects non-`ic` networks, writes
+  through `<canic-cache-root>/subnet-catalog/ic/refresh.lock` and
+  `catalog.json.tmp.<pid>`, and leaves any existing catalog intact on refresh
+  failure. Protobuf transport and registry value decoding stay inside
+  `canic-ic-registry`; host/CLI surfaces remain protobuf-free. Instruction
+  audit estimate integration is still deferred.
 - `0.60.1` renames the cached NNS subnet inspection surface from
   `canic subnet network ...` to `canic subnet catalog ...`, preserving the
   mainnet-only `--network ic` behavior and clarifying the cached-only
@@ -19,10 +34,8 @@ inspect only the files needed for the current task.
   canic subnet catalog info <subnet-principal|canister-principal|deployment-target>
   ```
   The command group defaults to mainnet `ic`, rejects non-`ic` networks in
-  0.60.1, requires an existing local catalog file, and does not include live
-  `refresh` or instruction-audit estimate integration yet. Missing-cache
-  errors now state that the slice is cached-only and point at the planned
-  refresh follow-up.
+  0.60.1, requires an existing local catalog file, and does not include
+  instruction-audit estimate integration yet.
 - `0.60.0` starts the NNS subnet inspection line with cached mainnet IC subnet
   catalog support. The new pure `canic-subnet-catalog` crate owns schema
   validation, future-schema rejection, and canonical principal-byte routing

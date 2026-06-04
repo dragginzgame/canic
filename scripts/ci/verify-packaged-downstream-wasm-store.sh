@@ -40,7 +40,13 @@ ensure_packaged_crate() {
             ;;
         canic-host)
             cargo package -p "$crate_name" --allow-dirty --no-verify \
-                --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
+                --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
+                --config "patch.crates-io.canic-ic-registry.path=\"$ROOT/crates/canic-ic-registry\"" \
+                --config "patch.crates-io.canic-subnet-catalog.path=\"$ROOT/crates/canic-subnet-catalog\"" >/dev/null
+            ;;
+        canic-ic-registry)
+            cargo package -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-subnet-catalog.path=\"$ROOT/crates/canic-subnet-catalog\"" >/dev/null
             ;;
         *)
             cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
@@ -56,6 +62,8 @@ populate_isolated_package_root() {
         "$PACKAGE_STAGING_ROOT/canic-backup-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-control-plane-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-core-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-subnet-catalog-$VERSION.crate" \
+        "$PACKAGE_STAGING_ROOT/canic-ic-registry-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-macros-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-host-$VERSION.crate" \
         "$PACKAGE_STAGING_ROOT/canic-$VERSION.crate"
@@ -82,7 +90,9 @@ canic-backup = { path = "package-root/canic-backup-$VERSION" }
 canic-control-plane = { path = "package-root/canic-control-plane-$VERSION" }
 canic-core = { path = "package-root/canic-core-$VERSION" }
 canic-host = { path = "package-root/canic-host-$VERSION" }
+canic-ic-registry = { path = "package-root/canic-ic-registry-$VERSION" }
 canic-macros = { path = "package-root/canic-macros-$VERSION" }
+canic-subnet-catalog = { path = "package-root/canic-subnet-catalog-$VERSION" }
 EOF
 }
 
@@ -206,6 +216,8 @@ main() {
     ensure_packaged_crate canic-backup
     ensure_packaged_crate canic-control-plane
     ensure_packaged_crate canic-core
+    ensure_packaged_crate canic-subnet-catalog
+    ensure_packaged_crate canic-ic-registry
     ensure_packaged_crate canic-macros
     ensure_packaged_crate canic-host
     ensure_packaged_crate canic

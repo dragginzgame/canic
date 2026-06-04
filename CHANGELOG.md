@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.2` adds live mainnet subnet catalog refresh through a shared
+  protobuf-based NNS registry adapter, with refresh locking, atomic cache
+  replacement, dry-run/export support, and previous-cache preservation on
+  refresh failure.
+
+  ```text
+  canic subnet catalog refresh
+  canic --network ic subnet catalog refresh
+  canic subnet catalog refresh --dry-run --output <path>
+  ```
+
 - `0.60.1` renames the cached subnet inspection command group from
   `canic subnet network ...` to `canic subnet catalog ...`, preserving the
   mainnet-only `--network ic` behavior and clarifying the cached-only
