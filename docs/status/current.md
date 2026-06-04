@@ -24,6 +24,9 @@ inspect only the files needed for the current task.
   commands must use domain replay receipts in later 0.61 slices. A focused
   upgrade-shape test proves old serialized auth state with historical consumed
   markers decodes into the new state shape while dropping that removed field.
+  The auth trust-chain shell guard now matches this invariant: it preserves the
+  endpoint order `verify -> subject binding -> scope check` and no longer
+  requires the removed verifier-local consume step.
 - `canic_app` set-style commands are now response-idempotent for the 0.61
   replay-safety line. The root endpoint returns `AppCommandResponse`; repeated
   `SetStatus` and `SetCyclesFundingEnabled` requests return success with

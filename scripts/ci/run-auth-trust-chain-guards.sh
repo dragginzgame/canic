@@ -26,16 +26,17 @@ then
 fi
 
 # Preserve the delegated endpoint guard sequence:
-# decode -> verify material -> bind subject -> check scope -> consume update use.
+# decode -> verify material -> bind subject -> check scope.
+# 0.61 removes verifier-local delegated-token use consumption; replay-sensitive
+# commands must use domain replay receipts instead of an auth-token use store.
 if ! awk '
     /fn verify_token\(/ { in_fn = 1 }
-    in_fn && /fn consume_update_token_once\(/ { in_fn = 0 }
+    in_fn && /pub\(super\) fn enforce_subject_binding/ { in_fn = 0 }
     in_fn && /AuthOps::verify_token/ && !verify { verify = NR }
     in_fn && /enforce_subject_binding/ && !subject { subject = NR }
     in_fn && /enforce_required_scope/ && !scope { scope = NR }
-    in_fn && /consume_update_token_once/ && !consume { consume = NR }
     END {
-        if (!(verify && subject && scope && consume && verify < subject && subject < scope && scope < consume)) {
+        if (!(verify && subject && scope && verify < subject && subject < scope)) {
             exit 1
         }
     }
