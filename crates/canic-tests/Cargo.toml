@@ -17,6 +17,8 @@ ic-testkit = { workspace = true }
 candid = { workspace = true }
 canic-control-plane = { workspace = true }
 canic-core = { workspace = true }
+canic-host = { workspace = true }
+canic-subnet-catalog = { workspace = true }
 ic-memory = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

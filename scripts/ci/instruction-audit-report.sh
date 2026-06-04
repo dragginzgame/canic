@@ -15,6 +15,12 @@ Options:
       Use Canic's pinned IC cost table for the supplied operator-assumed node count.
   --cycles-per-billion-instructions <cycles>
       Use an explicit operator-supplied rate. Wins over --estimate-node-count.
+  --estimate-canister-principal <principal>
+      Resolve a canister principal through the cached mainnet subnet catalog.
+  --allow-stale-subnet-catalog
+      Permit catalog-derived estimates from stale cached catalog data.
+  --subnet-catalog-stale-after <duration>
+      Mark cached catalog data stale after this duration; defaults to 7d.
   -h, --help
       Print this help.
 EOF
@@ -23,6 +29,9 @@ EOF
 ESTIMATE_EXECUTION_CYCLES=0
 ESTIMATE_NODE_COUNT=""
 CYCLES_PER_BILLION_INSTRUCTIONS=""
+ESTIMATE_CANISTER_PRINCIPAL=""
+ALLOW_STALE_SUBNET_CATALOG=0
+SUBNET_CATALOG_STALE_AFTER=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -48,6 +57,28 @@ while [[ $# -gt 0 ]]; do
       CYCLES_PER_BILLION_INSTRUCTIONS="$2"
       shift 2
       ;;
+    --estimate-canister-principal)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --estimate-canister-principal requires a value" >&2
+        usage >&2
+        exit 2
+      fi
+      ESTIMATE_CANISTER_PRINCIPAL="$2"
+      shift 2
+      ;;
+    --allow-stale-subnet-catalog)
+      ALLOW_STALE_SUBNET_CATALOG=1
+      shift
+      ;;
+    --subnet-catalog-stale-after)
+      if [[ $# -lt 2 ]]; then
+        echo "error: --subnet-catalog-stale-after requires a value" >&2
+        usage >&2
+        exit 2
+      fi
+      SUBNET_CATALOG_STALE_AFTER="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -70,13 +101,23 @@ if [[ -n "$CYCLES_PER_BILLION_INSTRUCTIONS" && ! "$CYCLES_PER_BILLION_INSTRUCTIO
   exit 2
 fi
 
-if [[ "$ESTIMATE_EXECUTION_CYCLES" == "1" && -z "$ESTIMATE_NODE_COUNT" && -z "$CYCLES_PER_BILLION_INSTRUCTIONS" ]]; then
-  echo "error: --estimate-execution-cycles requires --estimate-node-count or --cycles-per-billion-instructions" >&2
+if [[ -n "$SUBNET_CATALOG_STALE_AFTER" && ! "$SUBNET_CATALOG_STALE_AFTER" =~ ^[1-9][0-9]*(s|m|h|d)?$ ]]; then
+  echo "error: --subnet-catalog-stale-after must be positive seconds or a value ending in s, m, h, or d" >&2
   exit 2
 fi
 
-if [[ "$ESTIMATE_EXECUTION_CYCLES" != "1" && ( -n "$ESTIMATE_NODE_COUNT" || -n "$CYCLES_PER_BILLION_INSTRUCTIONS" ) ]]; then
+if [[ "$ESTIMATE_EXECUTION_CYCLES" == "1" && -z "$ESTIMATE_NODE_COUNT" && -z "$CYCLES_PER_BILLION_INSTRUCTIONS" && -z "$ESTIMATE_CANISTER_PRINCIPAL" ]]; then
+  echo "error: --estimate-execution-cycles requires --estimate-node-count, --cycles-per-billion-instructions, or --estimate-canister-principal" >&2
+  exit 2
+fi
+
+if [[ "$ESTIMATE_EXECUTION_CYCLES" != "1" && ( -n "$ESTIMATE_NODE_COUNT" || -n "$CYCLES_PER_BILLION_INSTRUCTIONS" || -n "$ESTIMATE_CANISTER_PRINCIPAL" || "$ALLOW_STALE_SUBNET_CATALOG" == "1" || -n "$SUBNET_CATALOG_STALE_AFTER" ) ]]; then
   echo "error: estimate source flags require --estimate-execution-cycles" >&2
+  exit 2
+fi
+
+if [[ "$ESTIMATE_EXECUTION_CYCLES" == "1" && -z "$ESTIMATE_CANISTER_PRINCIPAL" && ( "$ALLOW_STALE_SUBNET_CATALOG" == "1" || -n "$SUBNET_CATALOG_STALE_AFTER" ) ]]; then
+  echo "error: catalog stale flags require --estimate-canister-principal" >&2
   exit 2
 fi
 
@@ -129,6 +170,9 @@ export CANIC_INSTRUCTION_AUDIT_TIMESTAMP_UTC="$RUN_TIMESTAMP_UTC"
 export CANIC_INSTRUCTION_AUDIT_ESTIMATE_EXECUTION_CYCLES="$ESTIMATE_EXECUTION_CYCLES"
 export CANIC_INSTRUCTION_AUDIT_ESTIMATE_NODE_COUNT="$ESTIMATE_NODE_COUNT"
 export CANIC_INSTRUCTION_AUDIT_CYCLES_PER_BILLION_INSTRUCTIONS="$CYCLES_PER_BILLION_INSTRUCTIONS"
+export CANIC_INSTRUCTION_AUDIT_ESTIMATE_CANISTER_PRINCIPAL="$ESTIMATE_CANISTER_PRINCIPAL"
+export CANIC_INSTRUCTION_AUDIT_ALLOW_STALE_SUBNET_CATALOG="$ALLOW_STALE_SUBNET_CATALOG"
+export CANIC_INSTRUCTION_AUDIT_SUBNET_CATALOG_STALE_AFTER="$SUBNET_CATALOG_STALE_AFTER"
 
 echo "Running instruction audit report into $REPORT_PATH"
 cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture

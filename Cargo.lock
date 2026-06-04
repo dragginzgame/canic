@@ -578,6 +578,8 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
+ "canic-host",
+ "canic-subnet-catalog",
  "canic-testing-internal",
  "ic-memory",
  "ic-testkit",

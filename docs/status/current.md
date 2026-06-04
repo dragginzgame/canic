@@ -9,6 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.60.3` wires the refreshed mainnet subnet catalog into instruction-audit
+  execution-cycle estimates as an optional cached source. The report path
+  still performs no live NNS lookup; operators refresh first with
+  `canic subnet catalog refresh` and then opt in with:
+  ```text
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal>
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --allow-stale-subnet-catalog
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --subnet-catalog-stale-after <duration>
+  ```
+  Explicit `--cycles-per-billion-instructions` still wins over every source,
+  explicit `--estimate-node-count` still wins over the catalog, and catalog
+  estimates are omitted when the cache is missing, stale by default,
+  unresolved, missing a positive node count, or resolved to a non-application
+  subnet. Catalog-derived rates accept arbitrary positive application subnet
+  node counts with `ceil(1_000_000_000 * node_count / 13)` and record optional
+  registry/subnet/catalog/routing provenance only when the catalog supplies the
+  estimate source.
 - `0.60.2` adds live mainnet NNS subnet catalog refresh behind the shared
   `canic-ic-registry` adapter. `canic-host` owns the refresh lock and atomic
   cache replacement for `.canic/subnet-catalog/ic/catalog.json`; `canic-cli`
@@ -23,7 +40,7 @@ inspect only the files needed for the current task.
   `catalog.json.tmp.<pid>`, and leaves any existing catalog intact on refresh
   failure. Protobuf transport and registry value decoding stay inside
   `canic-ic-registry`; host/CLI surfaces remain protobuf-free. Instruction
-  audit estimate integration is still deferred.
+  audit estimate integration lands in `0.60.3`.
 - `0.60.1` renames the cached NNS subnet inspection surface from
   `canic subnet network ...` to `canic subnet catalog ...`, preserving the
   mainnet-only `--network ic` behavior and clarifying the cached-only

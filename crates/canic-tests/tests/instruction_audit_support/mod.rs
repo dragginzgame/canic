@@ -263,8 +263,8 @@ pub fn generate_instruction_footprint_report() {
     let workspace_root = workspace_root();
     let paths = audit_paths();
     let metadata = audit_metadata();
-    let estimate_options =
-        estimate_options_from_env().unwrap_or_else(|err| panic!("invalid estimate options: {err}"));
+    let estimate_options = estimate_options_from_env(&workspace_root)
+        .unwrap_or_else(|err| panic!("invalid estimate options: {err}"));
     let scenarios = scenarios();
     let checkpoint_sites = scan_perf_callsites(&workspace_root);
 

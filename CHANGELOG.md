@@ -16,6 +16,17 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.3` lets instruction-audit execution-cycle estimates use the refreshed
+  mainnet subnet catalog as an optional source, while preserving explicit-rate
+  and explicit-node-count precedence and omitting catalog-derived estimates
+  when the cache is missing, stale, unresolved, or not chargeable.
+
+  ```text
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal>
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --allow-stale-subnet-catalog
+  bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --subnet-catalog-stale-after <duration>
+  ```
+
 - `0.60.2` adds live mainnet subnet catalog refresh through a shared
   protobuf-based NNS registry adapter, with refresh locking, atomic cache
   replacement, dry-run/export support, and previous-cache preservation on
