@@ -146,6 +146,56 @@ fn refresh_parses_defaults_and_export_options() {
 }
 
 #[test]
+fn node_provider_list_parses_defaults_and_json_format() {
+    let defaults = NodeProviderListOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(
+        defaults.source_endpoint,
+        DEFAULT_NNS_GOVERNANCE_SOURCE_ENDPOINT
+    );
+
+    let options = NodeProviderListOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse node-provider list");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
+fn node_provider_help_is_advertised_under_nns() {
+    let nns = usage();
+    let node_provider = node_provider_usage();
+    let list = node_provider_list_usage();
+
+    assert!(nns.contains("node-provider"));
+    assert!(node_provider.contains("List mainnet NNS node providers"));
+    assert!(list.contains("canic nns node-provider list"));
+    assert!(list.contains("--format json"));
+}
+
+#[test]
+fn node_provider_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("node-provider"),
+        OsString::from("list"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network in 0.60"));
+    assert!(message.contains("canic --network ic nns node-provider list"));
+}
+
+#[test]
 fn catalog_local_is_rejected_with_pinned_message() {
     let err = run([
         OsString::from("subnet"),
@@ -172,7 +222,7 @@ fn refresh_is_advertised_as_subnet_command() {
 fn nns_namespace_help_mentions_subnet() {
     let text = usage();
 
-    assert!(text.contains("Inspect cached NNS registry data"));
+    assert!(text.contains("Inspect NNS metadata"));
     assert!(text.contains("subnet"));
     assert!(!text.contains("Inspect cached IC network subnet metadata"));
 }

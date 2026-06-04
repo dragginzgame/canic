@@ -15,11 +15,13 @@ use proto::{
     RegistryGetValueRequest, RegistryGetValueResponse, RoutingTable, SubnetId, SubnetListRecord,
     SubnetRecord, SubnetType, UInt64Value, registry_get_value_response,
 };
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 
 pub const DEFAULT_MAINNET_ENDPOINT: &str = "https://icp-api.io";
+pub const MAINNET_GOVERNANCE_CANISTER_ID: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
 
 const SUBNET_LIST_KEY: &str = "subnet_list";
 const ROUTING_TABLE_KEY: &str = "routing_table";
@@ -46,6 +48,28 @@ impl MainnetRegistryFetchRequest {
             fetched_by: "canic-ic-registry".to_string(),
         }
     }
+}
+
+///
+/// MainnetNodeProviderList
+///
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct MainnetNodeProviderList {
+    pub network: String,
+    pub governance_canister_id: String,
+    pub fetched_at: String,
+    pub fetched_by: String,
+    pub source_endpoint: String,
+    pub node_providers: Vec<MainnetNodeProvider>,
+}
+
+///
+/// MainnetNodeProvider
+///
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct MainnetNodeProvider {
+    pub principal: String,
+    pub reward_account_hex: Option<String>,
 }
 
 ///
@@ -152,6 +176,31 @@ struct RegistryChunk {
     content: Option<Vec<u8>>,
 }
 
+///
+/// ListNodeProvidersResponse
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct ListNodeProvidersResponse {
+    node_providers: Vec<GovernanceNodeProvider>,
+}
+
+///
+/// GovernanceNodeProvider
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct GovernanceNodeProvider {
+    id: Option<Principal>,
+    reward_account: Option<GovernanceAccountIdentifier>,
+}
+
+///
+/// GovernanceAccountIdentifier
+///
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct GovernanceAccountIdentifier {
+    hash: Vec<u8>,
+}
+
 pub fn fetch_mainnet_subnet_catalog(
     request: &MainnetRegistryFetchRequest,
 ) -> Result<SubnetCatalog, RegistryFetchError> {
@@ -160,6 +209,16 @@ pub fn fetch_mainnet_subnet_catalog(
         .build()
         .map_err(|err| RegistryFetchError::Runtime(err.to_string()))?;
     runtime.block_on(fetch_mainnet_subnet_catalog_async(request))
+}
+
+pub fn fetch_mainnet_node_provider_list(
+    request: &MainnetRegistryFetchRequest,
+) -> Result<MainnetNodeProviderList, RegistryFetchError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| RegistryFetchError::Runtime(err.to_string()))?;
+    runtime.block_on(fetch_mainnet_node_provider_list_async(request))
 }
 
 pub async fn fetch_mainnet_subnet_catalog_async(
@@ -204,6 +263,45 @@ pub async fn fetch_mainnet_subnet_catalog_async(
         routing_table,
     )
     .await
+}
+
+pub async fn fetch_mainnet_node_provider_list_async(
+    request: &MainnetRegistryFetchRequest,
+) -> Result<MainnetNodeProviderList, RegistryFetchError> {
+    let agent = Agent::builder()
+        .with_url(&request.endpoint)
+        .build()
+        .map_err(|err| RegistryFetchError::AgentBuild {
+            endpoint: request.endpoint.clone(),
+            reason: err.to_string(),
+        })?;
+    let governance_canister =
+        Principal::from_text(MAINNET_GOVERNANCE_CANISTER_ID).map_err(|err| {
+            RegistryFetchError::InvalidPrincipal {
+                field: "governance_canister_id",
+                reason: err.to_string(),
+            }
+        })?;
+    let arg = Encode!().map_err(|err| RegistryFetchError::CandidEncode {
+        message: "list_node_providers",
+        reason: err.to_string(),
+    })?;
+    let bytes = agent
+        .query(&governance_canister, "list_node_providers")
+        .with_arg(arg)
+        .call()
+        .await
+        .map_err(|err| RegistryFetchError::AgentCall {
+            method: "list_node_providers",
+            reason: err.to_string(),
+        })?;
+    let response = Decode!(&bytes, ListNodeProvidersResponse).map_err(|err| {
+        RegistryFetchError::CandidDecode {
+            message: "ListNodeProvidersResponse",
+            reason: err.to_string(),
+        }
+    })?;
+    node_provider_list_from_response(request, response)
 }
 
 async fn catalog_from_registry_records(
@@ -256,6 +354,44 @@ async fn catalog_from_registry_records(
     apply_mainnet_annotations(&mut catalog);
     catalog.validate()?;
     Ok(catalog)
+}
+
+fn node_provider_list_from_response(
+    request: &MainnetRegistryFetchRequest,
+    response: ListNodeProvidersResponse,
+) -> Result<MainnetNodeProviderList, RegistryFetchError> {
+    let mut node_providers = response
+        .node_providers
+        .into_iter()
+        .map(node_provider_from_governance)
+        .collect::<Result<Vec<_>, _>>()?;
+    node_providers.sort_by(|left, right| left.principal.cmp(&right.principal));
+    Ok(MainnetNodeProviderList {
+        network: MAINNET_NETWORK.to_string(),
+        governance_canister_id: MAINNET_GOVERNANCE_CANISTER_ID.to_string(),
+        fetched_at: request.fetched_at.clone(),
+        fetched_by: request.fetched_by.clone(),
+        source_endpoint: request.endpoint.clone(),
+        node_providers,
+    })
+}
+
+fn node_provider_from_governance(
+    node_provider: GovernanceNodeProvider,
+) -> Result<MainnetNodeProvider, RegistryFetchError> {
+    let principal = node_provider
+        .id
+        .ok_or(RegistryFetchError::MissingField {
+            field: "node_provider.id",
+        })?
+        .to_text();
+    let reward_account_hex = node_provider
+        .reward_account
+        .map(|account| hex_bytes(&account.hash));
+    Ok(MainnetNodeProvider {
+        principal,
+        reward_account_hex,
+    })
 }
 
 async fn get_latest_version(
@@ -663,6 +799,51 @@ mod tests {
     }
 
     #[test]
+    fn governance_node_provider_response_converts_to_domain_structs() {
+        let request = MainnetRegistryFetchRequest {
+            endpoint: "https://icp-api.io".to_string(),
+            fetched_at: "2026-06-04T00:00:00Z".to_string(),
+            fetched_by: "test".to_string(),
+        };
+        let response = ListNodeProvidersResponse {
+            node_providers: vec![
+                governance_node_provider("ryjl3-tyaaa-aaaaa-aaaba-cai", None),
+                governance_node_provider("aaaaa-aa", Some(vec![0xab, 0xcd])),
+            ],
+        };
+
+        let list = node_provider_list_from_response(&request, response).expect("node providers");
+
+        assert_eq!(list.network, MAINNET_NETWORK);
+        assert_eq!(list.governance_canister_id, MAINNET_GOVERNANCE_CANISTER_ID);
+        assert_eq!(list.node_providers.len(), 2);
+        assert_eq!(list.node_providers[0].principal, "aaaaa-aa");
+        assert_eq!(
+            list.node_providers[0].reward_account_hex.as_deref(),
+            Some("abcd")
+        );
+        assert_eq!(
+            list.node_providers[1].principal,
+            "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        );
+        assert_eq!(list.node_providers[1].reward_account_hex, None);
+    }
+
+    #[test]
+    fn governance_node_provider_requires_principal() {
+        let err = node_provider_from_governance(GovernanceNodeProvider {
+            id: None,
+            reward_account: None,
+        })
+        .expect_err("missing principal");
+
+        assert!(matches!(
+            err,
+            RegistryFetchError::MissingField { field } if field == "node_provider.id"
+        ));
+    }
+
+    #[test]
     fn validated_chunk_append_concatenates_matching_chunks() {
         let first = b"hello ".to_vec();
         let second = b"world".to_vec();
@@ -818,5 +999,15 @@ mod tests {
             .expect("principal")
             .as_slice()
             .to_vec()
+    }
+
+    fn governance_node_provider(
+        principal: &str,
+        reward_account_hash: Option<Vec<u8>>,
+    ) -> GovernanceNodeProvider {
+        GovernanceNodeProvider {
+            id: Some(Principal::from_text(principal).expect("principal")),
+            reward_account: reward_account_hash.map(|hash| GovernanceAccountIdentifier { hash }),
+        }
     }
 }

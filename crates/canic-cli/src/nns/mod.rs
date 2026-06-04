@@ -20,6 +20,11 @@ use canic_host::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
+    nns_node_provider::{
+        DEFAULT_NNS_GOVERNANCE_SOURCE_ENDPOINT, NnsNodeProviderHostError,
+        NnsNodeProviderListRequest, build_nns_node_provider_list_report,
+        nns_node_provider_list_report_text,
+    },
     release_set::icp_root,
     subnet_catalog::{
         DEFAULT_REFRESH_LOCK_STALE_SECONDS, DEFAULT_STALE_AFTER_SECONDS,
@@ -74,6 +79,10 @@ Examples:
   canic nns subnet refresh
   canic --network ic nns subnet refresh --format json
   canic nns subnet refresh --dry-run --output .canic/subnet-catalog/ic/catalog.preview.json";
+const NODE_PROVIDER_LIST_HELP_AFTER: &str = "\
+Examples:
+  canic nns node-provider list
+  canic --network ic nns node-provider list --format json";
 
 ///
 /// NnsCommandError
@@ -84,7 +93,10 @@ pub enum NnsCommandError {
     Usage(String),
 
     #[error(transparent)]
-    Host(#[from] SubnetCatalogHostError),
+    SubnetHost(#[from] SubnetCatalogHostError),
+
+    #[error(transparent)]
+    NodeProviderHost(#[from] NnsNodeProviderHostError),
 
     #[error(
         "deployment target {input} did not resolve to exactly one canister principal for network {network}: {reason}"
@@ -153,6 +165,16 @@ struct CatalogRefreshOptions {
     output_path: Option<PathBuf>,
 }
 
+///
+/// NodeProviderListOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NodeProviderListOptions {
+    network: String,
+    format: OutputFormat,
+    source_endpoint: String,
+}
+
 pub fn run<I>(args: I) -> Result<(), NnsCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -169,6 +191,7 @@ where
 
     match command.as_str() {
         "subnet" => run_subnet(args),
+        "node-provider" => run_node_provider(args),
         _ => unreachable!("nns dispatch command only defines known commands"),
     }
 }
@@ -193,6 +216,44 @@ where
         "refresh" => run_catalog_refresh(args),
         _ => unreachable!("nns subnet dispatch command only defines known commands"),
     }
+}
+
+fn run_node_provider<I>(args: I) -> Result<(), NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, node_provider_usage, version_text()) {
+        return Ok(());
+    }
+    let Some((command, args)) = parse_subcommand(node_provider_command(), args)
+        .map_err(|_| NnsCommandError::Usage(node_provider_usage()))?
+    else {
+        return Err(NnsCommandError::Usage(node_provider_usage()));
+    };
+
+    match command.as_str() {
+        "list" => run_node_provider_list(args),
+        _ => unreachable!("nns node-provider dispatch command only defines known commands"),
+    }
+}
+
+fn run_node_provider_list<I>(args: I) -> Result<(), NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, node_provider_list_usage, version_text()) {
+        return Ok(());
+    }
+    let options = NodeProviderListOptions::parse(args)?;
+    let request = NnsNodeProviderListRequest {
+        network: options.network,
+        source_endpoint: options.source_endpoint,
+        now_unix_secs: now_unix_secs()?,
+    };
+    let report = build_nns_node_provider_list_report(&request)?;
+    write_text_or_json(options.format, &report, nns_node_provider_list_report_text)
 }
 
 fn run_catalog_list<I>(args: I) -> Result<(), NnsCommandError>
@@ -362,6 +423,23 @@ impl CatalogRefreshOptions {
                 .unwrap_or(DEFAULT_REFRESH_LOCK_STALE_SECONDS),
             dry_run: matches.get_flag("dry-run"),
             output_path: path_option(&matches, "output"),
+        })
+    }
+}
+
+impl NodeProviderListOptions {
+    fn parse<I>(args: I) -> Result<Self, NnsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(node_provider_list_command(), args)
+            .map_err(|_| NnsCommandError::Usage(node_provider_list_usage()))?;
+        Ok(Self {
+            network: string_option(&matches, "network")
+                .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
+            format: typed_option(&matches, "format").unwrap_or(OutputFormat::Text),
+            source_endpoint: string_option(&matches, "source-endpoint")
+                .unwrap_or_else(|| DEFAULT_NNS_GOVERNANCE_SOURCE_ENDPOINT.to_string()),
         })
     }
 }
@@ -540,10 +618,13 @@ fn now_unix_secs() -> Result<u64, NnsCommandError> {
 fn nns_command() -> ClapCommand {
     ClapCommand::new("nns")
         .bin_name("canic nns")
-        .about("Inspect cached NNS registry data")
+        .about("Inspect NNS metadata")
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("subnet").about("Inspect and refresh NNS subnet metadata"),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("node-provider").about("Inspect NNS node-provider metadata"),
         ))
 }
 
@@ -561,6 +642,38 @@ fn subnet_command() -> ClapCommand {
         .subcommand(passthrough_subcommand(
             ClapCommand::new("refresh").about("Force-refresh and cache NNS subnet metadata"),
         ))
+}
+
+fn node_provider_command() -> ClapCommand {
+    ClapCommand::new("node-provider")
+        .bin_name("canic nns node-provider")
+        .about("Inspect NNS node-provider metadata")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("list").about("List mainnet NNS node providers"),
+        ))
+}
+
+fn node_provider_list_command() -> ClapCommand {
+    ClapCommand::new("list")
+        .bin_name("canic nns node-provider list")
+        .about("List mainnet NNS node providers")
+        .disable_help_flag(true)
+        .arg(
+            value_arg("format")
+                .long("format")
+                .value_name("text|json")
+                .value_parser(clap::builder::ValueParser::new(parse_format))
+                .help("Output format; defaults to text"),
+        )
+        .arg(
+            value_arg("source-endpoint")
+                .long("source-endpoint")
+                .value_name("url")
+                .help("IC API endpoint used for the NNS governance query"),
+        )
+        .arg(internal_network_arg())
+        .after_help(NODE_PROVIDER_LIST_HELP_AFTER)
 }
 
 fn list_command() -> ClapCommand {
@@ -704,6 +817,14 @@ fn usage() -> String {
 
 fn subnet_usage() -> String {
     render_help(subnet_command())
+}
+
+fn node_provider_usage() -> String {
+    render_help(node_provider_command())
+}
+
+fn node_provider_list_usage() -> String {
+    render_help(node_provider_list_command())
 }
 
 fn list_usage() -> String {

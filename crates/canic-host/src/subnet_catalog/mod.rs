@@ -1185,7 +1185,7 @@ fn parse_utc_timestamp_secs(value: &str) -> Option<u64> {
     u64::try_from(seconds).ok()
 }
 
-fn format_utc_timestamp_secs(value: u64) -> String {
+pub(crate) fn format_utc_timestamp_secs(value: u64) -> String {
     let days = i64::try_from(value / 86_400).unwrap_or(i64::MAX);
     let seconds_of_day = value % 86_400;
     let (year, month, day) = civil_from_days(days);

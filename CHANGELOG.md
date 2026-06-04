@@ -16,6 +16,16 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.10` adds a read-only NNS governance view for node providers:
+  `canic nns node-provider list` queries the mainnet NNS governance canister,
+  renders a narrow text table by default, and keeps reward-account detail in
+  JSON output.
+
+  ```text
+  canic nns node-provider list
+  canic nns node-provider list --format json
+  ```
+
 - `0.60.9` finishes another `canic-cli` hygiene pass by centralizing Clap help
   rendering, required argument extraction, numeric value parsers, and defaulted
   string lookup helpers without changing commands, flags, help text, JSON

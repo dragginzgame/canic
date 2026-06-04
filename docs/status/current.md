@@ -9,6 +9,18 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.60.10` adds the first non-subnet NNS inspection view:
+  ```text
+  canic nns node-provider list
+  canic nns node-provider list --format json
+  ```
+  The command queries the mainnet NNS governance canister
+  `rrkah-fqaaa-aaaaa-aaaaq-cai` with the Candid `list_node_providers` query,
+  keeps the live call inside `canic-ic-registry`, shapes report/text output in
+  `canic-host`, and exposes the surface through `canic-cli`. Text output is a
+  narrow provider-principal table; JSON includes optional reward-account hex.
+  The command is mainnet-only in 0.60 and rejects non-`ic` networks like the
+  existing NNS subnet commands.
 - `0.60.6` moves the public NNS subnet inspection surface from
   `canic subnet catalog ...` to `canic nns subnet ...`, records packaged
   downstream CLI proof for the current 0.60 subnet catalog line, and simplifies
