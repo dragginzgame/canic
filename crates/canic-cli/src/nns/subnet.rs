@@ -13,6 +13,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    duration::parse_duration_seconds,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
@@ -23,10 +24,9 @@ use canic_host::{
         DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, ResolvedDeploymentTarget,
         SubnetCatalogCacheRequest, SubnetCatalogFilters, SubnetCatalogHostError,
         SubnetCatalogInfoRequest, SubnetCatalogListRequest, SubnetCatalogRefreshRequest,
-        build_subnet_catalog_info_report, build_subnet_catalog_list_report,
-        parse_stale_after_duration, refresh_subnet_catalog, subnet_catalog_info_report_text,
-        subnet_catalog_list_report_text, subnet_catalog_list_report_verbose_text,
-        subnet_catalog_refresh_report_text,
+        build_subnet_catalog_info_report, build_subnet_catalog_list_report, refresh_subnet_catalog,
+        subnet_catalog_info_report_text, subnet_catalog_list_report_text,
+        subnet_catalog_list_report_verbose_text, subnet_catalog_refresh_report_text,
     },
 };
 use canic_subnet_catalog::{
@@ -426,7 +426,7 @@ fn parse_resolve_as(value: &str) -> Result<ResolveAs, String> {
 }
 
 fn parse_refresh_lock_stale_after(value: &str) -> Result<u64, String> {
-    parse_stale_after_duration(value).map_err(|err| err.to_string())
+    parse_duration_seconds(value).map_err(|err| err.to_string())
 }
 
 fn cache_request(icp_root: &Path, network: &str) -> SubnetCatalogCacheRequest {

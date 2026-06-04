@@ -6,6 +6,7 @@ use self::{guard::ReplayPending, slot as replay_slot};
 
 pub mod guard;
 pub mod key;
+pub mod model;
 pub mod slot;
 pub mod ttl;
 
@@ -213,7 +214,7 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        ops::storage::replay::{ReplayService, RootReplayOps},
+        ops::{replay::model::OperationId, storage::replay::RootReplayOps},
     };
 
     fn p(id: u8) -> Principal {
@@ -223,13 +224,7 @@ mod tests {
     fn pending(caller: Principal, request_id: [u8; 32]) -> ReplayPending {
         ReplayPending {
             caller,
-            slot_key: RootReplayOps::slot_key(
-                caller,
-                p(9),
-                ReplayService::Root,
-                &request_id,
-                [0u8; 16],
-            ),
+            slot_key: key::root_slot_key(caller, p(9), OperationId::from_bytes(request_id)),
             payload_hash: [7u8; 32],
             issued_at: 1_000,
             expires_at: 1_300,

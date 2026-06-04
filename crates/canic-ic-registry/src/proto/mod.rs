@@ -149,6 +149,30 @@ pub struct SubnetRecord {
 }
 
 ///
+/// NodeRecord
+///
+#[derive(Clone, Eq, prost::Message, PartialEq)]
+pub struct NodeRecord {
+    #[prost(bytes = "vec", tag = "15")]
+    pub node_operator_id: Vec<u8>,
+}
+
+///
+/// NodeOperatorRecord
+///
+#[derive(Clone, Eq, prost::Message, PartialEq)]
+pub struct NodeOperatorRecord {
+    #[prost(bytes = "vec", tag = "1")]
+    pub node_operator_principal_id: Vec<u8>,
+    #[prost(uint64, tag = "2")]
+    pub node_allowance: u64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub node_provider_principal_id: Vec<u8>,
+    #[prost(string, tag = "4")]
+    pub dc_id: String,
+}
+
+///
 /// SubnetType
 ///
 #[derive(Clone, Copy, Debug, prost::Enumeration, Eq, PartialEq)]

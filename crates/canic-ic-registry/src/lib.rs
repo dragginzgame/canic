@@ -8,16 +8,18 @@ use canic_subnet_catalog::{
     MAINNET_REGISTRY_CANISTER_ID, RoutingRange, SubnetCatalog, SubnetInfo, SubnetKind,
     SubnetSpecialization,
 };
+use futures::{StreamExt, TryStreamExt, stream};
 use ic_agent::Agent;
 use prost::Message;
 use proto::{
-    CanisterId, LargeValueChunkKeys, RegistryErrorCode, RegistryGetLatestVersionResponse,
-    RegistryGetValueRequest, RegistryGetValueResponse, RoutingTable, SubnetId, SubnetListRecord,
-    SubnetRecord, SubnetType, UInt64Value, registry_get_value_response,
+    CanisterId, LargeValueChunkKeys, NodeOperatorRecord, NodeRecord, RegistryErrorCode,
+    RegistryGetLatestVersionResponse, RegistryGetValueRequest, RegistryGetValueResponse,
+    RoutingTable, SubnetId, SubnetListRecord, SubnetRecord, SubnetType, UInt64Value,
+    registry_get_value_response,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
 pub const DEFAULT_MAINNET_ENDPOINT: &str = "https://icp-api.io";
@@ -26,6 +28,9 @@ pub const MAINNET_GOVERNANCE_CANISTER_ID: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
 const SUBNET_LIST_KEY: &str = "subnet_list";
 const ROUTING_TABLE_KEY: &str = "routing_table";
 const SUBNET_RECORD_KEY_PREFIX: &str = "subnet_record_";
+const NODE_RECORD_KEY_PREFIX: &str = "node_record_";
+const NODE_OPERATOR_RECORD_KEY_PREFIX: &str = "node_operator_record_";
+const NODE_PROVIDER_ENRICHMENT_CONCURRENCY: usize = 32;
 const FIDUCIARY_SUBNET: &str = "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae";
 const EUROPEAN_SUBNET: &str = "bkfrj-6k62g-dycql-7h53p-atvkj-zg4to-gaogh-netha-ptybj-ntsgw-rqe";
 
@@ -57,6 +62,8 @@ impl MainnetRegistryFetchRequest {
 pub struct MainnetNodeProviderList {
     pub network: String,
     pub governance_canister_id: String,
+    pub registry_canister_id: String,
+    pub registry_version: u64,
     pub fetched_at: String,
     pub fetched_by: String,
     pub source_endpoint: String,
@@ -69,6 +76,7 @@ pub struct MainnetNodeProviderList {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct MainnetNodeProvider {
     pub principal: String,
+    pub node_count: Option<u32>,
     pub reward_account_hex: Option<String>,
 }
 
@@ -301,7 +309,16 @@ pub async fn fetch_mainnet_node_provider_list_async(
             reason: err.to_string(),
         }
     })?;
-    node_provider_list_from_response(request, response)
+    let registry_canister = Principal::from_text(MAINNET_REGISTRY_CANISTER_ID).map_err(|err| {
+        RegistryFetchError::InvalidPrincipal {
+            field: "registry_canister_id",
+            reason: err.to_string(),
+        }
+    })?;
+    let registry_version = get_latest_version(&agent, &registry_canister).await?;
+    let node_counts =
+        fetch_node_provider_node_counts(&agent, &registry_canister, registry_version).await?;
+    node_provider_list_from_response(request, response, node_counts, registry_version)
 }
 
 async fn catalog_from_registry_records(
@@ -359,16 +376,20 @@ async fn catalog_from_registry_records(
 fn node_provider_list_from_response(
     request: &MainnetRegistryFetchRequest,
     response: ListNodeProvidersResponse,
+    node_counts: BTreeMap<String, u32>,
+    registry_version: u64,
 ) -> Result<MainnetNodeProviderList, RegistryFetchError> {
     let mut node_providers = response
         .node_providers
         .into_iter()
-        .map(node_provider_from_governance)
+        .map(|node_provider| node_provider_from_governance(node_provider, &node_counts))
         .collect::<Result<Vec<_>, _>>()?;
     node_providers.sort_by(|left, right| left.principal.cmp(&right.principal));
     Ok(MainnetNodeProviderList {
         network: MAINNET_NETWORK.to_string(),
         governance_canister_id: MAINNET_GOVERNANCE_CANISTER_ID.to_string(),
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version,
         fetched_at: request.fetched_at.clone(),
         fetched_by: request.fetched_by.clone(),
         source_endpoint: request.endpoint.clone(),
@@ -378,6 +399,7 @@ fn node_provider_list_from_response(
 
 fn node_provider_from_governance(
     node_provider: GovernanceNodeProvider,
+    node_counts: &BTreeMap<String, u32>,
 ) -> Result<MainnetNodeProvider, RegistryFetchError> {
     let principal = node_provider
         .id
@@ -388,10 +410,76 @@ fn node_provider_from_governance(
     let reward_account_hex = node_provider
         .reward_account
         .map(|account| hex_bytes(&account.hash));
+    let node_count = Some(node_counts.get(&principal).copied().unwrap_or(0));
     Ok(MainnetNodeProvider {
         principal,
+        node_count,
         reward_account_hex,
     })
+}
+
+async fn fetch_node_provider_node_counts(
+    agent: &Agent,
+    registry_canister: &Principal,
+    registry_version: u64,
+) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
+    let subnet_list_bytes =
+        get_registry_value(agent, registry_canister, SUBNET_LIST_KEY, registry_version).await?;
+    let subnet_list = decode_message::<SubnetListRecord>("SubnetListRecord", &subnet_list_bytes)?;
+    if subnet_list.subnets.is_empty() {
+        return Err(RegistryFetchError::EmptySubnetList);
+    }
+
+    let subnet_principals = subnet_list
+        .subnets
+        .iter()
+        .map(|subnet_raw| principal_text_from_raw(subnet_raw, "subnet_list.subnets"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let subnet_records = stream::iter(subnet_principals)
+        .map(|subnet_principal| async move {
+            let key = subnet_record_key(&subnet_principal);
+            let record_bytes =
+                get_registry_value(agent, registry_canister, &key, registry_version).await?;
+            decode_message::<SubnetRecord>("SubnetRecord", &record_bytes)
+        })
+        .buffer_unordered(NODE_PROVIDER_ENRICHMENT_CONCURRENCY)
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let node_principals = assigned_node_principals_from_subnets(&subnet_records)?;
+    let node_records = stream::iter(node_principals.iter().cloned())
+        .map(|node_principal| async move {
+            let key = node_record_key(&node_principal);
+            let record_bytes =
+                get_registry_value(agent, registry_canister, &key, registry_version).await?;
+            let record = decode_message::<NodeRecord>("NodeRecord", &record_bytes)?;
+            Ok::<_, RegistryFetchError>((node_principal, record))
+        })
+        .buffer_unordered(NODE_PROVIDER_ENRICHMENT_CONCURRENCY)
+        .try_collect::<BTreeMap<_, _>>()
+        .await?;
+
+    let mut node_operator_principals = BTreeSet::new();
+    for record in node_records.values() {
+        node_operator_principals.insert(principal_text_from_required_raw(
+            &record.node_operator_id,
+            "node_record.node_operator_id",
+        )?);
+    }
+
+    let node_operator_records = stream::iter(node_operator_principals)
+        .map(|node_operator_principal| async move {
+            let key = node_operator_record_key(&node_operator_principal);
+            let record_bytes =
+                get_registry_value(agent, registry_canister, &key, registry_version).await?;
+            let record = decode_message::<NodeOperatorRecord>("NodeOperatorRecord", &record_bytes)?;
+            Ok::<_, RegistryFetchError>((node_operator_principal, record))
+        })
+        .buffer_unordered(NODE_PROVIDER_ENRICHMENT_CONCURRENCY)
+        .try_collect::<BTreeMap<_, _>>()
+        .await?;
+
+    node_provider_counts_from_records(&node_principals, &node_records, &node_operator_records)
 }
 
 async fn get_latest_version(
@@ -650,8 +738,70 @@ fn principal_text_from_raw(raw: &[u8], field: &'static str) -> Result<String, Re
         })
 }
 
+fn principal_text_from_required_raw(
+    raw: &[u8],
+    field: &'static str,
+) -> Result<String, RegistryFetchError> {
+    if raw.is_empty() {
+        return Err(RegistryFetchError::MissingField { field });
+    }
+    principal_text_from_raw(raw, field)
+}
+
 fn subnet_record_key(subnet_principal: &str) -> String {
     format!("{SUBNET_RECORD_KEY_PREFIX}{subnet_principal}")
+}
+
+fn node_record_key(node_principal: &str) -> String {
+    format!("{NODE_RECORD_KEY_PREFIX}{node_principal}")
+}
+
+fn node_operator_record_key(node_operator_principal: &str) -> String {
+    format!("{NODE_OPERATOR_RECORD_KEY_PREFIX}{node_operator_principal}")
+}
+
+fn assigned_node_principals_from_subnets(
+    subnet_records: &[SubnetRecord],
+) -> Result<BTreeSet<String>, RegistryFetchError> {
+    let mut node_principals = BTreeSet::new();
+    for record in subnet_records {
+        for raw in &record.membership {
+            node_principals.insert(principal_text_from_raw(raw, "subnet_record.membership")?);
+        }
+    }
+    Ok(node_principals)
+}
+
+fn node_provider_counts_from_records(
+    node_principals: &BTreeSet<String>,
+    node_records: &BTreeMap<String, NodeRecord>,
+    node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
+) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
+    let mut counts = BTreeMap::<String, u32>::new();
+    for node_principal in node_principals {
+        let node_record =
+            node_records
+                .get(node_principal)
+                .ok_or(RegistryFetchError::MissingField {
+                    field: "node_record",
+                })?;
+        let node_operator_principal = principal_text_from_required_raw(
+            &node_record.node_operator_id,
+            "node_record.node_operator_id",
+        )?;
+        let node_operator_record = node_operator_records.get(&node_operator_principal).ok_or(
+            RegistryFetchError::MissingField {
+                field: "node_operator_record",
+            },
+        )?;
+        let node_provider_principal = principal_text_from_required_raw(
+            &node_operator_record.node_provider_principal_id,
+            "node_operator_record.node_provider_principal_id",
+        )?;
+        let count = counts.entry(node_provider_principal).or_default();
+        *count = count.saturating_add(1);
+    }
+    Ok(counts)
 }
 
 fn apply_mainnet_annotations(catalog: &mut SubnetCatalog) {
@@ -805,6 +955,7 @@ mod tests {
             fetched_at: "2026-06-04T00:00:00Z".to_string(),
             fetched_by: "test".to_string(),
         };
+        let node_counts = BTreeMap::from([("aaaaa-aa".to_string(), 2)]);
         let response = ListNodeProvidersResponse {
             node_providers: vec![
                 governance_node_provider("ryjl3-tyaaa-aaaaa-aaaba-cai", None),
@@ -812,12 +963,16 @@ mod tests {
             ],
         };
 
-        let list = node_provider_list_from_response(&request, response).expect("node providers");
+        let list = node_provider_list_from_response(&request, response, node_counts, 42)
+            .expect("node providers");
 
         assert_eq!(list.network, MAINNET_NETWORK);
         assert_eq!(list.governance_canister_id, MAINNET_GOVERNANCE_CANISTER_ID);
+        assert_eq!(list.registry_canister_id, MAINNET_REGISTRY_CANISTER_ID);
+        assert_eq!(list.registry_version, 42);
         assert_eq!(list.node_providers.len(), 2);
         assert_eq!(list.node_providers[0].principal, "aaaaa-aa");
+        assert_eq!(list.node_providers[0].node_count, Some(2));
         assert_eq!(
             list.node_providers[0].reward_account_hex.as_deref(),
             Some("abcd")
@@ -826,15 +981,60 @@ mod tests {
             list.node_providers[1].principal,
             "ryjl3-tyaaa-aaaaa-aaaba-cai"
         );
+        assert_eq!(list.node_providers[1].node_count, Some(0));
         assert_eq!(list.node_providers[1].reward_account_hex, None);
     }
 
     #[test]
+    fn node_provider_counts_follow_subnet_nodes_to_providers() {
+        let provider_a = Principal::self_authenticating(b"provider-a").to_text();
+        let provider_b = Principal::self_authenticating(b"provider-b").to_text();
+        let operator_a = Principal::self_authenticating(b"operator-a").to_text();
+        let operator_b = Principal::self_authenticating(b"operator-b").to_text();
+        let node_a = Principal::self_authenticating(b"node-a").to_text();
+        let node_b = Principal::self_authenticating(b"node-b").to_text();
+        let node_c = Principal::self_authenticating(b"node-c").to_text();
+        let subnet_records = vec![SubnetRecord {
+            membership: vec![
+                principal_raw(&node_a),
+                principal_raw(&node_b),
+                principal_raw(&node_c),
+            ],
+            subnet_type: SubnetType::Application as i32,
+            canister_cycles_cost_schedule: 0,
+        }];
+        let node_principals =
+            assigned_node_principals_from_subnets(&subnet_records).expect("node principals");
+        let node_records = BTreeMap::from([
+            (node_a, node_record(&operator_a)),
+            (node_b, node_record(&operator_a)),
+            (node_c, node_record(&operator_b)),
+        ]);
+        let node_operator_records = BTreeMap::from([
+            (operator_a, node_operator_record(&provider_a)),
+            (operator_b, node_operator_record(&provider_b)),
+        ]);
+
+        let counts = node_provider_counts_from_records(
+            &node_principals,
+            &node_records,
+            &node_operator_records,
+        )
+        .expect("provider counts");
+
+        assert_eq!(counts.get(&provider_a), Some(&2));
+        assert_eq!(counts.get(&provider_b), Some(&1));
+    }
+
+    #[test]
     fn governance_node_provider_requires_principal() {
-        let err = node_provider_from_governance(GovernanceNodeProvider {
-            id: None,
-            reward_account: None,
-        })
+        let err = node_provider_from_governance(
+            GovernanceNodeProvider {
+                id: None,
+                reward_account: None,
+            },
+            &BTreeMap::new(),
+        )
         .expect_err("missing principal");
 
         assert!(matches!(
@@ -1008,6 +1208,21 @@ mod tests {
         GovernanceNodeProvider {
             id: Some(Principal::from_text(principal).expect("principal")),
             reward_account: reward_account_hash.map(|hash| GovernanceAccountIdentifier { hash }),
+        }
+    }
+
+    fn node_record(node_operator: &str) -> NodeRecord {
+        NodeRecord {
+            node_operator_id: principal_raw(node_operator),
+        }
+    }
+
+    fn node_operator_record(node_provider: &str) -> NodeOperatorRecord {
+        NodeOperatorRecord {
+            node_operator_principal_id: Vec::new(),
+            node_allowance: 0,
+            node_provider_principal_id: principal_raw(node_provider),
+            dc_id: "dc1".to_string(),
         }
     }
 }

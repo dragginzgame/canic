@@ -16,6 +16,7 @@ publish = true
 [dependencies]
 candid = { workspace = true }
 canic-subnet-catalog = { workspace = true }
+futures = { workspace = true }
 ic-agent = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }

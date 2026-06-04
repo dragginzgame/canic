@@ -1,4 +1,11 @@
-use crate::table::{ColumnAlign, render_table};
+use crate::{
+    cache_file::{
+        CacheFileError, RefreshLockRequest, acquire_refresh_lock, create_directory,
+        write_text_atomically, write_text_output,
+    },
+    duration::parse_duration_seconds,
+    table::{ColumnAlign, render_table},
+};
 use canic_ic_registry::{
     DEFAULT_MAINNET_ENDPOINT, MainnetRegistryFetchRequest, RegistryFetchError,
     fetch_mainnet_subnet_catalog,
@@ -11,7 +18,6 @@ use canic_subnet_catalog::{
 use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
-    io::Write,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -359,19 +365,15 @@ fn refresh_subnet_catalog_with_source(
         .parent()
         .expect("subnet catalog path always has parent")
         .to_path_buf();
-    fs::create_dir_all(&catalog_dir).map_err(|source| {
-        SubnetCatalogHostError::CreateCatalogDirectory {
-            path: catalog_dir.clone(),
-            source,
-        }
-    })?;
-    let lock = acquire_refresh_lock(
-        &lock_path,
-        &catalog_path,
-        &request.cache.network,
-        request.now_unix_secs,
-        request.lock_stale_after_seconds,
-    )?;
+    create_directory(&catalog_dir).map_err(subnet_cache_error)?;
+    let lock = acquire_refresh_lock(RefreshLockRequest {
+        lock_path: &lock_path,
+        target_path: &catalog_path,
+        network: &request.cache.network,
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+    })
+    .map_err(subnet_cache_error)?;
     let replaced_existing_catalog = catalog_path.is_file();
     let fetched_at = format_utc_timestamp_secs(request.now_unix_secs);
     let mut fetch_request = MainnetRegistryFetchRequest::new(fetched_at);
@@ -386,12 +388,12 @@ fn refresh_subnet_catalog_with_source(
     catalog.validate()?;
     let catalog_json = catalog_to_pretty_json(&catalog)?;
     if let Some(output_path) = &request.output_path {
-        write_refresh_output(output_path, &catalog_json)?;
+        write_text_output(output_path, &catalog_json).map_err(subnet_cache_error)?;
     }
     if !request.dry_run {
-        write_catalog_atomically(&catalog_path, &catalog_json)?;
+        write_text_atomically(&catalog_path, &catalog_json).map_err(subnet_cache_error)?;
     }
-    lock.release()?;
+    lock.release().map_err(subnet_cache_error)?;
     Ok(SubnetCatalogRefreshReport {
         schema_version: SUBNET_CATALOG_REFRESH_REPORT_SCHEMA_VERSION,
         network: catalog.network,
@@ -545,23 +547,63 @@ pub fn catalog_stale_status(
 }
 
 pub fn parse_stale_after_duration(value: &str) -> Result<u64, SubnetCatalogHostError> {
-    let (number, multiplier) = match value.as_bytes().last().copied() {
-        Some(b's') => (&value[..value.len() - 1], 1),
-        Some(b'm') => (&value[..value.len() - 1], 60),
-        Some(b'h') => (&value[..value.len() - 1], 60 * 60),
-        Some(b'd') => (&value[..value.len() - 1], 24 * 60 * 60),
-        Some(b'0'..=b'9') => (value, 1),
-        _ => return invalid_stale_duration(value),
-    };
-    let seconds = number
-        .parse::<u64>()
-        .ok()
-        .and_then(|amount| amount.checked_mul(multiplier))
-        .filter(|seconds| *seconds > 0)
-        .ok_or_else(|| SubnetCatalogHostError::InvalidStaleDuration {
-            value: value.to_string(),
-        })?;
-    Ok(seconds)
+    parse_duration_seconds(value).map_err(|_| SubnetCatalogHostError::InvalidStaleDuration {
+        value: value.to_string(),
+    })
+}
+
+fn subnet_cache_error(err: CacheFileError) -> SubnetCatalogHostError {
+    match err {
+        CacheFileError::CreateDirectory { path, source } => {
+            SubnetCatalogHostError::CreateCatalogDirectory { path, source }
+        }
+        CacheFileError::CreateRefreshLock { path, source } => {
+            SubnetCatalogHostError::CreateRefreshLock { path, source }
+        }
+        CacheFileError::ReadRefreshLock { path, source } => {
+            SubnetCatalogHostError::ReadRefreshLock { path, source }
+        }
+        CacheFileError::ParseRefreshLock { path, source } => {
+            SubnetCatalogHostError::ParseRefreshLock { path, source }
+        }
+        CacheFileError::WriteRefreshLock { path, source } => {
+            SubnetCatalogHostError::WriteRefreshLock { path, source }
+        }
+        CacheFileError::RemoveRefreshLock { path, source } => {
+            SubnetCatalogHostError::RemoveRefreshLock { path, source }
+        }
+        CacheFileError::RefreshAlreadyInProgress {
+            path,
+            started_at_unix_ms,
+        } => SubnetCatalogHostError::RefreshAlreadyInProgress {
+            path,
+            started_at_unix_ms,
+        },
+        CacheFileError::WriteTemp { path, source } => {
+            SubnetCatalogHostError::WriteCatalogTemp { path, source }
+        }
+        CacheFileError::SyncTemp { path, source } => {
+            SubnetCatalogHostError::SyncCatalogTemp { path, source }
+        }
+        CacheFileError::Replace {
+            temp_path,
+            target_path,
+            source,
+        } => SubnetCatalogHostError::ReplaceCatalog {
+            temp_path,
+            catalog_path: target_path,
+            source,
+        },
+        CacheFileError::SyncDirectory { path, source } => {
+            SubnetCatalogHostError::SyncCatalogDirectory { path, source }
+        }
+        CacheFileError::WriteOutput { path, source } => {
+            SubnetCatalogHostError::WriteRefreshOutput { path, source }
+        }
+        CacheFileError::SyncOutput { path, source } => {
+            SubnetCatalogHostError::SyncRefreshOutput { path, source }
+        }
+    }
 }
 
 #[must_use]
@@ -809,224 +851,6 @@ impl SubnetCatalogRefreshSource for LiveNnsRegistryRefreshSource {
     }
 }
 
-///
-/// RefreshLockFile
-///
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct RefreshLockFile {
-    schema_version: u32,
-    network: String,
-    pid: u32,
-    started_at_unix_ms: u64,
-    catalog_path: String,
-}
-
-///
-/// RefreshLockGuard
-///
-#[derive(Debug)]
-struct RefreshLockGuard {
-    path: PathBuf,
-    active: bool,
-}
-
-impl RefreshLockGuard {
-    fn release(mut self) -> Result<(), SubnetCatalogHostError> {
-        fs::remove_file(&self.path).map_err(|source| {
-            SubnetCatalogHostError::RemoveRefreshLock {
-                path: self.path.clone(),
-                source,
-            }
-        })?;
-        self.active = false;
-        Ok(())
-    }
-}
-
-impl Drop for RefreshLockGuard {
-    fn drop(&mut self) {
-        if self.active {
-            let _ = fs::remove_file(&self.path);
-        }
-    }
-}
-
-fn acquire_refresh_lock(
-    lock_path: &Path,
-    catalog_path: &Path,
-    network: &str,
-    now_unix_secs: u64,
-    lock_stale_after_seconds: u64,
-) -> Result<RefreshLockGuard, SubnetCatalogHostError> {
-    let now_unix_ms = now_unix_secs.saturating_mul(1_000);
-    for attempt in 0..2 {
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(lock_path)
-        {
-            Ok(mut file) => {
-                let lock = RefreshLockFile {
-                    schema_version: 1,
-                    network: network.to_string(),
-                    pid: std::process::id(),
-                    started_at_unix_ms: now_unix_ms,
-                    catalog_path: catalog_path.display().to_string(),
-                };
-                let data = serde_json::to_vec_pretty(&lock).map_err(|source| {
-                    SubnetCatalogHostError::ParseRefreshLock {
-                        path: lock_path.to_path_buf(),
-                        source,
-                    }
-                })?;
-                file.write_all(&data).map_err(|source| {
-                    SubnetCatalogHostError::WriteRefreshLock {
-                        path: lock_path.to_path_buf(),
-                        source,
-                    }
-                })?;
-                file.sync_all()
-                    .map_err(|source| SubnetCatalogHostError::WriteRefreshLock {
-                        path: lock_path.to_path_buf(),
-                        source,
-                    })?;
-                return Ok(RefreshLockGuard {
-                    path: lock_path.to_path_buf(),
-                    active: true,
-                });
-            }
-            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
-                let existing = read_refresh_lock(lock_path)?;
-                if lock_is_stale(
-                    existing.started_at_unix_ms,
-                    now_unix_ms,
-                    lock_stale_after_seconds,
-                ) && attempt == 0
-                {
-                    fs::remove_file(lock_path).map_err(|source| {
-                        SubnetCatalogHostError::RemoveRefreshLock {
-                            path: lock_path.to_path_buf(),
-                            source,
-                        }
-                    })?;
-                    continue;
-                }
-                return Err(SubnetCatalogHostError::RefreshAlreadyInProgress {
-                    path: lock_path.to_path_buf(),
-                    started_at_unix_ms: existing.started_at_unix_ms,
-                });
-            }
-            Err(source) => {
-                return Err(SubnetCatalogHostError::CreateRefreshLock {
-                    path: lock_path.to_path_buf(),
-                    source,
-                });
-            }
-        }
-    }
-    Err(SubnetCatalogHostError::CreateRefreshLock {
-        path: lock_path.to_path_buf(),
-        source: io::Error::new(io::ErrorKind::AlreadyExists, "refresh lock retry exhausted"),
-    })
-}
-
-fn read_refresh_lock(lock_path: &Path) -> Result<RefreshLockFile, SubnetCatalogHostError> {
-    let data = fs::read(lock_path).map_err(|source| SubnetCatalogHostError::ReadRefreshLock {
-        path: lock_path.to_path_buf(),
-        source,
-    })?;
-    serde_json::from_slice(&data).map_err(|source| SubnetCatalogHostError::ParseRefreshLock {
-        path: lock_path.to_path_buf(),
-        source,
-    })
-}
-
-fn lock_is_stale(started_at_unix_ms: u64, now_unix_ms: u64, stale_after_seconds: u64) -> bool {
-    now_unix_ms
-        .saturating_sub(started_at_unix_ms)
-        .gt(&stale_after_seconds.saturating_mul(1_000))
-}
-
-fn write_catalog_atomically(
-    catalog_path: &Path,
-    catalog_json: &str,
-) -> Result<(), SubnetCatalogHostError> {
-    let catalog_dir = catalog_path
-        .parent()
-        .expect("subnet catalog path always has parent");
-    let temp_path = catalog_dir.join(format!("catalog.json.tmp.{}", std::process::id()));
-    {
-        let mut temp = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-            .map_err(|source| SubnetCatalogHostError::WriteCatalogTemp {
-                path: temp_path.clone(),
-                source,
-            })?;
-        temp.write_all(catalog_json.as_bytes()).map_err(|source| {
-            SubnetCatalogHostError::WriteCatalogTemp {
-                path: temp_path.clone(),
-                source,
-            }
-        })?;
-        temp.sync_all()
-            .map_err(|source| SubnetCatalogHostError::SyncCatalogTemp {
-                path: temp_path.clone(),
-                source,
-            })?;
-    }
-    fs::rename(&temp_path, catalog_path).map_err(|source| {
-        SubnetCatalogHostError::ReplaceCatalog {
-            temp_path: temp_path.clone(),
-            catalog_path: catalog_path.to_path_buf(),
-            source,
-        }
-    })?;
-    sync_directory(catalog_dir)
-}
-
-fn write_refresh_output(
-    output_path: &Path,
-    catalog_json: &str,
-) -> Result<(), SubnetCatalogHostError> {
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent).map_err(|source| {
-            SubnetCatalogHostError::CreateCatalogDirectory {
-                path: parent.to_path_buf(),
-                source,
-            }
-        })?;
-    }
-    let mut output = fs::File::create(output_path).map_err(|source| {
-        SubnetCatalogHostError::WriteRefreshOutput {
-            path: output_path.to_path_buf(),
-            source,
-        }
-    })?;
-    output
-        .write_all(catalog_json.as_bytes())
-        .map_err(|source| SubnetCatalogHostError::WriteRefreshOutput {
-            path: output_path.to_path_buf(),
-            source,
-        })?;
-    output
-        .sync_all()
-        .map_err(|source| SubnetCatalogHostError::SyncRefreshOutput {
-            path: output_path.to_path_buf(),
-            source,
-        })
-}
-
-fn sync_directory(path: &Path) -> Result<(), SubnetCatalogHostError> {
-    fs::File::open(path)
-        .and_then(|dir| dir.sync_all())
-        .map_err(|source| SubnetCatalogHostError::SyncCatalogDirectory {
-            path: path.to_path_buf(),
-            source,
-        })
-}
-
 fn subnet_matches_filters(subnet: &SubnetInfo, filters: SubnetCatalogFilters) -> bool {
     filters.kind.is_none_or(|kind| subnet.subnet_kind == kind)
         && filters
@@ -1226,12 +1050,6 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
     era.checked_mul(146_097)?
         .checked_add(day_of_era)?
         .checked_sub(719_468)
-}
-
-fn invalid_stale_duration<T>(value: &str) -> Result<T, SubnetCatalogHostError> {
-    Err(SubnetCatalogHostError::InvalidStaleDuration {
-        value: value.to_string(),
-    })
 }
 
 const fn yes_no(value: bool) -> &'static str {
@@ -1591,15 +1409,15 @@ mod tests {
         started_at_unix_ms: u64,
     ) {
         fs::create_dir_all(lock_path.parent().expect("lock parent")).expect("create parent");
-        let lock = RefreshLockFile {
-            schema_version: 1,
-            network: request.cache.network.clone(),
-            pid: 12345,
-            started_at_unix_ms,
-            catalog_path: subnet_catalog_path(&request.cache.icp_root, &request.cache.network)
+        let lock = serde_json::json!({
+            "schema_version": 1,
+            "network": request.cache.network.clone(),
+            "pid": 12345,
+            "started_at_unix_ms": started_at_unix_ms,
+            "target_path": subnet_catalog_path(&request.cache.icp_root, &request.cache.network)
                 .display()
                 .to_string(),
-        };
+        });
         fs::write(
             lock_path,
             serde_json::to_vec_pretty(&lock).expect("serialize lock"),

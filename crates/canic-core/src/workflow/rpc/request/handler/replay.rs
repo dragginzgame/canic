@@ -11,6 +11,7 @@ use crate::{
         replay::{
             self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
+            model::OperationId,
         },
         runtime::metrics::replay::{
             ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
@@ -53,7 +54,7 @@ pub(super) fn check_replay(
 
     let decision = replay::evaluate_root_replay(
         ctx,
-        replay_input.metadata.request_id,
+        OperationId::from_bytes(replay_input.metadata.request_id),
         replay_input.metadata.ttl_seconds,
         replay_input.payload_hash,
     )
@@ -380,7 +381,7 @@ pub(super) fn replay_slot_key(
     target_canister: Principal,
     request_id: [u8; 32],
 ) -> ReplaySlotKey {
-    replay_key::root_slot_key(caller, target_canister, request_id)
+    replay_key::root_slot_key(caller, target_canister, OperationId::from_bytes(request_id))
 }
 
 /// hash_domain_separated
@@ -404,14 +405,14 @@ mod replay {
     /// Call the ops replay guard with workflow root replay context.
     pub(super) fn evaluate_root_replay(
         ctx: &RootContext,
-        request_id: [u8; 32],
+        operation_id: OperationId,
         ttl_seconds: u64,
         payload_hash: [u8; 32],
     ) -> Result<ReplayDecision, ReplayGuardError> {
         crate::ops::replay::guard::evaluate_root_replay(RootReplayGuardInput {
             caller: ctx.caller,
             target_canister: ctx.self_pid,
-            request_id,
+            operation_id,
             ttl_seconds,
             payload_hash,
             now: ctx.now,

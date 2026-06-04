@@ -15,6 +15,7 @@ use crate::{
         replay::{
             self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
+            model::OperationId,
         },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
@@ -388,7 +389,7 @@ fn check_cycles_replay(
     let decision = replay_ops::guard::evaluate_root_replay(RootReplayGuardInput {
         caller: ctx.caller,
         target_canister: ctx.self_pid,
-        request_id: metadata.request_id,
+        operation_id: OperationId::from_bytes(metadata.request_id),
         ttl_seconds: metadata.ttl_seconds,
         payload_hash,
         now: ctx.now,

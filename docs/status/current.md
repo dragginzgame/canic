@@ -9,13 +9,27 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.0` has started from
-  `docs/design/0.61-replay-protection/0.61-design.md` Slice A. The current
-  branch adds `canic-core::replay_policy`, a manifest that classifies
-  Canic-emitted update endpoints by replay policy, implementation status, cost
-  class, quota policy, and cycle-reserve policy. Manifest tests compare the
-  static inventory against the facade macro files that emit Canic-owned update
-  endpoints.
+- `0.61.1` is underway from
+  `docs/design/0.61-replay-protection/0.61-design.md` Slice B. The current
+  branch adds the shared replay-core vocabulary in `ops::replay::model`:
+  32-byte `OperationId`, command kinds, replay actors, receipt/status/effect
+  types, common replay error classifications, versioned payload hashing, and
+  bounded terminal-error bytes. Existing root replay guard/key boundaries now
+  accept `OperationId` instead of raw `[u8; 32]` request IDs, while preserving
+  root replay behavior and the existing root DTO metadata shape. Validation:
+  ```text
+  cargo test -p canic-core ops::replay --lib -- --nocapture
+  cargo test -p canic-core --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+- `0.61.0` completed Slice A by adding `canic-core::replay_policy`, a manifest
+  that classifies Canic-emitted update endpoints by replay policy,
+  implementation status, cost class, quota policy, and cycle-reserve policy.
+  Manifest tests compare the static inventory against the facade macro files
+  that emit Canic-owned update endpoints.
 - The branch also hard-cuts verifier-local delegated-token update consumption:
   `access/auth/token.rs` no longer calls a consumed-use path, auth ops/storage
   no longer expose consumed-token APIs, `storage/stable/auth/token_uses.rs` is
@@ -42,26 +56,21 @@ inspect only the files needed for the current task.
   ```text
   canic nns node-provider list --verbose
   canic nns node-provider info <node-provider|prefix>
+  canic nns node-provider refresh
   ```
-  Focused host/CLI tests for that dirty NNS surface pass.
-- A separate `canic-cli` cleanup pass is also dirty. The shared Clap helper
-  `parse_required_subcommand` now centralizes required-subcommand parsing for
-  the backup, backup manifest, cycles, evidence, NNS, restore, and snapshot
-  routers. `restore plan --require-verified` now declares its conflict with
-  `--manifest` in Clap instead of post-parse validation. The NNS CLI module is
-  split into a thin namespace dispatcher plus `nns/subnet.rs` and
-  `nns/node_provider.rs`. Routers that intentionally print usage and return OK
-  when no subcommand is supplied were left unchanged. The pass also includes a
-  clippy-only nested-`if let` cleanup in the dirty NNS node-provider resolver.
-  Validation:
-  ```text
-  cargo test -p canic-cli --lib nns -- --nocapture
-  cargo test -p canic-cli --lib -- --nocapture
-  cargo clippy -p canic-cli --all-targets --all-features -- -D warnings
-  cargo test -p canic-host nns_node_provider -- --nocapture
-  cargo fmt --all -- --check
-  git diff --check
-  ```
+  Focused registry/host/CLI tests for that dirty NNS surface pass. The live
+  adapter derives assigned-node counts from mainnet subnet membership,
+  node-record, and node-operator-record registry data. `list` and `info` are
+  cache-first and auto-populate `.canic/node-provider/ic/providers.json` on a
+  first cache miss; `refresh` force-refreshes through a local lock and atomic
+  cache replacement. The data path remains IC-native through NNS governance and
+  registry canister calls. Provider names remain nullable because those native
+  records do not expose a canonical display name; text output does not render a
+  name column, and dashboard display names are intentionally not imported by
+  this surface. The cached NNS subnet and
+  node-provider surfaces now share host `cache_file` refresh-lock/atomic-write
+  helpers and the CLI refresh-lock duration parser now comes from shared host
+  `duration` support.
 - `0.60.10` adds the first non-subnet NNS inspection view:
   ```text
   canic nns node-provider list
@@ -74,10 +83,13 @@ inspect only the files needed for the current task.
   keeps the live call inside `canic-ic-registry`, shapes report/text output in
   `canic-host`, and exposes the surface through `canic-cli`. Non-verbose text
   mirrors the subnet list style with five-character provider principals plus
-  name/node-count columns; verbose text and JSON keep full principals and
-  reward-account detail. `info` resolves exact provider principals or unique
-  provider-principal prefixes. The command is mainnet-only in 0.60 and rejects
-  non-`ic` networks like the existing NNS subnet commands.
+  assigned-node counts. Verbose text and JSON keep full principals, registry
+  version, and reward-account detail; JSON keeps a nullable `name` field that
+  the native source does not populate. Node counts are assigned mainnet subnet
+  nodes derived from registry node/operator records. `info` resolves exact
+  provider principals or unique provider-principal prefixes. The command is
+  mainnet-only in 0.60 and rejects non-`ic` networks like the existing NNS
+  subnet commands.
 - `0.60.6` moves the public NNS subnet inspection surface from
   `canic subnet catalog ...` to `canic nns subnet ...`, records packaged
   downstream CLI proof for the current 0.60 subnet catalog line, and simplifies

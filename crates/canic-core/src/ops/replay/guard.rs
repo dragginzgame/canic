@@ -1,4 +1,6 @@
-use crate::{cdk::types::Principal, storage::stable::replay::ReplaySlotKey};
+use crate::{
+    cdk::types::Principal, ops::replay::model::OperationId, storage::stable::replay::ReplaySlotKey,
+};
 
 use super::{key, slot, ttl};
 
@@ -9,7 +11,7 @@ use super::{key, slot, ttl};
 pub struct RootReplayGuardInput {
     pub caller: Principal,
     pub target_canister: Principal,
-    pub request_id: [u8; 32],
+    pub operation_id: OperationId,
     pub ttl_seconds: u64,
     pub payload_hash: [u8; 32],
     pub now: u64,
@@ -77,7 +79,7 @@ pub fn evaluate_root_replay(
         },
     )?;
 
-    let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+    let slot_key = key::root_slot_key(input.caller, input.target_canister, input.operation_id);
     if let Some(existing) = slot::get_root_slot(slot_key) {
         return Ok(resolve_existing(input.now, input.payload_hash, existing));
     }
@@ -142,7 +144,7 @@ mod tests {
         RootReplayGuardInput {
             caller: p(1),
             target_canister: p(2),
-            request_id: [9u8; 32],
+            operation_id: OperationId::from_bytes([9u8; 32]),
             ttl_seconds: 60,
             payload_hash: [7u8; 32],
             now: 1_000,
@@ -164,7 +166,7 @@ mod tests {
         RootReplayOps::reset_for_tests();
 
         let input = base_input();
-        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.operation_id);
         let expected = vec![1, 2, 3];
         slot::upsert_root_slot(
             slot_key,
@@ -191,7 +193,7 @@ mod tests {
         RootReplayOps::reset_for_tests();
 
         let input = base_input();
-        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.operation_id);
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
@@ -212,7 +214,7 @@ mod tests {
         RootReplayOps::reset_for_tests();
 
         let input = base_input();
-        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.operation_id);
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
@@ -234,7 +236,7 @@ mod tests {
 
         let mut input = base_input();
         input.now = 1_500;
-        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.operation_id);
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {
@@ -256,7 +258,7 @@ mod tests {
 
         let mut input = base_input();
         input.now = 1_200;
-        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.request_id);
+        let slot_key = key::root_slot_key(input.caller, input.target_canister, input.operation_id);
         slot::upsert_root_slot(
             slot_key,
             RootReplayRecord {

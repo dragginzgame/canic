@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.1` starts the shared replay-core extraction with a 32-byte
+  `OperationId`, command-kind and replay-actor model, versioned payload-hash
+  helpers, bounded terminal-error bytes, and root replay guard/key boundaries
+  that now use the shared operation ID type. It also enriches
+  `canic nns node-provider list/info` with cache-first native NNS metadata,
+  `canic nns node-provider refresh`, mainnet registry-derived assigned-node
+  counts, and registry-version provenance.
+
 - `0.61.0` starts the replay-safety hardening branch with a replay-policy
   manifest for Canic-emitted update endpoints, a hard cut of verifier-local
   delegated-token update consumption, response-idempotent `canic_app`
@@ -29,8 +37,8 @@ Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 - `0.60.10` adds a read-only NNS governance view for node providers:
   `canic nns node-provider list` and `canic nns node-provider info` query the
   mainnet NNS governance canister, render compact five-character principals by
-  default, and keep full-principal/reward-account detail in verbose text and
-  JSON output.
+  default, include registry-derived assigned-node counts, and keep
+  full-principal/reward-account detail in verbose text and JSON output.
 
   ```text
   canic nns node-provider list
