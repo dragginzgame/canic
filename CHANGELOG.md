@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.60.md](docs/changelog/0.60.md)
 
+- `0.60.8` finishes the low-risk `canic-cli` Clap cleanup by moving evidence
+  output formats and Canic-owned cycles amount/hex/e8s values to Clap parsers,
+  removing stale manual parser error variants, and standardizing string
+  extraction through shared CLI helpers without changing commands, flags, JSON
+  output, or operational behavior.
+
 - `0.60.7` moves remaining simple `canic-cli` option validation onto Clap
   value parsers and typed match extraction, so invalid values fail at the CLI
   parse boundary without changing command names, flags, JSON shapes, NNS

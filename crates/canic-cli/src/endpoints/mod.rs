@@ -9,7 +9,7 @@ use crate::endpoints::{
     parse::parse_candid_service_endpoints,
 };
 use crate::{
-    cli::clap::{flag_arg, parse_matches, value_arg},
+    cli::clap::{flag_arg, parse_matches, string_option, value_arg},
     cli::defaults::default_icp,
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
@@ -81,10 +81,10 @@ impl EndpointsOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| EndpointsCommandError::Usage(usage()))?;
         Ok(Self {
-            fleet: string_value(&matches, "fleet").expect("clap requires fleet"),
-            canister: string_value(&matches, "canister").expect("clap requires canister"),
-            network: string_value(&matches, "network"),
-            icp: string_value(&matches, "icp").unwrap_or_else(default_icp),
+            fleet: string_option(&matches, "fleet").expect("clap requires fleet"),
+            canister: string_option(&matches, "canister").expect("clap requires canister"),
+            network: string_option(&matches, "network"),
+            icp: string_option(&matches, "icp").unwrap_or_else(default_icp),
             json: matches.get_flag("json"),
         })
     }
@@ -108,10 +108,6 @@ where
         println!("{}", render_plain_endpoints(&report.endpoints));
     }
     Ok(())
-}
-
-fn string_value(matches: &clap::ArgMatches, id: &str) -> Option<String> {
-    matches.try_get_one::<String>(id).ok().flatten().cloned()
 }
 
 fn command() -> ClapCommand {

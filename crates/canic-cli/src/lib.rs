@@ -131,8 +131,8 @@ where
         println!("{}", version_text());
         return Ok(());
     }
-    let global_icp = matches.get_one::<String>("icp").cloned();
-    let global_network = matches.get_one::<String>("network").cloned();
+    let global_icp = cli::clap::string_option(&matches, "icp");
+    let global_network = cli::clap::string_option(&matches, "network");
 
     let Some((command, subcommand_matches)) = matches.subcommand() else {
         return Err(CliError::Usage(usage()));

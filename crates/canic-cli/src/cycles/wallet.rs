@@ -1,5 +1,7 @@
 use crate::{
-    cli::clap::{flag_arg, parse_matches, passthrough_subcommand, string_option, value_arg},
+    cli::clap::{
+        flag_arg, parse_matches, passthrough_subcommand, string_option, typed_option, value_arg,
+    },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
@@ -289,13 +291,12 @@ impl TopupOptions {
     {
         let matches = parse_matches(topup_command(), args)
             .map_err(|_| CyclesCommandError::Usage(topup_usage()))?;
-        let amount = string_option(&matches, AMOUNT_ARG).expect("clap requires amount");
         Ok(Self {
             target: IcpTargetOptions::parse(&matches),
             deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
             canister_or_role: string_option(&matches, CANISTER_OR_ROLE_ARG)
                 .expect("clap requires canister-or-role"),
-            amount_cycles: parse_cycle_amount(&amount)?,
+            amount_cycles: typed_option(&matches, AMOUNT_ARG).expect("clap requires amount"),
             json: matches.get_flag(JSON_ARG),
             dry_run: matches.get_flag(DRY_RUN_ARG),
         })
@@ -561,14 +562,7 @@ fn append_long_flag(command: &mut std::process::Command, name: &str, enabled: bo
     }
 }
 
-fn parse_cycle_amount(value: &str) -> Result<u128, CyclesCommandError> {
-    parse_cycle_amount_for_usage(value, topup_usage)
-}
-
-pub(super) fn parse_cycle_amount_for_usage(
-    value: &str,
-    usage: fn() -> String,
-) -> Result<u128, CyclesCommandError> {
+pub(super) fn parse_cycle_amount(value: &str) -> Result<u128, String> {
     let value = value.trim();
     let compact = value.replace('_', "");
     let digits_len = compact
@@ -577,12 +571,12 @@ pub(super) fn parse_cycle_amount_for_usage(
         .map(char::len_utf8)
         .sum::<usize>();
     if digits_len == 0 {
-        return Err(CyclesCommandError::Usage(usage()));
+        return Err(invalid_cycle_amount(value));
     }
     let amount = compact
         .get(..digits_len)
         .and_then(|digits| digits.parse::<u128>().ok())
-        .ok_or_else(|| CyclesCommandError::Usage(usage()))?;
+        .ok_or_else(|| invalid_cycle_amount(value))?;
     let suffix = compact[digits_len..].trim().to_ascii_lowercase();
     let multiplier = match suffix.as_str() {
         "" | "cycle" | "cycles" => 1,
@@ -590,12 +584,16 @@ pub(super) fn parse_cycle_amount_for_usage(
         "m" => 1_000_000,
         "b" => 1_000_000_000,
         "t" | "tc" => 1_000_000_000_000,
-        _ => return Err(CyclesCommandError::Usage(usage())),
+        _ => return Err(invalid_cycle_amount(value)),
     };
     amount
         .checked_mul(multiplier)
         .filter(|cycles| *cycles > 0)
-        .ok_or_else(|| CyclesCommandError::Usage(usage()))
+        .ok_or_else(|| invalid_cycle_amount(value))
+}
+
+fn invalid_cycle_amount(value: &str) -> String {
+    format!("invalid cycles amount {value}; use a positive amount such as 4T, 500B, or 1000000")
 }
 
 pub(super) fn target_label(role: Option<&str>, canister_id: &str) -> String {
@@ -701,7 +699,12 @@ fn topup_command() -> ClapCommand {
                 .value_name(CANISTER_OR_ROLE_ARG)
                 .required(true),
         )
-        .arg(value_arg(AMOUNT_ARG).value_name(AMOUNT_ARG).required(true))
+        .arg(
+            value_arg(AMOUNT_ARG)
+                .value_name(AMOUNT_ARG)
+                .required(true)
+                .value_parser(clap::builder::ValueParser::new(parse_cycle_amount)),
+        )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
         .arg(internal_network_arg())

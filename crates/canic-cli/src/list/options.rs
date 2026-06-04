@@ -1,6 +1,6 @@
 use super::ListCommandError;
 use crate::{
-    cli::clap::{flag_arg, parse_matches, value_arg},
+    cli::clap::{flag_arg, parse_matches, string_option, value_arg},
     cli::defaults::default_icp,
     cli::globals::{internal_icp_arg, internal_network_arg},
 };
@@ -57,26 +57,17 @@ impl ListOptions {
     fn from_matches(matches: &clap::ArgMatches, source: ListSource, target_arg: &str) -> Self {
         Self {
             source,
-            target: optional_string(matches, target_arg).expect("clap requires target"),
-            subtree: optional_string(matches, "subtree"),
-            network: optional_string(matches, "network"),
-            icp: optional_string(matches, "icp").unwrap_or_else(default_icp),
-            verbose: optional_bool(matches, "verbose"),
+            target: string_option(matches, target_arg).expect("clap requires target"),
+            subtree: optional_defined_string(matches, "subtree"),
+            network: string_option(matches, "network"),
+            icp: optional_defined_string(matches, "icp").unwrap_or_else(default_icp),
+            verbose: matches.get_flag("verbose"),
         }
     }
 }
 
-fn optional_string(matches: &clap::ArgMatches, id: &str) -> Option<String> {
+fn optional_defined_string(matches: &clap::ArgMatches, id: &str) -> Option<String> {
     matches.try_get_one::<String>(id).ok().flatten().cloned()
-}
-
-fn optional_bool(matches: &clap::ArgMatches, id: &str) -> bool {
-    matches
-        .try_get_one::<bool>(id)
-        .ok()
-        .flatten()
-        .copied()
-        .unwrap_or(false)
 }
 
 ///

@@ -1,10 +1,10 @@
 use super::wallet::{
-    IcpTargetOptions, ResolvedCanisterTarget, cycles_icp_error, parse_cycle_amount_for_usage,
+    IcpTargetOptions, ResolvedCanisterTarget, cycles_icp_error, parse_cycle_amount,
     resolve_canister_target, resolve_deployment, target_label,
 };
 use crate::{
     cli::{
-        clap::{flag_arg, parse_matches, string_option, value_arg},
+        clap::{flag_arg, parse_matches, string_option, typed_option, value_arg},
         globals::{internal_icp_arg, internal_network_arg},
     },
     cycles::CyclesCommandError,
@@ -69,28 +69,16 @@ impl ConvertOptions {
     {
         let matches =
             parse_matches(command(), args).map_err(|_| CyclesCommandError::Usage(usage()))?;
-        let cycles_amount = string_option(&matches, CYCLES_AMOUNT_ARG)
-            .map(|amount| parse_cycle_amount_for_usage(&amount, usage))
-            .transpose()?;
-        let amount_e8s = string_option(&matches, ICP_E8S_ARG)
-            .map(|amount| parse_icp_e8s_amount(&amount))
-            .transpose()?;
-        let source_subaccount = string_option(&matches, FROM_SUBACCOUNT_ARG)
-            .map(|value| parse_fixed_32_hex(FROM_SUBACCOUNT_ARG, &value))
-            .transpose()?;
-        let operation_id = string_option(&matches, OPERATION_ID_ARG)
-            .map(|value| parse_fixed_32_hex(OPERATION_ID_ARG, &value))
-            .transpose()?;
         let options = Self {
             target: IcpTargetOptions::parse(&matches),
             deployment: string_option(&matches, DEPLOYMENT_ARG).expect("clap requires deployment"),
             canister_or_role: string_option(&matches, CANISTER_OR_ROLE_ARG)
                 .expect("clap requires canister-or-role"),
             source_canister_or_role: string_option(&matches, SOURCE_ARG),
-            amount_e8s,
-            cycles_amount,
-            source_subaccount,
-            operation_id,
+            amount_e8s: typed_option(&matches, ICP_E8S_ARG),
+            cycles_amount: typed_option(&matches, CYCLES_AMOUNT_ARG),
+            source_subaccount: typed_option(&matches, FROM_SUBACCOUNT_ARG),
+            operation_id: typed_option(&matches, OPERATION_ID_ARG),
             json: matches.get_flag(JSON_ARG),
             dry_run: matches.get_flag(DRY_RUN_ARG),
             fabricate: matches.get_flag(FABRICATE_ARG),
@@ -284,29 +272,23 @@ fn ensure_fabricate_local_network(network: &str) -> Result<(), CyclesCommandErro
     }
 }
 
-fn parse_icp_e8s_amount(value: &str) -> Result<u64, CyclesCommandError> {
+fn parse_icp_e8s_amount(value: &str) -> Result<u64, String> {
     let compact = value.trim().replace('_', "");
     compact
         .parse::<u64>()
         .ok()
         .filter(|amount| *amount > 0)
-        .ok_or_else(|| CyclesCommandError::InvalidIcpE8sAmount {
-            value: value.to_string(),
-        })
+        .ok_or_else(|| format!("invalid ICP e8s amount {value}; use a positive u64 e8s value"))
 }
 
-fn parse_fixed_32_hex(field: &'static str, value: &str) -> Result<[u8; 32], CyclesCommandError> {
+fn parse_fixed_32_hex(field: &'static str, value: &str) -> Result<[u8; 32], String> {
     let trimmed = value.trim();
-    let bytes = decode_hex(trimmed).map_err(|err| CyclesCommandError::InvalidHexField {
-        field,
-        reason: err.to_string(),
-    })?;
-    <[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| CyclesCommandError::InvalidHexField {
-        field,
-        reason: format!(
-            "expected 32 bytes (64 hex chars), got {} bytes",
+    let bytes = decode_hex(trimmed).map_err(|err| format!("invalid {field}: {err}"))?;
+    <[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| {
+        format!(
+            "invalid {field}: expected 32 bytes (64 hex chars), got {} bytes",
             bytes.len()
-        ),
+        )
     })
 }
 
@@ -465,21 +447,33 @@ fn command() -> ClapCommand {
                 .long(SOURCE_ARG)
                 .value_name(CANISTER_OR_ROLE_ARG),
         )
-        .arg(value_arg(ICP_E8S_ARG).long(ICP_E8S_ARG).value_name("e8s"))
+        .arg(
+            value_arg(ICP_E8S_ARG)
+                .long(ICP_E8S_ARG)
+                .value_name("e8s")
+                .value_parser(clap::builder::ValueParser::new(parse_icp_e8s_amount)),
+        )
         .arg(
             value_arg(CYCLES_AMOUNT_ARG)
                 .long("cycles")
-                .value_name(AMOUNT_ARG),
+                .value_name(AMOUNT_ARG)
+                .value_parser(clap::builder::ValueParser::new(parse_cycle_amount)),
         )
         .arg(
             value_arg(FROM_SUBACCOUNT_ARG)
                 .long(FROM_SUBACCOUNT_ARG)
-                .value_name("hex64"),
+                .value_name("hex64")
+                .value_parser(clap::builder::ValueParser::new(|value: &str| {
+                    parse_fixed_32_hex(FROM_SUBACCOUNT_ARG, value)
+                })),
         )
         .arg(
             value_arg(OPERATION_ID_ARG)
                 .long(OPERATION_ID_ARG)
-                .value_name("hex64"),
+                .value_name("hex64")
+                .value_parser(clap::builder::ValueParser::new(|value: &str| {
+                    parse_fixed_32_hex(OPERATION_ID_ARG, value)
+                })),
         )
         .arg(flag_arg(FABRICATE_ARG).long(FABRICATE_ARG))
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
@@ -587,10 +581,7 @@ mod tests {
                 OsString::from("--operation-id"),
                 OsString::from("abcd"),
             ]),
-            Err(CyclesCommandError::InvalidHexField {
-                field: OPERATION_ID_ARG,
-                ..
-            })
+            Err(CyclesCommandError::Usage(_))
         );
     }
 

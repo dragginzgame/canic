@@ -110,10 +110,7 @@ impl ScaffoldOptions {
         let matches =
             parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
         Ok(Self {
-            name: matches
-                .get_one::<String>("name")
-                .expect("clap requires name")
-                .clone(),
+            name: string_option(&matches, "name").expect("clap requires name"),
             #[cfg(test)]
             project_root: None,
             yes: matches.get_flag("yes"),

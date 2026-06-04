@@ -1,5 +1,8 @@
 use crate::{
-    cli::clap::{parse_matches, parse_subcommand, passthrough_subcommand, path_option, value_arg},
+    cli::clap::{
+        parse_matches, parse_subcommand, passthrough_subcommand, path_option, typed_option,
+        value_arg,
+    },
     cli::help::print_help_or_version,
     output, version_text,
 };
@@ -83,20 +86,21 @@ impl EvidenceCompareOptions {
     {
         let matches = parse_matches(evidence_compare_command(), args)
             .map_err(|_| EvidenceCommandError::Usage(compare_usage()))?;
-        let format = match matches
-            .get_one::<String>("format")
-            .map_or("text", String::as_str)
-        {
-            "text" => EvidenceCompareFormat::Text,
-            "json" => EvidenceCompareFormat::Json,
-            _ => return Err(EvidenceCommandError::Usage(compare_usage())),
-        };
-
         Ok(Self {
             left: path_option(&matches, "left").expect("clap requires left"),
             right: path_option(&matches, "right").expect("clap requires right"),
-            format,
+            format: typed_option(&matches, "format").unwrap_or(EvidenceCompareFormat::Text),
         })
+    }
+}
+
+fn parse_evidence_compare_format(value: &str) -> Result<EvidenceCompareFormat, String> {
+    match value {
+        "text" => Ok(EvidenceCompareFormat::Text),
+        "json" => Ok(EvidenceCompareFormat::Json),
+        other => Err(format!(
+            "invalid evidence comparison output format: {other}"
+        )),
     }
 }
 
@@ -188,16 +192,6 @@ impl EvidenceGateOptions {
     {
         let matches = parse_matches(evidence_gate_command(), args)
             .map_err(|_| EvidenceCommandError::Usage(gate_usage()))?;
-        let format = match matches
-            .get_one::<String>("format")
-            .map_or("text", String::as_str)
-        {
-            "text" => EvidenceGateFormat::Text,
-            "json" => EvidenceGateFormat::Json,
-            "envelope-json" => EvidenceGateFormat::EnvelopeJson,
-            _ => return Err(EvidenceCommandError::Usage(gate_usage())),
-        };
-
         Ok(Self {
             policy: path_option(&matches, "policy").expect("clap requires policy"),
             input: if let Some(envelope) = path_option(&matches, "envelope") {
@@ -209,9 +203,18 @@ impl EvidenceGateOptions {
                     ),
                 )
             },
-            format,
+            format: typed_option(&matches, "format").unwrap_or(EvidenceGateFormat::Text),
             output: path_option(&matches, "output"),
         })
+    }
+}
+
+fn parse_evidence_gate_format(value: &str) -> Result<EvidenceGateFormat, String> {
+    match value {
+        "text" => Ok(EvidenceGateFormat::Text),
+        "json" => Ok(EvidenceGateFormat::Json),
+        "envelope-json" => Ok(EvidenceGateFormat::EnvelopeJson),
+        other => Err(format!("invalid evidence gate output format: {other}")),
     }
 }
 
@@ -865,7 +868,8 @@ fn evidence_gate_command() -> ClapCommand {
             value_arg("format")
                 .long("format")
                 .value_name("text|json|envelope-json")
-                .default_value("text"),
+                .default_value("text")
+                .value_parser(clap::builder::ValueParser::new(parse_evidence_gate_format)),
         )
         .arg(value_arg("output").long("output").value_name("path"))
         .group(
@@ -900,7 +904,10 @@ fn evidence_compare_command() -> ClapCommand {
             value_arg("format")
                 .long("format")
                 .value_name("text|json")
-                .default_value("text"),
+                .default_value("text")
+                .value_parser(clap::builder::ValueParser::new(
+                    parse_evidence_compare_format,
+                )),
         )
         .after_help(
             "Compares stable envelope fields and ignores generated_at, canic_version, and the nested payload body. The payload_sha256 field is compared.",
@@ -934,6 +941,21 @@ mod tests {
         assert_eq!(options.left, PathBuf::from("left.json"));
         assert_eq!(options.right, PathBuf::from("right.json"));
         assert_eq!(options.format, EvidenceCompareFormat::Json);
+    }
+
+    #[test]
+    fn compare_rejects_unknown_format() {
+        std::assert_matches!(
+            EvidenceCompareOptions::parse([
+                OsString::from("--left"),
+                OsString::from("left.json"),
+                OsString::from("--right"),
+                OsString::from("right.json"),
+                OsString::from("--format"),
+                OsString::from("yaml"),
+            ]),
+            Err(EvidenceCommandError::Usage(_))
+        );
     }
 
     #[test]
@@ -974,6 +996,21 @@ mod tests {
             EvidenceGateInput::Manifest(PathBuf::from("evidence.toml"))
         );
         assert_eq!(options.format, EvidenceGateFormat::Text);
+    }
+
+    #[test]
+    fn gate_rejects_unknown_format() {
+        std::assert_matches!(
+            EvidenceGateOptions::parse([
+                OsString::from("--policy"),
+                OsString::from("policy.toml"),
+                OsString::from("--envelope"),
+                OsString::from("evidence.json"),
+                OsString::from("--format"),
+                OsString::from("yaml"),
+            ]),
+            Err(EvidenceCommandError::Usage(_))
+        );
     }
 
     #[test]
