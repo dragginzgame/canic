@@ -11,6 +11,7 @@ use crate::{
             AuthOpsError, AuthSignatureError, AuthValidationError,
             InternalInvocationProofVerificationInput,
         },
+        cost_guard::CostGuardPermit,
         ic::{IcOps, ecdsa::EcdsaOps},
         storage::auth::AuthStateOps,
     },
@@ -19,6 +20,7 @@ use crate::{
 impl AuthOps {
     /// Sign a role attestation payload using the attestation domain.
     pub(crate) async fn sign_role_attestation(
+        _permit: &CostGuardPermit,
         payload: RoleAttestation,
     ) -> Result<SignedRoleAttestation, InternalError> {
         let key_name = keys::attestation_key_name()?;
@@ -37,6 +39,7 @@ impl AuthOps {
 
     /// Sign a method-scoped internal invocation proof using the 0.40 proof domain.
     pub(crate) async fn sign_internal_invocation_proof(
+        _permit: &CostGuardPermit,
         payload: InternalInvocationProofPayloadV1,
     ) -> Result<SignedInternalInvocationProofV1, InternalError> {
         let key_name = keys::attestation_key_name()?;

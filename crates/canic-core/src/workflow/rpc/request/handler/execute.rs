@@ -18,15 +18,23 @@ use crate::{
     log::Topic,
     ops::{
         auth::AuthOps,
-        ic::IcOps,
+        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        ic::{IcOps, mgmt::MgmtOps},
+        replay::model::CommandKind,
         storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
     },
+    replay_policy::CostClass,
     workflow::{
         canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
         pool::PoolWorkflow,
         rpc::RpcWorkflowError,
     },
 };
+
+const ROOT_AUTH_SIGNING_QUOTA_WINDOW_SECONDS: u64 = 60;
+const MAX_ROOT_AUTH_SIGNING_OPERATIONS_PER_WINDOW: u64 = 60;
+const ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
+const MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 
 pub(super) async fn execute_root_capability(
     ctx: &RootContext,
@@ -67,6 +75,27 @@ pub(super) async fn execute_root_capability(
     }
 
     result
+}
+
+fn reserve_auth_material_signing_cost_guard(
+    ctx: &RootContext,
+    command_kind: &'static str,
+    current_cycle_balance: u128,
+) -> Result<CostGuardPermit, InternalError> {
+    let command_kind =
+        CommandKind::new(command_kind).expect("root auth signing command kind is valid");
+    CostGuardOps::reserve(CostGuardRequest {
+        cost_class: CostClass::ThresholdEcdsaSign,
+        command_kind,
+        quota_subject: ctx.caller,
+        payer: ctx.self_pid,
+        now_secs: IcOps::now_secs(),
+        quota_window_secs: ROOT_AUTH_SIGNING_QUOTA_WINDOW_SECONDS,
+        max_operations_per_window: MAX_ROOT_AUTH_SIGNING_OPERATIONS_PER_WINDOW,
+        current_cycle_balance,
+        cycle_reservation_cycles: ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES,
+        min_cycles_after_reservation: MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION,
+    })
 }
 
 async fn execute_provision(
@@ -120,7 +149,19 @@ async fn execute_issue_role_attestation(
     req: RoleAttestationRequest,
 ) -> Result<Response, InternalError> {
     let payload = build_role_attestation(ctx, req)?;
-    let signed = AuthOps::sign_role_attestation(payload).await?;
+    let cost_permit = reserve_auth_material_signing_cost_guard(
+        ctx,
+        "root.issue_role_attestation.v1",
+        MgmtOps::canister_cycle_balance().to_u128(),
+    )?;
+    let signed = match AuthOps::sign_role_attestation(&cost_permit, payload).await {
+        Ok(signed) => signed,
+        Err(err) => {
+            let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+            return Err(err);
+        }
+    };
+    CostGuardOps::complete(&cost_permit, IcOps::now_secs())?;
     log!(
         Topic::Auth,
         Info,
@@ -141,7 +182,19 @@ async fn execute_issue_internal_invocation_proof(
     req: InternalInvocationProofRequest,
 ) -> Result<Response, InternalError> {
     let payload = build_internal_invocation_proof(ctx, req)?;
-    let signed = AuthOps::sign_internal_invocation_proof(payload).await?;
+    let cost_permit = reserve_auth_material_signing_cost_guard(
+        ctx,
+        "root.issue_internal_invocation_proof.v1",
+        MgmtOps::canister_cycle_balance().to_u128(),
+    )?;
+    let signed = match AuthOps::sign_internal_invocation_proof(&cost_permit, payload).await {
+        Ok(signed) => signed,
+        Err(err) => {
+            let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+            return Err(err);
+        }
+    };
+    CostGuardOps::complete(&cost_permit, IcOps::now_secs())?;
     log!(
         Topic::Auth,
         Info,
@@ -197,4 +250,58 @@ pub(super) fn build_internal_invocation_proof(
         expires_at,
         epoch,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        cdk::types::Principal, ops::storage::intent::IntentStoreOps,
+        storage::stable::intent::IntentStore,
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn ctx() -> RootContext {
+        RootContext {
+            caller: p(3),
+            self_pid: p(42),
+            is_root_env: true,
+            subnet_id: p(4),
+            now: 2_000,
+        }
+    }
+
+    #[test]
+    fn auth_material_signing_cost_guard_rejects_low_cycle_reserve_before_recording_intents() {
+        IntentStore::reset_for_tests();
+
+        let err = reserve_auth_material_signing_cost_guard(
+            &ctx(),
+            "root.issue_role_attestation.v1",
+            ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES,
+        )
+        .expect_err("low cycle reserve rejected");
+
+        assert!(err.to_string().contains("cycle reserve"));
+        assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
+    }
+
+    #[test]
+    fn auth_material_signing_cost_guard_reservation_completes() {
+        IntentStore::reset_for_tests();
+
+        let permit = reserve_auth_material_signing_cost_guard(
+            &ctx(),
+            "root.issue_internal_invocation_proof.v1",
+            ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES
+                + MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION,
+        )
+        .expect("reservation");
+
+        CostGuardOps::complete(&permit, ctx().now).expect("complete");
+        assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
+    }
 }

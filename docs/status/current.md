@@ -9,6 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.9` completed the root auth-material signing cost-guard slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Root role-attestation
+  and internal-invocation proof signing now require `CostGuardPermit`, and
+  fresh root auth-material signing reserves `ThresholdEcdsaSign` signing quota
+  plus an in-flight cycle budget before threshold ECDSA. Signing failures
+  recover the cycle reservation; successful signatures complete the quota and
+  reservation. The role-attestation and internal-invocation proof manifest
+  entries remain release blockers because generic root capability execution
+  still aborts fresh replay on execution error; a later slice must mark or
+  recover post-ECDSA failures before those endpoints are fully implemented. No
+  CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::rpc::request::handler::execute --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo test -p canic-core ops::auth --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
 - `0.61.8` completed the next slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. Shared root replay
   receipts now reject cross-variant request-id reuse: before normal same-command

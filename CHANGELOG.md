@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.9` routes root role-attestation and internal-invocation proof signing
+  through signing cost guard permits. Fresh root auth-material signing now
+  reserves signing quota and an in-flight cycle budget before threshold ECDSA;
+  the endpoints remain manifest release blockers until post-dispatch signing
+  failure recovery is tightened.
+
 - `0.61.8` tightens shared root replay receipts by rejecting reuse of the same
   request id by the same caller across different root capability command kinds,
   so an operation id committed for one root capability cannot be treated as

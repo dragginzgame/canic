@@ -14,7 +14,7 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_bytes};
 use canic_host::{format::cycles_tc, icp::IcpCli, icp_config::resolve_current_canic_icp_root};
-use clap::Command as ClapCommand;
+use clap::{ArgGroup, Command as ClapCommand};
 use std::{
     ffi::OsString,
     fmt::Write as _,
@@ -36,6 +36,12 @@ const OPERATION_ID_ARG: &str = "operation-id";
 const PROVISIONAL_TOP_UP_METHOD: &str = "provisional_top_up_canister";
 const SOURCE_ARG: &str = "source";
 const FABRICATE_MODE_MESSAGE: &str = "mode=fabricate (does not call canister refill endpoint)";
+const CANISTER_MODE_ARGS: [&str; 4] = [
+    SOURCE_ARG,
+    ICP_E8S_ARG,
+    FROM_SUBACCOUNT_ARG,
+    OPERATION_ID_ARG,
+];
 
 ///
 /// ConvertOptions
@@ -72,7 +78,7 @@ impl ConvertOptions {
     {
         let matches =
             parse_matches(command(), args).map_err(|_| CyclesCommandError::Usage(usage()))?;
-        let options = Self {
+        Ok(Self {
             target: IcpTargetOptions::parse(&matches),
             deployment: required_string(&matches, DEPLOYMENT_ARG),
             canister_or_role: required_string(&matches, CANISTER_OR_ROLE_ARG),
@@ -84,9 +90,7 @@ impl ConvertOptions {
             json: matches.get_flag(JSON_ARG),
             dry_run: matches.get_flag(DRY_RUN_ARG),
             fabricate: matches.get_flag(FABRICATE_ARG),
-        };
-        validate_options(&options)?;
-        Ok(options)
+        })
     }
 }
 
@@ -239,29 +243,6 @@ fn run_fabricate(
         );
     }
     Ok(())
-}
-
-fn validate_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
-    if options.fabricate {
-        if options.cycles_amount.is_some()
-            && options.source_canister_or_role.is_none()
-            && options.amount_e8s.is_none()
-            && options.source_subaccount.is_none()
-            && options.operation_id.is_none()
-        {
-            return Ok(());
-        }
-        return Err(CyclesCommandError::Usage(usage()));
-    }
-
-    if options.source_canister_or_role.is_some()
-        && options.amount_e8s.is_some()
-        && options.cycles_amount.is_none()
-    {
-        return Ok(());
-    }
-
-    Err(CyclesCommandError::Usage(usage()))
 }
 
 fn ensure_fabricate_local_network(network: &str) -> Result<(), CyclesCommandError> {
@@ -447,19 +428,25 @@ fn command() -> ClapCommand {
         .arg(
             value_arg(SOURCE_ARG)
                 .long(SOURCE_ARG)
-                .value_name(CANISTER_OR_ROLE_ARG),
+                .value_name(CANISTER_OR_ROLE_ARG)
+                .requires(ICP_E8S_ARG)
+                .conflicts_with(FABRICATE_ARG),
         )
         .arg(
             value_arg(ICP_E8S_ARG)
                 .long(ICP_E8S_ARG)
                 .value_name("e8s")
-                .value_parser(clap::builder::ValueParser::new(parse_icp_e8s_amount)),
+                .value_parser(clap::builder::ValueParser::new(parse_icp_e8s_amount))
+                .requires(SOURCE_ARG)
+                .conflicts_with(FABRICATE_ARG),
         )
         .arg(
             value_arg(CYCLES_AMOUNT_ARG)
                 .long("cycles")
                 .value_name(AMOUNT_ARG)
-                .value_parser(clap::builder::ValueParser::new(parse_cycle_amount)),
+                .value_parser(clap::builder::ValueParser::new(parse_cycle_amount))
+                .requires(FABRICATE_ARG)
+                .conflicts_with_all(CANISTER_MODE_ARGS),
         )
         .arg(
             value_arg(FROM_SUBACCOUNT_ARG)
@@ -467,7 +454,9 @@ fn command() -> ClapCommand {
                 .value_name("hex64")
                 .value_parser(clap::builder::ValueParser::new(|value: &str| {
                     parse_fixed_32_hex(FROM_SUBACCOUNT_ARG, value)
-                })),
+                }))
+                .requires_all([SOURCE_ARG, ICP_E8S_ARG])
+                .conflicts_with(FABRICATE_ARG),
         )
         .arg(
             value_arg(OPERATION_ID_ARG)
@@ -475,13 +464,25 @@ fn command() -> ClapCommand {
                 .value_name("hex64")
                 .value_parser(clap::builder::ValueParser::new(|value: &str| {
                     parse_fixed_32_hex(OPERATION_ID_ARG, value)
-                })),
+                }))
+                .requires_all([SOURCE_ARG, ICP_E8S_ARG])
+                .conflicts_with(FABRICATE_ARG),
         )
-        .arg(flag_arg(FABRICATE_ARG).long(FABRICATE_ARG))
+        .arg(
+            flag_arg(FABRICATE_ARG)
+                .long(FABRICATE_ARG)
+                .requires(CYCLES_AMOUNT_ARG)
+                .conflicts_with_all(CANISTER_MODE_ARGS),
+        )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
+        .group(
+            ArgGroup::new("convert-mode")
+                .args([SOURCE_ARG, FABRICATE_ARG])
+                .required(true),
+        )
 }
 
 #[cfg(test)]
@@ -560,6 +561,40 @@ mod tests {
                 OsString::from("4T"),
                 OsString::from("--source"),
                 OsString::from("root"),
+            ]),
+            Err(CyclesCommandError::Usage(_))
+        );
+    }
+
+    #[test]
+    fn rejects_missing_convert_mode() {
+        std::assert_matches!(
+            ConvertOptions::parse([OsString::from("demo"), OsString::from("app")]),
+            Err(CyclesCommandError::Usage(_))
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_canister_mode() {
+        std::assert_matches!(
+            ConvertOptions::parse([
+                OsString::from("demo"),
+                OsString::from("app"),
+                OsString::from("--source"),
+                OsString::from("root"),
+            ]),
+            Err(CyclesCommandError::Usage(_))
+        );
+    }
+
+    #[test]
+    fn rejects_cycles_without_fabricate_mode() {
+        std::assert_matches!(
+            ConvertOptions::parse([
+                OsString::from("demo"),
+                OsString::from("app"),
+                OsString::from("--cycles"),
+                OsString::from("4T"),
             ]),
             Err(CyclesCommandError::Usage(_))
         );
