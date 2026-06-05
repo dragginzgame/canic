@@ -15,6 +15,7 @@ pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
 pub use types::{
+    PreparedInternalInvocationProofSignature, PreparedRoleAttestationSignature,
     PreparedRootDelegationProof, SignDelegatedTokenInput, SignDelegationProofInput,
     VerifyDelegatedTokenRuntimeInput,
 };

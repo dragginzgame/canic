@@ -1,6 +1,9 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedToken, DelegationAudience, DelegationCert, DelegationProof},
+    dto::auth::{
+        DelegatedToken, DelegationAudience, DelegationCert, DelegationProof,
+        InternalInvocationProofPayloadV1, RoleAttestation,
+    },
 };
 
 //
@@ -39,6 +42,28 @@ pub struct PreparedRootDelegationProof {
     pub cert_hash: [u8; 32],
     pub key_name: String,
     pub root_derivation_path: Vec<Vec<u8>>,
+}
+
+//
+// PreparedRoleAttestationSignature
+//
+
+pub struct PreparedRoleAttestationSignature {
+    pub payload: RoleAttestation,
+    pub message_hash: [u8; 32],
+    pub key_name: String,
+    pub derivation_path: Vec<Vec<u8>>,
+}
+
+//
+// PreparedInternalInvocationProofSignature
+//
+
+pub struct PreparedInternalInvocationProofSignature {
+    pub payload: InternalInvocationProofPayloadV1,
+    pub message_hash: [u8; 32],
+    pub key_name: String,
+    pub derivation_path: Vec<Vec<u8>>,
 }
 
 //

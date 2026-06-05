@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.10` finishes root auth-material replay recovery for
+  role-attestation and internal-invocation proof issuance. Both signing paths
+  now prepare before cost reservation, mark the threshold-ECDSA external-effect
+  boundary before guarded signing, preserve recovery-required receipts for
+  uncertain post-signing failures, and are marked implemented in the replay
+  policy manifest.
+
 - `0.61.9` routes root role-attestation and internal-invocation proof signing
   through signing cost guard permits. Fresh root auth-material signing now
   reserves signing quota and an in-flight cycle budget before threshold ECDSA;

@@ -993,6 +993,7 @@ fn fleet_adoption_report_command() -> ClapCommand {
             clap::Arg::new("inventory")
                 .long("inventory")
                 .value_name("path")
+                .conflicts_with("deployment-check")
                 .help("Read DeploymentInventoryV1 JSON evidence from this path"),
         )
         .arg(
@@ -1011,6 +1012,7 @@ fn fleet_adoption_report_command() -> ClapCommand {
             clap::Arg::new("package-metadata")
                 .long("package-metadata")
                 .value_name("path")
+                .conflicts_with("cargo-metadata")
                 .help("Read AdoptionPackageMetadataV1 JSON array evidence from this path"),
         )
         .arg(
@@ -1444,10 +1446,7 @@ fn adoption_package_metadata_from_options(
     options: &AdoptionReportOptions,
 ) -> Result<Vec<AdoptionPackageMetadataV1>, FleetCommandError> {
     match (&options.package_metadata, &options.cargo_metadata) {
-        (Some(_), Some(_)) => Err(FleetCommandError::Usage(
-            "choose either --package-metadata or --cargo-metadata, not both".to_string(),
-        )),
-        (Some(path), None) => read_json_file(path),
+        (Some(path), _) => read_json_file(path),
         (None, Some(path)) => read_cargo_metadata_package_metadata(config_path, path),
         (None, None) => Ok(Vec::new()),
     }
@@ -1472,10 +1471,7 @@ fn adoption_inventory_from_options(
     options: &AdoptionReportOptions,
 ) -> Result<Option<DeploymentInventoryV1>, FleetCommandError> {
     match (&options.inventory, &options.deployment_check) {
-        (Some(_), Some(_)) => Err(FleetCommandError::Usage(
-            "choose either --inventory or --deployment-check, not both".to_string(),
-        )),
-        (Some(path), None) => read_json_file(path).map(Some),
+        (Some(path), _) => read_json_file(path).map(Some),
         (None, Some(path)) => read_deployment_check_inventory(path).map(Some),
         (None, None) => Ok(None),
     }

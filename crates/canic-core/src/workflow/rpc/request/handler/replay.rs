@@ -9,10 +9,12 @@ use crate::{
     dto::rpc::Response,
     ids::CanisterRole,
     ops::{
+        ic::IcOps,
         replay::{
             self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
+            guard::secs_to_ns,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            model::{CommandKind, OperationId},
+            model::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
         },
         runtime::metrics::replay::{
             ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
@@ -306,7 +308,7 @@ fn decode_replay_response(bytes: &[u8]) -> Result<Response, InternalError> {
 ///
 /// Persist a replay record after successful capability execution.
 pub(super) fn commit_replay(
-    pending: ReplayPending,
+    pending: &ReplayPending,
     response: &Response,
 ) -> Result<(), InternalError> {
     crate::perf!("commit_encode");
@@ -334,6 +336,23 @@ pub(super) fn abort_replay(pending: ReplayPending) {
         ReplayMetricReason::Ok,
     );
     crate::perf!("abort_replay");
+}
+
+/// mark_external_effect_in_flight
+///
+/// Record that a root replay request crossed an external-effect boundary.
+pub(super) fn mark_external_effect_in_flight(
+    pending: &ReplayPending,
+    effect: ExternalEffectDescriptor,
+) {
+    replay_ops::mark_root_replay_external_effect(pending, effect, secs_to_ns(IcOps::now_secs()));
+}
+
+/// mark_recovery_required
+///
+/// Preserve a root replay receipt for manual recovery after uncertain execution.
+pub(super) fn mark_recovery_required(pending: &ReplayPending, reason: RecoveryReason) {
+    replay_ops::mark_root_replay_recovery_required(pending, reason, secs_to_ns(IcOps::now_secs()));
 }
 
 /// payload_hasher

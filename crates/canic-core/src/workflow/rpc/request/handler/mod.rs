@@ -140,21 +140,30 @@ impl RootResponseWorkflow {
             RootPreflight::Cached(response) => return Ok(response),
         };
 
-        let response =
-            match Self::execute_root_capability(&ctx, capability, prepared.authorized_cycles).await
-            {
-                Ok(response) => response,
-                Err(err) => {
-                    Self::abort_replay(prepared.pending);
-                    RootCapabilityMetrics::record_execution(
-                        descriptor.key,
-                        RootCapabilityMetricOutcome::Error,
-                    );
-                    return Err(err);
-                }
-            };
+        let response = match Self::execute_root_capability(
+            &ctx,
+            &prepared.pending,
+            capability,
+            prepared.authorized_cycles,
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                Self::abort_replay(prepared.pending);
+                RootCapabilityMetrics::record_execution(
+                    descriptor.key,
+                    RootCapabilityMetricOutcome::Error,
+                );
+                return Err(err);
+            }
+        };
         crate::perf!("execute_capability");
-        if let Err(err) = Self::commit_replay(prepared.pending, &response) {
+        if let Err(err) = Self::commit_replay(&prepared.pending, &response) {
+            Self::mark_replay_recovery_required(
+                &prepared.pending,
+                crate::ops::replay::model::RecoveryReason::ResponseCommitFailed,
+            );
             log!(
                 Topic::Rpc,
                 Warn,
@@ -249,10 +258,11 @@ impl RootResponseWorkflow {
 
     async fn execute_root_capability(
         ctx: &RootContext,
+        pending: &ReplayPending,
         capability: RootCapability,
         authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,
     ) -> Result<Response, InternalError> {
-        execute::execute_root_capability(ctx, capability, authorized_cycles).await
+        execute::execute_root_capability(ctx, pending, capability, authorized_cycles).await
     }
 
     fn check_replay(
@@ -269,12 +279,19 @@ impl RootResponseWorkflow {
         replay::check_existing_replay(ctx, capability)
     }
 
-    fn commit_replay(pending: ReplayPending, response: &Response) -> Result<(), InternalError> {
+    fn commit_replay(pending: &ReplayPending, response: &Response) -> Result<(), InternalError> {
         replay::commit_replay(pending, response)
     }
 
     fn abort_replay(pending: ReplayPending) {
         replay::abort_replay(pending);
+    }
+
+    fn mark_replay_recovery_required(
+        pending: &ReplayPending,
+        reason: crate::ops::replay::model::RecoveryReason,
+    ) {
+        replay::mark_recovery_required(pending, reason);
     }
 
     #[cfg(test)]

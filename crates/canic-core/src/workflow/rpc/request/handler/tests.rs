@@ -15,9 +15,11 @@ use crate::{
         replay::{
             guard::secs_to_ns,
             model::{
-                CommandKind, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
-                REPLAY_RECEIPT_SCHEMA_VERSION, ReplayActor, ReplayReceiptStatus,
+                CommandKind, EcdsaPurpose, ExternalEffectDescriptor, OperationId,
+                REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason,
+                ReplayActor, ReplayReceiptStatus,
             },
+            receipt::{mark_external_effect_in_flight, mark_recovery_required},
         },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
@@ -1176,7 +1178,7 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
     let response = Response::Cycles(CyclesResponse {
         cycles_transferred: 77,
     });
-    RootResponseWorkflow::commit_replay(pending, &response).expect("commit");
+    RootResponseWorkflow::commit_replay(&pending, &response).expect("commit");
 
     let preflight = RootResponseWorkflow::check_replay(&ctx, &capability).expect("must cache-hit");
     match preflight {
@@ -1188,6 +1190,68 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
         }
         replay::ReplayPreflight::Fresh(_) => panic!("duplicate replay must return cached response"),
     }
+}
+
+#[test]
+fn abort_replay_preserves_recovery_required_external_effect_receipt() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
+        subject: p(5),
+        role: CanisterRole::new("app"),
+        subnet_id: None,
+        audience: p(9),
+        ttl_secs: 60,
+        epoch: 0,
+        metadata: Some(meta(17, 60)),
+    });
+
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    let key = pending.receipt_token.key();
+    let effect = ExternalEffectDescriptor::ThresholdEcdsaSign {
+        key_id_hash: [1; 32],
+        purpose: EcdsaPurpose::RoleAttestation,
+        message_hash: [2; 32],
+    };
+
+    mark_external_effect_in_flight(&pending.receipt_token, effect.clone(), secs_to_ns(1_001));
+    mark_recovery_required(
+        &pending.receipt_token,
+        RecoveryReason::ExternalEffectStatusUnknown,
+        secs_to_ns(1_002),
+    );
+    RootResponseWorkflow::abort_replay(pending);
+
+    let receipt = ReplayReceiptOps::get(key)
+        .expect("recovery receipt must remain")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(
+        receipt.status,
+        ReplayReceiptStatus::RecoveryRequired {
+            reason: RecoveryReason::ExternalEffectStatusUnknown,
+        }
+    );
+    assert_eq!(receipt.effect, Some(effect));
+
+    let err = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect_err("recovery-required duplicate must not run fresh");
+    assert!(
+        err.to_string().contains("duplicate replay request"),
+        "expected duplicate replay error, got: {err}"
+    );
 }
 
 #[test]
@@ -1215,7 +1279,7 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
     RootResponseWorkflow::commit_replay(
-        pending,
+        &pending,
         &Response::Cycles(CyclesResponse {
             cycles_transferred: 10,
         }),
@@ -1254,7 +1318,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
     RootResponseWorkflow::commit_replay(
-        pending,
+        &pending,
         &Response::UpgradeCanister(UpgradeCanisterResponse {}),
     )
     .expect("commit");
@@ -1291,7 +1355,7 @@ fn preflight_authorize_then_replay_reports_existing_cross_variant_conflict_befor
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
     RootResponseWorkflow::commit_replay(
-        pending,
+        &pending,
         &Response::UpgradeCanister(UpgradeCanisterResponse {}),
     )
     .expect("commit");

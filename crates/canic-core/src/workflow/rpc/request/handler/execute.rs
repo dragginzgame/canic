@@ -1,6 +1,6 @@
 use super::{
     RootCapability, RootContext, attestation_expires_at, nonroot_cycles,
-    nonroot_cycles::AuthorizedCyclesGrant,
+    nonroot_cycles::AuthorizedCyclesGrant, replay,
 };
 use crate::{
     InternalError,
@@ -20,7 +20,10 @@ use crate::{
         auth::AuthOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
-        replay::model::CommandKind,
+        replay::{
+            guard::ReplayPending,
+            model::{CommandKind, RecoveryReason},
+        },
         storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
@@ -38,6 +41,7 @@ const MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 
 pub(super) async fn execute_root_capability(
     ctx: &RootContext,
+    pending: &ReplayPending,
     capability: RootCapability,
     authorized_cycles: Option<AuthorizedCyclesGrant>,
 ) -> Result<Response, InternalError> {
@@ -57,9 +61,11 @@ pub(super) async fn execute_root_capability(
             }?;
             Ok(Response::Cycles(response))
         }
-        RootCapability::IssueRoleAttestation(req) => execute_issue_role_attestation(ctx, req).await,
+        RootCapability::IssueRoleAttestation(req) => {
+            execute_issue_role_attestation(ctx, pending, req).await
+        }
         RootCapability::IssueInternalInvocationProof(req) => {
-            execute_issue_internal_invocation_proof(ctx, req).await
+            execute_issue_internal_invocation_proof(ctx, pending, req).await
         }
     };
 
@@ -146,22 +152,32 @@ async fn execute_recycle(req: &RecycleCanisterRequest) -> Result<Response, Inter
 
 async fn execute_issue_role_attestation(
     ctx: &RootContext,
+    pending: &ReplayPending,
     req: RoleAttestationRequest,
 ) -> Result<Response, InternalError> {
     let payload = build_role_attestation(ctx, req)?;
+    let prepared = AuthOps::prepare_role_attestation_signature(payload).await?;
     let cost_permit = reserve_auth_material_signing_cost_guard(
         ctx,
         "root.issue_role_attestation.v1",
         MgmtOps::canister_cycle_balance().to_u128(),
     )?;
-    let signed = match AuthOps::sign_role_attestation(&cost_permit, payload).await {
+    replay::mark_external_effect_in_flight(
+        pending,
+        AuthOps::role_attestation_signing_effect(&prepared),
+    );
+    let signed = match AuthOps::sign_prepared_role_attestation(&cost_permit, prepared).await {
         Ok(signed) => signed,
         Err(err) => {
             let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+            replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown);
             return Err(err);
         }
     };
-    CostGuardOps::complete(&cost_permit, IcOps::now_secs())?;
+    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed);
+        return Err(err);
+    }
     log!(
         Topic::Auth,
         Info,
@@ -179,22 +195,34 @@ async fn execute_issue_role_attestation(
 
 async fn execute_issue_internal_invocation_proof(
     ctx: &RootContext,
+    pending: &ReplayPending,
     req: InternalInvocationProofRequest,
 ) -> Result<Response, InternalError> {
     let payload = build_internal_invocation_proof(ctx, req)?;
+    let prepared = AuthOps::prepare_internal_invocation_proof_signature(payload).await?;
     let cost_permit = reserve_auth_material_signing_cost_guard(
         ctx,
         "root.issue_internal_invocation_proof.v1",
         MgmtOps::canister_cycle_balance().to_u128(),
     )?;
-    let signed = match AuthOps::sign_internal_invocation_proof(&cost_permit, payload).await {
+    replay::mark_external_effect_in_flight(
+        pending,
+        AuthOps::internal_invocation_proof_signing_effect(&prepared),
+    );
+    let signed = match AuthOps::sign_prepared_internal_invocation_proof(&cost_permit, prepared)
+        .await
+    {
         Ok(signed) => signed,
         Err(err) => {
             let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+            replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown);
             return Err(err);
         }
     };
-    CostGuardOps::complete(&cost_permit, IcOps::now_secs())?;
+    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed);
+        return Err(err);
+    }
     log!(
         Topic::Auth,
         Info,

@@ -141,16 +141,18 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(SIGNING_QUOTA_V1),
         Some(SIGNING_RESERVE_V1),
     ),
-    update_replay_blocker(
+    update_replay_protected(
         "canic_request_internal_invocation_proof",
         "auth.issue_internal_invocation_proof.v1",
+        ReplayImplementationStatus::Implemented,
         CostClass::ThresholdEcdsaSign,
         Some(SIGNING_QUOTA_V1),
         Some(SIGNING_RESERVE_V1),
     ),
-    update_replay_blocker(
+    update_replay_protected(
         "canic_request_role_attestation",
         "auth.issue_role_attestation.v1",
+        ReplayImplementationStatus::Implemented,
         CostClass::ThresholdEcdsaSign,
         Some(SIGNING_QUOTA_V1),
         Some(SIGNING_RESERVE_V1),
@@ -457,6 +459,38 @@ mod tests {
                 requires_operation_id: true,
             }
         );
+    }
+
+    #[test]
+    fn root_auth_material_issuance_is_manifested_as_implemented() {
+        for (endpoint, command_kind) in [
+            (
+                "canic_request_role_attestation",
+                "auth.issue_role_attestation.v1",
+            ),
+            (
+                "canic_request_internal_invocation_proof",
+                "auth.issue_internal_invocation_proof.v1",
+            ),
+        ] {
+            let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+                .iter()
+                .find(|entry| entry.endpoint == endpoint)
+                .expect("root auth-material policy entry");
+
+            assert_eq!(
+                entry.implementation_status,
+                ReplayImplementationStatus::Implemented
+            );
+            assert_eq!(entry.cost_class, CostClass::ThresholdEcdsaSign);
+            assert_eq!(
+                entry.replay_policy,
+                ReplayPolicy::ReplayProtected {
+                    command_kind,
+                    requires_operation_id: true,
+                }
+            );
+        }
     }
 
     #[test]

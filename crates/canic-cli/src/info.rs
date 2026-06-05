@@ -1,4 +1,11 @@
-use crate::{cli::help::print_help_or_version, cycles, info_env, list, version_text};
+use crate::{
+    cli::{
+        clap::{parse_subcommand, passthrough_subcommand},
+        help::print_help_or_version,
+    },
+    cycles, info_env, list, version_text,
+};
+use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -47,22 +54,77 @@ where
         return Ok(());
     }
 
-    let Some((command, tail)) = args.split_first() else {
-        return Err(InfoCommandError::Usage(usage()));
-    };
-    match command.to_str() {
-        Some("list") => list::run_info(tail.iter().cloned()).map_err(InfoCommandError::from),
-        Some("cycles") => cycles::run_info(tail.iter().cloned()).map_err(InfoCommandError::from),
-        Some("env") => info_env::run(tail.iter().cloned()).map_err(InfoCommandError::from),
-        Some("help" | "--help" | "-h") => {
-            println!("{}", usage());
-            Ok(())
-        }
-        _ => Err(InfoCommandError::Usage(usage())),
+    match parse_info_command(args)? {
+        ("list", tail) => list::run_info(tail).map_err(InfoCommandError::from),
+        ("cycles", tail) => cycles::run_info(tail).map_err(InfoCommandError::from),
+        ("env", tail) => info_env::run(tail).map_err(InfoCommandError::from),
+        _ => unreachable!("clap restricts info subcommands"),
     }
+}
+
+fn parse_info_command(
+    args: Vec<OsString>,
+) -> Result<(&'static str, Vec<OsString>), InfoCommandError> {
+    let (command, tail) = parse_subcommand(command(), args)
+        .map_err(|_| InfoCommandError::Usage(usage()))?
+        .ok_or_else(|| InfoCommandError::Usage(usage()))?;
+    match command.as_str() {
+        "list" => Ok(("list", tail)),
+        "cycles" => Ok(("cycles", tail)),
+        "env" => Ok(("env", tail)),
+        _ => unreachable!("clap restricts info subcommands"),
+    }
+}
+
+fn command() -> ClapCommand {
+    ClapCommand::new("info")
+        .bin_name("canic info")
+        .about("Group read-only installed-deployment information commands")
+        .disable_help_flag(true)
+        .subcommand(passthrough_subcommand(ClapCommand::new("list")))
+        .subcommand(passthrough_subcommand(ClapCommand::new("cycles")))
+        .subcommand(passthrough_subcommand(ClapCommand::new("env")))
 }
 
 #[must_use]
 fn usage() -> String {
     INFO_USAGE.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_info_subcommands_with_passthrough_args() {
+        let (command, tail) = parse_info_command(vec![
+            OsString::from("list"),
+            OsString::from("demo"),
+            OsString::from("--subtree"),
+            OsString::from("app"),
+        ])
+        .expect("parse info list");
+
+        assert_eq!(command, "list");
+        assert_eq!(
+            tail,
+            vec![
+                OsString::from("demo"),
+                OsString::from("--subtree"),
+                OsString::from("app")
+            ]
+        );
+    }
+
+    #[test]
+    fn rejects_missing_or_unknown_info_subcommand() {
+        std::assert_matches!(
+            parse_info_command(Vec::new()),
+            Err(InfoCommandError::Usage(_))
+        );
+        std::assert_matches!(
+            parse_info_command(vec![OsString::from("unknown")]),
+            Err(InfoCommandError::Usage(_))
+        );
+    }
 }

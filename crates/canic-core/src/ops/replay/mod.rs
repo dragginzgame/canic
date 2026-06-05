@@ -2,8 +2,12 @@ use crate::cdk::types::Principal;
 use crate::dto::rpc::{CyclesResponse, Response};
 use candid::{decode_one, encode_one};
 
-use self::{guard::ReplayPending, slot as replay_slot};
-
+use self::{
+    guard::ReplayPending,
+    model::{ExternalEffectDescriptor, RecoveryReason},
+    receipt::{abort_reserved_receipt, mark_external_effect_in_flight, mark_recovery_required},
+    slot as replay_slot,
+};
 pub mod guard;
 pub mod model;
 pub mod receipt;
@@ -76,12 +80,34 @@ pub fn reserve_root_replay(
 ///
 /// Persist canonical response bytes for an existing root replay reservation.
 pub fn commit_root_replay(
-    pending: ReplayPending,
+    pending: &ReplayPending,
     response: &Response,
 ) -> Result<(), ReplayCommitError> {
     let response_bytes = encode_root_replay_response(response)?;
-    replay_slot::commit_root_slot(&pending, response_bytes);
+    replay_slot::commit_root_slot(pending, response_bytes);
     Ok(())
+}
+
+/// mark_root_replay_external_effect
+///
+/// Persist the external-effect boundary for an existing root replay reservation.
+pub fn mark_root_replay_external_effect(
+    pending: &ReplayPending,
+    effect: ExternalEffectDescriptor,
+    now_ns: u64,
+) {
+    mark_external_effect_in_flight(&pending.receipt_token, effect, now_ns);
+}
+
+/// mark_root_replay_recovery_required
+///
+/// Preserve a replay receipt after an expensive external-effect boundary became uncertain.
+pub fn mark_root_replay_recovery_required(
+    pending: &ReplayPending,
+    reason: RecoveryReason,
+    now_ns: u64,
+) {
+    mark_recovery_required(&pending.receipt_token, reason, now_ns);
 }
 
 /// commit_root_cycles_replay
@@ -122,7 +148,7 @@ pub fn decode_root_cycles_replay_response(
 ///
 /// Remove an in-flight replay reservation after failed capability execution.
 pub fn abort_root_replay(pending: ReplayPending) {
-    replay_slot::remove_root_slot(&pending);
+    abort_reserved_receipt(&pending.receipt_token);
 }
 
 fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCommitError> {

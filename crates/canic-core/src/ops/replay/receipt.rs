@@ -205,7 +205,14 @@ pub fn mark_recovery_required(token: &ReplayReceiptToken, reason: RecoveryReason
 }
 
 pub fn abort_reserved_receipt(token: &ReplayReceiptToken) {
-    let _ = ReplayReceiptOps::remove(token.key);
+    let Some(receipt) =
+        ReplayReceiptOps::get(token.key).and_then(|record| record.into_receipt().ok())
+    else {
+        return;
+    };
+    if receipt.status == ReplayReceiptStatus::Reserved {
+        let _ = ReplayReceiptOps::remove(token.key);
+    }
 }
 
 fn latest_receipt_for_token(token: &ReplayReceiptToken) -> ReplayReceipt {

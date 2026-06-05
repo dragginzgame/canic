@@ -148,8 +148,6 @@ fn parses_adoption_report_json_output() {
         OsString::from("json"),
         OsString::from("--deployment-check"),
         OsString::from("check.json"),
-        OsString::from("--inventory"),
-        OsString::from("inventory.json"),
         OsString::from("--artifact-manifest"),
         OsString::from("artifacts.json"),
         OsString::from("--package-metadata"),
@@ -162,7 +160,7 @@ fn parses_adoption_report_json_output() {
     assert_eq!(options.profile, AdoptionProfileV1::Minimal);
     assert_eq!(options.format, AdoptionReportFormat::Json);
     assert_eq!(options.deployment_check, Some(PathBuf::from("check.json")));
-    assert_eq!(options.inventory, Some(PathBuf::from("inventory.json")));
+    assert_eq!(options.inventory, None);
     assert_eq!(
         options.artifact_manifest,
         Some(PathBuf::from("artifacts.json"))
@@ -228,6 +226,40 @@ fn parses_adoption_report_cargo_metadata_path() {
         Some(PathBuf::from("cargo-metadata.json"))
     );
     assert_eq!(options.package_metadata, None);
+}
+
+// Ensure adoption report rejects ambiguous inventory evidence sources at parse time.
+#[test]
+fn rejects_adoption_report_inventory_and_deployment_check_together() {
+    let err = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("partial"),
+        OsString::from("--deployment-check"),
+        OsString::from("check.json"),
+        OsString::from("--inventory"),
+        OsString::from("inventory.json"),
+    ])
+    .expect_err("ambiguous inventory evidence should fail");
+
+    std::assert_matches!(err, FleetCommandError::Usage(_));
+}
+
+// Ensure adoption report rejects ambiguous package metadata sources at parse time.
+#[test]
+fn rejects_adoption_report_package_metadata_and_cargo_metadata_together() {
+    let err = AdoptionReportOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("--profile"),
+        OsString::from("partial"),
+        OsString::from("--package-metadata"),
+        OsString::from("packages.json"),
+        OsString::from("--cargo-metadata"),
+        OsString::from("cargo-metadata.json"),
+    ])
+    .expect_err("ambiguous package metadata evidence should fail");
+
+    std::assert_matches!(err, FleetCommandError::Usage(_));
 }
 
 // Ensure unsupported adoption profiles fail before any report generation.
@@ -843,70 +875,6 @@ fn adoption_report_reads_package_metadata_from_cargo_metadata_file() {
     fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(report.inputs.package_metadata_count, 1);
     assert_eq!(store.package_state, AdoptionPackageStateV1::Matches);
-}
-
-// Ensure adoption evidence rejects ambiguous inventory source selection.
-#[test]
-fn adoption_report_rejects_inventory_and_deployment_check_together() {
-    let root = temp_dir("canic-fleet-adoption-conflicting-evidence");
-    let demo = write_fleet_config(&root, "demo");
-    let config_path = demo.join("canic.toml");
-    let evidence = write_adoption_evidence_files(&root);
-
-    let options = AdoptionReportOptions {
-        fleet: "demo".to_string(),
-        profile: AdoptionProfileV1::Partial,
-        format: AdoptionReportFormat::Text,
-        deployment_check: Some(evidence.deployment_check),
-        inventory: Some(evidence.inventory),
-        artifact_manifest: None,
-        cargo_metadata: None,
-        package_metadata: None,
-        build_provenance: None,
-        output: None,
-    };
-
-    let err = build_adoption_report_from_config_path(&config_path, &options, "unix:6")
-        .expect_err("ambiguous evidence should fail");
-
-    fs::remove_dir_all(&root).expect("remove temp root");
-    std::assert_matches!(
-        err,
-        FleetCommandError::Usage(message)
-            if message.contains("choose either --inventory or --deployment-check")
-    );
-}
-
-// Ensure adoption evidence rejects ambiguous package metadata source selection.
-#[test]
-fn adoption_report_rejects_package_metadata_and_cargo_metadata_together() {
-    let root = temp_dir("canic-fleet-adoption-conflicting-package-evidence");
-    let demo = write_fleet_config(&root, "demo");
-    let config_path = demo.join("canic.toml");
-    let evidence = write_adoption_evidence_files(&root);
-
-    let options = AdoptionReportOptions {
-        fleet: "demo".to_string(),
-        profile: AdoptionProfileV1::Partial,
-        format: AdoptionReportFormat::Text,
-        deployment_check: None,
-        inventory: None,
-        artifact_manifest: None,
-        cargo_metadata: Some(evidence.cargo_metadata),
-        package_metadata: Some(evidence.package_metadata),
-        build_provenance: None,
-        output: None,
-    };
-
-    let err = build_adoption_report_from_config_path(&config_path, &options, "unix:7")
-        .expect_err("ambiguous package metadata evidence should fail");
-
-    fs::remove_dir_all(&root).expect("remove temp root");
-    std::assert_matches!(
-        err,
-        FleetCommandError::Usage(message)
-            if message.contains("choose either --package-metadata or --cargo-metadata")
-    );
 }
 
 // Ensure cargo metadata package roots match package = "." declarations.

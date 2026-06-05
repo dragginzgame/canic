@@ -9,6 +9,26 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.10` completed the root auth-material replay recovery slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  Role-attestation and internal-invocation proof issuance now split signing
+  into prepare/sign phases, mark a `ThresholdEcdsaSign` external-effect
+  descriptor on the shared root replay receipt immediately before guarded
+  ECDSA signing, recover cycle reservations on signing failure, and preserve
+  recovery-required receipts for uncertain post-signing or post-commit
+  failures. Generic root replay abort now removes only receipts that are still
+  `Reserved`, so receipts already marked in-flight or recovery-required survive
+  the execution-error path. The replay policy manifest now marks
+  `canic_request_role_attestation` and
+  `canic_request_internal_invocation_proof` as implemented. No CLI commands
+  changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo test -p canic-core ops::auth --lib -- --nocapture
+  cargo test -p canic-core ops::replay --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
 - `0.61.9` completed the root auth-material signing cost-guard slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. Root role-attestation
   and internal-invocation proof signing now require `CostGuardPermit`, and

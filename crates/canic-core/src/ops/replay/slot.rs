@@ -2,7 +2,7 @@ use crate::ops::{
     replay::{
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
         guard::{ReplayPending, secs_to_ns},
-        receipt::{abort_reserved_receipt, commit_receipt_response, reserve_receipt_token},
+        receipt::{commit_receipt_response, reserve_receipt_token},
     },
     storage::replay::ReplayReceiptOps,
 };
@@ -53,11 +53,4 @@ pub fn active_root_slot_len_for_caller(
 /// Purge expired replay receipts up to the provided scan limit.
 pub fn purge_root_expired(now_ns: u64, limit: usize) -> usize {
     ReplayReceiptOps::purge_expired(now_ns, limit)
-}
-
-/// remove_root_slot
-///
-/// Remove a reserved replay receipt from stable replay storage.
-pub fn remove_root_slot(pending: &ReplayPending) {
-    abort_reserved_receipt(&pending.receipt_token);
 }
