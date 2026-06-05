@@ -120,9 +120,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
-    update_replay_blocker(
+    update_replay_protected(
         "canic_request_delegation",
         "auth.issue_delegation_proof.v1",
+        ReplayImplementationStatus::Implemented,
         CostClass::ThresholdEcdsaSign,
         Some(SIGNING_QUOTA_V1),
         Some(SIGNING_RESERVE_V1),
@@ -210,6 +211,24 @@ const fn update_replay_blocker(
     quota_policy: Option<&'static str>,
     cycle_reserve_policy: Option<&'static str>,
 ) -> EndpointReplayPolicy {
+    update_replay_protected(
+        endpoint,
+        command_kind,
+        ReplayImplementationStatus::ReleaseBlocker,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
+    )
+}
+
+const fn update_replay_protected(
+    endpoint: &'static str,
+    command_kind: &'static str,
+    implementation_status: ReplayImplementationStatus,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> EndpointReplayPolicy {
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
@@ -217,7 +236,7 @@ const fn update_replay_blocker(
             command_kind,
             requires_operation_id: true,
         },
-        implementation_status: ReplayImplementationStatus::ReleaseBlocker,
+        implementation_status,
         cost_class,
         quota_policy,
         cycle_reserve_policy,
@@ -305,6 +324,27 @@ mod tests {
                 entry.endpoint
             );
         }
+    }
+
+    #[test]
+    fn delegation_proof_issuance_is_manifested_as_implemented() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_request_delegation")
+            .expect("delegation endpoint policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(entry.cost_class, CostClass::ThresholdEcdsaSign);
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                command_kind: "auth.issue_delegation_proof.v1",
+                requires_operation_id: true,
+            }
+        );
     }
 
     #[test]

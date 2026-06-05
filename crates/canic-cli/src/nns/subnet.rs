@@ -1,36 +1,35 @@
-use super::{NnsCommandError, OutputFormat, now_unix_secs, parse_format, write_text_or_json};
+use super::{NnsCommandError, OutputFormat, leaf, now_unix_secs, write_text_or_json};
 use crate::{
     cli::{
         clap::{
             flag_arg, parse_matches, parse_positive_usize, parse_required_subcommand, parse_usize,
-            passthrough_subcommand, path_option, render_help, required_string, string_option,
+            passthrough_subcommand, render_help, required_string, required_typed,
             string_option_or_else, typed_option, value_arg,
         },
         defaults::default_icp,
-        globals::{internal_icp_arg, internal_network_arg},
+        globals::internal_icp_arg,
         help::print_help_or_version,
     },
     version_text,
 };
 use canic_host::{
-    duration::parse_duration_seconds,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
     release_set::icp_root,
     subnet_catalog::{
-        DEFAULT_REFRESH_LOCK_STALE_SECONDS, DEFAULT_STALE_AFTER_SECONDS,
-        DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT, ResolvedDeploymentTarget,
-        SubnetCatalogCacheRequest, SubnetCatalogFilters, SubnetCatalogHostError,
-        SubnetCatalogInfoRequest, SubnetCatalogListRequest, SubnetCatalogRefreshRequest,
-        build_subnet_catalog_info_report, build_subnet_catalog_list_report, refresh_subnet_catalog,
-        subnet_catalog_info_report_text, subnet_catalog_list_report_text,
-        subnet_catalog_list_report_verbose_text, subnet_catalog_refresh_report_text,
+        DEFAULT_STALE_AFTER_SECONDS, DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT,
+        ResolvedDeploymentTarget, SubnetCatalogCacheRequest, SubnetCatalogFilters,
+        SubnetCatalogHostError, SubnetCatalogInfoRequest, SubnetCatalogListRequest,
+        SubnetCatalogRefreshRequest, build_subnet_catalog_info_report,
+        build_subnet_catalog_list_report, refresh_subnet_catalog, subnet_catalog_info_report_text,
+        subnet_catalog_list_report_text, subnet_catalog_list_report_verbose_text,
+        subnet_catalog_refresh_report_text,
     },
 };
 use canic_subnet_catalog::{
-    CatalogError, GeographicScope, MAINNET_NETWORK, ResolveAs, SubnetKind, SubnetSpecialization,
+    CatalogError, GeographicScope, ResolveAs, SubnetKind, SubnetSpecialization,
     canonical_principal_text,
 };
 use clap::Command as ClapCommand;
@@ -39,7 +38,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(test)]
 pub(super) const DEFAULT_RANGE_LIMIT: usize = 50;
+const DEFAULT_RANGE_LIMIT_ARG: &str = "50";
 const INFO_INPUT_VALUE_NAME: &str = "subnet|canister|subnet-prefix|deployment-target";
 const INFO_INPUT_HELP: &str = "\
 Subnet/canister principal, unique subnet prefix, deployment target, or \
@@ -222,12 +223,9 @@ impl CatalogListOptions {
     {
         let matches = parse_matches(list_command(), args)
             .map_err(|_| NnsCommandError::Usage(list_usage()))?;
-        let range_limit = typed_option(&matches, "range-limit").unwrap_or(DEFAULT_RANGE_LIMIT);
-        let range_offset = typed_option(&matches, "range-offset").unwrap_or(0);
         Ok(Self {
-            network: string_option(&matches, "network")
-                .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
-            format: typed_option(&matches, "format").unwrap_or(OutputFormat::Text),
+            network: required_string(&matches, "network"),
+            format: required_typed(&matches, "format"),
             filters: SubnetCatalogFilters {
                 kind: typed_option(&matches, "kind"),
                 specialization: typed_option(&matches, "specialization"),
@@ -235,8 +233,8 @@ impl CatalogListOptions {
             },
             show_ranges: matches.get_flag("show-ranges"),
             verbose: matches.get_flag("verbose"),
-            range_limit,
-            range_offset,
+            range_limit: required_typed(&matches, "range-limit"),
+            range_offset: required_typed(&matches, "range-offset"),
         })
     }
 }
@@ -250,10 +248,9 @@ impl CatalogInfoOptions {
             .map_err(|_| NnsCommandError::Usage(info_usage()))?;
         Ok(Self {
             input: required_string(&matches, "input"),
-            network: string_option(&matches, "network")
-                .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
+            network: required_string(&matches, "network"),
             icp: string_option_or_else(&matches, "icp", default_icp),
-            format: typed_option(&matches, "format").unwrap_or(OutputFormat::Text),
+            format: required_typed(&matches, "format"),
             forced: typed_option(&matches, "as"),
         })
     }
@@ -267,15 +264,12 @@ impl CatalogRefreshOptions {
         let matches = parse_matches(refresh_command(), args)
             .map_err(|_| NnsCommandError::Usage(refresh_usage()))?;
         Ok(Self {
-            network: string_option(&matches, "network")
-                .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
-            format: typed_option(&matches, "format").unwrap_or(OutputFormat::Text),
-            source_endpoint: string_option(&matches, "source-endpoint")
-                .unwrap_or_else(|| DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT.to_string()),
-            lock_stale_after_seconds: typed_option(&matches, "lock-stale-after")
-                .unwrap_or(DEFAULT_REFRESH_LOCK_STALE_SECONDS),
+            network: required_string(&matches, "network"),
+            format: required_typed(&matches, "format"),
+            source_endpoint: required_string(&matches, "source-endpoint"),
+            lock_stale_after_seconds: required_typed(&matches, "lock-stale-after"),
             dry_run: matches.get_flag("dry-run"),
-            output_path: path_option(&matches, "output"),
+            output_path: typed_option(&matches, "output"),
         })
     }
 }
@@ -425,10 +419,6 @@ fn parse_resolve_as(value: &str) -> Result<ResolveAs, String> {
     }
 }
 
-fn parse_refresh_lock_stale_after(value: &str) -> Result<u64, String> {
-    parse_duration_seconds(value).map_err(|err| err.to_string())
-}
-
 fn cache_request(icp_root: &Path, network: &str) -> SubnetCatalogCacheRequest {
     SubnetCatalogCacheRequest {
         icp_root: PathBuf::from(icp_root),
@@ -478,13 +468,7 @@ fn list_command() -> ClapCommand {
                 .value_parser(clap::builder::ValueParser::new(parse_geo))
                 .help("Filter by geographic scope: global, europe, or unknown"),
         )
-        .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("text|json")
-                .value_parser(clap::builder::ValueParser::new(parse_format))
-                .help("Output format; defaults to text"),
-        )
+        .arg(leaf::format_arg())
         .arg(
             flag_arg("show-ranges")
                 .long("show-ranges")
@@ -499,6 +483,7 @@ fn list_command() -> ClapCommand {
             value_arg("range-limit")
                 .long("range-limit")
                 .value_name("n")
+                .default_value(DEFAULT_RANGE_LIMIT_ARG)
                 .value_parser(clap::builder::ValueParser::new(parse_positive_usize))
                 .help("Maximum routing ranges to show per subnet in text output"),
         )
@@ -506,10 +491,11 @@ fn list_command() -> ClapCommand {
             value_arg("range-offset")
                 .long("range-offset")
                 .value_name("n")
+                .default_value("0")
                 .value_parser(clap::builder::ValueParser::new(parse_usize))
                 .help("Routing range offset for text output"),
         )
-        .arg(internal_network_arg())
+        .arg(leaf::network_arg())
         .after_help(LIST_HELP_AFTER)
 }
 
@@ -531,14 +517,8 @@ fn info_command() -> ClapCommand {
                 .value_parser(clap::builder::ValueParser::new(parse_resolve_as))
                 .help("Force principal interpretation"),
         )
-        .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("text|json")
-                .value_parser(clap::builder::ValueParser::new(parse_format))
-                .help("Output format; defaults to text"),
-        )
-        .arg(internal_network_arg())
+        .arg(leaf::format_arg())
+        .arg(leaf::network_arg())
         .arg(internal_icp_arg())
         .after_help(INFO_HELP_AFTER)
 }
@@ -548,42 +528,19 @@ fn refresh_command() -> ClapCommand {
         .bin_name("canic nns subnet refresh")
         .about("Force-refresh and cache NNS subnet metadata")
         .disable_help_flag(true)
+        .arg(leaf::format_arg())
         .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("text|json")
-                .value_parser(clap::builder::ValueParser::new(parse_format))
-                .help("Output format; defaults to text"),
-        )
-        .arg(
-            value_arg("source-endpoint")
-                .long("source-endpoint")
-                .value_name("url")
+            leaf::source_endpoint_arg(DEFAULT_SUBNET_CATALOG_SOURCE_ENDPOINT)
                 .help("IC API endpoint used for the NNS registry query"),
         )
-        .arg(
-            value_arg("lock-stale-after")
-                .long("lock-stale-after")
-                .value_name("duration")
-                .value_parser(clap::builder::ValueParser::new(
-                    parse_refresh_lock_stale_after,
-                ))
-                .help(
-                    "Treat an existing refresh lock as stale after this duration; defaults to 30m",
-                ),
-        )
+        .arg(leaf::refresh_lock_stale_after_arg())
         .arg(
             flag_arg("dry-run")
                 .long("dry-run")
                 .help("Fetch and validate without replacing the cached catalog"),
         )
-        .arg(
-            value_arg("output")
-                .long("output")
-                .value_name("path")
-                .help("Also write the fetched catalog JSON to this path"),
-        )
-        .arg(internal_network_arg())
+        .arg(leaf::output_path_arg().help("Also write the fetched catalog JSON to this path"))
+        .arg(leaf::network_arg())
         .after_help(REFRESH_HELP_AFTER)
 }
 

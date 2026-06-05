@@ -24,6 +24,7 @@
 pub mod auth;
 pub mod cascade;
 pub mod config;
+pub mod cost_guard;
 pub mod ic;
 pub mod perf;
 pub mod placement;

@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.5` adds the shared cost-guard foundation and wires root
+  delegation-proof signing through it. Fresh delegation proof requests now
+  reserve signing quota and an in-flight cycle budget before threshold ECDSA,
+  while committed replay returns still bypass current quota and reserve checks.
+
 - `0.61.4` makes root delegation-proof issuance replay-protected. Delegation
   proof requests now carry root replay metadata, reserve shared replay
   receipts before threshold ECDSA signing, return committed proof bytes for

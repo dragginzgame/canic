@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-04
+Last updated: 2026-06-05
 
 ## Purpose
 
@@ -9,7 +9,25 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.4` is underway from
+- `0.61.5` is underway from
+  `docs/design/0.61-replay-protection/0.61-design.md`. The branch now has the
+  first shared cost-guard foundation in `ops::cost_guard`, backed by durable
+  intent-store reservations. Root delegation-proof signing reserves a
+  per-command/per-caller signing quota slot and an in-flight cycle reservation
+  after fresh replay preflight and before threshold ECDSA. The prepared proof
+  signer now requires an unforgeable `CostGuardPermit`, so the root signing
+  adapter cannot be called through that path without crossing the guard.
+  Committed replay responses still return without current quota or reserve
+  checks. The replay policy manifest now marks `canic_request_delegation` as
+  implemented; other costed endpoints remain release blockers. No CLI commands
+  changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core ops::cost_guard --lib -- --nocapture
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
+- `0.61.4` completed the root delegation replay receipt slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. Root
   delegation-proof issuance now uses shared replay receipts: shard-side
   requests attach root replay metadata, root rejects missing/invalid replay
@@ -36,8 +54,7 @@ inspect only the files needed for the current task.
   node-operator count, distinct node-provider count, and assigned-node count.
   The cache is `.canic/data-center/ic/data-centers.json`; refresh uses
   `.canic/data-center/ic/refresh.lock` and atomic cache replacement.
-  Cost/quota/cycle-reserve guard work for delegation-proof issuance remains a
-  later 0.61 blocker. Validation:
+  Validation:
   ```text
   cargo test -p canic-core api::auth --lib -- --nocapture
   cargo test -p canic-core ops::replay --lib -- --nocapture

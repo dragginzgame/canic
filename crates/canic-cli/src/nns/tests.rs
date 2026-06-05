@@ -1,22 +1,22 @@
 use super::*;
 use super::{
     data_center::{
-        DataCenterInfoOptions, DataCenterListOptions, DataCenterRefreshOptions,
-        data_center_info_usage, data_center_list_usage, data_center_refresh_usage,
+        data_center_info_options, data_center_info_usage, data_center_list_options,
+        data_center_list_usage, data_center_refresh_options, data_center_refresh_usage,
         data_center_usage,
     },
     node::{
-        NodeInfoOptions, NodeListOptions, NodeRefreshOptions, node_info_usage, node_list_usage,
-        node_refresh_usage, node_usage,
+        node_info_options, node_info_usage, node_list_options, node_list_usage,
+        node_refresh_options, node_refresh_usage, node_usage,
     },
     node_operator::{
-        NodeOperatorInfoOptions, NodeOperatorListOptions, NodeOperatorRefreshOptions,
-        node_operator_info_usage, node_operator_list_usage, node_operator_refresh_usage,
+        node_operator_info_options, node_operator_info_usage, node_operator_list_options,
+        node_operator_list_usage, node_operator_refresh_options, node_operator_refresh_usage,
         node_operator_usage,
     },
     node_provider::{
-        NodeProviderInfoOptions, NodeProviderListOptions, NodeProviderRefreshOptions,
-        node_provider_info_usage, node_provider_list_usage, node_provider_refresh_usage,
+        node_provider_info_options, node_provider_info_usage, node_provider_list_options,
+        node_provider_list_usage, node_provider_refresh_options, node_provider_refresh_usage,
         node_provider_usage,
     },
     registry::{RegistryVersionOptions, registry_usage, registry_version_usage},
@@ -195,14 +195,14 @@ fn refresh_parses_defaults_and_export_options() {
 
 #[test]
 fn node_provider_list_parses_defaults_and_json_format() {
-    let defaults = NodeProviderListOptions::parse([]).expect("parse defaults");
+    let defaults = node_provider_list_options([]).expect("parse defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
     assert_eq!(defaults.source_endpoint, DEFAULT_NNS_SOURCE_ENDPOINT);
     assert!(!defaults.verbose);
 
-    let options = NodeProviderListOptions::parse([
+    let options = node_provider_list_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -218,7 +218,7 @@ fn node_provider_list_parses_defaults_and_json_format() {
 
 #[test]
 fn node_provider_info_parses_input_and_json_format() {
-    let options = NodeProviderInfoOptions::parse([
+    let options = node_provider_info_options([
         OsString::from("ryjl"),
         OsString::from("--format"),
         OsString::from("json"),
@@ -235,7 +235,7 @@ fn node_provider_info_parses_input_and_json_format() {
 
 #[test]
 fn node_provider_refresh_parses_defaults_and_export_options() {
-    let defaults = NodeProviderRefreshOptions::parse([]).expect("parse refresh defaults");
+    let defaults = node_provider_refresh_options([]).expect("parse refresh defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
@@ -247,7 +247,7 @@ fn node_provider_refresh_parses_defaults_and_export_options() {
     assert!(!defaults.dry_run);
     assert_eq!(defaults.output_path, None);
 
-    let options = NodeProviderRefreshOptions::parse([
+    let options = node_provider_refresh_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -272,7 +272,7 @@ fn node_provider_refresh_parses_defaults_and_export_options() {
 
 #[test]
 fn node_operator_list_parses_defaults_and_json_format() {
-    let defaults = NodeOperatorListOptions::parse([]).expect("parse defaults");
+    let defaults = node_operator_list_options([]).expect("parse defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
@@ -282,7 +282,7 @@ fn node_operator_list_parses_defaults_and_json_format() {
     );
     assert!(!defaults.verbose);
 
-    let options = NodeOperatorListOptions::parse([
+    let options = node_operator_list_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -298,7 +298,7 @@ fn node_operator_list_parses_defaults_and_json_format() {
 
 #[test]
 fn node_operator_info_parses_input_and_json_format() {
-    let options = NodeOperatorInfoOptions::parse([
+    let options = node_operator_info_options([
         OsString::from("ryjl"),
         OsString::from("--format"),
         OsString::from("json"),
@@ -315,7 +315,7 @@ fn node_operator_info_parses_input_and_json_format() {
 
 #[test]
 fn node_operator_refresh_parses_defaults_and_export_options() {
-    let defaults = NodeOperatorRefreshOptions::parse([]).expect("parse refresh defaults");
+    let defaults = node_operator_refresh_options([]).expect("parse refresh defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
@@ -330,7 +330,7 @@ fn node_operator_refresh_parses_defaults_and_export_options() {
     assert!(!defaults.dry_run);
     assert_eq!(defaults.output_path, None);
 
-    let options = NodeOperatorRefreshOptions::parse([
+    let options = node_operator_refresh_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -355,14 +355,14 @@ fn node_operator_refresh_parses_defaults_and_export_options() {
 
 #[test]
 fn node_list_parses_defaults_and_json_format() {
-    let defaults = NodeListOptions::parse([]).expect("parse defaults");
+    let defaults = node_list_options([]).expect("parse defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
     assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
     assert!(!defaults.verbose);
 
-    let options = NodeListOptions::parse([
+    let options = node_list_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -378,7 +378,7 @@ fn node_list_parses_defaults_and_json_format() {
 
 #[test]
 fn node_info_parses_input_and_json_format() {
-    let options = NodeInfoOptions::parse([
+    let options = node_info_options([
         OsString::from("ryjl"),
         OsString::from("--format"),
         OsString::from("json"),
@@ -395,7 +395,7 @@ fn node_info_parses_input_and_json_format() {
 
 #[test]
 fn node_refresh_parses_defaults_and_export_options() {
-    let defaults = NodeRefreshOptions::parse([]).expect("parse refresh defaults");
+    let defaults = node_refresh_options([]).expect("parse refresh defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
@@ -407,7 +407,7 @@ fn node_refresh_parses_defaults_and_export_options() {
     assert!(!defaults.dry_run);
     assert_eq!(defaults.output_path, None);
 
-    let options = NodeRefreshOptions::parse([
+    let options = node_refresh_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -432,7 +432,7 @@ fn node_refresh_parses_defaults_and_export_options() {
 
 #[test]
 fn data_center_list_parses_defaults_and_json_format() {
-    let defaults = DataCenterListOptions::parse([]).expect("parse defaults");
+    let defaults = data_center_list_options([]).expect("parse defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
@@ -442,7 +442,7 @@ fn data_center_list_parses_defaults_and_json_format() {
     );
     assert!(!defaults.verbose);
 
-    let options = DataCenterListOptions::parse([
+    let options = data_center_list_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),
@@ -458,7 +458,7 @@ fn data_center_list_parses_defaults_and_json_format() {
 
 #[test]
 fn data_center_info_parses_input_and_json_format() {
-    let options = DataCenterInfoOptions::parse([
+    let options = data_center_info_options([
         OsString::from("an1"),
         OsString::from("--format"),
         OsString::from("json"),
@@ -475,7 +475,7 @@ fn data_center_info_parses_input_and_json_format() {
 
 #[test]
 fn data_center_refresh_parses_defaults_and_export_options() {
-    let defaults = DataCenterRefreshOptions::parse([]).expect("parse refresh defaults");
+    let defaults = data_center_refresh_options([]).expect("parse refresh defaults");
 
     assert_eq!(defaults.network, MAINNET_NETWORK);
     assert_eq!(defaults.format, OutputFormat::Text);
@@ -490,7 +490,7 @@ fn data_center_refresh_parses_defaults_and_export_options() {
     assert!(!defaults.dry_run);
     assert_eq!(defaults.output_path, None);
 
-    let options = DataCenterRefreshOptions::parse([
+    let options = data_center_refresh_options([
         OsString::from("--format"),
         OsString::from("json"),
         OsString::from("--source-endpoint"),

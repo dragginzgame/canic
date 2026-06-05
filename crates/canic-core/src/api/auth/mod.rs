@@ -20,7 +20,8 @@ use crate::{
             SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
-        ic::IcOps,
+        cost_guard::{CostGuardOps, CostGuardRequest},
+        ic::{IcOps, mgmt::MgmtOps},
         replay::{
             guard::secs_to_ns,
             model::{
@@ -29,8 +30,8 @@ use crate::{
             },
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-                abort_reserved_receipt, commit_receipt_response, mark_external_effect_in_flight,
-                mark_recovery_required, reserve_or_replay_receipt,
+                ReplayReceiptToken, abort_reserved_receipt, commit_receipt_response,
+                mark_external_effect_in_flight, mark_recovery_required, reserve_or_replay_receipt,
             },
         },
         runtime::env::EnvOps,
@@ -66,6 +67,10 @@ impl AuthApi {
     const DELEGATION_REPLAY_COMMAND_KIND: &str = "auth.issue_delegation_proof.v1";
     const DELEGATION_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
     const MAX_DELEGATION_REPLAY_TTL_SECONDS: u64 = 300;
+    const DELEGATION_SIGNING_QUOTA_WINDOW_SECONDS: u64 = 60;
+    const MAX_DELEGATION_SIGNING_OPERATIONS_PER_WINDOW: u64 = 60;
+    const DELEGATION_SIGNING_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
+    const MIN_DELEGATION_SIGNING_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
 
@@ -182,7 +187,7 @@ impl AuthApi {
         let payload_hash = Self::delegation_replay_payload_hash(&command_kind, &actor, &request);
         let now_secs = IcOps::now_secs();
         let replay_input = ReplayReceiptReserveInput::new(
-            command_kind,
+            command_kind.clone(),
             OperationId::from_bytes(metadata.request_id),
             actor,
             payload_hash,
@@ -197,6 +202,17 @@ impl AuthApi {
             decision => return Self::map_delegation_replay_decision(decision),
         };
 
+        Self::issue_fresh_delegation_proof(token, command_kind, caller, request, max_cert_ttl_secs)
+            .await
+    }
+
+    async fn issue_fresh_delegation_proof(
+        token: ReplayReceiptToken,
+        command_kind: CommandKind,
+        caller: Principal,
+        request: DelegationProofIssueRequest,
+        max_cert_ttl_secs: u64,
+    ) -> Result<DelegationProof, Error> {
         let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
         let prepared = match AuthOps::prepare_delegation_proof(SignDelegationProofInput {
             audience: request.aud,
@@ -216,6 +232,25 @@ impl AuthApi {
             }
         };
 
+        let cost_permit = match CostGuardOps::reserve(CostGuardRequest {
+            cost_class: crate::replay_policy::CostClass::ThresholdEcdsaSign,
+            command_kind,
+            quota_subject: caller,
+            payer: IcOps::canister_self(),
+            now_secs: IcOps::now_secs(),
+            quota_window_secs: Self::DELEGATION_SIGNING_QUOTA_WINDOW_SECONDS,
+            max_operations_per_window: Self::MAX_DELEGATION_SIGNING_OPERATIONS_PER_WINDOW,
+            current_cycle_balance: MgmtOps::canister_cycle_balance().to_u128(),
+            cycle_reservation_cycles: Self::DELEGATION_SIGNING_CYCLE_RESERVATION_CYCLES,
+            min_cycles_after_reservation: Self::MIN_DELEGATION_SIGNING_CYCLES_AFTER_RESERVATION,
+        }) {
+            Ok(permit) => permit,
+            Err(err) => {
+                abort_reserved_receipt(&token);
+                return Err(Self::map_auth_error(err));
+            }
+        };
+
         mark_external_effect_in_flight(
             &token,
             ExternalEffectDescriptor::ThresholdEcdsaSign {
@@ -226,9 +261,10 @@ impl AuthApi {
             secs_to_ns(IcOps::now_secs()),
         );
 
-        let proof = match AuthOps::sign_prepared_delegation_proof(prepared).await {
+        let proof = match AuthOps::sign_prepared_delegation_proof(&cost_permit, prepared).await {
             Ok(proof) => proof,
             Err(err) => {
+                let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
                 mark_recovery_required(
                     &token,
                     RecoveryReason::ExternalEffectStatusUnknown,
@@ -241,6 +277,7 @@ impl AuthApi {
         let response_bytes = match Self::encode_delegation_proof_response(&proof) {
             Ok(response_bytes) => response_bytes,
             Err(err) => {
+                let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
                 mark_recovery_required(
                     &token,
                     RecoveryReason::ResponseCommitFailed,
@@ -249,6 +286,15 @@ impl AuthApi {
                 return Err(err);
             }
         };
+
+        if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+            mark_recovery_required(
+                &token,
+                RecoveryReason::ResponseCommitFailed,
+                secs_to_ns(IcOps::now_secs()),
+            );
+            return Err(Self::map_auth_error(err));
+        }
 
         commit_receipt_response(
             &token,

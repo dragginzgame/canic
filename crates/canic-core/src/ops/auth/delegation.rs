@@ -16,6 +16,7 @@ use crate::{
     dto::auth::{DelegationProof, ShardKeyBinding},
     ops::{
         auth::AuthValidationError,
+        cost_guard::CostGuardPermit,
         ic::{IcOps, ecdsa::EcdsaOps},
         storage::state::subnet::SubnetStateOps,
     },
@@ -66,6 +67,7 @@ impl AuthOps {
 
     /// Sign and finish an already-prepared root delegation proof.
     pub(crate) async fn sign_prepared_delegation_proof(
+        _permit: &CostGuardPermit,
         prepared: PreparedRootDelegationProof,
     ) -> Result<DelegationProof, InternalError> {
         let root_sig = EcdsaOps::sign_bytes(

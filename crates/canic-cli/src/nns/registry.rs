@@ -1,11 +1,10 @@
-use super::{NnsCommandError, OutputFormat, now_unix_secs, parse_format, write_text_or_json};
+use super::{NnsCommandError, OutputFormat, leaf, now_unix_secs, write_text_or_json};
 use crate::{
     cli::{
         clap::{
             parse_matches, parse_required_subcommand, passthrough_subcommand, render_help,
-            string_option, typed_option, value_arg,
+            required_string, required_typed,
         },
-        globals::internal_network_arg,
         help::{first_arg_is_help, print_help_or_version},
     },
     version_text,
@@ -14,7 +13,6 @@ use canic_host::nns_registry::{
     DEFAULT_NNS_REGISTRY_SOURCE_ENDPOINT, NnsRegistryVersionRequest,
     build_nns_registry_version_report, nns_registry_version_report_text,
 };
-use canic_subnet_catalog::MAINNET_NETWORK;
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 
@@ -94,11 +92,9 @@ impl RegistryVersionOptions {
         let matches = parse_matches(registry_version_command(), args)
             .map_err(|_| NnsCommandError::Usage(registry_version_usage()))?;
         Ok(Self {
-            network: string_option(&matches, "network")
-                .unwrap_or_else(|| MAINNET_NETWORK.to_string()),
-            format: typed_option(&matches, "format").unwrap_or(OutputFormat::Text),
-            source_endpoint: string_option(&matches, "source-endpoint")
-                .unwrap_or_else(|| DEFAULT_NNS_REGISTRY_SOURCE_ENDPOINT.to_string()),
+            network: required_string(&matches, "network"),
+            format: required_typed(&matches, "format"),
+            source_endpoint: required_string(&matches, "source-endpoint"),
         })
     }
 }
@@ -118,20 +114,12 @@ fn registry_version_command() -> ClapCommand {
         .bin_name("canic nns registry version")
         .about("Show the latest mainnet NNS registry version")
         .disable_help_flag(true)
+        .arg(leaf::format_arg())
         .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("text|json")
-                .value_parser(clap::builder::ValueParser::new(parse_format))
-                .help("Output format; defaults to text"),
-        )
-        .arg(
-            value_arg("source-endpoint")
-                .long("source-endpoint")
-                .value_name("url")
+            leaf::source_endpoint_arg(DEFAULT_NNS_REGISTRY_SOURCE_ENDPOINT)
                 .help("IC API endpoint used for the native NNS registry query"),
         )
-        .arg(internal_network_arg())
+        .arg(leaf::network_arg())
         .after_help(REGISTRY_VERSION_HELP_AFTER)
 }
 
