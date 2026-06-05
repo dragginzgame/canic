@@ -1,5 +1,14 @@
 use super::*;
 use super::{
+    data_center::{
+        DataCenterInfoOptions, DataCenterListOptions, DataCenterRefreshOptions,
+        data_center_info_usage, data_center_list_usage, data_center_refresh_usage,
+        data_center_usage,
+    },
+    node::{
+        NodeInfoOptions, NodeListOptions, NodeRefreshOptions, node_info_usage, node_list_usage,
+        node_refresh_usage, node_usage,
+    },
     node_operator::{
         NodeOperatorInfoOptions, NodeOperatorListOptions, NodeOperatorRefreshOptions,
         node_operator_info_usage, node_operator_list_usage, node_operator_refresh_usage,
@@ -22,6 +31,10 @@ use canic_host::{
         InstalledDeploymentRegistry, InstalledDeploymentResolution, InstalledDeploymentSource,
         ResolvedDeploymentTopology,
     },
+    nns_data_center::{
+        DEFAULT_DATA_CENTER_REFRESH_LOCK_STALE_SECONDS, DEFAULT_NNS_DATA_CENTER_SOURCE_ENDPOINT,
+    },
+    nns_node::{DEFAULT_NNS_NODE_SOURCE_ENDPOINT, DEFAULT_NODE_REFRESH_LOCK_STALE_SECONDS},
     nns_node_operator::{
         DEFAULT_NNS_NODE_OPERATOR_SOURCE_ENDPOINT, DEFAULT_NODE_OPERATOR_REFRESH_LOCK_STALE_SECONDS,
     },
@@ -341,6 +354,166 @@ fn node_operator_refresh_parses_defaults_and_export_options() {
 }
 
 #[test]
+fn node_list_parses_defaults_and_json_format() {
+    let defaults = NodeListOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+    assert!(!defaults.verbose);
+
+    let options = NodeListOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+        OsString::from("--verbose"),
+    ])
+    .expect("parse node list");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+    assert!(options.verbose);
+}
+
+#[test]
+fn node_info_parses_input_and_json_format() {
+    let options = NodeInfoOptions::parse([
+        OsString::from("ryjl"),
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse node info");
+
+    assert_eq!(options.input, "ryjl");
+    assert_eq!(options.network, MAINNET_NETWORK);
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
+fn node_refresh_parses_defaults_and_export_options() {
+    let defaults = NodeRefreshOptions::parse([]).expect("parse refresh defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+    assert_eq!(
+        defaults.lock_stale_after_seconds,
+        DEFAULT_NODE_REFRESH_LOCK_STALE_SECONDS
+    );
+    assert!(!defaults.dry_run);
+    assert_eq!(defaults.output_path, None);
+
+    let options = NodeRefreshOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+        OsString::from("--lock-stale-after"),
+        OsString::from("5m"),
+        OsString::from("--dry-run"),
+        OsString::from("--output"),
+        OsString::from("nodes.preview.json"),
+    ])
+    .expect("parse node refresh");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+    assert_eq!(options.lock_stale_after_seconds, 300);
+    assert!(options.dry_run);
+    assert_eq!(
+        options.output_path,
+        Some(PathBuf::from("nodes.preview.json"))
+    );
+}
+
+#[test]
+fn data_center_list_parses_defaults_and_json_format() {
+    let defaults = DataCenterListOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(
+        defaults.source_endpoint,
+        DEFAULT_NNS_DATA_CENTER_SOURCE_ENDPOINT
+    );
+    assert!(!defaults.verbose);
+
+    let options = DataCenterListOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+        OsString::from("--verbose"),
+    ])
+    .expect("parse data-center list");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+    assert!(options.verbose);
+}
+
+#[test]
+fn data_center_info_parses_input_and_json_format() {
+    let options = DataCenterInfoOptions::parse([
+        OsString::from("an1"),
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse data-center info");
+
+    assert_eq!(options.input, "an1");
+    assert_eq!(options.network, MAINNET_NETWORK);
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
+fn data_center_refresh_parses_defaults_and_export_options() {
+    let defaults = DataCenterRefreshOptions::parse([]).expect("parse refresh defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(
+        defaults.source_endpoint,
+        DEFAULT_NNS_DATA_CENTER_SOURCE_ENDPOINT
+    );
+    assert_eq!(
+        defaults.lock_stale_after_seconds,
+        DEFAULT_DATA_CENTER_REFRESH_LOCK_STALE_SECONDS
+    );
+    assert!(!defaults.dry_run);
+    assert_eq!(defaults.output_path, None);
+
+    let options = DataCenterRefreshOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+        OsString::from("--lock-stale-after"),
+        OsString::from("5m"),
+        OsString::from("--dry-run"),
+        OsString::from("--output"),
+        OsString::from("data-centers.preview.json"),
+    ])
+    .expect("parse data-center refresh");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+    assert_eq!(options.lock_stale_after_seconds, 300);
+    assert!(options.dry_run);
+    assert_eq!(
+        options.output_path,
+        Some(PathBuf::from("data-centers.preview.json"))
+    );
+}
+
+#[test]
 fn registry_version_parses_defaults_and_json_format() {
     let defaults = RegistryVersionOptions::parse([]).expect("parse defaults");
 
@@ -361,6 +534,48 @@ fn registry_version_parses_defaults_and_json_format() {
 
     assert_eq!(options.format, OutputFormat::Json);
     assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
+fn data_center_help_is_advertised_under_nns() {
+    let nns = usage();
+    let data_center = data_center_usage();
+    let list = data_center_list_usage();
+    let info = data_center_info_usage();
+    let refresh = data_center_refresh_usage();
+
+    assert!(nns.contains("data-center"));
+    assert!(data_center.contains("List cached mainnet NNS data centers"));
+    assert!(data_center.contains("Show one cached mainnet NNS data center"));
+    assert!(data_center.contains("Force-refresh and cache NNS data-center metadata"));
+    assert!(list.contains("canic nns data-center list"));
+    assert!(list.contains("--verbose"));
+    assert!(list.contains("--format json"));
+    assert!(info.contains("canic nns data-center info"));
+    assert!(info.contains("data-center|data-center-prefix"));
+    assert!(refresh.contains("canic nns data-center refresh"));
+    assert!(refresh.contains("--dry-run"));
+}
+
+#[test]
+fn node_help_is_advertised_under_nns() {
+    let nns = usage();
+    let node = node_usage();
+    let list = node_list_usage();
+    let info = node_info_usage();
+    let refresh = node_refresh_usage();
+
+    assert!(nns.contains("node"));
+    assert!(node.contains("List cached mainnet NNS nodes"));
+    assert!(node.contains("Show one cached mainnet NNS node"));
+    assert!(node.contains("Force-refresh and cache NNS node metadata"));
+    assert!(list.contains("canic nns node list"));
+    assert!(list.contains("--verbose"));
+    assert!(list.contains("--format json"));
+    assert!(info.contains("canic nns node info"));
+    assert!(info.contains("node|node-prefix"));
+    assert!(refresh.contains("canic nns node refresh"));
+    assert!(refresh.contains("--dry-run"));
 }
 
 #[test]
@@ -415,6 +630,36 @@ fn registry_help_is_advertised_under_nns() {
     assert!(registry.contains("Show the latest mainnet NNS registry version"));
     assert!(version.contains("canic nns registry version"));
     assert!(version.contains("--format json"));
+}
+
+#[test]
+fn data_center_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("data-center"),
+        OsString::from("list"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns data-center list"));
+}
+
+#[test]
+fn node_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("node"),
+        OsString::from("list"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns node list"));
 }
 
 #[test]

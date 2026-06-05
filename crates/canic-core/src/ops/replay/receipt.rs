@@ -172,7 +172,7 @@ pub fn commit_receipt_response(
     response_bytes: Vec<u8>,
     now_ns: u64,
 ) {
-    let mut receipt = token.receipt.clone();
+    let mut receipt = latest_receipt_for_token(token);
     receipt.status = ReplayReceiptStatus::Committed;
     receipt.response_schema_version = Some(response_schema_version);
     receipt.response_bytes = Some(response_bytes);
@@ -187,7 +187,7 @@ pub fn commit_terminal_failure(
     now_ns: u64,
 ) {
     let bounded = bounded_terminal_error_bytes(error_bytes);
-    let mut receipt = token.receipt.clone();
+    let mut receipt = latest_receipt_for_token(token);
     receipt.status = ReplayReceiptStatus::TerminalFailed {
         error_code,
         error_bytes: bounded.bytes,
@@ -198,7 +198,7 @@ pub fn commit_terminal_failure(
 }
 
 pub fn mark_recovery_required(token: &ReplayReceiptToken, reason: RecoveryReason, now_ns: u64) {
-    let mut receipt = token.receipt.clone();
+    let mut receipt = latest_receipt_for_token(token);
     receipt.status = ReplayReceiptStatus::RecoveryRequired { reason };
     receipt.updated_at_ns = now_ns;
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
@@ -206,6 +206,12 @@ pub fn mark_recovery_required(token: &ReplayReceiptToken, reason: RecoveryReason
 
 pub fn abort_reserved_receipt(token: &ReplayReceiptToken) {
     let _ = ReplayReceiptOps::remove(token.key);
+}
+
+fn latest_receipt_for_token(token: &ReplayReceiptToken) -> ReplayReceipt {
+    ReplayReceiptOps::get(token.key)
+        .and_then(|record| record.into_receipt().ok())
+        .unwrap_or_else(|| token.receipt.clone())
 }
 
 fn classify_existing_receipt(
@@ -344,6 +350,30 @@ mod tests {
             reserve_or_replay_receipt(input()).expect("in-flight duplicate"),
             ReplayReceiptDecision::OperationInProgress
         );
+    }
+
+    #[test]
+    fn terminal_receipt_transitions_preserve_recorded_external_effect() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let token = match reserve_or_replay_receipt(input()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        let effect = ExternalEffectDescriptor::ThresholdEcdsaSign {
+            key_id_hash: [1; 32],
+            purpose: super::super::model::EcdsaPurpose::DelegationProof,
+            message_hash: [2; 32],
+        };
+        mark_external_effect_in_flight(&token, effect.clone(), 150);
+        commit_receipt_response(&token, 1, vec![1, 2, 3], 200);
+
+        let receipt = ReplayReceiptOps::get(token.key())
+            .expect("receipt stored")
+            .into_receipt()
+            .expect("receipt decodes");
+        assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+        assert_eq!(receipt.effect, Some(effect));
     }
 
     #[test]

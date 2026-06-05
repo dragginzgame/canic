@@ -173,6 +173,32 @@ pub struct NodeOperatorRecord {
 }
 
 ///
+/// DataCenterRecord
+///
+#[derive(Clone, prost::Message, PartialEq)]
+pub struct DataCenterRecord {
+    #[prost(string, tag = "1")]
+    pub id: String,
+    #[prost(string, tag = "2")]
+    pub region: String,
+    #[prost(string, tag = "3")]
+    pub owner: String,
+    #[prost(message, optional, tag = "4")]
+    pub gps: Option<Gps>,
+}
+
+///
+/// Gps
+///
+#[derive(Clone, prost::Message, PartialEq)]
+pub struct Gps {
+    #[prost(float, tag = "1")]
+    pub latitude: f32,
+    #[prost(float, tag = "2")]
+    pub longitude: f32,
+}
+
+///
 /// SubnetType
 ///
 #[derive(Clone, Copy, Debug, prost::Enumeration, Eq, PartialEq)]

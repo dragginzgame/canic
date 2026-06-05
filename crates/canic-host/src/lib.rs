@@ -19,6 +19,8 @@ pub mod icp;
 pub mod icp_config;
 pub mod install_root;
 pub mod installed_deployment;
+pub mod nns_data_center;
+pub mod nns_node;
 pub mod nns_node_operator;
 pub mod nns_node_provider;
 pub mod nns_registry;

@@ -1,3 +1,5 @@
+mod data_center;
+mod node;
 mod node_operator;
 mod node_provider;
 mod registry;
@@ -15,6 +17,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    nns_data_center::NnsDataCenterHostError, nns_node::NnsNodeHostError,
     nns_node_operator::NnsNodeOperatorHostError, nns_node_provider::NnsNodeProviderHostError,
     nns_registry::NnsRegistryHostError, subnet_catalog::SubnetCatalogHostError,
 };
@@ -37,6 +40,12 @@ pub enum NnsCommandError {
 
     #[error(transparent)]
     SubnetHost(#[from] SubnetCatalogHostError),
+
+    #[error(transparent)]
+    DataCenterHost(#[from] NnsDataCenterHostError),
+
+    #[error(transparent)]
+    NodeHost(#[from] NnsNodeHostError),
 
     #[error(transparent)]
     NodeProviderHost(#[from] NnsNodeProviderHostError),
@@ -88,6 +97,8 @@ where
 
     match command.as_str() {
         "subnet" => subnet::run(args),
+        "data-center" => data_center::run(args),
+        "node" => node::run(args),
         "node-provider" => node_provider::run(args),
         "node-operator" => node_operator::run(args),
         "registry" => registry::run(args),
@@ -134,6 +145,12 @@ fn nns_command() -> ClapCommand {
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(
             ClapCommand::new("subnet").about("Inspect and refresh NNS subnet metadata"),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("data-center").about("Inspect NNS data-center metadata"),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("node").about("Inspect NNS node metadata"),
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("node-provider").about("Inspect NNS node-provider metadata"),

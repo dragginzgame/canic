@@ -226,7 +226,7 @@ impl From<Request> for RootCapabilityCommand {
 // Replay metadata.
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootRequestMetadata {
     pub request_id: [u8; 32],
     pub ttl_seconds: u64,

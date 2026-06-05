@@ -16,13 +16,44 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.4` makes root delegation-proof issuance replay-protected. Delegation
+  proof requests now carry root replay metadata, reserve shared replay
+  receipts before threshold ECDSA signing, return committed proof bytes for
+  duplicate request ids, and preserve external-effect recovery state around
+  the signing boundary. It also adds cached
+  `canic nns data-center list/info/refresh` metadata derived from the shared
+  mainnet registry relation inventory.
+
+  ```text
+  canic nns data-center refresh
+  canic nns data-center list
+  canic nns data-center list --verbose
+  canic nns data-center info <data-center-prefix>
+  canic nns data-center list --format json
+  ```
+
 - `0.61.3` migrates root RPC replay onto the shared replay receipt store. Root
   capability replay now uses explicit root command kinds, receipt-backed
   reserve/commit/abort, receipt TTL expiry, active actor capacity checks, and
   committed response replay. It also adds `canic nns registry version` as the
   first broad NNS inspection foundation command and exposes cached
+  `canic nns node list/info/refresh` and
   `canic nns node-operator list/info/refresh` metadata derived from mainnet
-  registry node/operator records.
+  registry subnet, node, and operator records.
+
+  ```text
+  canic nns registry version
+  canic nns node refresh
+  canic nns node list
+  canic nns node list --verbose
+  canic nns node info <node-prefix>
+  canic nns node list --format json
+  canic nns node-operator refresh
+  canic nns node-operator list
+  canic nns node-operator list --verbose
+  canic nns node-operator info <node-operator-prefix>
+  canic nns node-operator list --format json
+  ```
 
 - `0.61.2` adds the shared stable replay receipt store and
   reserve/replay/commit API, with command-kind-scoped receipt keys, stored

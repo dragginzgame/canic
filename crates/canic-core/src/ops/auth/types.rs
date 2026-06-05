@@ -1,6 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedToken, DelegationAudience, DelegationProof},
+    dto::auth::{DelegatedToken, DelegationAudience, DelegationCert, DelegationProof},
 };
 
 //
@@ -28,6 +28,17 @@ pub struct SignDelegationProofInput {
     pub max_token_ttl_secs: u64,
     pub max_cert_ttl_secs: u64,
     pub issued_at: u64,
+}
+
+//
+// PreparedRootDelegationProof
+//
+
+pub struct PreparedRootDelegationProof {
+    pub cert: DelegationCert,
+    pub cert_hash: [u8; 32],
+    pub key_name: String,
+    pub root_derivation_path: Vec<Vec<u8>>,
 }
 
 //

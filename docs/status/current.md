@@ -9,7 +9,45 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.3` is underway from
+- `0.61.4` is underway from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Root
+  delegation-proof issuance now uses shared replay receipts: shard-side
+  requests attach root replay metadata, root rejects missing/invalid replay
+  metadata, the endpoint reserves `auth.issue_delegation_proof.v1` receipts
+  before threshold ECDSA signing, marks the signing effect in flight, commits
+  Candid-encoded proof bytes for duplicate replay, and reports conflict or
+  recovery states for non-fresh receipts. The auth signing ops are split into
+  prepare/sign phases so the API owns the replay/effect boundary. Shared
+  receipt terminal transitions also preserve an existing external-effect
+  descriptor when moving to committed, failed, or recovery-required states.
+  The same patch also adds cached NNS data-center inspection:
+  ```text
+  canic nns data-center refresh
+  canic nns data-center list
+  canic nns data-center list --verbose
+  canic nns data-center info <data-center-prefix>
+  canic nns data-center list --format json
+  ```
+  Data-center metadata is derived from the shared mainnet registry relation
+  inventory now used by nodes, node operators, node providers, and data
+  centers: subnet membership, node records, node-operator records, and
+  `data_center_record_<id>` values are fetched once and projected into the
+  report. Rows include data-center id, region, owner, optional GPS,
+  node-operator count, distinct node-provider count, and assigned-node count.
+  The cache is `.canic/data-center/ic/data-centers.json`; refresh uses
+  `.canic/data-center/ic/refresh.lock` and atomic cache replacement.
+  Cost/quota/cycle-reserve guard work for delegation-proof issuance remains a
+  later 0.61 blocker. Validation:
+  ```text
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo test -p canic-core ops::replay --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic-ic-registry data_center -- --nocapture
+  cargo test -p canic-host nns_data_center --lib -- --nocapture
+  cargo test -p canic-cli --lib nns -- --nocapture
+  cargo test -p canic-cli --lib command_family_help_returns_ok -- --nocapture
+  ```
+- `0.61.3` completed Slice B from
   `docs/design/0.61-replay-protection/0.61-design.md` Slice B. Root RPC replay
   now uses the shared replay receipt store instead of the legacy root replay
   map. Root capability replay prepares shared receipt tokens, checks receipt
@@ -28,6 +66,11 @@ inspect only the files needed for the current task.
   surfaces:
   ```text
   canic nns registry version
+  canic nns node refresh
+  canic nns node list
+  canic nns node list --verbose
+  canic nns node info <node-prefix>
+  canic nns node list --format json
   canic nns node-operator refresh
   canic nns node-operator list
   canic nns node-operator list --verbose
@@ -38,7 +81,11 @@ inspect only the files needed for the current task.
   node records, and node-operator records, then cached at
   `.canic/node-operator/ic/operators.json`; refresh uses
   `.canic/node-operator/ic/refresh.lock` and atomic cache replacement. Registry
-  version is a live read against the canonical NNS registry canister.
+  Node metadata is derived from the same registry traversal and includes node,
+  operator, provider, subnet, subnet kind, and data-center fields, cached at
+  `.canic/node/ic/nodes.json`; refresh uses `.canic/node/ic/refresh.lock` and
+  atomic cache replacement. Registry version is a live read against the
+  canonical NNS registry canister.
   Validation:
   ```text
   cargo test -p canic-core ops::replay --lib -- --nocapture
@@ -46,7 +93,9 @@ inspect only the files needed for the current task.
   cargo test -p canic-core --lib -- --nocapture
   cargo clippy -p canic-core --all-targets --all-features -- -D warnings
   cargo test -p canic --test changelog_governance -- --nocapture
+  cargo test -p canic-ic-registry node -- --nocapture
   cargo test -p canic-ic-registry node_operator -- --nocapture
+  cargo test -p canic-host nns_node --lib -- --nocapture
   cargo test -p canic-host nns_node_operator --lib -- --nocapture
   cargo test -p canic-cli --lib nns -- --nocapture
   cargo clippy -p canic-ic-registry -p canic-host -p canic-cli --lib -- -D warnings

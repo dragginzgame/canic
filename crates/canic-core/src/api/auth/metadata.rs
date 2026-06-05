@@ -1,6 +1,8 @@
 use crate::{
     dto::{
-        auth::{InternalInvocationProofRequest, RoleAttestationRequest},
+        auth::{
+            DelegationProofIssueRequest, InternalInvocationProofRequest, RoleAttestationRequest,
+        },
         rpc::RootRequestMetadata,
     },
     ops::ic::IcOps,
@@ -15,6 +17,15 @@ static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 pub(super) fn with_root_attestation_request_metadata(
     mut request: RoleAttestationRequest,
 ) -> RoleAttestationRequest {
+    if request.metadata.is_none() {
+        request.metadata = Some(new_request_metadata());
+    }
+    request
+}
+
+pub(super) fn with_delegation_request_metadata(
+    mut request: DelegationProofIssueRequest,
+) -> DelegationProofIssueRequest {
     if request.metadata.is_none() {
         request.metadata = Some(new_request_metadata());
     }

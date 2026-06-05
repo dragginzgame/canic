@@ -124,6 +124,8 @@ pub struct DelegatedToken {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProofIssueRequest {
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
     pub shard_pid: Principal,
     pub scopes: Vec<String>,
     pub aud: DelegationAudience,

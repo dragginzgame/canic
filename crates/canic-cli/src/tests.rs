@@ -135,6 +135,14 @@ fn command_family_help_returns_ok() {
         &["replica", "status", "help"],
         &["replica", "stop", "help"],
         &["nns", "help"],
+        &["nns", "data-center", "help"],
+        &["nns", "data-center", "list", "help"],
+        &["nns", "data-center", "info", "help"],
+        &["nns", "data-center", "refresh", "help"],
+        &["nns", "node", "help"],
+        &["nns", "node", "list", "help"],
+        &["nns", "node", "info", "help"],
+        &["nns", "node", "refresh", "help"],
         &["nns", "node-operator", "help"],
         &["nns", "node-operator", "list", "help"],
         &["nns", "node-operator", "info", "help"],
@@ -307,6 +315,40 @@ fn version_flags_return_ok() {
 #[test]
 fn nns_version_flags_return_ok() {
     assert!(run([OsString::from("nns"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("nns"),
+            OsString::from("data-center"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("nns"),
+            OsString::from("data-center"),
+            OsString::from("list"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("nns"),
+            OsString::from("node"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("nns"),
+            OsString::from("node"),
+            OsString::from("list"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
     assert!(
         run([
             OsString::from("nns"),

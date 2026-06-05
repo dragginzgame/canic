@@ -1,11 +1,11 @@
 use super::{
-    AuthOps, SignDelegationProofInput,
+    AuthOps, PreparedRootDelegationProof, SignDelegationProofInput,
     delegated::{
         canonical::{derivation_path_hash, key_name_hash},
         cert_rules::DelegatedAuthTtlLimits,
         issue::{
-            IssueDelegationProofError, IssueDelegationProofInput, finish_delegation_proof,
-            prepare_delegation_cert,
+            IssueDelegationProofError, IssueDelegationProofInput, PreparedDelegationCert,
+            finish_delegation_proof, prepare_delegation_cert,
         },
     },
     keys,
@@ -22,10 +22,10 @@ use crate::{
 };
 
 impl AuthOps {
-    /// Sign a delegation proof with local root threshold ECDSA material.
-    pub(crate) async fn sign_delegation_proof(
+    /// Prepare a canonical delegation proof certificate before root ECDSA.
+    pub(crate) async fn prepare_delegation_proof(
         input: SignDelegationProofInput,
-    ) -> Result<DelegationProof, InternalError> {
+    ) -> Result<PreparedRootDelegationProof, InternalError> {
         let root_pid = IcOps::canister_self();
         let key_name = keys::delegated_tokens_key_name()?;
         let root_derivation_path = keys::root_derivation_path();
@@ -56,9 +56,32 @@ impl AuthOps {
         })
         .map_err(map_issue_delegation_proof_error)?;
 
-        let root_sig =
-            EcdsaOps::sign_bytes(&key_name, root_derivation_path, prepared.cert_hash).await?;
-        Ok(finish_delegation_proof(prepared, root_sig).proof)
+        Ok(PreparedRootDelegationProof {
+            cert: prepared.cert,
+            cert_hash: prepared.cert_hash,
+            key_name,
+            root_derivation_path,
+        })
+    }
+
+    /// Sign and finish an already-prepared root delegation proof.
+    pub(crate) async fn sign_prepared_delegation_proof(
+        prepared: PreparedRootDelegationProof,
+    ) -> Result<DelegationProof, InternalError> {
+        let root_sig = EcdsaOps::sign_bytes(
+            &prepared.key_name,
+            prepared.root_derivation_path,
+            prepared.cert_hash,
+        )
+        .await?;
+        Ok(finish_delegation_proof(
+            PreparedDelegationCert {
+                cert: prepared.cert,
+                cert_hash: prepared.cert_hash,
+            },
+            root_sig,
+        )
+        .proof)
     }
 
     /// Resolve the local shard public key, fetching and caching it on demand.

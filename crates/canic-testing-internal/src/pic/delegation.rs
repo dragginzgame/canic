@@ -5,6 +5,7 @@ use canic::{
         DelegatedToken, DelegatedTokenMintRequest, DelegationAudience, DelegationProof,
         DelegationProofIssueRequest,
     },
+    dto::rpc::RootRequestMetadata,
     ids::cap,
     protocol,
 };
@@ -55,6 +56,7 @@ pub fn request_root_delegation_provision(
     let _shard_public_key_sec1: Result<Vec<u8>, Error> =
         pic.update_call_or_panic(shard_pid, USER_SHARD_LOCAL_PUBLIC_KEY_TEST, ());
     let request = DelegationProofIssueRequest {
+        metadata: Some(root_delegation_request_metadata(shard_pid, verifier_pid)),
         shard_pid,
         scopes: vec![cap::VERIFY.to_string()],
         aud: DelegationAudience::Principal(verifier_pid),
@@ -67,4 +69,21 @@ pub fn request_root_delegation_provision(
         (request,),
     );
     response.expect("canic_request_delegation application failed")
+}
+
+fn root_delegation_request_metadata(
+    shard_pid: Principal,
+    verifier_pid: Principal,
+) -> RootRequestMetadata {
+    let mut request_id = [0u8; 32];
+    for (index, byte) in shard_pid.as_slice().iter().enumerate() {
+        request_id[index % request_id.len()] ^= *byte;
+    }
+    for (index, byte) in verifier_pid.as_slice().iter().enumerate() {
+        request_id[(index + 13) % request_id.len()] ^= *byte;
+    }
+    RootRequestMetadata {
+        request_id,
+        ttl_seconds: 60,
+    }
 }
