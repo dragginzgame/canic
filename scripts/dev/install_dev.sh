@@ -5,6 +5,7 @@ CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.61.12}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.96.0}"
 ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+CANIC_ICP_CLI_VERSION="${CANIC_ICP_CLI_VERSION:-0.3.0}"
 CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -82,6 +83,29 @@ install_or_update_actionlint() {
     fi
 }
 
+clean_legacy_icp_npm_cli() {
+    local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
+    local npm_icp_bin="$npm_bin_dir/icp"
+    local link_target=""
+
+    if [ -L "$npm_icp_bin" ]; then
+        link_target="$(readlink "$npm_icp_bin" || true)"
+        if [[ "$link_target" == *"@icp-sdk/icp-cli"* ]]; then
+            yellow "Removing legacy npm ICP CLI wrapper:"
+            if command -v npm >/dev/null 2>&1; then
+                cyan_command "npm uninstall -g --prefix $CANIC_NPM_PREFIX @icp-sdk/icp-cli"
+                npm uninstall -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/icp-cli >/dev/null 2>&1 || true
+            fi
+            if [ -L "$npm_icp_bin" ]; then
+                cyan_command "rm -f $npm_icp_bin"
+                rm -f "$npm_icp_bin"
+            fi
+        fi
+    elif [ -e "$npm_icp_bin" ]; then
+        yellow "Leaving non-symlink ICP binary at $npm_icp_bin; remove it manually if it shadows $HOME/.cargo/bin/icp."
+    fi
+}
+
 clean_icp_npm_staging_dirs() {
     local npm_scope_dir="$CANIC_NPM_PREFIX/lib/node_modules/@icp-sdk"
     local staging_dirs=()
@@ -110,6 +134,24 @@ clean_icp_npm_staging_dirs() {
 }
 
 install_or_update_icp_cli() {
+    local cargo_bin_dir="$HOME/.cargo/bin"
+    local icp_path=""
+
+    yellow "ICP CLI:"
+    mkdir -p "$cargo_bin_dir"
+    export PATH="$cargo_bin_dir:$PATH"
+    cyan_command "CANIC_ICP_CLI_VERSION=$CANIC_ICP_CLI_VERSION bash scripts/ci/install-icp-cli.sh $CANIC_ICP_CLI_VERSION"
+    CANIC_ICP_CLI_VERSION="$CANIC_ICP_CLI_VERSION" bash "$ROOT_DIR/scripts/ci/install-icp-cli.sh" "$CANIC_ICP_CLI_VERSION"
+    clean_legacy_icp_npm_cli
+    require_command icp
+    icp_path="$(command -v icp)"
+    green "icp ready: $(icp --version 2>&1) ($icp_path)"
+    if [ "$icp_path" != "$cargo_bin_dir/icp" ]; then
+        yellow "icp resolves to $icp_path; put $cargo_bin_dir before other bin directories in PATH."
+    fi
+}
+
+install_or_update_ic_wasm() {
     local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
     local path_had_npm_bin=0
 
@@ -117,19 +159,17 @@ install_or_update_icp_cli() {
         path_had_npm_bin=1
     fi
 
-    yellow "ICP CLI:"
+    yellow "ic-wasm:"
     require_command npm
     mkdir -p "$npm_bin_dir"
     clean_icp_npm_staging_dirs
-    export PATH="$npm_bin_dir:$PATH"
-    cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/icp-cli @icp-sdk/ic-wasm"
-    npm install -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/icp-cli @icp-sdk/ic-wasm
-    require_command icp
+    export PATH="$HOME/.cargo/bin:$npm_bin_dir:$PATH"
+    cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/ic-wasm"
+    npm install -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/ic-wasm
     require_command ic-wasm
-    green "icp ready: $(icp --version 2>&1)"
     green "ic-wasm ready: $(ic-wasm --version 2>&1)"
     if [ "$path_had_npm_bin" -eq 0 ]; then
-        yellow "ICP CLI tools installed under $npm_bin_dir; add it to PATH to run them directly."
+        yellow "ic-wasm installed under $npm_bin_dir; add it to PATH to run it directly."
     fi
 }
 
@@ -154,6 +194,7 @@ main() {
         require_python
         install_or_update_actionlint
         install_or_update_icp_cli
+        install_or_update_ic_wasm
         green "Python, workflow lint, and ICP CLI prerequisites ready."
         return 0
     fi
@@ -189,6 +230,7 @@ main() {
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_actionlint
     install_or_update_icp_cli
+    install_or_update_ic_wasm
 
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked canic-cli --version $CANIC_CLI_VERSION"

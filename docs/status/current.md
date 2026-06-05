@@ -9,6 +9,71 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.15` completed the ICP 0.3 command-shape alignment pass. Local
+  `icp --version` reports `icp 0.3.0`; help inspection confirmed the Canic-used
+  command families still exist for canister calls/status/top-up/snapshots,
+  local network lifecycle, project/environment reads, cycles, and token
+  wrappers. Canic host command contexts that already carry an explicit ICP
+  project root now pass `--project-root-override <path>` to ICP CLI 0.3 while
+  preserving the existing subprocess `current_dir`. Local replica command
+  construction now honors an `IcpCli` environment with
+  `icp network <action> -e <environment>`, while the no-target default remains
+  `icp network <action> local`. No Canic CLI commands changed in this patch.
+  Validation:
+  ```text
+  icp --version
+  icp canister call --help
+  icp canister status --help
+  icp canister top-up --help
+  icp canister snapshot create --help
+  icp canister snapshot download --help
+  icp canister snapshot upload --help
+  icp canister snapshot restore --help
+  icp network start --help
+  icp network status --help
+  icp --project-root-override /home/adam/projects/canic environment list
+  icp --project-root-override /home/adam/projects/canic project show
+  cargo test -p canic-host icp -- --nocapture
+  cargo test -p canic-cli --lib icp -- --nocapture
+  cargo clippy -p canic-host --all-targets --all-features -- -D warnings
+  ```
+- `0.61.14` completed the ICP CLI installer cleanup slice. `make install-dev`,
+  `make update-dev`, and CI now install `icp` from the official `icp-cli`
+  `0.3.0` GitHub release installer under Cargo's bin directory instead of
+  installing npm `@icp-sdk/icp-cli` into `$HOME/.local`. Local setup and CI
+  now share `scripts/ci/install-icp-cli.sh`, which installs the pinned release,
+  keeps Cargo's bin directory on PATH, and registers it through `$GITHUB_PATH`
+  in GitHub Actions. The shared dev installer still installs `ic-wasm` through
+  npm and removes the legacy user-local npm `icp` wrapper when it points at
+  `@icp-sdk/icp-cli`. The local machine cleanup removed the old
+  `$HOME/.local/bin/icp` shadow, so `icp --version` now reports `icp 0.3.0`
+  from `$HOME/.cargo/bin/icp` and `which -a icp` now reports only that path.
+  Root-owned legacy `icp` binaries outside the user-local cleanup path must
+  still be removed separately by the machine owner if present elsewhere. No
+  Canic CLI commands changed in this patch. Validation:
+  ```text
+  bash -n scripts/dev/install_dev.sh scripts/ci/require_icp.sh scripts/ci/install-icp-cli.sh
+  make -n install-dev update-dev
+  actionlint .github/workflows/ci.yml
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  icp --version
+  ic-wasm --version
+  which -a icp
+  ```
+- `0.61.13` completed the attestation key-set manifest correction slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  `canic_attestation_key_set` is now classified as implemented
+  `SnapshotConvergent(auth.attestation_key_set.v1)` with cost class `None` and
+  no quota or cycle-reserve policy. The endpoint can refresh cached root
+  attestation public-key material, but it uses the ECDSA public-key query path
+  rather than threshold signing and does not issue proof material. A manifest
+  regression test pins that it stays out of the signing quota/reserve bucket.
+  No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
 - `0.61.12` completed the canister-status manifest correction slice from
   `docs/design/0.61-replay-protection/0.61-design.md`.
   `canic_canister_status` is now classified as an implemented update-shaped

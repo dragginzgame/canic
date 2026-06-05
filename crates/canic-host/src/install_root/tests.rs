@@ -140,7 +140,15 @@ fn icp_canister_command_carries_selected_network() {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["canister", "status", "root", "-e", "ic"]
+        [
+            "--project-root-override",
+            "/tmp/canic-icp-root",
+            "canister",
+            "status",
+            "root",
+            "-e",
+            "ic"
+        ]
     );
 }
 

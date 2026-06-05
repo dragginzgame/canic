@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.13` reclassifies `canic_attestation_key_set` as an implemented
+  snapshot-convergent endpoint in the replay manifest and folds in ICP CLI
+  0.3.0 operator-tooling cleanup. Local setup and CI now share the official
+  `icp-cli` installer helper, and rooted host commands pass
+  `--project-root-override <path>` explicitly.
+
 - `0.61.12` reclassifies `canic_canister_status` as an implemented
   update-shaped read-only endpoint in the replay manifest. The endpoint reads
   management-canister status and does not mutate Canic state or perform
