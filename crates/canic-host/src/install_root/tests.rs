@@ -174,6 +174,8 @@ fn local_canister_command_uses_http_target_when_configured() {
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
         [
+            "--project-root-override",
+            "/tmp/canic-icp-root",
             "canister",
             "status",
             "root",
@@ -207,7 +209,14 @@ fn local_http_fallback_creates_detached_root() {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["canister", "create", "--detached", "--json"]
+        [
+            "--project-root-override",
+            "/tmp/canic-icp-root",
+            "canister",
+            "create",
+            "--detached",
+            "--json"
+        ]
     );
 }
 
@@ -225,7 +234,14 @@ fn environment_create_uses_named_root() {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect::<Vec<_>>(),
-        ["canister", "create", "root", "--json"]
+        [
+            "--project-root-override",
+            "/tmp/canic-icp-root",
+            "canister",
+            "create",
+            "root",
+            "--json"
+        ]
     );
 }
 
