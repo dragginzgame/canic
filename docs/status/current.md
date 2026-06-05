@@ -9,6 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.11` completed the pool `ImportQueued` convergence-proof slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`. The pool admin command
+  manifest now marks `ImportQueued` as implemented with
+  `SnapshotConvergent(pool.import_queued.ensure_v1)` and cost class `None`.
+  A focused workflow test proves duplicate PIDs in the same queued-import
+  request and a repeated request leave exactly one pending-reset pool entry per
+  canister: the first call records one add and one skip, while the repeated
+  call records all skips. The production queued-import path still performs
+  authorization, admissibility checks, metrics, scheduling, and IC timestamps;
+  the test exercises the internal authorized state transition with those
+  native-test IC calls disabled. Pool `Recycle` and `ImportImmediate` remain
+  release blockers because they can still cross management reset effects. No
+  CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
 - `0.61.10` completed the root auth-material replay recovery slice from
   `docs/design/0.61-replay-protection/0.61-design.md`.
   Role-attestation and internal-invocation proof issuance now split signing

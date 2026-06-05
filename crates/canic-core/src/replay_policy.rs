@@ -224,10 +224,10 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
-    pool_admin_response_idempotent(
+    pool_admin_snapshot_convergent(
         "ImportQueued",
         "pool.import_queued.ensure_v1",
-        ReplayImplementationStatus::ReleaseBlocker,
+        ReplayImplementationStatus::Implemented,
         CostClass::None,
         None,
         None,
@@ -361,6 +361,24 @@ const fn pool_admin_replay_protected(
             command_kind,
             requires_operation_id: true,
         },
+        implementation_status,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
+    }
+}
+
+const fn pool_admin_snapshot_convergent(
+    variant: &'static str,
+    command_kind: &'static str,
+    implementation_status: ReplayImplementationStatus,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> PoolAdminCommandReplayPolicy {
+    PoolAdminCommandReplayPolicy {
+        variant,
+        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
         implementation_status,
         cost_class,
         quota_policy,
@@ -525,8 +543,28 @@ mod tests {
     }
 
     #[test]
+    fn pool_import_queued_command_is_manifested_as_implemented_convergent() {
+        let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.variant == "ImportQueued")
+            .expect("ImportQueued command policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::SnapshotConvergent {
+                command_kind: "pool.import_queued.ensure_v1",
+            }
+        );
+    }
+
+    #[test]
     fn pool_admin_non_create_variants_remain_explicit_release_blockers() {
-        for variant in ["Recycle", "ImportImmediate", "ImportQueued"] {
+        for variant in ["Recycle", "ImportImmediate"] {
             let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
                 .iter()
                 .find(|entry| entry.variant == variant)

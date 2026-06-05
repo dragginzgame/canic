@@ -388,6 +388,16 @@ impl PoolWorkflow {
             return Err(err);
         }
 
+        Self::pool_import_queued_canisters_authorized(pids, true, true, true, None).await
+    }
+
+    async fn pool_import_queued_canisters_authorized(
+        pids: Vec<Principal>,
+        check_admissibility: bool,
+        record_metrics: bool,
+        schedule: bool,
+        created_at_override: Option<u64>,
+    ) -> Result<PoolBatchResult, InternalError> {
         let total = pids.len() as u64;
 
         let mut added = 0;
@@ -395,39 +405,52 @@ impl PoolWorkflow {
         let mut skipped = 0;
 
         for pid in pids {
-            match admissibility::check_can_enter_pool(pid).await {
+            let admission = if check_admissibility {
+                admissibility::check_can_enter_pool(pid).await
+            } else {
+                Ok(())
+            };
+            match admission {
                 Ok(()) => {
                     if let Some(entry) = PoolQuery::pool_entry(pid) {
                         if let CanisterPoolStatus::Failed { .. } = entry.status {
-                            Self::mark_pending_reset(pid);
-                            MetricEvent::record(
-                                MetricOperation::ImportQueued,
-                                MetricOutcome::Requeued,
-                                MetricReason::FailedEntry,
-                            );
+                            mark_pool_import_queued_pending_reset(pid, created_at_override);
+                            if record_metrics {
+                                MetricEvent::record(
+                                    MetricOperation::ImportQueued,
+                                    MetricOutcome::Requeued,
+                                    MetricReason::FailedEntry,
+                                );
+                            }
                             requeued += 1;
                         } else {
                             // already ready or pending reset
-                            MetricEvent::skipped(
-                                MetricOperation::ImportQueued,
-                                MetricReason::AlreadyPresent,
-                            );
+                            if record_metrics {
+                                MetricEvent::skipped(
+                                    MetricOperation::ImportQueued,
+                                    MetricReason::AlreadyPresent,
+                                );
+                            }
                             skipped += 1;
                         }
                     } else {
-                        Self::mark_pending_reset(pid);
-                        MetricEvent::completed(MetricOperation::ImportQueued, MetricReason::Ok);
+                        mark_pool_import_queued_pending_reset(pid, created_at_override);
+                        if record_metrics {
+                            MetricEvent::completed(MetricOperation::ImportQueued, MetricReason::Ok);
+                        }
                         added += 1;
                     }
                 }
 
                 // Any policy rejection is treated as a skip
                 Err(err) => {
-                    MetricEvent::record(
-                        MetricOperation::ImportQueued,
-                        MetricOutcome::Skipped,
-                        MetricReason::from_policy(&err),
-                    );
+                    if record_metrics {
+                        MetricEvent::record(
+                            MetricOperation::ImportQueued,
+                            MetricOutcome::Skipped,
+                            MetricReason::from_policy(&err),
+                        );
+                    }
                     skipped += 1;
                 }
             }
@@ -440,11 +463,13 @@ impl PoolWorkflow {
             skipped,
         };
 
-        if result.added > 0 || result.requeued > 0 {
+        if schedule && (result.added > 0 || result.requeued > 0) {
             PoolSchedulerWorkflow::schedule();
         }
 
-        MetricEvent::completed(MetricOperation::ImportQueued, MetricReason::Ok);
+        if record_metrics {
+            MetricEvent::completed(MetricOperation::ImportQueued, MetricReason::Ok);
+        }
 
         Ok(result)
     }
@@ -474,6 +499,13 @@ fn pool_create_empty_replay_metadata(
 
 fn pool_import_already_present(pid: Principal) -> bool {
     PoolOps::contains(&pid)
+}
+
+fn mark_pool_import_queued_pending_reset(pid: Principal, created_at_override: Option<u64>) {
+    match created_at_override {
+        Some(created_at) => PoolOps::mark_pending_reset(pid, created_at),
+        None => PoolWorkflow::mark_pending_reset(pid),
+    }
 }
 
 ///
@@ -810,6 +842,7 @@ mod tests {
             ReplayReceiptStatus,
         },
     };
+    use futures::executor::block_on;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -920,6 +953,63 @@ mod tests {
         PoolOps::register_ready(pid, Cycles::new(10), None, None, None, 100);
 
         assert!(pool_import_already_present(pid));
+
+        PoolOps::remove(&pid);
+    }
+
+    #[test]
+    fn pool_import_queued_repeated_call_converges_without_duplicate_entries() {
+        let pid = p(48);
+        PoolOps::remove(&pid);
+
+        let first = block_on(PoolWorkflow::pool_import_queued_canisters_authorized(
+            vec![pid, pid],
+            false,
+            false,
+            false,
+            Some(100),
+        ))
+        .expect("first queued import");
+
+        assert_eq!(first.total, 2);
+        assert_eq!(first.added, 1);
+        assert_eq!(first.requeued, 0);
+        assert_eq!(first.skipped, 1);
+
+        let entry = PoolQuery::pool_entry(pid).expect("entry queued");
+        assert_eq!(entry.status, CanisterPoolStatus::PendingReset);
+        assert_eq!(
+            PoolQuery::pool_list()
+                .entries
+                .iter()
+                .filter(|entry| entry.pid == pid)
+                .count(),
+            1,
+            "queued import must not duplicate pool entries"
+        );
+
+        let second = block_on(PoolWorkflow::pool_import_queued_canisters_authorized(
+            vec![pid, pid],
+            false,
+            false,
+            false,
+            Some(100),
+        ))
+        .expect("second queued import");
+
+        assert_eq!(second.total, 2);
+        assert_eq!(second.added, 0);
+        assert_eq!(second.requeued, 0);
+        assert_eq!(second.skipped, 2);
+        assert_eq!(
+            PoolQuery::pool_list()
+                .entries
+                .iter()
+                .filter(|entry| entry.pid == pid)
+                .count(),
+            1,
+            "repeated queued import must remain convergent"
+        );
 
         PoolOps::remove(&pid);
     }

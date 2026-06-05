@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.11` graduates pool `ImportQueued` from release blocker to implemented
+  snapshot-convergent behavior. Repeated queued imports converge on one
+  pending-reset pool entry per canister and do not enqueue duplicate pool
+  records; `Recycle` and `ImportImmediate` remain explicit blockers because
+  they can still cross management reset effects.
+
 - `0.61.10` finishes root auth-material replay recovery for
   role-attestation and internal-invocation proof issuance. Both signing paths
   now prepare before cost reservation, mark the threshold-ECDSA external-effect
