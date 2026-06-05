@@ -13,7 +13,10 @@
 //! - call ops or workflow
 //! - embed policy or orchestration logic
 
-use crate::{cdk::types::Cycles, dto::prelude::*};
+use crate::{
+    cdk::types::Cycles,
+    dto::{prelude::*, rpc::RootRequestMetadata},
+};
 
 //
 // CanisterPoolResponse
@@ -61,7 +64,7 @@ pub enum CanisterPoolStatus {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PoolAdminCommand {
     // Create a fresh empty pool canister.
-    CreateEmpty,
+    CreateEmpty(CreateEmptyPoolRequest),
 
     // Recycle an existing canister back into the pool.
     Recycle { pid: Principal },
@@ -71,6 +74,16 @@ pub enum PoolAdminCommand {
 
     // Queue one or more canisters for pool import.
     ImportQueued { pids: Vec<Principal> },
+}
+
+//
+// CreateEmptyPoolRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CreateEmptyPoolRequest {
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
 }
 
 //

@@ -1,7 +1,7 @@
 use crate::{
     cache_file::{
-        CacheFileError, RefreshLockRequest, acquire_refresh_lock, create_directory,
-        write_text_atomically, write_text_output,
+        CacheFileError, JsonCacheReport, LoadJsonCacheErrorHandlers, LoadJsonCacheRequest,
+        RefreshCacheWriteRequest, load_json_cache, write_json_refresh_cache,
     },
     subnet_catalog::format_utc_timestamp_secs,
     table::{ColumnAlign, render_table},
@@ -13,7 +13,7 @@ use canic_ic_registry::{
 use canic_subnet_catalog::{MAINNET_NETWORK, canonical_principal_text};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -91,6 +91,16 @@ pub struct NnsNodeOperatorListReport {
     pub fetched_by: String,
     pub node_operator_count: usize,
     pub node_operators: Vec<NnsNodeOperatorRow>,
+}
+
+impl JsonCacheReport for NnsNodeOperatorListReport {
+    fn schema_version(&self) -> u32 {
+        self.schema_version
+    }
+
+    fn network(&self) -> &str {
+        &self.network
+    }
 }
 
 ///
@@ -268,32 +278,29 @@ pub fn load_cached_nns_node_operator_report(
 ) -> Result<CachedNnsNodeOperatorReport, NnsNodeOperatorHostError> {
     enforce_mainnet_network(&request.network)?;
     let path = nns_node_operator_cache_path(&request.icp_root, &request.network);
-    if !path.is_file() {
-        return Err(NnsNodeOperatorHostError::MissingCache { path });
-    }
-    let data = fs::read_to_string(&path).map_err(|source| NnsNodeOperatorHostError::ReadCache {
-        path: path.clone(),
-        source,
-    })?;
-    let report = serde_json::from_str::<NnsNodeOperatorListReport>(&data).map_err(|source| {
-        NnsNodeOperatorHostError::ParseCache {
-            path: path.clone(),
-            source,
-        }
-    })?;
-    if report.schema_version != NNS_NODE_OPERATOR_LIST_REPORT_SCHEMA_VERSION {
-        return Err(NnsNodeOperatorHostError::UnsupportedCacheSchemaVersion {
-            version: report.schema_version,
-            expected: NNS_NODE_OPERATOR_LIST_REPORT_SCHEMA_VERSION,
-        });
-    }
-    if report.network != request.network {
-        return Err(NnsNodeOperatorHostError::NetworkMismatch {
-            requested: request.network.clone(),
-            actual: report.network,
-        });
-    }
-    Ok(CachedNnsNodeOperatorReport { path, report })
+    let cached = load_json_cache(
+        LoadJsonCacheRequest {
+            path,
+            network: &request.network,
+            expected_schema_version: NNS_NODE_OPERATOR_LIST_REPORT_SCHEMA_VERSION,
+        },
+        LoadJsonCacheErrorHandlers {
+            missing_cache: |path| NnsNodeOperatorHostError::MissingCache { path },
+            read_cache: |path, source| NnsNodeOperatorHostError::ReadCache { path, source },
+            parse_cache: |path, source| NnsNodeOperatorHostError::ParseCache { path, source },
+            unsupported_schema: |version, expected| {
+                NnsNodeOperatorHostError::UnsupportedCacheSchemaVersion { version, expected }
+            },
+            network_mismatch: |requested, actual| NnsNodeOperatorHostError::NetworkMismatch {
+                requested,
+                actual,
+            },
+        },
+    )?;
+    Ok(CachedNnsNodeOperatorReport {
+        path: cached.path,
+        report: cached.report,
+    })
 }
 
 pub fn build_nns_node_operator_list_report(
@@ -381,56 +388,40 @@ fn refresh_nns_node_operator_cache_with_source(
     let cache_path = nns_node_operator_cache_path(&request.cache.icp_root, &request.cache.network);
     let lock_path =
         nns_node_operator_refresh_lock_path(&request.cache.icp_root, &request.cache.network);
-    let cache_dir = cache_path
-        .parent()
-        .expect("node-operator cache path always has parent")
-        .to_path_buf();
-    create_directory(&cache_dir).map_err(node_operator_cache_error)?;
-    let lock = acquire_refresh_lock(RefreshLockRequest {
-        lock_path: &lock_path,
-        target_path: &cache_path,
-        network: &request.cache.network,
-        now_unix_secs: request.now_unix_secs,
-        lock_stale_after_seconds: request.lock_stale_after_seconds,
-    })
-    .map_err(node_operator_cache_error)?;
-    let replaced_existing_cache = cache_path.is_file();
     let report = fetch_nns_node_operator_list_report_with_source(
         &request.cache.network,
         &request.source_endpoint,
         request.now_unix_secs,
         source,
     )?;
-    let report_json = serde_json::to_string_pretty(&report).map_err(|source| {
-        NnsNodeOperatorHostError::SerializeCache {
-            path: cache_path.clone(),
-            source,
-        }
-    })?;
-    if let Some(output_path) = &request.output_path {
-        write_text_output(output_path, &report_json).map_err(node_operator_cache_error)?;
-    }
-    if !request.dry_run {
-        write_text_atomically(&cache_path, &report_json).map_err(node_operator_cache_error)?;
-    }
-    lock.release().map_err(node_operator_cache_error)?;
+    let write_result = write_json_refresh_cache(
+        RefreshCacheWriteRequest {
+            cache_path: &cache_path,
+            lock_path: &lock_path,
+            network: &request.cache.network,
+            now_unix_secs: request.now_unix_secs,
+            lock_stale_after_seconds: request.lock_stale_after_seconds,
+            dry_run: request.dry_run,
+            output_path: request.output_path.as_deref(),
+            report: &report,
+        },
+        node_operator_cache_error,
+        |path, source| NnsNodeOperatorHostError::SerializeCache { path, source },
+    )?;
     let refresh_report = NnsNodeOperatorRefreshReport {
         schema_version: NNS_NODE_OPERATOR_REFRESH_REPORT_SCHEMA_VERSION,
         network: report.network.clone(),
-        cache_path: cache_path.display().to_string(),
-        refresh_lock_path: lock_path.display().to_string(),
-        output_path: request
-            .output_path
-            .as_ref()
-            .map(|path| path.display().to_string()),
+        cache_path: write_result.cache_path,
+        refresh_lock_path: write_result.refresh_lock_path,
+        output_path: write_result.output_path,
         registry_canister_id: report.registry_canister_id.clone(),
         registry_version: report.registry_version,
         fetched_at: report.fetched_at.clone(),
         source_endpoint: report.source_endpoint.clone(),
         fetched_by: report.fetched_by.clone(),
         dry_run: request.dry_run,
-        wrote_cache: !request.dry_run,
-        replaced_existing_cache,
+        wrote_cache: write_result.wrote_cache,
+        replaced_existing_cache: write_result.replaced_existing_cache,
         node_operator_count: report.node_operator_count,
     };
     Ok((report, refresh_report))

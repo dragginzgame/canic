@@ -1,7 +1,7 @@
 use crate::{
     cache_file::{
-        CacheFileError, RefreshLockRequest, acquire_refresh_lock, create_directory,
-        write_text_atomically, write_text_output,
+        CacheFileError, JsonCacheReport, LoadJsonCacheErrorHandlers, LoadJsonCacheRequest,
+        RefreshCacheWriteRequest, load_json_cache, write_json_refresh_cache,
     },
     subnet_catalog::format_utc_timestamp_secs,
     table::{ColumnAlign, render_table},
@@ -13,7 +13,7 @@ use canic_ic_registry::{
 use canic_subnet_catalog::MAINNET_NETWORK;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -90,6 +90,16 @@ pub struct NnsDataCenterListReport {
     pub fetched_by: String,
     pub data_center_count: usize,
     pub data_centers: Vec<NnsDataCenterRow>,
+}
+
+impl JsonCacheReport for NnsDataCenterListReport {
+    fn schema_version(&self) -> u32 {
+        self.schema_version
+    }
+
+    fn network(&self) -> &str {
+        &self.network
+    }
 }
 
 ///
@@ -289,32 +299,29 @@ fn load_cached_nns_data_center_report(
 ) -> Result<CachedNnsDataCenterReport, NnsDataCenterHostError> {
     enforce_mainnet_network(&request.network)?;
     let path = nns_data_center_cache_path(&request.icp_root, &request.network);
-    if !path.is_file() {
-        return Err(NnsDataCenterHostError::MissingCache { path });
-    }
-    let data = fs::read_to_string(&path).map_err(|source| NnsDataCenterHostError::ReadCache {
-        path: path.clone(),
-        source,
-    })?;
-    let report = serde_json::from_str::<NnsDataCenterListReport>(&data).map_err(|source| {
-        NnsDataCenterHostError::ParseCache {
-            path: path.clone(),
-            source,
-        }
-    })?;
-    if report.schema_version != NNS_DATA_CENTER_LIST_REPORT_SCHEMA_VERSION {
-        return Err(NnsDataCenterHostError::UnsupportedCacheSchemaVersion {
-            version: report.schema_version,
-            expected: NNS_DATA_CENTER_LIST_REPORT_SCHEMA_VERSION,
-        });
-    }
-    if report.network != request.network {
-        return Err(NnsDataCenterHostError::NetworkMismatch {
-            requested: request.network.clone(),
-            actual: report.network,
-        });
-    }
-    Ok(CachedNnsDataCenterReport { path, report })
+    let cached = load_json_cache(
+        LoadJsonCacheRequest {
+            path,
+            network: &request.network,
+            expected_schema_version: NNS_DATA_CENTER_LIST_REPORT_SCHEMA_VERSION,
+        },
+        LoadJsonCacheErrorHandlers {
+            missing_cache: |path| NnsDataCenterHostError::MissingCache { path },
+            read_cache: |path, source| NnsDataCenterHostError::ReadCache { path, source },
+            parse_cache: |path, source| NnsDataCenterHostError::ParseCache { path, source },
+            unsupported_schema: |version, expected| {
+                NnsDataCenterHostError::UnsupportedCacheSchemaVersion { version, expected }
+            },
+            network_mismatch: |requested, actual| NnsDataCenterHostError::NetworkMismatch {
+                requested,
+                actual,
+            },
+        },
+    )?;
+    Ok(CachedNnsDataCenterReport {
+        path: cached.path,
+        report: cached.report,
+    })
 }
 
 fn build_nns_data_center_list_report_with_source(
@@ -386,56 +393,40 @@ fn refresh_nns_data_center_cache_with_source(
     let cache_path = nns_data_center_cache_path(&request.cache.icp_root, &request.cache.network);
     let lock_path =
         nns_data_center_refresh_lock_path(&request.cache.icp_root, &request.cache.network);
-    let cache_dir = cache_path
-        .parent()
-        .expect("data-center cache path always has parent")
-        .to_path_buf();
-    create_directory(&cache_dir).map_err(data_center_cache_error)?;
-    let lock = acquire_refresh_lock(RefreshLockRequest {
-        lock_path: &lock_path,
-        target_path: &cache_path,
-        network: &request.cache.network,
-        now_unix_secs: request.now_unix_secs,
-        lock_stale_after_seconds: request.lock_stale_after_seconds,
-    })
-    .map_err(data_center_cache_error)?;
-    let replaced_existing_cache = cache_path.is_file();
     let report = fetch_nns_data_center_list_report_with_source(
         &request.cache.network,
         &request.source_endpoint,
         request.now_unix_secs,
         source,
     )?;
-    let report_json = serde_json::to_string_pretty(&report).map_err(|source| {
-        NnsDataCenterHostError::SerializeCache {
-            path: cache_path.clone(),
-            source,
-        }
-    })?;
-    if let Some(output_path) = &request.output_path {
-        write_text_output(output_path, &report_json).map_err(data_center_cache_error)?;
-    }
-    if !request.dry_run {
-        write_text_atomically(&cache_path, &report_json).map_err(data_center_cache_error)?;
-    }
-    lock.release().map_err(data_center_cache_error)?;
+    let write_result = write_json_refresh_cache(
+        RefreshCacheWriteRequest {
+            cache_path: &cache_path,
+            lock_path: &lock_path,
+            network: &request.cache.network,
+            now_unix_secs: request.now_unix_secs,
+            lock_stale_after_seconds: request.lock_stale_after_seconds,
+            dry_run: request.dry_run,
+            output_path: request.output_path.as_deref(),
+            report: &report,
+        },
+        data_center_cache_error,
+        |path, source| NnsDataCenterHostError::SerializeCache { path, source },
+    )?;
     let refresh_report = NnsDataCenterRefreshReport {
         schema_version: NNS_DATA_CENTER_REFRESH_REPORT_SCHEMA_VERSION,
         network: report.network.clone(),
-        cache_path: cache_path.display().to_string(),
-        refresh_lock_path: lock_path.display().to_string(),
-        output_path: request
-            .output_path
-            .as_ref()
-            .map(|path| path.display().to_string()),
+        cache_path: write_result.cache_path,
+        refresh_lock_path: write_result.refresh_lock_path,
+        output_path: write_result.output_path,
         registry_canister_id: report.registry_canister_id.clone(),
         registry_version: report.registry_version,
         fetched_at: report.fetched_at.clone(),
         source_endpoint: report.source_endpoint.clone(),
         fetched_by: report.fetched_by.clone(),
         dry_run: request.dry_run,
-        wrote_cache: !request.dry_run,
-        replaced_existing_cache,
+        wrote_cache: write_result.wrote_cache,
+        replaced_existing_cache: write_result.replaced_existing_cache,
         data_center_count: report.data_center_count,
     };
     Ok((report, refresh_report))

@@ -504,8 +504,13 @@ pub async fn fetch_mainnet_node_operator_list_async(
         }
     })?;
     let registry_version = get_latest_version(&agent, &registry_canister).await?;
-    let inventory =
-        fetch_registry_relation_inventory(&agent, &registry_canister, registry_version).await?;
+    let inventory = fetch_registry_relation_inventory(
+        &agent,
+        &registry_canister,
+        registry_version,
+        RegistryRelationInventoryScope::BaseRelations,
+    )
+    .await?;
     node_operator_list_from_inventory(request, inventory, registry_version)
 }
 
@@ -526,8 +531,13 @@ pub async fn fetch_mainnet_node_list_async(
         }
     })?;
     let registry_version = get_latest_version(&agent, &registry_canister).await?;
-    let inventory =
-        fetch_registry_relation_inventory(&agent, &registry_canister, registry_version).await?;
+    let inventory = fetch_registry_relation_inventory(
+        &agent,
+        &registry_canister,
+        registry_version,
+        RegistryRelationInventoryScope::BaseRelations,
+    )
+    .await?;
     node_list_from_inventory(request, inventory, registry_version)
 }
 
@@ -548,8 +558,13 @@ pub async fn fetch_mainnet_data_center_list_async(
         }
     })?;
     let registry_version = get_latest_version(&agent, &registry_canister).await?;
-    let inventory =
-        fetch_registry_relation_inventory(&agent, &registry_canister, registry_version).await?;
+    let inventory = fetch_registry_relation_inventory(
+        &agent,
+        &registry_canister,
+        registry_version,
+        RegistryRelationInventoryScope::WithDataCenters,
+    )
+    .await?;
     data_center_list_from_inventory(request, inventory, registry_version)
 }
 
@@ -655,8 +670,13 @@ async fn fetch_node_provider_node_counts(
     registry_canister: &Principal,
     registry_version: u64,
 ) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
-    let inventory =
-        fetch_registry_relation_inventory(agent, registry_canister, registry_version).await?;
+    let inventory = fetch_registry_relation_inventory(
+        agent,
+        registry_canister,
+        registry_version,
+        RegistryRelationInventoryScope::BaseRelations,
+    )
+    .await?;
     node_provider_counts_from_records(
         &inventory.node_principals,
         &inventory.node_records,
@@ -668,6 +688,7 @@ async fn fetch_registry_relation_inventory(
     agent: &Agent,
     registry_canister: &Principal,
     registry_version: u64,
+    scope: RegistryRelationInventoryScope,
 ) -> Result<RegistryRelationInventory, RegistryFetchError> {
     let subnet_list_bytes =
         get_registry_value(agent, registry_canister, SUBNET_LIST_KEY, registry_version).await?;
@@ -726,21 +747,18 @@ async fn fetch_registry_relation_inventory(
         .try_collect::<BTreeMap<_, _>>()
         .await?;
 
-    let data_center_ids = node_operator_records
-        .values()
-        .filter_map(|record| normalized_data_center_id(&record.dc_id))
-        .collect::<BTreeSet<_>>();
-    let data_center_records = stream::iter(data_center_ids)
-        .map(|data_center_id| async move {
-            let key = data_center_record_key(&data_center_id);
-            let record_bytes =
-                get_registry_value(agent, registry_canister, &key, registry_version).await?;
-            let record = decode_message::<DataCenterRecord>("DataCenterRecord", &record_bytes)?;
-            Ok::<_, RegistryFetchError>((data_center_id, record))
-        })
-        .buffer_unordered(NODE_PROVIDER_ENRICHMENT_CONCURRENCY)
-        .try_collect::<BTreeMap<_, _>>()
-        .await?;
+    let data_center_records = match scope {
+        RegistryRelationInventoryScope::BaseRelations => BTreeMap::new(),
+        RegistryRelationInventoryScope::WithDataCenters => {
+            fetch_data_center_records_for_inventory(
+                agent,
+                registry_canister,
+                registry_version,
+                &node_operator_records,
+            )
+            .await?
+        }
+    };
 
     Ok(RegistryRelationInventory {
         node_principals,
@@ -751,13 +769,39 @@ async fn fetch_registry_relation_inventory(
     })
 }
 
+async fn fetch_data_center_records_for_inventory(
+    agent: &Agent,
+    registry_canister: &Principal,
+    registry_version: u64,
+    node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
+) -> Result<BTreeMap<String, DataCenterRecord>, RegistryFetchError> {
+    let data_center_ids = node_operator_records
+        .values()
+        .filter_map(|record| normalized_data_center_id(&record.dc_id))
+        .collect::<BTreeSet<_>>();
+    stream::iter(data_center_ids)
+        .map(|data_center_id| async move {
+            let key = data_center_record_key(&data_center_id);
+            let record_bytes =
+                get_registry_value(agent, registry_canister, &key, registry_version).await?;
+            let record = decode_message::<DataCenterRecord>("DataCenterRecord", &record_bytes)?;
+            Ok::<_, RegistryFetchError>((data_center_id, record))
+        })
+        .buffer_unordered(NODE_PROVIDER_ENRICHMENT_CONCURRENCY)
+        .try_collect::<BTreeMap<_, _>>()
+        .await
+}
+
 fn node_operator_list_from_inventory(
     request: &MainnetRegistryFetchRequest,
     inventory: RegistryRelationInventory,
     registry_version: u64,
 ) -> Result<MainnetNodeOperatorList, RegistryFetchError> {
-    let node_counts =
-        node_operator_counts_from_records(&inventory.node_principals, &inventory.node_records)?;
+    let node_counts = node_operator_counts_from_records(
+        &inventory.node_principals,
+        &inventory.node_records,
+        &inventory.node_operator_records,
+    )?;
     let mut node_operators = inventory
         .node_operator_records
         .into_iter()
@@ -1244,6 +1288,47 @@ fn node_provider_counts_from_records(
     node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
 ) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
     let mut counts = BTreeMap::<String, u32>::new();
+    for relation in assigned_node_relations(node_principals, node_records, node_operator_records)? {
+        let count = counts.entry(relation.node_provider_principal).or_default();
+        *count = count.saturating_add(1);
+    }
+    Ok(counts)
+}
+
+fn node_operator_counts_from_records(
+    node_principals: &BTreeSet<String>,
+    node_records: &BTreeMap<String, NodeRecord>,
+    node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
+) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
+    let mut counts = BTreeMap::<String, u32>::new();
+    for relation in assigned_node_relations(node_principals, node_records, node_operator_records)? {
+        let count = counts.entry(relation.node_operator_principal).or_default();
+        *count = count.saturating_add(1);
+    }
+    Ok(counts)
+}
+
+fn data_center_node_counts_from_records(
+    node_principals: &BTreeSet<String>,
+    node_records: &BTreeMap<String, NodeRecord>,
+    node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
+) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
+    let mut counts = BTreeMap::<String, u32>::new();
+    for relation in assigned_node_relations(node_principals, node_records, node_operator_records)? {
+        if let Some(data_center_id) = relation.data_center_id {
+            let count = counts.entry(data_center_id).or_default();
+            *count = count.saturating_add(1);
+        }
+    }
+    Ok(counts)
+}
+
+fn assigned_node_relations(
+    node_principals: &BTreeSet<String>,
+    node_records: &BTreeMap<String, NodeRecord>,
+    node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
+) -> Result<Vec<AssignedNodeRelation>, RegistryFetchError> {
+    let mut relations = Vec::with_capacity(node_principals.len());
     for node_principal in node_principals {
         let node_record =
             node_records
@@ -1264,62 +1349,13 @@ fn node_provider_counts_from_records(
             &node_operator_record.node_provider_principal_id,
             "node_operator_record.node_provider_principal_id",
         )?;
-        let count = counts.entry(node_provider_principal).or_default();
-        *count = count.saturating_add(1);
+        relations.push(AssignedNodeRelation {
+            node_operator_principal,
+            node_provider_principal,
+            data_center_id: normalized_data_center_id(&node_operator_record.dc_id),
+        });
     }
-    Ok(counts)
-}
-
-fn node_operator_counts_from_records(
-    node_principals: &BTreeSet<String>,
-    node_records: &BTreeMap<String, NodeRecord>,
-) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
-    let mut counts = BTreeMap::<String, u32>::new();
-    for node_principal in node_principals {
-        let node_record =
-            node_records
-                .get(node_principal)
-                .ok_or(RegistryFetchError::MissingField {
-                    field: "node_record",
-                })?;
-        let node_operator_principal = principal_text_from_required_raw(
-            &node_record.node_operator_id,
-            "node_record.node_operator_id",
-        )?;
-        let count = counts.entry(node_operator_principal).or_default();
-        *count = count.saturating_add(1);
-    }
-    Ok(counts)
-}
-
-fn data_center_node_counts_from_records(
-    node_principals: &BTreeSet<String>,
-    node_records: &BTreeMap<String, NodeRecord>,
-    node_operator_records: &BTreeMap<String, NodeOperatorRecord>,
-) -> Result<BTreeMap<String, u32>, RegistryFetchError> {
-    let mut counts = BTreeMap::<String, u32>::new();
-    for node_principal in node_principals {
-        let node_record =
-            node_records
-                .get(node_principal)
-                .ok_or(RegistryFetchError::MissingField {
-                    field: "node_record",
-                })?;
-        let node_operator_principal = principal_text_from_required_raw(
-            &node_record.node_operator_id,
-            "node_record.node_operator_id",
-        )?;
-        let node_operator_record = node_operator_records.get(&node_operator_principal).ok_or(
-            RegistryFetchError::MissingField {
-                field: "node_operator_record",
-            },
-        )?;
-        if let Some(data_center_id) = normalized_data_center_id(&node_operator_record.dc_id) {
-            let count = counts.entry(data_center_id).or_default();
-            *count = count.saturating_add(1);
-        }
-    }
-    Ok(counts)
+    Ok(relations)
 }
 
 fn data_center_operator_counts_from_records(
@@ -1372,6 +1408,24 @@ struct RegistryRelationInventory {
     node_operator_records: BTreeMap<String, NodeOperatorRecord>,
     subnet_records: BTreeMap<String, SubnetRecord>,
     data_center_records: BTreeMap<String, DataCenterRecord>,
+}
+
+///
+/// RegistryRelationInventoryScope
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RegistryRelationInventoryScope {
+    BaseRelations,
+    WithDataCenters,
+}
+
+///
+/// AssignedNodeRelation
+///
+struct AssignedNodeRelation {
+    node_operator_principal: String,
+    node_provider_principal: String,
+    data_center_id: Option<String>,
 }
 
 fn subnet_kind_text(record: &SubnetRecord) -> String {

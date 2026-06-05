@@ -24,8 +24,8 @@ use crate::{
 impl PoolWorkflow {
     pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, InternalError> {
         match cmd {
-            PoolAdminCommand::CreateEmpty => {
-                let pid = Self::pool_create_canister().await?;
+            PoolAdminCommand::CreateEmpty(request) => {
+                let pid = Self::pool_create_canister(request).await?;
                 Ok(PoolAdminResponse::Created { pid })
             }
 

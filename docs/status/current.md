@@ -9,7 +9,27 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.5` is underway from
+- `0.61.6` completed the next slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Pool
+  `CreateEmpty` now carries replay metadata, reserves a
+  `pool.create_empty.v1` shared replay receipt, reserves deployment quota and
+  an in-flight cycle budget before management `create_canister`, marks the
+  management create effect in flight, calls the guarded management adapter with
+  a `CostGuardPermit`, commits the created pool principal for duplicate replay,
+  and marks uncertain post-management failures as recovery-required instead of
+  re-executing the external effect on retry. `canic_pool_admin` remains a replay
+  manifest release blocker until the non-CreateEmpty variants are classified
+  and guarded. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core ops::cost_guard --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo test -p canic-core ops::replay --lib -- --nocapture
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo test -p canic-core --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
+- `0.61.5` completed the first shared cost-guard slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. The branch now has the
   first shared cost-guard foundation in `ops::cost_guard`, backed by durable
   intent-store reservations. Root delegation-proof signing reserves a

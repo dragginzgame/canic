@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.6` makes pool `CreateEmpty` replay-protected and deployment
+  cost-guarded. Fresh requests now require replay metadata, reserve a shared
+  receipt and deployment quota/cycle budget before management `create_canister`,
+  commit the created pool principal for duplicate replay, and leave uncertain
+  management effects in recovery-required state instead of creating again.
+
 - `0.61.5` adds the shared cost-guard foundation and wires root
   delegation-proof signing through it. Fresh delegation proof requests now
   reserve signing quota and an in-flight cycle budget before threshold ECDSA,

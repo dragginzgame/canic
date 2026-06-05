@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     fs, io,
     io::Write,
@@ -66,6 +66,71 @@ pub enum CacheFileError {
 }
 
 ///
+/// CachedJsonReport
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CachedJsonReport<T> {
+    pub path: PathBuf,
+    pub report: T,
+}
+
+///
+/// JsonCacheReport
+///
+pub trait JsonCacheReport {
+    fn schema_version(&self) -> u32;
+    fn network(&self) -> &str;
+}
+
+///
+/// LoadJsonCacheRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoadJsonCacheRequest<'a> {
+    pub path: PathBuf,
+    pub network: &'a str,
+    pub expected_schema_version: u32,
+}
+
+///
+/// LoadJsonCacheErrorHandlers
+///
+pub struct LoadJsonCacheErrorHandlers<Missing, Read, Parse, Unsupported, Mismatch> {
+    pub missing_cache: Missing,
+    pub read_cache: Read,
+    pub parse_cache: Parse,
+    pub unsupported_schema: Unsupported,
+    pub network_mismatch: Mismatch,
+}
+
+///
+/// RefreshCacheWriteRequest
+///
+#[derive(Clone, Copy, Debug)]
+pub struct RefreshCacheWriteRequest<'a, T> {
+    pub cache_path: &'a Path,
+    pub lock_path: &'a Path,
+    pub network: &'a str,
+    pub now_unix_secs: u64,
+    pub lock_stale_after_seconds: u64,
+    pub dry_run: bool,
+    pub output_path: Option<&'a Path>,
+    pub report: &'a T,
+}
+
+///
+/// RefreshCacheWriteResult
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefreshCacheWriteResult {
+    pub cache_path: String,
+    pub refresh_lock_path: String,
+    pub output_path: Option<String>,
+    pub replaced_existing_cache: bool,
+    pub wrote_cache: bool,
+}
+
+///
 /// RefreshLockRequest
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -123,6 +188,43 @@ pub fn create_directory(path: &Path) -> Result<(), CacheFileError> {
         path: path.to_path_buf(),
         source,
     })
+}
+
+pub fn load_json_cache<T, E, Missing, Read, Parse, Unsupported, Mismatch>(
+    request: LoadJsonCacheRequest<'_>,
+    errors: LoadJsonCacheErrorHandlers<Missing, Read, Parse, Unsupported, Mismatch>,
+) -> Result<CachedJsonReport<T>, E>
+where
+    T: DeserializeOwned + JsonCacheReport,
+    Missing: Fn(PathBuf) -> E,
+    Read: Fn(PathBuf, io::Error) -> E,
+    Parse: Fn(PathBuf, serde_json::Error) -> E,
+    Unsupported: Fn(u32, u32) -> E,
+    Mismatch: Fn(String, String) -> E,
+{
+    let path = request.path;
+    if !path.is_file() {
+        return Err((errors.missing_cache)(path));
+    }
+    let data =
+        fs::read_to_string(&path).map_err(|source| (errors.read_cache)(path.clone(), source))?;
+    let report = serde_json::from_str::<T>(&data)
+        .map_err(|source| (errors.parse_cache)(path.clone(), source))?;
+    let actual_schema_version = report.schema_version();
+    if actual_schema_version != request.expected_schema_version {
+        return Err((errors.unsupported_schema)(
+            actual_schema_version,
+            request.expected_schema_version,
+        ));
+    }
+    let actual_network = report.network();
+    if actual_network != request.network {
+        return Err((errors.network_mismatch)(
+            request.network.to_string(),
+            actual_network.to_string(),
+        ));
+    }
+    Ok(CachedJsonReport { path, report })
 }
 
 pub fn acquire_refresh_lock(
@@ -256,6 +358,47 @@ pub fn write_text_output(output_path: &Path, contents: &str) -> Result<(), Cache
             path: output_path.to_path_buf(),
             source,
         })
+}
+
+pub fn write_json_refresh_cache<T, E>(
+    request: RefreshCacheWriteRequest<'_, T>,
+    cache_error: impl Fn(CacheFileError) -> E,
+    serialize_cache: impl Fn(PathBuf, serde_json::Error) -> E,
+) -> Result<RefreshCacheWriteResult, E>
+where
+    T: Serialize,
+{
+    let cache_dir = request
+        .cache_path
+        .parent()
+        .expect("cache target path always has parent")
+        .to_path_buf();
+    create_directory(&cache_dir).map_err(&cache_error)?;
+    let lock = acquire_refresh_lock(RefreshLockRequest {
+        lock_path: request.lock_path,
+        target_path: request.cache_path,
+        network: request.network,
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+    })
+    .map_err(&cache_error)?;
+    let replaced_existing_cache = request.cache_path.is_file();
+    let report_json = serde_json::to_string_pretty(request.report)
+        .map_err(|source| serialize_cache(request.cache_path.to_path_buf(), source))?;
+    if let Some(output_path) = request.output_path {
+        write_text_output(output_path, &report_json).map_err(&cache_error)?;
+    }
+    if !request.dry_run {
+        write_text_atomically(request.cache_path, &report_json).map_err(&cache_error)?;
+    }
+    lock.release().map_err(cache_error)?;
+    Ok(RefreshCacheWriteResult {
+        cache_path: request.cache_path.display().to_string(),
+        refresh_lock_path: request.lock_path.display().to_string(),
+        output_path: request.output_path.map(|path| path.display().to_string()),
+        replaced_existing_cache,
+        wrote_cache: !request.dry_run,
+    })
 }
 
 fn read_refresh_lock(lock_path: &Path) -> Result<RefreshLockFile, CacheFileError> {

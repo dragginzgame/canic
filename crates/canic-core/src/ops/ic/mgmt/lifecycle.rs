@@ -1,4 +1,5 @@
 use super::*;
+use crate::ops::cost_guard::CostGuardPermit;
 use candid::utils::ArgumentEncoder;
 
 impl MgmtOps {
@@ -16,6 +17,15 @@ impl MgmtOps {
         SystemMetrics::increment(SystemMetricKind::CreateCanister);
 
         Ok(pid)
+    }
+
+    /// Create a canister after a cost guard has reserved deployment quota and cycles.
+    pub async fn create_canister_with_permit(
+        _permit: &CostGuardPermit,
+        controllers: Vec<Principal>,
+        cycles: Cycles,
+    ) -> Result<Principal, InternalError> {
+        Self::create_canister(controllers, cycles).await
     }
 
     /// Install or upgrade a canister from chunks stored in one same-subnet store canister.
