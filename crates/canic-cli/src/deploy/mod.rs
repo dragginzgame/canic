@@ -179,17 +179,6 @@ impl DeployTruthOptions {
     }
 }
 
-fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {
-    match value {
-        "debug" => Ok(CanisterBuildProfile::Debug),
-        "fast" => Ok(CanisterBuildProfile::Fast),
-        "release" => Ok(CanisterBuildProfile::Release),
-        _ => Err(format!(
-            "invalid build profile {value}; use debug, fast, or release"
-        )),
-    }
-}
-
 pub fn current_observed_at() -> Result<String, Box<dyn std::error::Error>> {
     Ok(format!(
         "unix:{}",

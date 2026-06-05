@@ -1,8 +1,6 @@
 use super::{
     DeployCommandError, DeployTruthOptions, current_observed_at, deploy_truth_leaf_command,
-    load_deployment_check,
-    output_format::{AuthorityOutputFormat, parse_authority_output_format},
-    print_json, value_arg,
+    load_deployment_check, output_format::AuthorityOutputFormat, print_json, value_arg,
 };
 use crate::{
     cli::{
@@ -290,9 +288,7 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
-        .value_parser(clap::builder::ValueParser::new(
-            parse_authority_output_format,
-        ))
+        .value_parser(clap::value_parser!(AuthorityOutputFormat))
         .help("Output format; defaults to json")
 }
 

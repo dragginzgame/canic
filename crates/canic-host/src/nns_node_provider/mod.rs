@@ -3,6 +3,7 @@ use crate::{
         CacheFileError, JsonCacheReport, LoadJsonCacheErrorHandlers, LoadJsonCacheRequest,
         RefreshCacheWriteRequest, load_json_cache, write_json_refresh_cache,
     },
+    nns_render::{compact_text, optional_node_count_text, text_or_dash, yes_no},
     subnet_catalog::format_utc_timestamp_secs,
     table::{ColumnAlign, render_table},
 };
@@ -515,8 +516,8 @@ pub fn nns_node_provider_list_report_text(report: &NnsNodeProviderListReport) ->
         .iter()
         .map(|provider| {
             [
-                compact_principal(&provider.node_provider_principal),
-                node_count_text(provider.node_count),
+                compact_text(&provider.node_provider_principal, COMPACT_PRINCIPAL_CHARS),
+                optional_node_count_text(provider.node_count),
             ]
         })
         .collect::<Vec<_>>();
@@ -548,7 +549,7 @@ pub fn nns_node_provider_list_report_verbose_text(report: &NnsNodeProviderListRe
         .map(|provider| {
             [
                 provider.node_provider_principal.clone(),
-                node_count_text(provider.node_count),
+                optional_node_count_text(provider.node_count),
                 text_or_dash(provider.reward_account_hex.as_deref()).to_string(),
                 report.registry_version.to_string(),
                 report.fetched_at.clone(),
@@ -577,7 +578,7 @@ pub fn nns_node_provider_info_report_text(report: &NnsNodeProviderInfoReport) ->
     ));
     lines.push(format!(
         "node_count: {}",
-        node_count_text(report.node_count)
+        optional_node_count_text(report.node_count)
     ));
     lines.push(format!(
         "reward_account_hex: {}",
@@ -721,22 +722,6 @@ fn resolve_node_provider(
                 .collect(),
         }),
     }
-}
-
-fn compact_principal(value: &str) -> String {
-    value.chars().take(COMPACT_PRINCIPAL_CHARS).collect()
-}
-
-fn node_count_text(value: Option<u32>) -> String {
-    value.map_or_else(|| "unknown".to_string(), |count| count.to_string())
-}
-
-fn text_or_dash(value: Option<&str>) -> &str {
-    value.filter(|text| !text.is_empty()).unwrap_or("-")
-}
-
-const fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 #[cfg(test)]

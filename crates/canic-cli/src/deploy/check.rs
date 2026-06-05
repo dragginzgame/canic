@@ -1,7 +1,6 @@
 use super::{
     DeployCommandError, DeployTruthOptions, deploy_truth_leaf_command, load_deployment_check,
-    output_format::{CheckOutputFormat, parse_check_output_format},
-    print_json, value_arg,
+    output_format::CheckOutputFormat, print_json, value_arg,
 };
 use crate::{
     cli::{
@@ -375,7 +374,7 @@ fn check_format_arg() -> clap::Arg {
         .long(FORMAT_ARG)
         .value_name("json|envelope-json")
         .num_args(1)
-        .value_parser(clap::builder::ValueParser::new(parse_check_output_format))
+        .value_parser(clap::value_parser!(CheckOutputFormat))
         .help("Output format; defaults to json")
 }
 

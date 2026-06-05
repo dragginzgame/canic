@@ -3,6 +3,7 @@ use crate::{
         CacheFileError, JsonCacheReport, LoadJsonCacheErrorHandlers, LoadJsonCacheRequest,
         RefreshCacheWriteRequest, load_json_cache, write_json_refresh_cache,
     },
+    nns_render::{compact_text, optional_node_count_text, text_or_dash, yes_no},
     subnet_catalog::format_utc_timestamp_secs,
     table::{ColumnAlign, render_table},
 };
@@ -513,9 +514,9 @@ pub fn nns_node_operator_list_report_text(report: &NnsNodeOperatorListReport) ->
         .iter()
         .map(|operator| {
             [
-                compact_principal(&operator.node_operator_principal),
-                compact_principal(&operator.node_provider_principal),
-                node_count_text(operator.node_count),
+                compact_text(&operator.node_operator_principal, COMPACT_PRINCIPAL_CHARS),
+                compact_text(&operator.node_provider_principal, COMPACT_PRINCIPAL_CHARS),
+                optional_node_count_text(operator.node_count),
                 operator.node_allowance.to_string(),
                 text_or_dash(Some(&operator.data_center_id)).to_string(),
             ]
@@ -558,7 +559,7 @@ pub fn nns_node_operator_list_report_verbose_text(report: &NnsNodeOperatorListRe
             [
                 operator.node_operator_principal.clone(),
                 operator.node_provider_principal.clone(),
-                node_count_text(operator.node_count),
+                optional_node_count_text(operator.node_count),
                 operator.node_allowance.to_string(),
                 text_or_dash(Some(&operator.data_center_id)).to_string(),
                 report.registry_version.to_string(),
@@ -592,7 +593,10 @@ pub fn nns_node_operator_info_report_text(report: &NnsNodeOperatorInfoReport) ->
             "node_provider_principal: {}",
             report.node_provider_principal
         ),
-        format!("node_count: {}", node_count_text(report.node_count)),
+        format!(
+            "node_count: {}",
+            optional_node_count_text(report.node_count)
+        ),
         format!("node_allowance: {}", report.node_allowance),
         format!(
             "data_center_id: {}",
@@ -729,22 +733,6 @@ fn resolve_node_operator(
                 .collect(),
         }),
     }
-}
-
-fn compact_principal(value: &str) -> String {
-    value.chars().take(COMPACT_PRINCIPAL_CHARS).collect()
-}
-
-fn node_count_text(value: Option<u32>) -> String {
-    value.map_or_else(|| "unknown".to_string(), |count| count.to_string())
-}
-
-fn text_or_dash(value: Option<&str>) -> &str {
-    value.filter(|text| !text.is_empty()).unwrap_or("-")
-}
-
-const fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 #[cfg(test)]

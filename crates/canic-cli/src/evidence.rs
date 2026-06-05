@@ -19,7 +19,7 @@ use canic_host::{
         evaluate_policy_gate, evaluate_project_evidence_manifest_gate,
     },
 };
-use clap::{ArgGroup, Command as ClapCommand};
+use clap::{ArgGroup, Command as ClapCommand, ValueEnum};
 use serde::Serialize;
 use std::{
     ffi::OsString,
@@ -94,20 +94,10 @@ impl EvidenceCompareOptions {
     }
 }
 
-fn parse_evidence_compare_format(value: &str) -> Result<EvidenceCompareFormat, String> {
-    match value {
-        "text" => Ok(EvidenceCompareFormat::Text),
-        "json" => Ok(EvidenceCompareFormat::Json),
-        other => Err(format!(
-            "invalid evidence comparison output format: {other}"
-        )),
-    }
-}
-
 ///
 /// EvidenceCompareFormat
 ///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum EvidenceCompareFormat {
     Text,
     Json,
@@ -209,19 +199,10 @@ impl EvidenceGateOptions {
     }
 }
 
-fn parse_evidence_gate_format(value: &str) -> Result<EvidenceGateFormat, String> {
-    match value {
-        "text" => Ok(EvidenceGateFormat::Text),
-        "json" => Ok(EvidenceGateFormat::Json),
-        "envelope-json" => Ok(EvidenceGateFormat::EnvelopeJson),
-        other => Err(format!("invalid evidence gate output format: {other}")),
-    }
-}
-
 ///
 /// EvidenceGateFormat
 ///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum EvidenceGateFormat {
     Text,
     Json,
@@ -863,7 +844,7 @@ fn evidence_gate_command() -> ClapCommand {
                 .long("format")
                 .value_name("text|json|envelope-json")
                 .default_value("text")
-                .value_parser(clap::builder::ValueParser::new(parse_evidence_gate_format)),
+                .value_parser(clap::value_parser!(EvidenceGateFormat)),
         )
         .arg(value_arg("output").long("output").value_name("path"))
         .group(
@@ -899,9 +880,7 @@ fn evidence_compare_command() -> ClapCommand {
                 .long("format")
                 .value_name("text|json")
                 .default_value("text")
-                .value_parser(clap::builder::ValueParser::new(
-                    parse_evidence_compare_format,
-                )),
+                .value_parser(clap::value_parser!(EvidenceCompareFormat)),
         )
         .after_help(
             "Compares stable envelope fields and ignores generated_at, canic_version, and the nested payload body. The payload_sha256 field is compared.",

@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.7` adds command-level replay policy coverage for every
+  `canic_pool_admin` variant and makes immediate pool import return success
+  without management reset when the canister is already in the pool. The
+  non-CreateEmpty pool admin variants remain explicit release blockers until
+  their replay receipts or stronger idempotence guards are implemented.
+
 - `0.61.6` makes pool `CreateEmpty` replay-protected and deployment
   cost-guarded. Fresh requests now require replay metadata, reserve a shared
   receipt and deployment quota/cycle budget before management `create_canister`,

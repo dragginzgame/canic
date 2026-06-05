@@ -3,6 +3,7 @@ use crate::{
         CacheFileError, JsonCacheReport, LoadJsonCacheErrorHandlers, LoadJsonCacheRequest,
         RefreshCacheWriteRequest, load_json_cache, write_json_refresh_cache,
     },
+    nns_render::{compact_text, text_or_dash, yes_no},
     subnet_catalog::format_utc_timestamp_secs,
     table::{ColumnAlign, render_table},
 };
@@ -511,10 +512,10 @@ pub fn nns_node_list_report_text(report: &NnsNodeListReport) -> String {
         .iter()
         .map(|node| {
             [
-                compact_principal(&node.node_principal),
-                compact_principal(&node.node_operator_principal),
-                compact_principal(&node.node_provider_principal),
-                compact_principal(&node.subnet_principal),
+                compact_text(&node.node_principal, COMPACT_PRINCIPAL_CHARS),
+                compact_text(&node.node_operator_principal, COMPACT_PRINCIPAL_CHARS),
+                compact_text(&node.node_provider_principal, COMPACT_PRINCIPAL_CHARS),
+                compact_text(&node.subnet_principal, COMPACT_PRINCIPAL_CHARS),
                 node.subnet_kind.clone(),
                 text_or_dash(Some(&node.data_center_id)).to_string(),
             ]
@@ -730,18 +731,6 @@ fn resolve_node(
                 .collect(),
         }),
     }
-}
-
-fn compact_principal(value: &str) -> String {
-    value.chars().take(COMPACT_PRINCIPAL_CHARS).collect()
-}
-
-fn text_or_dash(value: Option<&str>) -> &str {
-    value.filter(|text| !text.is_empty()).unwrap_or("-")
-}
-
-const fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 #[cfg(test)]

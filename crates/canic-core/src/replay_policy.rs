@@ -74,6 +74,19 @@ pub struct EndpointReplayPolicy {
     pub cycle_reserve_policy: Option<&'static str>,
 }
 
+///
+/// PoolAdminCommandReplayPolicy
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PoolAdminCommandReplayPolicy {
+    pub variant: &'static str,
+    pub replay_policy: ReplayPolicy,
+    pub implementation_status: ReplayImplementationStatus,
+    pub cost_class: CostClass,
+    pub quota_policy: Option<&'static str>,
+    pub cycle_reserve_policy: Option<&'static str>,
+}
+
 const SIGNING_QUOTA_V1: &str = "signing.quota.v1";
 const SIGNING_RESERVE_V1: &str = "signing.cycle_reserve.v1";
 const DEPLOYMENT_QUOTA_V1: &str = "deployment.quota.v1";
@@ -184,9 +197,50 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
 ];
 
+pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPolicy] = &[
+    pool_admin_replay_protected(
+        "CreateEmpty",
+        "pool.create_empty.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    pool_admin_response_idempotent(
+        "Recycle",
+        "pool.recycle.ensure_v1",
+        ReplayImplementationStatus::ReleaseBlocker,
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    pool_admin_response_idempotent(
+        "ImportImmediate",
+        "pool.import_immediate.ensure_v1",
+        ReplayImplementationStatus::ReleaseBlocker,
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    pool_admin_response_idempotent(
+        "ImportQueued",
+        "pool.import_queued.ensure_v1",
+        ReplayImplementationStatus::ReleaseBlocker,
+        CostClass::None,
+        None,
+        None,
+    ),
+];
+
 #[must_use]
 pub const fn endpoint_replay_policy_manifest() -> &'static [EndpointReplayPolicy] {
     ENDPOINT_REPLAY_POLICY_MANIFEST
+}
+
+#[must_use]
+pub const fn pool_admin_command_replay_policy_manifest() -> &'static [PoolAdminCommandReplayPolicy]
+{
+    POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
 }
 
 const fn update_response_idempotent(
@@ -273,6 +327,45 @@ const fn update_snapshot_convergent(
     }
 }
 
+const fn pool_admin_response_idempotent(
+    variant: &'static str,
+    command_kind: &'static str,
+    implementation_status: ReplayImplementationStatus,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> PoolAdminCommandReplayPolicy {
+    PoolAdminCommandReplayPolicy {
+        variant,
+        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        implementation_status,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
+    }
+}
+
+const fn pool_admin_replay_protected(
+    variant: &'static str,
+    command_kind: &'static str,
+    implementation_status: ReplayImplementationStatus,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> PoolAdminCommandReplayPolicy {
+    PoolAdminCommandReplayPolicy {
+        variant,
+        replay_policy: ReplayPolicy::ReplayProtected {
+            command_kind,
+            requires_operation_id: true,
+        },
+        implementation_status,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,6 +420,25 @@ mod tests {
     }
 
     #[test]
+    fn costed_pool_admin_command_entries_declare_guards() {
+        for entry in POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST {
+            if entry.cost_class == CostClass::None {
+                continue;
+            }
+            assert!(
+                entry.quota_policy.is_some(),
+                "costed pool admin command {} missing quota policy",
+                entry.variant
+            );
+            assert!(
+                entry.cycle_reserve_policy.is_some(),
+                "costed pool admin command {} missing cycle-reserve policy",
+                entry.variant
+            );
+        }
+    }
+
+    #[test]
     fn delegation_proof_issuance_is_manifested_as_implemented() {
         let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
@@ -348,6 +460,55 @@ mod tests {
     }
 
     #[test]
+    fn pool_admin_command_variants_have_replay_policy_entries() {
+        let variants = pool_admin_command_variant_names();
+        let manifest = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .map(|entry| entry.variant)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(manifest, variants);
+    }
+
+    #[test]
+    fn pool_create_empty_command_is_manifested_as_implemented() {
+        let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.variant == "CreateEmpty")
+            .expect("CreateEmpty command policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                command_kind: "pool.create_empty.v1",
+                requires_operation_id: true,
+            }
+        );
+    }
+
+    #[test]
+    fn pool_admin_non_create_variants_remain_explicit_release_blockers() {
+        for variant in ["Recycle", "ImportImmediate", "ImportQueued"] {
+            let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+                .iter()
+                .find(|entry| entry.variant == variant)
+                .expect("pool admin command policy entry");
+            assert_eq!(
+                entry.implementation_status,
+                ReplayImplementationStatus::ReleaseBlocker
+            );
+            assert!(
+                matches!(entry.replay_policy, ReplayPolicy::ResponseIdempotent { .. }),
+                "{variant} must declare its chosen replay class"
+            );
+        }
+    }
+
+    #[test]
     fn intentionally_non_idempotent_entries_must_state_reason() {
         for entry in ENDPOINT_REPLAY_POLICY_MANIFEST {
             if let ReplayPolicy::IntentionallyNonIdempotent { reason, .. } = entry.replay_policy {
@@ -358,6 +519,39 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn pool_admin_command_variant_names() -> BTreeSet<&'static str> {
+        let source = include_str!("dto/pool.rs");
+        let marker = "pub enum PoolAdminCommand";
+        let start = source
+            .find(marker)
+            .expect("PoolAdminCommand enum exists in pool DTO");
+        let body_start = source[start..]
+            .find('{')
+            .map(|offset| start + offset + 1)
+            .expect("PoolAdminCommand enum has body");
+        let body_end = source[body_start..]
+            .find("\n}")
+            .map(|offset| body_start + offset)
+            .expect("PoolAdminCommand enum body closes");
+
+        source[body_start..body_end]
+            .lines()
+            .filter_map(pool_admin_command_variant_name_from_line)
+            .collect()
+    }
+
+    fn pool_admin_command_variant_name_from_line(line: &'static str) -> Option<&'static str> {
+        let line = line.trim();
+        let first = line.as_bytes().first().copied()?;
+        if !first.is_ascii_uppercase() {
+            return None;
+        }
+        let end = line
+            .find(|ch: char| ch == '(' || ch == '{' || ch == ',' || ch.is_whitespace())
+            .unwrap_or(line.len());
+        Some(&line[..end])
     }
 
     fn emitted_update_endpoint_names() -> BTreeSet<&'static str> {

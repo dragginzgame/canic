@@ -4,6 +4,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::str::FromStr;
 
 ///
 /// SubnetCatalog
@@ -72,6 +73,21 @@ impl SubnetKind {
     }
 }
 
+impl FromStr for SubnetKind {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "application" => Ok(Self::Application),
+            "system" => Ok(Self::System),
+            "unknown" => Ok(Self::Unknown),
+            other => Err(format!(
+                "invalid value {other}; use application, system, or unknown"
+            )),
+        }
+    }
+}
+
 ///
 /// SubnetSpecialization
 ///
@@ -96,6 +112,22 @@ impl SubnetSpecialization {
     }
 }
 
+impl FromStr for SubnetSpecialization {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "none" => Ok(Self::None),
+            "fiduciary" => Ok(Self::Fiduciary),
+            "european" => Ok(Self::European),
+            "unknown" => Ok(Self::Unknown),
+            other => Err(format!(
+                "invalid value {other}; use none, fiduciary, european, or unknown"
+            )),
+        }
+    }
+}
+
 ///
 /// GeographicScope
 ///
@@ -114,6 +146,21 @@ impl GeographicScope {
             Self::Global => "global",
             Self::Europe => "europe",
             Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl FromStr for GeographicScope {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "global" => Ok(Self::Global),
+            "europe" => Ok(Self::Europe),
+            "unknown" => Ok(Self::Unknown),
+            other => Err(format!(
+                "invalid value {other}; use global, europe, or unknown"
+            )),
         }
     }
 }

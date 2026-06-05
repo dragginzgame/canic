@@ -40,7 +40,7 @@ use canic_host::{
     },
     table::{ColumnAlign, render_table},
 };
-use clap::Command as ClapCommand;
+use clap::{Command as ClapCommand, ValueEnum};
 use serde::de::DeserializeOwned;
 use std::{
     ffi::OsString,
@@ -291,7 +291,7 @@ struct AdoptionReportOptions {
 /// AdoptionReportFormat
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum AdoptionReportFormat {
     Text,
     Json,
@@ -806,27 +806,6 @@ impl AdoptionReportOptions {
     }
 }
 
-fn parse_adoption_profile(value: &str) -> Result<AdoptionProfileV1, String> {
-    match value {
-        "brownfield" => Ok(AdoptionProfileV1::Brownfield),
-        "partial" => Ok(AdoptionProfileV1::Partial),
-        "standalone" => Ok(AdoptionProfileV1::Standalone),
-        "leaf-only" => Ok(AdoptionProfileV1::LeafOnly),
-        "hybrid-external-wasm" => Ok(AdoptionProfileV1::HybridExternalWasm),
-        "minimal" => Ok(AdoptionProfileV1::Minimal),
-        other => Err(format!("invalid adoption profile: {other}")),
-    }
-}
-
-fn parse_adoption_report_format(value: &str) -> Result<AdoptionReportFormat, String> {
-    match value {
-        "text" => Ok(AdoptionReportFormat::Text),
-        "json" => Ok(AdoptionReportFormat::Json),
-        "envelope-json" => Ok(AdoptionReportFormat::EnvelopeJson),
-        other => Err(format!("invalid adoption report output format: {other}")),
-    }
-}
-
 fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     discover_current_canic_config_choices()
 }
@@ -1000,16 +979,14 @@ fn fleet_adoption_report_command() -> ClapCommand {
                 .long("profile")
                 .value_name("profile")
                 .required(true)
-                .value_parser(clap::builder::ValueParser::new(parse_adoption_profile))
+                .value_parser(clap::value_parser!(AdoptionProfileV1))
                 .help("Adoption profile to evaluate"),
         )
         .arg(
             clap::Arg::new("format")
                 .long("format")
                 .value_name("text|json|envelope-json")
-                .value_parser(clap::builder::ValueParser::new(
-                    parse_adoption_report_format,
-                ))
+                .value_parser(clap::value_parser!(AdoptionReportFormat))
                 .help("Report output format"),
         )
         .arg(

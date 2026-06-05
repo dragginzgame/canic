@@ -1,7 +1,5 @@
 use super::{
-    DeployCommandError, current_observed_at,
-    output_format::{CatalogOutputFormat, parse_catalog_output_format},
-    value_arg,
+    DeployCommandError, current_observed_at, output_format::CatalogOutputFormat, value_arg,
 };
 use crate::{
     cli::{
@@ -249,7 +247,7 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("text|json")
         .num_args(1)
-        .value_parser(clap::builder::ValueParser::new(parse_catalog_output_format))
+        .value_parser(clap::value_parser!(CatalogOutputFormat))
         .help("Output format; defaults to text")
 }
 

@@ -268,6 +268,13 @@ impl PoolWorkflow {
             MetricEvent::failed(MetricOperation::ImportImmediate, &err);
             return Err(err);
         }
+        if pool_import_already_present(pid) {
+            MetricEvent::skipped(
+                MetricOperation::ImportImmediate,
+                MetricReason::AlreadyPresent,
+            );
+            return Ok(());
+        }
         if let Err(err) = admissibility::check_can_enter_pool(pid).await {
             MetricEvent::record(
                 MetricOperation::ImportImmediate,
@@ -463,6 +470,10 @@ fn pool_create_empty_replay_metadata(
         ))));
     }
     Ok(metadata)
+}
+
+fn pool_import_already_present(pid: Principal) -> bool {
+    PoolOps::contains(&pid)
 }
 
 ///
@@ -897,5 +908,19 @@ mod tests {
             map_pool_create_empty_replay_decision(decision).expect("committed receipt replays"),
             pid
         );
+    }
+
+    #[test]
+    fn pool_import_immediate_detects_already_pooled_canister_before_reset() {
+        let pid = p(47);
+        PoolOps::remove(&pid);
+
+        assert!(!pool_import_already_present(pid));
+
+        PoolOps::register_ready(pid, Cycles::new(10), None, None, None, 100);
+
+        assert!(pool_import_already_present(pid));
+
+        PoolOps::remove(&pid);
     }
 }

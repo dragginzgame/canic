@@ -22,7 +22,7 @@ use canic_host::{
     nns_node_operator::NnsNodeOperatorHostError, nns_node_provider::NnsNodeProviderHostError,
     nns_registry::NnsRegistryHostError, subnet_catalog::SubnetCatalogHostError,
 };
-use clap::Command as ClapCommand;
+use clap::{Command as ClapCommand, ValueEnum};
 use serde::Serialize;
 use std::{
     ffi::OsString,
@@ -79,7 +79,7 @@ pub enum NnsCommandError {
 ///
 /// OutputFormat
 ///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum OutputFormat {
     Text,
     Json,
@@ -121,14 +121,6 @@ where
             write_text::<NnsCommandError>(None, &text)
         }
         OutputFormat::Json => write_pretty_json(None, report),
-    }
-}
-
-fn parse_format(value: &str) -> Result<OutputFormat, String> {
-    match value {
-        "text" => Ok(OutputFormat::Text),
-        "json" => Ok(OutputFormat::Json),
-        other => Err(format!("invalid value {other}; use text or json")),
     }
 }
 

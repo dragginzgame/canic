@@ -55,20 +55,6 @@ impl MetricsOptions {
     }
 }
 
-fn parse_metrics_kind(value: &str) -> Result<MetricsKind, String> {
-    match value {
-        "core" => Ok(MetricsKind::Core),
-        "placement" => Ok(MetricsKind::Placement),
-        "platform" => Ok(MetricsKind::Platform),
-        "runtime" => Ok(MetricsKind::Runtime),
-        "security" => Ok(MetricsKind::Security),
-        "storage" => Ok(MetricsKind::Storage),
-        _ => Err(format!(
-            "invalid metrics kind {value}; use core, placement, platform, runtime, security, or storage"
-        )),
-    }
-}
-
 pub(super) fn usage() -> String {
     render_usage(metrics_command)
 }
@@ -88,7 +74,7 @@ fn metrics_command() -> ClapCommand {
             value_arg("kind")
                 .long("kind")
                 .value_name("kind")
-                .value_parser(clap::builder::ValueParser::new(parse_metrics_kind))
+                .value_parser(clap::value_parser!(MetricsKind))
                 .help("Metrics tier to query; defaults to core"),
         )
         .arg(

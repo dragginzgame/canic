@@ -9,7 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.6` completed the next slice from
+- `0.61.7` completed the next slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`. The replay policy
+  inventory now includes command-level coverage for every `PoolAdminCommand`
+  variant: `CreateEmpty`, `Recycle`, `ImportImmediate`, and `ImportQueued`.
+  `CreateEmpty` is recorded as implemented with `pool.create_empty.v1`; the
+  non-CreateEmpty variants now have explicit response-idempotent ensure-style
+  classifications but remain release blockers until replay receipts or stronger
+  idempotence guards are implemented. `ImportImmediate` also now returns
+  success before admissibility probing or management reset when the target
+  canister is already present in the pool. No CLI commands changed in this
+  patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
+- `0.61.6` completed the pool create replay/cost-guard slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. Pool
   `CreateEmpty` now carries replay metadata, reserves a
   `pool.create_empty.v1` shared replay receipt, reserves deployment quota and

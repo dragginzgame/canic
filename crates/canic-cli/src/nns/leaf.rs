@@ -1,4 +1,4 @@
-use super::{NnsCommandError, OutputFormat, parse_format};
+use super::{NnsCommandError, OutputFormat};
 use crate::{
     cli::{
         clap::{
@@ -278,7 +278,7 @@ pub(super) fn format_arg() -> clap::Arg {
         .long(FORMAT_ARG)
         .value_name("text|json")
         .default_value(DEFAULT_FORMAT)
-        .value_parser(clap::builder::ValueParser::new(parse_format))
+        .value_parser(clap::value_parser!(OutputFormat))
         .help("Output format; defaults to text")
 }
 

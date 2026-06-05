@@ -1,7 +1,6 @@
 use super::{
-    DeployCommandError, current_observed_at,
-    output_format::{CompareOutputFormat, parse_compare_output_format},
-    print_json, read_json_file, value_arg,
+    DeployCommandError, current_observed_at, output_format::CompareOutputFormat, print_json,
+    read_json_file, value_arg,
 };
 use crate::{
     cli::{
@@ -163,7 +162,7 @@ fn format_arg() -> clap::Arg {
         .long(FORMAT_ARG)
         .value_name("json|text")
         .num_args(1)
-        .value_parser(clap::builder::ValueParser::new(parse_compare_output_format))
+        .value_parser(clap::value_parser!(CompareOutputFormat))
         .help("Output format; defaults to json")
 }
 

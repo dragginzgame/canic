@@ -1,8 +1,9 @@
-use super::{parse_profile, value_arg};
+use super::value_arg;
 use crate::cli::{
     clap::{passthrough_subcommand, render_usage},
     globals::internal_network_arg,
 };
+use canic_host::canister_build::CanisterBuildProfile;
 use clap::Command as ClapCommand;
 
 pub(super) const DEPLOYMENT_ARG: &str = "deployment";
@@ -147,7 +148,7 @@ pub fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> Cla
                 .long(PROFILE_ARG)
                 .value_name("debug|fast|release")
                 .num_args(1)
-                .value_parser(clap::builder::ValueParser::new(parse_profile))
+                .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Expected canister wasm build profile"),
         )
         .arg(internal_network_arg())

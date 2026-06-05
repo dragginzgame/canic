@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 ///
 /// CanisterBuildProfile
 ///
@@ -37,6 +39,21 @@ impl CanisterBuildProfile {
             Self::Debug => "debug",
             Self::Fast => "fast",
             Self::Release => "release",
+        }
+    }
+}
+
+impl FromStr for CanisterBuildProfile {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "debug" => Ok(Self::Debug),
+            "fast" => Ok(Self::Fast),
+            "release" => Ok(Self::Release),
+            _ => Err(format!(
+                "invalid build profile {value}; use debug, fast, or release"
+            )),
         }
     }
 }

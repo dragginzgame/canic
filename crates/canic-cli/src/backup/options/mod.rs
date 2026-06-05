@@ -1,6 +1,6 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, parse_usize, path_option, required_string, string_option,
+        flag_arg, parse_matches, path_option, required_string, string_option,
         string_option_or_else, typed_option, value_arg,
     },
     cli::defaults::{default_icp, local_network},
@@ -166,7 +166,7 @@ pub(super) fn backup_prune_command() -> ClapCommand {
             value_arg("keep")
                 .long("keep")
                 .value_name("count")
-                .value_parser(clap::builder::ValueParser::new(parse_usize))
+                .value_parser(clap::value_parser!(usize))
                 .help("Keep the newest count entries from `canic backup list`"),
         )
         .arg(

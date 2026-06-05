@@ -2,7 +2,7 @@ use super::{NnsCommandError, OutputFormat, leaf, now_unix_secs, write_text_or_js
 use crate::{
     cli::{
         clap::{
-            flag_arg, parse_matches, parse_positive_usize, parse_required_subcommand, parse_usize,
+            flag_arg, parse_matches, parse_positive_usize, parse_required_subcommand,
             passthrough_subcommand, render_help, required_string, required_typed,
             string_option_or_else, typed_option, value_arg,
         },
@@ -377,48 +377,6 @@ fn target_resolution_error(
     }
 }
 
-fn parse_kind(value: &str) -> Result<SubnetKind, String> {
-    match value {
-        "application" => Ok(SubnetKind::Application),
-        "system" => Ok(SubnetKind::System),
-        "unknown" => Ok(SubnetKind::Unknown),
-        other => Err(format!(
-            "invalid value {other}; use application, system, or unknown"
-        )),
-    }
-}
-
-fn parse_specialization(value: &str) -> Result<SubnetSpecialization, String> {
-    match value {
-        "none" => Ok(SubnetSpecialization::None),
-        "fiduciary" => Ok(SubnetSpecialization::Fiduciary),
-        "european" => Ok(SubnetSpecialization::European),
-        "unknown" => Ok(SubnetSpecialization::Unknown),
-        other => Err(format!(
-            "invalid value {other}; use none, fiduciary, european, or unknown"
-        )),
-    }
-}
-
-fn parse_geo(value: &str) -> Result<GeographicScope, String> {
-    match value {
-        "global" => Ok(GeographicScope::Global),
-        "europe" => Ok(GeographicScope::Europe),
-        "unknown" => Ok(GeographicScope::Unknown),
-        other => Err(format!(
-            "invalid value {other}; use global, europe, or unknown"
-        )),
-    }
-}
-
-fn parse_resolve_as(value: &str) -> Result<ResolveAs, String> {
-    match value {
-        "subnet" => Ok(ResolveAs::Subnet),
-        "canister" => Ok(ResolveAs::Canister),
-        other => Err(format!("invalid value {other}; use subnet or canister")),
-    }
-}
-
 fn cache_request(icp_root: &Path, network: &str) -> SubnetCatalogCacheRequest {
     SubnetCatalogCacheRequest {
         icp_root: PathBuf::from(icp_root),
@@ -451,21 +409,21 @@ fn list_command() -> ClapCommand {
             value_arg("kind")
                 .long("kind")
                 .value_name("kind")
-                .value_parser(clap::builder::ValueParser::new(parse_kind))
+                .value_parser(clap::value_parser!(SubnetKind))
                 .help("Filter by subnet kind: application, system, or unknown"),
         )
         .arg(
             value_arg("specialization")
                 .long("specialization")
                 .value_name("specialization")
-                .value_parser(clap::builder::ValueParser::new(parse_specialization))
+                .value_parser(clap::value_parser!(SubnetSpecialization))
                 .help("Filter by specialization: none, fiduciary, european, or unknown"),
         )
         .arg(
             value_arg("geo")
                 .long("geo")
                 .value_name("scope")
-                .value_parser(clap::builder::ValueParser::new(parse_geo))
+                .value_parser(clap::value_parser!(GeographicScope))
                 .help("Filter by geographic scope: global, europe, or unknown"),
         )
         .arg(leaf::format_arg())
@@ -492,7 +450,7 @@ fn list_command() -> ClapCommand {
                 .long("range-offset")
                 .value_name("n")
                 .default_value("0")
-                .value_parser(clap::builder::ValueParser::new(parse_usize))
+                .value_parser(clap::value_parser!(usize))
                 .help("Routing range offset for text output"),
         )
         .arg(leaf::network_arg())
@@ -514,7 +472,7 @@ fn info_command() -> ClapCommand {
             value_arg("as")
                 .long("as")
                 .value_name("subnet|canister")
-                .value_parser(clap::builder::ValueParser::new(parse_resolve_as))
+                .value_parser(clap::value_parser!(ResolveAs))
                 .help("Force principal interpretation"),
         )
         .arg(leaf::format_arg())

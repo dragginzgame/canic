@@ -5,7 +5,10 @@ use crate::deployment_truth::{
 };
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 use thiserror::Error;
 
 pub const ADOPTION_REPORT_SCHEMA_VERSION: u32 = 1;
@@ -47,6 +50,22 @@ pub enum AdoptionProfileV1 {
     LeafOnly,
     HybridExternalWasm,
     Minimal,
+}
+
+impl FromStr for AdoptionProfileV1 {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "brownfield" => Ok(Self::Brownfield),
+            "partial" => Ok(Self::Partial),
+            "standalone" => Ok(Self::Standalone),
+            "leaf-only" => Ok(Self::LeafOnly),
+            "hybrid-external-wasm" => Ok(Self::HybridExternalWasm),
+            "minimal" => Ok(Self::Minimal),
+            other => Err(format!("invalid adoption profile: {other}")),
+        }
+    }
 }
 
 ///

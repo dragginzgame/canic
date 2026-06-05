@@ -3,6 +3,7 @@ use crate::{
         CacheFileError, JsonCacheReport, LoadJsonCacheErrorHandlers, LoadJsonCacheRequest,
         RefreshCacheWriteRequest, load_json_cache, write_json_refresh_cache,
     },
+    nns_render::{optional_f32_text, text_or_dash, yes_no},
     subnet_catalog::format_utc_timestamp_secs,
     table::{ColumnAlign, render_table},
 };
@@ -735,18 +736,6 @@ fn resolve_data_center(
                 .collect(),
         }),
     }
-}
-
-fn text_or_dash(value: Option<&str>) -> &str {
-    value.filter(|text| !text.is_empty()).unwrap_or("-")
-}
-
-fn optional_f32_text(value: Option<f32>) -> String {
-    value.map_or_else(|| "-".to_string(), |value| value.to_string())
-}
-
-const fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 #[cfg(test)]

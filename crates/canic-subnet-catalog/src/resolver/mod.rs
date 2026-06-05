@@ -3,7 +3,7 @@ use crate::{
     principal_bytes,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, str::FromStr};
 
 ///
 /// ResolveAs
@@ -21,6 +21,18 @@ impl ResolveAs {
         match self {
             Self::Subnet => "subnet",
             Self::Canister => "canister",
+        }
+    }
+}
+
+impl FromStr for ResolveAs {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "subnet" => Ok(Self::Subnet),
+            "canister" => Ok(Self::Canister),
+            other => Err(format!("invalid value {other}; use subnet or canister")),
         }
     }
 }

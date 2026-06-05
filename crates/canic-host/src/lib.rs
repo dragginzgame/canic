@@ -24,6 +24,7 @@ pub mod nns_node;
 pub mod nns_node_operator;
 pub mod nns_node_provider;
 pub mod nns_registry;
+mod nns_render;
 pub mod policy_gate;
 pub mod registry;
 pub mod release_set;

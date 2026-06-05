@@ -180,7 +180,7 @@ fn build_command() -> ClapCommand {
                 .long("profile")
                 .value_name("debug|fast|release")
                 .num_args(1)
-                .value_parser(clap::builder::ValueParser::new(parse_profile))
+                .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
         )
         .arg(
@@ -345,17 +345,6 @@ fn normalize_build_path(path: &str) -> PathBuf {
         env::current_dir()
             .expect("current directory must be available")
             .join(path)
-    }
-}
-
-fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {
-    match value {
-        "debug" => Ok(CanisterBuildProfile::Debug),
-        "fast" => Ok(CanisterBuildProfile::Fast),
-        "release" => Ok(CanisterBuildProfile::Release),
-        _ => Err(format!(
-            "invalid build profile {value}; use debug, fast, or release"
-        )),
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, path_option, string_option, string_option_or_else, value_arg,
+        flag_arg, parse_matches, parse_positive_usize, path_option, string_option,
+        string_option_or_else, value_arg,
     },
     cli::defaults::default_icp,
     cli::globals::{internal_icp_arg, internal_network_arg},
@@ -360,15 +361,4 @@ pub(super) fn restore_status_command() -> ClapCommand {
         .arg(flag_arg("require-complete").long("require-complete"))
         .arg(flag_arg("require-no-attention").long("require-no-attention"))
         .after_help(RESTORE_STATUS_HELP_AFTER)
-}
-
-fn parse_positive_usize(value: &str) -> Result<usize, String> {
-    let parsed = value
-        .parse::<usize>()
-        .map_err(|_| "expected a positive integer".to_string())?;
-    if parsed == 0 {
-        return Err("expected a positive integer".to_string());
-    }
-
-    Ok(parsed)
 }

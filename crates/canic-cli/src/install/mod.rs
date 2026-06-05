@@ -130,7 +130,7 @@ fn install_command() -> ClapCommand {
                 .long("profile")
                 .value_name("debug|fast|release")
                 .num_args(1)
-                .value_parser(clap::builder::ValueParser::new(parse_profile))
+                .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
         )
         .arg(internal_network_arg())
@@ -161,17 +161,6 @@ fn default_fleet_config_path(fleet: &str) -> String {
 
 fn usage() -> String {
     render_usage(install_command)
-}
-
-fn parse_profile(value: &str) -> Result<CanisterBuildProfile, String> {
-    match value {
-        "debug" => Ok(CanisterBuildProfile::Debug),
-        "fast" => Ok(CanisterBuildProfile::Fast),
-        "release" => Ok(CanisterBuildProfile::Release),
-        _ => Err(format!(
-            "invalid build profile {value}; use debug, fast, or release"
-        )),
-    }
 }
 
 fn install_error_with_context(

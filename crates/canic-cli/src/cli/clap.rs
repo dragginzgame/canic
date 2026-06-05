@@ -108,14 +108,10 @@ pub fn required_path(matches: &ArgMatches, id: &str) -> PathBuf {
     path_option(matches, id).unwrap_or_else(|| panic!("clap requires {id}"))
 }
 
-pub fn parse_usize(value: &str) -> Result<usize, String> {
-    value
-        .parse::<usize>()
-        .map_err(|_| "must be a non-negative integer".to_string())
-}
-
 pub fn parse_positive_usize(value: &str) -> Result<usize, String> {
-    let value = parse_usize(value)?;
+    let value = value
+        .parse::<usize>()
+        .map_err(|_| "must be a non-negative integer".to_string())?;
     if value == 0 {
         return Err("must be greater than zero".to_string());
     }

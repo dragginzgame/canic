@@ -193,7 +193,7 @@ fn profile_arg() -> clap::Arg {
         .long(PROFILE_ARG)
         .value_name("debug|fast|release")
         .num_args(1)
-        .value_parser(clap::builder::ValueParser::new(super::parse_profile))
+        .value_parser(clap::value_parser!(CanisterBuildProfile))
         .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release")
 }
 

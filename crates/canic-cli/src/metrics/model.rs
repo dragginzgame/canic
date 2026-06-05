@@ -1,10 +1,11 @@
+use clap::ValueEnum;
 use serde::Serialize;
 
 ///
 /// MetricsKind
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum MetricsKind {
     Core,
