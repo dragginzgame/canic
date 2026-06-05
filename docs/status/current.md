@@ -9,7 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.7` completed the next slice from
+- `0.61.8` completed the next slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Shared root replay
+  receipts now reject cross-variant request-id reuse: before normal same-command
+  replay evaluation, root replay checks for receipts with the same replay actor
+  and operation id under any other root capability command kind. Live
+  cross-command matches return a duplicate replay conflict; expired-only
+  cross-command matches preserve the expired replay decision. This prevents an
+  operation id committed for one root capability variant from being treated as
+  fresh for another variant. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core ops::replay::guard --lib -- --nocapture
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo test -p canic-core storage::stable::replay --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
+- `0.61.7` completed the pool admin variant replay-inventory slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. The replay policy
   inventory now includes command-level coverage for every `PoolAdminCommand`
   variant: `CreateEmpty`, `Recycle`, `ImportImmediate`, and `ImportQueued`.

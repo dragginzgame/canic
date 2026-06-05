@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
         parse_matches, parse_required_subcommand, passthrough_subcommand, path_option,
-        render_usage, required_path, typed_option, value_arg,
+        render_usage, required_path, required_typed, value_arg,
     },
     cli::help::print_help_or_version,
     output, version_text,
@@ -89,7 +89,7 @@ impl EvidenceCompareOptions {
         Ok(Self {
             left: required_path(&matches, "left"),
             right: required_path(&matches, "right"),
-            format: typed_option(&matches, "format").unwrap_or(EvidenceCompareFormat::Text),
+            format: required_typed(&matches, "format"),
         })
     }
 }
@@ -193,7 +193,7 @@ impl EvidenceGateOptions {
                     ),
                 )
             },
-            format: typed_option(&matches, "format").unwrap_or(EvidenceGateFormat::Text),
+            format: required_typed(&matches, "format"),
             output: path_option(&matches, "output"),
         })
     }

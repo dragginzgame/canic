@@ -1,6 +1,6 @@
 use crate::{
     cli::clap::{
-        flag_arg, parse_matches, path_option, required_string, string_option,
+        flag_arg, parse_matches, path_option, required_path, required_string, string_option,
         string_option_or_else, typed_option, value_arg,
     },
     cli::defaults::{default_icp, local_network},
@@ -15,6 +15,7 @@ use clap::{ArgGroup, ArgMatches, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
 
 const BACKUP_REF: &str = "backup-ref";
+const DEFAULT_BACKUP_DIR: &str = "backups";
 
 ///
 /// BackupCreateOptions
@@ -97,7 +98,7 @@ impl BackupListOptions {
         let matches = parse_backup_options(backup_list_command(), list_usage, args)?;
 
         Ok(Self {
-            dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("backups")),
+            dir: required_path(&matches, "dir"),
             out: path_option(&matches, "out"),
         })
     }
@@ -112,6 +113,7 @@ pub(super) fn backup_list_command() -> ClapCommand {
             value_arg("dir")
                 .long("dir")
                 .value_name("dir")
+                .default_value(DEFAULT_BACKUP_DIR)
                 .help("Backup root to scan; defaults to backups"),
         )
         .arg(value_arg("out").long("out").value_name("file"))
@@ -137,7 +139,7 @@ impl BackupPruneOptions {
     {
         let matches = parse_backup_options(backup_prune_command(), prune_usage, args)?;
         Ok(Self {
-            dir: path_option(&matches, "dir").unwrap_or_else(|| PathBuf::from("backups")),
+            dir: required_path(&matches, "dir"),
             failed: matches.get_flag("failed"),
             keep: typed_option(&matches, "keep"),
             dry_run: matches.get_flag("dry-run"),
@@ -155,6 +157,7 @@ pub(super) fn backup_prune_command() -> ClapCommand {
             value_arg("dir")
                 .long("dir")
                 .value_name("dir")
+                .default_value(DEFAULT_BACKUP_DIR)
                 .help("Backup root to scan; defaults to backups"),
         )
         .arg(
@@ -175,6 +178,12 @@ pub(super) fn backup_prune_command() -> ClapCommand {
                 .help("Preview selected backup directories without deleting them"),
         )
         .arg(value_arg("out").long("out").value_name("file"))
+        .group(
+            ArgGroup::new("prune-selector")
+                .args(["failed", "keep"])
+                .required(true)
+                .multiple(true),
+        )
 }
 
 ///

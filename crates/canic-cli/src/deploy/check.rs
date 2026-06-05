@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, render_usage, typed_option},
+        clap::{parse_matches, path_option, render_usage, required_typed},
         defaults::local_network,
         help::print_help_or_version,
     },
@@ -342,7 +342,7 @@ impl DeployCheckOptions {
     {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
-        let format = typed_option(&matches, FORMAT_ARG).unwrap_or(CheckOutputFormat::Json);
+        let format = required_typed(&matches, FORMAT_ARG);
         let build_provenance = path_option(&matches, BUILD_PROVENANCE_ARG);
         if build_provenance.is_some() && format != CheckOutputFormat::EnvelopeJson {
             return Err(DeployCommandError::Usage(format!(
@@ -374,6 +374,7 @@ fn check_format_arg() -> clap::Arg {
         .long(FORMAT_ARG)
         .value_name("json|envelope-json")
         .num_args(1)
+        .default_value("json")
         .value_parser(clap::value_parser!(CheckOutputFormat))
         .help("Output format; defaults to json")
 }

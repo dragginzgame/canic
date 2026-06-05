@@ -1,5 +1,5 @@
 use super::super::{DeployCommandError, DeployTruthOptions, output_format::ExternalOutputFormat};
-use crate::cli::clap::{parse_matches, required_path, required_string, typed_option};
+use crate::cli::clap::{parse_matches, required_path, required_string, required_typed};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
@@ -54,7 +54,7 @@ impl DeployExternalOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }
@@ -72,7 +72,7 @@ impl DeployExternalCriticalFixOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
+            format: required_typed(&matches, "format"),
             fix_id: required_string(&matches, "fix-id"),
             severity: required_string(&matches, "severity"),
         })
@@ -92,7 +92,7 @@ impl DeployExternalVerifyOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }
@@ -110,7 +110,7 @@ impl DeployExternalInspectOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: typed_option(&matches, "format").unwrap_or(ExternalOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }

@@ -12,7 +12,7 @@ use crate::{
 };
 use canic_host::duration::parse_duration_seconds;
 use canic_subnet_catalog::MAINNET_NETWORK;
-use clap::Command as ClapCommand;
+use clap::{ArgMatches, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
 
 const FORMAT_ARG: &str = "format";
@@ -51,6 +51,26 @@ pub(super) struct NnsLeafCommandSpec {
 }
 
 ///
+/// NnsCommonOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct NnsCommonOptions {
+    pub(super) network: String,
+    pub(super) format: OutputFormat,
+    pub(super) source_endpoint: String,
+}
+
+impl NnsCommonOptions {
+    pub(super) fn from_matches(matches: &ArgMatches) -> Self {
+        Self {
+            network: required_string(matches, NETWORK_ARG),
+            format: required_typed(matches, FORMAT_ARG),
+            source_endpoint: required_string(matches, SOURCE_ENDPOINT_ARG),
+        }
+    }
+}
+
+///
 /// NnsLeafListOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,12 +90,15 @@ impl NnsLeafListOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(list_command(spec, default_source_endpoint), args)
-            .map_err(|_| NnsCommandError::Usage(list_usage(spec, default_source_endpoint)))?;
+        let matches =
+            parse_leaf_matches(list_command(spec, default_source_endpoint), args, || {
+                list_usage(spec, default_source_endpoint)
+            })?;
+        let common = NnsCommonOptions::from_matches(&matches);
         Ok(Self {
-            network: required_string(&matches, NETWORK_ARG),
-            format: required_typed(&matches, FORMAT_ARG),
-            source_endpoint: required_string(&matches, SOURCE_ENDPOINT_ARG),
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
             verbose: matches.get_flag(VERBOSE_ARG),
         })
     }
@@ -101,13 +124,16 @@ impl NnsLeafInfoOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(info_command(spec, default_source_endpoint), args)
-            .map_err(|_| NnsCommandError::Usage(info_usage(spec, default_source_endpoint)))?;
+        let matches =
+            parse_leaf_matches(info_command(spec, default_source_endpoint), args, || {
+                info_usage(spec, default_source_endpoint)
+            })?;
+        let common = NnsCommonOptions::from_matches(&matches);
         Ok(Self {
             input: required_string(&matches, INPUT_ARG),
-            network: required_string(&matches, NETWORK_ARG),
-            format: required_typed(&matches, FORMAT_ARG),
-            source_endpoint: required_string(&matches, SOURCE_ENDPOINT_ARG),
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
         })
     }
 }
@@ -134,12 +160,15 @@ impl NnsLeafRefreshOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(refresh_command(spec, default_source_endpoint), args)
-            .map_err(|_| NnsCommandError::Usage(refresh_usage(spec, default_source_endpoint)))?;
+        let matches =
+            parse_leaf_matches(refresh_command(spec, default_source_endpoint), args, || {
+                refresh_usage(spec, default_source_endpoint)
+            })?;
+        let common = NnsCommonOptions::from_matches(&matches);
         Ok(Self {
-            network: required_string(&matches, NETWORK_ARG),
-            format: required_typed(&matches, FORMAT_ARG),
-            source_endpoint: required_string(&matches, SOURCE_ENDPOINT_ARG),
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
             lock_stale_after_seconds: required_typed(&matches, LOCK_STALE_AFTER_ARG),
             dry_run: matches.get_flag(DRY_RUN_ARG),
             output_path: typed_option(&matches, OUTPUT_ARG),
@@ -170,6 +199,17 @@ where
         "refresh" => run_refresh(args),
         _ => unreachable!("nns leaf dispatch command only defines known commands"),
     }
+}
+
+fn parse_leaf_matches<I>(
+    command: ClapCommand,
+    args: I,
+    usage: impl FnOnce() -> String,
+) -> Result<ArgMatches, NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    parse_matches(command, args).map_err(|_| NnsCommandError::Usage(usage()))
 }
 
 pub(super) fn command(spec: &NnsLeafCommandSpec) -> ClapCommand {

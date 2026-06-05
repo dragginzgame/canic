@@ -23,7 +23,7 @@ mod capability;
 mod execute;
 mod nonroot_cycles;
 mod replay;
-use capability::RootCapability;
+use capability::{RootCapability, RootReplayInput};
 
 pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
 
@@ -181,6 +181,16 @@ impl RootResponseWorkflow {
     ) -> Result<RootPreflight, InternalError> {
         match order {
             AuthorizationPipelineOrder::AuthorizeThenReplay => {
+                if let Some(preflight) = Self::check_existing_replay(ctx, capability)? {
+                    return match preflight {
+                        replay::ReplayPreflight::Fresh(_) => {
+                            unreachable!("existing replay probe cannot return fresh replay")
+                        }
+                        replay::ReplayPreflight::Cached(response) => {
+                            Ok(RootPreflight::Cached(response))
+                        }
+                    };
+                }
                 let authorized_cycles = Self::authorize_with_hint(ctx, capability)?;
                 match Self::check_replay(ctx, capability)? {
                     replay::ReplayPreflight::Fresh(pending) => {
@@ -250,6 +260,13 @@ impl RootResponseWorkflow {
         capability: &RootCapability,
     ) -> Result<replay::ReplayPreflight, InternalError> {
         replay::check_replay(ctx, capability)
+    }
+
+    fn check_existing_replay(
+        ctx: &RootContext,
+        capability: &RootCapability,
+    ) -> Result<Option<replay::ReplayPreflight>, InternalError> {
+        replay::check_existing_replay(ctx, capability)
     }
 
     fn commit_replay(pending: ReplayPending, response: &Response) -> Result<(), InternalError> {

@@ -5,7 +5,7 @@ use crate::{
     cli::{
         clap::{
             parse_matches, parse_subcommand, passthrough_subcommand, render_usage, required_path,
-            required_string, string_option_or_else, typed_option,
+            required_string, required_typed, string_option_or_else,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -185,7 +185,7 @@ impl DeployRootInspectOptions {
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: typed_option(&matches, "format").unwrap_or(RootOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }
@@ -201,7 +201,7 @@ impl DeployRootVerifyOptions {
             deployment: required_string(&matches, "deployment"),
             from_check: required_path(&matches, "from-check"),
             network: string_option_or_else(&matches, "network", local_network),
-            format: typed_option(&matches, "format").unwrap_or(RootOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }
@@ -252,6 +252,7 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .default_value("json")
         .value_parser(clap::value_parser!(RootOutputFormat))
         .help("Output format; defaults to json")
 }

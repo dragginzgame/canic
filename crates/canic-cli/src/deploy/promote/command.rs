@@ -416,6 +416,7 @@ fn promotion_format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .default_value("json")
         .value_parser(clap::value_parser!(PromotionOutputFormat))
         .help("Output format; defaults to json")
 }

@@ -249,6 +249,24 @@ impl ReplayReceiptStore {
         REPLAY_RECEIPTS.with_borrow(|map| map.get(&key))
     }
 
+    #[must_use]
+    pub(crate) fn list_by_actor_operation_excluding_command(
+        actor: ReplayActor,
+        operation_id: [u8; 32],
+        command_kind: &str,
+    ) -> Vec<ReplayReceiptRecord> {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .map(|entry| entry.value())
+                .filter(|record| {
+                    record.actor == actor
+                        && record.operation_id == operation_id
+                        && record.command_kind != command_kind
+                })
+                .collect()
+        })
+    }
+
     pub(crate) fn upsert(key: ReplayReceiptSlotKey, record: ReplayReceiptRecord) {
         REPLAY_RECEIPTS.with_borrow_mut(|map| {
             map.insert(key, record);
@@ -390,5 +408,34 @@ mod tests {
         let round_trip = ReplayReceiptRecord::from_receipt(receipt);
 
         assert_eq!(round_trip, record);
+    }
+
+    #[test]
+    fn replay_receipt_store_lists_actor_operation_matches_excluding_command() {
+        ReplayReceiptStore::reset_for_tests();
+        let actor = ReplayActor::direct_caller(p(1));
+        let mut a = receipt_record_fixture();
+        a.command_kind = "root.upgrade.v1".to_string();
+        a.actor = actor;
+        a.operation_id = [8; 32];
+        let mut b = a.clone();
+        b.command_kind = "root.request_cycles.v1".to_string();
+        let mut other_actor = a.clone();
+        other_actor.actor = ReplayActor::direct_caller(p(2));
+
+        ReplayReceiptStore::upsert(ReplayReceiptSlotKey([1; 32]), a);
+        ReplayReceiptStore::upsert(ReplayReceiptSlotKey([2; 32]), b);
+        ReplayReceiptStore::upsert(ReplayReceiptSlotKey([3; 32]), other_actor);
+
+        let matches = ReplayReceiptStore::list_by_actor_operation_excluding_command(
+            actor,
+            [8; 32],
+            "root.request_cycles.v1",
+        );
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].command_kind, "root.upgrade.v1");
+
+        ReplayReceiptStore::reset_for_tests();
     }
 }

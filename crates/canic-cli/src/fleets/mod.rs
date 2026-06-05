@@ -1,8 +1,7 @@
 use crate::{
     cli::clap::{
         parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
-        required_string, required_typed, string_option, string_option_or_else, typed_option,
-        value_arg,
+        required_string, required_typed, string_option_or_else, value_arg,
     },
     cli::defaults::local_network,
     cli::globals::internal_network_arg,
@@ -737,7 +736,7 @@ impl RoleAttachOptions {
             fleet: required_string(&matches, "fleet"),
             role: required_string(&matches, "role"),
             subnet: required_string(&matches, "subnet"),
-            kind: string_option(&matches, "kind").unwrap_or_else(|| "singleton".to_string()),
+            kind: required_string(&matches, "kind"),
         })
     }
 }
@@ -782,7 +781,7 @@ impl AdoptionReportOptions {
         let matches = parse_matches(fleet_adoption_report_command(), args)
             .map_err(|_| FleetCommandError::Usage(adoption_report_usage()))?;
 
-        let format = typed_option(&matches, "format").unwrap_or(AdoptionReportFormat::Text);
+        let format = required_typed(&matches, "format");
         let build_provenance = path_option(&matches, "build-provenance");
         if build_provenance.is_some() && format != AdoptionReportFormat::EnvelopeJson {
             return Err(FleetCommandError::Usage(format!(
@@ -986,6 +985,7 @@ fn fleet_adoption_report_command() -> ClapCommand {
             clap::Arg::new("format")
                 .long("format")
                 .value_name("text|json|envelope-json")
+                .default_value("text")
                 .value_parser(clap::value_parser!(AdoptionReportFormat))
                 .help("Report output format"),
         )
@@ -1124,6 +1124,7 @@ fn fleet_role_attach_command() -> ClapCommand {
             clap::Arg::new("kind")
                 .long("kind")
                 .value_name("kind")
+                .default_value("singleton")
                 .help("Canister kind: singleton, shard, replica, or instance"),
         )
         .after_help(FLEET_ROLE_ATTACH_HELP_AFTER)

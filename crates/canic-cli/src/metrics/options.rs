@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, parse_positive_u64, path_option, render_usage, required_string,
-        string_option, string_option_or_else, typed_option, value_arg,
+        required_typed, string_option, string_option_or_else, value_arg,
     },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
@@ -10,7 +10,8 @@ use crate::{
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
-const DEFAULT_LIMIT: u64 = 1_000;
+const DEFAULT_KIND: &str = "core";
+const DEFAULT_LIMIT: &str = "1000";
 
 ///
 /// MetricsOptions
@@ -37,16 +38,13 @@ impl MetricsOptions {
     {
         let matches = parse_matches(metrics_command(), args)
             .map_err(|_| MetricsCommandError::Usage(usage()))?;
-        let kind = typed_option(&matches, "kind").unwrap_or(MetricsKind::Core);
-        let limit = typed_option(&matches, "limit").unwrap_or(DEFAULT_LIMIT);
-
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
-            kind,
+            kind: required_typed(&matches, "kind"),
             role: string_option(&matches, "role"),
             canister: string_option(&matches, "canister"),
             nonzero: matches.get_flag("nonzero"),
-            limit,
+            limit: required_typed(&matches, "limit"),
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
             network: string_option_or_else(&matches, "network", local_network),
@@ -74,6 +72,7 @@ fn metrics_command() -> ClapCommand {
             value_arg("kind")
                 .long("kind")
                 .value_name("kind")
+                .default_value(DEFAULT_KIND)
                 .value_parser(clap::value_parser!(MetricsKind))
                 .help("Metrics tier to query; defaults to core"),
         )
@@ -93,6 +92,7 @@ fn metrics_command() -> ClapCommand {
             value_arg("limit")
                 .long("limit")
                 .value_name("entries")
+                .default_value(DEFAULT_LIMIT)
                 .value_parser(clap::builder::ValueParser::new(parse_positive_u64))
                 .help("Maximum metric rows to fetch per canister; defaults to 1000"),
         )

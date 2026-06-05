@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.8` tightens shared root replay receipts by rejecting reuse of the same
+  request id by the same caller across different root capability command kinds,
+  so an operation id committed for one root capability cannot be treated as
+  fresh for another variant.
+
 - `0.61.7` adds command-level replay policy coverage for every
   `canic_pool_admin` variant and makes immediate pool import return success
   without management reset when the canister is already in the pool. The

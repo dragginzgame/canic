@@ -5,7 +5,7 @@ use super::{
 use crate::{
     cli::{
         clap::{
-            parse_matches, parse_subcommand, passthrough_subcommand, render_usage, typed_option,
+            parse_matches, parse_subcommand, passthrough_subcommand, render_usage, required_typed,
         },
         help::print_help_or_version,
     },
@@ -249,7 +249,7 @@ impl DeployAuthorityOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: typed_option(&matches, "format").unwrap_or(AuthorityOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }
@@ -288,6 +288,7 @@ fn format_arg() -> clap::Arg {
         .long("format")
         .value_name("json|text")
         .num_args(1)
+        .default_value("json")
         .value_parser(clap::value_parser!(AuthorityOutputFormat))
         .help("Output format; defaults to json")
 }

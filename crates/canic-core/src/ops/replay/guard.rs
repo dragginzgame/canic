@@ -7,6 +7,7 @@ use crate::{
             ReplayReceiptToken, prepare_replay_receipt,
         },
     },
+    ops::storage::replay::ReplayReceiptOps,
 };
 
 use super::{slot, ttl};
@@ -78,6 +79,10 @@ pub enum ReplayGuardError {
 pub fn evaluate_root_replay(
     input: RootReplayGuardInput,
 ) -> Result<ReplayDecision, ReplayGuardError> {
+    if let Some(decision) = evaluate_cross_command_replay(&input) {
+        return Ok(decision);
+    }
+
     ttl::validate_replay_ttl(input.ttl_seconds, input.max_ttl_seconds).map_err(
         |ttl::ReplayTtlError::InvalidTtl {
              ttl_seconds,
@@ -101,38 +106,107 @@ pub fn evaluate_root_replay(
     )
     .with_expires_at_ns(expires_at_ns);
 
-    match prepare_replay_receipt(receipt_input).map_err(
+    let decision = prepare_replay_receipt(receipt_input).map_err(
         |ReplayReceiptStoreError::ReceiptDecodeFailed(message)| {
             ReplayGuardError::ReceiptDecodeFailed(message)
         },
-    )? {
+    )?;
+    if matches!(decision, ReplayReceiptDecision::Fresh(_)) {
+        let _ = slot::purge_root_expired(now_ns, input.purge_scan_limit);
+    }
+    Ok(map_receipt_decision(decision))
+}
+
+/// evaluate_existing_root_replay
+///
+/// Evaluate only existing replay state, leaving fresh requests unreserved and
+/// otherwise unclassified for callers that must authorize before reserving.
+pub fn evaluate_existing_root_replay(
+    input: RootReplayGuardInput,
+) -> Result<Option<ReplayDecision>, ReplayGuardError> {
+    if let Some(decision) = evaluate_cross_command_replay(&input) {
+        return Ok(Some(decision));
+    }
+
+    let now_ns = secs_to_ns(input.now);
+    let expires_at = input.now.saturating_add(input.ttl_seconds);
+    let expires_at_ns = secs_to_ns(expires_at);
+    let actor = ReplayActor::direct_caller(input.caller);
+    let receipt_input = ReplayReceiptReserveInput::new(
+        input.command_kind,
+        input.operation_id,
+        actor,
+        input.payload_hash,
+        now_ns,
+    )
+    .with_expires_at_ns(expires_at_ns);
+
+    let decision = prepare_replay_receipt(receipt_input).map_err(
+        |ReplayReceiptStoreError::ReceiptDecodeFailed(message)| {
+            ReplayGuardError::ReceiptDecodeFailed(message)
+        },
+    )?;
+    match decision {
+        ReplayReceiptDecision::Fresh(_) => Ok(None),
+        other => Ok(Some(map_receipt_decision(other))),
+    }
+}
+
+fn evaluate_cross_command_replay(input: &RootReplayGuardInput) -> Option<ReplayDecision> {
+    let actor = ReplayActor::direct_caller(input.caller);
+    let matches = ReplayReceiptOps::list_by_actor_operation_excluding_command(
+        actor,
+        input.operation_id,
+        &input.command_kind,
+    );
+    if matches.is_empty() {
+        return None;
+    }
+
+    let now_ns = secs_to_ns(input.now);
+    if matches.iter().any(|record| {
+        record
+            .expires_at_ns
+            .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
+    }) {
+        return Some(ReplayDecision::DuplicateConflict);
+    }
+    Some(ReplayDecision::Expired)
+}
+
+fn map_receipt_decision(decision: ReplayReceiptDecision) -> ReplayDecision {
+    match decision {
         ReplayReceiptDecision::Fresh(receipt_token) => {
-            let _ = slot::purge_root_expired(now_ns, input.purge_scan_limit);
-            Ok(ReplayDecision::Fresh(ReplayPending {
-                caller: input.caller,
+            let receipt = receipt_token.receipt();
+            let caller = receipt.actor.effective_principal;
+            let payload_hash = receipt.payload_hash;
+            let issued_at = receipt.created_at_ns / 1_000_000_000;
+            let expires_at = receipt
+                .expires_at_ns
+                .map_or(u64::MAX, |expires_at_ns| expires_at_ns / 1_000_000_000);
+            ReplayDecision::Fresh(ReplayPending {
+                caller,
                 receipt_token: Box::new(receipt_token),
-                payload_hash: input.payload_hash,
-                issued_at: input.now,
+                payload_hash,
+                issued_at,
                 expires_at,
-            }))
+            })
         }
         ReplayReceiptDecision::ReturnCommitted(receipt) => {
             let Some(response_bytes) = receipt.response_bytes else {
-                return Ok(ReplayDecision::DecodeFailed(
+                return ReplayDecision::DecodeFailed(
                     "committed replay receipt missing response bytes".to_string(),
-                ));
+                );
             };
-            Ok(ReplayDecision::DuplicateSame(ReplayCached {
-                response_bytes,
-            }))
+            ReplayDecision::DuplicateSame(ReplayCached { response_bytes })
         }
         ReplayReceiptDecision::OperationInProgress
         | ReplayReceiptDecision::RecoveryRequired(_)
-        | ReplayReceiptDecision::TerminalFailed { .. } => Ok(ReplayDecision::InFlight),
+        | ReplayReceiptDecision::TerminalFailed { .. } => ReplayDecision::InFlight,
         ReplayReceiptDecision::ActorMismatch | ReplayReceiptDecision::PayloadMismatch => {
-            Ok(ReplayDecision::DuplicateConflict)
+            ReplayDecision::DuplicateConflict
         }
-        ReplayReceiptDecision::Expired => Ok(ReplayDecision::Expired),
+        ReplayReceiptDecision::Expired => ReplayDecision::Expired,
     }
 }
 

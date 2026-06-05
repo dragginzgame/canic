@@ -1230,6 +1230,85 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
 }
 
 #[test]
+fn check_replay_rejects_cross_variant_same_request_id() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(3),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(4),
+        now: 2_000,
+    };
+    let upgrade = RootCapability::Upgrade(UpgradeCanisterRequest {
+        canister_pid: p(9),
+        metadata: Some(meta(8, 60)),
+    });
+    let cycles = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 11,
+        metadata: Some(meta(8, 60)),
+    });
+
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &upgrade).expect("first replay") {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    RootResponseWorkflow::commit_replay(
+        pending,
+        &Response::UpgradeCanister(UpgradeCanisterResponse {}),
+    )
+    .expect("commit");
+
+    let err = RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
+    assert!(
+        err.to_string().contains("replay conflict"),
+        "expected replay conflict error, got: {err}"
+    );
+}
+
+#[test]
+fn preflight_authorize_then_replay_reports_existing_cross_variant_conflict_before_policy() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(3),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(4),
+        now: 2_000,
+    };
+    let upgrade = RootCapability::Upgrade(UpgradeCanisterRequest {
+        canister_pid: p(9),
+        metadata: Some(meta(8, 60)),
+    });
+    let cycles = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 11,
+        metadata: Some(meta(8, 60)),
+    });
+
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &upgrade).expect("first replay") {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    RootResponseWorkflow::commit_replay(
+        pending,
+        &Response::UpgradeCanister(UpgradeCanisterResponse {}),
+    )
+    .expect("commit");
+
+    let err = RootResponseWorkflow::preflight(
+        &ctx,
+        &cycles,
+        AuthorizationPipelineOrder::AuthorizeThenReplay,
+    )
+    .expect_err("existing replay conflict must win before policy");
+    assert!(
+        err.to_string().contains("replay conflict"),
+        "expected replay conflict error, got: {err}"
+    );
+}
+
+#[test]
 fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
     ReplayReceiptOps::reset_for_tests();
 

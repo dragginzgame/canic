@@ -1,10 +1,11 @@
-use super::{NnsCommandError, OutputFormat, leaf, now_unix_secs, write_text_or_json};
+use super::{
+    NnsCommandError, OutputFormat,
+    leaf::{self, NnsCommonOptions},
+    now_unix_secs, write_text_or_json,
+};
 use crate::{
     cli::{
-        clap::{
-            parse_matches, parse_required_subcommand, passthrough_subcommand, render_help,
-            required_string, required_typed,
-        },
+        clap::{parse_matches, parse_required_subcommand, passthrough_subcommand, render_help},
         help::{first_arg_is_help, print_help_or_version},
     },
     version_text,
@@ -91,10 +92,11 @@ impl RegistryVersionOptions {
     {
         let matches = parse_matches(registry_version_command(), args)
             .map_err(|_| NnsCommandError::Usage(registry_version_usage()))?;
+        let common = NnsCommonOptions::from_matches(&matches);
         Ok(Self {
-            network: required_string(&matches, "network"),
-            format: required_typed(&matches, "format"),
-            source_endpoint: required_string(&matches, "source-endpoint"),
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
         })
     }
 }

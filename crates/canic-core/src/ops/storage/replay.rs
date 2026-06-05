@@ -33,6 +33,19 @@ impl ReplayReceiptOps {
         ReplayReceiptStore::get(key)
     }
 
+    #[must_use]
+    pub fn list_by_actor_operation_excluding_command(
+        actor: crate::ops::replay::model::ReplayActor,
+        operation_id: OperationId,
+        command_kind: &CommandKind,
+    ) -> Vec<ReplayReceiptRecord> {
+        ReplayReceiptStore::list_by_actor_operation_excluding_command(
+            actor,
+            operation_id.into_bytes(),
+            command_kind.as_str(),
+        )
+    }
+
     pub fn upsert(key: ReplayReceiptSlotKey, record: ReplayReceiptRecord) {
         ReplayReceiptStore::upsert(key, record);
     }

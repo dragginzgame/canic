@@ -1,5 +1,5 @@
 use super::super::{DeployCommandError, output_format::PromotionOutputFormat};
-use crate::cli::clap::{parse_matches, required_path, typed_option};
+use crate::cli::clap::{parse_matches, required_path, required_typed};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
@@ -24,7 +24,7 @@ impl DeployPromoteReportOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: typed_option(&matches, "format").unwrap_or(PromotionOutputFormat::Json),
+            format: required_typed(&matches, "format"),
         })
     }
 }

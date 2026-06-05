@@ -7,12 +7,6 @@ use std::fs;
 pub(super) fn backup_prune(
     options: &BackupPruneOptions,
 ) -> Result<BackupPruneReport, BackupCommandError> {
-    if !options.failed && options.keep.is_none() {
-        return Err(BackupCommandError::Usage(
-            "backup prune requires --failed or --keep <count>".to_string(),
-        ));
-    }
-
     let entries = backup_list(&BackupListOptions {
         dir: options.dir.clone(),
         out: None,

@@ -1,6 +1,7 @@
 use super::{
     MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_SECONDS,
     REPLAY_PAYLOAD_HASH_DOMAIN, REPLAY_PURGE_SCAN_LIMIT, RootCapability, RootContext,
+    RootReplayInput,
 };
 use crate::{
     InternalError,
@@ -40,26 +41,7 @@ pub(super) fn check_replay(
     ctx: &RootContext,
     capability: &RootCapability,
 ) -> Result<ReplayPreflight, InternalError> {
-    let replay_input = capability.replay_input().ok_or_else(|| {
-        ReplayMetrics::record(
-            ReplayMetricOperation::Check,
-            ReplayMetricOutcome::Failed,
-            ReplayMetricReason::MissingMetadata,
-        );
-        RpcWorkflowError::MissingReplayMetadata(capability.descriptor().name)
-    })?;
-    crate::perf!("prepare_replay_input");
-
-    let decision = replay::evaluate_root_replay(
-        ctx,
-        replay_input.descriptor.command_kind,
-        OperationId::from_bytes(replay_input.metadata.request_id),
-        replay_input.metadata.ttl_seconds,
-        replay_input.payload_hash,
-    )
-    .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?;
-    crate::perf!("evaluate_replay");
-
+    let (replay_input, decision) = evaluate_replay(ctx, capability)?;
     match decision {
         ReplayDecision::Fresh(pending) => {
             ReplayMetrics::record(
@@ -85,6 +67,70 @@ pub(super) fn check_replay(
             );
             Ok(ReplayPreflight::Fresh(pending))
         }
+        other => map_existing_replay_decision(replay_input, other),
+    }
+}
+
+/// check_existing_replay
+///
+/// Run a non-reserving replay probe for auth-first paths.
+pub(super) fn check_existing_replay(
+    ctx: &RootContext,
+    capability: &RootCapability,
+) -> Result<Option<ReplayPreflight>, InternalError> {
+    let Some(replay_input) = capability.replay_input() else {
+        return Ok(None);
+    };
+
+    let Some(decision) = replay::evaluate_existing_root_replay(
+        ctx,
+        replay_input.descriptor.command_kind,
+        OperationId::from_bytes(replay_input.metadata.request_id),
+        replay_input.metadata.ttl_seconds,
+        replay_input.payload_hash,
+    )
+    .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?
+    else {
+        return Ok(None);
+    };
+    crate::perf!("evaluate_existing_replay");
+
+    map_existing_replay_decision(replay_input, decision).map(Some)
+}
+
+fn evaluate_replay(
+    ctx: &RootContext,
+    capability: &RootCapability,
+) -> Result<(RootReplayInput, ReplayDecision), InternalError> {
+    let replay_input = capability.replay_input().ok_or_else(|| {
+        ReplayMetrics::record(
+            ReplayMetricOperation::Check,
+            ReplayMetricOutcome::Failed,
+            ReplayMetricReason::MissingMetadata,
+        );
+        RpcWorkflowError::MissingReplayMetadata(capability.descriptor().name)
+    })?;
+    crate::perf!("prepare_replay_input");
+
+    let decision = replay::evaluate_root_replay(
+        ctx,
+        replay_input.descriptor.command_kind,
+        OperationId::from_bytes(replay_input.metadata.request_id),
+        replay_input.metadata.ttl_seconds,
+        replay_input.payload_hash,
+    )
+    .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?;
+    crate::perf!("evaluate_replay");
+
+    Ok((replay_input, decision))
+}
+
+fn map_existing_replay_decision(
+    replay_input: RootReplayInput,
+    decision: ReplayDecision,
+) -> Result<ReplayPreflight, InternalError> {
+    match decision {
+        ReplayDecision::Fresh(_) => unreachable!("fresh replay decisions are handled by callers"),
         ReplayDecision::DuplicateSame(cached) => {
             crate::perf!("decode_cached");
             ReplayMetrics::record(
@@ -406,6 +452,30 @@ mod replay {
         let command_kind =
             CommandKind::new(command_kind).expect("root replay command kind constants are valid");
         crate::ops::replay::guard::evaluate_root_replay(RootReplayGuardInput {
+            caller: ctx.caller,
+            command_kind,
+            operation_id,
+            ttl_seconds,
+            payload_hash,
+            now: ctx.now,
+            max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
+            purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
+        })
+    }
+
+    /// evaluate_existing_root_replay
+    ///
+    /// Call the ops replay guard without classifying fresh requests.
+    pub(super) fn evaluate_existing_root_replay(
+        ctx: &RootContext,
+        command_kind: &'static str,
+        operation_id: OperationId,
+        ttl_seconds: u64,
+        payload_hash: [u8; 32],
+    ) -> Result<Option<ReplayDecision>, ReplayGuardError> {
+        let command_kind =
+            CommandKind::new(command_kind).expect("root replay command kind constants are valid");
+        crate::ops::replay::guard::evaluate_existing_root_replay(RootReplayGuardInput {
             caller: ctx.caller,
             command_kind,
             operation_id,

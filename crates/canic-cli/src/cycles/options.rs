@@ -1,7 +1,7 @@
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, parse_positive_u64, path_option, render_usage, required_string,
-        string_option, string_option_or_else, typed_option, value_arg,
+        required_typed, string_option, string_option_or_else, value_arg,
     },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
@@ -10,8 +10,8 @@ use crate::{
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
-const DEFAULT_SINCE_SECONDS: u64 = 24 * 60 * 60;
-const DEFAULT_LIMIT: u64 = 1_000;
+const DEFAULT_SINCE: &str = "24h";
+const DEFAULT_LIMIT: &str = "1000";
 
 const COMMAND_NAME: &str = "cycles";
 const DEPLOYMENT_ARG: &str = "deployment";
@@ -50,14 +50,11 @@ impl CyclesOptions {
     }
 
     fn from_matches(matches: &clap::ArgMatches) -> Self {
-        let since_seconds = typed_option(matches, SINCE_ARG).unwrap_or(DEFAULT_SINCE_SECONDS);
-        let limit = typed_option(matches, LIMIT_ARG).unwrap_or(DEFAULT_LIMIT);
-
         Self {
             deployment: required_string(matches, DEPLOYMENT_ARG),
             subtree: string_option(matches, SUBTREE_ARG),
-            since_seconds,
-            limit,
+            since_seconds: required_typed(matches, SINCE_ARG),
+            limit: required_typed(matches, LIMIT_ARG),
             json: matches.get_flag(JSON_ARG),
             verbose: matches.get_flag(VERBOSE_ARG),
             out: path_option(matches, OUT_ARG),
@@ -115,6 +112,7 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
             value_arg(SINCE_ARG)
                 .long(SINCE_ARG)
                 .value_name("duration")
+                .default_value(DEFAULT_SINCE)
                 .value_parser(clap::builder::ValueParser::new(parse_duration))
                 .help("Cycle history window; defaults to 24h"),
         )
@@ -128,6 +126,7 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
             value_arg(LIMIT_ARG)
                 .long(LIMIT_ARG)
                 .value_name("entries")
+                .default_value(DEFAULT_LIMIT)
                 .value_parser(clap::builder::ValueParser::new(parse_positive_u64))
                 .help("Maximum tracker samples to fetch per canister; defaults to 1000"),
         )
