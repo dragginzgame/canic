@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.12` reclassifies `canic_canister_status` as an implemented
+  update-shaped read-only endpoint in the replay manifest. The endpoint reads
+  management-canister status and does not mutate Canic state or perform
+  deployment, signing, value-transfer, or publication effects, so it no longer
+  consumes deployment quota/reserve policy.
+
 - `0.61.11` graduates pool `ImportQueued` from release blocker to implemented
   snapshot-convergent behavior. Repeated queued imports converge on one
   pending-reset pool entry per canister and do not enqueue duplicate pool

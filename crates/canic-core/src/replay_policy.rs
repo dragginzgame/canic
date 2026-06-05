@@ -105,13 +105,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(SIGNING_QUOTA_V1),
         Some(SIGNING_RESERVE_V1),
     ),
-    update_replay_blocker(
-        "canic_canister_status",
-        "management.canister_status.v1",
-        CostClass::ManagementDeployment,
-        Some(DEPLOYMENT_QUOTA_V1),
-        Some(DEPLOYMENT_RESERVE_V1),
-    ),
+    update_read_only("canic_canister_status"),
     update_replay_blocker(
         "canic_canister_upgrade",
         "management.canister_upgrade.v1",
@@ -253,6 +247,18 @@ const fn update_response_idempotent(
         endpoint,
         endpoint_kind: EndpointKind::Update,
         replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::None,
+        quota_policy: None,
+        cycle_reserve_policy: None,
+    }
+}
+
+const fn update_read_only(endpoint: &'static str) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::QueryOrReadOnly,
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class: CostClass::None,
         quota_policy: None,
@@ -509,6 +515,23 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn canister_status_is_manifested_as_read_only() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_canister_status")
+            .expect("canister status policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
     }
 
     #[test]

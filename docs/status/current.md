@@ -9,6 +9,18 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.12` completed the canister-status manifest correction slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  `canic_canister_status` is now classified as an implemented update-shaped
+  read-only endpoint with `QueryOrReadOnly`, cost class `None`, and no quota or
+  cycle-reserve policy. The endpoint reads management-canister status but does
+  not mutate Canic state and does not perform deployment, signing,
+  value-transfer, or publication effects. A manifest regression test pins that
+  classification. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
 - `0.61.11` completed the pool `ImportQueued` convergence-proof slice from
   `docs/design/0.61-replay-protection/0.61-design.md`. The pool admin command
   manifest now marks `ImportQueued` as implemented with
