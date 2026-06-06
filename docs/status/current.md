@@ -9,6 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.17` completed the canister-upgrade manifest graduation from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  `ENDPOINT_REPLAY_POLICY_MANIFEST` now records `canic_canister_upgrade` as
+  implemented with `ResponseIdempotent(management.canister_upgrade.v1)`, cost
+  class `ManagementDeployment`, and deployment quota/reserve policy. The proof
+  is the existing upgrade planner: repeated upgrade requests become no-ops once
+  the installed module hash matches the approved target hash, while missing or
+  different hashes still request an upgrade. `UpgradeCanisterRpc` now has
+  focused request-shape coverage proving replay metadata is carried into the
+  root request DTO and non-upgrade response variants are rejected. The remaining
+  endpoint release blockers are now `canic_icp_refill` and
+  `canic_response_capability_v1`. No CLI commands changed in this patch.
+  Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo test -p canic-core domain::policy::upgrade --lib -- --nocapture
+  cargo test -p canic-core ops::rpc::request --lib -- --nocapture
+  ```
 - `0.61.16` completed the pool-admin endpoint manifest graduation from
   `docs/design/0.61-replay-protection/0.61-design.md`. The endpoint-level
   `canic_pool_admin` entry is no longer a release blocker. The replay policy

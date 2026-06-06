@@ -230,3 +230,51 @@ fn generate_request_id() -> [u8; 32] {
     hasher.update(canister.as_slice());
     hasher.finalize().into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn metadata(id: u8) -> RootRequestMetadata {
+        RootRequestMetadata {
+            request_id: [id; 32],
+            ttl_seconds: 123,
+        }
+    }
+
+    #[test]
+    fn upgrade_canister_rpc_carries_replay_metadata_into_request() {
+        let canister_pid = p(42);
+        let metadata = metadata(7);
+
+        let request = UpgradeCanisterRpc {
+            canister_pid,
+            metadata: Some(metadata),
+        }
+        .into_request();
+
+        let Request::UpgradeCanister(request) = request else {
+            panic!("upgrade RPC must encode an upgrade request");
+        };
+
+        assert_eq!(request.canister_pid, canister_pid);
+        assert_eq!(request.metadata, Some(metadata));
+    }
+
+    #[test]
+    fn upgrade_canister_rpc_accepts_only_upgrade_response() {
+        UpgradeCanisterRpc::try_from_response(Response::UpgradeCanister(
+            UpgradeCanisterResponse {},
+        ))
+        .expect("upgrade response accepted");
+
+        UpgradeCanisterRpc::try_from_response(Response::RecycleCanister(
+            RecycleCanisterResponse {},
+        ))
+        .expect_err("wrong response variant rejected");
+    }
+}

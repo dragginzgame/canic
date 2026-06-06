@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.17` graduates `canic_canister_upgrade` from release blocker to
+  implemented costed response-idempotent behavior. The direct controller
+  endpoint is now recorded as `management.canister_upgrade.v1`, with tests
+  pinning that repeated upgrades become no-ops once the installed module hash
+  matches the approved target hash and that the upgrade RPC wrapper carries
+  root replay metadata into the dispatched request. The remaining endpoint
+  blockers are ICP refill and root capability RPC.
+
 - `0.61.16` removes the endpoint-level `canic_pool_admin` replay blocker by
   recording it as an implemented command-dispatch surface backed by the pool
   admin command manifest. The manifest now distinguishes the endpoint

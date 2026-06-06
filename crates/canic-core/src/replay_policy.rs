@@ -104,7 +104,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_response_idempotent("canic_app", "app.command.v1"),
     update_snapshot_convergent("canic_attestation_key_set", "auth.attestation_key_set.v1"),
     update_read_only("canic_canister_status"),
-    update_replay_blocker(
+    update_costed_response_idempotent(
         "canic_canister_upgrade",
         "management.canister_upgrade.v1",
         CostClass::ManagementDeployment,
@@ -251,6 +251,24 @@ const fn update_response_idempotent(
         cost_class: CostClass::None,
         quota_policy: None,
         cycle_reserve_policy: None,
+    }
+}
+
+const fn update_costed_response_idempotent(
+    endpoint: &'static str,
+    command_kind: &'static str,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
     }
 }
 
@@ -580,6 +598,28 @@ mod tests {
     }
 
     #[test]
+    fn canister_upgrade_is_manifested_as_implemented_response_idempotent() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_canister_upgrade")
+            .expect("canister upgrade policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::ResponseIdempotent {
+                command_kind: "management.canister_upgrade.v1",
+            }
+        );
+        assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
+        assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
+        assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
+    }
+
+    #[test]
     fn remaining_release_blockers_are_explicit_endpoint_slices() {
         let blockers = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
@@ -591,11 +631,7 @@ mod tests {
 
         assert_eq!(
             blockers,
-            BTreeSet::from([
-                "canic_canister_upgrade",
-                "canic_icp_refill",
-                "canic_response_capability_v1",
-            ])
+            BTreeSet::from(["canic_icp_refill", "canic_response_capability_v1",])
         );
     }
 
