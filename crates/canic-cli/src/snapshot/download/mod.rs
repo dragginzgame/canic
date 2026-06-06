@@ -394,6 +394,11 @@ fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
             command,
             stderr: output,
         },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => SnapshotCommandError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => {
             SnapshotCommandError::SnapshotIdUnavailable(output)
         }

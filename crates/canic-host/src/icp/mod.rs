@@ -11,6 +11,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const LOCAL_NETWORK: &str = "local";
+pub const REQUIRED_ICP_CLI_VERSION: &str = "0.3.0";
+pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=0.3.0, <0.4.0";
 pub(crate) const CANIC_ICP_LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
 pub(crate) const CANIC_ICP_LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
 
@@ -33,6 +35,13 @@ pub struct IcpRawOutput {
 #[derive(Debug)]
 pub enum IcpCommandError {
     Io(std::io::Error),
+    MissingCli {
+        executable: String,
+    },
+    IncompatibleCliVersion {
+        executable: String,
+        found: String,
+    },
     Failed {
         command: String,
         stderr: String,
@@ -52,6 +61,18 @@ impl fmt::Display for IcpCommandError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(formatter, "{err}"),
+            Self::MissingCli { executable } => {
+                write!(
+                    formatter,
+                    "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\nnext: install icp-cli {REQUIRED_ICP_CLI_VERSION} from https://github.com/dfinity/icp-cli/releases/tag/v{REQUIRED_ICP_CLI_VERSION}, or pass top-level --icp <path>"
+                )
+            }
+            Self::IncompatibleCliVersion { executable, found } => {
+                write!(
+                    formatter,
+                    "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\nnext: install icp-cli {REQUIRED_ICP_CLI_VERSION} from https://github.com/dfinity/icp-cli/releases/tag/v{REQUIRED_ICP_CLI_VERSION}, or pass top-level --icp <path>"
+                )
+            }
             Self::Failed { command, stderr } => {
                 write!(formatter, "icp command failed: {command}\n{stderr}")
             }
@@ -81,7 +102,10 @@ impl Error for IcpCommandError {
         match self {
             Self::Io(err) => Some(err),
             Self::Json { source, .. } => Some(source),
-            Self::Failed { .. } | Self::SnapshotIdUnavailable { .. } => None,
+            Self::Failed { .. }
+            | Self::IncompatibleCliVersion { .. }
+            | Self::MissingCli { .. }
+            | Self::SnapshotIdUnavailable { .. } => None,
         }
     }
 }
@@ -103,6 +127,16 @@ pub struct IcpCli {
     environment: Option<String>,
     network: Option<String>,
     cwd: Option<PathBuf>,
+}
+
+///
+/// IcpCliVersion
+///
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct IcpCliVersion {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
 }
 
 ///
@@ -226,7 +260,17 @@ impl IcpCli {
     pub fn version(&self) -> Result<String, IcpCommandError> {
         let mut command = self.command();
         command.arg("--version");
-        run_output(&mut command)
+        run_output_unchecked(&mut command)
+    }
+
+    /// Resolve and validate the installed ICP CLI version.
+    pub fn compatible_version(&self) -> Result<String, IcpCommandError> {
+        compatible_version_output(&self.executable, self.cwd.as_deref())
+    }
+
+    /// Ensure this command context points at a supported ICP CLI.
+    pub fn ensure_compatible(&self) -> Result<(), IcpCommandError> {
+        self.compatible_version().map(|_| ())
     }
 
     /// Start the local ICP replica.
@@ -753,6 +797,12 @@ pub fn add_debug_arg(command: &mut Command, debug: bool) {
     }
 }
 
+/// Ensure a command points at a supported ICP CLI executable before spawning it.
+pub fn ensure_command_compatible(command: &Command) -> Result<(), IcpCommandError> {
+    let executable = command.get_program().to_string_lossy();
+    compatible_version_output(executable.as_ref(), command.get_current_dir()).map(|_| ())
+}
+
 fn add_project_root_override_arg(command: &mut Command, cwd: &Path) {
     command.arg("--project-root-override").arg(cwd);
 }
@@ -773,6 +823,11 @@ fn run_local_replica_start_command(
 
 /// Execute a command and capture trimmed stdout.
 pub fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
+    ensure_command_compatible(command)?;
+    run_output_unchecked(command)
+}
+
+fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {
     let display = command_display(command);
     let output = command.output()?;
     if output.status.success() {
@@ -787,6 +842,7 @@ pub fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
 
 /// Execute a command and capture stdout plus stderr on success.
 pub fn run_output_with_stderr(command: &mut Command) -> Result<String, IcpCommandError> {
+    ensure_command_compatible(command)?;
     let display = command_display(command);
     let output = command.output()?;
     if output.status.success() {
@@ -806,6 +862,7 @@ pub fn run_json<T>(command: &mut Command) -> Result<T, IcpCommandError>
 where
     T: serde::de::DeserializeOwned,
 {
+    ensure_command_compatible(command)?;
     let display = command_display(command);
     let output = command.output()?;
     if output.status.success() {
@@ -825,6 +882,7 @@ where
 
 /// Execute a command and require a successful status.
 pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
+    ensure_command_compatible(command)?;
     let display = command_display(command);
     let output = command.output()?;
     if output.status.success() {
@@ -839,6 +897,7 @@ pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
 
 /// Execute a command with inherited terminal I/O and require a successful status.
 pub fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommandError> {
+    ensure_command_compatible(command)?;
     let display = command_display(command);
     let mut child = command
         .stdout(Stdio::inherit())
@@ -889,11 +948,16 @@ fn stream_and_capture_stderr(mut stderr: impl Read) -> io::Result<Vec<u8>> {
 
 /// Execute a command and return whether it exits successfully.
 pub fn run_success(command: &mut Command) -> Result<bool, IcpCommandError> {
+    ensure_command_compatible(command)?;
     Ok(command.output()?.status.success())
 }
 
 /// Execute a rendered ICP CLI command and return raw process output.
 pub fn run_raw_output(program: &str, args: &[String]) -> Result<IcpRawOutput, std::io::Error> {
+    if is_icp_program(program) {
+        compatible_version_output(program, None)
+            .map_err(|err| io::Error::other(err.to_string()))?;
+    }
     let output = Command::new(program).args(args).output()?;
     Ok(IcpRawOutput {
         success: output.status.success(),
@@ -901,6 +965,12 @@ pub fn run_raw_output(program: &str, args: &[String]) -> Result<IcpRawOutput, st
         stdout: output.stdout,
         stderr: output.stderr,
     })
+}
+
+fn is_icp_program(program: &str) -> bool {
+    Path::new(program)
+        .file_name()
+        .is_some_and(|file_name| file_name == "icp")
 }
 
 /// Render a command for diagnostics and dry-run previews.
@@ -930,6 +1000,84 @@ pub fn parse_snapshot_id(output: &str) -> Option<String> {
         })
         .find(|part| is_snapshot_id_token(part))
         .map(str::to_string)
+}
+
+/// Parse an ICP CLI semantic version from `icp --version` output.
+#[must_use]
+pub fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
+    output
+        .split_whitespace()
+        .find_map(parse_icp_cli_version_token)
+}
+
+/// Return whether an ICP CLI version is supported by this Canic release.
+#[must_use]
+pub const fn is_supported_icp_cli_version(version: IcpCliVersion) -> bool {
+    version.major == 0 && version.minor == 3
+}
+
+fn compatible_version_output(
+    executable: &str,
+    cwd: Option<&Path>,
+) -> Result<String, IcpCommandError> {
+    let output = icp_version_output(executable, cwd)?;
+    if let Some(version) = parse_icp_cli_version(&output)
+        && is_supported_icp_cli_version(version)
+    {
+        return Ok(output);
+    }
+    Err(IcpCommandError::IncompatibleCliVersion {
+        executable: executable.to_string(),
+        found: output,
+    })
+}
+
+fn icp_version_output(executable: &str, cwd: Option<&Path>) -> Result<String, IcpCommandError> {
+    let mut command = Command::new(executable);
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    command.arg("--version");
+    let display = command_display(&command);
+    let output = command.output().map_err(|err| {
+        if err.kind() == io::ErrorKind::NotFound {
+            IcpCommandError::MissingCli {
+                executable: executable.to_string(),
+            }
+        } else {
+            IcpCommandError::Io(err)
+        }
+    })?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err(IcpCommandError::Failed {
+            command: display,
+            stderr: command_stderr(&output),
+        })
+    }
+}
+
+fn parse_icp_cli_version_token(token: &str) -> Option<IcpCliVersion> {
+    let token = token
+        .trim_matches(|c: char| matches!(c, ',' | ';' | ')' | '('))
+        .trim_start_matches('v');
+    let mut parts = token.split('.');
+    let major = parts.next()?.parse::<u64>().ok()?;
+    let minor = parts.next()?.parse::<u64>().ok()?;
+    let patch_token = parts.next()?;
+    let patch_digits = patch_token
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>();
+    if patch_digits.is_empty() || parts.next().is_some() {
+        return None;
+    }
+    Some(IcpCliVersion {
+        major,
+        minor,
+        patch: patch_digits.parse::<u64>().ok()?,
+    })
 }
 
 // ICP snapshot ids are rendered as even-length hexadecimal blobs.

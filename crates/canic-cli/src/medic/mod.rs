@@ -149,12 +149,12 @@ fn is_missing_installed_deployment(error: &str) -> bool {
 }
 
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
-    match IcpCli::new(&options.icp, None, Some(options.network.clone())).version() {
+    match IcpCli::new(&options.icp, None, Some(options.network.clone())).compatible_version() {
         Ok(version) => MedicCheck::ok("icp cli", version, "-"),
         Err(err) => MedicCheck::error(
             "icp cli",
             err.to_string(),
-            "install icp-cli or pass top-level --icp <path>",
+            "install supported icp-cli or pass top-level --icp <path>",
         ),
     }
 }

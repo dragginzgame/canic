@@ -2918,11 +2918,9 @@ fn ensure_icp_environment_ready(
 
 // Check whether `icp network ping <network>` currently succeeds.
 fn icp_ping(icp_root: &Path, network: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(icp::default_command_in(icp_root)
-        .args(["network", "ping", network])
-        .output()?
-        .status
-        .success())
+    let mut command = icp::default_command_in(icp_root);
+    command.args(["network", "ping", network]);
+    Ok(icp::run_success(&mut command)?)
 }
 
 fn print_install_timing_summary(timings: &InstallTimingSummary, total: Duration) {

@@ -164,7 +164,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
 }
 
 fn load_icp_cli_version(options: &StatusOptions) -> String {
-    match IcpCli::new(&options.icp, None, None).version() {
+    match IcpCli::new(&options.icp, None, None).compatible_version() {
         Ok(version) => version,
         Err(err) => format!("unavailable ({err})"),
     }

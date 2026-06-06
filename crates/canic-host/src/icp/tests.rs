@@ -1,5 +1,83 @@
 use super::*;
 
+#[test]
+fn parses_icp_cli_versions_from_common_output() {
+    assert_eq!(
+        parse_icp_cli_version("icp 0.3.0"),
+        Some(IcpCliVersion {
+            major: 0,
+            minor: 3,
+            patch: 0
+        })
+    );
+    assert_eq!(
+        parse_icp_cli_version("icp-cli v0.3.12"),
+        Some(IcpCliVersion {
+            major: 0,
+            minor: 3,
+            patch: 12
+        })
+    );
+    assert_eq!(parse_icp_cli_version("icp development build"), None);
+}
+
+#[test]
+fn icp_cli_version_range_allows_only_current_minor_line() {
+    assert!(is_supported_icp_cli_version(IcpCliVersion {
+        major: 0,
+        minor: 3,
+        patch: 0
+    }));
+    assert!(is_supported_icp_cli_version(IcpCliVersion {
+        major: 0,
+        minor: 3,
+        patch: 9
+    }));
+    assert!(!is_supported_icp_cli_version(IcpCliVersion {
+        major: 0,
+        minor: 2,
+        patch: 99
+    }));
+    assert!(!is_supported_icp_cli_version(IcpCliVersion {
+        major: 0,
+        minor: 4,
+        patch: 0
+    }));
+}
+
+#[cfg(unix)]
+#[test]
+fn command_runner_rejects_old_icp_cli_before_running_command() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = unique_temp_dir("canic-old-icp-cli");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let icp_path = root.join("icp");
+    fs::write(
+        &icp_path,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 0.2.0'; exit 0; fi\necho 'old command ran' >&2\nexit 42\n",
+    )
+    .expect("write fake icp");
+    fs::set_permissions(&icp_path, fs::Permissions::from_mode(0o755)).expect("chmod fake icp");
+
+    let mut command = Command::new(&icp_path);
+    command.args(["canister", "status", "root"]);
+
+    let err = run_status(&mut command).expect_err("old icp rejected");
+
+    assert!(matches!(
+        err,
+        IcpCommandError::IncompatibleCliVersion { .. }
+    ));
+    assert!(
+        err.to_string()
+            .contains("required: icp-cli >=0.3.0, <0.4.0")
+    );
+
+    fs::remove_dir_all(root).expect("remove temp dir");
+}
+
 // Keep generated commands tied to ICP CLI environments when one is selected.
 #[test]
 fn renders_environment_target() {
@@ -9,6 +87,14 @@ fn renders_environment_target() {
         icp.snapshot_download_display("root", "snap-1", Path::new("backups/root")),
         "icp canister snapshot download root snap-1 --output backups/root -e staging"
     );
+}
+
+fn unique_temp_dir(label: &str) -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time after unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("{label}-{}-{nanos}", std::process::id()))
 }
 
 // Keep direct network targeting available for local and ad hoc command contexts.

@@ -447,6 +447,11 @@ fn replica_icp_error(error: IcpCommandError) -> ReplicaCommandError {
             command,
             stderr: output,
         },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => ReplicaCommandError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => ReplicaCommandError::IcpFailed {
             command: "icp canister snapshot".to_string(),
             stderr: output,

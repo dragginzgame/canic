@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.14` graduates pool `ImportImmediate` from release blocker to
+  implemented response-idempotent behavior. Immediate import now has manifest
+  coverage as `pool.import_immediate.ensure_v1`, with tests proving duplicate
+  retries stop at the existing pending-reset or ready pool entry instead of
+  creating another pool record or proceeding toward another reset. It also
+  makes ICP-backed `canic` commands fail early with a clear `icp-cli`
+  compatibility diagnostic when the selected executable is missing or outside
+  the supported `>=0.3.0, <0.4.0` range.
+
 - `0.61.13` reclassifies `canic_attestation_key_set` as an implemented
   snapshot-convergent endpoint in the replay manifest and folds in ICP CLI
   0.3.0 operator-tooling cleanup. Local setup and CI now share the official

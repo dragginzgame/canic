@@ -482,6 +482,11 @@ fn token_icp_error(error: IcpCommandError) -> TokenCommandError {
             command,
             stderr: output,
         },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => TokenCommandError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => TokenCommandError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,

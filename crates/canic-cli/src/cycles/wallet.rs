@@ -761,6 +761,11 @@ pub(super) fn cycles_icp_error(error: IcpCommandError) -> CyclesCommandError {
             command,
             stderr: output,
         },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => CyclesCommandError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => CyclesCommandError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,

@@ -5,6 +5,7 @@ use canic_backup::{
         RestoreApplyDryRunError, RestoreApplyJournalError, RestorePlanError, RestoreRunnerError,
     },
 };
+use canic_host::icp::IcpCommandError;
 use thiserror::Error as ThisError;
 
 ///
@@ -135,6 +136,9 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),

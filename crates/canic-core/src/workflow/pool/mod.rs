@@ -944,7 +944,7 @@ mod tests {
     }
 
     #[test]
-    fn pool_import_immediate_detects_already_pooled_canister_before_reset() {
+    fn pool_import_immediate_detects_ready_canister_before_reset() {
         let pid = p(47);
         PoolOps::remove(&pid);
 
@@ -953,6 +953,33 @@ mod tests {
         PoolOps::register_ready(pid, Cycles::new(10), None, None, None, 100);
 
         assert!(pool_import_already_present(pid));
+
+        PoolOps::remove(&pid);
+    }
+
+    #[test]
+    fn pool_import_immediate_detects_pending_reset_canister_before_reset() {
+        let pid = p(49);
+        PoolOps::remove(&pid);
+
+        assert!(!pool_import_already_present(pid));
+
+        PoolOps::mark_pending_reset(pid, 100);
+
+        assert!(pool_import_already_present(pid));
+        assert_eq!(
+            PoolQuery::pool_list()
+                .entries
+                .iter()
+                .filter(|entry| entry.pid == pid)
+                .count(),
+            1,
+            "duplicate immediate import must not create another pending entry"
+        );
+        assert_eq!(
+            PoolQuery::pool_entry(pid).expect("pending entry").status,
+            CanisterPoolStatus::PendingReset
+        );
 
         PoolOps::remove(&pid);
     }

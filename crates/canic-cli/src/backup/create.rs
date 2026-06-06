@@ -551,6 +551,11 @@ fn backup_icp_error(error: IcpCommandError) -> BackupCommandError {
             command,
             stderr: output,
         },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => BackupCommandError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => BackupCommandError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,

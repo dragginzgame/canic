@@ -110,6 +110,7 @@ fn icp_call_on_network_with_mode(
     }
     icp::add_target_args(&mut command, Some(network), None);
 
+    icp::ensure_command_compatible(&command)?;
     let result = command.output()?;
 
     if let Some(path) = temp_argument_path {

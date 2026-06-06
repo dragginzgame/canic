@@ -207,7 +207,7 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
     pool_admin_response_idempotent(
         "ImportImmediate",
         "pool.import_immediate.ensure_v1",
-        ReplayImplementationStatus::ReleaseBlocker,
+        ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -602,21 +602,42 @@ mod tests {
     }
 
     #[test]
-    fn pool_admin_non_create_variants_remain_explicit_release_blockers() {
-        for variant in ["Recycle", "ImportImmediate"] {
-            let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
-                .iter()
-                .find(|entry| entry.variant == variant)
-                .expect("pool admin command policy entry");
-            assert_eq!(
-                entry.implementation_status,
-                ReplayImplementationStatus::ReleaseBlocker
-            );
-            assert!(
-                matches!(entry.replay_policy, ReplayPolicy::ResponseIdempotent { .. }),
-                "{variant} must declare its chosen replay class"
-            );
-        }
+    fn pool_import_immediate_command_is_manifested_as_implemented_idempotent() {
+        let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.variant == "ImportImmediate")
+            .expect("ImportImmediate command policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::ResponseIdempotent {
+                command_kind: "pool.import_immediate.ensure_v1",
+            }
+        );
+        assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
+        assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
+        assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
+    }
+
+    #[test]
+    fn pool_recycle_remains_explicit_release_blocker() {
+        let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.variant == "Recycle")
+            .expect("Recycle command policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::ReleaseBlocker
+        );
+        assert!(
+            matches!(entry.replay_policy, ReplayPolicy::ResponseIdempotent { .. }),
+            "Recycle must declare its chosen replay class"
+        );
     }
 
     #[test]

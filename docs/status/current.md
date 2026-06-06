@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-05
+Last updated: 2026-06-06
 
 ## Purpose
 
@@ -9,6 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.14` completed the pool `ImportImmediate` replay-proof slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  `POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST` now records `ImportImmediate` as
+  implemented with `ResponseIdempotent(pool.import_immediate.ensure_v1)` and
+  deployment quota/reserve policy. The pool workflow now has focused coverage
+  proving immediate import detects both ready and pending-reset pool entries
+  before the reset path; duplicate retries keep a single pool entry and
+  preserve `PendingReset` once the first request has marked the canister for
+  reset. Pool `Recycle` remains the only explicit pool admin variant release
+  blocker because it can still cross management reset before removing the
+  subnet-registry entry. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo fmt --all -- --check
+  ```
 - `0.61.13` completed the attestation key-set manifest correction and ICP CLI
   0.3 cleanup batch. From
   `docs/design/0.61-replay-protection/0.61-design.md`,

@@ -256,6 +256,11 @@ fn installed_deployment_icp_error(error: IcpCommandError) -> InstalledDeployment
             command,
             stderr: output,
         },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => InstalledDeploymentError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
         IcpCommandError::SnapshotIdUnavailable { output } => InstalledDeploymentError::IcpFailed {
             command: "icp canister snapshot create".to_string(),
             stderr: output,
