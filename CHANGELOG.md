@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.27` adds delegated-token mint replay decision coverage. Mint replay
+  tests now pin committed, conflicting, and in-progress receipt behavior plus
+  token-signing quota rejection before ECDSA.
+
 - `0.61.26` closes delegated-token mint wrapper manifest coverage. Fleet/test
   `*_issue_token` wrappers are now explicit replay-protected signing endpoints
   in the replay policy inventory, with a scanner test for future wrappers.

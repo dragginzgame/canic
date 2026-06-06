@@ -9,6 +9,18 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.27` added delegated-token mint replay decision coverage from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Auth API tests now prove
+  committed `auth.mint_token.v1` receipts return cached `DelegatedToken`
+  responses, same-operation actor and payload mismatches reject, in-progress
+  duplicate mint receipts block with no external effect recorded, and the
+  token-signing cost guard can reject a fresh signing operation before any ECDSA
+  signing adapter is reachable. `AuthApi` now builds token-signing
+  `CostGuardRequest` values through one helper shared by live code and tests.
+  No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  ```
 - `0.61.26` closed the delegated-token mint wrapper manifest gap from
   `docs/design/0.61-replay-protection/0.61-design.md`.
   `signer_issue_token` and `user_shard_issue_token` are now explicit

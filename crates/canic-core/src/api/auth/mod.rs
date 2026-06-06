@@ -407,18 +407,10 @@ impl AuthApi {
             }
         };
 
-        let cost_permit = match CostGuardOps::reserve(CostGuardRequest {
-            cost_class: crate::replay_policy::CostClass::ThresholdEcdsaSign,
-            command_kind: command_kind.clone(),
-            quota_subject: caller,
-            payer: IcOps::canister_self(),
-            now_secs: IcOps::now_secs(),
-            quota_window_secs: Self::TOKEN_SIGNING_QUOTA_WINDOW_SECONDS,
-            max_operations_per_window: Self::MAX_TOKEN_SIGNING_OPERATIONS_PER_WINDOW,
-            current_cycle_balance: MgmtOps::canister_cycle_balance().to_u128(),
-            cycle_reservation_cycles: Self::TOKEN_SIGNING_CYCLE_RESERVATION_CYCLES,
-            min_cycles_after_reservation: Self::MIN_TOKEN_SIGNING_CYCLES_AFTER_RESERVATION,
-        }) {
+        let cost_permit = match CostGuardOps::reserve(Self::token_signing_cost_guard_request(
+            command_kind.clone(),
+            caller,
+        )) {
             Ok(permit) => permit,
             Err(err) => {
                 abort_reserved_receipt(&token);
@@ -865,6 +857,40 @@ impl AuthApi {
         reserve_or_replay_receipt(replay_input).map_err(Self::map_delegation_replay_store_error)
     }
 
+    fn token_signing_cost_guard_request(
+        command_kind: CommandKind,
+        caller: Principal,
+    ) -> CostGuardRequest {
+        Self::token_signing_cost_guard_request_at(
+            command_kind,
+            caller,
+            IcOps::canister_self(),
+            IcOps::now_secs(),
+            MgmtOps::canister_cycle_balance().to_u128(),
+        )
+    }
+
+    const fn token_signing_cost_guard_request_at(
+        command_kind: CommandKind,
+        caller: Principal,
+        payer: Principal,
+        now_secs: u64,
+        current_cycle_balance: u128,
+    ) -> CostGuardRequest {
+        CostGuardRequest {
+            cost_class: crate::replay_policy::CostClass::ThresholdEcdsaSign,
+            command_kind,
+            quota_subject: caller,
+            payer,
+            now_secs,
+            quota_window_secs: Self::TOKEN_SIGNING_QUOTA_WINDOW_SECONDS,
+            max_operations_per_window: Self::MAX_TOKEN_SIGNING_OPERATIONS_PER_WINDOW,
+            current_cycle_balance,
+            cycle_reservation_cycles: Self::TOKEN_SIGNING_CYCLE_RESERVATION_CYCLES,
+            min_cycles_after_reservation: Self::MIN_TOKEN_SIGNING_CYCLES_AFTER_RESERVATION,
+        }
+    }
+
     fn map_delegation_replay_decision(
         decision: ReplayReceiptDecision,
     ) -> Result<DelegationProof, Error> {
@@ -1278,14 +1304,24 @@ mod tests {
         cdk::types::Principal,
         dto::{
             auth::{
-                DelegatedTokenIssueRequest, DelegatedTokenMintRequest, DelegationAudience,
-                DelegationCert, DelegationProof, DelegationProofIssueRequest, ShardKeyBinding,
-                SignatureAlgorithm,
+                DelegatedToken, DelegatedTokenClaims, DelegatedTokenIssueRequest,
+                DelegatedTokenMintRequest, DelegationAudience, DelegationCert, DelegationProof,
+                DelegationProofIssueRequest, ShardKeyBinding, SignatureAlgorithm,
             },
             error::ErrorCode,
             rpc::RootRequestMetadata,
         },
-        ops::auth::{AuthExpiryError, AuthOpsError},
+        ops::{
+            auth::{AuthExpiryError, AuthOpsError},
+            cost_guard::CostGuardOps,
+            replay::{
+                model::{ReplayActor, ReplayReceiptStatus},
+                receipt::{ReplayReceiptDecision, commit_receipt_response},
+            },
+            storage::replay::ReplayReceiptOps,
+        },
+        replay_policy::CostClass,
+        storage::stable::intent::IntentStore,
     };
 
     fn p(id: u8) -> Principal {
@@ -1358,6 +1394,35 @@ mod tests {
             ttl_secs: 30,
             nonce: [9; 16],
         }
+    }
+
+    fn delegated_token(nonce_byte: u8) -> DelegatedToken {
+        DelegatedToken {
+            claims: DelegatedTokenClaims {
+                version: 1,
+                subject: p(8),
+                issuer_shard_pid: p(2),
+                cert_hash: [11; 32],
+                issued_at: 20,
+                expires_at: 50,
+                aud: DelegationAudience::Principal(p(3)),
+                scopes: vec!["canic.verify".to_string()],
+                nonce: [nonce_byte; 16],
+            },
+            proof: delegation_proof(),
+            shard_sig: vec![12; 64],
+        }
+    }
+
+    fn reserve_mint_receipt(
+        request: &DelegatedTokenMintRequest,
+        actor: ReplayActor,
+    ) -> ReplayReceiptDecision {
+        let command_kind = AuthApi::token_mint_replay_command_kind();
+        let metadata = request.metadata.expect("mint request metadata");
+        let payload_hash = AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, request);
+        AuthApi::reserve_token_replay_receipt(command_kind, metadata, actor, payload_hash)
+            .expect("mint receipt reservation")
     }
 
     #[test]
@@ -1473,6 +1538,117 @@ mod tests {
             AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, &a),
             AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, &b)
         );
+    }
+
+    #[test]
+    fn delegated_token_mint_committed_replay_returns_cached_token() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let request = mint_request(21);
+        let actor = ReplayActor::direct_caller(p(44));
+        let token = match reserve_mint_receipt(&request, actor) {
+            ReplayReceiptDecision::Fresh(token) => token,
+            decision => panic!("expected fresh receipt, got {decision:?}"),
+        };
+        let response = delegated_token(31);
+        let response_bytes =
+            AuthApi::encode_delegated_token_response(&response).expect("response encoding");
+
+        commit_receipt_response(
+            &token,
+            AuthApi::TOKEN_REPLAY_RESPONSE_SCHEMA_VERSION,
+            response_bytes,
+            2_000,
+        );
+
+        let replay = reserve_mint_receipt(&request, actor);
+        let cached = AuthApi::map_token_replay_decision(replay, "delegated token mint")
+            .expect("committed replay returns cached token");
+
+        assert_eq!(cached, response);
+    }
+
+    #[test]
+    fn delegated_token_mint_replay_rejects_actor_and_payload_mismatch() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let request = mint_request(22);
+        let actor = ReplayActor::direct_caller(p(44));
+        match reserve_mint_receipt(&request, actor) {
+            ReplayReceiptDecision::Fresh(_) => {}
+            decision => panic!("expected fresh receipt, got {decision:?}"),
+        }
+
+        let actor_mismatch = reserve_mint_receipt(&request, ReplayActor::direct_caller(p(45)));
+        assert_eq!(actor_mismatch, ReplayReceiptDecision::ActorMismatch);
+
+        let mut changed = request;
+        changed.token_ttl_secs += 1;
+        let payload_mismatch = reserve_mint_receipt(&changed, actor);
+        assert_eq!(payload_mismatch, ReplayReceiptDecision::PayloadMismatch);
+    }
+
+    #[test]
+    fn delegated_token_mint_in_progress_duplicate_blocks_before_effect() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let request = mint_request(23);
+        let actor = ReplayActor::direct_caller(p(44));
+        let token = match reserve_mint_receipt(&request, actor) {
+            ReplayReceiptDecision::Fresh(token) => token,
+            decision => panic!("expected fresh receipt, got {decision:?}"),
+        };
+
+        let duplicate = reserve_mint_receipt(&request, actor);
+        let err = AuthApi::map_token_replay_decision(duplicate, "delegated token mint")
+            .expect_err("duplicate in-progress mint must block");
+        assert_eq!(err.code, ErrorCode::Conflict);
+
+        let stored = ReplayReceiptOps::get(token.key())
+            .expect("stored receipt")
+            .into_receipt()
+            .expect("receipt decode");
+        assert_eq!(stored.status, ReplayReceiptStatus::Reserved);
+        assert_eq!(stored.effect, None);
+    }
+
+    #[test]
+    fn delegated_token_signing_quota_rejects_before_signing_adapter() {
+        IntentStore::reset_for_tests();
+
+        let command_kind = AuthApi::token_mint_replay_command_kind();
+        let caller = p(44);
+        let payer = p(2);
+        let current_cycle_balance = AuthApi::TOKEN_SIGNING_CYCLE_RESERVATION_CYCLES
+            + AuthApi::MIN_TOKEN_SIGNING_CYCLES_AFTER_RESERVATION
+            + 1;
+        let mut first = AuthApi::token_signing_cost_guard_request_at(
+            command_kind.clone(),
+            caller,
+            payer,
+            10,
+            current_cycle_balance,
+        );
+        first.max_operations_per_window = 1;
+        assert_eq!(first.cost_class, CostClass::ThresholdEcdsaSign);
+        assert_eq!(first.command_kind, command_kind);
+        assert_eq!(first.quota_subject, caller);
+        assert_eq!(first.payer, payer);
+
+        let permit = CostGuardOps::reserve(first).expect("first signing operation reserves");
+        CostGuardOps::complete(&permit, 10).expect("first signing operation completes");
+
+        let mut second = AuthApi::token_signing_cost_guard_request_at(
+            AuthApi::token_mint_replay_command_kind(),
+            caller,
+            payer,
+            20,
+            current_cycle_balance,
+        );
+        second.max_operations_per_window = 1;
+
+        let err = CostGuardOps::reserve(second).expect_err("quota rejects second operation");
+        assert!(err.to_string().contains("quota exceeded"));
     }
 
     #[test]
