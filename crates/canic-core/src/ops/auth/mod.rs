@@ -15,9 +15,9 @@ pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
 pub use types::{
-    PreparedInternalInvocationProofSignature, PreparedRoleAttestationSignature,
-    PreparedRootDelegationProof, SignDelegatedTokenInput, SignDelegationProofInput,
-    VerifyDelegatedTokenRuntimeInput,
+    PreparedDelegatedTokenSignature, PreparedInternalInvocationProofSignature,
+    PreparedRoleAttestationSignature, PreparedRootDelegationProof, SignDelegatedTokenInput,
+    SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
 };
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";

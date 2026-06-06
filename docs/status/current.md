@@ -9,6 +9,37 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.25` started delegated-token mint replay hardening. Public
+  `DelegatedTokenIssueRequest` and `DelegatedTokenMintRequest` handling now
+  requires caller-provided replay metadata, reserves shared receipts with
+  command kinds `auth.issue_token.v1` and `auth.mint_token.v1`, hashes the
+  authoritative proof/token payload without metadata, and returns committed
+  `DelegatedToken` responses for duplicate replays. Shard token signing now
+  crosses a prepared-token boundary: fresh execution reserves a
+  `CostGuardPermit`, marks `ThresholdEcdsaSign(DelegatedToken)` before ECDSA,
+  and signs through `sign_prepared_delegated_token`. The mint path reserves one
+  outer token receipt, requests the root proof with the same operation
+  metadata, and commits the final shard token response under the mint command.
+  The live mint/issue path now emits `Topic::Auth` logs for replay reservation,
+  committed replay return, blocked replay decisions, signing cost guard
+  reservation, ECDSA effect marking, recovery-required signing failure, and
+  final response commit without logging token, proof, signature, or receipt
+  response bytes. Active auth contract, recurring audit docs, and the 0.61
+  design now describe delegated-token verification as TTL-bounded bearer-token
+  verification, with replay-sensitive mutations assigned to domain operation
+  receipts. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo test -p canic-core ops::auth --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo test -p canic-testing-internal --lib -- --nocapture
+  cargo check -p canister_user_shard -p delegation_signer_stub -p delegation_root_stub -p sharding_root_stub
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  bash scripts/ci/run-auth-trust-chain-guards.sh
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.24` graduated root capability `ProvisionCanister` from command-level
   blocker to implemented replay-protected management-deployment behavior.
   `ProvisionCanister` execution now resolves the requested parent, checks that

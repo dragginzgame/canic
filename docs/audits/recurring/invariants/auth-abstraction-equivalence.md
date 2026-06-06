@@ -59,8 +59,8 @@ For any authenticated endpoint implemented via abstraction, the abstraction path
 - mismatched subject/caller
 - expired credentials
 - insufficient scope
-- update replay
-- query statelessness
+- delegated-token bearer reuse during the token TTL
+- domain replay receipt rejection for replay-sensitive commands
 - delegated-session subject resolution
 - role-attestation caller predicates such as `caller::has_role(...)` /
   `caller::has_any_role(...)`
@@ -73,8 +73,9 @@ This audit verifies semantic equivalence and failure-behavior parity between abs
 
 This audit must also check the mechanical trust-chain guards that prevent a
 public material-only verifier from reappearing. The abstraction path is only
-equivalent if endpoint-level subject binding and update-token replay
-consumption remain part of the generated/helper boundary.
+equivalent if endpoint-level subject binding and required-scope enforcement
+remain part of the generated/helper boundary. Replay-sensitive mutations must
+use domain operation receipts rather than verifier-local token-use state.
 
 This audit must not treat endpoint role policy as delegated-token audience
 policy. A generated endpoint may accept callers from several roles using
@@ -191,9 +192,9 @@ cargo test -p canic-core --lib caller_predicates_use_transport_caller_not_authen
 ```
 
 The `access::auth` bundle must include
-`delegated_auth_guard_preserves_verify_bind_scope_consume_order`, subject
-binding, required scope, update replay, query statelessness, and delegated
-session resolution tests.
+`delegated_auth_guard_preserves_verify_bind_scope_order`, subject binding,
+required scope, bearer-token reuse, domain replay receipt coverage, and
+delegated session resolution tests.
 
 Audience-focused checks must also prove:
 

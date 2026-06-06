@@ -33,6 +33,14 @@ pub fn issue_delegated_token(
     cert_ttl_secs: u64,
 ) -> DelegatedToken {
     let request = DelegatedTokenMintRequest {
+        metadata: Some(mint_token_request_metadata(
+            shard_pid,
+            subject,
+            &aud,
+            &scopes,
+            token_ttl_secs,
+            cert_ttl_secs,
+        )),
         subject,
         aud,
         scopes,
@@ -85,5 +93,53 @@ fn root_delegation_request_metadata(
     RootRequestMetadata {
         request_id,
         ttl_seconds: 60,
+    }
+}
+
+fn mint_token_request_metadata(
+    shard_pid: Principal,
+    subject: Principal,
+    aud: &DelegationAudience,
+    scopes: &[String],
+    token_ttl_secs: u64,
+    cert_ttl_secs: u64,
+) -> RootRequestMetadata {
+    let mut request_id = [0u8; 32];
+    mix_principal(&mut request_id, 0, shard_pid);
+    mix_principal(&mut request_id, 7, subject);
+    mix_audience(&mut request_id, 13, aud);
+    for (scope_index, scope) in scopes.iter().enumerate() {
+        for (byte_index, byte) in scope.as_bytes().iter().enumerate() {
+            request_id[(scope_index + byte_index + 19) % request_id.len()] ^= *byte;
+        }
+    }
+    mix_u64(&mut request_id, 3, token_ttl_secs);
+    mix_u64(&mut request_id, 11, cert_ttl_secs);
+    RootRequestMetadata {
+        request_id,
+        ttl_seconds: 60,
+    }
+}
+
+fn mix_audience(request_id: &mut [u8; 32], offset: usize, aud: &DelegationAudience) {
+    match aud {
+        DelegationAudience::Principal(pid) => mix_principal(request_id, offset, *pid),
+        DelegationAudience::Role(role) => {
+            for (index, byte) in role.as_str().as_bytes().iter().enumerate() {
+                request_id[(index + offset) % request_id.len()] ^= *byte;
+            }
+        }
+    }
+}
+
+fn mix_principal(request_id: &mut [u8; 32], offset: usize, principal: Principal) {
+    for (index, byte) in principal.as_slice().iter().enumerate() {
+        request_id[(index + offset) % request_id.len()] ^= *byte;
+    }
+}
+
+fn mix_u64(request_id: &mut [u8; 32], offset: usize, value: u64) {
+    for (index, byte) in value.to_be_bytes().iter().enumerate() {
+        request_id[(index + offset) % request_id.len()] ^= *byte;
     }
 }

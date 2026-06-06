@@ -148,7 +148,7 @@ Expected:
 Workflow must not own endpoint auth semantics.
 
 ```bash
-rg -n 'verify_caller|DelegatedToken|resolve_authenticated_identity|authenticated_with_scope|consume_update|token_material|verify_delegated_token|subject|scope|audience' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'verify_caller|DelegatedToken|resolve_authenticated_identity|authenticated_with_scope|token_material|verify_delegated_token|subject|scope|audience' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:

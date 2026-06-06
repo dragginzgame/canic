@@ -4,6 +4,7 @@ use crate::{
         DelegatedToken, DelegationAudience, DelegationCert, DelegationProof,
         InternalInvocationProofPayloadV1, RoleAttestation,
     },
+    ops::auth::delegated::mint::PreparedDelegatedToken,
 };
 
 //
@@ -42,6 +43,17 @@ pub struct PreparedRootDelegationProof {
     pub cert_hash: [u8; 32],
     pub key_name: String,
     pub root_derivation_path: Vec<Vec<u8>>,
+}
+
+//
+// PreparedDelegatedTokenSignature
+//
+
+pub struct PreparedDelegatedTokenSignature {
+    pub prepared: PreparedDelegatedToken,
+    pub message_hash: [u8; 32],
+    pub key_name: String,
+    pub derivation_path: Vec<Vec<u8>>,
 }
 
 //

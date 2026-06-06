@@ -307,18 +307,25 @@ Entrypoint paths:
 
 ```text
 AuthApi::mint_token
-  -> request root proof
-  -> AuthApi::issue_token
+  -> reserve auth.mint_token.v1 replay receipt
+  -> request root proof with the same operation metadata
+  -> guarded shard token signing
 
 AuthApi::issue_token
-  -> AuthOps::sign_token
+  -> reserve auth.issue_token.v1 replay receipt
+  -> guarded shard token signing
 ```
 
 Shard minting steps:
 
-1. Require `proof.cert.shard_pid == self`.
-2. Prepare `DelegatedTokenClaims`.
-3. Enforce:
+1. Require caller-provided replay metadata; server-generated operation IDs are
+   not used for token minting or token issuing.
+2. Return the committed `DelegatedToken` for the same operation ID, actor, and
+   payload.
+3. Reject the same operation ID with a different actor or payload.
+4. Require `proof.cert.shard_pid == self`.
+5. Prepare `DelegatedTokenClaims`.
+6. Enforce:
    - cert is currently valid
    - token TTL is greater than zero
    - token TTL does not exceed `cert.max_token_ttl_secs`
@@ -326,15 +333,21 @@ Shard minting steps:
    - token audience is a subset of cert audience
    - token scopes are a subset of cert scopes
    - claims are canonical
-4. Sign `claims_hash` with the shard ECDSA path:
+7. Reserve signing quota and cycle budget for the requesting caller before
+   shard ECDSA.
+8. Mark `ThresholdEcdsaSign(DelegatedToken)` in the replay receipt before
+   shard ECDSA.
+9. Sign `claims_hash` with the shard ECDSA path:
 
 ```text
 ["canic", "shard", self_pid_bytes]
 ```
 
-5. Return `DelegatedToken`.
+10. Commit the exact `DelegatedToken` response.
 
 Minting does not depend on verifier creation order or registry propagation.
+The delegated-token nonce is not an operation ID and does not substitute for
+the replay receipt.
 
 Signer lifecycle prewarm:
 

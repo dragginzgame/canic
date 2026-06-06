@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.25` starts delegated-token mint replay hardening. Public token issue
+  and mint helpers now require replay metadata, reserve shared receipts, and
+  sign shard tokens only through logged cost-guarded ECDSA boundaries.
+
 - `0.61.24` graduates root `ProvisionCanister` and the root capability RPC
   endpoint. Provisioning now reserves deployment quota/cycles and marks the
   create/install replay effect before lifecycle work can cross the boundary.

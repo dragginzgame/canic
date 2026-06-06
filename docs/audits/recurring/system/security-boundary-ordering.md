@@ -10,7 +10,8 @@ This audit tracks the current hard-cut boundary split:
 
 - public delegated-token endpoint auth uses `auth::authenticated(...)`,
   singular `DelegationAudience::{Role, Principal}`, subject/caller binding,
-  scope checks, and update-token replay consumption;
+  scope checks, and bearer-token verification without verifier-local token-use
+  writes;
 - protected internal role endpoints use `caller::has_role(...)` /
   `caller::has_any_role(...)` and must verify root-signed internal invocation
   proof envelopes before decoding handler args or dispatching;
@@ -30,7 +31,8 @@ For endpoint delegated tokens, the required order is:
 3. verify root/shard trust chain;
 4. enforce caller/subject binding;
 5. enforce singular audience and scope;
-6. consume update-token replay marker for update calls;
+6. do not write verifier-local token-use state; replay-sensitive endpoint
+   commands must use domain operation receipts;
 7. dispatch the endpoint implementation;
 8. record bounded success/denial metrics at the owning boundary.
 

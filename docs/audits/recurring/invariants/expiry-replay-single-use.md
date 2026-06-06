@@ -162,7 +162,8 @@ Pressure score guidance:
 - broad/unbounded clock skew acceptance
 - freshness checks implemented outside canonical verifier path
 - replay store or nonce mechanism disabled/bypassed in production configuration
-- consumed-token state keyed without issuer, subject, cert hash, or nonce
+- domain replay receipts keyed without command kind, operation ID, actor, or
+  payload hash
 - root replay global capacity checked before per-caller capacity
 
 ## Severity

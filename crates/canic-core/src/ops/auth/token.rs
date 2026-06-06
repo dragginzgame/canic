@@ -1,5 +1,6 @@
 use super::{
-    AuthOps, SignDelegatedTokenInput, VerifyDelegatedTokenRuntimeInput,
+    AuthOps, PreparedDelegatedTokenSignature, SignDelegatedTokenInput,
+    VerifyDelegatedTokenRuntimeInput,
     delegated::mint::{
         MintDelegatedTokenError, MintDelegatedTokenInput, finish_delegated_token,
         prepare_delegated_token,
@@ -20,7 +21,9 @@ use crate::{
     ops::{
         auth::{AuthScopeError, AuthSignatureError, AuthValidationError},
         config::ConfigOps,
+        cost_guard::CostGuardPermit,
         ic::{IcOps, ecdsa::EcdsaOps},
+        replay::model::{EcdsaPurpose, ExternalEffectDescriptor},
         runtime::{
             env::EnvOps,
             metrics::delegated_auth::{DelegatedAuthMetricReason, DelegatedAuthMetrics},
@@ -30,10 +33,10 @@ use crate::{
 };
 
 impl AuthOps {
-    /// Sign a self-contained delegated token with local shard threshold ECDSA material.
-    pub async fn sign_token(
+    /// Prepare delegated-token claims before shard ECDSA signing.
+    pub(crate) fn prepare_delegated_token_signature(
         input: SignDelegatedTokenInput,
-    ) -> Result<DelegatedToken, InternalError> {
+    ) -> Result<PreparedDelegatedTokenSignature, InternalError> {
         let local = IcOps::canister_self();
         if input.proof.cert.shard_pid != local {
             return Err(AuthScopeError::ShardPidMismatch {
@@ -55,14 +58,40 @@ impl AuthOps {
         .map_err(map_mint_delegated_token_error)?;
 
         let key_name = keys::delegated_tokens_key_name()?;
-        let shard_sig = EcdsaOps::sign_bytes(
-            &key_name,
-            keys::shard_derivation_path(local),
-            prepared.claims_hash,
-        )
-        .await?;
+        let derivation_path = keys::shard_derivation_path(local);
+        Ok(PreparedDelegatedTokenSignature {
+            message_hash: prepared.claims_hash,
+            prepared,
+            key_name,
+            derivation_path,
+        })
+    }
+
+    /// Sign prepared delegated-token claims with local shard threshold ECDSA material.
+    pub(crate) async fn sign_prepared_delegated_token(
+        _permit: &CostGuardPermit,
+        prepared: PreparedDelegatedTokenSignature,
+    ) -> Result<DelegatedToken, InternalError> {
+        let PreparedDelegatedTokenSignature {
+            prepared,
+            message_hash,
+            key_name,
+            derivation_path,
+        } = prepared;
+        let shard_sig = EcdsaOps::sign_bytes(&key_name, derivation_path, message_hash).await?;
 
         Ok(finish_delegated_token(prepared, shard_sig))
+    }
+
+    /// Describe the shard ECDSA effect for a prepared delegated-token signature.
+    pub(crate) fn delegated_token_signing_effect(
+        prepared: &PreparedDelegatedTokenSignature,
+    ) -> ExternalEffectDescriptor {
+        ExternalEffectDescriptor::ThresholdEcdsaSign {
+            key_id_hash: key_name_hash(&prepared.key_name),
+            purpose: EcdsaPurpose::DelegatedToken,
+            message_hash: prepared.message_hash,
+        }
     }
 
     /// Verify a self-contained delegated token without local proof lookup.

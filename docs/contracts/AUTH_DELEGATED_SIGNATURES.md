@@ -120,13 +120,19 @@ delegated-auth key config changes.
 
 ### Token minting
 
-1. Shard obtains a `DelegationProof`.
-2. Shard validates audience, scope, and TTL attenuation.
-3. Shard signs canonical token claims with its deterministic shard ECDSA path.
-4. Shard returns a self-contained `DelegatedToken`.
+1. Caller supplies replay metadata with a bounded TTL.
+2. Shard reserves a command-scoped replay receipt.
+3. Shard obtains or receives a `DelegationProof`.
+4. Shard validates audience, scope, and TTL attenuation.
+5. Shard reserves signing quota and cycle budget.
+6. Shard marks the delegated-token ECDSA effect before signing.
+7. Shard signs canonical token claims with its deterministic shard ECDSA path.
+8. Shard commits and returns a self-contained `DelegatedToken`.
 
 `AuthApi::mint_token` performs proof request and token signing in one
-API call. `AuthApi::issue_token` signs from an explicit proof.
+API call. `AuthApi::issue_token` signs from an explicit proof. Both paths use
+caller-provided replay metadata; token nonces are informational entropy and are
+not operation IDs.
 
 ## Verification Contract
 

@@ -46,7 +46,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.91.0"
 edition = "2024"
-version = "0.61.24"
+version = "0.61.25"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -60,17 +60,17 @@ readme = "README.md"
 async-trait = "0.1"
 candid = { version = "0.10", default-features = false }
 candid_parser = "0.3.1"
-canic = { version = "0.61.24", path = "crates/canic" }
-canic-backup = { version = "0.61.24", path = "crates/canic-backup" }
-canic-cli = { version = "0.61.24", path = "crates/canic-cli" }
-canic-control-plane = { version = "0.61.24", path = "crates/canic-control-plane" }
-canic-core = { version = "0.61.24", path = "crates/canic-core" }
-canic-host = { version = "0.61.24", path = "crates/canic-host" }
-canic-ic-registry = { version = "0.61.24", path = "crates/canic-ic-registry" }
-canic-macros = { version = "0.61.24", path = "crates/canic-macros" }
-canic-subnet-catalog = { version = "0.61.24", path = "crates/canic-subnet-catalog" }
-canic-testing-internal = { version = "0.61.24", path = "crates/canic-testing-internal" }
-canic-wasm-store = { version = "0.61.24", path = "crates/canic-wasm-store" }
+canic = { version = "0.61.25", path = "crates/canic" }
+canic-backup = { version = "0.61.25", path = "crates/canic-backup" }
+canic-cli = { version = "0.61.25", path = "crates/canic-cli" }
+canic-control-plane = { version = "0.61.25", path = "crates/canic-control-plane" }
+canic-core = { version = "0.61.25", path = "crates/canic-core" }
+canic-host = { version = "0.61.25", path = "crates/canic-host" }
+canic-ic-registry = { version = "0.61.25", path = "crates/canic-ic-registry" }
+canic-macros = { version = "0.61.25", path = "crates/canic-macros" }
+canic-subnet-catalog = { version = "0.61.25", path = "crates/canic-subnet-catalog" }
+canic-testing-internal = { version = "0.61.25", path = "crates/canic-testing-internal" }
+canic-wasm-store = { version = "0.61.25", path = "crates/canic-wasm-store" }
 clap = { version = "4.6.1", features = ["derive"] }
 criterion = "0.8"
 flate2 = { version = "1.1", default-features = false, features = [
@@ -86,7 +86,7 @@ ic-testkit = "0.1.11"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
-project-protocol-stub = { version = "0.61.24", path = "canisters/test/project_protocol_stub" }
+project-protocol-stub = { version = "0.61.25", path = "canisters/test/project_protocol_stub" }
 prost = "0.14.3"
 quote = "1.0"
 rand_chacha = "0.10"

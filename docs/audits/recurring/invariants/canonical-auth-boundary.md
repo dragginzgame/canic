@@ -26,7 +26,7 @@ The canonical boundary must perform or invoke verification stages for:
 - subject-caller binding
 - required-scope validation
 - freshness / expiry verification
-- update-token replay consumption for update calls
+- bearer-token verification without verifier-local token-use writes
 
 ## Why This Matters
 
