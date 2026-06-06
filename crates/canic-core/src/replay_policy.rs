@@ -91,6 +91,19 @@ pub struct PoolAdminCommandReplayPolicy {
     pub cycle_reserve_policy: Option<&'static str>,
 }
 
+///
+/// RootCapabilityCommandReplayPolicy
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootCapabilityCommandReplayPolicy {
+    pub variant: &'static str,
+    pub replay_policy: ReplayPolicy,
+    pub implementation_status: ReplayImplementationStatus,
+    pub cost_class: CostClass,
+    pub quota_policy: Option<&'static str>,
+    pub cycle_reserve_policy: Option<&'static str>,
+}
+
 const SIGNING_QUOTA_V1: &str = "signing.quota.v1";
 const SIGNING_RESERVE_V1: &str = "signing.cycle_reserve.v1";
 const DEPLOYMENT_QUOTA_V1: &str = "deployment.quota.v1";
@@ -152,9 +165,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(SIGNING_QUOTA_V1),
         Some(SIGNING_RESERVE_V1),
     ),
-    update_replay_blocker(
+    update_command_dispatch(
         "canic_response_capability_v1",
         "root.capability_rpc.v1",
+        "root.capability.command_manifest.v1",
+        ReplayImplementationStatus::ReleaseBlocker,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -229,6 +244,57 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
     ),
 ];
 
+pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityCommandReplayPolicy] = &[
+    root_capability_replay_protected(
+        "ProvisionCanister",
+        "root.provision.v1",
+        ReplayImplementationStatus::ReleaseBlocker,
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    root_capability_replay_protected(
+        "UpgradeCanister",
+        "root.upgrade.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    root_capability_replay_protected(
+        "RecycleCanister",
+        "root.recycle_canister.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
+    root_capability_replay_protected(
+        "RequestCycles",
+        "root.request_cycles.v1",
+        ReplayImplementationStatus::ReleaseBlocker,
+        CostClass::ValueTransfer,
+        Some(VALUE_TRANSFER_QUOTA_V1),
+        Some(VALUE_TRANSFER_RESERVE_V1),
+    ),
+    root_capability_replay_protected(
+        "IssueRoleAttestation",
+        "root.issue_role_attestation.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
+    root_capability_replay_protected(
+        "IssueInternalInvocationProof",
+        "root.issue_internal_invocation_proof.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
+];
+
 #[must_use]
 pub const fn endpoint_replay_policy_manifest() -> &'static [EndpointReplayPolicy] {
     ENDPOINT_REPLAY_POLICY_MANIFEST
@@ -238,6 +304,12 @@ pub const fn endpoint_replay_policy_manifest() -> &'static [EndpointReplayPolicy
 pub const fn pool_admin_command_replay_policy_manifest() -> &'static [PoolAdminCommandReplayPolicy]
 {
     POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+}
+
+#[must_use]
+pub const fn root_capability_command_replay_policy_manifest()
+-> &'static [RootCapabilityCommandReplayPolicy] {
+    ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
 }
 
 const fn update_response_idempotent(
@@ -283,23 +355,6 @@ const fn update_read_only(endpoint: &'static str) -> EndpointReplayPolicy {
         quota_policy: None,
         cycle_reserve_policy: None,
     }
-}
-
-const fn update_replay_blocker(
-    endpoint: &'static str,
-    command_kind: &'static str,
-    cost_class: CostClass,
-    quota_policy: Option<&'static str>,
-    cycle_reserve_policy: Option<&'static str>,
-) -> EndpointReplayPolicy {
-    update_replay_protected(
-        endpoint,
-        command_kind,
-        ReplayImplementationStatus::ReleaseBlocker,
-        cost_class,
-        quota_policy,
-        cycle_reserve_policy,
-    )
 }
 
 const fn update_replay_protected(
@@ -434,6 +489,27 @@ const fn pool_admin_snapshot_convergent(
     }
 }
 
+const fn root_capability_replay_protected(
+    variant: &'static str,
+    command_kind: &'static str,
+    implementation_status: ReplayImplementationStatus,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> RootCapabilityCommandReplayPolicy {
+    RootCapabilityCommandReplayPolicy {
+        variant,
+        replay_policy: ReplayPolicy::ReplayProtected {
+            command_kind,
+            requires_operation_id: true,
+        },
+        implementation_status,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,6 +577,25 @@ mod tests {
             assert!(
                 entry.cycle_reserve_policy.is_some(),
                 "costed pool admin command {} missing cycle-reserve policy",
+                entry.variant
+            );
+        }
+    }
+
+    #[test]
+    fn costed_root_capability_command_entries_declare_guards() {
+        for entry in ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST {
+            if entry.cost_class == CostClass::None {
+                continue;
+            }
+            assert!(
+                entry.quota_policy.is_some(),
+                "costed root capability command {} missing quota policy",
+                entry.variant
+            );
+            assert!(
+                entry.cycle_reserve_policy.is_some(),
+                "costed root capability command {} missing cycle-reserve policy",
                 entry.variant
             );
         }
@@ -657,6 +752,100 @@ mod tests {
     }
 
     #[test]
+    fn root_capability_command_variants_have_replay_policy_entries() {
+        let variants = root_capability_command_variant_names();
+        let manifest = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .map(|entry| entry.variant)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(manifest, variants);
+    }
+
+    #[test]
+    fn root_capability_endpoint_is_manifested_as_command_dispatch() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_response_capability_v1")
+            .expect("root capability endpoint policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::ReleaseBlocker
+        );
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::CommandDispatch {
+                command_kind: "root.capability_rpc.v1",
+                command_manifest: "root.capability.command_manifest.v1",
+            }
+        );
+        assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
+        assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
+        assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
+    }
+
+    #[test]
+    fn root_capability_command_blockers_are_explicit() {
+        let blockers = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| {
+                entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker
+            })
+            .map(|entry| entry.variant)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            blockers,
+            BTreeSet::from(["ProvisionCanister", "RequestCycles",])
+        );
+    }
+
+    #[test]
+    fn root_capability_implemented_commands_are_replay_protected() {
+        for (variant, command_kind, cost_class) in [
+            (
+                "UpgradeCanister",
+                "root.upgrade.v1",
+                CostClass::ManagementDeployment,
+            ),
+            (
+                "RecycleCanister",
+                "root.recycle_canister.v1",
+                CostClass::ManagementDeployment,
+            ),
+            (
+                "IssueRoleAttestation",
+                "root.issue_role_attestation.v1",
+                CostClass::ThresholdEcdsaSign,
+            ),
+            (
+                "IssueInternalInvocationProof",
+                "root.issue_internal_invocation_proof.v1",
+                CostClass::ThresholdEcdsaSign,
+            ),
+        ] {
+            let entry = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
+                .iter()
+                .find(|entry| entry.variant == variant)
+                .expect("root capability command policy entry");
+
+            assert_eq!(
+                entry.implementation_status,
+                ReplayImplementationStatus::Implemented
+            );
+            assert_eq!(
+                entry.replay_policy,
+                ReplayPolicy::ReplayProtected {
+                    command_kind,
+                    requires_operation_id: true,
+                }
+            );
+            assert_eq!(entry.cost_class, cost_class);
+        }
+    }
+
+    #[test]
     fn pool_admin_command_variants_have_replay_policy_entries() {
         let variants = pool_admin_command_variant_names();
         let manifest = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
@@ -804,27 +993,34 @@ mod tests {
     }
 
     fn pool_admin_command_variant_names() -> BTreeSet<&'static str> {
-        let source = include_str!("dto/pool.rs");
-        let marker = "pub enum PoolAdminCommand";
-        let start = source
-            .find(marker)
-            .expect("PoolAdminCommand enum exists in pool DTO");
+        enum_variant_names_from_source(include_str!("dto/pool.rs"), "pub enum PoolAdminCommand")
+    }
+
+    fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
+        enum_variant_names_from_source(include_str!("dto/rpc.rs"), "pub enum RootCapabilityCommand")
+    }
+
+    fn enum_variant_names_from_source(
+        source: &'static str,
+        marker: &'static str,
+    ) -> BTreeSet<&'static str> {
+        let start = source.find(marker).expect("enum exists in source");
         let body_start = source[start..]
             .find('{')
             .map(|offset| start + offset + 1)
-            .expect("PoolAdminCommand enum has body");
+            .expect("enum has body");
         let body_end = source[body_start..]
             .find("\n}")
             .map(|offset| body_start + offset)
-            .expect("PoolAdminCommand enum body closes");
+            .expect("enum body closes");
 
         source[body_start..body_end]
             .lines()
-            .filter_map(pool_admin_command_variant_name_from_line)
+            .filter_map(enum_variant_name_from_line)
             .collect()
     }
 
-    fn pool_admin_command_variant_name_from_line(line: &'static str) -> Option<&'static str> {
+    fn enum_variant_name_from_line(line: &'static str) -> Option<&'static str> {
         let line = line.trim();
         let first = line.as_bytes().first().copied()?;
         if !first.is_ascii_uppercase() {

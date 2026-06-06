@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.22` splits root capability RPC replay policy into a command manifest.
+  The endpoint is now pinned as command-dispatch, with `ProvisionCanister` and
+  `RequestCycles` left as explicit command-level blockers.
+
 - `0.61.21` graduates `canic_icp_refill` to implemented
   replay-protected value-transfer policy. Fresh refill effects now reserve
   value-transfer quota and cycle budget before transfer or notify execution.

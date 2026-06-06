@@ -9,6 +9,25 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.22` split the remaining root capability RPC blocker into command-level
+  replay policy. `canic_response_capability_v1` is now represented as
+  `CommandDispatch(root.capability_rpc.v1,
+  root.capability.command_manifest.v1)` and remains an endpoint release
+  blocker while the command manifest has blockers. The new
+  `ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST` covers every
+  `RootCapabilityCommand` variant. `UpgradeCanister`, `RecycleCanister`,
+  `IssueRoleAttestation`, and `IssueInternalInvocationProof` are implemented
+  replay-protected commands. `ProvisionCanister` remains blocked until root
+  provisioning records a management-deployment cost barrier and
+  external-effect/recovery boundary before create/install work; `RequestCycles`
+  remains blocked until root cycles funding records a value-transfer cost
+  barrier and external-effect/recovery boundary before cycles transfer. No CLI
+  commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  ```
 - `0.61.21` graduated ICP refill from release blocker to implemented
   replay-protected value-transfer behavior. Fresh manual refill execution now
   reserves a `CostGuardPermit` with `CostClass::ValueTransfer` before the
