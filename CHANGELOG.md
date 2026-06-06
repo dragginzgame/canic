@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.19` wires ICP refill into shared replay receipt reservation for fresh
+  manual refills. Terminal refill responses are now committed into shared
+  receipts and returned on duplicate replay, while actor/payload/in-progress
+  receipt conflicts map to public conflict errors. Retryable refill records
+  still abort the temporary shared receipt so existing transfer/notify retry
+  behavior remains unchanged until external-effect marking lands.
+
 - `0.61.18` starts the ICP refill shared replay-core migration by building the
   shared receipt reserve input in the manual-refill path while still using the
   existing refill record store for execution state. The slice adds the refill

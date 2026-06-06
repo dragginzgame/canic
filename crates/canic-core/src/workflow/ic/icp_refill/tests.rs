@@ -1,5 +1,5 @@
 use super::*;
-use crate::cdk::types::TC;
+use crate::{cdk::types::TC, dto::error::ErrorCode};
 use std::str::FromStr;
 
 fn p(id: u8) -> Principal {
@@ -347,6 +347,73 @@ fn refill_replay_payload_hash_binds_actor_and_transfer_fields() {
         base,
         icp_refill_payload_hash(&command_kind, &actor, &changed_target)
     );
+}
+
+#[test]
+fn refill_replay_commits_terminal_response_for_replay() {
+    let request = request_with_operation(180);
+    let input = icp_refill_replay_reserve_input(&request, p(90), 1_000);
+    let IcpRefillReplayReservation::Fresh {
+        operation_id,
+        token,
+    } = reserve_icp_refill_replay(input).expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+
+    let mut record = sample_record(IcpRefillStatus::Completed);
+    record.operation_id = operation_id;
+    record.ledger_block_index = Some(123);
+    record.cycles_sent = Some(Nat::from(456_u64));
+    let response = IcpRefillRecordOps::to_response(&record);
+    finish_icp_refill_replay(&token, &record, &response).expect("commit terminal response");
+
+    let replay = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
+        .expect("committed replay");
+    let IcpRefillReplayReservation::Replay(cached) = replay else {
+        panic!("expected cached replay");
+    };
+    assert_eq!(cached.operation_id, response.operation_id);
+    assert_eq!(cached.status, IcpRefillStatus::Completed);
+    assert_eq!(cached.ledger_block_index, Some(123));
+    assert_eq!(cached.cycles_sent, Some(Nat::from(456_u64)));
+}
+
+#[test]
+fn refill_replay_resumable_response_aborts_reserved_receipt() {
+    let request = request_with_operation(181);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let record = sample_record(IcpRefillStatus::Requested);
+    let response = IcpRefillRecordOps::to_response(&record);
+
+    finish_icp_refill_replay(&token, &record, &response).expect("abort resumable response");
+
+    assert!(matches!(
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
+            .expect("fresh after abort"),
+        IcpRefillReplayReservation::Fresh { .. }
+    ));
+}
+
+#[test]
+fn refill_replay_payload_mismatch_maps_to_conflict() {
+    let request = request_with_operation(182);
+    let _reservation =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation");
+
+    let mut changed = request;
+    changed.amount_e8s += 1;
+    let err = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&changed, p(90), 1_001))
+        .expect_err("payload mismatch must fail");
+    let public = err.public_error().expect("public replay error");
+    assert_eq!(public.code, ErrorCode::Conflict);
+    assert!(public.message.contains("different payload"));
 }
 
 #[test]

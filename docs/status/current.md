@@ -9,6 +9,25 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.19` continued the ICP refill shared replay-core migration from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Fresh manual ICP refill
+  execution now reserves a shared replay receipt before creating or advancing
+  the refill business record. Terminal refill responses are committed into the
+  shared receipt and duplicate committed replays return the cached
+  `IcpRefillResponse`; actor mismatch, payload mismatch, in-progress, expired,
+  recovery-required, and terminal-failed receipt decisions map to public
+  conflict errors. Resumable refill records still abort the temporary shared
+  receipt so existing transfer/notify retry behavior is preserved until
+  external-effect marking lands. `canic_icp_refill` remains a release blocker
+  until ledger transfer and CMC notify effects are marked in flight before the
+  external calls and uncertain outcomes become recovery-required receipts. No
+  CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  ```
 - `0.61.18` started the ICP refill shared replay-core migration from
   `docs/design/0.61-replay-protection/0.61-design.md`. ICP refill now has
   shared replay identity helpers for command kind `icp.refill.v1`, conversion

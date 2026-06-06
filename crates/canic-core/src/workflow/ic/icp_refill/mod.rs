@@ -13,9 +13,12 @@ use crate::{
             evaluate_manual_refill,
         },
     },
-    dto::icp_refill::{
-        IcpRefillDryRun, IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest, IcpRefillResponse,
-        IcpRefillStatus,
+    dto::{
+        error::Error,
+        icp_refill::{
+            IcpRefillDryRun, IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest,
+            IcpRefillResponse, IcpRefillStatus,
+        },
     },
     ids::{BuildNetwork, CanisterRole},
     infra::ic::icp_refill::{IcpRefillCanisterOverrides, NotifyTopUpArg, NotifyTopUpError},
@@ -23,8 +26,12 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
         replay::{
-            model::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher},
-            receipt::ReplayReceiptReserveInput,
+            model::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher, ReplayReceipt},
+            receipt::{
+                ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
+                ReplayReceiptToken, abort_reserved_receipt, commit_receipt_response,
+                reserve_or_replay_receipt,
+            },
         },
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{
@@ -36,6 +43,7 @@ use crate::{
     storage::stable::icp_refill::IcpRefillRecord,
     workflow::ic::network::NetworkWorkflow,
 };
+use candid::{decode_one, encode_one};
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
@@ -43,6 +51,7 @@ const TX_WINDOW_NANOS: u64 = 24 * 60 * 60 * 1_000_000_000;
 const MAX_NOTIFY_ATTEMPTS: u32 = 5;
 const ICP_LEDGER_DECIMALS: u8 = 8;
 const ICP_REFILL_REPLAY_COMMAND_KIND: &str = "icp.refill.v1";
+const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 ///
 /// IcpRefillWorkflowError
@@ -110,36 +119,15 @@ impl IcpRefillWorkflow {
         validate_manual_request_shape(&request, false)?;
         let replay_input =
             icp_refill_replay_reserve_input(&request, IcOps::msg_caller(), IcOps::now_nanos());
-        let operation_id = replay_input.operation_id.into_bytes();
+        let reservation = reserve_icp_refill_replay(replay_input)?;
 
-        if let Some(record) = IcpRefillRecordOps::find_by_operation_id(operation_id) {
-            IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
-            let record = advance_record(record).await?;
-            return Ok(IcpRefillRecordOps::to_response(&record));
+        match reservation {
+            IcpRefillReplayReservation::Fresh {
+                operation_id,
+                token,
+            } => execute_fresh_manual_refill(request, operation_id, &token).await,
+            IcpRefillReplayReservation::Replay(response) => Ok(response),
         }
-
-        let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
-        let cmc_account =
-            IcpRefillOps::cmc_topup_account(context.cmc_canister_id, request.target_canister)?;
-        let record = IcpRefillRecordOps::create_or_get(IcpRefillRecordCreateInput {
-            operation_id,
-            source_canister: request.source_canister,
-            source_subaccount: request.source_subaccount,
-            target_canister: request.target_canister,
-            ledger_canister_id: context.ledger_canister_id,
-            cmc_canister_id: context.cmc_canister_id,
-            cmc_to_account_owner: cmc_account.owner,
-            cmc_to_account_subaccount: cmc_account.subaccount,
-            amount_e8s: request.amount_e8s,
-            fee_e8s: context.fee_e8s,
-            memo: IcpRefillOps::topup_memo(),
-            created_at_time_ns: context.created_at_time_ns,
-            now_ns: IcOps::now_nanos(),
-        })?;
-
-        let record = advance_record(record).await?;
-
-        Ok(IcpRefillRecordOps::to_response(&record))
     }
 
     pub async fn execute_hub_self_refill(
@@ -200,6 +188,59 @@ impl IcpRefillWorkflow {
 
         Self::execute_manual_refill(request).await
     }
+}
+
+async fn execute_fresh_manual_refill(
+    request: IcpRefillRequest,
+    operation_id: [u8; 32],
+    token: &ReplayReceiptToken,
+) -> Result<IcpRefillResponse, InternalError> {
+    let record = match execute_manual_refill_record(request, operation_id).await {
+        Ok(record) => record,
+        Err(err) => {
+            abort_reserved_receipt(token);
+            return Err(err);
+        }
+    };
+    let response = IcpRefillRecordOps::to_response(&record);
+
+    if let Err(err) = finish_icp_refill_replay(token, &record, &response) {
+        abort_reserved_receipt(token);
+        return Err(err);
+    }
+
+    Ok(response)
+}
+
+async fn execute_manual_refill_record(
+    request: IcpRefillRequest,
+    operation_id: [u8; 32],
+) -> Result<IcpRefillRecord, InternalError> {
+    if let Some(record) = IcpRefillRecordOps::find_by_operation_id(operation_id) {
+        IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
+        return advance_record(record).await;
+    }
+
+    let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
+    let cmc_account =
+        IcpRefillOps::cmc_topup_account(context.cmc_canister_id, request.target_canister)?;
+    let record = IcpRefillRecordOps::create_or_get(IcpRefillRecordCreateInput {
+        operation_id,
+        source_canister: request.source_canister,
+        source_subaccount: request.source_subaccount,
+        target_canister: request.target_canister,
+        ledger_canister_id: context.ledger_canister_id,
+        cmc_canister_id: context.cmc_canister_id,
+        cmc_to_account_owner: cmc_account.owner,
+        cmc_to_account_subaccount: cmc_account.subaccount,
+        amount_e8s: request.amount_e8s,
+        fee_e8s: context.fee_e8s,
+        memo: IcpRefillOps::topup_memo(),
+        created_at_time_ns: context.created_at_time_ns,
+        now_ns: IcOps::now_nanos(),
+    })?;
+
+    advance_record(record).await
 }
 
 ///
@@ -263,6 +304,18 @@ impl<'a> ManualRefillPolicyPreflight<'a> {
 enum RateQueryMode {
     Always,
     WhenGateConfigured,
+}
+
+///
+/// IcpRefillReplayReservation
+///
+#[derive(Debug)]
+enum IcpRefillReplayReservation {
+    Fresh {
+        operation_id: [u8; 32],
+        token: Box<ReplayReceiptToken>,
+    },
+    Replay(IcpRefillResponse),
 }
 
 async fn prepare_context(
@@ -541,6 +594,116 @@ fn icp_refill_replay_reserve_input(
         payload_hash,
         now_ns,
     )
+}
+
+fn reserve_icp_refill_replay(
+    input: ReplayReceiptReserveInput,
+) -> Result<IcpRefillReplayReservation, InternalError> {
+    let operation_id = input.operation_id.into_bytes();
+    match reserve_or_replay_receipt(input).map_err(map_icp_refill_replay_store_error)? {
+        ReplayReceiptDecision::Fresh(token) => Ok(IcpRefillReplayReservation::Fresh {
+            operation_id,
+            token: Box::new(token),
+        }),
+        ReplayReceiptDecision::ReturnCommitted(receipt) => {
+            decode_icp_refill_replay_response(&receipt).map(IcpRefillReplayReservation::Replay)
+        }
+        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
+            "ICP refill request is already in progress; retry later with the same operation id",
+        ))),
+        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(Error::conflict(
+            "ICP refill operation id was reused by a different caller",
+        ))),
+        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(Error::conflict(
+            "ICP refill operation id was reused with a different payload",
+        ))),
+        ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
+            "ICP refill replay receipt expired; retry with a new operation id",
+        ))),
+        ReplayReceiptDecision::RecoveryRequired(reason) => {
+            Err(InternalError::public(Error::conflict(format!(
+                "ICP refill request requires recovery before replay: {reason:?}"
+            ))))
+        }
+        ReplayReceiptDecision::TerminalFailed {
+            error_code,
+            error_bytes,
+            error_bytes_truncated,
+        } => Err(InternalError::public(Error::conflict(format!(
+            "ICP refill request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
+            error_bytes.len()
+        )))),
+    }
+}
+
+fn finish_icp_refill_replay(
+    token: &ReplayReceiptToken,
+    record: &IcpRefillRecord,
+    response: &IcpRefillResponse,
+) -> Result<(), InternalError> {
+    if IcpRefillRecordOps::is_resumable(record) {
+        abort_reserved_receipt(token);
+        return Ok(());
+    }
+
+    commit_receipt_response(
+        token,
+        ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
+        encode_icp_refill_replay_response(response)?,
+        IcOps::now_nanos(),
+    );
+    Ok(())
+}
+
+fn encode_icp_refill_replay_response(
+    response: &IcpRefillResponse,
+) -> Result<Vec<u8>, InternalError> {
+    encode_one(response).map_err(|err| {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("failed to encode ICP refill replay response: {err}"),
+        )
+    })
+}
+
+fn decode_icp_refill_replay_response(
+    receipt: &ReplayReceipt,
+) -> Result<IcpRefillResponse, InternalError> {
+    let response_schema_version = receipt.response_schema_version.ok_or_else(|| {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "ICP refill replay receipt is missing response schema version",
+        )
+    })?;
+    if response_schema_version != ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION {
+        return Err(InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!(
+                "unsupported ICP refill replay response schema version {response_schema_version}"
+            ),
+        ));
+    }
+    let response_bytes = receipt.response_bytes.as_deref().ok_or_else(|| {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "ICP refill replay receipt is missing response bytes",
+        )
+    })?;
+    decode_one(response_bytes).map_err(|err| {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("failed to decode ICP refill replay response: {err}"),
+        )
+    })
+}
+
+fn map_icp_refill_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
+    match err {
+        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("failed to decode ICP refill replay receipt: {message}"),
+        ),
+    }
 }
 
 const fn icp_refill_operation_id(request: &IcpRefillRequest) -> OperationId {
