@@ -4,6 +4,7 @@ use crate::{
     config::{Config, ConfigModel},
     dto::{
         auth::{InternalInvocationProofRequest, RoleAttestationRequest},
+        error::ErrorCode,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
             RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
@@ -485,10 +486,11 @@ fn preflight_replay_then_authorize_validates_replay_before_policy() {
         AuthorizationPipelineOrder::ReplayThenAuthorize,
     )
     .expect_err("replay-then-authorize should validate replay first");
-    assert!(
-        err.to_string().contains("missing replay metadata"),
-        "expected replay metadata error first, got: {err}"
-    );
+    let public = err
+        .public_error()
+        .expect("missing operation id is a public hard-cut error");
+    assert_eq!(public.code, ErrorCode::OperationIdRequired);
+    assert_eq!(public.message, "operation_id is required for this command");
 }
 
 #[test]

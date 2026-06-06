@@ -670,8 +670,7 @@ impl AuthApi {
     fn delegation_replay_metadata(
         metadata: Option<RootRequestMetadata>,
     ) -> Result<RootRequestMetadata, Error> {
-        let metadata = metadata
-            .ok_or_else(|| Error::invalid("delegation proof request requires replay metadata"))?;
+        let metadata = metadata.ok_or_else(Error::operation_id_required)?;
         if metadata.ttl_seconds == 0 {
             return Err(Error::invalid(
                 "delegation proof replay metadata ttl_seconds must be greater than zero",
@@ -691,8 +690,7 @@ impl AuthApi {
         metadata: Option<RootRequestMetadata>,
         label: &str,
     ) -> Result<RootRequestMetadata, Error> {
-        let metadata = metadata
-            .ok_or_else(|| Error::invalid(format!("{label} request requires replay metadata")))?;
+        let metadata = metadata.ok_or_else(Error::operation_id_required)?;
         if metadata.ttl_seconds == 0 {
             return Err(Error::invalid(format!(
                 "{label} replay metadata ttl_seconds must be greater than zero"
@@ -1451,7 +1449,8 @@ mod tests {
     #[test]
     fn delegation_replay_metadata_rejects_missing_or_invalid_ttl() {
         let missing = AuthApi::delegation_replay_metadata(None).expect_err("metadata is required");
-        assert_eq!(missing.code, ErrorCode::InvalidInput);
+        assert_eq!(missing.code, ErrorCode::OperationIdRequired);
+        assert_eq!(missing.message, "operation_id is required for this command");
 
         let zero = AuthApi::delegation_replay_metadata(Some(RootRequestMetadata {
             request_id: [1; 32],
@@ -1485,7 +1484,8 @@ mod tests {
     fn delegated_token_replay_metadata_rejects_missing_or_invalid_ttl() {
         let missing =
             AuthApi::token_replay_metadata(None, "delegated token mint").expect_err("required");
-        assert_eq!(missing.code, ErrorCode::InvalidInput);
+        assert_eq!(missing.code, ErrorCode::OperationIdRequired);
+        assert_eq!(missing.message, "operation_id is required for this command");
 
         let zero = AuthApi::token_replay_metadata(Some(meta(1, 0)), "delegated token mint")
             .expect_err("zero ttl is invalid");

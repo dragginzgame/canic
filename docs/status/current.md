@@ -9,6 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.30` normalized the hard-cut missing-operation-ID boundary from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Public errors now expose
+  `ErrorCode::OperationIdRequired` with message
+  `operation_id is required for this command`. Delegation-proof replay
+  metadata, delegated-token issue/mint replay metadata, and pool `CreateEmpty`
+  replay metadata return that code when replay metadata is absent. Root
+  capability `MissingReplayMetadata` now maps to the same public code, covering
+  `RequestCycles` replay preflight. Zero or oversized replay TTL values remain
+  `InvalidInput`, and replay conflicts remain `Conflict`. No CLI commands
+  changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core workflow::rpc --lib -- --nocapture
+  ```
 - `0.61.29` added stable replay receipt upgrade-shape coverage from
   `docs/design/0.61-replay-protection/0.61-design.md`. Stable replay record
   tests now prove committed receipts preserve status, response schema, response

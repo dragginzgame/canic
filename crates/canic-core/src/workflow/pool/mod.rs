@@ -486,11 +486,7 @@ impl PoolWorkflow {
 fn pool_create_empty_replay_metadata(
     metadata: Option<RootRequestMetadata>,
 ) -> Result<RootRequestMetadata, InternalError> {
-    let metadata = metadata.ok_or_else(|| {
-        InternalError::public(Error::invalid(
-            "pool create-empty request requires replay metadata",
-        ))
-    })?;
+    let metadata = metadata.ok_or_else(|| InternalError::public(Error::operation_id_required()))?;
     if metadata.ttl_seconds == 0 {
         return Err(InternalError::public(Error::invalid(
             "pool create-empty replay metadata ttl_seconds must be greater than zero",
@@ -913,7 +909,11 @@ mod tests {
         let missing = pool_create_empty_replay_metadata(None).expect_err("metadata is required");
         assert_eq!(
             missing.public_error().expect("public error").code,
-            ErrorCode::InvalidInput
+            ErrorCode::OperationIdRequired
+        );
+        assert_eq!(
+            missing.public_error().expect("public error").message,
+            "operation_id is required for this command"
         );
 
         let zero = pool_create_empty_replay_metadata(Some(metadata(1, 0)))

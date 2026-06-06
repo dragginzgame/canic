@@ -169,6 +169,9 @@ impl From<RpcWorkflowError> for InternalError {
             RpcWorkflowError::CyclesFundingDisabled => {
                 Self::public(PublicError::unavailable("cycles funding disabled"))
             }
+            RpcWorkflowError::MissingReplayMetadata(_) => {
+                Self::public(PublicError::operation_id_required())
+            }
             RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
             | RpcWorkflowError::FundingCooldownActive { .. } => Self::public(PublicError::policy(
                 ErrorCode::ResourceExhausted,
@@ -195,5 +198,17 @@ mod tests {
             .public_error()
             .expect("expected public error mapping for kill switch");
         assert_eq!(public.code, ErrorCode::Unavailable);
+    }
+
+    #[test]
+    fn missing_replay_metadata_maps_to_operation_id_required() {
+        let internal: InternalError =
+            RpcWorkflowError::MissingReplayMetadata("RequestCycles").into();
+        let public = internal
+            .public_error()
+            .expect("expected public replay metadata error");
+
+        assert_eq!(public.code, ErrorCode::OperationIdRequired);
+        assert_eq!(public.message, "operation_id is required for this command");
     }
 }

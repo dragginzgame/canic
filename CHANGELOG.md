@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.30` adds the public `OperationIdRequired` hard-cut error. Missing
+  operation IDs on replay-sensitive auth, pool, and root capability paths now
+  return that stable code while malformed TTLs stay `InvalidInput`.
+
 - `0.61.29` adds replay receipt stable-shape guards. Stable record tests now
   pin committed, pending, and recovery-required receipt round-trips plus
   controlled rejection of unsupported receipt schemas.

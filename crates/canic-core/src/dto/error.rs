@@ -44,6 +44,15 @@ impl Error {
         Self::new(ErrorCode::InvalidInput, message.into())
     }
 
+    // 400 – Replay-sensitive command omitted its client operation ID.
+    #[must_use]
+    pub fn operation_id_required() -> Self {
+        Self::new(
+            ErrorCode::OperationIdRequired,
+            "operation_id is required for this command".to_string(),
+        )
+    }
+
     // 500 – Broken invariant or impossible internal state.
     pub fn invariant(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvariantViolation, message.into())
@@ -102,6 +111,7 @@ pub enum ErrorCode {
     InvalidInput,
     InvariantViolation,
     NotFound,
+    OperationIdRequired,
     PolicyInstanceRequiresSingletonWithDirectory,
     PolicyReplicaRequiresSingletonWithScaling,
     PolicyRoleAlreadyRegistered,
