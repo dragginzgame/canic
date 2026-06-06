@@ -327,6 +327,7 @@ impl ReplayReceiptStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::replay::model::{EcdsaPurpose, RecoveryReason};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -348,6 +349,13 @@ mod tests {
             response_bytes: None,
             effect: None,
         }
+    }
+
+    fn stable_round_trip_into_receipt(record: ReplayReceiptRecord) -> ReplayReceipt {
+        let encoded = record.into_bytes();
+        ReplayReceiptRecord::from_bytes(Cow::Owned(encoded))
+            .into_receipt()
+            .expect("stable replay receipt decodes")
     }
 
     // round_trip_record
@@ -408,6 +416,68 @@ mod tests {
         let round_trip = ReplayReceiptRecord::from_receipt(receipt);
 
         assert_eq!(round_trip, record);
+    }
+
+    #[test]
+    fn committed_replay_receipt_survives_stable_round_trip() {
+        let mut record = receipt_record_fixture();
+        record.status = ReplayReceiptStatus::Committed;
+        record.updated_at_ns = 150;
+        record.response_schema_version = Some(1);
+        record.response_bytes = Some(vec![1, 2, 3, 4]);
+        record.effect = Some(ExternalEffectDescriptor::ManagementCall {
+            canister: p(8),
+            method: "deposit_cycles".to_string(),
+        });
+
+        let receipt = stable_round_trip_into_receipt(record.clone());
+
+        assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+        assert_eq!(receipt.response_schema_version, Some(1));
+        assert_eq!(receipt.response_bytes.as_deref(), Some(&[1, 2, 3, 4][..]));
+        assert_eq!(ReplayReceiptRecord::from_receipt(receipt), record);
+    }
+
+    #[test]
+    fn pending_and_recovery_replay_receipts_survive_stable_round_trip() {
+        let reserved = stable_round_trip_into_receipt(receipt_record_fixture());
+        assert_eq!(reserved.status, ReplayReceiptStatus::Reserved);
+        assert_eq!(reserved.response_bytes, None);
+        assert_eq!(reserved.effect, None);
+
+        let effect = ExternalEffectDescriptor::ThresholdEcdsaSign {
+            key_id_hash: [1; 32],
+            purpose: EcdsaPurpose::DelegationProof,
+            message_hash: [2; 32],
+        };
+        let mut recovery = receipt_record_fixture();
+        recovery.status = ReplayReceiptStatus::RecoveryRequired {
+            reason: RecoveryReason::ExternalEffectStatusUnknown,
+        };
+        recovery.updated_at_ns = 175;
+        recovery.effect = Some(effect.clone());
+
+        let receipt = stable_round_trip_into_receipt(recovery);
+
+        assert_eq!(
+            receipt.status,
+            ReplayReceiptStatus::RecoveryRequired {
+                reason: RecoveryReason::ExternalEffectStatusUnknown
+            }
+        );
+        assert_eq!(receipt.effect, Some(effect));
+    }
+
+    #[test]
+    fn unsupported_replay_receipt_schema_returns_controlled_error() {
+        let mut record = receipt_record_fixture();
+        record.schema_version = REPLAY_RECEIPT_SCHEMA_VERSION + 1;
+
+        let err = record
+            .into_receipt()
+            .expect_err("unsupported schema must not decode");
+
+        assert!(err.contains("unsupported replay receipt schema version"));
     }
 
     #[test]

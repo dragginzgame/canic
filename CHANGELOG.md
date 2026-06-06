@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.29` adds replay receipt stable-shape guards. Stable record tests now
+  pin committed, pending, and recovery-required receipt round-trips plus
+  controlled rejection of unsupported receipt schemas.
+
 - `0.61.28` adds a delegated-auth hard-cut source guard. Live `canic-core`
   source now fails tests if the removed verifier-local token-use replay store or
   APIs are reintroduced.

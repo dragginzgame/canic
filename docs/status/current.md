@@ -9,6 +9,17 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.29` added stable replay receipt upgrade-shape coverage from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Stable replay record
+  tests now prove committed receipts preserve status, response schema, response
+  bytes, and external-effect data through CBOR round-trip; pending `Reserved`
+  and `RecoveryRequired(ExternalEffectStatusUnknown)` receipts preserve status
+  and effect metadata; and unsupported replay receipt schema versions return a
+  controlled decode error instead of being accepted. No CLI commands changed in
+  this patch. Validation:
+  ```text
+  cargo test -p canic-core storage::stable::replay --lib -- --nocapture
+  ```
 - `0.61.28` added executable delegated-auth hard-cut source guard coverage from
   `docs/design/0.61-replay-protection/0.61-design.md`. The new
   `canic-core` integration test scans live runtime source under
