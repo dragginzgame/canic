@@ -697,6 +697,18 @@ fn reserve_icp_refill_replay(
                 error_bytes.len()
             ))))
         }
+        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
+            log_icp_refill_replay_conflict(operation_id, "pending_actor_quota_exceeded");
+            Err(InternalError::public(Error::exhausted(format!(
+                "ICP refill pending replay receipt quota exceeded for caller; max_pending={max_pending}"
+            ))))
+        }
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
+            log_icp_refill_replay_conflict(operation_id, "pending_command_quota_exceeded");
+            Err(InternalError::public(Error::exhausted(format!(
+                "ICP refill pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
+            ))))
+        }
     }
 }
 

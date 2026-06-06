@@ -67,6 +67,19 @@ impl ReplayReceiptOps {
         ReplayReceiptStore::active_len_for_actor(actor, now_ns)
     }
 
+    #[must_use]
+    pub fn pending_len_for_actor(
+        actor: crate::ops::replay::model::ReplayActor,
+        now_ns: u64,
+    ) -> usize {
+        ReplayReceiptStore::pending_len_for_actor(actor, now_ns)
+    }
+
+    #[must_use]
+    pub fn pending_len_for_command_kind(command_kind: &CommandKind, now_ns: u64) -> usize {
+        ReplayReceiptStore::pending_len_for_command_kind(command_kind.as_str(), now_ns)
+    }
+
     pub fn purge_expired(now_ns: u64, limit: usize) -> usize {
         let expired = ReplayReceiptStore::collect_expired(now_ns, limit);
         for key in &expired {

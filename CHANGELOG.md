@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.33` adds shared pending replay receipt quotas. Fresh shared receipts
+  now reject with `ResourceExhausted` once an actor has 64 pending receipts or a
+  command kind has 512 pending receipts, while committed replays still return
+  before quota checks.
+
 - `0.61.32` adds write-before-send pending operation logging for generated
   ICP-refill IDs. `canic cycles convert` now records generated live canister
   refill IDs in `.canic/operations/pending.json`, reuses matching pending IDs

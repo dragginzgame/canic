@@ -16,6 +16,9 @@ use crate::{
 
 use super::model::{CommandKind, RecoveryReason};
 
+pub const MAX_PENDING_REPLAY_RECEIPTS_PER_ACTOR: usize = 64;
+pub const MAX_PENDING_REPLAY_RECEIPTS_PER_COMMAND_KIND: usize = 512;
+
 ///
 /// ReplayReceiptReserveInput
 ///
@@ -95,6 +98,14 @@ pub enum ReplayReceiptDecision {
         error_bytes: Vec<u8>,
         error_bytes_truncated: bool,
     },
+    PendingActorQuotaExceeded {
+        actor: ReplayActor,
+        max_pending: usize,
+    },
+    PendingCommandQuotaExceeded {
+        command_kind: CommandKind,
+        max_pending: usize,
+    },
 }
 
 ///
@@ -108,8 +119,27 @@ pub enum ReplayReceiptStoreError {
 pub fn reserve_or_replay_receipt(
     input: ReplayReceiptReserveInput,
 ) -> Result<ReplayReceiptDecision, ReplayReceiptStoreError> {
+    reserve_or_replay_receipt_with_limits(
+        input,
+        MAX_PENDING_REPLAY_RECEIPTS_PER_ACTOR,
+        MAX_PENDING_REPLAY_RECEIPTS_PER_COMMAND_KIND,
+    )
+}
+
+fn reserve_or_replay_receipt_with_limits(
+    input: ReplayReceiptReserveInput,
+    max_pending_per_actor: usize,
+    max_pending_per_command_kind: usize,
+) -> Result<ReplayReceiptDecision, ReplayReceiptStoreError> {
     let decision = prepare_replay_receipt(input)?;
     if let ReplayReceiptDecision::Fresh(token) = &decision {
+        if let Some(quota_decision) = pending_receipt_quota_decision(
+            token.receipt(),
+            max_pending_per_actor,
+            max_pending_per_command_kind,
+        ) {
+            return Ok(quota_decision);
+        }
         reserve_receipt_token(token);
     }
     Ok(decision)
@@ -152,6 +182,32 @@ pub fn reserve_receipt_token(token: &ReplayReceiptToken) {
         token.key,
         ReplayReceiptRecord::from_receipt(token.receipt.clone()),
     );
+}
+
+fn pending_receipt_quota_decision(
+    receipt: &ReplayReceipt,
+    max_pending_per_actor: usize,
+    max_pending_per_command_kind: usize,
+) -> Option<ReplayReceiptDecision> {
+    if ReplayReceiptOps::pending_len_for_actor(receipt.actor, receipt.created_at_ns)
+        >= max_pending_per_actor
+    {
+        return Some(ReplayReceiptDecision::PendingActorQuotaExceeded {
+            actor: receipt.actor,
+            max_pending: max_pending_per_actor,
+        });
+    }
+
+    if ReplayReceiptOps::pending_len_for_command_kind(&receipt.command_kind, receipt.created_at_ns)
+        >= max_pending_per_command_kind
+    {
+        return Some(ReplayReceiptDecision::PendingCommandQuotaExceeded {
+            command_kind: receipt.command_kind.clone(),
+            max_pending: max_pending_per_command_kind,
+        });
+    }
+
+    None
 }
 
 pub fn mark_external_effect_in_flight(
@@ -285,12 +341,21 @@ mod tests {
     }
 
     fn input() -> ReplayReceiptReserveInput {
+        input_with("test.command.v1", p(1), [7; 32], 100)
+    }
+
+    fn input_with(
+        command_kind: &str,
+        actor: Principal,
+        operation_id: [u8; 32],
+        now_ns: u64,
+    ) -> ReplayReceiptReserveInput {
         ReplayReceiptReserveInput::new(
-            CommandKind::new("test.command.v1").expect("command"),
-            OperationId::from_bytes([7; 32]),
-            ReplayActor::direct_caller(p(1)),
+            CommandKind::new(command_kind).expect("command"),
+            OperationId::from_bytes(operation_id),
+            ReplayActor::direct_caller(actor),
             [9; 32],
-            100,
+            now_ns,
         )
     }
 
@@ -371,6 +436,138 @@ mod tests {
             reserve_or_replay_receipt(input()).expect("in-flight duplicate"),
             ReplayReceiptDecision::OperationInProgress
         );
+    }
+
+    #[test]
+    fn reserve_or_replay_receipt_enforces_pending_actor_quota_for_fresh_receipts() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let first = reserve_or_replay_receipt_with_limits(input(), 1, 10).expect("first reserve");
+        assert!(matches!(first, ReplayReceiptDecision::Fresh(_)));
+
+        let second = reserve_or_replay_receipt_with_limits(
+            input_with("test.command.v1", p(1), [8; 32], 101),
+            1,
+            10,
+        )
+        .expect("second decision");
+
+        assert_eq!(
+            second,
+            ReplayReceiptDecision::PendingActorQuotaExceeded {
+                actor: ReplayActor::direct_caller(p(1)),
+                max_pending: 1,
+            }
+        );
+        assert_eq!(
+            ReplayReceiptOps::len(),
+            1,
+            "quota rejection must not write a fresh receipt"
+        );
+    }
+
+    #[test]
+    fn reserve_or_replay_receipt_enforces_pending_command_quota_for_fresh_receipts() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let first = reserve_or_replay_receipt_with_limits(input(), 10, 1).expect("first reserve");
+        assert!(matches!(first, ReplayReceiptDecision::Fresh(_)));
+
+        let second = reserve_or_replay_receipt_with_limits(
+            input_with("test.command.v1", p(2), [8; 32], 101),
+            10,
+            1,
+        )
+        .expect("second decision");
+
+        assert_eq!(
+            second,
+            ReplayReceiptDecision::PendingCommandQuotaExceeded {
+                command_kind: CommandKind::new("test.command.v1").expect("command"),
+                max_pending: 1,
+            }
+        );
+        assert_eq!(
+            ReplayReceiptOps::len(),
+            1,
+            "quota rejection must not write a fresh receipt"
+        );
+    }
+
+    #[test]
+    fn pending_receipt_quota_ignores_expired_pending_receipts() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let first = reserve_or_replay_receipt_with_limits(input().with_expires_at_ns(100), 1, 10)
+            .expect("first reserve");
+        assert!(matches!(first, ReplayReceiptDecision::Fresh(_)));
+
+        let second = reserve_or_replay_receipt_with_limits(
+            input_with("test.command.v1", p(1), [8; 32], 101),
+            1,
+            10,
+        )
+        .expect("second reserve");
+
+        assert!(
+            matches!(second, ReplayReceiptDecision::Fresh(_)),
+            "expired pending receipts must not consume pending quota"
+        );
+        assert_eq!(ReplayReceiptOps::len(), 2);
+    }
+
+    #[test]
+    fn pending_receipt_quota_ignores_pending_receipts_at_expiry_boundary() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let first = reserve_or_replay_receipt_with_limits(
+            input_with("test.command.v1", p(1), [7; 32], 90).with_expires_at_ns(100),
+            1,
+            10,
+        )
+        .expect("first reserve");
+        assert!(matches!(first, ReplayReceiptDecision::Fresh(_)));
+
+        let second = reserve_or_replay_receipt_with_limits(
+            input_with("test.command.v1", p(1), [8; 32], 100),
+            1,
+            10,
+        )
+        .expect("second reserve");
+
+        assert!(
+            matches!(second, ReplayReceiptDecision::Fresh(_)),
+            "receipts at their expiry boundary must not consume pending quota"
+        );
+        assert_eq!(ReplayReceiptOps::len(), 2);
+    }
+
+    #[test]
+    fn pending_receipt_quota_does_not_block_committed_replay() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let committed_token = match reserve_or_replay_receipt_with_limits(input(), 1, 10)
+            .expect("reserve committed target")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        commit_receipt_response(&committed_token, 1, vec![1, 2, 3], 150);
+
+        let pending = reserve_or_replay_receipt_with_limits(
+            input_with("test.command.v1", p(1), [8; 32], 160),
+            1,
+            10,
+        )
+        .expect("reserve pending filler");
+        assert!(matches!(pending, ReplayReceiptDecision::Fresh(_)));
+
+        let duplicate =
+            reserve_or_replay_receipt_with_limits(input(), 1, 10).expect("committed duplicate");
+        assert!(matches!(
+            duplicate,
+            ReplayReceiptDecision::ReturnCommitted(_)
+        ));
     }
 
     #[test]

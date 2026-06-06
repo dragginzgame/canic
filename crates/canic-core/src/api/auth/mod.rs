@@ -922,6 +922,16 @@ impl AuthApi {
                 "delegation proof request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
                 error_bytes.len()
             ))),
+            ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
+                Err(Error::exhausted(format!(
+                    "delegation proof pending replay receipt quota exceeded for caller; max_pending={max_pending}"
+                )))
+            }
+            ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
+                Err(Error::exhausted(format!(
+                    "delegation proof pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
+                )))
+            }
         }
     }
 
@@ -959,6 +969,16 @@ impl AuthApi {
                 "{label} request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
                 error_bytes.len()
             ))),
+            ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
+                Err(Error::exhausted(format!(
+                    "{label} pending replay receipt quota exceeded for caller; max_pending={max_pending}"
+                )))
+            }
+            ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
+                Err(Error::exhausted(format!(
+                    "{label} pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
+                )))
+            }
         }
     }
 
@@ -1133,6 +1153,12 @@ impl AuthApi {
             ReplayReceiptDecision::Expired => "expired",
             ReplayReceiptDecision::RecoveryRequired(_) => "recovery_required",
             ReplayReceiptDecision::TerminalFailed { .. } => "terminal_failed",
+            ReplayReceiptDecision::PendingActorQuotaExceeded { .. } => {
+                "pending_actor_quota_exceeded"
+            }
+            ReplayReceiptDecision::PendingCommandQuotaExceeded { .. } => {
+                "pending_command_quota_exceeded"
+            }
         }
     }
 

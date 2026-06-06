@@ -297,6 +297,30 @@ impl ReplayReceiptStore {
         })
     }
 
+    #[must_use]
+    pub(crate) fn pending_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .filter(|entry| {
+                    let record = entry.value();
+                    record.actor == actor && record_is_pending(&record, now_ns)
+                })
+                .count()
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn pending_len_for_command_kind(command_kind: &str, now_ns: u64) -> usize {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .filter(|entry| {
+                    let record = entry.value();
+                    record.command_kind == command_kind && record_is_pending(&record, now_ns)
+                })
+                .count()
+        })
+    }
+
     pub(crate) fn collect_expired(now_ns: u64, limit: usize) -> Vec<ReplayReceiptSlotKey> {
         let mut expired = Vec::new();
         REPLAY_RECEIPTS.with_borrow(|map| {
@@ -315,6 +339,18 @@ impl ReplayReceiptStore {
         });
         expired
     }
+}
+
+fn record_is_pending(record: &ReplayReceiptRecord, now_ns: u64) -> bool {
+    record
+        .expires_at_ns
+        .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
+        && matches!(
+            record.status,
+            ReplayReceiptStatus::Reserved
+                | ReplayReceiptStatus::ExternalEffectInFlight
+                | ReplayReceiptStatus::RecoveryRequired { .. }
+        )
 }
 
 #[cfg(test)]

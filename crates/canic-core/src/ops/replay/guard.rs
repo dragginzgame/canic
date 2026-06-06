@@ -202,7 +202,9 @@ fn map_receipt_decision(decision: ReplayReceiptDecision) -> ReplayDecision {
         }
         ReplayReceiptDecision::OperationInProgress
         | ReplayReceiptDecision::RecoveryRequired(_)
-        | ReplayReceiptDecision::TerminalFailed { .. } => ReplayDecision::InFlight,
+        | ReplayReceiptDecision::TerminalFailed { .. }
+        | ReplayReceiptDecision::PendingActorQuotaExceeded { .. }
+        | ReplayReceiptDecision::PendingCommandQuotaExceeded { .. } => ReplayDecision::InFlight,
         ReplayReceiptDecision::ActorMismatch | ReplayReceiptDecision::PayloadMismatch => {
             ReplayDecision::DuplicateConflict
         }

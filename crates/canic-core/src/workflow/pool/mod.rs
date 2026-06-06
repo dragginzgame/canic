@@ -671,6 +671,16 @@ fn map_pool_create_empty_replay_decision(
             "pool create-empty request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
             error_bytes.len()
         )))),
+        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
+            Err(InternalError::public(Error::exhausted(format!(
+                "pool create-empty pending replay receipt quota exceeded for caller; max_pending={max_pending}"
+            ))))
+        }
+        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
+            Err(InternalError::public(Error::exhausted(format!(
+                "pool create-empty pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
+            ))))
+        }
     }
 }
 

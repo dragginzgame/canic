@@ -9,6 +9,26 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.33` added shared pending replay receipt quotas at
+  `reserve_or_replay_receipt`. Fresh shared receipts now reject with
+  `ResourceExhausted` when the actor already has 64 pending receipts or the
+  command kind already has 512 pending receipts. Pending quota counts
+  non-expired `Reserved`, `ExternalEffectInFlight`, and `RecoveryRequired`
+  receipts; expired, committed, and terminal-failed receipts do not count.
+  Existing committed replay receipts still return their cached response before
+  current pending quota checks. No CLI commands changed in this patch.
+  Validation:
+  ```text
+  cargo test -p canic-core ops::replay::receipt --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.32` added write-before-send pending operation logging for generated
   manual ICP refill operation IDs. Live `canic cycles convert` canister mode
   now writes generated IDs before dispatch to:
