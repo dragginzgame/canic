@@ -9,6 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.38` added a durable-publication replay-policy regression guard. The
+  test derives the expected durable-publish endpoint set from protected
+  wasm-store update methods plus root template publication admin methods, then
+  proves each entry is implemented, monotonic, `DurablePublish`, and carries
+  durable-publish quota/reserve metadata. It also fails if unrelated endpoints
+  drift into the durable-publish cost class. This is manifest-only; no runtime
+  paths, CLI commands, flags, output columns, or JSON report shapes changed.
+  Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.37` put actual canister upgrade installs behind a management-deployment
   `CostGuardPermit`. `CanisterLifecycleEvent::Upgrade` now carries explicit
   cost context, lifecycle upgrade reserves deployment quota/cycles only after
