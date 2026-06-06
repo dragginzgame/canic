@@ -67,10 +67,11 @@ impl AuthOps {
 
     /// Sign and finish an already-prepared root delegation proof.
     pub(crate) async fn sign_prepared_delegation_proof(
-        _permit: &CostGuardPermit,
+        permit: &CostGuardPermit,
         prepared: PreparedRootDelegationProof,
     ) -> Result<DelegationProof, InternalError> {
         let root_sig = EcdsaOps::sign_bytes(
+            permit,
             &prepared.key_name,
             prepared.root_derivation_path,
             prepared.cert_hash,

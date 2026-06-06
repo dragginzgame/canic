@@ -40,10 +40,11 @@ impl AuthOps {
 
     /// Sign a prepared role attestation payload using the attestation domain.
     pub(crate) async fn sign_prepared_role_attestation(
-        _permit: &CostGuardPermit,
+        permit: &CostGuardPermit,
         prepared: PreparedRoleAttestationSignature,
     ) -> Result<SignedRoleAttestation, InternalError> {
         let signature = EcdsaOps::sign_bytes(
+            permit,
             &prepared.key_name,
             prepared.derivation_path,
             prepared.message_hash,
@@ -75,10 +76,11 @@ impl AuthOps {
 
     /// Sign a prepared method-scoped internal invocation proof using the 0.40 proof domain.
     pub(crate) async fn sign_prepared_internal_invocation_proof(
-        _permit: &CostGuardPermit,
+        permit: &CostGuardPermit,
         prepared: PreparedInternalInvocationProofSignature,
     ) -> Result<SignedInternalInvocationProofV1, InternalError> {
         let signature = EcdsaOps::sign_bytes(
+            permit,
             &prepared.key_name,
             prepared.derivation_path,
             prepared.message_hash,

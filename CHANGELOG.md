@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.35` tightens the threshold-ECDSA signing boundary. `EcdsaOps::sign_bytes`
+  now requires a `CostGuardPermit`, and a source guard pins permit construction
+  and expensive-adapter call sites.
+
 - `0.61.34` tightens the ICP refill value-transfer boundary. Ledger transfer
   and CMC notify ops now require a `CostGuardPermit`, so refill execution
   cannot cross those adapter calls without the reserved value-transfer guard.

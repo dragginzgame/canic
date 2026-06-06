@@ -1,0 +1,120 @@
+// Category C - System-level artifact test (no embedded config).
+
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+#[test]
+fn cost_guard_permit_construction_stays_private() {
+    let source_root = source_root();
+    let mut violations = Vec::new();
+
+    scan_rust_files(&source_root, &mut |path, contents| {
+        if path.ends_with("src/ops/cost_guard.rs") {
+            if !contents.contains("_private: (),") {
+                violations.push("CostGuardPermit is missing its private construction field".into());
+            }
+            return;
+        }
+
+        if contents.contains("CostGuardPermit {") {
+            violations.push(format!(
+                "{} constructs CostGuardPermit outside the cost-guard module",
+                display(path)
+            ));
+        }
+    });
+
+    assert!(
+        violations.is_empty(),
+        "cost guard permit construction boundary changed: {violations:?}"
+    );
+}
+
+#[test]
+fn threshold_ecdsa_sign_adapter_requires_cost_guard_permit() {
+    let ecdsa_ops = source_root().join("ops/ic/ecdsa.rs");
+    let contents = fs::read_to_string(&ecdsa_ops).expect("read ecdsa ops");
+    let permit_args = contents.matches("_permit: &CostGuardPermit").count();
+
+    assert_eq!(
+        permit_args, 2,
+        "both auth-crypto and non-auth-crypto EcdsaOps::sign_bytes implementations must require CostGuardPermit"
+    );
+}
+
+#[test]
+fn threshold_ecdsa_sign_adapter_is_reached_only_from_prepared_auth_ops() {
+    let source_root = source_root();
+    let allowed_callers = [
+        "src/ops/auth/attestation.rs",
+        "src/ops/auth/delegation.rs",
+        "src/ops/auth/token.rs",
+    ];
+    let mut violations = Vec::new();
+
+    scan_rust_files(&source_root, &mut |path, contents| {
+        if !contents.contains("EcdsaOps::sign_bytes(") {
+            return;
+        }
+
+        let display_path = display(path);
+        if !allowed_callers.contains(&display_path.as_str()) {
+            violations.push(format!(
+                "{display_path} calls EcdsaOps::sign_bytes outside prepared auth signing ops"
+            ));
+        }
+    });
+
+    assert!(
+        violations.is_empty(),
+        "threshold ECDSA signing adapter boundary changed: {violations:?}"
+    );
+}
+
+#[test]
+fn icp_refill_value_transfer_adapters_require_cost_guard_permit() {
+    let refill_ops = source_root().join("ops/ic/icp_refill.rs");
+    let contents = fs::read_to_string(&refill_ops).expect("read ICP refill ops");
+    let permit_args = contents.matches("_permit: &CostGuardPermit").count();
+
+    assert_eq!(
+        permit_args, 2,
+        "both ICP refill value-transfer adapters must require CostGuardPermit"
+    );
+}
+
+fn source_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
+}
+
+fn scan_rust_files(root: &Path, visitor: &mut impl FnMut(&Path, &str)) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            scan_rust_files(&path, visitor);
+            continue;
+        }
+
+        if path.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
+
+        let Ok(contents) = fs::read_to_string(&path) else {
+            continue;
+        };
+        visitor(&path, &contents);
+    }
+}
+
+fn display(path: &Path) -> String {
+    path.strip_prefix(env!("CARGO_MANIFEST_DIR"))
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}

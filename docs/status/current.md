@@ -9,6 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.35` tightened the threshold-ECDSA signing cost-guard boundary.
+  `EcdsaOps::sign_bytes` now requires a `CostGuardPermit` in both
+  `auth-crypto` and non-`auth-crypto` builds, and prepared auth signing wrappers
+  pass their existing permits through to the lower signing adapter. A new
+  `canic-core` source guard pins private `CostGuardPermit` construction,
+  prepared-auth-only ECDSA signing calls, and permit-required ICP refill
+  value-transfer adapters. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core --test cost_guard_boundary_guard -- --nocapture
+  cargo test -p canic-core ops::auth --lib -- --nocapture
+  cargo test -p canic-core api::auth --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.34` tightened the ICP refill value-transfer cost-guard boundary.
   `IcpRefillOps::icrc1_transfer` and `IcpRefillOps::notify_top_up` now require
   a `CostGuardPermit`, and the refill workflow requires the reserved

@@ -6,9 +6,12 @@ use crate::cdk::mgmt::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    ops::runtime::metrics::platform_call::{
-        PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-        PlatformCallMetricSurface, PlatformCallMetrics,
+    ops::{
+        cost_guard::CostGuardPermit,
+        runtime::metrics::platform_call::{
+            PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+            PlatformCallMetricSurface, PlatformCallMetrics,
+        },
     },
 };
 use k256::ecdsa::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
@@ -52,6 +55,7 @@ pub struct EcdsaOps;
 impl EcdsaOps {
     // Sign a pre-hashed payload using the configured threshold ECDSA key.
     pub async fn sign_bytes(
+        _permit: &CostGuardPermit,
         key_name: &str,
         derivation_path: Vec<Vec<u8>>,
         msg_hash: [u8; 32],
@@ -136,6 +140,7 @@ impl EcdsaOps {
     // Fail closed when threshold ECDSA management support is not compiled in.
     #[expect(clippy::unused_async)]
     pub async fn sign_bytes(
+        _permit: &CostGuardPermit,
         _key_name: &str,
         _derivation_path: Vec<Vec<u8>>,
         _msg_hash: [u8; 32],

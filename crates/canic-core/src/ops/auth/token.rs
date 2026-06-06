@@ -69,7 +69,7 @@ impl AuthOps {
 
     /// Sign prepared delegated-token claims with local shard threshold ECDSA material.
     pub(crate) async fn sign_prepared_delegated_token(
-        _permit: &CostGuardPermit,
+        permit: &CostGuardPermit,
         prepared: PreparedDelegatedTokenSignature,
     ) -> Result<DelegatedToken, InternalError> {
         let PreparedDelegatedTokenSignature {
@@ -78,7 +78,8 @@ impl AuthOps {
             key_name,
             derivation_path,
         } = prepared;
-        let shard_sig = EcdsaOps::sign_bytes(&key_name, derivation_path, message_hash).await?;
+        let shard_sig =
+            EcdsaOps::sign_bytes(permit, &key_name, derivation_path, message_hash).await?;
 
         Ok(finish_delegated_token(prepared, shard_sig))
     }
