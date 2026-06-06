@@ -9,6 +9,28 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.23` graduated root capability `RequestCycles` from command-level
+  blocker to implemented replay-protected value-transfer behavior.
+  `RequestCycles` execution now reserves a `CostGuardPermit` after
+  authorization and before the `deposit_cycles` management await. The guard
+  uses command kind `root.request_cycles.v1`, the requesting child as quota
+  subject, the root canister as payer, a 60-second quota window, max 60
+  operations per window, the approved transfer amount as the cycle reservation,
+  and a 1_000_000_000 minimum remaining cycle balance. The transfer path now
+  marks `ExternalEffectDescriptor::ManagementCall { method: "deposit_cycles" }`
+  before the await; infrastructure errors recover the guard and preserve the
+  replay receipt as `RecoveryRequired(ExternalEffectStatusUnknown)`.
+  Successful transfers record the funding ledger, complete the guard, and
+  commit the cached cycles response through the existing replay flow.
+  `ProvisionCanister` is now the only remaining root capability command
+  blocker, so `canic_response_capability_v1` remains blocked only through that
+  command. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  ```
 - `0.61.22` split the remaining root capability RPC blocker into command-level
   replay policy. `canic_response_capability_v1` is now represented as
   `CommandDispatch(root.capability_rpc.v1,

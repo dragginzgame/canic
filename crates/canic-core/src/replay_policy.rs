@@ -272,7 +272,7 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
     root_capability_replay_protected(
         "RequestCycles",
         "root.request_cycles.v1",
-        ReplayImplementationStatus::ReleaseBlocker,
+        ReplayImplementationStatus::Implemented,
         CostClass::ValueTransfer,
         Some(VALUE_TRANSFER_QUOTA_V1),
         Some(VALUE_TRANSFER_RESERVE_V1),
@@ -795,10 +795,7 @@ mod tests {
             .map(|entry| entry.variant)
             .collect::<BTreeSet<_>>();
 
-        assert_eq!(
-            blockers,
-            BTreeSet::from(["ProvisionCanister", "RequestCycles",])
-        );
+        assert_eq!(blockers, BTreeSet::from(["ProvisionCanister",]));
     }
 
     #[test]
@@ -813,6 +810,11 @@ mod tests {
                 "RecycleCanister",
                 "root.recycle_canister.v1",
                 CostClass::ManagementDeployment,
+            ),
+            (
+                "RequestCycles",
+                "root.request_cycles.v1",
+                CostClass::ValueTransfer,
             ),
             (
                 "IssueRoleAttestation",

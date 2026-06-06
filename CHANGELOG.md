@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.23` graduates root `RequestCycles` to implemented value-transfer
+  replay policy. Cycles transfers now reserve value-transfer quota/cycles and
+  mark the `deposit_cycles` effect before the management await.
+
 - `0.61.22` splits root capability RPC replay policy into a command manifest.
   The endpoint is now pinned as command-dispatch, with `ProvisionCanister` and
   `RequestCycles` left as explicit command-level blockers.

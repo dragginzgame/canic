@@ -12,6 +12,7 @@ use crate::{
     },
     ids::CanisterRole,
     ops::{
+        cost_guard::CostGuardOps,
         replay::{
             guard::secs_to_ns,
             model::{
@@ -32,6 +33,7 @@ use crate::{
             state::app::AppStateOps,
         },
     },
+    replay_policy::CostClass,
     storage::stable::env::{Env, EnvRecord},
     storage::stable::index::app::AppIndexRecord,
     storage::stable::replay::ReplayReceiptRecord,
@@ -582,6 +584,101 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
         mode: AppMode::Enabled,
         cycles_funding_enabled: true,
     });
+}
+
+#[test]
+fn request_cycles_cost_guard_request_uses_value_transfer_policy() {
+    let ctx = RootContext {
+        caller: p(92),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 9_000,
+    };
+    let guard_request =
+        nonroot_cycles::request_cycles_cost_guard_request(&ctx, 2_000, 5_000_000_000);
+
+    assert_eq!(guard_request.cost_class, CostClass::ValueTransfer);
+    assert_eq!(
+        guard_request.command_kind.as_str(),
+        "root.request_cycles.v1"
+    );
+    assert_eq!(guard_request.quota_subject, ctx.caller);
+    assert_eq!(guard_request.payer, ctx.self_pid);
+    assert_eq!(guard_request.now_secs, ctx.now);
+    assert_eq!(guard_request.quota_window_secs, 60);
+    assert_eq!(guard_request.max_operations_per_window, 60);
+    assert_eq!(guard_request.cycle_reservation_cycles, 2_000);
+    assert_eq!(guard_request.min_cycles_after_reservation, 1_000_000_000);
+}
+
+#[test]
+fn request_cycles_value_transfer_cost_guard_enforces_actor_quota() {
+    let ctx = RootContext {
+        caller: p(93),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 12_000,
+    };
+
+    for _ in 0..60 {
+        let permit = CostGuardOps::reserve(nonroot_cycles::request_cycles_cost_guard_request(
+            &ctx,
+            1_000,
+            5_000_000_000,
+        ))
+        .expect("quota reservation");
+        CostGuardOps::complete(&permit, ctx.now).expect("complete quota reservation");
+    }
+
+    let err = CostGuardOps::reserve(nonroot_cycles::request_cycles_cost_guard_request(
+        &ctx,
+        1_000,
+        5_000_000_000,
+    ))
+    .expect_err("same actor quota bucket exhausted");
+    assert!(err.to_string().contains("quota exceeded"));
+}
+
+#[test]
+fn request_cycles_marks_deposit_external_effect() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(94),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(29, 60)),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+
+    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77);
+
+    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+    assert_eq!(
+        receipt.effect,
+        Some(ExternalEffectDescriptor::ManagementCall {
+            canister: ctx.caller,
+            method: "deposit_cycles".to_string(),
+        })
+    );
+
+    RootResponseWorkflow::abort_replay(pending);
 }
 
 #[test]

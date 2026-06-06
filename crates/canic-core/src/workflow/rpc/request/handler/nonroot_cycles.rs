@@ -11,11 +11,12 @@ use crate::{
     log,
     log::Topic,
     ops::{
+        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
             self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            model::{CommandKind, OperationId},
+            model::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
         },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
@@ -32,8 +33,14 @@ use crate::{
         },
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
+    replay_policy::CostClass,
     workflow::rpc::RpcWorkflowError,
 };
+
+const ROOT_REQUEST_CYCLES_COMMAND_KIND: &str = "root.request_cycles.v1";
+const ROOT_REQUEST_CYCLES_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
+const MAX_ROOT_REQUEST_CYCLES_VALUE_TRANSFER_OPERATIONS_PER_WINDOW: u64 = 60;
+const MIN_ROOT_REQUEST_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 
 ///
 /// NonrootCyclesCapabilityWorkflow
@@ -104,7 +111,7 @@ async fn response_replay_first_with_planner(
         }
     };
 
-    let response = match execute_authorized_request_cycles(&ctx, grant).await {
+    let response = match execute_authorized_request_cycles(&ctx, &pending, grant).await {
         Ok(response) => response,
         Err(err) => {
             abort_replay(pending);
@@ -287,27 +294,37 @@ pub(super) fn authorize_request_cycles_inner(
 // Execute the approved cycles transfer and return the canonical cycles response.
 pub(super) async fn execute_request_cycles(
     ctx: &RootContext,
+    pending: &ReplayPending,
     req: &CyclesRequest,
 ) -> Result<CyclesResponse, InternalError> {
     let grant = authorize_request_cycles_plan(ctx, req)?;
-    execute_authorized_request_cycles(ctx, grant).await
+    execute_authorized_request_cycles(ctx, pending, grant).await
 }
 
 // Execute root cycles funding against the authoritative subnet registry.
 pub(super) async fn execute_root_request_cycles(
     ctx: &RootContext,
+    pending: &ReplayPending,
     req: &CyclesRequest,
 ) -> Result<CyclesResponse, InternalError> {
     let grant = authorize_root_request_cycles_plan(ctx, req)?;
-    execute_authorized_request_cycles(ctx, grant).await
+    execute_authorized_request_cycles(ctx, pending, grant).await
 }
 
 // Execute an already-authorized cycles transfer.
 pub(super) async fn execute_authorized_request_cycles(
     ctx: &RootContext,
+    pending: &ReplayPending,
     grant: AuthorizedCyclesGrant,
 ) -> Result<CyclesResponse, InternalError> {
-    if let Err(err) = MgmtOps::deposit_cycles(ctx.caller, grant.approved_cycles).await {
+    let cost_permit = reserve_request_cycles_cost_guard(ctx, grant.approved_cycles)?;
+    mark_request_cycles_external_effect(pending, ctx, grant.approved_cycles);
+
+    if let Err(err) =
+        MgmtOps::deposit_cycles_with_permit(&cost_permit, ctx.caller, grant.approved_cycles).await
+    {
+        let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+        mark_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, &err);
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             grant.approved_cycles,
@@ -318,6 +335,15 @@ pub(super) async fn execute_authorized_request_cycles(
 
     CyclesFundingMetrics::record_granted(ctx.caller, grant.approved_cycles);
     CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
+
+    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        replay_ops::mark_root_replay_recovery_required(
+            pending,
+            RecoveryReason::ResponseCommitFailed,
+            replay_ops::guard::secs_to_ns(IcOps::now_secs()),
+        );
+        return Err(err);
+    }
 
     Ok(CyclesResponse {
         cycles_transferred: grant.approved_cycles,
@@ -388,7 +414,7 @@ fn check_cycles_replay(
 
     let decision = replay_ops::guard::evaluate_root_replay(RootReplayGuardInput {
         caller: ctx.caller,
-        command_kind: CommandKind::new("root.request_cycles.v1")
+        command_kind: root_request_cycles_command_kind()
             .expect("root request cycles command kind is valid"),
         operation_id: OperationId::from_bytes(metadata.request_id),
         ttl_seconds: metadata.ttl_seconds,
@@ -475,6 +501,89 @@ fn check_cycles_replay(
             ReplayDecodeError::DecodeFailed(message),
         )),
     }
+}
+
+fn reserve_request_cycles_cost_guard(
+    ctx: &RootContext,
+    approved_cycles: u128,
+) -> Result<CostGuardPermit, InternalError> {
+    CostGuardOps::reserve(request_cycles_cost_guard_request(
+        ctx,
+        approved_cycles,
+        MgmtOps::canister_cycle_balance().to_u128(),
+    ))
+}
+
+pub(super) fn request_cycles_cost_guard_request(
+    ctx: &RootContext,
+    approved_cycles: u128,
+    current_cycle_balance: u128,
+) -> CostGuardRequest {
+    CostGuardRequest {
+        cost_class: CostClass::ValueTransfer,
+        command_kind: root_request_cycles_command_kind()
+            .expect("root request cycles command kind is valid"),
+        quota_subject: ctx.caller,
+        payer: ctx.self_pid,
+        now_secs: ctx.now,
+        quota_window_secs: ROOT_REQUEST_CYCLES_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS,
+        max_operations_per_window: MAX_ROOT_REQUEST_CYCLES_VALUE_TRANSFER_OPERATIONS_PER_WINDOW,
+        current_cycle_balance,
+        cycle_reservation_cycles: approved_cycles,
+        min_cycles_after_reservation: MIN_ROOT_REQUEST_CYCLES_AFTER_RESERVATION,
+    }
+}
+
+fn root_request_cycles_command_kind()
+-> Result<CommandKind, crate::ops::replay::model::CommandKindError> {
+    CommandKind::new(ROOT_REQUEST_CYCLES_COMMAND_KIND)
+}
+
+pub(super) fn mark_request_cycles_external_effect(
+    pending: &ReplayPending,
+    ctx: &RootContext,
+    approved_cycles: u128,
+) {
+    replay_ops::mark_root_replay_external_effect(
+        pending,
+        ExternalEffectDescriptor::ManagementCall {
+            canister: ctx.caller,
+            method: "deposit_cycles".to_string(),
+        },
+        replay_ops::guard::secs_to_ns(IcOps::now_secs()),
+    );
+    log!(
+        Topic::Rpc,
+        Info,
+        "request cycles replay effect marked effect=deposit_cycles command_kind={} caller={} approved_cycles={}",
+        ROOT_REQUEST_CYCLES_COMMAND_KIND,
+        ctx.caller,
+        approved_cycles
+    );
+}
+
+fn mark_request_cycles_recovery_required(
+    pending: &ReplayPending,
+    ctx: &RootContext,
+    approved_cycles: u128,
+    err: &InternalError,
+) {
+    let (error_class, error_origin) = err.log_fields();
+    replay_ops::mark_root_replay_recovery_required(
+        pending,
+        RecoveryReason::ExternalEffectStatusUnknown,
+        replay_ops::guard::secs_to_ns(IcOps::now_secs()),
+    );
+    log!(
+        Topic::Rpc,
+        Error,
+        "request cycles replay recovery required effect=deposit_cycles command_kind={} caller={} approved_cycles={} error_class={} error_origin={}",
+        ROOT_REQUEST_CYCLES_COMMAND_KIND,
+        ctx.caller,
+        approved_cycles,
+        error_class,
+        error_origin
+    );
 }
 
 // Convert replay guard failures into the existing workflow replay error surface.

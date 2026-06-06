@@ -53,11 +53,11 @@ pub(super) async fn execute_root_capability(
         RootCapability::RecycleCanister(req) => execute_recycle(&req).await,
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {
-                nonroot_cycles::execute_authorized_request_cycles(ctx, grant).await
+                nonroot_cycles::execute_authorized_request_cycles(ctx, pending, grant).await
             } else if ctx.is_root_env {
-                nonroot_cycles::execute_root_request_cycles(ctx, &req).await
+                nonroot_cycles::execute_root_request_cycles(ctx, pending, &req).await
             } else {
-                nonroot_cycles::execute_request_cycles(ctx, &req).await
+                nonroot_cycles::execute_request_cycles(ctx, pending, &req).await
             }?;
             Ok(Response::Cycles(response))
         }
