@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.24` graduates root `ProvisionCanister` and the root capability RPC
+  endpoint. Provisioning now reserves deployment quota/cycles and marks the
+  create/install replay effect before lifecycle work can cross the boundary.
+
 - `0.61.23` graduates root `RequestCycles` to implemented value-transfer
   replay policy. Cycles transfers now reserve value-transfer quota/cycles and
   mark the `deposit_cycles` effect before the management await.

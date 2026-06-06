@@ -9,6 +9,32 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.24` graduated root capability `ProvisionCanister` from command-level
+  blocker to implemented replay-protected management-deployment behavior.
+  `ProvisionCanister` execution now resolves the requested parent, checks that
+  the parent is registered, reads the configured initial-cycle target, reserves
+  a `CostGuardPermit` with `CostClass::ManagementDeployment`, and marks
+  `ExternalEffectDescriptor::ManagementCreateCanister` before lifecycle
+  create/install work can allocate from the pool, create a canister, top up a
+  pool allocation, change controllers, install code, write registry state, or
+  propagate topology. The guard uses command kind `root.provision.v1`, the
+  requesting caller as quota subject, the root canister as payer, a 60-second
+  quota window, max 10 operations per window, the configured initial-cycle
+  amount as the cycle reservation, and a 1 TC minimum remaining cycle balance.
+  Post-boundary provisioning failures recover the in-flight cycle reservation
+  and preserve the replay receipt as
+  `RecoveryRequired(ExternalEffectStatusUnknown)`. Successful provisioning
+  completes the deployment guard and returns the new canister principal through
+  the existing root replay commit flow. `ProvisionCanister` and
+  `canic_response_capability_v1` are now marked implemented in the replay
+  manifests; there are no remaining endpoint release blockers. No CLI commands
+  changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  ```
 - `0.61.23` graduated root capability `RequestCycles` from command-level
   blocker to implemented replay-protected value-transfer behavior.
   `RequestCycles` execution now reserves a `CostGuardPermit` after

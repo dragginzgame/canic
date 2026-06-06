@@ -169,7 +169,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_response_capability_v1",
         "root.capability_rpc.v1",
         "root.capability.command_manifest.v1",
-        ReplayImplementationStatus::ReleaseBlocker,
+        ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -248,7 +248,7 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
     root_capability_replay_protected(
         "ProvisionCanister",
         "root.provision.v1",
-        ReplayImplementationStatus::ReleaseBlocker,
+        ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -748,7 +748,7 @@ mod tests {
             .map(|entry| entry.endpoint)
             .collect::<BTreeSet<_>>();
 
-        assert_eq!(blockers, BTreeSet::from(["canic_response_capability_v1",]));
+        assert!(blockers.is_empty(), "unexpected blockers: {blockers:?}");
     }
 
     #[test]
@@ -771,7 +771,7 @@ mod tests {
 
         assert_eq!(
             entry.implementation_status,
-            ReplayImplementationStatus::ReleaseBlocker
+            ReplayImplementationStatus::Implemented
         );
         assert_eq!(
             entry.replay_policy,
@@ -795,12 +795,17 @@ mod tests {
             .map(|entry| entry.variant)
             .collect::<BTreeSet<_>>();
 
-        assert_eq!(blockers, BTreeSet::from(["ProvisionCanister",]));
+        assert!(blockers.is_empty(), "unexpected blockers: {blockers:?}");
     }
 
     #[test]
     fn root_capability_implemented_commands_are_replay_protected() {
         for (variant, command_kind, cost_class) in [
+            (
+                "ProvisionCanister",
+                "root.provision.v1",
+                CostClass::ManagementDeployment,
+            ),
             (
                 "UpgradeCanister",
                 "root.upgrade.v1",

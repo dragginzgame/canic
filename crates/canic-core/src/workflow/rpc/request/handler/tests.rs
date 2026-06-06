@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    cdk::types::Principal,
+    cdk::types::{Principal, TC},
     config::{Config, ConfigModel},
     dto::{
         auth::{InternalInvocationProofRequest, RoleAttestationRequest},
@@ -369,6 +369,70 @@ fn authorize_allows_provision_in_root_context() {
     });
 
     RootResponseWorkflow::authorize(&ctx, &capability).expect("must authorize");
+}
+
+#[test]
+fn root_provision_cost_guard_request_uses_deployment_policy() {
+    let ctx = RootContext {
+        caller: p(95),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 9_500,
+    };
+    let guard_request = execute::root_provision_cost_guard_request(&ctx, 5 * TC, 100 * TC);
+
+    assert_eq!(guard_request.cost_class, CostClass::ManagementDeployment);
+    assert_eq!(guard_request.command_kind.as_str(), "root.provision.v1");
+    assert_eq!(guard_request.quota_subject, ctx.caller);
+    assert_eq!(guard_request.payer, ctx.self_pid);
+    assert_eq!(guard_request.now_secs, ctx.now);
+    assert_eq!(guard_request.quota_window_secs, 60);
+    assert_eq!(guard_request.max_operations_per_window, 10);
+    assert_eq!(guard_request.cycle_reservation_cycles, 5 * TC);
+    assert_eq!(guard_request.min_cycles_after_reservation, TC);
+}
+
+#[test]
+fn root_provision_marks_create_external_effect() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(96),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    let req = CreateCanisterRequest {
+        canister_role: CanisterRole::new("project_hub"),
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+        metadata: Some(meta(31, 60)),
+    };
+    let capability = RootCapability::Provision(req.clone());
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+
+    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42));
+
+    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+    assert_eq!(
+        receipt.effect,
+        Some(ExternalEffectDescriptor::ManagementCreateCanister {
+            command_kind: CommandKind::new("root.provision.v1").expect("command kind"),
+        })
+    );
+
+    RootResponseWorkflow::abort_replay(pending);
 }
 
 #[test]
