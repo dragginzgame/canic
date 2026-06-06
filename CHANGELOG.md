@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.31` makes generated ICP-refill operation IDs visible in the CLI.
+  Non-JSON `canic cycles convert` canister-mode output now prints generated
+  IDs before live calls and in dry-runs so retries have the client ID. The
+  slice also starts warning on `used_underscore_binding` and cleans affected
+  test canister endpoints.
+
 - `0.61.30` adds the public `OperationIdRequired` hard-cut error. Missing
   operation IDs on replay-sensitive auth, pool, and root capability paths now
   return that stable code while malformed TTLs stay `InvalidInput`.

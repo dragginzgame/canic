@@ -24,7 +24,8 @@ async fn test() -> Result<(), Error> {
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn test_verify_delegated_token(_token: DelegatedToken) -> Result<(), Error> {
+async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error> {
+    let _ = token;
     if let Err(err) = canic::access::env::build_network_local() {
         return Err(Error::forbidden(err.to_string()));
     }

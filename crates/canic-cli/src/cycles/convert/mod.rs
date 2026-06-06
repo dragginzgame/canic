@@ -62,6 +62,25 @@ struct ConvertOptions {
     fabricate: bool,
 }
 
+///
+/// OperationIdSource
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OperationIdSource {
+    Provided,
+    Generated,
+}
+
+impl OperationIdSource {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Provided => "provided",
+            Self::Generated => "generated",
+        }
+    }
+}
+
 pub(super) fn run(args: Vec<OsString>) -> Result<(), CyclesCommandError> {
     let options = ConvertOptions::parse(args)?;
     run_options(&options)
@@ -128,15 +147,14 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     let amount_e8s = options
         .amount_e8s
         .expect("convert validation requires ICP e8s amount");
-    let operation_id = options.operation_id.unwrap_or_else(|| {
-        generated_operation_id(
-            &options.deployment,
-            &source.canister_id,
-            &target.canister_id,
-            amount_e8s,
-            current_unix_nanos(),
-        )
-    });
+    let (operation_id, operation_id_source) = resolve_operation_id(
+        options.operation_id,
+        &options.deployment,
+        &source.canister_id,
+        &target.canister_id,
+        amount_e8s,
+        current_unix_nanos(),
+    );
     let request_arg = icp_refill_request_arg(
         operation_id,
         &source.canister_id,
@@ -153,9 +171,18 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     );
 
     if options.dry_run {
-        write_canister_dry_run(options, &source, &target, operation_id, &command);
+        write_canister_dry_run(
+            options,
+            &source,
+            &target,
+            operation_id,
+            operation_id_source,
+            &command,
+        );
         return Ok(());
     }
+
+    write_generated_operation_id_notice(options.json, operation_id, operation_id_source);
 
     let output = icp
         .canister_call_arg_output(
@@ -280,6 +307,7 @@ fn write_canister_dry_run(
     source: &ResolvedCanisterTarget,
     target: &ResolvedCanisterTarget,
     operation_id: [u8; 32],
+    operation_id_source: OperationIdSource,
     command: &str,
 ) {
     if options.json {
@@ -301,6 +329,7 @@ fn write_canister_dry_run(
         );
     } else {
         println!("mode=canister");
+        write_generated_operation_id_notice(options.json, operation_id, operation_id_source);
         println!("{command}");
     }
 }
@@ -397,6 +426,55 @@ fn generated_operation_id(
     let mut operation_id = [0; 32];
     operation_id.copy_from_slice(&digest);
     operation_id
+}
+
+fn resolve_operation_id(
+    provided: Option<[u8; 32]>,
+    deployment: &str,
+    source_canister: &str,
+    target_canister: &str,
+    amount_e8s: u64,
+    now_nanos: u128,
+) -> ([u8; 32], OperationIdSource) {
+    match provided {
+        Some(operation_id) => (operation_id, OperationIdSource::Provided),
+        None => (
+            generated_operation_id(
+                deployment,
+                source_canister,
+                target_canister,
+                amount_e8s,
+                now_nanos,
+            ),
+            OperationIdSource::Generated,
+        ),
+    }
+}
+
+fn generated_operation_id_notice(
+    operation_id: [u8; 32],
+    source: OperationIdSource,
+) -> Option<String> {
+    (source == OperationIdSource::Generated).then(|| {
+        format!(
+            "operation_id={}\noperation_id_source={}",
+            hex_bytes(operation_id),
+            source.label()
+        )
+    })
+}
+
+fn write_generated_operation_id_notice(
+    json: bool,
+    operation_id: [u8; 32],
+    source: OperationIdSource,
+) {
+    if json {
+        return;
+    }
+    if let Some(notice) = generated_operation_id_notice(operation_id, source) {
+        println!("{notice}");
+    }
 }
 
 fn extend_operation_id_part(bytes: &mut Vec<u8>, part: &[u8]) {
@@ -666,5 +744,27 @@ mod tests {
 
         assert_ne!(left, right);
         assert_ne!(left, next_time);
+    }
+
+    #[test]
+    fn resolves_provided_operation_id_without_generation_notice() {
+        let operation_id = [7; 32];
+        let (resolved, source) =
+            resolve_operation_id(Some(operation_id), "demo", "source", "target", 1, 10);
+
+        assert_eq!(resolved, operation_id);
+        assert_eq!(source, OperationIdSource::Provided);
+        assert_eq!(generated_operation_id_notice(resolved, source), None);
+    }
+
+    #[test]
+    fn generated_operation_id_notice_is_operator_visible() {
+        let (operation_id, source) = resolve_operation_id(None, "demo", "source", "target", 1, 10);
+        let notice = generated_operation_id_notice(operation_id, source)
+            .expect("generated operation id should be printed");
+
+        assert_eq!(source, OperationIdSource::Generated);
+        assert!(notice.contains(&format!("operation_id={}", hex_bytes(operation_id))));
+        assert!(notice.contains("operation_id_source=generated"));
     }
 }

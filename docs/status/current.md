@@ -9,6 +9,29 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.31` made CLI-generated ICP-refill operation IDs visible in non-JSON
+  `canic cycles convert` canister-mode output. The CLI now records whether the
+  `operation_id` was supplied or generated; JSON output remains unchanged, but
+  non-JSON dry-runs and live calls print the generated client ID before the
+  endpoint call:
+  ```text
+  operation_id=<hex64>
+  operation_id_source=generated
+  ```
+  Supplying `--operation-id <hex64>` keeps the generated-ID notice suppressed.
+  The same slice removes the global `used_underscore_binding` Clippy allow
+  while keeping `missing_panics_doc` allowed, then cleans macro-visible
+  delegated-token/internal-call arguments in the test canister stubs. No CLI
+  commands, flags, or JSON report shapes changed in this patch.
+  Validation:
+  ```text
+  cargo test -p canic-cli cycles::convert --lib -- --nocapture
+  cargo clippy -p delegation_signer_stub -p project_hub_stub -p project_instance_stub -p runtime_probe --all-targets --all-features -- -D warnings
+  cargo clippy -p canic-cli --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.30` normalized the hard-cut missing-operation-ID boundary from
   `docs/design/0.61-replay-protection/0.61-design.md`. Public errors now expose
   `ErrorCode::OperationIdRequired` with message

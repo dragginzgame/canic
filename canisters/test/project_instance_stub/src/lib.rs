@@ -23,7 +23,8 @@ async fn instance_id() -> Result<Principal, Error> {
 
 /// Verify one self-contained delegated token.
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn instance_verify_token(_token: DelegatedToken) -> Result<(), Error> {
+async fn instance_verify_token(token: DelegatedToken) -> Result<(), Error> {
+    let _ = token;
     Ok(())
 }
 
@@ -33,7 +34,8 @@ async fn instance_verify_token(_token: DelegatedToken) -> Result<(), Error> {
     name = "project_instance_record_visit",
     requires(caller::has_role("project_hub"))
 )]
-async fn record_visit(_project_key: String) -> Result<(), Error> {
+async fn record_visit(project_key: String) -> Result<(), Error> {
+    let _ = project_key;
     Ok(())
 }
 

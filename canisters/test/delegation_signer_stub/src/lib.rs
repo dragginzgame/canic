@@ -28,12 +28,14 @@ async fn signer_issue_token(request: DelegatedTokenMintRequest) -> Result<Delega
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn signer_verify_token(_token: DelegatedToken) -> Result<(), Error> {
+async fn signer_verify_token(token: DelegatedToken) -> Result<(), Error> {
+    let _ = token;
     Ok(())
 }
 
 #[canic_update(requires(auth::authenticated()))]
-async fn signer_verify_token_any(_token: DelegatedToken) -> Result<(), Error> {
+async fn signer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
+    let _ = token;
     Ok(())
 }
 
