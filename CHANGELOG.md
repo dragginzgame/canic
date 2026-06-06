@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.28` adds a delegated-auth hard-cut source guard. Live `canic-core`
+  source now fails tests if the removed verifier-local token-use replay store or
+  APIs are reintroduced.
+
 - `0.61.27` adds delegated-token mint replay decision coverage. Mint replay
   tests now pin committed, conflicting, and in-progress receipt behavior plus
   token-signing quota rejection before ECDSA.

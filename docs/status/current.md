@@ -9,6 +9,17 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.28` added executable delegated-auth hard-cut source guard coverage from
+  `docs/design/0.61-replay-protection/0.61-design.md`. The new
+  `canic-core` integration test scans live runtime source under
+  `crates/canic-core/src` and fails if removed verifier-local token-use replay
+  APIs, records, capacity constants, stable `auth/token_uses.rs`, or
+  `delegated_token_uses` storage fields reappear. Historical docs and audit
+  reports are intentionally outside the scan. No CLI commands changed in this
+  patch. Validation:
+  ```text
+  cargo test -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+  ```
 - `0.61.27` added delegated-token mint replay decision coverage from
   `docs/design/0.61-replay-protection/0.61-design.md`. Auth API tests now prove
   committed `auth.mint_token.v1` receipts return cached `DelegatedToken`
