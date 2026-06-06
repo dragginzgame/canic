@@ -9,6 +9,25 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.21` graduated ICP refill from release blocker to implemented
+  replay-protected value-transfer behavior. Fresh manual refill execution now
+  reserves a `CostGuardPermit` with `CostClass::ValueTransfer` before the
+  first ledger transfer or CMC notify external-effect boundary for a replay
+  attempt. The guard uses command kind `icp.refill.v1`, the replay actor as
+  quota subject, the current canister as payer, a 60-second quota window, max
+  60 operations per window, and a 1_000_000_000 cycle reservation/minimum.
+  Terminal committed refill responses complete the guard; resumable,
+  recovery-required, and response-commit-failed outcomes recover it. The
+  endpoint replay manifest now records `canic_icp_refill` as implemented with
+  value-transfer quota/reserve policy, leaving only
+  `canic_response_capability_v1` as an endpoint release blocker. No CLI
+  commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  ```
 - `0.61.20` continued the ICP refill shared replay-core migration from
   `docs/design/0.61-replay-protection/0.61-design.md`. Fresh manual refill
   execution now carries the shared `ReplayReceiptToken` through record

@@ -3,11 +3,13 @@ use crate::{
     cdk::types::TC,
     dto::error::ErrorCode,
     ops::{
+        cost_guard::CostGuardOps,
         replay::model::{
             ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus,
         },
         storage::replay::ReplayReceiptOps,
     },
+    replay_policy::CostClass,
 };
 use std::str::FromStr;
 
@@ -375,7 +377,7 @@ fn refill_replay_commits_terminal_response_for_replay() {
     record.ledger_block_index = Some(123);
     record.cycles_sent = Some(Nat::from(456_u64));
     let response = IcpRefillRecordOps::to_response(&record);
-    finish_icp_refill_replay(&token, &record, &response).expect("commit terminal response");
+    finish_icp_refill_replay(&token, &record, &response, None).expect("commit terminal response");
 
     let replay = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
         .expect("committed replay");
@@ -400,7 +402,7 @@ fn refill_replay_resumable_response_aborts_reserved_receipt() {
     let record = sample_record(IcpRefillStatus::Requested);
     let response = IcpRefillRecordOps::to_response(&record);
 
-    finish_icp_refill_replay(&token, &record, &response).expect("abort resumable response");
+    finish_icp_refill_replay(&token, &record, &response, None).expect("abort resumable response");
 
     assert!(matches!(
         reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
@@ -423,6 +425,62 @@ fn refill_replay_payload_mismatch_maps_to_conflict() {
     let public = err.public_error().expect("public replay error");
     assert_eq!(public.code, ErrorCode::Conflict);
     assert!(public.message.contains("different payload"));
+}
+
+#[test]
+fn refill_cost_guard_request_uses_value_transfer_policy() {
+    let request = request_with_operation(187);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let guard_request = icp_refill_cost_guard_request(&token, p(99), 5_000_000_000, 123);
+
+    assert_eq!(guard_request.cost_class, CostClass::ValueTransfer);
+    assert_eq!(guard_request.command_kind.as_str(), "icp.refill.v1");
+    assert_eq!(guard_request.quota_subject, p(90));
+    assert_eq!(
+        guard_request.quota_window_secs,
+        ICP_REFILL_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS
+    );
+    assert_eq!(
+        guard_request.max_operations_per_window,
+        MAX_ICP_REFILL_VALUE_TRANSFER_OPERATIONS_PER_WINDOW
+    );
+    assert_eq!(
+        guard_request.cycle_reservation_cycles,
+        ICP_REFILL_VALUE_TRANSFER_CYCLE_RESERVATION_CYCLES
+    );
+    assert_eq!(
+        guard_request.min_cycles_after_reservation,
+        MIN_ICP_REFILL_CYCLES_AFTER_RESERVATION
+    );
+}
+
+#[test]
+fn refill_value_transfer_cost_guard_enforces_actor_quota() {
+    let request = request_with_operation(188);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(91), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let now = 9_000;
+    let balance = 10_000_000_000;
+
+    for _ in 0..MAX_ICP_REFILL_VALUE_TRANSFER_OPERATIONS_PER_WINDOW {
+        let permit =
+            CostGuardOps::reserve(icp_refill_cost_guard_request(&token, p(99), balance, now))
+                .expect("quota reservation");
+        CostGuardOps::complete(&permit, now).expect("complete quota reservation");
+    }
+
+    let err = CostGuardOps::reserve(icp_refill_cost_guard_request(&token, p(99), balance, now))
+        .expect_err("same actor quota bucket exhausted");
+    assert!(err.to_string().contains("quota exceeded"));
 }
 
 #[test]
@@ -494,7 +552,7 @@ fn refill_replay_resumable_response_aborts_in_flight_receipt() {
     let response = IcpRefillRecordOps::to_response(&record);
     mark_icp_refill_transfer_effect(&token, &record);
 
-    finish_icp_refill_replay(&token, &record, &response).expect("abort in-flight receipt");
+    finish_icp_refill_replay(&token, &record, &response, None).expect("abort in-flight receipt");
 
     assert!(ReplayReceiptOps::get(token.key()).is_none());
     assert!(matches!(

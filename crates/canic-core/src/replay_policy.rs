@@ -111,9 +111,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
-    update_replay_blocker(
+    update_replay_protected(
         "canic_icp_refill",
         "icp.refill.v1",
+        ReplayImplementationStatus::Implemented,
         CostClass::ValueTransfer,
         Some(VALUE_TRANSFER_QUOTA_V1),
         Some(VALUE_TRANSFER_RESERVE_V1),
@@ -620,6 +621,29 @@ mod tests {
     }
 
     #[test]
+    fn icp_refill_is_manifested_as_implemented_value_transfer() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_icp_refill")
+            .expect("ICP refill policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                command_kind: "icp.refill.v1",
+                requires_operation_id: true,
+            }
+        );
+        assert_eq!(entry.cost_class, CostClass::ValueTransfer);
+        assert_eq!(entry.quota_policy, Some(VALUE_TRANSFER_QUOTA_V1));
+        assert_eq!(entry.cycle_reserve_policy, Some(VALUE_TRANSFER_RESERVE_V1));
+    }
+
+    #[test]
     fn remaining_release_blockers_are_explicit_endpoint_slices() {
         let blockers = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
@@ -629,10 +653,7 @@ mod tests {
             .map(|entry| entry.endpoint)
             .collect::<BTreeSet<_>>();
 
-        assert_eq!(
-            blockers,
-            BTreeSet::from(["canic_icp_refill", "canic_response_capability_v1",])
-        );
+        assert_eq!(blockers, BTreeSet::from(["canic_response_capability_v1",]));
     }
 
     #[test]

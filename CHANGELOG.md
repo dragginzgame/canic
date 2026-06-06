@@ -16,122 +16,79 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
-- `0.61.20` marks ICP refill ledger transfer and CMC `notify_top_up`
-  boundaries in shared replay receipts before the external awaits. Transport
-  failures after either marked boundary now preserve the receipt as
-  recovery-required instead of re-opening the operation for blind retry, while
-  known retryable ledger/CMC responses still leave the refill business record
-  resumable. The slice also adds Canic runtime logs for refill replay
-  reservation, replay conflicts, effect marking, commits, resumable aborts, and
-  recovery-required outcomes.
+- `0.61.21` graduates `canic_icp_refill` to implemented
+  replay-protected value-transfer policy. Fresh refill effects now reserve
+  value-transfer quota and cycle budget before transfer or notify execution.
 
-- `0.61.19` wires ICP refill into shared replay receipt reservation for fresh
-  manual refills. Terminal refill responses are now committed into shared
-  receipts and returned on duplicate replay, while actor/payload/in-progress
-  receipt conflicts map to public conflict errors. Retryable refill records
-  still abort the temporary shared receipt so existing transfer/notify retry
-  behavior remains unchanged until external-effect marking lands. The design now
-  also requires Canic runtime logs for refill replay decisions, external-effect
-  marking, commits, resumable aborts, and recovery-required outcomes.
+- `0.61.20` marks ICP refill transfer and notify external-effect boundaries in
+  shared replay receipts. Post-boundary transport failures now preserve
+  recovery-required receipts, while known retryable responses keep refill
+  business records resumable.
 
-- `0.61.18` starts the ICP refill shared replay-core migration by building the
-  shared receipt reserve input in the manual-refill path while still using the
-  existing refill record store for execution state. The slice adds the refill
-  command kind, operation-id conversion, replay actor, and canonical payload
-  hash helpers, with tests proving the hash excludes the operation ID and binds
-  actor plus transfer fields before receipt reservation is enabled.
+- `0.61.19` wires ICP refill into shared replay receipt reservation and
+  committed response replay. Fresh refills reserve shared receipts, terminal
+  responses are cached, and replay conflicts map to public conflict errors.
 
-- `0.61.17` graduates `canic_canister_upgrade` from release blocker to
-  implemented costed response-idempotent behavior. The direct controller
-  endpoint is now recorded as `management.canister_upgrade.v1`, with tests
-  pinning that repeated upgrades become no-ops once the installed module hash
-  matches the approved target hash and that the upgrade RPC wrapper carries
-  root replay metadata into the dispatched request. The remaining endpoint
-  blockers are ICP refill and root capability RPC.
+- `0.61.18` starts the ICP refill shared replay-core migration. Refill requests
+  now build shared replay identity and reserve-input data while the existing
+  refill business store continues to own transfer/notify progress.
 
-- `0.61.16` removes the endpoint-level `canic_pool_admin` replay blocker by
-  recording it as an implemented command-dispatch surface backed by the pool
-  admin command manifest. The manifest now distinguishes the endpoint
-  dispatcher from the per-command replay policies and tests fail if any pool
-  admin variant regresses to release-blocker status. A release-blocker
-  regression test now pins the remaining endpoint slices to canister upgrade,
-  ICP refill, and root capability RPC.
+- `0.61.17` graduates `canic_canister_upgrade` to implemented
+  response-idempotent replay policy. Upgrade planning now treats matching
+  installed target module hashes as no-ops and carries replay metadata through
+  upgrade RPC dispatch.
 
-- `0.61.15` graduates pool `Recycle` from release blocker to implemented
-  response-idempotent behavior. Recycle now removes the canister from the
-  subnet registry and records a metadata-preserving pending-reset pool entry
-  before crossing the management reset boundary, so duplicate retries stop at
-  the existing pending or ready pool entry instead of repeating the reset path.
+- `0.61.16` graduates the `canic_pool_admin` endpoint dispatcher by tying it to
+  the pool admin command manifest. Manifest tests now pin the endpoint as
+  command-dispatch and fail if any pool admin variant regresses.
 
-- `0.61.14` graduates pool `ImportImmediate` from release blocker to
-  implemented response-idempotent behavior. Immediate import now has manifest
-  coverage as `pool.import_immediate.ensure_v1`, with tests proving duplicate
-  retries stop at the existing pending-reset or ready pool entry instead of
-  creating another pool record or proceeding toward another reset. It also
-  makes ICP-backed `canic` commands fail early with a clear `icp-cli`
-  compatibility diagnostic when the selected executable is missing or outside
-  the supported `>=0.3.0, <0.4.0` range.
+- `0.61.15` graduates pool `Recycle` to implemented response-idempotent
+  behavior. Recycle records a metadata-preserving pending-reset pool entry
+  before management reset so duplicate retries stop at existing pool state.
 
-- `0.61.13` reclassifies `canic_attestation_key_set` as an implemented
-  snapshot-convergent endpoint in the replay manifest and folds in ICP CLI
-  0.3.0 operator-tooling cleanup. Local setup and CI now share the official
-  `icp-cli` installer helper, and rooted host commands pass
-  `--project-root-override <path>` explicitly.
+- `0.61.14` graduates pool `ImportImmediate` to implemented
+  response-idempotent behavior. Immediate import now stops at existing ready or
+  pending-reset pool entries and adds stricter ICP CLI compatibility failures.
+
+- `0.61.13` reclassifies `canic_attestation_key_set` as implemented
+  snapshot-convergent behavior. The slice also standardizes ICP CLI 0.3.0
+  installation for local setup and CI, including explicit project-root use.
 
 - `0.61.12` reclassifies `canic_canister_status` as an implemented
-  update-shaped read-only endpoint in the replay manifest. The endpoint reads
-  management-canister status and does not mutate Canic state or perform
-  deployment, signing, value-transfer, or publication effects, so it no longer
-  consumes deployment quota/reserve policy.
+  update-shaped read-only endpoint. It reads management status without Canic
+  mutation or deployment/signing/value-transfer effects.
 
-- `0.61.11` graduates pool `ImportQueued` from release blocker to implemented
-  snapshot-convergent behavior. Repeated queued imports converge on one
-  pending-reset pool entry per canister and do not enqueue duplicate pool
-  records; `Recycle` and `ImportImmediate` remain explicit blockers because
-  they can still cross management reset effects.
+- `0.61.11` graduates pool `ImportQueued` to implemented snapshot-convergent
+  behavior. Repeated queued imports converge on one pending-reset entry per
+  canister and avoid duplicate queued pool records.
 
-- `0.61.10` finishes root auth-material replay recovery for
-  role-attestation and internal-invocation proof issuance. Both signing paths
-  now prepare before cost reservation, mark the threshold-ECDSA external-effect
-  boundary before guarded signing, preserve recovery-required receipts for
-  uncertain post-signing failures, and are marked implemented in the replay
-  policy manifest.
+- `0.61.10` finishes root auth-material replay recovery for role-attestation
+  and internal-invocation proof issuance. Both signing paths now mark the ECDSA
+  effect boundary and preserve recovery-required receipts for uncertain exits.
 
 - `0.61.9` routes root role-attestation and internal-invocation proof signing
-  through signing cost guard permits. Fresh root auth-material signing now
-  reserves signing quota and an in-flight cycle budget before threshold ECDSA;
-  the endpoints remain manifest release blockers until post-dispatch signing
-  failure recovery is tightened.
+  through signing cost guards. Fresh signing reserves quota and in-flight
+  cycles before threshold ECDSA while replay recovery remains a later slice.
 
-- `0.61.8` tightens shared root replay receipts by rejecting reuse of the same
-  request id by the same caller across different root capability command kinds,
-  so an operation id committed for one root capability cannot be treated as
-  fresh for another variant.
+- `0.61.8` rejects same-caller request-id reuse across different root
+  capability command kinds. This prevents a receipt committed for one root
+  capability variant from being treated as fresh for another.
 
 - `0.61.7` adds command-level replay policy coverage for every
-  `canic_pool_admin` variant and makes immediate pool import return success
-  without management reset when the canister is already in the pool. The
-  non-CreateEmpty pool admin variants remain explicit release blockers until
-  their replay receipts or stronger idempotence guards are implemented.
+  `canic_pool_admin` variant. Immediate pool import now succeeds without reset
+  when the canister is already present in pool state.
 
 - `0.61.6` makes pool `CreateEmpty` replay-protected and deployment
-  cost-guarded. Fresh requests now require replay metadata, reserve a shared
-  receipt and deployment quota/cycle budget before management `create_canister`,
-  commit the created pool principal for duplicate replay, and leave uncertain
-  management effects in recovery-required state instead of creating again.
+  cost-guarded. Fresh requests reserve replay, quota, and cycle budget before
+  management create and commit the created pool principal for replay.
 
-- `0.61.5` adds the shared cost-guard foundation and wires root
-  delegation-proof signing through it. Fresh delegation proof requests now
-  reserve signing quota and an in-flight cycle budget before threshold ECDSA,
-  while committed replay returns still bypass current quota and reserve checks.
+- `0.61.5` adds the shared cost-guard foundation and applies it to root
+  delegation-proof signing. Fresh signing reserves quota and in-flight cycles,
+  while committed replay returns bypass current quota and reserve checks.
 
-- `0.61.4` makes root delegation-proof issuance replay-protected. Delegation
-  proof requests now carry root replay metadata, reserve shared replay
-  receipts before threshold ECDSA signing, return committed proof bytes for
-  duplicate request ids, and preserve external-effect recovery state around
-  the signing boundary. It also adds cached
-  `canic nns data-center list/info/refresh` metadata derived from the shared
-  mainnet registry relation inventory.
+- `0.61.4` makes root delegation-proof issuance replay-protected and adds
+  cached NNS data-center inspection. Delegation proof requests reserve shared
+  receipts before signing and replay committed proof bytes for duplicates.
 
   ```text
   canic nns data-center refresh
@@ -141,14 +98,9 @@ Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
   canic nns data-center list --format json
   ```
 
-- `0.61.3` migrates root RPC replay onto the shared replay receipt store. Root
-  capability replay now uses explicit root command kinds, receipt-backed
-  reserve/commit/abort, receipt TTL expiry, active actor capacity checks, and
-  committed response replay. It also adds `canic nns registry version` as the
-  first broad NNS inspection foundation command and exposes cached
-  `canic nns node list/info/refresh` and
-  `canic nns node-operator list/info/refresh` metadata derived from mainnet
-  registry subnet, node, and operator records.
+- `0.61.3` migrates root RPC replay onto the shared replay receipt store and
+  expands NNS inspection. Root capability replay now uses receipt-backed
+  reserve/commit/abort, TTL expiry, actor capacity checks, and cached replay.
 
   ```text
   canic nns registry version
@@ -164,26 +116,17 @@ Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
   canic nns node-operator list --format json
   ```
 
-- `0.61.2` adds the shared stable replay receipt store and
-  reserve/replay/commit API, with command-kind-scoped receipt keys, stored
-  replay actors and payload hashes, committed response bytes, external-effect
-  status, recovery-required status, and bounded terminal-failure bytes. Existing
-  root RPC replay behavior is unchanged; root migration onto the shared receipt
-  primitive remains a 0.61 blocker.
+- `0.61.2` adds the shared stable replay receipt store and reserve/replay/commit
+  API. Receipts now model command-scoped keys, actors, payload hashes,
+  committed responses, external effects, recovery, and bounded failures.
 
-- `0.61.1` starts the shared replay-core extraction with a 32-byte
-  `OperationId`, command-kind and replay-actor model, versioned payload-hash
-  helpers, bounded terminal-error bytes, and root replay guard/key boundaries
-  that now use the shared operation ID type. It also enriches
-  `canic nns node-provider list/info` with cache-first native NNS metadata,
-  `canic nns node-provider refresh`, mainnet registry-derived assigned-node
-  counts, and registry-version provenance.
+- `0.61.1` starts the shared replay-core extraction and enriches NNS node
+  provider metadata. The slice adds `OperationId`, command kinds, replay
+  actors, payload hashing, bounded errors, and registry-version provenance.
 
-- `0.61.0` starts the replay-safety hardening branch with a replay-policy
-  manifest for Canic-emitted update endpoints, a hard cut of verifier-local
-  delegated-token update consumption, response-idempotent `canic_app`
-  set-style commands, and an early caller/shard guard for delegation proof
-  issuance.
+- `0.61.0` starts the replay-safety hardening branch. It adds the endpoint
+  replay manifest, cuts verifier-local delegated-token update consumption, and
+  makes `canic_app` set-style commands response-idempotent.
 
 ## [0.60.x] - 2026-06-04 - NNS subnet inspection
 

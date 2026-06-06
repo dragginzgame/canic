@@ -24,7 +24,8 @@ use crate::{
     infra::ic::icp_refill::{IcpRefillCanisterOverrides, NotifyTopUpArg, NotifyTopUpError},
     ops::{
         config::ConfigOps,
-        ic::{IcOps, icp_refill::IcpRefillOps},
+        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        ic::{IcOps, icp_refill::IcpRefillOps, mgmt::MgmtOps},
         replay::{
             model::{
                 CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
@@ -44,6 +45,7 @@ use crate::{
             state::app::AppStateOps,
         },
     },
+    replay_policy::CostClass,
     storage::stable::icp_refill::IcpRefillRecord,
     workflow::ic::network::NetworkWorkflow,
 };
@@ -56,6 +58,10 @@ const MAX_NOTIFY_ATTEMPTS: u32 = 5;
 const ICP_LEDGER_DECIMALS: u8 = 8;
 const ICP_REFILL_REPLAY_COMMAND_KIND: &str = "icp.refill.v1";
 const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
+const ICP_REFILL_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
+const MAX_ICP_REFILL_VALUE_TRANSFER_OPERATIONS_PER_WINDOW: u64 = 60;
+const ICP_REFILL_VALUE_TRANSFER_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
+const MIN_ICP_REFILL_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 
 ///
 /// IcpRefillWorkflowError
@@ -205,16 +211,19 @@ async fn execute_fresh_manual_refill(
     operation_id: [u8; 32],
     token: &ReplayReceiptToken,
 ) -> Result<IcpRefillResponse, InternalError> {
-    let record = match execute_manual_refill_record(request, operation_id, token).await {
-        Ok(record) => record,
-        Err(err) => {
-            abort_reserved_receipt(token);
-            return Err(err);
-        }
-    };
+    let mut cost_permit = None;
+    let record =
+        match execute_manual_refill_record(request, operation_id, token, &mut cost_permit).await {
+            Ok(record) => record,
+            Err(err) => {
+                recover_icp_refill_cost_guard(cost_permit.as_ref());
+                abort_reserved_receipt(token);
+                return Err(err);
+            }
+        };
     let response = IcpRefillRecordOps::to_response(&record);
 
-    if let Err(err) = finish_icp_refill_replay(token, &record, &response) {
+    if let Err(err) = finish_icp_refill_replay(token, &record, &response, cost_permit.as_ref()) {
         abort_reserved_receipt(token);
         return Err(err);
     }
@@ -226,10 +235,11 @@ async fn execute_manual_refill_record(
     request: IcpRefillRequest,
     operation_id: [u8; 32],
     token: &ReplayReceiptToken,
+    cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillRecord, InternalError> {
     if let Some(record) = IcpRefillRecordOps::find_by_operation_id(operation_id) {
         IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
-        return advance_record(record, token).await;
+        return advance_record(record, token, cost_permit).await;
     }
 
     let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
@@ -251,7 +261,7 @@ async fn execute_manual_refill_record(
         now_ns: IcOps::now_nanos(),
     })?;
 
-    advance_record(record, token).await
+    advance_record(record, token, cost_permit).await
 }
 
 ///
@@ -365,6 +375,7 @@ async fn prepare_context(
 async fn transfer_record(
     record: IcpRefillRecord,
     token: &ReplayReceiptToken,
+    cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillRecord, InternalError> {
     let to = IcpRefillOps::cmc_topup_account(record.cmc_canister_id, record.target_canister)?;
     let transfer_arg = IcpRefillOps::transfer_arg(
@@ -376,6 +387,7 @@ async fn transfer_record(
         record.created_at_time_ns,
     );
 
+    reserve_icp_refill_cost_guard_if_needed(token, &record, cost_permit)?;
     mark_icp_refill_transfer_effect(token, &record);
 
     match IcpRefillOps::icrc1_transfer(record.ledger_canister_id, transfer_arg).await {
@@ -404,13 +416,16 @@ async fn transfer_record(
 async fn advance_record(
     record: IcpRefillRecord,
     token: &ReplayReceiptToken,
+    cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillRecord, InternalError> {
     let record = match record.status {
-        IcpRefillStatus::Requested => transfer_unless_window_stale(record, token).await?,
+        IcpRefillStatus::Requested => {
+            transfer_unless_window_stale(record, token, cost_permit).await?
+        }
         IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing => record,
         IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_notify(&record) => record,
         IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_bad_fee(&record) => {
-            transfer_unless_window_stale(record, token).await?
+            transfer_unless_window_stale(record, token, cost_permit).await?
         }
         IcpRefillStatus::Completed
         | IcpRefillStatus::Failed
@@ -420,7 +435,7 @@ async fn advance_record(
     };
 
     if IcpRefillRecordOps::should_notify(&record) {
-        notify_record(record, token).await
+        notify_record(record, token, cost_permit).await
     } else {
         Ok(record)
     }
@@ -429,18 +444,20 @@ async fn advance_record(
 async fn transfer_unless_window_stale(
     record: IcpRefillRecord,
     token: &ReplayReceiptToken,
+    cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillRecord, InternalError> {
     let now_ns = IcOps::now_nanos();
     if IcpRefillRecordOps::transfer_window_stale(&record, now_ns, TX_WINDOW_NANOS) {
         IcpRefillRecordOps::mark_transfer_window_stale(record.id, now_ns)
     } else {
-        transfer_record(record, token).await
+        transfer_record(record, token, cost_permit).await
     }
 }
 
 async fn notify_record(
     record: IcpRefillRecord,
     token: &ReplayReceiptToken,
+    cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillRecord, InternalError> {
     let Some(block_index) = record.ledger_block_index else {
         return IcpRefillRecordOps::mark_notify_failed(
@@ -456,6 +473,7 @@ async fn notify_record(
         canister_id: record.target_canister,
     };
 
+    reserve_icp_refill_cost_guard_if_needed(token, &record, cost_permit)?;
     mark_icp_refill_notify_effect(token, &record);
 
     match IcpRefillOps::notify_top_up(record.cmc_canister_id, args).await {
@@ -686,21 +704,107 @@ fn finish_icp_refill_replay(
     token: &ReplayReceiptToken,
     record: &IcpRefillRecord,
     response: &IcpRefillResponse,
+    cost_permit: Option<&CostGuardPermit>,
 ) -> Result<(), InternalError> {
     if IcpRefillRecordOps::is_resumable(record) {
+        recover_icp_refill_cost_guard(cost_permit);
         log_icp_refill_resumable_abort(record);
         abort_uncommitted_receipt(token);
         return Ok(());
     }
 
+    let response_bytes = match encode_icp_refill_replay_response(response) {
+        Ok(response_bytes) => response_bytes,
+        Err(err) => {
+            recover_icp_refill_cost_guard(cost_permit);
+            mark_recovery_required(
+                token,
+                RecoveryReason::ResponseCommitFailed,
+                IcOps::now_nanos(),
+            );
+            return Err(err);
+        }
+    };
+
     commit_receipt_response(
         token,
         ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-        encode_icp_refill_replay_response(response)?,
+        response_bytes,
         IcOps::now_nanos(),
     );
+    complete_icp_refill_cost_guard(cost_permit);
     log_icp_refill_commit(record);
     Ok(())
+}
+
+fn reserve_icp_refill_cost_guard_if_needed(
+    token: &ReplayReceiptToken,
+    record: &IcpRefillRecord,
+    cost_permit: &mut Option<CostGuardPermit>,
+) -> Result<(), InternalError> {
+    if cost_permit.is_some() {
+        return Ok(());
+    }
+
+    let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
+        token,
+        IcOps::canister_self(),
+        MgmtOps::canister_cycle_balance().to_u128(),
+        IcOps::now_secs(),
+    ))?;
+    log_icp_refill_cost_guard_reserved(record);
+    *cost_permit = Some(permit);
+    Ok(())
+}
+
+fn icp_refill_cost_guard_request(
+    token: &ReplayReceiptToken,
+    payer: Principal,
+    current_cycle_balance: u128,
+    now_secs: u64,
+) -> CostGuardRequest {
+    CostGuardRequest {
+        cost_class: CostClass::ValueTransfer,
+        command_kind: icp_refill_command_kind(),
+        quota_subject: token.receipt().actor.effective_principal,
+        payer,
+        now_secs,
+        quota_window_secs: ICP_REFILL_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS,
+        max_operations_per_window: MAX_ICP_REFILL_VALUE_TRANSFER_OPERATIONS_PER_WINDOW,
+        current_cycle_balance,
+        cycle_reservation_cycles: ICP_REFILL_VALUE_TRANSFER_CYCLE_RESERVATION_CYCLES,
+        min_cycles_after_reservation: MIN_ICP_REFILL_CYCLES_AFTER_RESERVATION,
+    }
+}
+
+fn complete_icp_refill_cost_guard(cost_permit: Option<&CostGuardPermit>) {
+    let Some(cost_permit) = cost_permit else {
+        return;
+    };
+    if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+        crate::log!(
+            crate::log::Topic::Cycles,
+            Error,
+            "icp refill value-transfer cost guard completion failed reservation_id={}: {}",
+            cost_permit.reservation_id,
+            err
+        );
+    }
+}
+
+fn recover_icp_refill_cost_guard(cost_permit: Option<&CostGuardPermit>) {
+    let Some(cost_permit) = cost_permit else {
+        return;
+    };
+    if let Err(err) = CostGuardOps::recover(cost_permit, IcOps::now_secs()) {
+        crate::log!(
+            crate::log::Topic::Cycles,
+            Error,
+            "icp refill value-transfer cost guard recovery failed reservation_id={}: {}",
+            cost_permit.reservation_id,
+            err
+        );
+    }
 }
 
 fn mark_icp_refill_transfer_effect(token: &ReplayReceiptToken, record: &IcpRefillRecord) {
@@ -771,6 +875,20 @@ fn mark_icp_refill_recovery_required(
         record.amount_e8s,
         error_class,
         error_origin
+    );
+}
+
+fn log_icp_refill_cost_guard_reserved(record: &IcpRefillRecord) {
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Info,
+        "icp refill value-transfer cost guard reserved command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(record.operation_id),
+        record.id,
+        record.source_canister,
+        record.target_canister,
+        record.amount_e8s
     );
 }
 
