@@ -176,6 +176,14 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     update_snapshot_convergent("canic_sync_state", "cascade.sync_state.v1"),
     update_snapshot_convergent("canic_sync_topology", "cascade.sync_topology.v1"),
+    update_replay_protected(
+        "signer_issue_token",
+        "auth.mint_token.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
+    ),
     update_monotonic_publish(
         "canic_template_prepare_admin",
         "wasm_store.template_prepare_admin.v1",
@@ -206,6 +214,14 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_monotonic_publish(
         "canic_wasm_store_stage_manifest",
         "wasm_store.stage_manifest.v1",
+    ),
+    update_replay_protected(
+        "user_shard_issue_token",
+        "auth.mint_token.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::ThresholdEcdsaSign,
+        Some(SIGNING_QUOTA_V1),
+        Some(SIGNING_RESERVE_V1),
     ),
 ];
 
@@ -513,7 +529,11 @@ const fn root_capability_replay_protected(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeSet;
+    use std::{
+        collections::BTreeSet,
+        fs,
+        path::{Path, PathBuf},
+    };
 
     #[test]
     fn endpoint_manifest_entries_are_unique() {
@@ -651,6 +671,53 @@ mod tests {
                     requires_operation_id: true,
                 }
             );
+        }
+    }
+
+    #[test]
+    fn fleet_delegated_token_mint_wrappers_are_manifested_as_implemented() {
+        let wrappers = fleet_delegated_token_mint_wrapper_names();
+        assert!(
+            !wrappers.is_empty(),
+            "expected at least one fleet delegated-token mint wrapper"
+        );
+
+        let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| entry.endpoint_kind == EndpointKind::Update)
+            .map(|entry| entry.endpoint)
+            .collect::<BTreeSet<_>>();
+
+        let missing = wrappers
+            .iter()
+            .map(String::as_str)
+            .filter(|wrapper| !manifest.contains(wrapper))
+            .collect::<Vec<_>>();
+        assert!(
+            missing.is_empty(),
+            "missing replay policy entries for delegated-token mint wrappers: {missing:?}"
+        );
+
+        for wrapper in wrappers {
+            let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+                .iter()
+                .find(|entry| entry.endpoint == wrapper)
+                .expect("delegated-token mint wrapper policy entry");
+
+            assert_eq!(
+                entry.implementation_status,
+                ReplayImplementationStatus::Implemented
+            );
+            assert_eq!(
+                entry.replay_policy,
+                ReplayPolicy::ReplayProtected {
+                    command_kind: "auth.mint_token.v1",
+                    requires_operation_id: true,
+                }
+            );
+            assert_eq!(entry.cost_class, CostClass::ThresholdEcdsaSign);
+            assert_eq!(entry.quota_policy, Some(SIGNING_QUOTA_V1));
+            assert_eq!(entry.cycle_reserve_policy, Some(SIGNING_RESERVE_V1));
         }
     }
 
@@ -1050,6 +1117,85 @@ mod tests {
         .into_iter()
         .flat_map(update_endpoint_names_from_source)
         .collect()
+    }
+
+    fn fleet_delegated_token_mint_wrapper_names() -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        for root in [
+            workspace_root().join("canisters"),
+            workspace_root().join("fleets"),
+        ] {
+            for path in rust_files_under(&root) {
+                let source = fs::read_to_string(&path)
+                    .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+                names.extend(delegated_token_mint_wrapper_names_from_source(&source));
+            }
+        }
+        names
+    }
+
+    fn workspace_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("canic-core lives under crates/")
+            .to_path_buf()
+    }
+
+    fn rust_files_under(root: &Path) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        collect_rust_files(root, &mut files);
+        files
+    }
+
+    fn collect_rust_files(path: &Path, files: &mut Vec<PathBuf>) {
+        let entries = fs::read_dir(path)
+            .unwrap_or_else(|err| panic!("failed to read directory {}: {err}", path.display()));
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|err| {
+                panic!(
+                    "failed to read directory entry under {}: {err}",
+                    path.display()
+                )
+            });
+            let path = entry.path();
+            if path.is_dir() {
+                collect_rust_files(&path, files);
+            } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                files.push(path);
+            }
+        }
+    }
+
+    fn delegated_token_mint_wrapper_names_from_source(source: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut offset = 0;
+        while let Some(relative_call) = source[offset..].find("AuthApi::mint_token") {
+            let call = offset + relative_call;
+            let Some(fn_start) = source[..call].rfind("fn ") else {
+                offset = call + "AuthApi::mint_token".len();
+                continue;
+            };
+            let attribute_window_start = source[..fn_start]
+                .rfind("\n\n")
+                .map_or(0, |index| index + 2);
+            let attribute_window = &source[attribute_window_start..fn_start];
+            if !attribute_window.contains("#[canic_update") {
+                offset = call + "AuthApi::mint_token".len();
+                continue;
+            }
+            let name_start = fn_start + "fn ".len();
+            let Some(name_end) = source[name_start..]
+                .find('(')
+                .map(|index| name_start + index)
+            else {
+                offset = call + "AuthApi::mint_token".len();
+                continue;
+            };
+            names.push(source[name_start..name_end].trim().to_string());
+            offset = call + "AuthApi::mint_token".len();
+        }
+        names
     }
 
     fn update_endpoint_names_from_source(source: &'static str) -> Vec<&'static str> {

@@ -9,6 +9,20 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.26` closed the delegated-token mint wrapper manifest gap from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  `signer_issue_token` and `user_shard_issue_token` are now explicit
+  `ENDPOINT_REPLAY_POLICY_MANIFEST` entries with implemented
+  `ReplayProtected(auth.mint_token.v1)` policy, `CostClass::ThresholdEcdsaSign`,
+  signing quota, and signing cycle-reserve metadata. A new replay-policy
+  regression test scans `canisters/` and `fleets/` Rust sources for
+  `#[canic_update]` functions that call `AuthApi::mint_token` and fails if a
+  wrapper is missing from the manifest. This is manifest/test coverage for the
+  replay/cost-guarded mint path landed in `0.61.25`. No CLI commands changed in
+  this patch. Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  ```
 - `0.61.25` started delegated-token mint replay hardening. Public
   `DelegatedTokenIssueRequest` and `DelegatedTokenMintRequest` handling now
   requires caller-provided replay metadata, reserves shared receipts with

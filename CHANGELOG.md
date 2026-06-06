@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.26` closes delegated-token mint wrapper manifest coverage. Fleet/test
+  `*_issue_token` wrappers are now explicit replay-protected signing endpoints
+  in the replay policy inventory, with a scanner test for future wrappers.
+
 - `0.61.25` starts delegated-token mint replay hardening. Public token issue
   and mint helpers now require replay metadata, reserve shared receipts, and
   sign shard tokens only through logged cost-guarded ECDSA boundaries.
