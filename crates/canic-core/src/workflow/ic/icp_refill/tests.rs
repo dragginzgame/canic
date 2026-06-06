@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    InternalErrorClass,
     cdk::types::TC,
     dto::error::ErrorCode,
     ops::{
@@ -457,6 +458,33 @@ fn refill_cost_guard_request_uses_value_transfer_policy() {
         guard_request.min_cycles_after_reservation,
         MIN_ICP_REFILL_CYCLES_AFTER_RESERVATION
     );
+}
+
+#[test]
+fn refill_external_effect_boundary_requires_value_transfer_cost_permit() {
+    let request = request_with_operation(189);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(92), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+
+    let missing = require_icp_refill_cost_permit(None).expect_err("missing permit rejects");
+    assert_eq!(missing.class(), InternalErrorClass::Invariant);
+    assert_eq!(missing.origin(), InternalErrorOrigin::Workflow);
+
+    let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
+        &token,
+        p(99),
+        10_000_000_000,
+        10_000,
+    ))
+    .expect("reserve value-transfer permit");
+    let cost_permit = Some(permit);
+
+    assert!(require_icp_refill_cost_permit(cost_permit.as_ref()).is_ok());
+    CostGuardOps::abort(cost_permit.as_ref().expect("permit")).expect("abort permit");
 }
 
 #[test]

@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.34` tightens the ICP refill value-transfer boundary. Ledger transfer
+  and CMC notify ops now require a `CostGuardPermit`, so refill execution
+  cannot cross those adapter calls without the reserved value-transfer guard.
+
 - `0.61.33` adds shared pending replay receipt quotas. Fresh shared receipts
   now reject with `ResourceExhausted` once an actor has 64 pending receipts or a
   command kind has 512 pending receipts, while committed replays still return

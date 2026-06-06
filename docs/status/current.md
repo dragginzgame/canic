@@ -9,6 +9,18 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.34` tightened the ICP refill value-transfer cost-guard boundary.
+  `IcpRefillOps::icrc1_transfer` and `IcpRefillOps::notify_top_up` now require
+  a `CostGuardPermit`, and the refill workflow requires the reserved
+  value-transfer permit before marking or executing ledger transfer and CMC
+  notify external effects. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.33` added shared pending replay receipt quotas at
   `reserve_or_replay_receipt`. Fresh shared receipts now reject with
   `ResourceExhausted` when the actor already has 64 pending receipts or the

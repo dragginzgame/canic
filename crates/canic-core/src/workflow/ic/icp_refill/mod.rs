@@ -388,9 +388,10 @@ async fn transfer_record(
     );
 
     reserve_icp_refill_cost_guard_if_needed(token, &record, cost_permit)?;
+    let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
     mark_icp_refill_transfer_effect(token, &record);
 
-    match IcpRefillOps::icrc1_transfer(record.ledger_canister_id, transfer_arg).await {
+    match IcpRefillOps::icrc1_transfer(cost_permit, record.ledger_canister_id, transfer_arg).await {
         Err(err) => {
             mark_icp_refill_recovery_required(token, &record, "ledger_transfer", &err);
             Err(err)
@@ -474,9 +475,10 @@ async fn notify_record(
     };
 
     reserve_icp_refill_cost_guard_if_needed(token, &record, cost_permit)?;
+    let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
     mark_icp_refill_notify_effect(token, &record);
 
-    match IcpRefillOps::notify_top_up(record.cmc_canister_id, args).await {
+    match IcpRefillOps::notify_top_up(cost_permit, record.cmc_canister_id, args).await {
         Ok(Ok(cycles_sent)) => {
             let record =
                 IcpRefillRecordOps::mark_completed(record.id, cycles_sent, IcOps::now_nanos())?;
@@ -767,6 +769,17 @@ fn reserve_icp_refill_cost_guard_if_needed(
     log_icp_refill_cost_guard_reserved(record);
     *cost_permit = Some(permit);
     Ok(())
+}
+
+fn require_icp_refill_cost_permit(
+    cost_permit: Option<&CostGuardPermit>,
+) -> Result<&CostGuardPermit, InternalError> {
+    cost_permit.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "ICP refill external effect crossed without value-transfer cost permit",
+        )
+    })
 }
 
 fn icp_refill_cost_guard_request(

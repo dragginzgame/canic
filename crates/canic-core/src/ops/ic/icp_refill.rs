@@ -13,7 +13,7 @@ use crate::{
             IcpXdrConversionRateResponse, Icrc1TransferResult, NotifyTopUpArg, NotifyTopUpResult,
         },
     },
-    ops::ic::IcOpsError,
+    ops::{cost_guard::CostGuardPermit, ic::IcOpsError},
 };
 use thiserror::Error as ThisError;
 
@@ -94,6 +94,7 @@ impl IcpRefillOps {
     }
 
     pub async fn icrc1_transfer(
+        _permit: &CostGuardPermit,
         ledger_id: Principal,
         args: TransferArg,
     ) -> Result<Icrc1TransferResult, InternalError> {
@@ -101,6 +102,7 @@ impl IcpRefillOps {
     }
 
     pub async fn notify_top_up(
+        _permit: &CostGuardPermit,
         cmc_id: Principal,
         args: NotifyTopUpArg,
     ) -> Result<NotifyTopUpResult, InternalError> {
