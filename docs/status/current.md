@@ -9,6 +9,20 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.39` added an aggregate release-candidate replay manifest gate.
+  `release_candidate_manifests_have_no_release_blockers` now fails if the
+  endpoint manifest, root capability command manifest, or pool admin command
+  manifest contains any `ReleaseBlocker` entry, and reports blockers with their
+  manifest scope. The 0.61 design release-candidate section now points at that
+  executable gate. This is manifest/test/docs-only; no runtime paths, CLI
+  commands, flags, output columns, or JSON report shapes changed. Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.38` added a durable-publication replay-policy regression guard. The
   test derives the expected durable-publish endpoint set from protected
   wasm-store update methods plus root template publication admin methods, then

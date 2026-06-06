@@ -626,6 +626,16 @@ mod tests {
     }
 
     #[test]
+    fn release_candidate_manifests_have_no_release_blockers() {
+        let blockers = release_candidate_manifest_blockers();
+
+        assert!(
+            blockers.is_empty(),
+            "release candidate manifests still contain replay blockers: {blockers:?}"
+        );
+    }
+
+    #[test]
     fn durable_publish_entries_are_wasm_store_publication_surfaces() {
         let expected = durable_publish_endpoint_names();
         let actual = ENDPOINT_REPLAY_POLICY_MANIFEST
@@ -1125,6 +1135,34 @@ mod tests {
         .into_iter()
         .chain(CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS.iter().copied())
         .collect()
+    }
+
+    fn release_candidate_manifest_blockers() -> BTreeSet<String> {
+        let endpoint_blockers = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| {
+                entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker
+            })
+            .map(|entry| format!("endpoint:{}", entry.endpoint));
+
+        let root_command_blockers = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| {
+                entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker
+            })
+            .map(|entry| format!("root-capability:{}", entry.variant));
+
+        let pool_command_blockers = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| {
+                entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker
+            })
+            .map(|entry| format!("pool-admin:{}", entry.variant));
+
+        endpoint_blockers
+            .chain(root_command_blockers)
+            .chain(pool_command_blockers)
+            .collect()
     }
 
     fn enum_variant_names_from_source(

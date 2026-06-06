@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.39` adds an aggregate release-candidate manifest gate. Replay-policy
+  tests now fail if endpoint, root-capability, or pool-admin manifests contain
+  any remaining `ReleaseBlocker` entries.
+
 - `0.61.38` pins durable-publication replay policy coverage. A replay-policy
   regression now proves the durable-publish cost class is scoped to
   wasm-store/template publication endpoints with quota and reserve metadata.
