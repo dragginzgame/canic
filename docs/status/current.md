@@ -9,6 +9,28 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.20` continued the ICP refill shared replay-core migration from
+  `docs/design/0.61-replay-protection/0.61-design.md`. Fresh manual refill
+  execution now carries the shared `ReplayReceiptToken` through record
+  advancement, ledger transfer, and CMC notify. Ledger transfer marks
+  `ExternalEffectDescriptor::IcpTransfer` before `icrc1_transfer`; CMC
+  `notify_top_up` marks `ExternalEffectDescriptor::ManagementCall` before the
+  notify await. Transport or infrastructure failures after either marked
+  external-effect boundary preserve the receipt as
+  `RecoveryRequired(ExternalEffectStatusUnknown)`. Known retryable
+  application-level ledger/CMC outcomes still leave the refill business record
+  resumable and discard the temporary uncommitted receipt. Canic runtime logs
+  under `Topic::Cycles` now cover refill replay reservation, committed replay
+  returns, replay conflicts, effect marking, terminal commits, resumable
+  receipt aborts, and recovery-required outcomes. `canic_icp_refill` remains a
+  release blocker until value-transfer quota and reserve enforcement is wired
+  into the refill path. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo test -p canic --test changelog_governance -- --nocapture
+  ```
 - `0.61.19` continued the ICP refill shared replay-core migration from
   `docs/design/0.61-replay-protection/0.61-design.md`. Fresh manual ICP refill
   execution now reserves a shared replay receipt before creating or advancing
@@ -20,8 +42,11 @@ inspect only the files needed for the current task.
   receipt so existing transfer/notify retry behavior is preserved until
   external-effect marking lands. `canic_icp_refill` remains a release blocker
   until ledger transfer and CMC notify effects are marked in flight before the
-  external calls and uncertain outcomes become recovery-required receipts. No
-  CLI commands changed in this patch. Validation:
+  external calls and uncertain outcomes become recovery-required receipts. The
+  design now also requires Canic runtime logs for refill replay decisions,
+  replay conflicts, external-effect marking, terminal commits, resumable
+  receipt aborts, retryable outcomes, and recovery-required outcomes. No CLI
+  commands changed in this patch. Validation:
   ```text
   cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
   cargo test -p canic-core replay_policy --lib -- --nocapture

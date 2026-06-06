@@ -215,6 +215,20 @@ pub fn abort_reserved_receipt(token: &ReplayReceiptToken) {
     }
 }
 
+pub fn abort_uncommitted_receipt(token: &ReplayReceiptToken) {
+    let Some(receipt) =
+        ReplayReceiptOps::get(token.key).and_then(|record| record.into_receipt().ok())
+    else {
+        return;
+    };
+    if matches!(
+        receipt.status,
+        ReplayReceiptStatus::Reserved | ReplayReceiptStatus::ExternalEffectInFlight
+    ) {
+        let _ = ReplayReceiptOps::remove(token.key);
+    }
+}
+
 fn latest_receipt_for_token(token: &ReplayReceiptToken) -> ReplayReceipt {
     ReplayReceiptOps::get(token.key)
         .and_then(|record| record.into_receipt().ok())

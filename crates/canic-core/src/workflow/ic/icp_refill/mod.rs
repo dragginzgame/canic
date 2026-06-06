@@ -26,10 +26,14 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
         replay::{
-            model::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher, ReplayReceipt},
+            model::{
+                CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
+                ReplayPayloadHasher, ReplayReceipt,
+            },
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-                ReplayReceiptToken, abort_reserved_receipt, commit_receipt_response,
+                ReplayReceiptToken, abort_reserved_receipt, abort_uncommitted_receipt,
+                commit_receipt_response, mark_external_effect_in_flight, mark_recovery_required,
                 reserve_or_replay_receipt,
             },
         },
@@ -125,8 +129,14 @@ impl IcpRefillWorkflow {
             IcpRefillReplayReservation::Fresh {
                 operation_id,
                 token,
-            } => execute_fresh_manual_refill(request, operation_id, &token).await,
-            IcpRefillReplayReservation::Replay(response) => Ok(response),
+            } => {
+                log_icp_refill_fresh_reservation(&request);
+                execute_fresh_manual_refill(request, operation_id, &token).await
+            }
+            IcpRefillReplayReservation::Replay(response) => {
+                log_icp_refill_committed_replay(&response);
+                Ok(response)
+            }
         }
     }
 
@@ -195,7 +205,7 @@ async fn execute_fresh_manual_refill(
     operation_id: [u8; 32],
     token: &ReplayReceiptToken,
 ) -> Result<IcpRefillResponse, InternalError> {
-    let record = match execute_manual_refill_record(request, operation_id).await {
+    let record = match execute_manual_refill_record(request, operation_id, token).await {
         Ok(record) => record,
         Err(err) => {
             abort_reserved_receipt(token);
@@ -215,10 +225,11 @@ async fn execute_fresh_manual_refill(
 async fn execute_manual_refill_record(
     request: IcpRefillRequest,
     operation_id: [u8; 32],
+    token: &ReplayReceiptToken,
 ) -> Result<IcpRefillRecord, InternalError> {
     if let Some(record) = IcpRefillRecordOps::find_by_operation_id(operation_id) {
         IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
-        return advance_record(record).await;
+        return advance_record(record, token).await;
     }
 
     let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
@@ -240,7 +251,7 @@ async fn execute_manual_refill_record(
         now_ns: IcOps::now_nanos(),
     })?;
 
-    advance_record(record).await
+    advance_record(record, token).await
 }
 
 ///
@@ -351,7 +362,10 @@ async fn prepare_context(
     })
 }
 
-async fn transfer_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, InternalError> {
+async fn transfer_record(
+    record: IcpRefillRecord,
+    token: &ReplayReceiptToken,
+) -> Result<IcpRefillRecord, InternalError> {
     let to = IcpRefillOps::cmc_topup_account(record.cmc_canister_id, record.target_canister)?;
     let transfer_arg = IcpRefillOps::transfer_arg(
         record.source_subaccount,
@@ -362,8 +376,14 @@ async fn transfer_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Int
         record.created_at_time_ns,
     );
 
-    match IcpRefillOps::icrc1_transfer(record.ledger_canister_id, transfer_arg).await? {
-        Ok(block_index) => {
+    mark_icp_refill_transfer_effect(token, &record);
+
+    match IcpRefillOps::icrc1_transfer(record.ledger_canister_id, transfer_arg).await {
+        Err(err) => {
+            mark_icp_refill_recovery_required(token, &record, "ledger_transfer", &err);
+            Err(err)
+        }
+        Ok(Ok(block_index)) => {
             let block_index = match IcpRefillOps::checked_block_index(block_index) {
                 Ok(block_index) => block_index,
                 Err(err) => {
@@ -377,17 +397,20 @@ async fn transfer_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Int
             };
             IcpRefillRecordOps::mark_transferred(record.id, block_index, IcOps::now_nanos())
         }
-        Err(err) => apply_transfer_error(record.id, err),
+        Ok(Err(err)) => apply_transfer_error(record.id, err),
     }
 }
 
-async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, InternalError> {
+async fn advance_record(
+    record: IcpRefillRecord,
+    token: &ReplayReceiptToken,
+) -> Result<IcpRefillRecord, InternalError> {
     let record = match record.status {
-        IcpRefillStatus::Requested => transfer_unless_window_stale(record).await?,
+        IcpRefillStatus::Requested => transfer_unless_window_stale(record, token).await?,
         IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing => record,
         IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_notify(&record) => record,
         IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_bad_fee(&record) => {
-            transfer_unless_window_stale(record).await?
+            transfer_unless_window_stale(record, token).await?
         }
         IcpRefillStatus::Completed
         | IcpRefillStatus::Failed
@@ -397,7 +420,7 @@ async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inte
     };
 
     if IcpRefillRecordOps::should_notify(&record) {
-        notify_record(record).await
+        notify_record(record, token).await
     } else {
         Ok(record)
     }
@@ -405,16 +428,20 @@ async fn advance_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inte
 
 async fn transfer_unless_window_stale(
     record: IcpRefillRecord,
+    token: &ReplayReceiptToken,
 ) -> Result<IcpRefillRecord, InternalError> {
     let now_ns = IcOps::now_nanos();
     if IcpRefillRecordOps::transfer_window_stale(&record, now_ns, TX_WINDOW_NANOS) {
         IcpRefillRecordOps::mark_transfer_window_stale(record.id, now_ns)
     } else {
-        transfer_record(record).await
+        transfer_record(record, token).await
     }
 }
 
-async fn notify_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, InternalError> {
+async fn notify_record(
+    record: IcpRefillRecord,
+    token: &ReplayReceiptToken,
+) -> Result<IcpRefillRecord, InternalError> {
     let Some(block_index) = record.ledger_block_index else {
         return IcpRefillRecordOps::mark_notify_failed(
             record.id,
@@ -429,6 +456,8 @@ async fn notify_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inter
         canister_id: record.target_canister,
     };
 
+    mark_icp_refill_notify_effect(token, &record);
+
     match IcpRefillOps::notify_top_up(record.cmc_canister_id, args).await {
         Ok(Ok(cycles_sent)) => {
             let record =
@@ -438,7 +467,8 @@ async fn notify_record(record: IcpRefillRecord) -> Result<IcpRefillRecord, Inter
         }
         Ok(Err(err)) => apply_notify_error(record.id, record.notify_attempts, err),
         Err(err) => {
-            mark_retryable_notify_failure(record.id, record.notify_attempts, err.to_string())
+            mark_icp_refill_recovery_required(token, &record, "cmc_notify_top_up", &err);
+            Err(err)
         }
     }
 }
@@ -608,19 +638,32 @@ fn reserve_icp_refill_replay(
         ReplayReceiptDecision::ReturnCommitted(receipt) => {
             decode_icp_refill_replay_response(&receipt).map(IcpRefillReplayReservation::Replay)
         }
-        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
-            "ICP refill request is already in progress; retry later with the same operation id",
-        ))),
-        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(Error::conflict(
-            "ICP refill operation id was reused by a different caller",
-        ))),
-        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(Error::conflict(
-            "ICP refill operation id was reused with a different payload",
-        ))),
-        ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
-            "ICP refill replay receipt expired; retry with a new operation id",
-        ))),
+        ReplayReceiptDecision::OperationInProgress => {
+            log_icp_refill_replay_conflict(operation_id, "operation_in_progress");
+            Err(InternalError::public(Error::conflict(
+                "ICP refill request is already in progress; retry later with the same operation id",
+            )))
+        }
+        ReplayReceiptDecision::ActorMismatch => {
+            log_icp_refill_replay_conflict(operation_id, "actor_mismatch");
+            Err(InternalError::public(Error::conflict(
+                "ICP refill operation id was reused by a different caller",
+            )))
+        }
+        ReplayReceiptDecision::PayloadMismatch => {
+            log_icp_refill_replay_conflict(operation_id, "payload_mismatch");
+            Err(InternalError::public(Error::conflict(
+                "ICP refill operation id was reused with a different payload",
+            )))
+        }
+        ReplayReceiptDecision::Expired => {
+            log_icp_refill_replay_conflict(operation_id, "expired");
+            Err(InternalError::public(Error::conflict(
+                "ICP refill replay receipt expired; retry with a new operation id",
+            )))
+        }
         ReplayReceiptDecision::RecoveryRequired(reason) => {
+            log_icp_refill_replay_conflict(operation_id, "recovery_required");
             Err(InternalError::public(Error::conflict(format!(
                 "ICP refill request requires recovery before replay: {reason:?}"
             ))))
@@ -629,10 +672,13 @@ fn reserve_icp_refill_replay(
             error_code,
             error_bytes,
             error_bytes_truncated,
-        } => Err(InternalError::public(Error::conflict(format!(
-            "ICP refill request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
-            error_bytes.len()
-        )))),
+        } => {
+            log_icp_refill_replay_conflict(operation_id, "terminal_failed");
+            Err(InternalError::public(Error::conflict(format!(
+                "ICP refill request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
+                error_bytes.len()
+            ))))
+        }
     }
 }
 
@@ -642,7 +688,8 @@ fn finish_icp_refill_replay(
     response: &IcpRefillResponse,
 ) -> Result<(), InternalError> {
     if IcpRefillRecordOps::is_resumable(record) {
-        abort_reserved_receipt(token);
+        log_icp_refill_resumable_abort(record);
+        abort_uncommitted_receipt(token);
         return Ok(());
     }
 
@@ -652,7 +699,148 @@ fn finish_icp_refill_replay(
         encode_icp_refill_replay_response(response)?,
         IcOps::now_nanos(),
     );
+    log_icp_refill_commit(record);
     Ok(())
+}
+
+fn mark_icp_refill_transfer_effect(token: &ReplayReceiptToken, record: &IcpRefillRecord) {
+    mark_external_effect_in_flight(
+        token,
+        ExternalEffectDescriptor::IcpTransfer {
+            operation_id: OperationId::from_bytes(record.operation_id),
+        },
+        IcOps::now_nanos(),
+    );
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Info,
+        "icp refill replay effect marked effect=ledger_transfer command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(record.operation_id),
+        record.id,
+        record.source_canister,
+        record.target_canister,
+        record.amount_e8s
+    );
+}
+
+fn mark_icp_refill_notify_effect(token: &ReplayReceiptToken, record: &IcpRefillRecord) {
+    mark_external_effect_in_flight(
+        token,
+        ExternalEffectDescriptor::ManagementCall {
+            canister: record.cmc_canister_id,
+            method: "notify_top_up".to_string(),
+        },
+        IcOps::now_nanos(),
+    );
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Info,
+        "icp refill replay effect marked effect=cmc_notify_top_up command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(record.operation_id),
+        record.id,
+        record.source_canister,
+        record.target_canister,
+        record.amount_e8s
+    );
+}
+
+fn mark_icp_refill_recovery_required(
+    token: &ReplayReceiptToken,
+    record: &IcpRefillRecord,
+    effect: &'static str,
+    err: &InternalError,
+) {
+    let (error_class, error_origin) = err.log_fields();
+    mark_recovery_required(
+        token,
+        RecoveryReason::ExternalEffectStatusUnknown,
+        IcOps::now_nanos(),
+    );
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Error,
+        "icp refill replay recovery required effect={} command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={} error_class={} error_origin={}",
+        effect,
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(record.operation_id),
+        record.id,
+        record.source_canister,
+        record.target_canister,
+        record.amount_e8s,
+        error_class,
+        error_origin
+    );
+}
+
+fn log_icp_refill_fresh_reservation(request: &IcpRefillRequest) {
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Info,
+        "icp refill replay receipt reserved command_kind={} operation_id={} source={} target={} amount_e8s={}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(request.operation_id),
+        request.source_canister,
+        request.target_canister,
+        request.amount_e8s
+    );
+}
+
+fn log_icp_refill_committed_replay(response: &IcpRefillResponse) {
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Info,
+        "icp refill committed replay returned command_kind={} operation_id={} status={:?}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(response.operation_id),
+        response.status
+    );
+}
+
+fn log_icp_refill_replay_conflict(operation_id: [u8; 32], decision: &'static str) {
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Warn,
+        "icp refill replay decision blocked command_kind={} operation_id={} decision={}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(operation_id),
+        decision
+    );
+}
+
+fn log_icp_refill_resumable_abort(record: &IcpRefillRecord) {
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Info,
+        "icp refill replay receipt aborted for resumable record command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={} status={:?}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(record.operation_id),
+        record.id,
+        record.source_canister,
+        record.target_canister,
+        record.amount_e8s,
+        record.status
+    );
+}
+
+fn operation_id_display(operation_id: [u8; 32]) -> String {
+    OperationId::from_bytes(operation_id).to_string()
+}
+
+fn log_icp_refill_commit(record: &IcpRefillRecord) {
+    crate::log!(
+        crate::log::Topic::Cycles,
+        Ok,
+        "icp refill replay response committed command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={} status={:?}",
+        ICP_REFILL_REPLAY_COMMAND_KIND,
+        operation_id_display(record.operation_id),
+        record.id,
+        record.source_canister,
+        record.target_canister,
+        record.amount_e8s,
+        record.status
+    );
 }
 
 fn encode_icp_refill_replay_response(

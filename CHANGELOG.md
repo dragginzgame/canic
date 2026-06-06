@@ -16,12 +16,23 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.20` marks ICP refill ledger transfer and CMC `notify_top_up`
+  boundaries in shared replay receipts before the external awaits. Transport
+  failures after either marked boundary now preserve the receipt as
+  recovery-required instead of re-opening the operation for blind retry, while
+  known retryable ledger/CMC responses still leave the refill business record
+  resumable. The slice also adds Canic runtime logs for refill replay
+  reservation, replay conflicts, effect marking, commits, resumable aborts, and
+  recovery-required outcomes.
+
 - `0.61.19` wires ICP refill into shared replay receipt reservation for fresh
   manual refills. Terminal refill responses are now committed into shared
   receipts and returned on duplicate replay, while actor/payload/in-progress
   receipt conflicts map to public conflict errors. Retryable refill records
   still abort the temporary shared receipt so existing transfer/notify retry
-  behavior remains unchanged until external-effect marking lands.
+  behavior remains unchanged until external-effect marking lands. The design now
+  also requires Canic runtime logs for refill replay decisions, external-effect
+  marking, commits, resumable aborts, and recovery-required outcomes.
 
 - `0.61.18` starts the ICP refill shared replay-core migration by building the
   shared receipt reserve input in the manual-refill path while still using the

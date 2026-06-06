@@ -1,5 +1,14 @@
 use super::*;
-use crate::{cdk::types::TC, dto::error::ErrorCode};
+use crate::{
+    cdk::types::TC,
+    dto::error::ErrorCode,
+    ops::{
+        replay::model::{
+            ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus,
+        },
+        storage::replay::ReplayReceiptOps,
+    },
+};
 use std::str::FromStr;
 
 fn p(id: u8) -> Principal {
@@ -414,6 +423,123 @@ fn refill_replay_payload_mismatch_maps_to_conflict() {
     let public = err.public_error().expect("public replay error");
     assert_eq!(public.code, ErrorCode::Conflict);
     assert!(public.message.contains("different payload"));
+}
+
+#[test]
+fn refill_replay_marks_ledger_transfer_effect() {
+    let request = request_with_operation(183);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.operation_id = request.operation_id;
+
+    mark_icp_refill_transfer_effect(&token, &record);
+
+    let receipt = ReplayReceiptOps::get(token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+    assert_eq!(
+        receipt.effect,
+        Some(ExternalEffectDescriptor::IcpTransfer {
+            operation_id: OperationId::from_bytes(record.operation_id)
+        })
+    );
+}
+
+#[test]
+fn refill_replay_marks_cmc_notify_effect() {
+    let request = request_with_operation(184);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Transferred);
+    record.operation_id = request.operation_id;
+
+    mark_icp_refill_notify_effect(&token, &record);
+
+    let receipt = ReplayReceiptOps::get(token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+    assert_eq!(
+        receipt.effect,
+        Some(ExternalEffectDescriptor::ManagementCall {
+            canister: record.cmc_canister_id,
+            method: "notify_top_up".to_string()
+        })
+    );
+}
+
+#[test]
+fn refill_replay_resumable_response_aborts_in_flight_receipt() {
+    let request = request_with_operation(185);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.operation_id = request.operation_id;
+    let response = IcpRefillRecordOps::to_response(&record);
+    mark_icp_refill_transfer_effect(&token, &record);
+
+    finish_icp_refill_replay(&token, &record, &response).expect("abort in-flight receipt");
+
+    assert!(ReplayReceiptOps::get(token.key()).is_none());
+    assert!(matches!(
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
+            .expect("fresh after abort"),
+        IcpRefillReplayReservation::Fresh { .. }
+    ));
+}
+
+#[test]
+fn refill_replay_recovery_required_preserves_effect_receipt() {
+    let request = request_with_operation(186);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.operation_id = request.operation_id;
+    mark_icp_refill_transfer_effect(&token, &record);
+
+    mark_icp_refill_recovery_required(
+        &token,
+        &record,
+        "ledger_transfer",
+        &InternalError::infra(InternalErrorOrigin::Infra, "call failed"),
+    );
+
+    let receipt = ReplayReceiptOps::get(token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(
+        receipt.status,
+        ReplayReceiptStatus::RecoveryRequired {
+            reason: RecoveryReason::ExternalEffectStatusUnknown
+        }
+    );
+    assert_eq!(
+        receipt.effect,
+        Some(ExternalEffectDescriptor::IcpTransfer {
+            operation_id: OperationId::from_bytes(record.operation_id)
+        })
+    );
 }
 
 #[test]
