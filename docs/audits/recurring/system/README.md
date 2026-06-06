@@ -34,6 +34,7 @@ These audits cover:
 - [instruction-footprint.md](instruction-footprint.md)
 - [bootstrap-lifecycle-symmetry.md](bootstrap-lifecycle-symmetry.md)
 - [change-friction.md](change-friction.md)
+- [workflow-purity.md](workflow-purity.md)
 
 ## Usage Guidance
 
@@ -50,6 +51,9 @@ These audits cover:
   contracts, or whether crate-local package documentation matches intended downstream use.
 - Use `dry-consolidation` after broad CLI/host/backup changes or when a cleanup
   pass should distinguish useful local duplication from behavior-bearing drift.
+- Use `workflow-purity` after workflow/replay/cost-guard/intent/recovery
+  changes to verify workflow remains orchestration and lower layers retain
+  records, codecs, policy, and platform-effect ownership.
 
 ## Reporting Discipline
 

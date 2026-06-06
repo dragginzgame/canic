@@ -9,6 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.15` completed the pool `Recycle` replay-proof slice from
+  `docs/design/0.61-replay-protection/0.61-design.md`.
+  `POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST` now records `Recycle` as
+  implemented with `ResponseIdempotent(pool.recycle.ensure_v1)` and deployment
+  quota/reserve policy. Recycle now removes the canister from the subnet
+  registry and records a metadata-preserving pending-reset pool entry before
+  crossing the management reset boundary; duplicate retries stop at an
+  existing pending-reset or ready pool entry instead of repeating the reset
+  path. Successful recycle preserves the original registry role, parent, and
+  module hash in the ready pool entry. Failed immediate reset leaves the
+  pending-reset pool entry in place and schedules pool reset recovery. No CLI
+  commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::pool --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  ```
 - `0.61.14` completed the pool `ImportImmediate` replay-proof slice from
   `docs/design/0.61-replay-protection/0.61-design.md`.
   `POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST` now records `ImportImmediate` as

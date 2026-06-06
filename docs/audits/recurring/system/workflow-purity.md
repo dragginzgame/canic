@@ -1,5 +1,7 @@
 # Audit: Workflow Purity
 
+Method: `workflow-purity-v2`
+
 ## Purpose
 
 Verify that workflow code remains orchestration code and does not absorb lower
@@ -18,13 +20,27 @@ Workflow may:
 Workflow must not:
 
 - construct storage records;
+- mutate storage records directly;
+- expose persisted records as workflow-local state carriers when an ops-owned
+  command/view type would keep the boundary cleaner;
 - perform serialization;
 - own conversions;
 - parse transport formats;
 - access stable structures directly;
 - perform IC/platform calls outside ops;
 - own auth semantics;
-- implement persistence policy.
+- implement persistence policy;
+- own replay/cost/intent ledger schemas or codecs.
+
+Recent 0.61 replay-protection work expanded workflow orchestration around
+replay receipts, cost guards, pending-reset recovery, and management effects.
+This audit must therefore distinguish allowed sequencing from ownership leaks:
+
+- Allowed: workflow reserves, aborts, marks, commits, or recovers through
+  `ops::*` facades while ordering side effects.
+- Not allowed: workflow defines persisted receipt schemas, encodes stored replay
+  responses itself, mutates stable records, or implements quota/replay/intent
+  policies directly.
 
 ## Scope
 
@@ -36,6 +52,8 @@ Boundary comparison scope:
 
 - `crates/canic-core/src/domain/policy/**`
 - `crates/canic-core/src/ops/**`
+- `crates/canic-core/src/replay_policy.rs`
+- `crates/canic-core/src/storage/**`
 - `crates/canic-core/src/access/**`
 - `crates/canic-macros/src/endpoint/**`
 
@@ -44,21 +62,30 @@ Boundary comparison scope:
 - adding workflow modules;
 - moving logic between workflow, policy, and ops;
 - adding retry, replay, funding, lifecycle, or install orchestration;
+- adding cost guards, durable intents, replay receipts, pending-reset recovery,
+  or management-effect recovery;
+- changing persisted record shapes consumed by workflow;
 - changing endpoint macro auth/access lowering.
 
 ## Checklist
 
 ### 1. Storage Record / Stable Access
 
-Workflow must not construct or depend on storage records or stable structures.
+Workflow must not construct or mutate storage records or stable structures.
+Direct production dependence on persisted record types is at least a watchpoint
+and is a finding when workflow stores, transforms, or passes the record around
+as its own state carrier.
 
 ```bash
-rg -n 'storage::.*Record|stable::|CanisterRecord|EnvRecord|StateRecord|RootReplayRecord' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'storage::.*Record|storage::stable|stable::|CanisterRecord|EnvRecord|StateRecord|RootReplayRecord|ReplayReceipt|IcpRefillRecord|PoolRecord|CanisterRecord' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
-- no production storage record imports;
+- no production stable-storage imports;
+- no production construction or mutation of `*Record` types;
+- no workflow-owned state machines that carry persisted records where ops-owned
+  transition DTOs would work;
 - no direct stable structure access;
 - test-only storage fixtures are allowed in `tests.rs`.
 
@@ -67,34 +94,45 @@ Expected:
 Workflow must not own persistence serialization or transport parsing.
 
 ```bash
-rg -n 'serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder|encode_|decode_|from_str|parse\(|IDLDeserialize|IDLBuilder|to_bytes|from_bytes' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder|encode_one|decode_one|encode_|decode_|from_str|parse\(|IDLDeserialize|IDLBuilder|to_bytes|from_bytes' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Classify matches:
 
-- Candid call/install argument bounds are allowed only as boundary adapters.
-- Replay decode wrappers must delegate actual encoding/decoding to ops.
+- Candid call/install argument bounds are allowed only as thin boundary
+  adapters around ops calls.
+- Replay response, receipt, capability-proof, and durable-intent codecs should
+  live in ops or a lower dedicated codec module.
+- Workflow wrappers named `encode_*` or `decode_*` are allowed only when they
+  delegate actual encoding/decoding to ops.
 - Any JSON/text/YAML parsing in workflow is a violation.
 
 ### 3. Conversion Ownership
 
-Workflow must not own DTO, record, infra, or view conversion logic.
+Workflow must not own DTO, record, infra, policy-input, or view conversion
+logic.
 
 ```bash
-rg -n 'struct .*Adapter|from_dto|to_dto|request_args_from_dto|result_to_dto|record_to|to_response|record_to_response|impl From|impl TryFrom' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'struct .*Adapter|from_dto|to_dto|request_args_from_dto|result_to_dto|record_to|to_response|record_to_response|record_to_policy_input|impl From|impl TryFrom|mapper::' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
-- conversions live in ops, API, or dedicated mapper modules outside workflow;
+- conversions live in ops, API, policy-input mappers, or dedicated mapper
+  modules outside workflow;
 - workflow may call conversion helpers owned by other layers.
+- workflow-local `impl From`/`TryFrom` is allowed only for workflow-local error
+  wrapping or workflow-owned internal enums; DTO/proof/blob conversions are
+  findings.
 
 ### 4. Platform Calls
 
-Workflow must call platform effects only through ops.
+Workflow must call platform effects only through ops. Workflow may sequence
+ops-owned platform effects, but destructive or expensive effects must be paired
+with the appropriate replay, intent, or cost-guard preconditions.
 
 ```bash
-rg -n 'ic_cdk|crate::cdk::api|cdk::api|HttpInfra|MgmtInfra|call_raw|set_timer|set_certified_data|data_certificate|sign_with_ecdsa|ecdsa_public_key' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'ic_cdk|crate::cdk::api|cdk::api|HttpInfra|MgmtInfra|call_raw|set_timer|set_certified_data|data_certificate|sign_with_ecdsa|ecdsa_public_key|create_canister|install_code|uninstall_code|update_settings|transfer|notify' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -102,19 +140,24 @@ Expected:
 - no direct infra/CDK calls;
 - ops calls such as `IcOps`, `MgmtOps`, `RequestOps`, and `HttpOps` are
   allowed.
+- management create/install/reset/transfer flows have explicit replay, intent,
+  recovery, or cost-guard ordering where duplicate execution would be harmful.
 
 ### 5. Auth Semantics
 
 Workflow must not own endpoint auth semantics.
 
 ```bash
-rg -n 'verify_caller|DelegatedToken|resolve_authenticated_identity|authenticated_with_scope|consume_update|token_material|verify_delegated_token' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'verify_caller|DelegatedToken|resolve_authenticated_identity|authenticated_with_scope|consume_update|token_material|verify_delegated_token|subject|scope|audience' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
 - endpoint auth remains in macros/access/API auth boundaries;
 - workflow may orchestrate auth runtime setup or key publication through ops.
+- workflow capability authorization may compare already-authenticated callers
+  with request subjects, but it must not verify delegated-token material or
+  resolve endpoint identity.
 
 ### 6. Policy / Persistence Policy Ownership
 
@@ -122,7 +165,7 @@ Workflow may apply policy but must not define pure policy types or own mutable
 policy ledgers.
 
 ```bash
-rg -n 'struct .*Policy|enum .*Policy|impl .*Policy|thread_local!.*FUNDING|static .*LEDGER' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'struct .*Policy|enum .*Policy|impl .*Policy|thread_local!.*FUNDING|thread_local!.*LEDGER|static .*LEDGER|Quota|CostClass|ReplayPolicy|IntentPolicy' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -130,14 +173,92 @@ Expected:
 - pure policy lives in `domain/policy`;
 - runtime/persistence state lives in ops or storage;
 - workflow coordinates state reads, policy evaluation, and mutation order.
+- cost class, quota, replay, and intent semantics are imported from
+  `replay_policy`, `domain/policy`, or `ops`, not invented in workflow.
+
+### 7. Replay / Cost / Intent Boundary
+
+Workflow may orchestrate replay, cost guards, and durable intents, but ownership
+of replay/cost/intent state and codec behavior must remain below workflow.
+
+```bash
+rg -n 'ReplayReceipt|ReplayReceiptDecision|ReplayReceiptToken|reserve_or_replay|commit_receipt|abort_reserved|mark_recovery_required|CostGuardOps|CostGuardRequest|CostGuardPermit|IntentStoreOps|try_reserve|commit_at|abort\\(' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- replay reservation happens before a non-idempotent external effect;
+- replay commit happens only after the authorized effect and authoritative state
+  update succeed;
+- replay reservations are aborted or marked recovery-required on failure;
+- cost guard reserve/complete/recover paths bracket expensive or quota-bearing
+  effects;
+- intent store operations are invoked through ops, with workflow limited to
+  sequencing and metric/error handling.
+
+### 8. Recovery / Idempotence Surface
+
+Recent pool and replay work makes recovery ordering a first-class workflow
+purity risk. Workflow may decide sequence, but recovery state must be ops-owned
+and duplicate requests must stop before repeated destructive effects.
+
+```bash
+rg -n 'PendingReset|RecoveryRequired|schedule\\(|AlreadyPresent|mark_pending_reset|mark_ready|mark_failed|register_pending_reset|register_ready|remove\\(&pid\\)|reset_into_pool|reset path|duplicate|idempotent' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- workflow sets or requests durable recovery markers before crossing
+  destructive management boundaries;
+- duplicate or retry branches short-circuit before repeating create/reset/install
+  effects;
+- pending/recovery markers are stored through ops;
+- failure branches do not overwrite recovery markers in a way that makes a retry
+  repeat the same external effect unsafely.
+
+### 9. Metrics / Error Mapping
+
+Workflow may record metrics and map errors at orchestration boundaries, but
+metrics and formatted errors must not become policy inputs.
+
+```bash
+rg -n 'MetricEvent|Metrics::record|record_.*metric|format!\\(|to_string\\(\\)|InternalError::workflow|InternalError::public|Error::' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- metric labels are bounded or delegated to metrics helpers;
+- error mapping stays at boundary seams and does not replace typed policy or
+  ops errors;
+- workflow does not branch on formatted error strings.
+
+### 10. Module Pressure
+
+Workflow files that accumulate many responsibilities should be flagged even
+when individual responsibilities are delegated correctly.
+
+```bash
+wc -l crates/canic-core/src/workflow/**/*.rs
+rg -n '^fn |^pub fn |^async fn |^pub async fn |^struct |^enum |^impl ' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- large workflow modules have clear section boundaries and helper ownership;
+- high-pressure modules list concrete extraction candidates in the report;
+- extraction candidates preserve dependency direction rather than moving code to
+  another workflow file by default.
 
 ## Output Requirements
 
 Result reports must include:
 
 - exact scope and commit;
+- method tag/version and method-drift notes;
 - pass/fail for each checklist item;
 - any code changes made;
+- recent-change coverage notes for replay, cost guard, intents, management
+  effects, and recovery;
 - residual watchpoints;
 - validation commands.
 

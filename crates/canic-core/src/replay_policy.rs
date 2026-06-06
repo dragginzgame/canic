@@ -199,7 +199,7 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
     pool_admin_response_idempotent(
         "Recycle",
         "pool.recycle.ensure_v1",
-        ReplayImplementationStatus::ReleaseBlocker,
+        ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn pool_recycle_remains_explicit_release_blocker() {
+    fn pool_recycle_command_is_manifested_as_implemented_idempotent() {
         let entry = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
             .iter()
             .find(|entry| entry.variant == "Recycle")
@@ -632,12 +632,17 @@ mod tests {
 
         assert_eq!(
             entry.implementation_status,
-            ReplayImplementationStatus::ReleaseBlocker
+            ReplayImplementationStatus::Implemented
         );
-        assert!(
-            matches!(entry.replay_policy, ReplayPolicy::ResponseIdempotent { .. }),
-            "Recycle must declare its chosen replay class"
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::ResponseIdempotent {
+                command_kind: "pool.recycle.ensure_v1",
+            }
         );
+        assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
+        assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
+        assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
     }
 
     #[test]

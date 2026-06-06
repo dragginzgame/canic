@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.15` graduates pool `Recycle` from release blocker to implemented
+  response-idempotent behavior. Recycle now removes the canister from the
+  subnet registry and records a metadata-preserving pending-reset pool entry
+  before crossing the management reset boundary, so duplicate retries stop at
+  the existing pending or ready pool entry instead of repeating the reset path.
+
 - `0.61.14` graduates pool `ImportImmediate` from release blocker to
   implemented response-idempotent behavior. Immediate import now has manifest
   coverage as `pool.import_immediate.ensure_v1`, with tests proving duplicate

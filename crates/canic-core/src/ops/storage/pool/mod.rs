@@ -37,6 +37,24 @@ impl PoolOps {
         );
     }
 
+    pub fn register_pending_reset(
+        pid: Principal,
+        role: Option<CanisterRole>,
+        parent: Option<Principal>,
+        module_hash: Option<Vec<u8>>,
+        created_at: u64,
+    ) {
+        PoolStore::register(
+            pid,
+            Cycles::default(),
+            PoolStatus::PendingReset,
+            role,
+            parent,
+            module_hash,
+            created_at,
+        );
+    }
+
     // ---------------------------------------------------------------
     // State transitions
     // ---------------------------------------------------------------
