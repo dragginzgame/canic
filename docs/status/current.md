@@ -9,6 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.18` started the ICP refill shared replay-core migration from
+  `docs/design/0.61-replay-protection/0.61-design.md`. ICP refill now has
+  shared replay identity helpers for command kind `icp.refill.v1`, conversion
+  from `IcpRefillRequest.operation_id` into `OperationId`, direct-caller replay
+  actor derivation, and canonical payload hashing through
+  `ReplayPayloadHasher`. The manual-refill path now constructs a shared
+  `ReplayReceiptReserveInput` from those fields and uses its operation ID bytes
+  for the existing refill record lookup/create path. Tests prove the refill
+  payload hash excludes `operation_id` while binding the actor, source
+  canister, source subaccount, target canister, amount, and refill mode.
+  `canic_icp_refill` remains a release blocker until live refill execution
+  reserves, marks, and commits shared replay receipts around transfer/notify
+  progress. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  ```
 - `0.61.17` completed the canister-upgrade manifest graduation from
   `docs/design/0.61-replay-protection/0.61-design.md`.
   `ENDPOINT_REPLAY_POLICY_MANIFEST` now records `canic_canister_upgrade` as

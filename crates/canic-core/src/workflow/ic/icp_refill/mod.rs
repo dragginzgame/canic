@@ -22,6 +22,10 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
+        replay::{
+            model::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher},
+            receipt::ReplayReceiptReserveInput,
+        },
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{
             children::CanisterChildrenOps,
@@ -38,6 +42,7 @@ use thiserror::Error as ThisError;
 const TX_WINDOW_NANOS: u64 = 24 * 60 * 60 * 1_000_000_000;
 const MAX_NOTIFY_ATTEMPTS: u32 = 5;
 const ICP_LEDGER_DECIMALS: u8 = 8;
+const ICP_REFILL_REPLAY_COMMAND_KIND: &str = "icp.refill.v1";
 
 ///
 /// IcpRefillWorkflowError
@@ -103,7 +108,11 @@ impl IcpRefillWorkflow {
         request: IcpRefillRequest,
     ) -> Result<IcpRefillResponse, InternalError> {
         validate_manual_request_shape(&request, false)?;
-        if let Some(record) = IcpRefillRecordOps::find_by_operation_id(request.operation_id) {
+        let replay_input =
+            icp_refill_replay_reserve_input(&request, IcOps::msg_caller(), IcOps::now_nanos());
+        let operation_id = replay_input.operation_id.into_bytes();
+
+        if let Some(record) = IcpRefillRecordOps::find_by_operation_id(operation_id) {
             IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
             let record = advance_record(record).await?;
             return Ok(IcpRefillRecordOps::to_response(&record));
@@ -113,7 +122,7 @@ impl IcpRefillWorkflow {
         let cmc_account =
             IcpRefillOps::cmc_topup_account(context.cmc_canister_id, request.target_canister)?;
         let record = IcpRefillRecordOps::create_or_get(IcpRefillRecordCreateInput {
-            operation_id: request.operation_id,
+            operation_id,
             source_canister: request.source_canister,
             source_subaccount: request.source_subaccount,
             target_canister: request.target_canister,
@@ -514,6 +523,66 @@ fn validate_manual_request_shape(
     }
 
     Ok(())
+}
+
+fn icp_refill_replay_reserve_input(
+    request: &IcpRefillRequest,
+    caller: Principal,
+    now_ns: u64,
+) -> ReplayReceiptReserveInput {
+    let command_kind = icp_refill_command_kind();
+    let actor = icp_refill_replay_actor(caller);
+    let payload_hash = icp_refill_payload_hash(&command_kind, &actor, request);
+
+    ReplayReceiptReserveInput::new(
+        command_kind,
+        icp_refill_operation_id(request),
+        actor,
+        payload_hash,
+        now_ns,
+    )
+}
+
+const fn icp_refill_operation_id(request: &IcpRefillRequest) -> OperationId {
+    OperationId::from_bytes(request.operation_id)
+}
+
+fn icp_refill_command_kind() -> CommandKind {
+    CommandKind::new(ICP_REFILL_REPLAY_COMMAND_KIND)
+        .expect("ICP refill replay command kind is a valid static label")
+}
+
+const fn icp_refill_replay_actor(caller: Principal) -> ReplayActor {
+    ReplayActor::direct_caller(caller)
+}
+
+fn icp_refill_payload_hash(
+    command_kind: &CommandKind,
+    actor: &ReplayActor,
+    request: &IcpRefillRequest,
+) -> [u8; 32] {
+    let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
+    hasher.hash_str("IcpRefill");
+    hasher.hash_principal(&request.source_canister);
+    hash_optional_subaccount(&mut hasher, request.source_subaccount);
+    hasher.hash_principal(&request.target_canister);
+    hasher.hash_u64(request.amount_e8s);
+    hasher.hash_str(icp_refill_mode_label(request.mode));
+    hasher.finish()
+}
+
+fn hash_optional_subaccount(hasher: &mut ReplayPayloadHasher, subaccount: Option<[u8; 32]>) {
+    hasher.hash_bool(subaccount.is_some());
+    if let Some(subaccount) = subaccount {
+        hasher.hash_bytes(&subaccount);
+    }
+}
+
+const fn icp_refill_mode_label(mode: IcpRefillMode) -> &'static str {
+    match mode {
+        IcpRefillMode::Canister => "canister",
+        IcpRefillMode::Fabricate => "fabricate",
+    }
 }
 
 async fn configured_rate(

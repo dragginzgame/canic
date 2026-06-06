@@ -16,6 +16,13 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.18` starts the ICP refill shared replay-core migration by building the
+  shared receipt reserve input in the manual-refill path while still using the
+  existing refill record store for execution state. The slice adds the refill
+  command kind, operation-id conversion, replay actor, and canonical payload
+  hash helpers, with tests proving the hash excludes the operation ID and binds
+  actor plus transfer fields before receipt reservation is enabled.
+
 - `0.61.17` graduates `canic_canister_upgrade` from release blocker to
   implemented costed response-idempotent behavior. The direct controller
   endpoint is now recorded as `management.canister_upgrade.v1`, with tests

@@ -46,6 +46,12 @@ fn request_for(record: &IcpRefillRecord) -> IcpRefillRequest {
     }
 }
 
+fn request_with_operation(operation_byte: u8) -> IcpRefillRequest {
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.operation_id = [operation_byte; 32];
+    request_for(&record)
+}
+
 fn stored_record(id: u64, operation_byte: u8, status: IcpRefillStatus) -> IcpRefillRecord {
     let mut record = sample_record(status);
     record.id = id;
@@ -266,6 +272,81 @@ fn hub_self_refill_operation_id_binds_identity_amount_and_time() {
     assert_eq!(first, same);
     assert_ne!(first, different_amount);
     assert_ne!(first, different_time);
+}
+
+#[test]
+fn refill_replay_operation_id_uses_request_bytes_exactly() {
+    let request = request_with_operation(77);
+
+    assert_eq!(
+        icp_refill_operation_id(&request).into_bytes(),
+        request.operation_id
+    );
+}
+
+#[test]
+fn refill_replay_reserve_input_carries_shared_identity() {
+    let request = request_with_operation(78);
+    let caller = p(90);
+    let now_ns = 123_456;
+    let input = icp_refill_replay_reserve_input(&request, caller, now_ns);
+
+    assert_eq!(input.command_kind.as_str(), "icp.refill.v1");
+    assert_eq!(input.operation_id.into_bytes(), request.operation_id);
+    assert_eq!(input.actor, icp_refill_replay_actor(caller));
+    assert_eq!(input.now_ns, now_ns);
+    assert_eq!(
+        input.payload_hash,
+        icp_refill_payload_hash(&input.command_kind, &input.actor, &request)
+    );
+}
+
+#[test]
+fn refill_replay_payload_hash_excludes_operation_id() {
+    let command_kind = icp_refill_command_kind();
+    let actor = icp_refill_replay_actor(p(90));
+    let first = request_with_operation(1);
+    let second = request_with_operation(2);
+
+    assert_eq!(
+        icp_refill_payload_hash(&command_kind, &actor, &first),
+        icp_refill_payload_hash(&command_kind, &actor, &second)
+    );
+}
+
+#[test]
+fn refill_replay_payload_hash_binds_actor_and_transfer_fields() {
+    let command_kind = icp_refill_command_kind();
+    let actor = icp_refill_replay_actor(p(90));
+    let other_actor = icp_refill_replay_actor(p(91));
+    let request = request_with_operation(3);
+
+    let base = icp_refill_payload_hash(&command_kind, &actor, &request);
+    assert_ne!(
+        base,
+        icp_refill_payload_hash(&command_kind, &other_actor, &request)
+    );
+
+    let mut changed_amount = request.clone();
+    changed_amount.amount_e8s += 1;
+    assert_ne!(
+        base,
+        icp_refill_payload_hash(&command_kind, &actor, &changed_amount)
+    );
+
+    let mut changed_subaccount = request.clone();
+    changed_subaccount.source_subaccount = Some([9; 32]);
+    assert_ne!(
+        base,
+        icp_refill_payload_hash(&command_kind, &actor, &changed_subaccount)
+    );
+
+    let mut changed_target = request;
+    changed_target.target_canister = p(92);
+    assert_ne!(
+        base,
+        icp_refill_payload_hash(&command_kind, &actor, &changed_target)
+    );
 }
 
 #[test]
