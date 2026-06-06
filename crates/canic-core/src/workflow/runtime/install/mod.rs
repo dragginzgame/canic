@@ -56,8 +56,9 @@ impl ModuleInstallWorkflow {
         }
     }
 
-    /// Install or upgrade one canister from an already resolved module source.
-    pub async fn install_code<T: ArgumentEncoder>(
+    /// Install or upgrade one canister from an already resolved module source after a deployment permit.
+    pub async fn install_code_with_permit<T: ArgumentEncoder>(
+        permit: &CostGuardPermit,
         mode: CanisterInstallMode,
         target_canister: Principal,
         source: &ApprovedModuleSource,
@@ -68,7 +69,8 @@ impl ModuleInstallWorkflow {
                 source_canister,
                 chunk_hashes,
             } => {
-                MgmtOps::install_chunked_code(
+                MgmtOps::install_chunked_code_with_permit(
+                    permit,
                     mode,
                     target_canister,
                     *source_canister,
@@ -79,8 +81,14 @@ impl ModuleInstallWorkflow {
                 .await
             }
             ApprovedModulePayload::Embedded { wasm_module } => {
-                MgmtOps::install_code(mode, target_canister, wasm_module.as_ref().to_vec(), args)
-                    .await
+                MgmtOps::install_code_with_permit(
+                    permit,
+                    mode,
+                    target_canister,
+                    wasm_module.as_ref().to_vec(),
+                    args,
+                )
+                .await
             }
         }
     }

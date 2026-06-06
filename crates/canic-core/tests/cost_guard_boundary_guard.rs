@@ -114,6 +114,7 @@ fn provisioning_workflow_uses_management_permit_wrappers() {
             "MgmtOps::create_canister(",
             "MgmtOps::deposit_cycles(",
             "ModuleInstallWorkflow::install_with_payload(",
+            "ModuleInstallWorkflow::install_code(",
         ] {
             if contents.contains(forbidden) {
                 violations.push(format!(

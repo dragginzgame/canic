@@ -9,6 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.37` put actual canister upgrade installs behind a management-deployment
+  `CostGuardPermit`. `CanisterLifecycleEvent::Upgrade` now carries explicit
+  cost context, lifecycle upgrade reserves deployment quota/cycles only after
+  the module-hash plan says an upgrade is needed, and the install workflow no
+  longer exposes an unpermitted lifecycle install helper. The reserve boundary
+  logs command kind, quota subject, payer, and target canister without logging
+  module bytes or payloads. Already-current upgrades still skip before quota or
+  cycle reservation. No CLI commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core workflow::canister_lifecycle --lib -- --nocapture
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo test -p canic-core --test cost_guard_boundary_guard -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.36` threaded the root provision deployment `CostGuardPermit` through
   lifecycle creation. `CanisterLifecycleEvent::Create` now carries the reserved
   permit, provisioning allocation uses permit-required wrappers for pool

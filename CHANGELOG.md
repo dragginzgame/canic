@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.37` puts actual canister upgrade installs behind a management
+  deployment `CostGuardPermit`. Already-current upgrades still skip before
+  quota or cycle reservation.
+
 - `0.61.36` threads root provision's deployment permit through lifecycle
   creation. Provisioning allocation, pool top-up, canister create, and initial
   install now use permit-required management wrappers.

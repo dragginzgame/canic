@@ -2,13 +2,15 @@ mod propagation;
 
 use crate::{
     InternalError,
+    cdk::types::TC,
     domain::policy::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },
     ops::{
-        cost_guard::CostGuardPermit,
+        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::mgmt::{CanisterInstallMode, MgmtOps},
+        replay::model::CommandKind,
         runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
         runtime::metrics::canister_ops::{
             CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
@@ -21,6 +23,7 @@ use crate::{
         storage::registry::subnet::SubnetRegistryOps,
         topology::input::mapper::RegistryPolicyInputMapper,
     },
+    replay_policy::CostClass,
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,
         prelude::*, runtime::install::ModuleInstallWorkflow,
@@ -38,8 +41,19 @@ pub enum CanisterLifecycleEvent<'a> {
         extra_arg: Option<Vec<u8>>,
     },
     Upgrade {
+        cost_context: CanisterUpgradeCostContext,
         pid: Principal,
     },
+}
+
+///
+/// CanisterUpgradeCostContext
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanisterUpgradeCostContext {
+    pub quota_subject: Principal,
+    pub payer: Principal,
+    pub now_secs: u64,
 }
 
 ///
@@ -76,7 +90,9 @@ impl CanisterLifecycleWorkflow {
                 extra_arg,
             } => Self::apply_create(deployment_permit, role, parent, extra_arg).await,
 
-            CanisterLifecycleEvent::Upgrade { pid } => Self::apply_upgrade(pid).await,
+            CanisterLifecycleEvent::Upgrade { cost_context, pid } => {
+                Self::apply_upgrade(cost_context, pid).await
+            }
         }
     }
 
@@ -170,7 +186,10 @@ impl CanisterLifecycleWorkflow {
 
     // ───────────────────────── Upgrade ──────────────────────────
 
-    async fn apply_upgrade(pid: Principal) -> Result<CanisterLifecycleResult, InternalError> {
+    async fn apply_upgrade(
+        cost_context: CanisterUpgradeCostContext,
+        pid: Principal,
+    ) -> Result<CanisterLifecycleResult, InternalError> {
         let (role, parent_pid) = upgrade_target(pid)?;
 
         record_provisioning(
@@ -218,7 +237,29 @@ impl CanisterLifecycleWorkflow {
             return Ok(CanisterLifecycleResult::default());
         }
 
-        if let Err(err) = ModuleInstallWorkflow::install_code(
+        let cost_permit = match reserve_canister_upgrade_cost_guard(
+            cost_context,
+            MgmtOps::canister_cycle_balance().to_u128(),
+        ) {
+            Ok(permit) => permit,
+            Err(err) => {
+                record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
+                record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
+                return Err(err);
+            }
+        };
+        log!(
+            Topic::CanisterLifecycle,
+            Info,
+            "canister_upgrade: deployment cost guard reserved command_kind={} quota_subject={} payer={} target={}",
+            CANISTER_UPGRADE_COMMAND_KIND,
+            cost_context.quota_subject,
+            cost_context.payer,
+            pid
+        );
+
+        if let Err(err) = ModuleInstallWorkflow::install_code_with_permit(
+            &cost_permit,
             CanisterInstallMode::Upgrade(None),
             pid,
             &module_source,
@@ -226,6 +267,12 @@ impl CanisterLifecycleWorkflow {
         )
         .await
         {
+            let _ = CostGuardOps::recover(&cost_permit, crate::ops::ic::IcOps::now_secs());
+            record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
+            record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
+            return Err(err);
+        }
+        if let Err(err) = CostGuardOps::complete(&cost_permit, crate::ops::ic::IcOps::now_secs()) {
             record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
             record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
             return Err(err);
@@ -246,6 +293,41 @@ impl CanisterLifecycleWorkflow {
         );
 
         Ok(CanisterLifecycleResult::default())
+    }
+}
+
+const CANISTER_UPGRADE_COMMAND_KIND: &str = "management.canister_upgrade.v1";
+const CANISTER_UPGRADE_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
+const MAX_CANISTER_UPGRADE_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 10;
+const CANISTER_UPGRADE_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
+const MIN_CANISTER_UPGRADE_CYCLES_AFTER_RESERVATION: u128 = TC;
+
+fn reserve_canister_upgrade_cost_guard(
+    cost_context: CanisterUpgradeCostContext,
+    current_cycle_balance: u128,
+) -> Result<CostGuardPermit, InternalError> {
+    CostGuardOps::reserve(canister_upgrade_cost_guard_request(
+        cost_context,
+        current_cycle_balance,
+    ))
+}
+
+pub(super) fn canister_upgrade_cost_guard_request(
+    cost_context: CanisterUpgradeCostContext,
+    current_cycle_balance: u128,
+) -> CostGuardRequest {
+    CostGuardRequest {
+        cost_class: CostClass::ManagementDeployment,
+        command_kind: CommandKind::new(CANISTER_UPGRADE_COMMAND_KIND)
+            .expect("canister upgrade command kind is a valid static label"),
+        quota_subject: cost_context.quota_subject,
+        payer: cost_context.payer,
+        now_secs: cost_context.now_secs,
+        quota_window_secs: CANISTER_UPGRADE_DEPLOYMENT_QUOTA_WINDOW_SECONDS,
+        max_operations_per_window: MAX_CANISTER_UPGRADE_DEPLOYMENT_OPERATIONS_PER_WINDOW,
+        current_cycle_balance,
+        cycle_reservation_cycles: CANISTER_UPGRADE_CYCLE_RESERVATION_CYCLES,
+        min_cycles_after_reservation: MIN_CANISTER_UPGRADE_CYCLES_AFTER_RESERVATION,
     }
 }
 
@@ -527,5 +609,39 @@ fn assert_registered_immediate_parent(
             found: record.parent_pid,
         }
         .into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn canister_upgrade_cost_guard_request_uses_deployment_policy() {
+        let cost_context = CanisterUpgradeCostContext {
+            quota_subject: p(7),
+            payer: p(8),
+            now_secs: 9_000,
+        };
+
+        let request = canister_upgrade_cost_guard_request(cost_context, 100 * TC);
+
+        assert_eq!(request.cost_class, CostClass::ManagementDeployment);
+        assert_eq!(
+            request.command_kind.as_str(),
+            "management.canister_upgrade.v1"
+        );
+        assert_eq!(request.quota_subject, cost_context.quota_subject);
+        assert_eq!(request.payer, cost_context.payer);
+        assert_eq!(request.now_secs, cost_context.now_secs);
+        assert_eq!(request.quota_window_secs, 60);
+        assert_eq!(request.max_operations_per_window, 10);
+        assert_eq!(request.current_cycle_balance, 100 * TC);
+        assert_eq!(request.cycle_reservation_cycles, 1_000_000_000);
+        assert_eq!(request.min_cycles_after_reservation, TC);
     }
 }

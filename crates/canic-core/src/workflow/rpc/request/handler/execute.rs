@@ -31,7 +31,9 @@ use crate::{
     },
     replay_policy::CostClass,
     workflow::{
-        canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
+        canister_lifecycle::{
+            CanisterLifecycleEvent, CanisterLifecycleWorkflow, CanisterUpgradeCostContext,
+        },
         pool::PoolWorkflow,
         rpc::RpcWorkflowError,
     },
@@ -56,7 +58,7 @@ pub(super) async fn execute_root_capability(
 
     let result = match capability {
         RootCapability::Provision(req) => execute_provision(ctx, pending, &req).await,
-        RootCapability::Upgrade(req) => execute_upgrade(&req).await,
+        RootCapability::Upgrade(req) => execute_upgrade(ctx, &req).await,
         RootCapability::RecycleCanister(req) => execute_recycle(&req).await,
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {
@@ -265,8 +267,16 @@ fn mark_root_provision_recovery_required(
     );
 }
 
-async fn execute_upgrade(req: &UpgradeCanisterRequest) -> Result<Response, InternalError> {
+async fn execute_upgrade(
+    ctx: &RootContext,
+    req: &UpgradeCanisterRequest,
+) -> Result<Response, InternalError> {
     let event = CanisterLifecycleEvent::Upgrade {
+        cost_context: CanisterUpgradeCostContext {
+            quota_subject: ctx.caller,
+            payer: ctx.self_pid,
+            now_secs: ctx.now,
+        },
         pid: req.canister_pid,
     };
 
