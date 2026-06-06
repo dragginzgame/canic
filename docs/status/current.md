@@ -9,6 +9,26 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.32` added write-before-send pending operation logging for generated
+  manual ICP refill operation IDs. Live `canic cycles convert` canister mode
+  now writes generated IDs before dispatch to:
+  ```text
+  .canic/operations/pending.json
+  ```
+  Matching `pending_send` records are reused for the same generated-ID command
+  after a CLI crash or uncertain send; successful CLI return marks the entry
+  `completed`, and failures leave it pending. Non-JSON output reports
+  `operation_id_source=pending_log` when a local pending record supplies the
+  operation ID. Provided `--operation-id <hex64>` values bypass the pending log.
+  No CLI commands, flags, or JSON report shapes changed in this patch.
+  Validation:
+  ```text
+  cargo test -p canic-cli cycles::convert --lib -- --nocapture
+  cargo clippy -p canic-cli --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.31` made CLI-generated ICP-refill operation IDs visible in non-JSON
   `canic cycles convert` canister-mode output. The CLI now records whether the
   `operation_id` was supplied or generated; JSON output remains unchanged, but

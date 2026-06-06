@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.32` adds write-before-send pending operation logging for generated
+  ICP-refill IDs. `canic cycles convert` now records generated live canister
+  refill IDs in `.canic/operations/pending.json`, reuses matching pending IDs
+  after a crash, and marks entries completed after successful CLI return.
+
 - `0.61.31` makes generated ICP-refill operation IDs visible in the CLI.
   Non-JSON `canic cycles convert` canister-mode output now prints generated
   IDs before live calls and in dry-runs so retries have the client ID. The

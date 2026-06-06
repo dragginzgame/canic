@@ -61,6 +61,9 @@ pub enum CyclesCommandError {
     #[error("canic cycles convert --fabricate only supports the local network, got {network}")]
     FabricationRequiresLocal { network: String },
 
+    #[error("failed to update pending operation log: {0}")]
+    PendingOperationLog(String),
+
     #[error(transparent)]
     RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),
 
