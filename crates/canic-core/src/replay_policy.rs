@@ -33,6 +33,10 @@ pub enum ReplayPolicy {
     SnapshotConvergent {
         command_kind: &'static str,
     },
+    CommandDispatch {
+        command_kind: &'static str,
+        command_manifest: &'static str,
+    },
     IntentionallyNonIdempotent {
         command_kind: &'static str,
         reason: &'static str,
@@ -114,9 +118,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(VALUE_TRANSFER_QUOTA_V1),
         Some(VALUE_TRANSFER_RESERVE_V1),
     ),
-    update_replay_blocker(
+    update_command_dispatch(
         "canic_pool_admin",
         "pool.admin.v1",
+        "pool.admin.command_manifest.v1",
+        ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
@@ -326,6 +332,29 @@ const fn update_snapshot_convergent(
         cost_class: CostClass::None,
         quota_policy: None,
         cycle_reserve_policy: None,
+    }
+}
+
+const fn update_command_dispatch(
+    endpoint: &'static str,
+    command_kind: &'static str,
+    command_manifest: &'static str,
+    implementation_status: ReplayImplementationStatus,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::CommandDispatch {
+            command_kind,
+            command_manifest,
+        },
+        implementation_status,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
     }
 }
 
@@ -551,6 +580,26 @@ mod tests {
     }
 
     #[test]
+    fn remaining_release_blockers_are_explicit_endpoint_slices() {
+        let blockers = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| {
+                entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker
+            })
+            .map(|entry| entry.endpoint)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            blockers,
+            BTreeSet::from([
+                "canic_canister_upgrade",
+                "canic_icp_refill",
+                "canic_response_capability_v1",
+            ])
+        );
+    }
+
+    #[test]
     fn pool_admin_command_variants_have_replay_policy_entries() {
         let variants = pool_admin_command_variant_names();
         let manifest = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
@@ -559,6 +608,45 @@ mod tests {
             .collect::<BTreeSet<_>>();
 
         assert_eq!(manifest, variants);
+    }
+
+    #[test]
+    fn pool_admin_endpoint_is_manifested_as_implemented_command_dispatch() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_pool_admin")
+            .expect("pool admin endpoint policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::CommandDispatch {
+                command_kind: "pool.admin.v1",
+                command_manifest: "pool.admin.command_manifest.v1",
+            }
+        );
+        assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
+        assert_eq!(entry.quota_policy, Some(DEPLOYMENT_QUOTA_V1));
+        assert_eq!(entry.cycle_reserve_policy, Some(DEPLOYMENT_RESERVE_V1));
+    }
+
+    #[test]
+    fn pool_admin_endpoint_requires_all_command_variants_implemented() {
+        let blockers = POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
+            .iter()
+            .filter(|entry| {
+                entry.implementation_status == ReplayImplementationStatus::ReleaseBlocker
+            })
+            .map(|entry| entry.variant)
+            .collect::<Vec<_>>();
+
+        assert!(
+            blockers.is_empty(),
+            "pool admin endpoint cannot be implemented while command variants remain blocked: {blockers:?}"
+        );
     }
 
     #[test]

@@ -9,6 +9,20 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.16` completed the pool-admin endpoint manifest graduation from
+  `docs/design/0.61-replay-protection/0.61-design.md`. The endpoint-level
+  `canic_pool_admin` entry is no longer a release blocker. The replay policy
+  model now has `CommandDispatch`, and `canic_pool_admin` is recorded as
+  `CommandDispatch(pool.admin.v1, pool.admin.command_manifest.v1)` with
+  deployment quota/reserve policy. A regression test pins the endpoint-level
+  classification, and another test fails if any `PoolAdminCommand` manifest
+  entry regresses to `ReleaseBlocker`. The manifest now pins the remaining
+  endpoint release blockers to `canic_canister_upgrade`, `canic_icp_refill`,
+  and `canic_response_capability_v1`. This is manifest-only; pool runtime
+  behavior and CLI output did not change. Validation:
+  ```text
+  cargo test -p canic-core replay_policy --lib -- --nocapture
+  ```
 - `0.61.15` completed the pool `Recycle` replay-proof slice from
   `docs/design/0.61-replay-protection/0.61-design.md`.
   `POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST` now records `Recycle` as

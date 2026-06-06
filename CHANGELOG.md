@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.16` removes the endpoint-level `canic_pool_admin` replay blocker by
+  recording it as an implemented command-dispatch surface backed by the pool
+  admin command manifest. The manifest now distinguishes the endpoint
+  dispatcher from the per-command replay policies and tests fail if any pool
+  admin variant regresses to release-blocker status. A release-blocker
+  regression test now pins the remaining endpoint slices to canister upgrade,
+  ICP refill, and root capability RPC.
+
 - `0.61.15` graduates pool `Recycle` from release blocker to implemented
   response-idempotent behavior. Recycle now removes the canister from the
   subnet registry and records a metadata-preserving pending-reset pool entry
