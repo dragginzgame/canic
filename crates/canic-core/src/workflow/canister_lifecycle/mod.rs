@@ -7,6 +7,7 @@ use crate::{
         upgrade::plan_upgrade,
     },
     ops::{
+        cost_guard::CostGuardPermit,
         ic::mgmt::{CanisterInstallMode, MgmtOps},
         runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
         runtime::metrics::canister_ops::{
@@ -29,8 +30,9 @@ use crate::{
 ///
 /// CanisterLifecycleEvent
 ///
-pub enum CanisterLifecycleEvent {
+pub enum CanisterLifecycleEvent<'a> {
     Create {
+        deployment_permit: &'a CostGuardPermit,
         role: CanisterRole,
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
@@ -64,14 +66,15 @@ pub struct CanisterLifecycleWorkflow;
 
 impl CanisterLifecycleWorkflow {
     pub async fn apply(
-        event: CanisterLifecycleEvent,
+        event: CanisterLifecycleEvent<'_>,
     ) -> Result<CanisterLifecycleResult, InternalError> {
         match event {
             CanisterLifecycleEvent::Create {
+                deployment_permit,
                 role,
                 parent,
                 extra_arg,
-            } => Self::apply_create(role, parent, extra_arg).await,
+            } => Self::apply_create(deployment_permit, role, parent, extra_arg).await,
 
             CanisterLifecycleEvent::Upgrade { pid } => Self::apply_upgrade(pid).await,
         }
@@ -80,6 +83,7 @@ impl CanisterLifecycleWorkflow {
     // ───────────────────────── Creation ─────────────────────────
 
     async fn apply_create(
+        deployment_permit: &CostGuardPermit,
         role: CanisterRole,
         parent: Principal,
         extra_arg: Option<Vec<u8>>,
@@ -113,15 +117,21 @@ impl CanisterLifecycleWorkflow {
             return Err(err);
         }
 
-        let pid =
-            match ProvisionWorkflow::create_and_install_canister(&role, parent, extra_arg).await {
-                Ok(pid) => pid,
-                Err(err) => {
-                    record_canister_op_failure(&role, CanisterOpsMetricOperation::Create, &err);
-                    record_provisioning_failure(&role, ProvisioningMetricOperation::Create, &err);
-                    return Err(err);
-                }
-            };
+        let pid = match ProvisionWorkflow::create_and_install_canister(
+            deployment_permit,
+            &role,
+            parent,
+            extra_arg,
+        )
+        .await
+        {
+            Ok(pid) => pid,
+            Err(err) => {
+                record_canister_op_failure(&role, CanisterOpsMetricOperation::Create, &err);
+                record_provisioning_failure(&role, ProvisioningMetricOperation::Create, &err);
+                return Err(err);
+            }
+        };
 
         if let Err(err) = assert_registered_immediate_parent(pid, parent) {
             record_canister_op(

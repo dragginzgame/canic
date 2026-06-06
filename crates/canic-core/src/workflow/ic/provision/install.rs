@@ -1,6 +1,7 @@
 use crate::{
     InternalError,
     ops::{
+        cost_guard::CostGuardPermit,
         ic::{IcOps, mgmt::CanisterInstallMode},
         runtime::install_source::ApprovedModuleSource,
         runtime::metrics::{
@@ -29,6 +30,7 @@ use crate::{
 
 /// Install WASM and initial state into a new canister.
 pub(super) async fn install_canister(
+    deployment_permit: &CostGuardPermit,
     pid: Principal,
     role: &CanisterRole,
     parent_pid: Principal,
@@ -88,7 +90,8 @@ pub(super) async fn install_canister(
         return Err(err);
     }
 
-    if let Err(err) = ModuleInstallWorkflow::install_with_payload(
+    if let Err(err) = ModuleInstallWorkflow::install_with_payload_with_permit(
+        deployment_permit,
         CanisterInstallMode::Install,
         pid,
         module_source,

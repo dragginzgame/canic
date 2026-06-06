@@ -18,7 +18,7 @@ mod policy;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    ops::runtime::install_source::ModuleSourceRuntimeApi,
+    ops::{cost_guard::CostGuardPermit, runtime::install_source::ModuleSourceRuntimeApi},
     workflow::{
         ic::provision::{
             allocation::{AllocationSource, allocate_canister},
@@ -52,6 +52,7 @@ impl ProvisionWorkflow {
     /// 3. Register canister in SubnetRegistry.
     /// 4. Cascade topology + sync directories.
     pub async fn create_and_install_canister(
+        deployment_permit: &CostGuardPermit,
         role: &CanisterRole,
         parent_pid: Principal,
         extra_arg: Option<Vec<u8>>,
@@ -89,9 +90,18 @@ impl ProvisionWorkflow {
             }
         };
 
-        let (pid, source) = allocate_canister(role, parent_pid).await?;
+        let (pid, source) = allocate_canister(deployment_permit, role, parent_pid).await?;
 
-        if let Err(err) = install_canister(pid, role, parent_pid, &module_source, extra_arg).await {
+        if let Err(err) = install_canister(
+            deployment_permit,
+            pid,
+            role,
+            parent_pid,
+            &module_source,
+            extra_arg,
+        )
+        .await
+        {
             log!(
                 Topic::CanisterLifecycle,
                 Error,

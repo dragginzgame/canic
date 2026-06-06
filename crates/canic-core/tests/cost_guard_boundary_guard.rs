@@ -85,6 +85,51 @@ fn icp_refill_value_transfer_adapters_require_cost_guard_permit() {
     );
 }
 
+#[test]
+fn management_deployment_adapters_require_cost_guard_permit() {
+    let lifecycle_ops = source_root().join("ops/ic/mgmt/lifecycle.rs");
+    let lifecycle = fs::read_to_string(&lifecycle_ops).expect("read management lifecycle ops");
+    let lifecycle_permit_args = lifecycle.matches("_permit: &CostGuardPermit").count();
+
+    assert_eq!(
+        lifecycle_permit_args, 3,
+        "create_canister and install_code management adapters must have permit-required wrappers"
+    );
+
+    let cycles_ops = source_root().join("ops/ic/mgmt/cycles.rs");
+    let cycles = fs::read_to_string(&cycles_ops).expect("read management cycles ops");
+    assert!(
+        cycles.contains("_permit: &CostGuardPermit"),
+        "deposit_cycles value-transfer wrapper must require CostGuardPermit"
+    );
+}
+
+#[test]
+fn provisioning_workflow_uses_management_permit_wrappers() {
+    let workflow_root = source_root().join("workflow");
+    let mut violations = Vec::new();
+
+    scan_rust_files(&workflow_root, &mut |path, contents| {
+        for forbidden in [
+            "MgmtOps::create_canister(",
+            "MgmtOps::deposit_cycles(",
+            "ModuleInstallWorkflow::install_with_payload(",
+        ] {
+            if contents.contains(forbidden) {
+                violations.push(format!(
+                    "{} calls unpermitted management deployment helper `{forbidden}`",
+                    display(path)
+                ));
+            }
+        }
+    });
+
+    assert!(
+        violations.is_empty(),
+        "management deployment permit boundary changed: {violations:?}"
+    );
+}
+
 fn source_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }

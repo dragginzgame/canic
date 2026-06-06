@@ -123,6 +123,7 @@ async fn execute_provision(
     mark_root_provision_external_effect(pending, ctx, req, parent_pid);
 
     let event = CanisterLifecycleEvent::Create {
+        deployment_permit: &cost_permit,
         role: req.canister_role.clone(),
         parent: parent_pid,
         extra_arg: req.extra_arg.clone(),

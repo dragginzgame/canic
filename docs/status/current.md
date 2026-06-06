@@ -9,6 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.36` threaded the root provision deployment `CostGuardPermit` through
+  lifecycle creation. `CanisterLifecycleEvent::Create` now carries the reserved
+  permit, provisioning allocation uses permit-required wrappers for pool
+  top-up and fresh canister creation, and initial canister install uses
+  permit-required management install wrappers. The cost-guard boundary guard now
+  also rejects unpermitted provisioning workflow management calls. No CLI
+  commands changed in this patch. Validation:
+  ```text
+  cargo test -p canic-core --test cost_guard_boundary_guard -- --nocapture
+  cargo test -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo test -p canic-core workflow::ic::provision --lib -- --nocapture
+  cargo clippy -p canic-core --all-targets --all-features -- -D warnings
+  cargo fmt --all -- --check
+  cargo test -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.35` tightened the threshold-ECDSA signing cost-guard boundary.
   `EcdsaOps::sign_bytes` now requires a `CostGuardPermit` in both
   `auth-crypto` and non-`auth-crypto` builds, and prepared auth signing wrappers

@@ -2,6 +2,7 @@ use crate::{
     InternalError,
     ops::{
         config::ConfigOps,
+        cost_guard::CostGuardPermit,
         ic::{
             IcOps,
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
@@ -38,6 +39,7 @@ pub(super) enum AllocationSource {
 ///
 /// Reuses a canister from the pool if available; otherwise creates a new one.
 pub(super) async fn allocate_canister(
+    deployment_permit: &CostGuardPermit,
     role: &CanisterRole,
     parent_pid: Principal,
 ) -> Result<(Principal, AllocationSource), InternalError> {
@@ -56,11 +58,20 @@ pub(super) async fn allocate_canister(
     };
     let target = cfg.initial_cycles;
 
-    if let Some(allocation) = try_allocate_from_pool(role, parent_pid, target.clone()).await? {
+    if let Some(allocation) =
+        try_allocate_from_pool(deployment_permit, role, parent_pid, target.clone()).await?
+    {
         return Ok(allocation);
     }
 
-    let pid = match create_canister_with_configured_controllers(role, parent_pid, target).await {
+    let pid = match create_canister_with_configured_controllers(
+        deployment_permit,
+        role,
+        parent_pid,
+        target,
+    )
+    .await
+    {
         Ok(pid) => pid,
         Err(err) => {
             record_canister_op(
@@ -97,6 +108,7 @@ pub(super) async fn allocate_canister(
 
 // Reuse a ready pool canister when one is available.
 async fn try_allocate_from_pool(
+    deployment_permit: &CostGuardPermit,
     role: &CanisterRole,
     parent_pid: Principal,
     target: Cycles,
@@ -114,7 +126,7 @@ async fn try_allocate_from_pool(
     };
 
     if current < target {
-        current = topup_pool_allocation(role, pid, current, target).await?;
+        current = topup_pool_allocation(deployment_permit, role, pid, current, target).await?;
     }
 
     configure_pool_allocation_controllers(role, pid, parent_pid).await?;
@@ -142,6 +154,7 @@ async fn try_allocate_from_pool(
 
 // Top up a reused pool canister to the configured initial cycle target.
 async fn topup_pool_allocation(
+    deployment_permit: &CostGuardPermit,
     role: &CanisterRole,
     pid: Principal,
     current: Cycles,
@@ -152,7 +165,7 @@ async fn topup_pool_allocation(
         return Ok(current);
     }
 
-    if let Err(err) = MgmtOps::deposit_cycles(pid, missing).await {
+    if let Err(err) = MgmtOps::deposit_cycles_with_permit(deployment_permit, pid, missing).await {
         record_canister_op(
             role,
             CanisterOpsMetricOperation::Create,
@@ -215,13 +228,15 @@ async fn configure_pool_allocation_controllers(
 
 /// Create a fresh canister on the IC with the configured controllers.
 async fn create_canister_with_configured_controllers(
+    deployment_permit: &CostGuardPermit,
     role: &CanisterRole,
     parent_pid: Principal,
     cycles: Cycles,
 ) -> Result<Principal, InternalError> {
     let controllers = child_canister_controllers(parent_pid)?;
 
-    let pid = MgmtOps::create_canister(controllers, cycles.clone()).await?;
+    let pid = MgmtOps::create_canister_with_permit(deployment_permit, controllers, cycles.clone())
+        .await?;
 
     log!(
         Topic::CanisterLifecycle,

@@ -28,6 +28,27 @@ impl MgmtOps {
         Self::create_canister(controllers, cycles).await
     }
 
+    /// Install or upgrade chunked code after a cost guard has reserved deployment quota and cycles.
+    pub async fn install_chunked_code_with_permit<T: ArgumentEncoder>(
+        _permit: &CostGuardPermit,
+        mode: CanisterInstallMode,
+        target_canister: Principal,
+        store_canister: Principal,
+        chunk_hashes_list: Vec<Vec<u8>>,
+        wasm_module_hash: Vec<u8>,
+        args: T,
+    ) -> Result<(), InternalError> {
+        Self::install_chunked_code(
+            mode,
+            target_canister,
+            store_canister,
+            chunk_hashes_list,
+            wasm_module_hash,
+            args,
+        )
+        .await
+    }
+
     /// Install or upgrade a canister from chunks stored in one same-subnet store canister.
     pub async fn install_chunked_code<T: ArgumentEncoder>(
         mode: CanisterInstallMode,
@@ -65,6 +86,17 @@ impl MgmtOps {
         );
 
         Ok(())
+    }
+
+    /// Install or upgrade embedded code after a cost guard has reserved deployment quota and cycles.
+    pub async fn install_code_with_permit<T: ArgumentEncoder>(
+        _permit: &CostGuardPermit,
+        mode: CanisterInstallMode,
+        target_canister: Principal,
+        wasm_module: Vec<u8>,
+        args: T,
+    ) -> Result<(), InternalError> {
+        Self::install_code(mode, target_canister, wasm_module, args).await
     }
 
     /// Install or upgrade a canister from an embedded wasm payload.
