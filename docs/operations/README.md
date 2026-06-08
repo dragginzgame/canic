@@ -14,6 +14,9 @@ validation notes.
 - [Recovery and retry runbooks](recovery-retry-runbooks.md) document safe
   operator recovery decisions for replay-sensitive failures and uncertain
   operations.
+- [Diagnostic consistency audit](diagnostic-consistency-audit.md) records
+  whether current public errors, logs, metrics, tests, and docs distinguish the
+  replay-sensitive failure classes needed for RC operation.
 
 ## Release Probe Inventories
 

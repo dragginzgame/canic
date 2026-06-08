@@ -102,6 +102,9 @@ jobs:
       - name: Recovery runbooks guard
         shell: bash
         run: bash scripts/ci/check-recovery-runbooks.sh
+      - name: Diagnostic consistency audit guard
+        shell: bash
+        run: bash scripts/ci/check-diagnostic-consistency-audit.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit
@@ -170,6 +173,9 @@ jobs:
       - name: Recovery runbooks guard
         shell: bash
         run: bash scripts/ci/check-recovery-runbooks.sh
+      - name: Diagnostic consistency audit guard
+        shell: bash
+        run: bash scripts/ci/check-diagnostic-consistency-audit.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit

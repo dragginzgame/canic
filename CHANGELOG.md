@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
 
+- `0.62.4` adds the non-versioned diagnostic consistency audit and CI guard,
+  classifying existing public errors, logs, metrics, tests, docs, and
+  public-output impact rules without changing runtime, Candid, CLI,
+  JSON/output, package, dependency, or lockfile surfaces.
+
 - `0.62.3` adds non-versioned recovery/retry runbooks and a CI guard,
   documenting safe operator actions for replay-sensitive failures and
   uncertain operations without changing runtime, Candid, CLI, JSON/output,

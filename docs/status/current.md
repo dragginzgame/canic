@@ -9,6 +9,28 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.4` adds the non-versioned diagnostic consistency audit at
+  `docs/operations/diagnostic-consistency-audit.md` plus CI guard
+  `scripts/ci/check-diagnostic-consistency-audit.sh`. The audit classifies
+  existing public errors, internal runtime logs, metrics, tests, and docs for
+  replay-sensitive failure classes including duplicate replay, missing or
+  invalid operation IDs, expiration, caller/shard mismatch, delegation-proof
+  replay, delegated-token replay, pending operations, recovery-required state,
+  cost-boundary refusal, permit-boundary refusal, and durable-publication
+  ambiguity. This is docs/CI-only work: no runtime behavior, Candid, CLI
+  output, JSON/output format, dependency, lockfile, fixture, snapshot,
+  generated output, package artifact, or release package changes are
+  introduced. Validation:
+  ```text
+  actionlint
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.62.3` adds the non-versioned recovery/retry runbooks at
   `docs/operations/recovery-retry-runbooks.md` plus CI guard
   `scripts/ci/check-recovery-runbooks.sh`. The runbooks document safe operator

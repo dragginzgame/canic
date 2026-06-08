@@ -37,6 +37,9 @@ generated artifacts.
   records the current stable-state and upgrade evidence.
 - [Release validation matrix](release-validation-matrix.md) records the
   validation gates used for slice close-out, RC promotion, and final release.
+- [Diagnostic consistency audit](diagnostic-consistency-audit.md) records how
+  current public errors, internal logs, metrics, tests, and docs distinguish
+  replay-sensitive failure classes.
 
 ## Operator Safety Rules
 
@@ -295,6 +298,7 @@ validation environment when too expensive for an ordinary docs slice.
 Release blockers: none found in these runbooks.
 
 The runbooks are sufficient to continue 0.62 without opening another runtime
-implementation slice. Remaining work belongs to diagnostic consistency review,
-package/install validation, RC accounting, or focused defect handling if a
-concrete release blocker is found.
+implementation slice. Diagnostic consistency is covered by
+[Diagnostic consistency audit](diagnostic-consistency-audit.md). Remaining work
+belongs to package/install validation, RC accounting, or focused defect
+handling if a concrete release blocker is found.
