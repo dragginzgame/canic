@@ -55,10 +55,10 @@ Diagnostic surfaces have different compatibility weight:
 | Metric label | Treat as stable operational output; changing or adding labels requires focused approval and tests. |
 | No public-output impact | Docs/test/CI-only clarification or existing-surface inventory. |
 
-Public output changes are not included in this audit. If a future slice changes
+Public output changes are not included in this audit. If a future change touches
 CLI text, JSON fields, Candid signatures, public error codes, or metric labels,
-that slice must include an explicit public-output impact statement and tests for
-the changed surface.
+that change must include an explicit public-output impact statement and tests
+for the changed surface.
 
 ## Outcome Labels
 

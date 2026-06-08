@@ -58,6 +58,7 @@ bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-diagnostic-consistency-audit.sh
 bash scripts/ci/check-release-package-install-validation.sh
+bash scripts/ci/check-rc-readiness-audit.sh
 git diff --check
 ```
 
@@ -101,6 +102,7 @@ bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-diagnostic-consistency-audit.sh
 bash scripts/ci/check-release-package-install-validation.sh
+bash scripts/ci/check-rc-readiness-audit.sh
 make fmt-check
 make clippy
 make test-unit
@@ -119,6 +121,7 @@ bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-diagnostic-consistency-audit.sh
 bash scripts/ci/check-release-package-install-validation.sh
+bash scripts/ci/check-rc-readiness-audit.sh
 make fmt-check
 make clippy
 make test-unit
@@ -174,6 +177,13 @@ accounting, also run:
 
 ```text
 bash scripts/ci/check-release-package-install-validation.sh
+```
+
+If the slice touches implementation close-out or RC-readiness wording, also
+run:
+
+```text
+bash scripts/ci/check-rc-readiness-audit.sh
 ```
 
 ## Governance Gates
@@ -255,6 +265,7 @@ slice. Do treat it as required accounting before RC promotion.
 
 The package/install gates above are documented in:
 
+- [RC readiness audit](rc-readiness-audit.md)
 - [Release package and install validation](release-package-install-validation.md)
 - [Diagnostic consistency audit](diagnostic-consistency-audit.md)
 - [Recovery and retry runbooks](recovery-retry-runbooks.md)

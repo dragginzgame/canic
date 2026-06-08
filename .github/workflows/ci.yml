@@ -108,6 +108,9 @@ jobs:
       - name: Release package/install validation guard
         shell: bash
         run: bash scripts/ci/check-release-package-install-validation.sh
+      - name: RC readiness audit guard
+        shell: bash
+        run: bash scripts/ci/check-rc-readiness-audit.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit
@@ -182,6 +185,9 @@ jobs:
       - name: Release package/install validation guard
         shell: bash
         run: bash scripts/ci/check-release-package-install-validation.sh
+      - name: RC readiness audit guard
+        shell: bash
+        run: bash scripts/ci/check-rc-readiness-audit.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit

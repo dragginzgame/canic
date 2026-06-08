@@ -20,6 +20,9 @@ validation notes.
 - [Release package and install validation](release-package-install-validation.md)
   records package, install, artifact, smoke-test, and environment-specific
   release gates.
+- [RC readiness audit](rc-readiness-audit.md) records the implementation
+  close-out verdict and separates remaining RC/final-release validation from
+  additional implementation slicing.
 
 ## Release Probe Inventories
 

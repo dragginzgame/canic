@@ -27,6 +27,12 @@ This checklist does not change runtime behavior, Candid, CLI output,
 JSON/output formats, package manifests, dependencies, lockfiles, fixtures,
 snapshots, generated artifacts, package artifacts, or release package contents.
 
+## Related Evidence
+
+- [RC readiness audit](rc-readiness-audit.md) records whether implementation
+  slicing is closed and which package/install gates remain RC or final-release
+  validation work.
+
 ## Existing Package and Install Gates
 
 These gates already exist in the repo. This checklist classifies them; it does
@@ -152,7 +158,8 @@ slice.
 
 Release blockers: none found in this checklist.
 
-The current package/install validation inventory is sufficient to continue
-0.62 without opening another implementation slice. Remaining work belongs to RC
-readiness audit, assigned package/install gate execution, final release
-accounting, or focused defect handling if a concrete release blocker is found.
+The current package/install validation inventory is sufficient to close 0.62
+implementation work after the [RC readiness audit](rc-readiness-audit.md)
+records its final verdict. Remaining work belongs to assigned package/install
+gate execution, final release accounting, or focused defect handling if a
+concrete release blocker is found.

@@ -9,6 +9,33 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.6` adds the non-versioned RC readiness audit at
+  `docs/operations/rc-readiness-audit.md` plus CI guard
+  `scripts/ci/check-rc-readiness-audit.sh`. The audit records
+  `READY TO CLOSE 0.62 IMPLEMENTATION WORK`, marks the 0.62 design slice
+  record historical, and separates remaining package/install, broad workspace,
+  local ICP/canister, tag, and final release gates into RC/full validation
+  rather than additional implementation slicing. This is docs/CI-only work: no
+  runtime behavior, Candid, CLI output, JSON/output format, dependency,
+  lockfile, fixture, snapshot, generated output, package artifact, release
+  version, tag, or publish operation changes are introduced. Validation:
+  ```text
+  actionlint
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
+  bash scripts/ci/check-release-package-install-validation.sh
+  bash scripts/ci/check-rc-readiness-audit.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  bash scripts/ci/run-auth-trust-chain-guards.sh
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
+  cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+  cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
+  git diff --check
+  ```
 - `0.62.5` adds the non-versioned release package/install validation checklist
   at `docs/operations/release-package-install-validation.md` plus CI guard
   `scripts/ci/check-release-package-install-validation.sh`. The checklist

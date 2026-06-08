@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
 
+- `0.62.6` adds the non-versioned RC readiness audit and CI guard, records
+  that 0.62 implementation work is ready to close, and assigns remaining
+  package/install, broad workspace, local ICP/canister, tag, and final release
+  gates to RC/full validation rather than another implementation slice.
+
 - `0.62.5` adds the non-versioned release package/install validation checklist
   and CI guard, classifying package, installed CLI, packaged downstream, local
   canister, artifact, and release-flow ownership gates without changing
