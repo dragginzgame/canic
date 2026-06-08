@@ -3,8 +3,9 @@
 use crate::{
     cdk::types::Cycles,
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, MetricsCanisterConfig, RandomnessConfig,
-        RoleDeclaration, RoleDeclarationKind, StandardsCanisterConfig,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, DiagnosticsCanisterConfig,
+        MetricsCanisterConfig, RandomnessConfig, RoleDeclaration, RoleDeclarationKind,
+        StandardsCanisterConfig,
     },
     config::{Config, ConfigModel},
     ids::{CanisterRole, SubnetRole},
@@ -102,6 +103,7 @@ impl ConfigTestBuilder {
             directory: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
+            diagnostics: DiagnosticsCanisterConfig::default(),
             metrics: MetricsCanisterConfig::default(),
         }
     }

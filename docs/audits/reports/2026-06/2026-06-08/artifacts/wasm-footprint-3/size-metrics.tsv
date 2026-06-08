@@ -1,0 +1,2 @@
+canister	kind	built_wasm_bytes	built_wasm_gz_bytes	shrunk_wasm_bytes	shrunk_wasm_gz_bytes	shrink_delta_bytes	shrink_delta_percent	built_functions	shrunk_functions	built_exports	shrunk_exports
+app	leaf-canister	2902554	780895	2676206	692885	226348	7.80	5222	5144	19	18

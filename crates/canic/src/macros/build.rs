@@ -93,6 +93,7 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metadata)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_env)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_observability_log)");
+        println!("cargo:rustc-check-cfg=cfg(canic_memory_ledger_enabled)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_metrics)");
         println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_cycle_tracker)");
         println!("cargo:rustc-check-cfg=cfg(canic_metrics_core)");
@@ -122,6 +123,7 @@ macro_rules! __canic_build_internal {
         let mut has_icrc21 = false;
         let mut has_scaling = false;
         let mut has_sharding = false;
+        let mut memory_ledger = false;
         let mut metrics_core = false;
         let mut metrics_placement = false;
         let mut metrics_platform = false;
@@ -162,6 +164,7 @@ macro_rules! __canic_build_internal {
                 has_icrc21 |= canister_cfg.standards.icrc21;
                 has_scaling |= canister_cfg.scaling.is_some();
                 has_sharding |= canister_cfg.sharding.is_some();
+                memory_ledger |= canister_cfg.diagnostics.memory_ledger;
                 let profile = canister_cfg.resolved_metrics_profile(&role_id);
                 let tier_mask = $crate::__build::metrics_profile_tier_mask(profile);
                 metrics_core |= tier_mask & $crate::__build::METRICS_TIER_CORE != 0;
@@ -186,6 +189,10 @@ macro_rules! __canic_build_internal {
 
         if role_attestation_refresh {
             println!("cargo:rustc-cfg=canic_role_attestation_refresh");
+        }
+
+        if memory_ledger {
+            println!("cargo:rustc-cfg=canic_memory_ledger_enabled");
         }
 
         if has_scaling {

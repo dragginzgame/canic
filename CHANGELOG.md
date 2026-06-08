@@ -12,9 +12,21 @@ present.
 
 ## Unreleased
 
-## [0.63.x] - 2026-06-08 - NNS topology inspection
+## [0.63.x] - 2026-06-08 - NNS topology inspection and surface reduction
 
 Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
+
+- `0.63.1` adds one-shot cached mainnet NNS topology refresh and makes the
+  controller-only `canic_memory_ledger` diagnostic opt-in with per-role
+  `diagnostics.memory_ledger`, shrinking the default wasm-store Candid/runtime
+  surface without changing package versions, dependencies, or lockfiles.
+
+  ```text
+  canic nns topology refresh
+  canic nns topology refresh --dry-run
+  canic nns topology refresh --format json
+  canic nns topology refresh --source-endpoint https://icp-api.io
+  ```
 
 - `0.63.0` expands cached mainnet NNS topology inspection with an aggregate
   topology summary and filtered node reads, without changing package versions

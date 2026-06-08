@@ -1,0 +1,71 @@
+Number of types: 80
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 170608 bytes
+
+Number of functions: 5222
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_5193)",
+    "canister_inspect_message (func_5194)",
+    "canister_post_upgrade (func_5195)",
+    "canister_query canic_bootstrap_status (func_5196)",
+    "canister_query canic_canister_children (func_5197)",
+    "canister_query canic_cycle_balance (func_5198)",
+    "canister_query canic_cycle_topups (func_5199)",
+    "canister_query canic_cycle_tracker (func_5200)",
+    "canister_query canic_log (func_5201)",
+    "canister_query canic_memory_ledger (func_5202)",
+    "canister_query canic_metadata (func_5203)",
+    "canister_query canic_metrics (func_5204)",
+    "canister_query canic_ready (func_5205)",
+    "canister_query icrc10_supported_standards (func_5206)",
+    "canister_update canic_response_capability_v1 (func_5207)",
+    "canister_update canic_sync_state (func_5208)",
+    "canister_update canic_sync_topology (func_5209)",
+    "canister_global_timer (func_5210)",
+    "canister_update <ic-cdk internal> timer_executor (func_5211)",
+]
+
+Imported IC0 System API: [
+    "msg_reply_data_append",
+    "msg_reply",
+    "msg_method_name_size",
+    "msg_method_name_copy",
+    "accept_message",
+    "stable64_size",
+    "stable64_read",
+    "canister_version",
+    "debug_print",
+    "time",
+    "trap",
+    "performance_counter",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "is_controller",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+    "stable64_grow",
+    "stable64_write",
+]
+
+Custom sections with size: [
+    "icp:public candid:service (7961 bytes)",
+]

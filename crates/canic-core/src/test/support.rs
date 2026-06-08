@@ -4,8 +4,9 @@ use crate::{
     cdk::candid::Principal,
     cdk::types::Cycles,
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, MetricsCanisterConfig, RandomnessConfig,
-        ShardPool, ShardPoolPolicy, ShardingConfig, StandardsCanisterConfig,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, DiagnosticsCanisterConfig,
+        MetricsCanisterConfig, RandomnessConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
+        StandardsCanisterConfig,
     },
     ids::{CanisterRole, SubnetRole},
     ops::runtime::env::EnvOps,
@@ -37,6 +38,7 @@ pub fn init_sharding_test_config() {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };
 
@@ -50,6 +52,7 @@ pub fn init_sharding_test_config() {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };
 
@@ -63,6 +66,7 @@ pub fn init_sharding_test_config() {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     };
 

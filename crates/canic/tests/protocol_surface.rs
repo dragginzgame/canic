@@ -62,14 +62,14 @@ fn wasm_store_exposes_standard_cycle_tracker() {
 }
 
 #[test]
-fn wasm_store_exposes_ledger_but_not_registry_memory_diagnostics() {
+fn wasm_store_excludes_default_memory_diagnostics() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
 
     assert!(
-        did.contains("type MemoryLedgerResponse = record")
-            && did.contains("  canic_memory_ledger : () -> (Result_"),
-        "missing `canic_memory_ledger` method in {}",
+        !did.contains("type MemoryLedgerResponse = record")
+            && !did.contains("  canic_memory_ledger :"),
+        "unexpected default `canic_memory_ledger` method in {}",
         did_path.display()
     );
     assert!(
@@ -95,8 +95,8 @@ fn wasm_store_canonical_did_parses() {
     assert!(
         service
             .iter()
-            .any(|(name, _)| name == "canic_memory_ledger"),
-        "parsed wasm_store service must include canic_memory_ledger"
+            .all(|(name, _)| name != "canic_memory_ledger"),
+        "parsed default wasm_store service must not include canic_memory_ledger"
     );
 }
 
@@ -155,7 +155,7 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
 }
 
 #[test]
-fn memory_ledger_is_default_and_registry_is_removed() {
+fn memory_ledger_is_config_gated_and_registry_is_removed() {
     let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
     let bundles = read_text(&bundle_path);
     let shared_bundle = bundles
@@ -172,12 +172,14 @@ fn memory_ledger_is_default_and_registry_is_removed() {
         .expect("wasm_store runtime bundle should exist");
 
     assert!(
-        shared_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
-        "default shared runtime bundle must include the ABI ledger recovery endpoint"
+        shared_bundle.contains("#[cfg(canic_memory_ledger_enabled)]")
+            && shared_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
+        "shared runtime bundle must config-gate the ABI ledger recovery endpoint"
     );
     assert!(
-        wasm_store_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
-        "wasm_store runtime bundle must include the ABI ledger recovery endpoint"
+        wasm_store_bundle.contains("#[cfg(canic_memory_ledger_enabled)]")
+            && wasm_store_bundle.contains("canic_emit_memory_ledger_diagnostic_endpoint!"),
+        "wasm_store runtime bundle must config-gate the ABI ledger recovery endpoint"
     );
     assert!(
         !shared_bundle.contains("canic_emit_memory_observability_endpoints!"),

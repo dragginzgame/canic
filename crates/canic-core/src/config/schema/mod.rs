@@ -235,6 +235,7 @@ impl ConfigModel {
                 directory: None,
                 auth: CanisterAuthConfig::default(),
                 standards: StandardsCanisterConfig::default(),
+                diagnostics: DiagnosticsCanisterConfig::default(),
                 metrics: MetricsCanisterConfig::default(),
             },
         );

@@ -171,6 +171,7 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
 - `sharding` – optional table that defines stateful shard pools.
 - `auth.delegated_token_signer = true` – mark this role as a delegated-token signer; Canic prewarms local shard signing key material.
 - `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and local `SubnetState`, not this flag.
+- `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
 
 The `wasm_store` role is reserved and implicit.
 Do not add it under `canisters.*`.

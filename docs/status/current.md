@@ -9,6 +9,36 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.63.1` adds `canic nns topology refresh` as the one-shot refresh path for
+  every cached mainnet NNS component consumed by `canic nns topology summary`
+  and makes the controller-only `canic_memory_ledger` recovery diagnostic
+  opt-in per canister role through `diagnostics.memory_ledger = true`. The NNS
+  command refreshes subnet, node, node-provider, node-operator, and data-center
+  reports with shared `--source-endpoint`, `--dry-run`, `--lock-stale-after`,
+  and `--format json` support, returning an aggregate per-component refresh
+  report with cache path, registry version, fetched timestamp, item count,
+  write status, and replacement status. The shared runtime and wasm-store
+  endpoint bundles now emit `canic_memory_ledger` only when the build config
+  enables `canic_memory_ledger_enabled`, and the checked-in default
+  `crates/canic-wasm-store/wasm_store.did` no longer exposes the memory-ledger
+  DTOs or method. This is a CLI/host operator workflow expansion plus an
+  intentional default Candid/runtime surface reduction; no Cargo package
+  versions, release scripts, dependencies, or lockfiles change.
+  Validation:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-host nns --lib -- --nocapture
+  cargo test --locked -p canic-cli --lib nns -- --nocapture
+  cargo test --locked -p canic-core diagnostics_memory_ledger --lib -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo fmt --all -- --check
+  cargo check --locked -p canic --lib
+  cargo check --locked -p canic-cli
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo run --locked -p canic-cli -- nns topology refresh --dry-run
+  bash scripts/ci/wasm-audit-report.sh
+  git diff --check
+  ```
 - `0.63.0` starts the post-0.62 NNS topology expansion without changing Cargo
   package versions, release scripts, Candid, runtime canisters, package
   artifacts, or lockfiles. The CLI now exposes `canic nns topology summary`,

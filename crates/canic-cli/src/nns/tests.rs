@@ -25,7 +25,10 @@ use super::{
         info_usage, list_usage, refresh_usage, resolve_canister_or_role,
         should_retry_info_as_deployment_target, subnet_usage,
     },
-    topology::{TopologySummaryOptions, topology_summary_usage, topology_usage},
+    topology::{
+        TopologyRefreshOptions, TopologySummaryOptions, topology_refresh_usage,
+        topology_summary_usage, topology_usage,
+    },
 };
 use canic_host::{
     installed_deployment::{
@@ -573,6 +576,33 @@ fn topology_summary_parses_defaults_and_json_format() {
 }
 
 #[test]
+fn topology_refresh_parses_defaults_and_dry_run() {
+    let defaults = TopologyRefreshOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+    assert_eq!(defaults.lock_stale_after_seconds, 30 * 60);
+    assert!(!defaults.dry_run);
+
+    let options = TopologyRefreshOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+        OsString::from("--lock-stale-after"),
+        OsString::from("5m"),
+        OsString::from("--dry-run"),
+    ])
+    .expect("parse topology refresh");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+    assert_eq!(options.lock_stale_after_seconds, 300);
+    assert!(options.dry_run);
+}
+
+#[test]
 fn data_center_help_is_advertised_under_nns() {
     let nns = usage();
     let data_center = data_center_usage();
@@ -678,12 +708,19 @@ fn topology_help_is_advertised_under_nns() {
     let nns = usage();
     let topology = topology_usage();
     let summary = topology_summary_usage();
+    let refresh = topology_refresh_usage();
 
     assert!(nns.contains("topology"));
     assert!(topology.contains("Summarize cached mainnet NNS topology reports"));
+    assert!(topology.contains("Refresh cached mainnet NNS topology component reports"));
     assert!(summary.contains("canic nns topology summary"));
     assert!(summary.contains("--format json"));
     assert!(summary.contains("--source-endpoint"));
+    assert!(refresh.contains("canic nns topology refresh"));
+    assert!(refresh.contains("--format json"));
+    assert!(refresh.contains("--source-endpoint"));
+    assert!(refresh.contains("--lock-stale-after"));
+    assert!(refresh.contains("--dry-run"));
 }
 
 #[test]
@@ -774,6 +811,21 @@ fn topology_local_is_rejected_with_pinned_message() {
     let message = err.to_string();
     assert!(message.contains("supports only the mainnet `ic` network"));
     assert!(message.contains("canic --network ic nns topology summary"));
+}
+
+#[test]
+fn topology_refresh_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("topology"),
+        OsString::from("refresh"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns topology refresh"));
 }
 
 #[test]

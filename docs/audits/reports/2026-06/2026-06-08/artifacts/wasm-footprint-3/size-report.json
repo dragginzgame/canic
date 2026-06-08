@@ -1,0 +1,17 @@
+{
+  "scope": "wasm-footprint",
+  "profile": "release",
+  "canisters": [
+    {
+      "canister": "app",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 2902554,
+      "built_wasm_gz_bytes": 780895,
+      "shrunk_wasm_bytes": 2676206,
+      "shrunk_wasm_gz_bytes": 692885,
+      "shrink_delta_bytes": 226348,
+      "shrink_delta_percent": 7.80,
+      "baseline_delta_bytes": "-43736"
+    }
+  ]
+}

@@ -83,92 +83,6 @@ type ErrorCode = variant {
   Conflict;
 };
 type IndexEntryInput = record { pid : principal; role : text };
-//
-// MemoryAllocationRecordEntry
-//
-type MemoryAllocationRecordEntry = record {
-  stable_key : text;
-  retired_generation : opt nat64;
-  last_seen_generation : nat64;
-  schema_history : vec MemorySchemaMetadataEntry;
-  first_generation : nat64;
-  state : MemoryAllocationState;
-  memory_manager_id : opt nat8;
-};
-//
-// MemoryAllocationState
-//
-type MemoryAllocationState = variant { Reserved; Active; Retired };
-//
-// MemoryCommitRecoveryErrorResponse
-//
-type MemoryCommitRecoveryErrorResponse = variant {
-  GenerationOverflow;
-  NoValidGeneration;
-  UnexpectedGeneration;
-  AmbiguousGeneration;
-};
-//
-// MemoryCommitRecoveryResponse
-//
-type MemoryCommitRecoveryResponse = record {
-  slot0 : MemoryCommitSlotResponse;
-  slot1 : MemoryCommitSlotResponse;
-  authoritative_generation : opt nat64;
-  recovery_error : opt MemoryCommitRecoveryErrorResponse;
-};
-//
-// MemoryCommitSlotResponse
-//
-type MemoryCommitSlotResponse = record {
-  valid : bool;
-  present : bool;
-  generation : opt nat64;
-};
-//
-// MemoryLedgerGenerationEntry
-//
-type MemoryLedgerGenerationEntry = record {
-  committed_at : opt nat64;
-  generation : nat64;
-  declaration_count : nat32;
-  runtime_fingerprint : opt text;
-  parent_generation : opt nat64;
-};
-//
-// MemoryLedgerResponse
-//
-type MemoryLedgerResponse = record {
-  records : vec MemoryAllocationRecordEntry;
-  generations : vec MemoryLedgerGenerationEntry;
-  commit_recovery : MemoryCommitRecoveryResponse;
-  current_generation : nat64;
-  ledger_schema_version : nat32;
-  physical_format_id : nat32;
-  authorities : vec MemoryRangeAuthorityEntry;
-};
-//
-// MemoryRangeAuthorityEntry
-//
-type MemoryRangeAuthorityEntry = record {
-  end : nat8;
-  owner : text;
-  mode : MemoryRangeAuthorityMode;
-  start : nat8;
-  purpose : text;
-};
-//
-// MemoryRangeAuthorityMode
-//
-type MemoryRangeAuthorityMode = variant { Reserved; Allowed };
-//
-// MemorySchemaMetadataEntry
-//
-type MemorySchemaMetadataEntry = record {
-  generation : nat64;
-  schema_version : opt nat32;
-  schema_fingerprint : opt text;
-};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -183,7 +97,6 @@ type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
 type Result = variant { Ok : nat; Err : Error };
 type Result_1 = variant { Ok : Page; Err : Error };
 type Result_2 = variant { Ok : Page_1; Err : Error };
-type Result_3 = variant { Ok : MemoryLedgerResponse; Err : Error };
 type Result_4 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
 type Result_5 = variant { Ok; Err : Error };
 type Result_6 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
@@ -266,7 +179,6 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_cycle_balance : () -> (Result) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
-  canic_memory_ledger : () -> (Result_3) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (

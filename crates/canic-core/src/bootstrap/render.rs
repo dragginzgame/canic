@@ -2,11 +2,12 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-        CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
-        FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-        RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
-        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        CanisterPool, ConfigModel, DelegatedTokenConfig, DiagnosticsCanisterConfig,
+        DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy, LogConfig,
+        MetricsCanisterConfig, MetricsProfile, PoolImport, RandomnessConfig, RandomnessSource,
+        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -364,6 +365,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let directory = render_option(config.directory.as_ref(), render_directory_config);
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
+    let diagnostics = render_diagnostics_canister_config(config.diagnostics);
     let metrics = render_metrics_canister_config(config.metrics);
 
     quote! {
@@ -377,7 +379,19 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             directory: #directory,
             auth: #auth,
             standards: #standards,
+            diagnostics: #diagnostics,
             metrics: #metrics,
+        }
+    }
+}
+
+// Render the per-canister diagnostics config.
+fn render_diagnostics_canister_config(config: DiagnosticsCanisterConfig) -> TokenStream {
+    let memory_ledger = config.memory_ledger;
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::DiagnosticsCanisterConfig {
+            memory_ledger: #memory_ledger,
         }
     }
 }

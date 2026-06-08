@@ -71,6 +71,54 @@ fn topology_summary_rejects_local_network_with_topology_hint() {
     assert!(message.contains("canic --network ic nns topology summary"));
 }
 
+#[test]
+fn topology_refresh_counts_component_reports() {
+    let report = topology_refresh_report_from_reports(
+        MAINNET_NETWORK.to_string(),
+        "https://icp-api.io".to_string(),
+        false,
+        NnsTopologyRefreshComponentReports {
+            subnet: subnet_refresh_report_fixture(),
+            node: node_refresh_report_fixture(),
+            node_provider: node_provider_refresh_report_fixture(),
+            node_operator: node_operator_refresh_report_fixture(),
+            data_center: data_center_refresh_report_fixture(),
+        },
+    );
+
+    assert_eq!(report.schema_version, 1);
+    assert_eq!(report.component_count, 5);
+    assert_eq!(report.wrote_cache_count, 5);
+    assert_eq!(report.replaced_existing_cache_count, 1);
+    assert_eq!(report.components[0].source, "subnet_catalog");
+    assert_eq!(report.components[0].item_count, 2);
+    assert_eq!(report.components[1].source, "nodes");
+    assert_eq!(report.components[1].item_count, 3);
+}
+
+#[test]
+fn topology_refresh_text_renders_component_table() {
+    let report = topology_refresh_report_from_reports(
+        MAINNET_NETWORK.to_string(),
+        "https://icp-api.io".to_string(),
+        true,
+        NnsTopologyRefreshComponentReports {
+            subnet: dry_run_subnet_refresh_report_fixture(),
+            node: dry_run_node_refresh_report_fixture(),
+            node_provider: dry_run_node_provider_refresh_report_fixture(),
+            node_operator: dry_run_node_operator_refresh_report_fixture(),
+            data_center: dry_run_data_center_refresh_report_fixture(),
+        },
+    );
+
+    let text = nns_topology_refresh_report_text(&report);
+
+    assert!(text.contains("topology_refresh: ic components 5 wrote 0 replaced 1 dry_run yes"));
+    assert!(text.contains("subnet_catalog"));
+    assert!(text.contains("node_operators"));
+    assert!(text.contains("data_centers"));
+}
+
 fn subnet_report_fixture() -> SubnetCatalogListReport {
     SubnetCatalogListReport {
         schema_version: 1,
@@ -87,6 +135,143 @@ fn subnet_report_fixture() -> SubnetCatalogListReport {
             subnet_row("pzp6e", SubnetKind::Application, 2, 2),
             subnet_row("tdb26", SubnetKind::System, 1, 1),
         ],
+    }
+}
+
+fn subnet_refresh_report_fixture() -> SubnetCatalogRefreshReport {
+    SubnetCatalogRefreshReport {
+        schema_version: 1,
+        network: MAINNET_NETWORK.to_string(),
+        catalog_path: ".canic/subnet-catalog/ic/catalog.json".to_string(),
+        refresh_lock_path: ".canic/subnet-catalog/ic/refresh.lock".to_string(),
+        output_path: None,
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version: 42,
+        fetched_at: "2026-06-04T00:00:00Z".to_string(),
+        source_endpoint: "https://icp-api.io".to_string(),
+        fetched_by: "test".to_string(),
+        dry_run: false,
+        wrote_catalog: true,
+        replaced_existing_catalog: true,
+        subnet_count: 2,
+        routing_range_count: 3,
+    }
+}
+
+fn dry_run_subnet_refresh_report_fixture() -> SubnetCatalogRefreshReport {
+    SubnetCatalogRefreshReport {
+        dry_run: true,
+        wrote_catalog: false,
+        ..subnet_refresh_report_fixture()
+    }
+}
+
+fn node_refresh_report_fixture() -> NnsNodeRefreshReport {
+    NnsNodeRefreshReport {
+        schema_version: 1,
+        network: MAINNET_NETWORK.to_string(),
+        cache_path: ".canic/node/ic/nodes.json".to_string(),
+        refresh_lock_path: ".canic/node/ic/refresh.lock".to_string(),
+        output_path: None,
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version: 43,
+        fetched_at: "2026-06-04T00:01:00Z".to_string(),
+        source_endpoint: "https://icp-api.io".to_string(),
+        fetched_by: "test".to_string(),
+        dry_run: false,
+        wrote_cache: true,
+        replaced_existing_cache: false,
+        node_count: 3,
+    }
+}
+
+fn dry_run_node_refresh_report_fixture() -> NnsNodeRefreshReport {
+    NnsNodeRefreshReport {
+        dry_run: true,
+        wrote_cache: false,
+        ..node_refresh_report_fixture()
+    }
+}
+
+fn node_provider_refresh_report_fixture() -> NnsNodeProviderRefreshReport {
+    NnsNodeProviderRefreshReport {
+        schema_version: 1,
+        network: MAINNET_NETWORK.to_string(),
+        cache_path: ".canic/node-provider/ic/providers.json".to_string(),
+        refresh_lock_path: ".canic/node-provider/ic/refresh.lock".to_string(),
+        output_path: None,
+        governance_canister_id: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version: 44,
+        fetched_at: "2026-06-04T00:02:00Z".to_string(),
+        source_endpoint: "https://icp-api.io".to_string(),
+        fetched_by: "test".to_string(),
+        dry_run: false,
+        wrote_cache: true,
+        replaced_existing_cache: false,
+        node_provider_count: 1,
+    }
+}
+
+fn dry_run_node_provider_refresh_report_fixture() -> NnsNodeProviderRefreshReport {
+    NnsNodeProviderRefreshReport {
+        dry_run: true,
+        wrote_cache: false,
+        ..node_provider_refresh_report_fixture()
+    }
+}
+
+fn node_operator_refresh_report_fixture() -> NnsNodeOperatorRefreshReport {
+    NnsNodeOperatorRefreshReport {
+        schema_version: 1,
+        network: MAINNET_NETWORK.to_string(),
+        cache_path: ".canic/node-operator/ic/operators.json".to_string(),
+        refresh_lock_path: ".canic/node-operator/ic/refresh.lock".to_string(),
+        output_path: None,
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version: 45,
+        fetched_at: "2026-06-04T00:03:00Z".to_string(),
+        source_endpoint: "https://icp-api.io".to_string(),
+        fetched_by: "test".to_string(),
+        dry_run: false,
+        wrote_cache: true,
+        replaced_existing_cache: false,
+        node_operator_count: 2,
+    }
+}
+
+fn dry_run_node_operator_refresh_report_fixture() -> NnsNodeOperatorRefreshReport {
+    NnsNodeOperatorRefreshReport {
+        dry_run: true,
+        wrote_cache: false,
+        ..node_operator_refresh_report_fixture()
+    }
+}
+
+fn data_center_refresh_report_fixture() -> NnsDataCenterRefreshReport {
+    NnsDataCenterRefreshReport {
+        schema_version: 1,
+        network: MAINNET_NETWORK.to_string(),
+        cache_path: ".canic/data-center/ic/data-centers.json".to_string(),
+        refresh_lock_path: ".canic/data-center/ic/refresh.lock".to_string(),
+        output_path: None,
+        registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
+        registry_version: 46,
+        fetched_at: "2026-06-04T00:04:00Z".to_string(),
+        source_endpoint: "https://icp-api.io".to_string(),
+        fetched_by: "test".to_string(),
+        dry_run: false,
+        wrote_cache: true,
+        replaced_existing_cache: false,
+        data_center_count: 1,
+    }
+}
+
+fn dry_run_data_center_refresh_report_fixture() -> NnsDataCenterRefreshReport {
+    NnsDataCenterRefreshReport {
+        dry_run: true,
+        wrote_cache: false,
+        ..data_center_refresh_report_fixture()
     }
 }
 

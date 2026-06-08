@@ -1,26 +1,31 @@
 use crate::{
     nns_data_center::{
         NnsDataCenterCacheRequest, NnsDataCenterHostError, NnsDataCenterListReport,
-        NnsDataCenterListRequest, build_nns_data_center_list_report,
+        NnsDataCenterListRequest, NnsDataCenterRefreshReport, NnsDataCenterRefreshRequest,
+        build_nns_data_center_list_report, refresh_nns_data_center_report,
     },
     nns_node::{
         NNS_NODE_SUBNET_KIND_APPLICATION, NNS_NODE_SUBNET_KIND_SYSTEM,
         NNS_NODE_SUBNET_KIND_UNKNOWN, NnsNodeCacheRequest, NnsNodeHostError, NnsNodeListFilters,
-        NnsNodeListReport, NnsNodeListRequest, build_nns_node_list_report,
+        NnsNodeListReport, NnsNodeListRequest, NnsNodeRefreshReport, NnsNodeRefreshRequest,
+        build_nns_node_list_report, refresh_nns_node_report,
     },
     nns_node_operator::{
         NnsNodeOperatorCacheRequest, NnsNodeOperatorHostError, NnsNodeOperatorListReport,
-        NnsNodeOperatorListRequest, build_nns_node_operator_list_report,
+        NnsNodeOperatorListRequest, NnsNodeOperatorRefreshReport, NnsNodeOperatorRefreshRequest,
+        build_nns_node_operator_list_report, refresh_nns_node_operator_report,
     },
     nns_node_provider::{
         NnsNodeProviderCacheRequest, NnsNodeProviderHostError, NnsNodeProviderListReport,
-        NnsNodeProviderListRequest, build_nns_node_provider_list_report,
+        NnsNodeProviderListRequest, NnsNodeProviderRefreshReport, NnsNodeProviderRefreshRequest,
+        build_nns_node_provider_list_report, refresh_nns_node_provider_report,
     },
     nns_render::yes_no,
     subnet_catalog::{
         DEFAULT_STALE_AFTER_SECONDS, SubnetCatalogCacheRequest, SubnetCatalogFilters,
         SubnetCatalogHostError, SubnetCatalogListReport, SubnetCatalogListRequest,
-        build_subnet_catalog_list_report,
+        SubnetCatalogRefreshReport, SubnetCatalogRefreshRequest, build_subnet_catalog_list_report,
+        refresh_subnet_catalog,
     },
     table::{ColumnAlign, render_table},
 };
@@ -30,6 +35,7 @@ use std::path::PathBuf;
 use thiserror::Error as ThisError;
 
 pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 
 ///
 /// NnsTopologySummaryRequest
@@ -40,6 +46,19 @@ pub struct NnsTopologySummaryRequest {
     pub network: String,
     pub source_endpoint: String,
     pub now_unix_secs: u64,
+}
+
+///
+/// NnsTopologyRefreshRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NnsTopologyRefreshRequest {
+    pub icp_root: PathBuf,
+    pub network: String,
+    pub source_endpoint: String,
+    pub now_unix_secs: u64,
+    pub lock_stale_after_seconds: u64,
+    pub dry_run: bool,
 }
 
 ///
@@ -80,12 +99,45 @@ pub struct NnsTopologyRegistryVersionRow {
 }
 
 ///
+/// NnsTopologyRefreshReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyRefreshReport {
+    pub schema_version: u32,
+    pub network: String,
+    pub source_endpoint: String,
+    pub dry_run: bool,
+    pub component_count: usize,
+    pub wrote_cache_count: usize,
+    pub replaced_existing_cache_count: usize,
+    pub components: Vec<NnsTopologyRefreshRow>,
+}
+
+///
+/// NnsTopologyRefreshRow
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyRefreshRow {
+    pub source: String,
+    pub cache_path: String,
+    pub refresh_lock_path: String,
+    pub registry_version: u64,
+    pub fetched_at: String,
+    pub source_endpoint: String,
+    pub fetched_by: String,
+    pub dry_run: bool,
+    pub wrote_cache: bool,
+    pub replaced_existing_cache: bool,
+    pub item_count: usize,
+}
+
+///
 /// NnsTopologyHostError
 ///
 #[derive(Debug, ThisError)]
 pub enum NnsTopologyHostError {
     #[error(
-        "`canic nns topology` supports only the mainnet `ic` network\n\nThe NNS topology summary is derived from public Internet Computer mainnet registry records.\nLocal replica NNS registry discovery is not implemented yet.\n\nTry:\n  canic --network ic nns topology summary"
+        "`canic nns topology` supports only the mainnet `ic` network\n\nThe NNS topology report is derived from public Internet Computer mainnet registry records.\nLocal replica NNS registry discovery is not implemented yet.\n\nTry:\n  canic --network ic nns topology summary\n  canic --network ic nns topology refresh"
     )]
     UnsupportedNetwork { network: String },
 
@@ -167,6 +219,81 @@ pub fn build_nns_topology_summary_report(
     ))
 }
 
+pub fn refresh_nns_topology_report(
+    request: &NnsTopologyRefreshRequest,
+) -> Result<NnsTopologyRefreshReport, NnsTopologyHostError> {
+    enforce_mainnet_network(&request.network)?;
+
+    let subnet_report = refresh_subnet_catalog(&SubnetCatalogRefreshRequest {
+        cache: SubnetCatalogCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+        dry_run: request.dry_run,
+        output_path: None,
+    })?;
+    let node_report = refresh_nns_node_report(&NnsNodeRefreshRequest {
+        cache: NnsNodeCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+        dry_run: request.dry_run,
+        output_path: None,
+    })?;
+    let node_provider_report = refresh_nns_node_provider_report(&NnsNodeProviderRefreshRequest {
+        cache: NnsNodeProviderCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+        dry_run: request.dry_run,
+        output_path: None,
+    })?;
+    let node_operator_report = refresh_nns_node_operator_report(&NnsNodeOperatorRefreshRequest {
+        cache: NnsNodeOperatorCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+        dry_run: request.dry_run,
+        output_path: None,
+    })?;
+    let data_center_report = refresh_nns_data_center_report(&NnsDataCenterRefreshRequest {
+        cache: NnsDataCenterCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+        lock_stale_after_seconds: request.lock_stale_after_seconds,
+        dry_run: request.dry_run,
+        output_path: None,
+    })?;
+
+    Ok(topology_refresh_report_from_reports(
+        request.network.clone(),
+        request.source_endpoint.clone(),
+        request.dry_run,
+        NnsTopologyRefreshComponentReports {
+            subnet: subnet_report,
+            node: node_report,
+            node_provider: node_provider_report,
+            node_operator: node_operator_report,
+            data_center: data_center_report,
+        },
+    ))
+}
+
 #[must_use]
 pub fn nns_topology_summary_report_text(report: &NnsTopologySummaryReport) -> String {
     let mut lines = Vec::new();
@@ -185,6 +312,22 @@ pub fn nns_topology_summary_report_text(report: &NnsTopologySummaryReport) -> St
     lines.push(render_kind_table(report));
     lines.push("registry_versions:".to_string());
     lines.push(render_registry_version_table(report));
+    lines.join("\n")
+}
+
+#[must_use]
+pub fn nns_topology_refresh_report_text(report: &NnsTopologyRefreshReport) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "topology_refresh: {} components {} wrote {} replaced {} dry_run {}",
+        report.network,
+        report.component_count,
+        report.wrote_cache_count,
+        report.replaced_existing_cache_count,
+        yes_no(report.dry_run)
+    ));
+    lines.push(format!("source_endpoint: {}", report.source_endpoint));
+    lines.push(render_refresh_table(report));
     lines.join("\n")
 }
 
@@ -265,6 +408,137 @@ fn topology_summary_report_from_reports(
         subnet_catalog_stale: subnet_report.catalog_stale,
         subnet_catalog_stale_reason: subnet_report.stale_reason,
         registry_versions,
+    }
+}
+
+fn topology_refresh_report_from_reports(
+    network: String,
+    source_endpoint: String,
+    dry_run: bool,
+    reports: NnsTopologyRefreshComponentReports,
+) -> NnsTopologyRefreshReport {
+    let components = vec![
+        refresh_row_from_subnet_report(reports.subnet),
+        refresh_row_from_node_report(reports.node),
+        refresh_row_from_node_provider_report(reports.node_provider),
+        refresh_row_from_node_operator_report(reports.node_operator),
+        refresh_row_from_data_center_report(reports.data_center),
+    ];
+    let wrote_cache_count = components
+        .iter()
+        .filter(|component| component.wrote_cache)
+        .count();
+    let replaced_existing_cache_count = components
+        .iter()
+        .filter(|component| component.replaced_existing_cache)
+        .count();
+
+    NnsTopologyRefreshReport {
+        schema_version: NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION,
+        network,
+        source_endpoint,
+        dry_run,
+        component_count: components.len(),
+        wrote_cache_count,
+        replaced_existing_cache_count,
+        components,
+    }
+}
+
+///
+/// NnsTopologyRefreshComponentReports
+///
+struct NnsTopologyRefreshComponentReports {
+    subnet: SubnetCatalogRefreshReport,
+    node: NnsNodeRefreshReport,
+    node_provider: NnsNodeProviderRefreshReport,
+    node_operator: NnsNodeOperatorRefreshReport,
+    data_center: NnsDataCenterRefreshReport,
+}
+
+fn refresh_row_from_subnet_report(report: SubnetCatalogRefreshReport) -> NnsTopologyRefreshRow {
+    NnsTopologyRefreshRow {
+        source: "subnet_catalog".to_string(),
+        cache_path: report.catalog_path,
+        refresh_lock_path: report.refresh_lock_path,
+        registry_version: report.registry_version,
+        fetched_at: report.fetched_at,
+        source_endpoint: report.source_endpoint,
+        fetched_by: report.fetched_by,
+        dry_run: report.dry_run,
+        wrote_cache: report.wrote_catalog,
+        replaced_existing_cache: report.replaced_existing_catalog,
+        item_count: report.subnet_count,
+    }
+}
+
+fn refresh_row_from_node_report(report: NnsNodeRefreshReport) -> NnsTopologyRefreshRow {
+    NnsTopologyRefreshRow {
+        source: "nodes".to_string(),
+        cache_path: report.cache_path,
+        refresh_lock_path: report.refresh_lock_path,
+        registry_version: report.registry_version,
+        fetched_at: report.fetched_at,
+        source_endpoint: report.source_endpoint,
+        fetched_by: report.fetched_by,
+        dry_run: report.dry_run,
+        wrote_cache: report.wrote_cache,
+        replaced_existing_cache: report.replaced_existing_cache,
+        item_count: report.node_count,
+    }
+}
+
+fn refresh_row_from_node_provider_report(
+    report: NnsNodeProviderRefreshReport,
+) -> NnsTopologyRefreshRow {
+    NnsTopologyRefreshRow {
+        source: "node_providers".to_string(),
+        cache_path: report.cache_path,
+        refresh_lock_path: report.refresh_lock_path,
+        registry_version: report.registry_version,
+        fetched_at: report.fetched_at,
+        source_endpoint: report.source_endpoint,
+        fetched_by: report.fetched_by,
+        dry_run: report.dry_run,
+        wrote_cache: report.wrote_cache,
+        replaced_existing_cache: report.replaced_existing_cache,
+        item_count: report.node_provider_count,
+    }
+}
+
+fn refresh_row_from_node_operator_report(
+    report: NnsNodeOperatorRefreshReport,
+) -> NnsTopologyRefreshRow {
+    NnsTopologyRefreshRow {
+        source: "node_operators".to_string(),
+        cache_path: report.cache_path,
+        refresh_lock_path: report.refresh_lock_path,
+        registry_version: report.registry_version,
+        fetched_at: report.fetched_at,
+        source_endpoint: report.source_endpoint,
+        fetched_by: report.fetched_by,
+        dry_run: report.dry_run,
+        wrote_cache: report.wrote_cache,
+        replaced_existing_cache: report.replaced_existing_cache,
+        item_count: report.node_operator_count,
+    }
+}
+
+fn refresh_row_from_data_center_report(
+    report: NnsDataCenterRefreshReport,
+) -> NnsTopologyRefreshRow {
+    NnsTopologyRefreshRow {
+        source: "data_centers".to_string(),
+        cache_path: report.cache_path,
+        refresh_lock_path: report.refresh_lock_path,
+        registry_version: report.registry_version,
+        fetched_at: report.fetched_at,
+        source_endpoint: report.source_endpoint,
+        fetched_by: report.fetched_by,
+        dry_run: report.dry_run,
+        wrote_cache: report.wrote_cache,
+        replaced_existing_cache: report.replaced_existing_cache,
+        item_count: report.data_center_count,
     }
 }
 
@@ -377,6 +651,43 @@ fn render_registry_version_table(report: &NnsTopologySummaryReport) -> String {
     let alignments = [
         ColumnAlign::Left,
         ColumnAlign::Right,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+    ];
+    render_table(&headers, &rows, &alignments)
+}
+
+fn render_refresh_table(report: &NnsTopologyRefreshReport) -> String {
+    let headers = [
+        "SOURCE",
+        "COUNT",
+        "VERSION",
+        "FETCHED_AT",
+        "WROTE",
+        "REPLACED",
+        "CACHE",
+    ];
+    let rows = report
+        .components
+        .iter()
+        .map(|row| {
+            [
+                row.source.clone(),
+                row.item_count.to_string(),
+                row.registry_version.to_string(),
+                row.fetched_at.clone(),
+                yes_no(row.wrote_cache).to_string(),
+                yes_no(row.replaced_existing_cache).to_string(),
+                row.cache_path.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let alignments = [
+        ColumnAlign::Left,
+        ColumnAlign::Right,
+        ColumnAlign::Right,
+        ColumnAlign::Left,
         ColumnAlign::Left,
         ColumnAlign::Left,
         ColumnAlign::Left,

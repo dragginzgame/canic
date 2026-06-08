@@ -15,6 +15,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }
 }
@@ -208,6 +209,33 @@ fn metrics_profile_override_wins_over_default() {
         cfg.resolved_metrics_profile(&CanisterRole::from("app")),
         MetricsProfile::Full
     );
+}
+
+#[test]
+fn diagnostics_memory_ledger_defaults_off() {
+    let cfg: CanisterConfig = toml::from_str(
+        r#"
+kind = "singleton"
+"#,
+    )
+    .expect("minimal canister config should parse");
+
+    assert!(!cfg.diagnostics.memory_ledger);
+}
+
+#[test]
+fn diagnostics_memory_ledger_parses_explicit_opt_in() {
+    let cfg: CanisterConfig = toml::from_str(
+        r#"
+kind = "singleton"
+
+[diagnostics]
+memory_ledger = true
+"#,
+    )
+    .expect("diagnostics memory ledger config should parse");
+
+    assert!(cfg.diagnostics.memory_ledger);
 }
 
 #[test]

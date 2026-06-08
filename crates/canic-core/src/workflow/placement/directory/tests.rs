@@ -2,8 +2,9 @@ use super::*;
 use crate::{
     cdk::types::Cycles,
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, DirectoryPool,
-        MetricsCanisterConfig, RandomnessConfig, StandardsCanisterConfig,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, DiagnosticsCanisterConfig,
+        DirectoryConfig, DirectoryPool, MetricsCanisterConfig, RandomnessConfig,
+        StandardsCanisterConfig,
     },
     ids::{CanisterRole, SubnetRole},
     ops::{
@@ -45,6 +46,7 @@ fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
         directory: Some(directory),
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }
 }

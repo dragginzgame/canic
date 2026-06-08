@@ -131,6 +131,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         directory: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }
 }
@@ -154,6 +155,17 @@ pub struct CanisterAuthConfig {
 pub struct StandardsCanisterConfig {
     #[serde(default)]
     pub icrc21: bool,
+}
+
+///
+/// DiagnosticsCanisterConfig
+///
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DiagnosticsCanisterConfig {
+    #[serde(default)]
+    pub memory_ledger: bool,
 }
 
 ///
@@ -192,6 +204,9 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub standards: StandardsCanisterConfig,
+
+    #[serde(default)]
+    pub diagnostics: DiagnosticsCanisterConfig,
 
     #[serde(default)]
     pub metrics: MetricsCanisterConfig,

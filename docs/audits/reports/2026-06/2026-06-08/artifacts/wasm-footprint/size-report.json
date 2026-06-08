@@ -1,0 +1,72 @@
+{
+  "scope": "wasm-footprint",
+  "profile": "release",
+  "canisters": [
+    {
+      "canister": "app",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 2902615,
+      "built_wasm_gz_bytes": 781000,
+      "shrunk_wasm_bytes": 2719942,
+      "shrunk_wasm_gz_bytes": 703520,
+      "shrink_delta_bytes": 182673,
+      "shrink_delta_percent": 6.29,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "user_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3079100,
+      "built_wasm_gz_bytes": 834514,
+      "shrunk_wasm_bytes": 2885377,
+      "shrunk_wasm_gz_bytes": 752852,
+      "shrink_delta_bytes": 193723,
+      "shrink_delta_percent": 6.29,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "user_shard",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 3002482,
+      "built_wasm_gz_bytes": 813981,
+      "shrunk_wasm_bytes": 2813615,
+      "shrunk_wasm_gz_bytes": 736101,
+      "shrink_delta_bytes": 188867,
+      "shrink_delta_percent": 6.29,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "scale_hub",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 2942824,
+      "built_wasm_gz_bytes": 794623,
+      "shrunk_wasm_bytes": 2757838,
+      "shrunk_wasm_gz_bytes": 716221,
+      "shrink_delta_bytes": 184986,
+      "shrink_delta_percent": 6.29,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "scale_replica",
+      "kind": "leaf-canister",
+      "built_wasm_bytes": 2919173,
+      "built_wasm_gz_bytes": 787990,
+      "shrunk_wasm_bytes": 2735611,
+      "shrunk_wasm_gz_bytes": 709418,
+      "shrink_delta_bytes": 183562,
+      "shrink_delta_percent": 6.29,
+      "baseline_delta_bytes": "N/A"
+    },
+    {
+      "canister": "root",
+      "kind": "bundle-canister",
+      "built_wasm_bytes": 5158113,
+      "built_wasm_gz_bytes": 2023981,
+      "shrunk_wasm_bytes": 4873030,
+      "shrunk_wasm_gz_bytes": 1888124,
+      "shrink_delta_bytes": 285083,
+      "shrink_delta_percent": 5.53,
+      "baseline_delta_bytes": "N/A"
+    }
+  ]
+}

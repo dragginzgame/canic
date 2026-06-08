@@ -10,12 +10,12 @@ pub mod compiled {
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
             AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-            CanisterPool, ConfigModel, DelegatedTokenConfig, DirectoryConfig, DirectoryPool,
-            FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile,
-            PoolImport, RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
-            RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool,
-            ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig,
-            TopupPolicy, Whitelist,
+            CanisterPool, ConfigModel, DelegatedTokenConfig, DiagnosticsCanisterConfig,
+            DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy, LogConfig,
+            MetricsCanisterConfig, MetricsProfile, PoolImport, RandomnessConfig, RandomnessSource,
+            RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
+            ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+            StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
         },
         ids::{CanisterRole, SubnetRole},
     };
