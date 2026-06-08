@@ -8,6 +8,9 @@ validation notes.
 - [Release validation matrix](release-validation-matrix.md) defines the
   current release-validation inventory. Use it for slice close-out,
   implementation close-out, RC promotion, and final release/tag validation.
+- [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
+  records the current upgrade/state evidence for replay-sensitive release
+  surfaces.
 
 ## Release Probe Inventories
 

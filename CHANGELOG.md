@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
 
+- `0.62.2` adds the non-versioned upgrade/state compatibility audit and CI
+  guard, classifying replay-sensitive state areas, required RC gates, and
+  current evidence without changing runtime, Candid, CLI, JSON/output, package,
+  dependency, or lockfile surfaces.
+
 - `0.62.1` adds the non-versioned release-validation matrix and CI guard,
   separating slice close-out, implementation close-out, RC promotion, final
   release/tag checks, focused replay/auth/cost gates, package/install probes,

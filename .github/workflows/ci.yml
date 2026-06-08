@@ -96,6 +96,9 @@ jobs:
       - name: Release validation matrix guard
         shell: bash
         run: bash scripts/ci/check-release-validation-matrix.sh
+      - name: Upgrade/state compatibility audit guard
+        shell: bash
+        run: bash scripts/ci/check-upgrade-state-audit.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit
@@ -158,6 +161,9 @@ jobs:
       - name: Release validation matrix guard
         shell: bash
         run: bash scripts/ci/check-release-validation-matrix.sh
+      - name: Upgrade/state compatibility audit guard
+        shell: bash
+        run: bash scripts/ci/check-upgrade-state-audit.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit

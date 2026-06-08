@@ -54,6 +54,7 @@ Docs-only release-line slices should use docs-appropriate validation:
 cargo fmt --all -- --check
 cargo test --locked -p canic --test changelog_governance -- --nocapture
 bash scripts/ci/check-release-validation-matrix.sh
+bash scripts/ci/check-upgrade-state-audit.sh
 git diff --check
 ```
 
@@ -93,6 +94,7 @@ cargo check --workspace --locked
 bash scripts/ci/run-layering-guards.sh
 bash scripts/ci/run-forbidden-crypto-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
+bash scripts/ci/check-upgrade-state-audit.sh
 make fmt-check
 make clippy
 make test-unit
@@ -107,6 +109,7 @@ The tag workflow currently includes:
 ```text
 bash scripts/ci/run-forbidden-crypto-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
+bash scripts/ci/check-upgrade-state-audit.sh
 make fmt-check
 make clippy
 make test-unit
@@ -131,6 +134,7 @@ If the slice touches stable memory, replay receipt state, or upgrade/state
 compatibility, also run the relevant focused stable-state gates:
 
 ```text
+bash scripts/ci/check-upgrade-state-audit.sh
 cargo test --locked -p canic-core --test stable_memory_abi_guard -- --nocapture
 cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 ```
@@ -221,6 +225,7 @@ slice. Do treat it as required accounting before RC promotion.
 
 The package/install gates above are documented in:
 
+- [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
 - [0.56 v1 release probe inventory](0.56-v1-release-probes.md)
 - [Installed CLI smoke](0.56-installed-cli-smoke.md)
 - [Packaged downstream CLI](0.56-packaged-downstream-cli.md)

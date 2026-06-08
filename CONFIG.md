@@ -10,17 +10,19 @@ At a high level the file describes:
 - The implicit wasm-store behavior used by chunk-store-backed installs.
 
 All fields are validated when `canic::build!` runs, so configuration drift fails
-fast at compile time. Every canister crate also declares the role it implements
-in `Cargo.toml`:
+fast at compile time. Every canister crate also declares the fleet and role it
+implements in `Cargo.toml`:
 
 ```toml
 [package.metadata.canic]
+fleet = "demo"
 role = "app"
 ```
 
-That package role must exist in `canic.toml`. `role = "root"` selects the root
-lifecycle and root endpoint bundle; every other role selects the ordinary
-non-root lifecycle and endpoint bundle.
+That package fleet must match `[fleet] name = "..."`, and the package role must
+exist in `canic.toml`. `role = "root"` selects the root lifecycle and root
+endpoint bundle; every other role selects the ordinary non-root lifecycle and
+endpoint bundle.
 
 ---
 

@@ -9,6 +9,28 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.2` adds the non-versioned upgrade/state compatibility audit at
+  `docs/operations/upgrade-state-compatibility-audit.md` plus CI guard
+  `scripts/ci/check-upgrade-state-audit.sh`. The audit classifies
+  replay-sensitive state areas including replay receipts, operation IDs,
+  pending operation logs, delegated-auth hard-cut state, caller/shard binding,
+  delegated-token mint replay, ICP refill replay, cost-guard accounting,
+  upgrade request replay, lifecycle post-upgrade ordering, durable-publication
+  state, and stable-memory ABI ownership. No release blocker was found in this
+  audit. This is docs/CI-only work: no runtime behavior, Candid, CLI output,
+  JSON/output format, dependency, lockfile, fixture, snapshot, generated output,
+  package artifact, or release package changes are introduced. Validation:
+  ```text
+  actionlint
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo test --locked -p canic-core --test stable_memory_abi_guard -- --nocapture
+  cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
+  cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+  git diff --check
+  ```
 - `0.62.1` adds the non-versioned release-validation matrix at
   `docs/operations/release-validation-matrix.md`. The matrix separates slice
   close-out, implementation close-out, RC promotion, and final release/tag

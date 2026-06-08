@@ -51,10 +51,10 @@ canic install --profile release test
 If you want the raw debug wasm lane instead, run:
 
 ```bash
-canic build --profile debug app
+canic build test app --profile debug
 ```
 
-This one command:
+The install flow:
 - creates the reference canisters in `icp`
 - builds the local canister artifacts
 - emits the build-produced root staging manifest from the configured ordinary `.wasm.gz` artifacts
@@ -98,7 +98,7 @@ Downstream repos that consume Canic from crates.io should use the installed CLI
 surface instead:
 
 ```bash
-canic build <canister>
+canic build <fleet> <role>
 ```
 
 That builder:
@@ -106,10 +106,10 @@ That builder:
 - refreshes the implicit bootstrap `wasm_store` artifact automatically when building `root`
 - keeps `wasm_store` out of downstream `icp.yaml` and delegates the implicit bootstrap build through the Canic backend builder
 - lets the bootstrap builder resolve the canonical `canic-wasm-store` source automatically from the current `canic` checkout or published registry source, and if that canonical crate is not present it synthesizes a wrapper directly from the resolved `canic` source, so downstreams do not need their own `wasm_store` crate or extra `wasm_store` build config
-- copies the resulting WASM into `.icp/local/canisters/<name>/<name>.wasm`
+- copies the resulting WASM into `.icp/local/canisters/<role>/<role>.wasm`
 - copies the uncompressed WASM to `ICP_WASM_OUTPUT_PATH` when invoked by ICP
   CLI custom builds
-- runs `candid-extractor` to produce `.icp/local/canisters/<name>/<name>.did`
+- runs `candid-extractor` to produce `.icp/local/canisters/<role>/<role>.did`
 
 The visible reference canister `.did` files now live only under `.icp/local`.
 They are generated build artifacts, not committed source files.
@@ -125,15 +125,15 @@ not rewrite the checked-in source file unless
 `CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
 
 Profile selection for the builder is:
-- `canic build --profile debug|fast|release <canister>` when using the
+- `canic build <fleet> <role> --profile debug|fast|release` when using the
   installed CLI
 - `CANIC_WASM_PROFILE=debug|fast|release` for lower-level host-library or
   repo-local script paths
 
 ## Why `.wasm.gz` Exists
 
-`icp.yaml` sets `"gzip": true`, so icp 0.30.2 also writes a gzipped artifact:
-`.icp/local/canisters/<name>/<name>.wasm.gz`.
+`icp.yaml` sets `"gzip": true`, so the pinned ICP CLI also writes a gzipped
+artifact: `.icp/local/canisters/<role>/<role>.wasm.gz`.
 
 `root.wasm` stays thin again. Only the bootstrap `wasm_store.wasm.gz` is
 embedded in `root`; the ordinary role `.wasm.gz` artifacts stay outside `root`
@@ -156,7 +156,7 @@ In split repos where the Rust workspace lives under `backend/` but `icp.yaml`
 and `.icp` live at the repo root, pass the roots to the installed CLI:
 
 ```bash
-canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <canister>
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <fleet> <role>
 ```
 
 The first root drives Cargo and config discovery; the second root owns emitted
@@ -166,7 +166,7 @@ If canister crates live under a different directory such as
 `backend/src/canisters`, point the command at the real config:
 
 ```bash
-canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <canister>
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <fleet> <role>
 ```
 
 The builder infers the canister root from that config location.
@@ -178,5 +178,6 @@ convention, declare the mapping in `Cargo.toml`:
 
 ```toml
 [package.metadata.canic]
+fleet = "project"
 role = "project_ledger"
 ```
