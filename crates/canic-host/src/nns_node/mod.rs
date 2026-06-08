@@ -87,7 +87,7 @@ pub struct NnsNodeListFilters {
 
 impl NnsNodeListFilters {
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.subnet.is_none()
             && self.subnet_kind.is_none()
             && self.data_center.is_none()
