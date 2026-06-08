@@ -49,6 +49,10 @@ pub mod ops {
         pub use crate::ops::config::ConfigOps;
     }
 
+    pub mod cost_guard {
+        pub use crate::ops::cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest};
+    }
+
     pub mod ic {
         pub use crate::ops::ic::IcOps;
 
@@ -79,6 +83,12 @@ pub mod ops {
         }
     }
 
+    pub mod replay {
+        pub mod model {
+            pub use crate::ops::replay::model::CommandKind;
+        }
+    }
+
     pub mod storage {
         pub mod index {
             pub mod app {
@@ -106,10 +116,14 @@ pub mod ops {
     }
 }
 
+pub mod replay_policy {
+    pub use crate::replay_policy::CostClass;
+}
+
 pub mod workflow {
     pub mod canister_lifecycle {
         pub use crate::workflow::canister_lifecycle::{
-            CanisterLifecycleEvent, CanisterLifecycleWorkflow,
+            CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
         };
     }
 

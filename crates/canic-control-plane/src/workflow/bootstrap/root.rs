@@ -7,7 +7,7 @@
 use crate::{
     ids::{BuildNetwork, CanisterRole},
     ops::storage::template::{TemplateChunkedOps, TemplateManifestOps},
-    workflow::runtime::template::WasmStorePublicationWorkflow,
+    workflow::{deployment, runtime::template::WasmStorePublicationWorkflow},
 };
 use canic_core::api::lifecycle::metrics::{
     CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
@@ -33,7 +33,6 @@ use canic_core::control_plane_support::{
         },
     },
     workflow::{
-        canister_lifecycle::{CanisterLifecycleEvent, CanisterLifecycleWorkflow},
         ic::{IcWorkflow, provision::ProvisionWorkflow},
         pool::{PoolWorkflow, query::PoolQuery},
         prelude::*,
@@ -724,11 +723,12 @@ async fn ensure_required_canisters(data: &RootBootstrapContext) -> Result<(), In
             manifest.version
         );
 
-        CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
-            role: role.clone(),
-            parent: IcOps::canister_self(),
-            extra_arg: None,
-        })
+        deployment::create_canister_with_deployment_guard(
+            deployment::BOOTSTRAP_AUTO_CREATE_COMMAND_KIND,
+            role.clone(),
+            IcOps::canister_self(),
+            None,
+        )
         .await?;
         canic_core::perf!("bootstrap_create_role");
     }
@@ -770,11 +770,12 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
 
     log!(Topic::Init, Info, "ws: create {role}");
 
-    CanisterLifecycleWorkflow::apply(CanisterLifecycleEvent::Create {
+    deployment::create_canister_with_deployment_guard(
+        deployment::BOOTSTRAP_WASM_STORE_CREATE_COMMAND_KIND,
         role,
-        parent: IcOps::canister_self(),
-        extra_arg: None,
-    })
+        IcOps::canister_self(),
+        None,
+    )
     .await?;
     canic_core::perf!("bootstrap_create_wasm_store");
     let _ = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();

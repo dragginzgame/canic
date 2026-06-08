@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 ## Purpose
 
@@ -9,15 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.61.40` cleaned up 0.61 release-readiness wording without changing runtime
-  behavior. The replay-protection design now labels the branch-slice plan as a
-  historical implementation record and directs current readiness decisions to
-  the acceptance criteria plus executable replay-policy, hard-cut, and
-  cost-guard gates. It also renames stale-looking "remaining" headings so they
-  do not imply fresh work after the `.39` aggregate manifest gate passes. No
-  runtime paths, CLI commands, flags, output columns, or JSON report shapes
-  changed. Validation:
+- `0.61.40` fixed control-plane compile failures caused by the
+  permit-required lifecycle create boundary and cleaned up 0.61
+  release-readiness wording. Bootstrap auto-create, bootstrap wasm-store
+  creation, and runtime wasm-store publication creation now reserve, complete,
+  or recover a management-deployment `CostGuardPermit` before calling
+  `CanisterLifecycleEvent::Create`. The replay-protection design now labels
+  the branch-slice plan as a historical implementation record and directs
+  current readiness decisions to the acceptance criteria plus executable
+  replay-policy, hard-cut, and cost-guard gates. No CLI commands, flags, output
+  columns, JSON report shapes, dependencies, or lockfiles changed. Validation:
   ```text
+  cargo check --locked -p canic-control-plane --all-targets
+  cargo test --locked -p canic-control-plane --all-targets -- --nocapture
+  cargo clippy --locked -p canic-control-plane --all-targets --all-features -- -D warnings
+  cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo clippy --locked -p canic-core --all-targets --all-features -- -D warnings
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
