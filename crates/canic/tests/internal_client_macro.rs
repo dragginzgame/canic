@@ -25,9 +25,11 @@ fn multi_role_endpoint() -> canic::api::ic::ProtectedInternalEndpoint {
     requires(caller::has_role("project_hub"))
 )]
 async fn system_add_project_to_user(
-    _user_id: Principal,
-    _project_id: Principal,
+    user_id: Principal,
+    project_id: Principal,
 ) -> Result<(), canic::Error> {
+    let _ = (user_id, project_id);
+
     Ok(())
 }
 
