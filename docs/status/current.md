@@ -9,6 +9,22 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.0` starts the bounded post-0.61 release-durability line with a
+  docs-only charter/reconciliation slice. The new design is
+  `docs/design/0.62-release-durability/0.62-design.md`, and the line is scoped
+  to release validation, upgrade confidence, operator recovery, validation
+  governance, targeted tests, and minimal diagnostics. This slice also
+  reconciles stale tracked 0.62 changelog content that described the old
+  "Broad NNS inspection foundation" identity; that NNS registry-version work is
+  already part of the 0.61 history and remains recorded under `0.61.3`. No
+  runtime behavior, Candid, CLI output, JSON/output format, dependency,
+  lockfile, fixture, snapshot, generated output, package artifact, or release
+  package changes are introduced. Validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.40` fixed control-plane compile failures caused by the
   permit-required lifecycle create boundary and cleaned up 0.61
   release-readiness wording. Bootstrap auto-create, bootstrap wasm-store

@@ -12,6 +12,16 @@ present.
 
 ## Unreleased
 
+## [0.62.x] - 2026-06-08 - Release durability
+
+Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
+
+- `0.62.0` starts the bounded post-0.61 release-durability line. This
+  docs-only charter/reconciliation slice adds the 0.62 design, replaces stale
+  tracked Broad NNS 0.62 changelog content, and keeps 0.62 scoped to release
+  validation, upgrade confidence, operator recovery, governance, targeted tests,
+  and minimal diagnostics.
+
 ## [0.61.x] - 2026-06-04 - System replay protection
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
