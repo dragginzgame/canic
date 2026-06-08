@@ -9,6 +9,27 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.3` adds the non-versioned recovery/retry runbooks at
+  `docs/operations/recovery-retry-runbooks.md` plus CI guard
+  `scripts/ci/check-recovery-runbooks.sh`. The runbooks document safe operator
+  recovery decisions for replay-sensitive failures and uncertain operations,
+  including same-input retries, committed replay, in-progress operations,
+  payload/caller mismatches, expired authorization, delegation caller/shard
+  mismatch, project-local pending ICP refill, recovery-required refill,
+  cost-boundary refusal, durable-publication ambiguity, upgrade interruption,
+  and unexpected receipt state. This is docs/CI-only work: no runtime behavior,
+  Candid, CLI output, JSON/output format, dependency, lockfile, fixture,
+  snapshot, generated output, package artifact, or release package changes are
+  introduced. Validation:
+  ```text
+  actionlint
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.62.2` adds the non-versioned upgrade/state compatibility audit at
   `docs/operations/upgrade-state-compatibility-audit.md` plus CI guard
   `scripts/ci/check-upgrade-state-audit.sh`. The audit classifies

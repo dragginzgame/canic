@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
 
+- `0.62.3` adds non-versioned recovery/retry runbooks and a CI guard,
+  documenting safe operator actions for replay-sensitive failures and
+  uncertain operations without changing runtime, Candid, CLI, JSON/output,
+  package, dependency, or lockfile surfaces.
+
 - `0.62.2` adds the non-versioned upgrade/state compatibility audit and CI
   guard, classifying replay-sensitive state areas, required RC gates, and
   current evidence without changing runtime, Candid, CLI, JSON/output, package,

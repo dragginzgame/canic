@@ -99,6 +99,9 @@ jobs:
       - name: Upgrade/state compatibility audit guard
         shell: bash
         run: bash scripts/ci/check-upgrade-state-audit.sh
+      - name: Recovery runbooks guard
+        shell: bash
+        run: bash scripts/ci/check-recovery-runbooks.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit
@@ -164,6 +167,9 @@ jobs:
       - name: Upgrade/state compatibility audit guard
         shell: bash
         run: bash scripts/ci/check-upgrade-state-audit.sh
+      - name: Recovery runbooks guard
+        shell: bash
+        run: bash scripts/ci/check-recovery-runbooks.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit

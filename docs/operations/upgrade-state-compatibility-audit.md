@@ -70,7 +70,7 @@ Each area below uses one of these outcomes:
 | --- | --- | --- | --- |
 | Replay receipt persistence and shape stability | `ReplayReceiptRecord` stores `schema_version`, command kind, 32-byte operation ID, actor, payload-hash schema, status, response schema/bytes, and effect in `crates/canic-core/src/storage/stable/replay.rs`. Tests cover CBOR round-trip, committed receipt round-trip, pending/recovery receipt round-trip, shared receipt conversion, actor/operation listing, and unsupported schema rejection. | Covered by existing tests/docs | Current schema compatibility is covered. A live PocketIC fixture that seeds historical replay receipt bytes before upgrade would be optional hardening unless RC validation finds drift. |
 | Operation-ID durability | Runtime replay receipts persist `[u8; 32]` operation IDs. Root upgrade RPC tests prove upgrade requests carry replay metadata into the request. CLI ICP refill generated IDs are written before send in the pending operation log. | Covered by existing tests/docs | Operation IDs remain caller/client-owned for replay-sensitive commands. Server correctness does not depend on the CLI pending log. |
-| Project-local pending operation log | `crates/canic-cli/src/cycles/convert/pending.rs` writes `.canic/operations/pending.json` with log and entry schema versions, atomic temp-file replace, directory sync, `pending_send`, and `completed` states. Tests cover project-local path, write-before-send, matching pending reuse, and completed entries not being reused. | Covered by existing tests/docs | This is host/operator durability, not canister stable state. Recovery wording belongs in the operator runbook slice. |
+| Project-local pending operation log | `crates/canic-cli/src/cycles/convert/pending.rs` writes `.canic/operations/pending.json` with log and entry schema versions, atomic temp-file replace, directory sync, `pending_send`, and `completed` states. Tests cover project-local path, write-before-send, matching pending reuse, and completed entries not being reused. | Covered by existing tests/docs | This is host/operator durability, not canister stable state. Recovery wording is documented in [Recovery and retry runbooks](recovery-retry-runbooks.md). |
 | Delegated-auth hard cut | `crates/canic-core/tests/delegated_auth_hard_cut_guard.rs` rejects reintroducing the removed token-use module and removed symbols. 0.61 design explicitly says old token-use markers are not migrated into shared replay receipts. | Covered by existing tests/docs | The post-upgrade runtime has one replay model. |
 | Delegation proof caller/shard binding | `AuthApi::validate_delegation_request_caller` requires caller and `shard_pid` to match before proof issuance; unit tests assert mismatched callers fail. Replay payload hashing binds authoritative proof payload and excludes metadata. | Covered by existing tests/docs | This prevents replay/cost guards from minting proof material for a foreign shard request. |
 | Delegated-token mint and issue replay state | `crates/canic-core/src/api/auth/mod.rs` tests metadata validation, payload-hash stability, committed replay returning the cached token, actor mismatch, payload mismatch, and in-progress duplicate blocking. | Covered by existing tests/docs | Shared replay receipts own token mint replay behavior after the hard cut. |
@@ -136,6 +136,8 @@ validation environment if too expensive for an ordinary docs slice.
 Release blockers: none found in this audit.
 
 The current evidence is sufficient to continue 0.62 without opening another
-runtime implementation slice. Remaining work belongs to RC accounting or later
-0.62 operational docs, especially recovery/runbook wording for pending or
-recovery-required states.
+runtime implementation slice. Recovery/runbook wording for pending or
+recovery-required states is documented in
+[Recovery and retry runbooks](recovery-retry-runbooks.md). Remaining work
+belongs to diagnostic consistency review, package/install validation, or RC
+accounting.

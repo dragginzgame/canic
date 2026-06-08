@@ -11,6 +11,9 @@ validation notes.
 - [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
   records the current upgrade/state evidence for replay-sensitive release
   surfaces.
+- [Recovery and retry runbooks](recovery-retry-runbooks.md) document safe
+  operator recovery decisions for replay-sensitive failures and uncertain
+  operations.
 
 ## Release Probe Inventories
 

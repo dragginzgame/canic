@@ -55,6 +55,7 @@ cargo fmt --all -- --check
 cargo test --locked -p canic --test changelog_governance -- --nocapture
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
+bash scripts/ci/check-recovery-runbooks.sh
 git diff --check
 ```
 
@@ -95,6 +96,7 @@ bash scripts/ci/run-layering-guards.sh
 bash scripts/ci/run-forbidden-crypto-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
+bash scripts/ci/check-recovery-runbooks.sh
 make fmt-check
 make clippy
 make test-unit
@@ -110,6 +112,7 @@ The tag workflow currently includes:
 bash scripts/ci/run-forbidden-crypto-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
+bash scripts/ci/check-recovery-runbooks.sh
 make fmt-check
 make clippy
 make test-unit
@@ -144,6 +147,13 @@ also run:
 
 ```text
 cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
+```
+
+If the slice touches operator recovery wording or retry/runbook expectations,
+also run:
+
+```text
+bash scripts/ci/check-recovery-runbooks.sh
 ```
 
 ## Governance Gates
@@ -225,6 +235,7 @@ slice. Do treat it as required accounting before RC promotion.
 
 The package/install gates above are documented in:
 
+- [Recovery and retry runbooks](recovery-retry-runbooks.md)
 - [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
 - [0.56 v1 release probe inventory](0.56-v1-release-probes.md)
 - [Installed CLI smoke](0.56-installed-cli-smoke.md)
