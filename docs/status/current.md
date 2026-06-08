@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-06
+Last updated: 2026-06-07
 
 ## Purpose
 
@@ -9,6 +9,19 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.61.40` cleaned up 0.61 release-readiness wording without changing runtime
+  behavior. The replay-protection design now labels the branch-slice plan as a
+  historical implementation record and directs current readiness decisions to
+  the acceptance criteria plus executable replay-policy, hard-cut, and
+  cost-guard gates. It also renames stale-looking "remaining" headings so they
+  do not imply fresh work after the `.39` aggregate manifest gate passes. No
+  runtime paths, CLI commands, flags, output columns, or JSON report shapes
+  changed. Validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.61.39` added an aggregate release-candidate replay manifest gate.
   `release_candidate_manifests_have_no_release_blockers` now fails if the
   endpoint manifest, root capability command manifest, or pool admin command

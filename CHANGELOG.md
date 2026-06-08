@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.61.md](docs/changelog/0.61.md)
 
+- `0.61.40` cleans up 0.61 readiness wording. The design now marks the slice
+  plan as historical implementation record and points current readiness at the
+  executable acceptance and manifest gates.
+
 - `0.61.39` adds an aggregate release-candidate manifest gate. Replay-policy
   tests now fail if endpoint, root-capability, or pool-admin manifests contain
   any remaining `ReleaseBlocker` entries.
