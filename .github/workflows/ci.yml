@@ -93,6 +93,9 @@ jobs:
       - name: Forbidden crypto API guards
         shell: bash
         run: bash scripts/ci/run-forbidden-crypto-guards.sh
+      - name: Release validation matrix guard
+        shell: bash
+        run: bash scripts/ci/check-release-validation-matrix.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit
@@ -152,6 +155,9 @@ jobs:
       - name: Forbidden crypto API guards
         shell: bash
         run: bash scripts/ci/run-forbidden-crypto-guards.sh
+      - name: Release validation matrix guard
+        shell: bash
+        run: bash scripts/ci/check-release-validation-matrix.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit

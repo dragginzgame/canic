@@ -41,6 +41,14 @@ For documentation-only governance changes, use docs-appropriate validation such
 as formatting, whitespace, link-shape review, and `git diff --check`. Do not run
 code test suites unless code files changed or the maintainer asks for them.
 
+Release-line-specific validation matrices may further classify existing checks
+for a bounded release line. Use
+[docs/operations/release-validation-matrix.md](../operations/release-validation-matrix.md)
+as the current matrix for slice close-out, implementation close-out, RC
+promotion, and final release/tag validation. The matrix interprets this
+governance policy for the active release line; it does not override the git,
+versioning, or release boundaries in this document.
+
 ## Git Boundary
 
 Automated agents must never run:

@@ -9,6 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.1` adds the non-versioned release-validation matrix at
+  `docs/operations/release-validation-matrix.md`. The matrix separates slice
+  close-out, implementation close-out, RC promotion, and final release/tag
+  validation; it also classifies required local/CI gates, focused
+  replay/auth/cost gates, governance checks, package/install probes, broad
+  workspace checks, and environment-specific local ICP/canister checks. The
+  matrix is linked from `docs/governance/ci-deployment.md`, the operations docs
+  index, and CI guard `scripts/ci/check-release-validation-matrix.sh` so it is
+  active release-validation infrastructure, not an archive design note. This is
+  docs/CI-only matrix work: no runtime behavior, Candid, CLI output,
+  JSON/output format, dependency, lockfile, fixture, snapshot, generated output,
+  package artifact, or release package changes are introduced. Validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  bash scripts/ci/check-release-validation-matrix.sh
+  git diff --check
+  ```
 - `0.62.0` starts the bounded post-0.61 release-durability line with a
   docs-only charter/reconciliation slice. The new design is
   `docs/design/0.62-release-durability/0.62-design.md`, and the line is scoped

@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
 
+- `0.62.1` adds the non-versioned release-validation matrix and CI guard,
+  separating slice close-out, implementation close-out, RC promotion, final
+  release/tag checks, focused replay/auth/cost gates, package/install probes,
+  and environment-specific local ICP/canister validation.
+
 - `0.62.0` starts the bounded post-0.61 release-durability line. This
   docs-only charter/reconciliation slice adds the 0.62 design, replaces stale
   tracked Broad NNS 0.62 changelog content, and keeps 0.62 scoped to release
