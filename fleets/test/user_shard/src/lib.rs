@@ -31,7 +31,9 @@ async fn user_shard_local_public_key_test() -> Result<Vec<u8>, Error> {
 }
 
 #[canic_query(requires(auth::authenticated(cap::VERIFY)))]
-async fn hello(_token: DelegatedToken) -> Result<(), Error> {
+async fn hello(token: DelegatedToken) -> Result<(), Error> {
+    let _ = token;
+
     Ok(())
 }
 
