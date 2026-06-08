@@ -105,6 +105,9 @@ jobs:
       - name: Diagnostic consistency audit guard
         shell: bash
         run: bash scripts/ci/check-diagnostic-consistency-audit.sh
+      - name: Release package/install validation guard
+        shell: bash
+        run: bash scripts/ci/check-release-package-install-validation.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit
@@ -176,6 +179,9 @@ jobs:
       - name: Diagnostic consistency audit guard
         shell: bash
         run: bash scripts/ci/check-diagnostic-consistency-audit.sh
+      - name: Release package/install validation guard
+        shell: bash
+        run: bash scripts/ci/check-release-package-install-validation.sh
       - run: make fmt-check
       - run: make clippy
       - run: make test-unit

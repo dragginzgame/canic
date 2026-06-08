@@ -9,6 +9,27 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.62.5` adds the non-versioned release package/install validation checklist
+  at `docs/operations/release-package-install-validation.md` plus CI guard
+  `scripts/ci/check-release-package-install-validation.sh`. The checklist
+  classifies existing package, installed CLI, packaged downstream CLI,
+  packaged downstream `wasm_store`, release build, local fleet install, and
+  local canister validation gates, and records artifact verification and
+  human-owned release-flow boundaries. This is docs/CI-only work: no runtime
+  behavior, Candid, CLI output, JSON/output format, dependency, lockfile,
+  fixture, snapshot, generated output, package artifact, or release package
+  changes are introduced. Validation:
+  ```text
+  actionlint
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
+  bash scripts/ci/check-release-package-install-validation.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.62.4` adds the non-versioned diagnostic consistency audit at
   `docs/operations/diagnostic-consistency-audit.md` plus CI guard
   `scripts/ci/check-diagnostic-consistency-audit.sh`. The audit classifies

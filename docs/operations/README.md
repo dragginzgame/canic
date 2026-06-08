@@ -17,6 +17,9 @@ validation notes.
 - [Diagnostic consistency audit](diagnostic-consistency-audit.md) records
   whether current public errors, logs, metrics, tests, and docs distinguish the
   replay-sensitive failure classes needed for RC operation.
+- [Release package and install validation](release-package-install-validation.md)
+  records package, install, artifact, smoke-test, and environment-specific
+  release gates.
 
 ## Release Probe Inventories
 

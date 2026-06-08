@@ -35,6 +35,12 @@ This audit does not change runtime behavior, Candid, CLI output, JSON/output
 formats, package manifests, dependencies, lockfiles, fixtures, snapshots, or
 generated artifacts.
 
+## Related Evidence
+
+- [Release package and install validation](release-package-install-validation.md)
+  records package, install, artifact, smoke-test, and environment-specific
+  release gates.
+
 ## Public-Output Boundary
 
 Diagnostic surfaces have different compatibility weight:

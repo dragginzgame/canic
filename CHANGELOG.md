@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)
 
+- `0.62.5` adds the non-versioned release package/install validation checklist
+  and CI guard, classifying package, installed CLI, packaged downstream, local
+  canister, artifact, and release-flow ownership gates without changing
+  runtime, Candid, CLI, JSON/output, package, dependency, or lockfile surfaces.
+
 - `0.62.4` adds the non-versioned diagnostic consistency audit and CI guard,
   classifying existing public errors, logs, metrics, tests, docs, and
   public-output impact rules without changing runtime, Candid, CLI,

@@ -12,7 +12,7 @@ remains the general policy for command tiers, git boundaries, versioning,
 release flow, network selection, and automation language rules.
 
 Current release-line context: 0.62 is using this matrix for release durability,
-upgrade confidence, and operator recovery work.
+upgrade confidence, operator recovery, and package/install validation work.
 
 ## Scope
 
@@ -57,6 +57,7 @@ bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-diagnostic-consistency-audit.sh
+bash scripts/ci/check-release-package-install-validation.sh
 git diff --check
 ```
 
@@ -99,6 +100,7 @@ bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-diagnostic-consistency-audit.sh
+bash scripts/ci/check-release-package-install-validation.sh
 make fmt-check
 make clippy
 make test-unit
@@ -116,6 +118,7 @@ bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-diagnostic-consistency-audit.sh
+bash scripts/ci/check-release-package-install-validation.sh
 make fmt-check
 make clippy
 make test-unit
@@ -164,6 +167,13 @@ run:
 
 ```text
 bash scripts/ci/check-diagnostic-consistency-audit.sh
+```
+
+If the slice touches package/install validation wording or release artifact
+accounting, also run:
+
+```text
+bash scripts/ci/check-release-package-install-validation.sh
 ```
 
 ## Governance Gates
@@ -245,6 +255,7 @@ slice. Do treat it as required accounting before RC promotion.
 
 The package/install gates above are documented in:
 
+- [Release package and install validation](release-package-install-validation.md)
 - [Diagnostic consistency audit](diagnostic-consistency-audit.md)
 - [Recovery and retry runbooks](recovery-retry-runbooks.md)
 - [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
