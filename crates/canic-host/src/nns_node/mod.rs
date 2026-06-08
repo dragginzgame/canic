@@ -24,6 +24,9 @@ pub const DEFAULT_NODE_REFRESH_LOCK_STALE_SECONDS: u64 = 30 * 60;
 pub const NNS_NODE_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_NODE_INFO_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_NODE_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_NODE_SUBNET_KIND_APPLICATION: &str = "application";
+pub const NNS_NODE_SUBNET_KIND_SYSTEM: &str = "system";
+pub const NNS_NODE_SUBNET_KIND_UNKNOWN: &str = "unknown";
 const COMPACT_PRINCIPAL_CHARS: usize = 5;
 
 ///
@@ -43,6 +46,7 @@ pub struct NnsNodeListRequest {
     pub cache: NnsNodeCacheRequest,
     pub source_endpoint: String,
     pub now_unix_secs: u64,
+    pub filters: NnsNodeListFilters,
 }
 
 ///
@@ -67,6 +71,29 @@ pub struct NnsNodeRefreshRequest {
     pub lock_stale_after_seconds: u64,
     pub dry_run: bool,
     pub output_path: Option<PathBuf>,
+}
+
+///
+/// NnsNodeListFilters
+///
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct NnsNodeListFilters {
+    pub subnet: Option<String>,
+    pub subnet_kind: Option<String>,
+    pub data_center: Option<String>,
+    pub node_provider: Option<String>,
+    pub node_operator: Option<String>,
+}
+
+impl NnsNodeListFilters {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.subnet.is_none()
+            && self.subnet_kind.is_none()
+            && self.data_center.is_none()
+            && self.node_provider.is_none()
+            && self.node_operator.is_none()
+    }
 }
 
 ///
@@ -326,8 +353,8 @@ fn build_nns_node_list_report_with_source(
     request: &NnsNodeListRequest,
     source: &dyn NnsNodeSource,
 ) -> Result<NnsNodeListReport, NnsNodeHostError> {
-    match load_cached_nns_node_report(&request.cache) {
-        Ok(cached) => Ok(cached.report),
+    let report = match load_cached_nns_node_report(&request.cache) {
+        Ok(cached) => cached.report,
         Err(NnsNodeHostError::MissingCache { .. }) => {
             let refresh_request = NnsNodeRefreshRequest {
                 cache: request.cache.clone(),
@@ -338,10 +365,11 @@ fn build_nns_node_list_report_with_source(
                 output_path: None,
             };
             let (report, _) = refresh_nns_node_cache_with_source(&refresh_request, source)?;
-            Ok(report)
+            report
         }
-        Err(err) => Err(err),
-    }
+        Err(err) => return Err(err),
+    };
+    Ok(filter_node_list_report(report, &request.filters))
 }
 
 fn build_nns_node_info_report_with_source(
@@ -352,6 +380,7 @@ fn build_nns_node_info_report_with_source(
         cache: request.cache.clone(),
         source_endpoint: request.source_endpoint.clone(),
         now_unix_secs: request.now_unix_secs,
+        filters: NnsNodeListFilters::default(),
     };
     let report = build_nns_node_list_report_with_source(&list_request, source)?;
     let (node, resolved_from) = resolve_node(&report, &request.input)?;
@@ -658,6 +687,75 @@ fn node_report_from_list(list: MainnetNodeList) -> NnsNodeListReport {
         node_count: nodes.len(),
         nodes,
     }
+}
+
+fn filter_node_list_report(
+    mut report: NnsNodeListReport,
+    filters: &NnsNodeListFilters,
+) -> NnsNodeListReport {
+    if filters.is_empty() {
+        return report;
+    }
+    report
+        .nodes
+        .retain(|node| node_matches_filters(node, filters));
+    report.node_count = report.nodes.len();
+    report
+}
+
+fn node_matches_filters(node: &NnsNodeRow, filters: &NnsNodeListFilters) -> bool {
+    filters
+        .subnet
+        .as_deref()
+        .is_none_or(|filter| principal_filter_matches(&node.subnet_principal, filter))
+        && filters
+            .subnet_kind
+            .as_deref()
+            .is_none_or(|filter| text_filter_equals(&node.subnet_kind, filter))
+        && filters
+            .data_center
+            .as_deref()
+            .is_none_or(|filter| text_filter_starts_with(&node.data_center_id, filter))
+        && filters
+            .node_provider
+            .as_deref()
+            .is_none_or(|filter| principal_filter_matches(&node.node_provider_principal, filter))
+        && filters
+            .node_operator
+            .as_deref()
+            .is_none_or(|filter| principal_filter_matches(&node.node_operator_principal, filter))
+}
+
+fn principal_filter_matches(value: &str, filter: &str) -> bool {
+    let Some(filter) = non_empty_filter(filter) else {
+        return false;
+    };
+    if let Ok(principal) = canonical_principal_text(filter) {
+        value == principal
+    } else {
+        value.starts_with(&filter.to_ascii_lowercase())
+    }
+}
+
+fn text_filter_starts_with(value: &str, filter: &str) -> bool {
+    let Some(filter) = non_empty_filter(filter) else {
+        return false;
+    };
+    value
+        .to_ascii_lowercase()
+        .starts_with(&filter.to_ascii_lowercase())
+}
+
+fn text_filter_equals(value: &str, filter: &str) -> bool {
+    let Some(filter) = non_empty_filter(filter) else {
+        return false;
+    };
+    value.eq_ignore_ascii_case(filter)
+}
+
+fn non_empty_filter(filter: &str) -> Option<&str> {
+    let filter = filter.trim();
+    (!filter.is_empty()).then_some(filter)
 }
 
 ///

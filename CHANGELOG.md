@@ -12,6 +12,23 @@ present.
 
 ## Unreleased
 
+## [0.63.x] - 2026-06-08 - NNS topology inspection
+
+Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
+
+- `0.63.0` expands cached mainnet NNS topology inspection with an aggregate
+  topology summary and filtered node reads, without changing package versions
+  or cache schemas.
+
+  ```text
+  canic nns topology summary
+  canic nns node list --subnet <subnet|subnet-prefix>
+  canic nns node list --kind <application|system|unknown>
+  canic nns node list --data-center <data-center|data-center-prefix>
+  canic nns node list --node-provider <node-provider|node-provider-prefix>
+  canic nns node list --node-operator <node-operator|node-operator-prefix>
+  ```
+
 ## [0.62.x] - 2026-06-08 - Release durability
 
 Detailed patch breakdown: [docs/changelog/0.62.md](docs/changelog/0.62.md)

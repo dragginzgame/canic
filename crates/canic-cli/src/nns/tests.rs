@@ -25,6 +25,7 @@ use super::{
         info_usage, list_usage, refresh_usage, resolve_canister_or_role,
         should_retry_info_as_deployment_target, subnet_usage,
     },
+    topology::{TopologySummaryOptions, topology_summary_usage, topology_usage},
 };
 use canic_host::{
     installed_deployment::{
@@ -368,12 +369,27 @@ fn node_list_parses_defaults_and_json_format() {
         OsString::from("--source-endpoint"),
         OsString::from("https://icp-api.io"),
         OsString::from("--verbose"),
+        OsString::from("--data-center"),
+        OsString::from("zh2"),
+        OsString::from("--node-provider"),
+        OsString::from("7at4h"),
+        OsString::from("--node-operator"),
+        OsString::from("4lp6i"),
+        OsString::from("--subnet"),
+        OsString::from("tdb26"),
+        OsString::from("--kind"),
+        OsString::from("system"),
     ])
     .expect("parse node list");
 
     assert_eq!(options.format, OutputFormat::Json);
     assert_eq!(options.source_endpoint, "https://icp-api.io");
     assert!(options.verbose);
+    assert_eq!(options.filters.data_center.as_deref(), Some("zh2"));
+    assert_eq!(options.filters.node_provider.as_deref(), Some("7at4h"));
+    assert_eq!(options.filters.node_operator.as_deref(), Some("4lp6i"));
+    assert_eq!(options.filters.subnet.as_deref(), Some("tdb26"));
+    assert_eq!(options.filters.subnet_kind.as_deref(), Some("system"));
 }
 
 #[test]
@@ -537,6 +553,26 @@ fn registry_version_parses_defaults_and_json_format() {
 }
 
 #[test]
+fn topology_summary_parses_defaults_and_json_format() {
+    let defaults = TopologySummaryOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+
+    let options = TopologySummaryOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse topology summary");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
 fn data_center_help_is_advertised_under_nns() {
     let nns = usage();
     let data_center = data_center_usage();
@@ -572,6 +608,11 @@ fn node_help_is_advertised_under_nns() {
     assert!(list.contains("canic nns node list"));
     assert!(list.contains("--verbose"));
     assert!(list.contains("--format json"));
+    assert!(list.contains("--data-center"));
+    assert!(list.contains("--node-provider"));
+    assert!(list.contains("--node-operator"));
+    assert!(list.contains("--subnet"));
+    assert!(list.contains("--kind"));
     assert!(info.contains("canic nns node info"));
     assert!(info.contains("node|node-prefix"));
     assert!(refresh.contains("canic nns node refresh"));
@@ -630,6 +671,19 @@ fn registry_help_is_advertised_under_nns() {
     assert!(registry.contains("Show the latest mainnet NNS registry version"));
     assert!(version.contains("canic nns registry version"));
     assert!(version.contains("--format json"));
+}
+
+#[test]
+fn topology_help_is_advertised_under_nns() {
+    let nns = usage();
+    let topology = topology_usage();
+    let summary = topology_summary_usage();
+
+    assert!(nns.contains("topology"));
+    assert!(topology.contains("Summarize cached mainnet NNS topology reports"));
+    assert!(summary.contains("canic nns topology summary"));
+    assert!(summary.contains("--format json"));
+    assert!(summary.contains("--source-endpoint"));
 }
 
 #[test]
@@ -705,6 +759,21 @@ fn registry_local_is_rejected_with_pinned_message() {
     let message = err.to_string();
     assert!(message.contains("supports only the mainnet `ic` network"));
     assert!(message.contains("canic --network ic nns registry version"));
+}
+
+#[test]
+fn topology_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("topology"),
+        OsString::from("summary"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns topology summary"));
 }
 
 #[test]

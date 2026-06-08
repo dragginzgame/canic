@@ -99,8 +99,12 @@ canic nns registry version
 canic nns subnet list
 canic nns data-center list
 canic nns node list
+canic nns node list --data-center <data-center-prefix>
+canic nns node list --node-provider <node-provider-prefix>
+canic nns node list --subnet <subnet-prefix> --kind system
 canic nns node-provider list
 canic nns node-operator list
+canic nns topology summary
 canic nns subnet list --verbose
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```

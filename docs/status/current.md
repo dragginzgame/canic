@@ -9,6 +9,30 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.63.0` starts the post-0.62 NNS topology expansion without changing Cargo
+  package versions, release scripts, Candid, runtime canisters, package
+  artifacts, or lockfiles. The CLI now exposes `canic nns topology summary`,
+  which composes existing cached NNS subnet, node, node-provider,
+  node-operator, and data-center reports into aggregate counts, subnet-kind
+  distribution, and per-source registry-version provenance. `canic nns node
+  list` also gains filter flags for subnet/subnet-prefix, subnet kind,
+  data-center/data-center-prefix, node-provider/node-provider-prefix, and
+  node-operator/node-operator-prefix while preserving the existing node cache
+  schema. The root README and CLI README advertise the new operator-facing
+  surface, and `CHANGELOG.md` plus `docs/changelog/0.63.md` record the
+  versioned `0.63.0` changelog entry.
+  Validation:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-host nns --lib -- --nocapture
+  cargo test --locked -p canic-cli --lib nns -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-cli
+  cargo run --locked -p canic-cli -- nns topology summary
+  cargo run --locked -p canic-cli -- nns node list --data-center zh2 --kind application
+  git diff --check
+  ```
 - `0.62.6` adds the non-versioned RC readiness audit at
   `docs/operations/rc-readiness-audit.md` plus CI guard
   `scripts/ci/check-rc-readiness-audit.sh`. The audit records

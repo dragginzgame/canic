@@ -14,6 +14,7 @@ fn node_report_uses_live_registry_source() {
         cache: test_cache_request(MAINNET_NETWORK, "uses-live-source"),
         source_endpoint: "https://icp-api.io".to_string(),
         now_unix_secs: 1_780_531_200,
+        filters: NnsNodeListFilters::default(),
     };
     let report = build_nns_node_list_report_with_source(
         &request,
@@ -55,6 +56,38 @@ fn node_info_resolves_unique_prefix() {
 
     assert_eq!(resolved_from, "node_principal_prefix");
     assert_eq!(node.node_principal, "ryjl3-tyaaa-aaaaa-aaaba-cai");
+}
+
+#[test]
+fn node_list_filters_by_related_prefixes() {
+    let mut report = node_report_fixture();
+    report.node_count = 2;
+    report.nodes.push(NnsNodeRow {
+        node_principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+        node_operator_principal: "qaa6y-5yaaa-aaaaa-aaafa-cai".to_string(),
+        node_provider_principal: "qaa6y-5yaaa-aaaaa-aaafa-cai".to_string(),
+        subnet_principal: "tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe"
+            .to_string(),
+        subnet_kind: "system".to_string(),
+        data_center_id: "dc2".to_string(),
+    });
+
+    let filtered = filter_node_list_report(
+        report,
+        &NnsNodeListFilters {
+            subnet: Some("pzp6e".to_string()),
+            subnet_kind: Some("application".to_string()),
+            data_center: Some("dc".to_string()),
+            node_provider: Some("rwlgt".to_string()),
+            node_operator: Some("aaaaa-aa".to_string()),
+        },
+    );
+
+    assert_eq!(filtered.node_count, 1);
+    assert_eq!(
+        filtered.nodes[0].node_principal,
+        "ryjl3-tyaaa-aaaaa-aaaba-cai"
+    );
 }
 
 fn node_report_fixture() -> NnsNodeListReport {

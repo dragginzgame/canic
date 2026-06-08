@@ -5,6 +5,7 @@ mod node_operator;
 mod node_provider;
 mod registry;
 mod subnet;
+mod topology;
 
 #[cfg(test)]
 mod tests;
@@ -20,7 +21,8 @@ use crate::{
 use canic_host::{
     nns_data_center::NnsDataCenterHostError, nns_node::NnsNodeHostError,
     nns_node_operator::NnsNodeOperatorHostError, nns_node_provider::NnsNodeProviderHostError,
-    nns_registry::NnsRegistryHostError, subnet_catalog::SubnetCatalogHostError,
+    nns_registry::NnsRegistryHostError, nns_topology::NnsTopologyHostError,
+    subnet_catalog::SubnetCatalogHostError,
 };
 use clap::{Command as ClapCommand, ValueEnum};
 use serde::Serialize;
@@ -56,6 +58,9 @@ pub enum NnsCommandError {
 
     #[error(transparent)]
     RegistryHost(#[from] NnsRegistryHostError),
+
+    #[error(transparent)]
+    TopologyHost(#[from] NnsTopologyHostError),
 
     #[error(
         "deployment target {input} did not resolve to exactly one canister principal for network {network}: {reason}"
@@ -103,6 +108,7 @@ where
         "node-provider" => node_provider::run(args),
         "node-operator" => node_operator::run(args),
         "registry" => registry::run(args),
+        "topology" => topology::run(args),
         _ => unreachable!("nns dispatch command only defines known commands"),
     }
 }
@@ -153,6 +159,9 @@ fn nns_command() -> ClapCommand {
         ))
         .subcommand(passthrough_subcommand(
             ClapCommand::new("registry").about("Inspect NNS registry metadata"),
+        ))
+        .subcommand(passthrough_subcommand(
+            ClapCommand::new("topology").about("Summarize joined NNS topology metadata"),
         ))
 }
 
