@@ -203,6 +203,6 @@ impl RegistryPolicy {
     }
 }
 
-fn is_manager_parent_kind(kind: CanisterKind) -> bool {
+const fn is_manager_parent_kind(kind: CanisterKind) -> bool {
     matches!(kind, CanisterKind::Service | CanisterKind::Singleton)
 }
