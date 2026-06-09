@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${1:-${ACTIONLINT_VERSION:-1.7.8}}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [ -z "${ACTIONLINT_VERSION:-}" ] && [ -f "$ROOT_DIR/tool-versions.env" ]; then
+    # shellcheck source=tool-versions.env
+    source "$ROOT_DIR/tool-versions.env"
+fi
+
+VERSION="${1:-${ACTIONLINT_VERSION:-}}"
 INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+
+if [ -z "$VERSION" ]; then
+    echo "missing actionlint version; set ACTIONLINT_VERSION or update tool-versions.env" >&2
+    exit 1
+fi
 
 platform() {
     local os

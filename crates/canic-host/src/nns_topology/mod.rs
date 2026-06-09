@@ -31,10 +31,10 @@ use crate::{
 };
 use canic_subnet_catalog::{MAINNET_NETWORK, SubnetKind};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::BTreeSet, path::PathBuf};
 use thiserror::Error as ThisError;
 
-pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 2;
 pub const NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 
 ///
@@ -81,6 +81,16 @@ pub struct NnsTopologySummaryReport {
     pub node_provider_count: usize,
     pub node_operator_count: usize,
     pub data_center_count: usize,
+    pub nodes_with_known_node_provider_count: usize,
+    pub nodes_with_unknown_node_provider_count: usize,
+    pub nodes_with_known_node_operator_count: usize,
+    pub nodes_with_unknown_node_operator_count: usize,
+    pub nodes_with_known_data_center_count: usize,
+    pub nodes_with_unknown_data_center_count: usize,
+    pub node_operators_with_known_node_provider_count: usize,
+    pub node_operators_with_unknown_node_provider_count: usize,
+    pub node_operators_with_known_data_center_count: usize,
+    pub node_operators_with_unknown_data_center_count: usize,
     pub subnet_catalog_stale: bool,
     pub subnet_catalog_stale_reason: String,
     pub registry_versions: Vec<NnsTopologyRegistryVersionRow>,
@@ -310,6 +320,8 @@ pub fn nns_topology_summary_report_text(report: &NnsTopologySummaryReport) -> St
     lines.push(render_count_table(report));
     lines.push("subnet_kinds:".to_string());
     lines.push(render_kind_table(report));
+    lines.push("join_coverage:".to_string());
+    lines.push(render_join_coverage_table(report));
     lines.push("registry_versions:".to_string());
     lines.push(render_registry_version_table(report));
     lines.join("\n")
@@ -347,6 +359,31 @@ fn topology_summary_report_from_reports(
         node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_APPLICATION);
     let system_node_count = node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_SYSTEM);
     let unknown_node_count = node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_UNKNOWN);
+    let node_provider_principals = node_provider_report
+        .node_providers
+        .iter()
+        .map(|provider| provider.node_provider_principal.as_str())
+        .collect::<BTreeSet<_>>();
+    let node_operator_principals = node_operator_report
+        .node_operators
+        .iter()
+        .map(|operator| operator.node_operator_principal.as_str())
+        .collect::<BTreeSet<_>>();
+    let data_center_ids = data_center_report
+        .data_centers
+        .iter()
+        .map(|data_center| data_center.data_center_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let nodes_with_known_node_provider_count =
+        node_count_with_known_node_provider(&node_report, &node_provider_principals);
+    let nodes_with_known_node_operator_count =
+        node_count_with_known_node_operator(&node_report, &node_operator_principals);
+    let nodes_with_known_data_center_count =
+        node_count_with_known_data_center(&node_report, &data_center_ids);
+    let node_operators_with_known_node_provider_count =
+        operator_count_with_known_node_provider(&node_operator_report, &node_provider_principals);
+    let node_operators_with_known_data_center_count =
+        operator_count_with_known_data_center(&node_operator_report, &data_center_ids);
     let registry_versions = vec![
         registry_version_row(
             "subnet_catalog",
@@ -405,6 +442,26 @@ fn topology_summary_report_from_reports(
         node_provider_count: node_provider_report.node_provider_count,
         node_operator_count: node_operator_report.node_operator_count,
         data_center_count: data_center_report.data_center_count,
+        nodes_with_known_node_provider_count,
+        nodes_with_unknown_node_provider_count: node_report
+            .node_count
+            .saturating_sub(nodes_with_known_node_provider_count),
+        nodes_with_known_node_operator_count,
+        nodes_with_unknown_node_operator_count: node_report
+            .node_count
+            .saturating_sub(nodes_with_known_node_operator_count),
+        nodes_with_known_data_center_count,
+        nodes_with_unknown_data_center_count: node_report
+            .node_count
+            .saturating_sub(nodes_with_known_data_center_count),
+        node_operators_with_known_node_provider_count,
+        node_operators_with_unknown_node_provider_count: node_operator_report
+            .node_operator_count
+            .saturating_sub(node_operators_with_known_node_provider_count),
+        node_operators_with_known_data_center_count,
+        node_operators_with_unknown_data_center_count: node_operator_report
+            .node_operator_count
+            .saturating_sub(node_operators_with_known_data_center_count),
         subnet_catalog_stale: subnet_report.catalog_stale,
         subnet_catalog_stale_reason: subnet_report.stale_reason,
         registry_versions,
@@ -567,6 +624,61 @@ fn node_count_by_subnet_kind(report: &NnsNodeListReport, kind: &str) -> usize {
         .count()
 }
 
+fn node_count_with_known_node_provider(
+    report: &NnsNodeListReport,
+    providers: &BTreeSet<&str>,
+) -> usize {
+    report
+        .nodes
+        .iter()
+        .filter(|node| providers.contains(node.node_provider_principal.as_str()))
+        .count()
+}
+
+fn node_count_with_known_node_operator(
+    report: &NnsNodeListReport,
+    operators: &BTreeSet<&str>,
+) -> usize {
+    report
+        .nodes
+        .iter()
+        .filter(|node| operators.contains(node.node_operator_principal.as_str()))
+        .count()
+}
+
+fn node_count_with_known_data_center(
+    report: &NnsNodeListReport,
+    data_centers: &BTreeSet<&str>,
+) -> usize {
+    report
+        .nodes
+        .iter()
+        .filter(|node| data_centers.contains(node.data_center_id.as_str()))
+        .count()
+}
+
+fn operator_count_with_known_node_provider(
+    report: &NnsNodeOperatorListReport,
+    providers: &BTreeSet<&str>,
+) -> usize {
+    report
+        .node_operators
+        .iter()
+        .filter(|operator| providers.contains(operator.node_provider_principal.as_str()))
+        .count()
+}
+
+fn operator_count_with_known_data_center(
+    report: &NnsNodeOperatorListReport,
+    data_centers: &BTreeSet<&str>,
+) -> usize {
+    report
+        .node_operators
+        .iter()
+        .filter(|operator| data_centers.contains(operator.data_center_id.as_str()))
+        .count()
+}
+
 fn registry_version_row(
     source: &str,
     registry_version: u64,
@@ -626,6 +738,47 @@ fn render_kind_table(report: &NnsTopologySummaryReport) -> String {
             NNS_NODE_SUBNET_KIND_UNKNOWN.to_string(),
             report.unknown_subnet_count.to_string(),
             report.unknown_node_count.to_string(),
+        ],
+    ];
+    let alignments = [ColumnAlign::Left, ColumnAlign::Right, ColumnAlign::Right];
+    render_table(&headers, &rows, &alignments)
+}
+
+fn render_join_coverage_table(report: &NnsTopologySummaryReport) -> String {
+    let headers = ["LINK", "KNOWN", "UNKNOWN"];
+    let rows = [
+        [
+            "nodes_to_node_providers".to_string(),
+            report.nodes_with_known_node_provider_count.to_string(),
+            report.nodes_with_unknown_node_provider_count.to_string(),
+        ],
+        [
+            "nodes_to_node_operators".to_string(),
+            report.nodes_with_known_node_operator_count.to_string(),
+            report.nodes_with_unknown_node_operator_count.to_string(),
+        ],
+        [
+            "nodes_to_data_centers".to_string(),
+            report.nodes_with_known_data_center_count.to_string(),
+            report.nodes_with_unknown_data_center_count.to_string(),
+        ],
+        [
+            "node_operators_to_node_providers".to_string(),
+            report
+                .node_operators_with_known_node_provider_count
+                .to_string(),
+            report
+                .node_operators_with_unknown_node_provider_count
+                .to_string(),
+        ],
+        [
+            "node_operators_to_data_centers".to_string(),
+            report
+                .node_operators_with_known_data_center_count
+                .to_string(),
+            report
+                .node_operators_with_unknown_data_center_count
+                .to_string(),
         ],
     ];
     let alignments = [ColumnAlign::Left, ColumnAlign::Right, ColumnAlign::Right];

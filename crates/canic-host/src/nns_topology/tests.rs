@@ -20,7 +20,7 @@ fn topology_summary_counts_existing_reports() {
         data_center_report_fixture(),
     );
 
-    assert_eq!(report.schema_version, 1);
+    assert_eq!(report.schema_version, 2);
     assert_eq!(report.subnet_count, 2);
     assert_eq!(report.application_subnet_count, 1);
     assert_eq!(report.system_subnet_count, 1);
@@ -31,6 +31,16 @@ fn topology_summary_counts_existing_reports() {
     assert_eq!(report.node_provider_count, 1);
     assert_eq!(report.node_operator_count, 2);
     assert_eq!(report.data_center_count, 1);
+    assert_eq!(report.nodes_with_known_node_provider_count, 2);
+    assert_eq!(report.nodes_with_unknown_node_provider_count, 1);
+    assert_eq!(report.nodes_with_known_node_operator_count, 2);
+    assert_eq!(report.nodes_with_unknown_node_operator_count, 1);
+    assert_eq!(report.nodes_with_known_data_center_count, 2);
+    assert_eq!(report.nodes_with_unknown_data_center_count, 1);
+    assert_eq!(report.node_operators_with_known_node_provider_count, 1);
+    assert_eq!(report.node_operators_with_unknown_node_provider_count, 1);
+    assert_eq!(report.node_operators_with_known_data_center_count, 1);
+    assert_eq!(report.node_operators_with_unknown_data_center_count, 1);
     assert_eq!(report.registry_versions.len(), 5);
 }
 
@@ -51,6 +61,9 @@ fn topology_summary_text_renders_count_and_version_tables() {
     assert!(text.contains("topology: ic subnets 2 nodes 3"));
     assert!(text.contains("routing_ranges"));
     assert!(text.contains("subnet_kinds:"));
+    assert!(text.contains("join_coverage:"));
+    assert!(text.contains("nodes_to_node_providers"));
+    assert!(text.contains("node_operators_to_data_centers"));
     assert!(text.contains("registry_versions:"));
     assert!(text.contains("subnet_catalog"));
 }
@@ -312,21 +325,27 @@ fn node_report_fixture() -> NnsNodeListReport {
         fetched_by: "test".to_string(),
         node_count: 3,
         nodes: vec![
-            node_row("node-a", "application"),
-            node_row("node-b", "application"),
-            node_row("node-c", "system"),
+            node_row("node-a", "operator-a", "provider-a", "dc1", "application"),
+            node_row("node-b", "operator-a", "provider-a", "dc1", "application"),
+            node_row("node-c", "operator-z", "provider-z", "dc-z", "system"),
         ],
     }
 }
 
-fn node_row(node_principal: &str, subnet_kind: &str) -> NnsNodeRow {
+fn node_row(
+    node_principal: &str,
+    node_operator_principal: &str,
+    node_provider_principal: &str,
+    data_center_id: &str,
+    subnet_kind: &str,
+) -> NnsNodeRow {
     NnsNodeRow {
         node_principal: node_principal.to_string(),
-        node_operator_principal: "operator-a".to_string(),
-        node_provider_principal: "provider-a".to_string(),
+        node_operator_principal: node_operator_principal.to_string(),
+        node_provider_principal: node_provider_principal.to_string(),
         subnet_principal: "subnet-a".to_string(),
         subnet_kind: subnet_kind.to_string(),
-        data_center_id: "dc1".to_string(),
+        data_center_id: data_center_id.to_string(),
     }
 }
 
@@ -370,9 +389,9 @@ fn node_operator_report_fixture() -> NnsNodeOperatorListReport {
             },
             NnsNodeOperatorRow {
                 node_operator_principal: "operator-b".to_string(),
-                node_provider_principal: "provider-a".to_string(),
+                node_provider_principal: "provider-z".to_string(),
                 node_allowance: 1,
-                data_center_id: "dc1".to_string(),
+                data_center_id: "dc-z".to_string(),
                 node_count: Some(1),
             },
         ],

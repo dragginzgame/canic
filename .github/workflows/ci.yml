@@ -4,8 +4,6 @@ env:
   CANIC_MSRV: 1.91.0
   CANIC_INTERNAL_TOOLCHAIN: 1.96.0
   POCKET_IC_VERSION: 14.0.0
-  ACTIONLINT_VERSION: 1.7.8
-  CANIC_ICP_CLI_VERSION: 0.3.0
 
 permissions:
   contents: read
@@ -63,7 +61,7 @@ jobs:
       - name: Install actionlint
         shell: bash
         run: |
-          BIN="$(bash scripts/ci/install-actionlint.sh "$ACTIONLINT_VERSION")"
+          BIN="$(bash scripts/ci/install-actionlint.sh)"
           echo "ACTIONLINT_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Lint GitHub Actions workflows
         shell: bash
@@ -71,7 +69,7 @@ jobs:
       - name: Install ICP CLI tools
         shell: bash
         run: |
-          bash scripts/ci/install-icp-cli.sh "$CANIC_ICP_CLI_VERSION"
+          bash scripts/ci/install-icp-cli.sh
           npm install -g @icp-sdk/ic-wasm
       - name: Check ICP CLI tools
         run: |
@@ -143,7 +141,7 @@ jobs:
       - name: Install actionlint
         shell: bash
         run: |
-          BIN="$(bash scripts/ci/install-actionlint.sh "$ACTIONLINT_VERSION")"
+          BIN="$(bash scripts/ci/install-actionlint.sh)"
           echo "ACTIONLINT_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Lint GitHub Actions workflows
         shell: bash
@@ -151,7 +149,7 @@ jobs:
       - name: Install ICP CLI tools
         shell: bash
         run: |
-          bash scripts/ci/install-icp-cli.sh "$CANIC_ICP_CLI_VERSION"
+          bash scripts/ci/install-icp-cli.sh
           npm install -g @icp-sdk/ic-wasm
       - name: Check ICP CLI tools
         run: |

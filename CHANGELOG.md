@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
 
+- `0.63.2` adds joined-topology coverage metrics to `canic nns topology
+  summary`, showing whether cached nodes and node operators resolve to known
+  provider, operator, and data-center rows, and centralizes external dev-tool
+  pins in `tool-versions.env` with deterministic ICP CLI install verification
+  and newer-release warnings.
+
 - `0.63.1` adds one-shot cached mainnet NNS topology refresh and makes the
   controller-only `canic_memory_ledger` diagnostic opt-in with per-role
   `diagnostics.memory_ledger`, shrinking the default wasm-store Candid/runtime

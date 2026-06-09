@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
 
+_CANIC_REQUIRE_ICP_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_CANIC_REQUIRE_ICP_ROOT_DIR="$(cd "$_CANIC_REQUIRE_ICP_SCRIPT_DIR/../.." && pwd)"
+if [ -z "${CANIC_ICP_CLI_VERSION:-}" ] &&
+    [ -f "$_CANIC_REQUIRE_ICP_ROOT_DIR/tool-versions.env" ]; then
+    # shellcheck source=tool-versions.env
+    source "$_CANIC_REQUIRE_ICP_ROOT_DIR/tool-versions.env"
+fi
+
 require_icp_tools() {
     local icp_version_output=""
     local ic_wasm_version_output=""
-    local required_icp_version="${CANIC_ICP_CLI_VERSION:-0.3.0}"
+    local required_icp_version="${CANIC_ICP_CLI_VERSION:-}"
+
+    if [ -z "$required_icp_version" ]; then
+        echo "missing CANIC_ICP_CLI_VERSION; set it or update tool-versions.env" >&2
+        exit 1
+    fi
 
     if ! command -v icp >/dev/null 2>&1; then
         echo "icp-cli is required for Canic CI" >&2

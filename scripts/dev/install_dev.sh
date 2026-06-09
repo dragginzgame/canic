@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.63.1}"
-CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.96.0}"
-ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.8}"
-ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
-CANIC_ICP_CLI_VERSION="${CANIC_ICP_CLI_VERSION:-0.3.0}"
-CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if { [ -z "${ACTIONLINT_VERSION:-}" ] || [ -z "${CANIC_ICP_CLI_VERSION:-}" ]; } &&
+    [ -f "$ROOT_DIR/tool-versions.env" ]; then
+    # shellcheck source=tool-versions.env
+    source "$ROOT_DIR/tool-versions.env"
+fi
+CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.63.1}"
+CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.96.0}"
+ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-}"
+ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+CANIC_ICP_CLI_VERSION="${CANIC_ICP_CLI_VERSION:-}"
+CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
+if [ -z "$ACTIONLINT_VERSION" ] || [ -z "$CANIC_ICP_CLI_VERSION" ]; then
+    echo "missing external tool version pin; expected tool-versions.env or explicit environment overrides" >&2
+    exit 1
+fi
 RUSTUP_INIT_URL="https://sh.rustup.rs"
 CANIC_DEV_TOOLS=(
     cargo-watch
@@ -43,6 +52,10 @@ cyan_command() {
 
 cargo_toolchain() {
     cargo +"$CANIC_RUST_TOOLCHAIN" "$@"
+}
+
+resolved_cargo_bin_dir() {
+    printf '%s/bin\n' "${CARGO_HOME:-$HOME/.cargo}"
 }
 
 require_command() {
@@ -84,10 +97,12 @@ install_or_update_actionlint() {
 }
 
 clean_legacy_icp_npm_cli() {
+    local cargo_bin_dir
     local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
     local npm_icp_bin="$npm_bin_dir/icp"
     local link_target=""
 
+    cargo_bin_dir="$(resolved_cargo_bin_dir)"
     if [ -L "$npm_icp_bin" ]; then
         link_target="$(readlink "$npm_icp_bin" || true)"
         if [[ "$link_target" == *"@icp-sdk/icp-cli"* ]]; then
@@ -102,7 +117,7 @@ clean_legacy_icp_npm_cli() {
             fi
         fi
     elif [ -e "$npm_icp_bin" ]; then
-        yellow "Leaving non-symlink ICP binary at $npm_icp_bin; remove it manually if it shadows $HOME/.cargo/bin/icp."
+        yellow "Leaving non-symlink ICP binary at $npm_icp_bin; remove it manually if it shadows $cargo_bin_dir/icp."
     fi
 }
 
@@ -134,15 +149,18 @@ clean_icp_npm_staging_dirs() {
 }
 
 install_or_update_icp_cli() {
-    local cargo_bin_dir="$HOME/.cargo/bin"
+    local cargo_bin_dir
     local icp_path=""
 
+    cargo_bin_dir="$(resolved_cargo_bin_dir)"
     yellow "ICP CLI:"
     mkdir -p "$cargo_bin_dir"
     export PATH="$cargo_bin_dir:$PATH"
+    hash -r 2>/dev/null || true
     cyan_command "CANIC_ICP_CLI_VERSION=$CANIC_ICP_CLI_VERSION bash scripts/ci/install-icp-cli.sh $CANIC_ICP_CLI_VERSION"
     CANIC_ICP_CLI_VERSION="$CANIC_ICP_CLI_VERSION" bash "$ROOT_DIR/scripts/ci/install-icp-cli.sh" "$CANIC_ICP_CLI_VERSION"
     clean_legacy_icp_npm_cli
+    hash -r 2>/dev/null || true
     require_command icp
     icp_path="$(command -v icp)"
     green "icp ready: $(icp --version 2>&1) ($icp_path)"
@@ -163,7 +181,8 @@ install_or_update_ic_wasm() {
     require_command npm
     mkdir -p "$npm_bin_dir"
     clean_icp_npm_staging_dirs
-    export PATH="$HOME/.cargo/bin:$npm_bin_dir:$PATH"
+    export PATH="$(resolved_cargo_bin_dir):$npm_bin_dir:$PATH"
+    hash -r 2>/dev/null || true
     cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/ic-wasm"
     npm install -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/ic-wasm
     require_command ic-wasm

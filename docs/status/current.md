@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-08
+Last updated: 2026-06-09
 
 ## Purpose
 
@@ -9,6 +9,37 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.63.2` adds joined-topology coverage metrics to
+  `canic nns topology summary`. The summary now reports whether cached nodes
+  resolve to known node-provider, node-operator, and data-center rows, and
+  whether cached node operators resolve to known node-provider and data-center
+  rows. Text output includes a `join_coverage` table; JSON summary output uses
+  topology summary report schema version `2` with explicit known/unknown
+  counters. Local setup and CI now read external dev-tool pins from root
+  `tool-versions.env`; the ICP CLI installer installs the pinned version,
+  verifies that resolved `icp --version` matches it, honors `CARGO_HOME`, and
+  emits a non-fatal warning when GitHub's latest `dfinity/icp-cli` release tag
+  differs from the pin. NNS component cache schemas, runtime canisters, Candid,
+  Cargo package versions, dependencies, and lockfiles are unchanged.
+  Validation:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-host nns_topology --lib -- --nocapture
+  cargo test --locked -p canic-host nns --lib -- --nocapture
+  cargo test --locked -p canic-cli --lib nns -- --nocapture
+  cargo fmt --all -- --check
+  cargo run --locked -p canic-cli -- nns topology summary
+  cargo run --locked -p canic-cli -- nns topology summary --format json
+  cargo check --locked -p canic-cli
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  bash -n scripts/dev/install_dev.sh scripts/ci/install-actionlint.sh scripts/ci/install-icp-cli.sh scripts/ci/require_icp.sh tool-versions.env
+  make -n install-dev update-dev
+  bash scripts/ci/install-icp-cli.sh
+  ACTIONLINT_INSTALL_DIR=/tmp/canic-actionlint-test bash scripts/ci/install-actionlint.sh
+  actionlint .github/workflows/ci.yml
+  bash -c 'source scripts/ci/require_icp.sh; require_icp_tools'
+  git diff --check
+  ```
 - `0.63.1` adds `canic nns topology refresh` as the one-shot refresh path for
   every cached mainnet NNS component consumed by `canic nns topology summary`
   and makes the controller-only `canic_memory_ledger` recovery diagnostic
