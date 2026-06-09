@@ -12,10 +12,14 @@ present.
 
 ## Unreleased
 
-- Starts the `0.64` service/singleton topology correction with a dedicated
-  design note, config-model support for `kind = "service"`, and
-  service-derived bootstrap/SubnetIndex/AppIndex validation while preserving
-  parent-scoped singleton semantics for downstream child canisters.
+## [0.64.x] - 2026-06-09 - Service/singleton topology split
+
+Detailed patch breakdown: [docs/changelog/0.64.md](docs/changelog/0.64.md)
+
+- `0.64.0` separates root-scoped services from parent-scoped singletons with
+  `kind = "service"`, making root bootstrap, SubnetIndex, and current AppIndex
+  validation service-driven while preserving singleton for downstream
+  parent-owned child canisters.
 
 ## [0.63.x] - 2026-06-08 - NNS topology inspection and surface reduction
 
