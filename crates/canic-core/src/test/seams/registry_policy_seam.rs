@@ -243,9 +243,9 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         }
         RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. }
         | RegistryPolicyError::ServiceRequiresRootParent { .. }
-        | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
-        | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
+        | RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. }
+        | RegistryPolicyError::ShardRequiresServiceWithSharding { .. }
+        | RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
             panic!("expected root duplicate role error")
         }
     }
@@ -306,9 +306,9 @@ fn registry_service_policy_blocks_duplicate_role() {
         }
         RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. }
         | RegistryPolicyError::ServiceRequiresRootParent { .. }
-        | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
-        | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
+        | RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. }
+        | RegistryPolicyError::ShardRequiresServiceWithSharding { .. }
+        | RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
             panic!("expected service duplicate role error")
         }
     }
@@ -386,9 +386,9 @@ fn registry_singleton_policy_blocks_under_parent() {
         }
         RegistryPolicyError::RoleAlreadyRegistered { .. }
         | RegistryPolicyError::ServiceRequiresRootParent { .. }
-        | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
-        | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
-        | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
+        | RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. }
+        | RegistryPolicyError::ShardRequiresServiceWithSharding { .. }
+        | RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
             panic!("expected duplicate singleton under parent error");
         }
     }
@@ -429,7 +429,7 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
 }
 
 #[test]
-fn instance_creation_requires_singleton_directory_parent() {
+fn instance_creation_requires_service_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("plain_parent");
     let parent_pid = p(7);
@@ -443,17 +443,17 @@ fn instance_creation_requires_singleton_directory_parent() {
         &parent_role,
         &root_canister_config(),
     )
-    .expect_err("policy should reject instance creation under non-singleton parent");
+    .expect_err("policy should reject instance creation under non-service parent");
 
     match &err {
-        RegistryPolicyError::InstanceRequiresSingletonWithDirectory {
+        RegistryPolicyError::InstanceRequiresServiceWithDirectory {
             role: err_role,
             parent_role: err_parent_role,
         } => {
             assert_eq!(err_role, &role);
             assert_eq!(err_parent_role, &parent_role);
         }
-        _ => panic!("expected instance singleton-parent policy error"),
+        _ => panic!("expected instance service-parent policy error"),
     }
 
     let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
@@ -464,12 +464,12 @@ fn instance_creation_requires_singleton_directory_parent() {
     assert!(
         public
             .message
-            .contains("must be created by a singleton parent with directory config")
+            .contains("must be created by a service parent with directory config")
     );
 }
 
 #[test]
-fn instance_creation_requires_directory_config_on_singleton_parent() {
+fn instance_creation_requires_directory_config_on_service_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(9);
@@ -481,30 +481,30 @@ fn instance_creation_requires_directory_config_on_singleton_parent() {
         &data,
         &instance_canister_config(),
         &parent_role,
-        &singleton_canister_config(),
+        &service_canister_config(),
     )
-    .expect_err("policy should reject instance creation under singleton parent without directory");
+    .expect_err("policy should reject instance creation under service parent without directory");
 
     match &err {
-        RegistryPolicyError::InstanceRequiresSingletonWithDirectory {
+        RegistryPolicyError::InstanceRequiresServiceWithDirectory {
             role: err_role,
             parent_role: err_parent_role,
         } => {
             assert_eq!(err_role, &role);
             assert_eq!(err_parent_role, &parent_role);
         }
-        _ => panic!("expected instance singleton-directory policy error"),
+        _ => panic!("expected instance service-directory policy error"),
     }
 }
 
 #[test]
-fn instance_creation_succeeds_under_singleton_directory_parent() {
+fn instance_creation_rejects_singleton_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
     let data = RegistryPolicyInput { entries: vec![] };
 
-    RegistryPolicy::can_register_role(
+    let err = RegistryPolicy::can_register_role(
         &role,
         parent_pid,
         &data,
@@ -512,7 +512,18 @@ fn instance_creation_succeeds_under_singleton_directory_parent() {
         &parent_role,
         &singleton_directory_parent_config(),
     )
-    .expect("instance should be allowed under singleton directory parent");
+    .expect_err("singleton directory parents should not create instances");
+
+    match &err {
+        RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+            role: err_role,
+            parent_role: err_parent_role,
+        } => {
+            assert_eq!(err_role, &role);
+            assert_eq!(err_parent_role, &parent_role);
+        }
+        _ => panic!("expected instance service-directory policy error"),
+    }
 }
 
 #[test]
@@ -534,13 +545,13 @@ fn instance_creation_succeeds_under_service_directory_parent() {
 }
 
 #[test]
-fn replica_creation_succeeds_under_singleton_scaling_parent() {
+fn replica_creation_rejects_singleton_scaling_parent() {
     let role = CanisterRole::new("replica_child");
     let parent_role = CanisterRole::new("scale_hub");
     let parent_pid = p(8);
     let data = RegistryPolicyInput { entries: vec![] };
 
-    RegistryPolicy::can_register_role(
+    let err = RegistryPolicy::can_register_role(
         &role,
         parent_pid,
         &data,
@@ -548,7 +559,18 @@ fn replica_creation_succeeds_under_singleton_scaling_parent() {
         &parent_role,
         &singleton_scaling_parent_config(),
     )
-    .expect("replica should be allowed under singleton scaling parent");
+    .expect_err("singleton scaling parents should not create replicas");
+
+    match &err {
+        RegistryPolicyError::ReplicaRequiresServiceWithScaling {
+            role: err_role,
+            parent_role: err_parent_role,
+        } => {
+            assert_eq!(err_role, &role);
+            assert_eq!(err_parent_role, &parent_role);
+        }
+        _ => panic!("expected replica service-scaling policy error"),
+    }
 }
 
 #[test]
@@ -570,13 +592,13 @@ fn replica_creation_succeeds_under_service_scaling_parent() {
 }
 
 #[test]
-fn shard_creation_succeeds_under_singleton_sharding_parent() {
+fn shard_creation_rejects_singleton_sharding_parent() {
     let role = CanisterRole::new("shard_child");
     let parent_role = CanisterRole::new("shard_hub");
     let parent_pid = p(9);
     let data = RegistryPolicyInput { entries: vec![] };
 
-    RegistryPolicy::can_register_role(
+    let err = RegistryPolicy::can_register_role(
         &role,
         parent_pid,
         &data,
@@ -584,7 +606,18 @@ fn shard_creation_succeeds_under_singleton_sharding_parent() {
         &parent_role,
         &singleton_sharding_parent_config(),
     )
-    .expect("shard should be allowed under singleton sharding parent");
+    .expect_err("singleton sharding parents should not create shards");
+
+    match &err {
+        RegistryPolicyError::ShardRequiresServiceWithSharding {
+            role: err_role,
+            parent_role: err_parent_role,
+        } => {
+            assert_eq!(err_role, &role);
+            assert_eq!(err_parent_role, &parent_role);
+        }
+        _ => panic!("expected shard service-sharding policy error"),
+    }
 }
 
 #[test]
@@ -650,7 +683,7 @@ fn observed_registration_policy_accepts_replica_without_registry_snapshot() {
         RegistryRegistrationObservation::default(),
         &replica_canister_config(),
         &parent_role,
-        &singleton_scaling_parent_config(),
+        &service_scaling_parent_config(),
     )
     .expect("replica should be allowed from observed parent config without full registry input");
 }

@@ -9,6 +9,36 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.64.0` is pushed as the service/singleton topology split. The config model
+  now has explicit `kind = "service"` for root-scoped, root-created canisters;
+  root bootstrap, SubnetIndex, and current AppIndex validation are
+  service-driven; singleton remains parent-scoped child cardinality for
+  downstream app shapes such as `project_instance -> project_ledger`. Active
+  checked-in fleet configs, scaffolds, install/status/build fixtures, and the
+  packaged downstream CLI probe use `kind = "service"` for root-created roles.
+  Detailed notes live in `docs/changelog/0.64.md`; the design note is
+  `docs/design/0.64-service-singleton-topology/0.64-design.md`.
+  Validation:
+  ```text
+  cargo test --locked -p canic-core config::schema --lib -- --nocapture
+  cargo test --locked -p canic-core ops::topology::index --lib -- --nocapture
+  cargo test --locked -p canic-core registry_policy_seam --lib -- --nocapture
+  cargo test --locked -p canic-cli scaffold --lib -- --nocapture
+  cargo test --locked -p canic-cli status --lib -- --nocapture
+  cargo test --locked -p canic-cli build --lib -- --nocapture
+  cargo test --locked -p canic build_support::config --lib -- --nocapture
+  cargo test --locked -p canic-host adoption --lib -- --nocapture
+  cargo test --locked -p canic-host icp_config --lib -- --nocapture
+  cargo test --locked -p canic-host build_provenance --lib -- --nocapture
+  cargo test --locked -p canic-host deployment_truth --lib -- --nocapture
+  cargo test --locked -p canic-host install_root --lib -- --nocapture
+  cargo test --locked -p canic-host release_set --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic-host -p canic-cli -p canic
+  scripts/ci/verify-packaged-downstream-cli.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.63.3` changelog is finalized for the batch where the root topology test
   helper treats `canic_memory_ledger` as absent from the default root bundle,
   matching the `diagnostics.memory_ledger = true` opt-in contract from

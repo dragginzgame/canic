@@ -10,13 +10,15 @@ fn registry_policy_error_code(message: &str) -> Option<ErrorCode> {
     if message.contains("already registered under parent") {
         return Some(ErrorCode::PolicySingletonAlreadyRegisteredUnderParent);
     }
-    if message.contains("must be created by a singleton parent with scaling config") {
+    // These wire codes keep their pre-0.64 names for compatibility; the
+    // policy messages now describe service-owned manager pools.
+    if message.contains("must be created by a service parent with scaling config") {
         return Some(ErrorCode::PolicyReplicaRequiresSingletonWithScaling);
     }
-    if message.contains("must be created by a singleton parent with sharding config") {
+    if message.contains("must be created by a service parent with sharding config") {
         return Some(ErrorCode::PolicyShardRequiresSingletonWithSharding);
     }
-    if message.contains("must be created by a singleton parent with directory config") {
+    if message.contains("must be created by a service parent with directory config") {
         return Some(ErrorCode::PolicyInstanceRequiresSingletonWithDirectory);
     }
 

@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Hardens the `0.64` service/singleton split by making runtime registration
+  policy require service parents for directory, scaling, and sharding manager
+  pools while leaving parent-scoped singleton child creation intact.
+
 ## [0.64.x] - 2026-06-09 - Service/singleton topology split
 
 Detailed patch breakdown: [docs/changelog/0.64.md](docs/changelog/0.64.md)
