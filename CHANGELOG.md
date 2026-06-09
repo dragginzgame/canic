@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.64.md](docs/changelog/0.64.md)
 
+- `0.64.3` closes the 0.64 topology design with no required deferred work and
+  adds root-index regression coverage for stale direct-root singleton residue.
+
 - `0.64.2` tightens AppIndex and SubnetIndex imports so propagated and full
   snapshots cannot accept roles outside the configured service-filtered index
   sets.

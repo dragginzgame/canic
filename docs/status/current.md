@@ -9,14 +9,33 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- Local `0.64.2` candidate after pushed `0.64.1`: incomplete AppIndex/SubnetIndex
-  import paths now reject roles outside the configured index sets, so stale
-  singleton or non-service entries cannot be accepted through propagated
-  snapshots. Full index imports also reject unexpected roles before checking
-  required roles. Root builders still derive index entries from direct root
-  service records, and builder-generated partial imports use an explicit
-  trusted internal path. The root and detailed `0.64.2` changelogs are drafted.
-  Current validation:
+- Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64
+  topology line with no required deferred implementation work. The 0.64 design
+  note is marked implemented/closed, old open questions are recorded as closed
+  0.64 decisions, and optional future ideas are labeled as future feature scope
+  rather than 0.64 debt. Root index builder regression coverage now locks down
+  stale direct-root singleton residue: AppIndex and SubnetIndex continue to
+  derive entries from configured service-filtered role sets, so a leftover
+  direct-root child role that is no longer index-eligible is excluded without
+  producing a duplicate-root-service failure. The root and detailed `0.64.3`
+  changelogs are drafted.
+  Validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic-core config::schema --lib -- --nocapture
+  cargo test --locked -p canic-core ops::topology::index --lib -- --nocapture
+  cargo test --locked -p canic-core registry_policy_seam --lib -- --nocapture
+  cargo test --locked -p canic-core index_addressing_seam --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- `0.64.2` is pushed as the index import role-bound hardening. AppIndex and
+  SubnetIndex imports now reject roles outside the configured explicit
+  AppIndex/service-derived SubnetIndex sets, including partial snapshots.
+  Root builders still derive index entries from direct root service records,
+  and builder-generated partial imports use an explicit trusted internal path.
+  Validation:
   ```text
   cargo fmt --all -- --check
   cargo test --locked -p canic-core index_addressing_seam --lib -- --nocapture

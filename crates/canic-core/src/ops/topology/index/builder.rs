@@ -150,6 +150,30 @@ mod tests {
     }
 
     #[test]
+    fn subnet_index_excludes_stale_direct_root_roles_not_configured_for_index() {
+        let root = p(0);
+        let direct_service = p(1);
+        let stale_singleton_residue = p(2);
+        let roles = BTreeSet::from([CanisterRole::from("project_hub")]);
+        let registry = registry(vec![
+            (root, record("root", None)),
+            (direct_service, record("project_hub", Some(root))),
+            (
+                stale_singleton_residue,
+                record("project_ledger", Some(root)),
+            ),
+        ]);
+
+        let index = RootSubnetIndexBuilder::build(&registry, &roles)
+            .expect("stale direct root singleton residue should be excluded");
+
+        assert_eq!(
+            index.entries,
+            vec![(CanisterRole::from("project_hub"), direct_service)]
+        );
+    }
+
+    #[test]
     fn app_index_ignores_nested_matching_roles_before_duplicate_detection() {
         let root = p(0);
         let direct_service = p(1);
@@ -165,6 +189,30 @@ mod tests {
 
         let index = RootAppIndexBuilder::build(&registry, &roles)
             .expect("nested matching role should not duplicate app service");
+
+        assert_eq!(
+            index.entries,
+            vec![(CanisterRole::from("project_hub"), direct_service)]
+        );
+    }
+
+    #[test]
+    fn app_index_excludes_stale_direct_root_roles_not_configured_for_index() {
+        let root = p(0);
+        let direct_service = p(1);
+        let stale_singleton_residue = p(2);
+        let roles = BTreeSet::from([CanisterRole::from("project_hub")]);
+        let registry = registry(vec![
+            (root, record("root", None)),
+            (direct_service, record("project_hub", Some(root))),
+            (
+                stale_singleton_residue,
+                record("project_ledger", Some(root)),
+            ),
+        ]);
+
+        let index = RootAppIndexBuilder::build(&registry, &roles)
+            .expect("stale direct root singleton residue should be excluded");
 
         assert_eq!(
             index.entries,
