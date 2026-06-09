@@ -18,7 +18,7 @@ fn topology_invariants_live_in_policy() {
 
     let _config = ConfigTestBuilder::new()
         .with_app_index("alpha")
-        .with_prime_canister_kind("alpha", CanisterKind::Singleton)
+        .with_prime_canister_kind("alpha", CanisterKind::Service)
         .install();
 
     let role = CanisterRole::new("alpha");

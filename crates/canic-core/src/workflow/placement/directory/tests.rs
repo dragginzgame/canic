@@ -37,7 +37,7 @@ fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
     );
 
     CanisterConfig {
-        kind: CanisterKind::Singleton,
+        kind: CanisterKind::Service,
         initial_cycles: Cycles::new(0),
         topup: None,
         randomness: RandomnessConfig::default(),
