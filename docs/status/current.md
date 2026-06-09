@@ -1304,7 +1304,7 @@ inspect only the files needed for the current task.
   docs/getting-started/local-academic-fleet.md
   .cursor/skills/canic-academic/SKILL.md
   ```
-  and promotes `canic info list` / `canic medic` plus target hygiene,
+  and promotes `canic info list` / `canic info medic` plus target hygiene,
   `CANIC_ROOT`-style canister ID naming, sourced shell helper rules, sharded
   internal-call shape, metrics stale/deployed checks, and install-versus-upgrade
   guidance into the README/install surfaces. The CLI help/diagnostic side now
@@ -2288,7 +2288,7 @@ inspect only the files needed for the current task.
   the required `canic deploy register ... --allow-unverified` acknowledgement,
   keeping explicit recovery guidance aligned with the deployment-target hard
   cut.
-- `canic info list`, `canic info cycles`, `canic metrics`, and
+- `canic info list`, `canic info cycles`, `canic info metrics`, and
   `canic backup create` now present live positional inputs as installed
   deployment targets, not fleets. Live list/metrics/cycles text output renders
   `Deployment:`, config-only output keeps `Fleet template:`, and metrics/cycle

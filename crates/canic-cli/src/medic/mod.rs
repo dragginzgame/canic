@@ -21,9 +21,9 @@ const CHECK_HEADER: &str = "CHECK";
 const STATUS_HEADER: &str = "STATUS";
 const DETAIL_HEADER: &str = "DETAIL";
 const NEXT_HEADER: &str = "NEXT";
-const MEDIC_HELP_AFTER: &str = "\
+const INFO_MEDIC_HELP_AFTER: &str = "\
 Examples:
-  canic medic test";
+  canic info medic test";
 
 ///
 /// MedicCommandError
@@ -47,12 +47,23 @@ struct MedicOptions {
 }
 
 impl MedicOptions {
-    fn parse<I>(args: I) -> Result<Self, MedicCommandError>
+    fn parse_info<I>(args: I) -> Result<Self, MedicCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse_with(args, info_medic_command, info_usage)
+    }
+
+    fn parse_with<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, MedicCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
         let matches =
-            parse_matches(medic_command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
+            parse_matches(command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
 
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
@@ -62,24 +73,31 @@ impl MedicOptions {
     }
 }
 
-/// Run read-only local Canic setup diagnostics.
-pub fn run<I>(args: I) -> Result<(), MedicCommandError>
+pub fn run_info<I>(args: I) -> Result<(), MedicCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    if print_help_or_version(&args, info_usage, version_text()) {
         return Ok(());
     }
 
-    let options = MedicOptions::parse(args)?;
-    println!("{}", render_medic_report(&run_medic_checks(&options)));
+    let options = MedicOptions::parse_info(args)?;
+    run_options(&options);
     Ok(())
 }
 
-fn medic_command() -> ClapCommand {
+fn run_options(options: &MedicOptions) {
+    println!("{}", render_medic_report(&run_medic_checks(options)));
+}
+
+fn info_medic_command() -> ClapCommand {
+    medic_command_with_bin_name("canic info medic", INFO_MEDIC_HELP_AFTER)
+}
+
+fn medic_command_with_bin_name(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     ClapCommand::new("medic")
-        .bin_name("canic medic")
+        .bin_name(bin_name)
         .about("Diagnose local Canic deployment target setup")
         .disable_help_flag(true)
         .arg(
@@ -90,7 +108,11 @@ fn medic_command() -> ClapCommand {
         )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
-        .after_help(MEDIC_HELP_AFTER)
+        .after_help(help_after)
+}
+
+fn info_usage() -> String {
+    render_usage(info_medic_command)
 }
 
 fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
@@ -202,7 +224,7 @@ fn check_root_ready(
         Ok(false) => MedicCheck::warn(
             "root ready",
             "canic_ready=false",
-            "wait briefly, then run canic medic",
+            "wait briefly, then run canic info medic",
         ),
         Err(err) => MedicCheck::error("root ready", err, "run canic install"),
     }
@@ -241,10 +263,6 @@ fn render_medic_report(checks: &[MedicCheck]) -> String {
         &rows,
         &[ColumnAlign::Left; 4],
     )
-}
-
-fn usage() -> String {
-    render_usage(medic_command)
 }
 
 const fn medic_status_label(status: MedicStatus) -> &'static str {

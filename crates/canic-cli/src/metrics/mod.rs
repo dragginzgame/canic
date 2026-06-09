@@ -7,7 +7,7 @@ mod transport;
 use crate::{
     cli::help::print_help_or_version,
     metrics::{
-        options::{MetricsOptions, usage},
+        options::{MetricsOptions, info_usage},
         render::write_metrics_report,
         transport::metrics_report,
     },
@@ -61,18 +61,22 @@ pub enum MetricsCommandError {
     Registry(#[from] RegistryParseError),
 }
 
-pub fn run<I>(args: I) -> Result<(), MetricsCommandError>
+pub fn run_info<I>(args: I) -> Result<(), MetricsCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    if print_help_or_version(&args, info_usage, version_text()) {
         return Ok(());
     }
 
-    let options = MetricsOptions::parse(args)?;
+    let options = MetricsOptions::parse_info(args)?;
+    run_options(&options)
+}
+
+fn run_options(options: &MetricsOptions) -> Result<(), MetricsCommandError> {
     let report = metrics_report(&options)?;
-    write_metrics_report(&options, &report)
+    write_metrics_report(options, &report)
 }
 
 #[cfg(test)]

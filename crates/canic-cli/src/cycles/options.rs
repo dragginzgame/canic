@@ -44,8 +44,19 @@ impl CyclesOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(info_cycles_command(), args)
-            .map_err(|_| CyclesCommandError::Usage(info_usage()))?;
+        Self::parse_with(args, info_cycles_command, info_usage)
+    }
+
+    fn parse_with<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, CyclesCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| CyclesCommandError::Usage(usage()))?;
         Ok(Self::from_matches(&matches))
     }
 

@@ -60,9 +60,6 @@ pub enum CliError {
     #[error("deploy: {0}")]
     Deploy(#[from] deploy::DeployCommandError),
 
-    #[error("endpoints: {0}")]
-    Endpoints(#[from] endpoints::EndpointsCommandError),
-
     #[error("evidence: {0}")]
     Evidence(#[from] evidence::EvidenceCommandError),
 
@@ -74,12 +71,6 @@ pub enum CliError {
 
     #[error("fleet: {0}")]
     Fleets(#[from] fleets::FleetCommandError),
-
-    #[error("medic: {0}")]
-    Medic(#[from] medic::MedicCommandError),
-
-    #[error("metrics: {0}")]
-    Metrics(#[from] metrics::MetricsCommandError),
 
     #[error("snapshot: {0}")]
     Snapshot(#[from] snapshot::SnapshotCommandError),
@@ -150,13 +141,10 @@ where
         "build" => build::run(tail).map_err(CliError::from),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
-        "endpoints" => endpoints::run(tail).map_err(CliError::from),
         "evidence" => evidence::run(tail).map_err(CliError::from),
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
-        "medic" => medic::run(tail).map_err(CliError::from),
-        "metrics" => metrics::run(tail).map_err(CliError::from),
         "nns" => nns::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),

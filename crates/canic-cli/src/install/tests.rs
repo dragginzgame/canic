@@ -150,7 +150,7 @@ fn install_existing_deployment_errors_get_action_hint() {
     let message = err.to_string();
 
     assert!(message.contains("canic --network academic info list demo"));
-    assert!(message.contains("canic --network academic medic demo"));
+    assert!(message.contains("canic --network academic info medic demo"));
     assert!(message.contains("project upgrade flow"));
 
     std::assert_matches!(

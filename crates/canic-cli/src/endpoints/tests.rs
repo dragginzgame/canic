@@ -227,7 +227,7 @@ service : {
 // Ensure endpoint options parse local and live lookup controls.
 #[test]
 fn parses_endpoint_options() {
-    let options = EndpointsOptions::parse([
+    let options = EndpointsOptions::parse_info([
         OsString::from("test"),
         OsString::from("app"),
         OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
@@ -238,17 +238,17 @@ fn parses_endpoint_options() {
     ])
     .expect("parse options");
 
-    assert_eq!(options.fleet, "test");
+    assert_eq!(options.deployment, "test");
     assert_eq!(options.canister, "app");
     assert_eq!(options.network.as_deref(), Some("local"));
     assert_eq!(options.icp, "/bin/icp");
     assert!(options.json);
 }
 
-// Ensure direct Candid-file selection is not part of fleet-scoped endpoint lookup.
+// Ensure direct Candid-file selection is not part of deployment-scoped endpoint lookup.
 #[test]
 fn rejects_did_option() {
-    let err = EndpointsOptions::parse([
+    let err = EndpointsOptions::parse_info([
         OsString::from("test"),
         OsString::from("app"),
         OsString::from("--did"),
@@ -259,10 +259,10 @@ fn rejects_did_option() {
     std::assert_matches!(err, EndpointsCommandError::Usage(_));
 }
 
-// Ensure explicit role fallback is not part of fleet-scoped endpoint lookup.
+// Ensure explicit role fallback is not part of deployment-scoped endpoint lookup.
 #[test]
 fn rejects_role_option() {
-    let err = EndpointsOptions::parse([
+    let err = EndpointsOptions::parse_info([
         OsString::from("test"),
         OsString::from("tl4x7-vh777-77776-aaacq-cai"),
         OsString::from("--role"),

@@ -50,7 +50,7 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
     },
     DeploySubcommand {
         name: "check",
-        about: "Print the local deployment truth check JSON",
+        about: "Print the local deployment truth check",
     },
     DeploySubcommand {
         name: "diff",

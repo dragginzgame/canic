@@ -32,12 +32,23 @@ pub(super) struct MetricsOptions {
 }
 
 impl MetricsOptions {
-    pub(super) fn parse<I>(args: I) -> Result<Self, MetricsCommandError>
+    pub(super) fn parse_info<I>(args: I) -> Result<Self, MetricsCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
-        let matches = parse_matches(metrics_command(), args)
-            .map_err(|_| MetricsCommandError::Usage(usage()))?;
+        Self::parse_with(args, info_metrics_command, info_usage)
+    }
+
+    fn parse_with<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+    ) -> Result<Self, MetricsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches =
+            parse_matches(command(), args).map_err(|_| MetricsCommandError::Usage(usage()))?;
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
             kind: required_typed(&matches, "kind"),
@@ -53,13 +64,17 @@ impl MetricsOptions {
     }
 }
 
-pub(super) fn usage() -> String {
-    render_usage(metrics_command)
+pub(super) fn info_usage() -> String {
+    render_usage(info_metrics_command)
 }
 
-fn metrics_command() -> ClapCommand {
+fn info_metrics_command() -> ClapCommand {
+    metrics_command_with_bin_name("canic info metrics")
+}
+
+fn metrics_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
     ClapCommand::new("metrics")
-        .bin_name("canic metrics")
+        .bin_name(bin_name)
         .about("Query Canic runtime telemetry")
         .disable_help_flag(true)
         .arg(

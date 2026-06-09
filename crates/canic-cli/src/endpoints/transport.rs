@@ -36,7 +36,7 @@ pub(super) fn endpoint_report(
         .or_else(|| (!is_principal_like(&options.canister)).then(|| options.canister.clone()));
     let Some(role) = role else {
         return Err(EndpointsCommandError::NoInterfaceArtifact {
-            fleet: options.fleet.clone(),
+            deployment: options.deployment.clone(),
             canister: options.canister.clone(),
         });
     };
@@ -80,8 +80,8 @@ fn resolve_endpoint_target(
         .find(|entry| entry.role.as_deref() == Some(options.canister.as_str()))
         .ok_or_else(|| -> Box<dyn std::error::Error> {
             format!(
-                "role {} was not found in fleet {}",
-                options.canister, options.fleet
+                "role {} was not found in deployment target {}",
+                options.canister, options.deployment
             )
             .into()
         })?;
@@ -95,7 +95,7 @@ fn load_fleet_registry(
     options: &EndpointsOptions,
 ) -> Result<Vec<RegistryEntry>, Box<dyn std::error::Error>> {
     let request = InstalledDeploymentRequest {
-        deployment: options.fleet.clone(),
+        deployment: options.deployment.clone(),
         network: state_network(options),
         icp: options.icp.clone(),
         detect_lost_local_root: false,

@@ -122,7 +122,7 @@ pub fn apply_global_network(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "cycles" | "endpoints" | "medic" | "metrics" | "status" | "token" => true,
+        "cycles" | "status" | "token" => true,
         "info" => info_leaf_accepts_globals(tail),
         "nns" => nns_leaf_accepts_global_icp(tail),
         "replica" => matches!(
@@ -138,9 +138,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "build" | "cycles" | "endpoints" | "install" | "medic" | "metrics" | "status" | "token" => {
-            true
-        }
+        "build" | "cycles" | "install" | "status" | "token" => true,
         "deploy" => deploy_leaf_accepts_global_network(tail),
         "info" => info_leaf_accepts_globals(tail),
         "nns" => nns_leaf_accepts_global_network(tail),
@@ -155,7 +153,7 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
     matches!(
         tail.first().and_then(|arg| arg.to_str()),
-        Some("cycles" | "env" | "list")
+        Some("cycles" | "endpoints" | "env" | "list" | "medic" | "metrics")
     )
 }
 

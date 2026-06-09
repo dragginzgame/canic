@@ -16,6 +16,7 @@ pub(super) enum AuthorityOutputFormat {
 pub(super) enum CheckOutputFormat {
     Json,
     EnvelopeJson,
+    Text,
 }
 
 ///

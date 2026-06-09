@@ -25,8 +25,8 @@ Examples:
 canic install uses fleets/<fleet>/canic.toml.
 Use it for fresh local creation or recreating local state after the ICP CLI
 replica lost canisters. For an existing canister that only needs new Wasm,
-inspect with canic info list and canic medic, then use the project upgrade
-flow.
+inspect with canic info list and canic info medic, then use the project
+upgrade flow.
 
 The selected canic.toml must include:
   [fleet]
@@ -172,7 +172,7 @@ fn install_error_with_context(
         return InstallCommandError::InstallHint {
             source: err,
             hint: format!(
-                "If this deployment or canister already exists, run `canic --network {network} info list {fleet}` and `canic --network {network} medic {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
+                "If this deployment or canister already exists, run `canic --network {network} info list {fleet}` and `canic --network {network} info medic {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
             ),
         };
     }

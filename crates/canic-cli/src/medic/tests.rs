@@ -3,7 +3,7 @@ use super::*;
 // Ensure medic options parse the deployment target, network, and ICP CLI selectors.
 #[test]
 fn parses_medic_options() {
-    let options = MedicOptions::parse([
+    let options = MedicOptions::parse_info([
         OsString::from("demo"),
         OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
         OsString::from("local"),
@@ -20,10 +20,10 @@ fn parses_medic_options() {
 // Ensure medic help explains the diagnostic command rather than printing a one-liner.
 #[test]
 fn medic_usage_includes_examples() {
-    let text = usage();
+    let text = info_usage();
 
     assert!(text.contains("Diagnose local Canic deployment target setup"));
-    assert!(text.contains("Usage: canic medic <deployment>"));
+    assert!(text.contains("Usage: canic info medic <deployment>"));
     assert!(text.contains("<deployment>"));
     assert!(!text.contains("--fleet <name>"));
     assert!(!text.contains("--network"));

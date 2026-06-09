@@ -18,7 +18,7 @@ installed registry and medic checks:
 canic status
 canic --network academic info list <deployment>
 canic --network academic info env <deployment>
-canic --network academic medic <deployment>
+canic --network academic info medic <deployment>
 ```
 
 Use `canic fleet config <fleet>` to inspect what is configured and
@@ -89,11 +89,11 @@ not persist canister state across stop/start.
 When a canister already exists and you only need new Wasm on that canister,
 treat it as an upgrade flow. Until a dedicated Canic upgrade wrapper is
 available for that path, record the raw ICP command in the project runbook and
-run `canic info list` plus `canic medic` before and after the upgrade.
+run `canic info list` plus `canic info medic` before and after the upgrade.
 
 ```bash
 canic --network academic info list <deployment>
-canic --network academic medic <deployment>
+canic --network academic info medic <deployment>
 env -u ICP_NETWORK icp canister install <canister> --mode=upgrade --wasm <path> -e academic
 canic --network academic info list <deployment>
 ```
@@ -129,8 +129,8 @@ application endpoints for raw external calls from scripts or tests.
 ## Metrics And Deployed Wasm
 
 `canic fleet config <fleet> --verbose` shows configured or inferred metrics
-profiles. `canic metrics <deployment> --kind <tier>` queries what the deployed
-canister actually exposes.
+profiles. `canic info metrics <deployment> --kind <tier>` queries what the
+deployed canister actually exposes.
 
 If a metrics tier reports `empty` or `canic_metrics` is unavailable, check all
 three states before changing code:
@@ -138,7 +138,7 @@ three states before changing code:
 ```bash
 canic fleet config <fleet> --verbose
 canic --network academic info list <deployment> --verbose
-canic --network academic metrics <deployment> --kind core
+canic --network academic info metrics <deployment> --kind core
 ```
 
 The likely causes are: the role profile does not enable that tier, the deployed
@@ -155,8 +155,8 @@ canic status
 canic fleet config <fleet> --verbose
 canic --network academic info list <deployment> --verbose
 canic --network academic info env <deployment>
-canic --network academic medic <deployment>
-canic --network academic metrics <deployment> --kind core --nonzero
+canic --network academic info medic <deployment>
+canic --network academic info metrics <deployment> --kind core --nonzero
 ```
 
 This separates configured intent, deployed registry state, replica health,

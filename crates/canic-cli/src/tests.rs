@@ -50,12 +50,9 @@ fn usage_lists_command_families() {
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    evidence"));
     assert!(plain.find("    evidence") < plain.find("    info"));
-    assert!(plain.find("    info") < plain.find("    endpoints"));
-    assert!(plain.find("    endpoints") < plain.find("    medic"));
-    assert!(plain.find("    medic") < plain.find("    metrics"));
-    assert!(plain.find("    metrics") < plain.find("    cycles"));
+    assert!(plain.find("    info") < plain.find("    cycles"));
     assert!(plain.find("    cycles") < plain.find("    token"));
-    assert!(plain.find("    metrics") < plain.find("    snapshot"));
+    assert!(plain.find("    token") < plain.find("    snapshot"));
     assert!(plain.find("    snapshot") < plain.find("    backup"));
     assert!(plain.find("    backup") < plain.find("    restore"));
     assert!(plain.contains("Options:"));
@@ -65,8 +62,6 @@ fn usage_lists_command_families() {
     assert!(plain.contains("cycles"));
     assert!(plain.contains("token"));
     assert!(plain.contains("info"));
-    assert!(plain.contains("endpoints"));
-    assert!(plain.contains("metrics"));
     assert!(plain.contains("    build"));
     assert!(plain.contains("    deploy"));
     assert!(plain.contains("Manage Canic fleets and roles"));
@@ -85,8 +80,10 @@ fn usage_lists_command_families() {
     assert!(plain.contains("install"));
     assert!(plain.contains("snapshot"));
     assert!(plain.contains("backup"));
-    assert!(plain.contains("medic"));
     assert!(plain.contains("restore"));
+    assert!(!plain.contains("    endpoints"));
+    assert!(!plain.contains("    medic"));
+    assert!(!plain.contains("    metrics"));
     assert!(plain.contains("Tip: Run `canic <command> help`"));
 }
 
@@ -117,8 +114,10 @@ fn command_family_help_returns_ok() {
         &["info", "help"],
         &["info", "list", "help"],
         &["info", "cycles", "help"],
+        &["info", "metrics", "help"],
+        &["info", "endpoints", "help"],
+        &["info", "medic", "help"],
         &["info", "env", "help"],
-        &["endpoints", "help"],
         &["evidence", "help"],
         &["evidence", "compare", "help"],
         &["install", "help"],
@@ -160,8 +159,6 @@ fn command_family_help_returns_ok() {
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
         &["restore", "run", "help"],
-        &["medic", "help"],
-        &["metrics", "help"],
         &["token", "help"],
         &["token", "balance", "help"],
         &["token", "icp", "balance", "help"],
@@ -180,6 +177,24 @@ fn top_level_info_aliases_are_removed() {
     std::assert_matches!(
         run([OsString::from("list"), OsString::from("help")]),
         Err(CliError::Usage(_))
+    );
+}
+
+#[test]
+fn top_level_live_inspection_commands_are_removed() {
+    for command in ["endpoints", "medic", "metrics"] {
+        std::assert_matches!(
+            run([OsString::from(command), OsString::from("help")]),
+            Err(CliError::Usage(_))
+        );
+    }
+}
+
+#[test]
+fn cycles_history_alias_is_removed() {
+    std::assert_matches!(
+        run([OsString::from("cycles"), OsString::from("history")]),
+        Err(CliError::Cycles(_))
     );
 }
 
@@ -216,6 +231,10 @@ fn info_help_uses_deployment_target_wording() {
 
     assert!(text.contains("installed-deployment information commands"));
     assert!(text.contains("List installed deployment canisters"));
+    assert!(text.contains("Summarize deployment cycle history"));
+    assert!(text.contains("Query Canic runtime telemetry"));
+    assert!(text.contains("List callable Candid endpoints"));
+    assert!(text.contains("Diagnose local deployment target setup"));
     assert!(text.contains("Print sourceable canister ID exports"));
     assert!(!text.contains("deployed-fleet"));
     assert!(!text.contains("deployed fleet"));
@@ -296,7 +315,6 @@ fn version_flags_return_ok() {
     );
     assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("endpoints"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
@@ -334,8 +352,6 @@ fn version_flags_return_ok() {
         .is_ok()
     );
     assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("metrics"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("token"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
     assert!(
@@ -478,7 +494,7 @@ fn global_icp_is_forwarded_to_nns_subnet_info_only() {
 #[test]
 fn info_version_flags_return_ok() {
     assert!(run([OsString::from("info"), OsString::from("--version")]).is_ok());
-    for leaf in ["list", "cycles", "env"] {
+    for leaf in ["list", "cycles", "metrics", "endpoints", "medic", "env"] {
         assert!(
             run([
                 OsString::from("info"),
@@ -537,18 +553,17 @@ fn deploy_version_flags_return_ok() {
 
 #[test]
 fn global_icp_is_forwarded_to_commands_that_use_icp() {
-    let mut tail = vec![OsString::from("test")];
+    let mut status_tail = Vec::new();
     let mut cycles_tail = vec![OsString::from("balance")];
     let mut token_tail = vec![OsString::from("balance")];
 
-    apply_global_icp("medic", &mut tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("status", &mut status_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("cycles", &mut cycles_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("token", &mut token_tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
-        tail,
+        status_tail,
         vec![
-            OsString::from("test"),
             OsString::from(INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp")
         ]
@@ -574,17 +589,17 @@ fn global_icp_is_forwarded_to_commands_that_use_icp() {
 #[test]
 fn global_icp_does_not_override_internal_forwarded_icp() {
     let mut tail = vec![
-        OsString::from("test"),
+        OsString::from("balance"),
         OsString::from(INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
     ];
 
-    apply_global_icp("medic", &mut tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("cycles", &mut tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
         tail,
         vec![
-            OsString::from("test"),
+            OsString::from("balance"),
             OsString::from(INTERNAL_ICP_OPTION),
             OsString::from("/bin/icp")
         ]
@@ -633,11 +648,21 @@ fn global_icp_is_forwarded_only_to_replica_leaf_commands() {
 fn global_icp_is_forwarded_to_info_query_commands() {
     let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
+    let mut metrics_tail = vec![OsString::from("metrics"), OsString::from("test")];
+    let mut endpoints_tail = vec![
+        OsString::from("endpoints"),
+        OsString::from("test"),
+        OsString::from("app"),
+    ];
+    let mut medic_tail = vec![OsString::from("medic"), OsString::from("test")];
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("help")];
 
     apply_global_icp("info", &mut list_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut cycles_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("info", &mut metrics_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("info", &mut endpoints_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("info", &mut medic_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut env_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut help_tail, Some("/tmp/icp".to_string()));
 
@@ -654,6 +679,34 @@ fn global_icp_is_forwarded_to_info_query_commands() {
         cycles_tail,
         vec![
             OsString::from("cycles"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        metrics_tail,
+        vec![
+            OsString::from("metrics"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        endpoints_tail,
+        vec![
+            OsString::from("endpoints"),
+            OsString::from("test"),
+            OsString::from("app"),
+            OsString::from(INTERNAL_ICP_OPTION),
+            OsString::from("/tmp/icp")
+        ]
+    );
+    assert_eq!(
+        medic_tail,
+        vec![
+            OsString::from("medic"),
             OsString::from("test"),
             OsString::from(INTERNAL_ICP_OPTION),
             OsString::from("/tmp/icp")
@@ -950,11 +1003,21 @@ fn global_network_is_forwarded_only_to_fleet_list() {
 fn global_network_is_forwarded_to_info_query_commands() {
     let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
+    let mut metrics_tail = vec![OsString::from("metrics"), OsString::from("test")];
+    let mut endpoints_tail = vec![
+        OsString::from("endpoints"),
+        OsString::from("test"),
+        OsString::from("app"),
+    ];
+    let mut medic_tail = vec![OsString::from("medic"), OsString::from("test")];
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("help")];
 
     apply_global_network("info", &mut list_tail, Some("local".to_string()));
     apply_global_network("info", &mut cycles_tail, Some("local".to_string()));
+    apply_global_network("info", &mut metrics_tail, Some("local".to_string()));
+    apply_global_network("info", &mut endpoints_tail, Some("local".to_string()));
+    apply_global_network("info", &mut medic_tail, Some("local".to_string()));
     apply_global_network("info", &mut env_tail, Some("local".to_string()));
     apply_global_network("info", &mut help_tail, Some("local".to_string()));
 
@@ -971,6 +1034,34 @@ fn global_network_is_forwarded_to_info_query_commands() {
         cycles_tail,
         vec![
             OsString::from("cycles"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local")
+        ]
+    );
+    assert_eq!(
+        metrics_tail,
+        vec![
+            OsString::from("metrics"),
+            OsString::from("test"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local")
+        ]
+    );
+    assert_eq!(
+        endpoints_tail,
+        vec![
+            OsString::from("endpoints"),
+            OsString::from("test"),
+            OsString::from("app"),
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("local")
+        ]
+    );
+    assert_eq!(
+        medic_tail,
+        vec![
+            OsString::from("medic"),
             OsString::from("test"),
             OsString::from(INTERNAL_NETWORK_OPTION),
             OsString::from("local")
@@ -1000,6 +1091,7 @@ fn command_local_global_options_are_hard_rejected() {
     );
     std::assert_matches!(
         run([
+            OsString::from("info"),
             OsString::from("medic"),
             OsString::from("test"),
             OsString::from("--icp"),

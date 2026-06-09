@@ -124,6 +124,20 @@ fn deploy_check_parses_envelope_json_format() {
 }
 
 #[test]
+fn deploy_check_parses_text_format() {
+    let options = deploy_check::DeployCheckOptions::parse([
+        check_deployment_arg(),
+        OsString::from("--format"),
+        OsString::from("text"),
+    ])
+    .expect("parse deploy check");
+
+    assert_eq!(options.truth.deployment, "demo");
+    assert_eq!(options.format, CheckOutputFormat::Text);
+    assert_eq!(options.build_provenance, None);
+}
+
+#[test]
 fn deploy_check_parses_build_provenance_envelope_input() {
     let mut args = envelope_format_args();
     args.extend(build_provenance_args());
@@ -153,8 +167,35 @@ fn deploy_check_rejects_build_provenance_without_envelope_output() {
 fn deploy_check_usage_lists_build_provenance_input() {
     let text = deploy_check::usage();
 
-    assert!(text.contains("--format <json|envelope-json>"));
+    assert!(text.contains("--format <json|envelope-json|text>"));
     assert!(text.contains("--build-provenance <path>"));
+}
+
+#[test]
+fn deployment_check_text_renders_operator_summary() {
+    let mut check = sample_authority_check();
+    check.report.status = SafetyStatusV1::Warning;
+    check.report.warnings.push(SafetyFindingV1 {
+        code: "test_warning".to_string(),
+        message: "operator should review warning".to_string(),
+        severity: SafetySeverityV1::Warning,
+        subject: Some("app".to_string()),
+    });
+    check
+        .report
+        .next_actions
+        .push("review deployment warnings before continuing".to_string());
+
+    let text = deploy_check::deployment_check_text(&check);
+
+    assert!(text.contains("Deployment check"));
+    assert!(text.contains("mode: passive"));
+    assert!(text.contains("status: Warning"));
+    assert!(text.contains("deployment: demo"));
+    assert!(text.contains("counts:"));
+    assert!(text.contains("warnings:"));
+    assert!(text.contains("code=test_warning"));
+    assert!(text.contains("next_actions:"));
 }
 
 #[test]

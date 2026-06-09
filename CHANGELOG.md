@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
 
+- `0.63.4` hard-cuts live deployment inspection under `canic info`, replacing
+  the former top-level metrics, endpoints, and medic commands while adding a
+  compact text summary for `canic deploy check`.
+
 - `0.63.3` hardens CI and maintainer workflow by sharing operations-doc guard
   helpers, merging tag validation into the main checks job, moving first-party
   GitHub Actions pins to Node 24-compatible majors, adding an optional `gh` CI

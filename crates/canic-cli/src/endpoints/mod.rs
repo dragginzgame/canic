@@ -24,11 +24,11 @@ use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
 const CANDID_SERVICE_METADATA: &str = "candid:service";
-const HELP_AFTER: &str = "\
+const INFO_HELP_AFTER: &str = "\
 Examples:
-  canic endpoints test app
-  canic endpoints test scale_hub --json
-  canic endpoints test tl4x7-vh777-77776-aaacq-cai";
+  canic info endpoints demo-local app
+  canic info endpoints demo-local scale_hub --json
+  canic info endpoints demo-local tl4x7-vh777-77776-aaacq-cai";
 
 ///
 /// EndpointsCommandError
@@ -46,9 +46,12 @@ pub enum EndpointsCommandError {
     InvalidCandid(String),
 
     #[error(
-        "live metadata was unavailable for {canister} in fleet {fleet} and no local Candid artifact could be resolved"
+        "live metadata was unavailable for {canister} in deployment target {deployment} and no local Candid artifact could be resolved"
     )]
-    NoInterfaceArtifact { fleet: String, canister: String },
+    NoInterfaceArtifact {
+        deployment: String,
+        canister: String,
+    },
 
     #[error("local Candid artifact not found for role {role}; looked under {root}")]
     MissingRoleArtifact { role: String, root: String },
@@ -69,7 +72,7 @@ pub enum EndpointsCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct EndpointsOptions {
-    fleet: String,
+    deployment: String,
     canister: String,
     network: Option<String>,
     icp: String,
@@ -77,14 +80,26 @@ struct EndpointsOptions {
 }
 
 impl EndpointsOptions {
-    fn parse<I>(args: I) -> Result<Self, EndpointsCommandError>
+    fn parse_info<I>(args: I) -> Result<Self, EndpointsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        Self::parse_with(args, info_command, info_usage, "deployment")
+    }
+
+    fn parse_with<I>(
+        args: I,
+        command: impl FnOnce() -> ClapCommand,
+        usage: fn() -> String,
+        target_arg: &str,
+    ) -> Result<Self, EndpointsCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
         let matches =
             parse_matches(command(), args).map_err(|_| EndpointsCommandError::Usage(usage()))?;
         Ok(Self {
-            fleet: required_string(&matches, "fleet"),
+            deployment: required_string(&matches, target_arg),
             canister: required_string(&matches, "canister"),
             network: string_option(&matches, "network"),
             icp: string_option_or_else(&matches, "icp", default_icp),
@@ -93,17 +108,21 @@ impl EndpointsOptions {
     }
 }
 
-/// Run the canister endpoint listing command.
-pub fn run<I>(args: I) -> Result<(), EndpointsCommandError>
+/// Run the installed-deployment endpoint listing command.
+pub fn run_info<I>(args: I) -> Result<(), EndpointsCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    if print_help_or_version(&args, info_usage, version_text()) {
         return Ok(());
     }
 
-    let options = EndpointsOptions::parse(args)?;
+    let options = EndpointsOptions::parse_info(args)?;
+    run_options(&options)
+}
+
+fn run_options(options: &EndpointsOptions) -> Result<(), EndpointsCommandError> {
     let report = endpoint_report(&options)?;
     if options.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -113,16 +132,30 @@ where
     Ok(())
 }
 
-fn command() -> ClapCommand {
+fn info_command() -> ClapCommand {
+    endpoint_command(
+        "canic info endpoints",
+        "deployment",
+        "Installed deployment target name to inspect",
+        INFO_HELP_AFTER,
+    )
+}
+
+fn endpoint_command(
+    bin_name: &'static str,
+    target_arg: &'static str,
+    target_help: &'static str,
+    help_after: &'static str,
+) -> ClapCommand {
     ClapCommand::new("endpoints")
-        .bin_name("canic endpoints")
+        .bin_name(bin_name)
         .disable_help_flag(true)
         .about("List callable methods exposed by a canister Candid interface")
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg(target_arg)
+                .value_name(target_arg)
                 .required(true)
-                .help("Fleet name to inspect"),
+                .help(target_help),
         )
         .arg(
             value_arg("canister")
@@ -133,11 +166,11 @@ fn command() -> ClapCommand {
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
         .arg(flag_arg("json").long("json").help("Print JSON output"))
-        .after_help(HELP_AFTER)
+        .after_help(help_after)
 }
 
-fn usage() -> String {
-    render_usage(command)
+fn info_usage() -> String {
+    render_usage(info_command)
 }
 
 #[cfg(test)]

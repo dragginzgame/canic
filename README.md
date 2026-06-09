@@ -81,7 +81,7 @@ canic replica start --background
 canic install --profile fast test
 canic info list test
 canic info env test
-canic medic test
+canic info medic test
 ```
 
 To inspect public IC NNS metadata:

@@ -105,21 +105,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Deployment,
     },
     CommandSpec {
-        name: "endpoints",
-        about: "List canister Candid endpoints",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "medic",
-        about: "Diagnose local Canic deployment target setup",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
-        name: "metrics",
-        about: "Query Canic runtime telemetry",
-        scope: CommandScope::Deployment,
-    },
-    CommandSpec {
         name: "snapshot",
         about: "Capture and download canister snapshots",
         scope: CommandScope::BackupRestore,

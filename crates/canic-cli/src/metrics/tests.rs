@@ -7,11 +7,12 @@ use crate::metrics::{
 // Ensure the public kind selector accepts the expected CLI vocabulary.
 #[test]
 fn parses_metric_kind_selectors() {
-    let options = MetricsOptions::parse([OsString::from("test")]).expect("default metrics kind");
+    let options =
+        MetricsOptions::parse_info([OsString::from("test")]).expect("default metrics kind");
     assert_eq!(options.deployment, "test");
     assert_eq!(options.kind, MetricsKind::Core);
 
-    let options = MetricsOptions::parse([
+    let options = MetricsOptions::parse_info([
         OsString::from("test"),
         OsString::from("--kind"),
         OsString::from("security"),
@@ -20,7 +21,7 @@ fn parses_metric_kind_selectors() {
     assert_eq!(options.kind, MetricsKind::Security);
 
     std::assert_matches!(
-        MetricsOptions::parse([
+        MetricsOptions::parse_info([
             OsString::from("test"),
             OsString::from("--kind"),
             OsString::from("cycles"),
@@ -29,7 +30,7 @@ fn parses_metric_kind_selectors() {
     );
 
     std::assert_matches!(
-        MetricsOptions::parse([
+        MetricsOptions::parse_info([
             OsString::from("test"),
             OsString::from("--limit"),
             OsString::from("banana"),
@@ -37,7 +38,7 @@ fn parses_metric_kind_selectors() {
         Err(MetricsCommandError::Usage(_))
     );
     std::assert_matches!(
-        MetricsOptions::parse([
+        MetricsOptions::parse_info([
             OsString::from("test"),
             OsString::from("--limit"),
             OsString::from("0"),
@@ -48,9 +49,9 @@ fn parses_metric_kind_selectors() {
 
 #[test]
 fn metrics_usage_uses_deployment_target_wording() {
-    let text = usage();
+    let text = info_usage();
 
-    assert!(text.contains("Usage: canic metrics [OPTIONS] <deployment>"));
+    assert!(text.contains("Usage: canic info metrics [OPTIONS] <deployment>"));
     assert!(text.contains("Installed deployment target name to inspect"));
     assert!(!text.contains("<fleet>"));
     assert!(!text.contains("Installed fleet"));

@@ -3,7 +3,7 @@ use crate::{
         clap::{parse_subcommand, passthrough_subcommand},
         help::print_help_or_version,
     },
-    cycles, info_env, list, version_text,
+    cycles, endpoints, info_env, list, medic, metrics, version_text,
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -15,14 +15,20 @@ Group read-only installed-deployment information commands
 Usage: canic info <command> [OPTIONS]
 
 Commands:
-  list     List installed deployment canisters
-  cycles   Summarize deployment cycle history
-  env      Print sourceable canister ID exports
-  help     Print this message or the help of the given subcommand(s)
+  list       List installed deployment canisters
+  cycles     Summarize deployment cycle history
+  metrics    Query Canic runtime telemetry
+  endpoints  List callable Candid endpoints
+  medic      Diagnose local deployment target setup
+  env        Print sourceable canister ID exports
+  help       Print this message or the help of the given subcommand(s)
 
 Examples:
   canic info list test --subtree scale_hub
   canic info cycles test --subtree scale_hub
+  canic info metrics test
+  canic info endpoints test app
+  canic info medic test
   canic info env test";
 
 ///
@@ -42,6 +48,15 @@ pub enum InfoCommandError {
 
     #[error("env: {0}")]
     Env(#[from] info_env::InfoEnvCommandError),
+
+    #[error("endpoints: {0}")]
+    Endpoints(#[from] endpoints::EndpointsCommandError),
+
+    #[error("medic: {0}")]
+    Medic(#[from] medic::MedicCommandError),
+
+    #[error("metrics: {0}")]
+    Metrics(#[from] metrics::MetricsCommandError),
 }
 
 /// Run the installed-deployment information command group.
@@ -57,6 +72,9 @@ where
     match parse_info_command(args)? {
         ("list", tail) => list::run_info(tail).map_err(InfoCommandError::from),
         ("cycles", tail) => cycles::run_info(tail).map_err(InfoCommandError::from),
+        ("metrics", tail) => metrics::run_info(tail).map_err(InfoCommandError::from),
+        ("endpoints", tail) => endpoints::run_info(tail).map_err(InfoCommandError::from),
+        ("medic", tail) => medic::run_info(tail).map_err(InfoCommandError::from),
         ("env", tail) => info_env::run(tail).map_err(InfoCommandError::from),
         _ => unreachable!("clap restricts info subcommands"),
     }
@@ -71,6 +89,9 @@ fn parse_info_command(
     match command.as_str() {
         "list" => Ok(("list", tail)),
         "cycles" => Ok(("cycles", tail)),
+        "metrics" => Ok(("metrics", tail)),
+        "endpoints" => Ok(("endpoints", tail)),
+        "medic" => Ok(("medic", tail)),
         "env" => Ok(("env", tail)),
         _ => unreachable!("clap restricts info subcommands"),
     }
@@ -83,6 +104,9 @@ fn command() -> ClapCommand {
         .disable_help_flag(true)
         .subcommand(passthrough_subcommand(ClapCommand::new("list")))
         .subcommand(passthrough_subcommand(ClapCommand::new("cycles")))
+        .subcommand(passthrough_subcommand(ClapCommand::new("metrics")))
+        .subcommand(passthrough_subcommand(ClapCommand::new("endpoints")))
+        .subcommand(passthrough_subcommand(ClapCommand::new("medic")))
         .subcommand(passthrough_subcommand(ClapCommand::new("env")))
 }
 

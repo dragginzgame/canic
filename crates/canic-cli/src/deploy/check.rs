@@ -12,7 +12,7 @@ use crate::{
 };
 use canic_host::{
     build_provenance::build_provenance_schema,
-    deployment_truth::{DeploymentCheckV1, SafetyReportV1, SafetyStatusV1},
+    deployment_truth::{DeploymentCheckV1, SafetyFindingV1, SafetyReportV1, SafetyStatusV1},
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
@@ -31,10 +31,12 @@ const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
   canic --network local deploy check --profile fast demo
+  canic deploy check demo --format text
   canic deploy check demo --format envelope-json
   canic deploy check demo --format envelope-json --build-provenance build-provenance.json
 
-Prints the local DeploymentCheckV1 JSON without installing or mutating state.
+Prints the local DeploymentCheckV1 without installing or mutating state.
+Use --format text for a compact operator-facing summary.
 Use --format envelope-json for the stable CI/GitOps evidence envelope.
 --build-provenance is fingerprinted only in envelope output.";
 
@@ -78,6 +80,88 @@ fn write_deployment_check(
             let envelope = build_deployment_check_envelope(options, check)?;
             print_json(&envelope)
         }
+        CheckOutputFormat::Text => {
+            println!("{}", deployment_check_text(check));
+            Ok(())
+        }
+    }
+}
+
+pub(super) fn deployment_check_text(check: &DeploymentCheckV1) -> String {
+    let mut lines = vec![
+        "Deployment check".to_string(),
+        "mode: passive".to_string(),
+        "execution: none".to_string(),
+        format!("status: {:?}", check.report.status),
+        format!("summary: {}", check.report.summary),
+        format!("check_id: {}", check.check_id),
+        format!("plan_id: {}", check.plan.plan_id),
+        format!("inventory_id: {}", check.inventory.inventory_id),
+        format!("report_id: {}", check.report.report_id),
+        format!(
+            "deployment: {}",
+            check.plan.deployment_identity.deployment_name
+        ),
+        format!("network: {}", check.plan.deployment_identity.network),
+        format!("fleet_template: {}", check.plan.fleet_template),
+        String::new(),
+        "counts:".to_string(),
+        format!(
+            "  expected_canisters: {}",
+            check.plan.expected_canisters.len()
+        ),
+        format!(
+            "  observed_canisters: {}",
+            check.inventory.observed_canisters.len()
+        ),
+        format!("  artifact_diff: {}", check.diff.artifact_diff.len()),
+        format!("  controller_diff: {}", check.diff.controller_diff.len()),
+        format!("  pool_diff: {}", check.diff.pool_diff.len()),
+        format!(
+            "  embedded_config_diff: {}",
+            check.diff.embedded_config_diff.len()
+        ),
+        format!("  module_hash_diff: {}", check.diff.module_hash_diff.len()),
+        format!(
+            "  verifier_readiness_diff: {}",
+            check.diff.verifier_readiness_diff.len()
+        ),
+        format!("  hard_failures: {}", check.report.hard_failures.len()),
+        format!("  warnings: {}", check.report.warnings.len()),
+    ];
+
+    append_findings(&mut lines, "hard_failures", &check.report.hard_failures);
+    append_findings(&mut lines, "warnings", &check.report.warnings);
+    append_next_actions(&mut lines, &check.report.next_actions);
+    lines.join("\n")
+}
+
+fn append_findings(lines: &mut Vec<String>, label: &str, findings: &[SafetyFindingV1]) {
+    if findings.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push(format!("{label}:"));
+    for finding in findings {
+        let subject = finding
+            .subject
+            .as_deref()
+            .map_or_else(|| "-".to_string(), ToString::to_string);
+        lines.push(format!(
+            "  - code={} severity={:?} subject={} message={}",
+            finding.code, finding.severity, subject, finding.message
+        ));
+    }
+}
+
+fn append_next_actions(lines: &mut Vec<String>, actions: &[String]) {
+    if actions.is_empty() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push("next_actions:".to_string());
+    for action in actions {
+        lines.push(format!("  - {action}"));
     }
 }
 
@@ -360,19 +444,16 @@ impl DeployCheckOptions {
 }
 
 pub(super) fn command() -> ClapCommand {
-    deploy_truth_leaf_command(
-        CHECK_COMMAND_NAME,
-        "Print the local deployment truth check JSON",
-    )
-    .arg(check_format_arg())
-    .arg(build_provenance_input_arg())
-    .after_help(DEPLOY_CHECK_HELP_AFTER)
+    deploy_truth_leaf_command(CHECK_COMMAND_NAME, "Print the local deployment truth check")
+        .arg(check_format_arg())
+        .arg(build_provenance_input_arg())
+        .after_help(DEPLOY_CHECK_HELP_AFTER)
 }
 
 fn check_format_arg() -> clap::Arg {
     value_arg(FORMAT_ARG)
         .long(FORMAT_ARG)
-        .value_name("json|envelope-json")
+        .value_name("json|envelope-json|text")
         .num_args(1)
         .default_value("json")
         .value_parser(clap::value_parser!(CheckOutputFormat))
