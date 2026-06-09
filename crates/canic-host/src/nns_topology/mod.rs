@@ -359,6 +359,85 @@ fn topology_summary_report_from_reports(
         node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_APPLICATION);
     let system_node_count = node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_SYSTEM);
     let unknown_node_count = node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_UNKNOWN);
+    let join_coverage = topology_summary_join_coverage_counts(
+        &node_report,
+        &node_provider_report,
+        &node_operator_report,
+        &data_center_report,
+    );
+    let registry_versions = topology_summary_registry_versions(
+        &subnet_report,
+        &node_report,
+        &node_provider_report,
+        &node_operator_report,
+        &data_center_report,
+    );
+
+    NnsTopologySummaryReport {
+        schema_version: NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION,
+        network,
+        source_endpoint,
+        subnet_count: subnet_report.subnets.len(),
+        application_subnet_count,
+        system_subnet_count,
+        unknown_subnet_count,
+        routing_range_count: subnet_report
+            .subnets
+            .iter()
+            .map(|subnet| subnet.range_count)
+            .sum(),
+        node_count: node_report.node_count,
+        application_node_count,
+        system_node_count,
+        unknown_node_count,
+        node_provider_count: node_provider_report.node_provider_count,
+        node_operator_count: node_operator_report.node_operator_count,
+        data_center_count: data_center_report.data_center_count,
+        nodes_with_known_node_provider_count: join_coverage.nodes_with_known_node_provider_count,
+        nodes_with_unknown_node_provider_count: node_report
+            .node_count
+            .saturating_sub(join_coverage.nodes_with_known_node_provider_count),
+        nodes_with_known_node_operator_count: join_coverage.nodes_with_known_node_operator_count,
+        nodes_with_unknown_node_operator_count: node_report
+            .node_count
+            .saturating_sub(join_coverage.nodes_with_known_node_operator_count),
+        nodes_with_known_data_center_count: join_coverage.nodes_with_known_data_center_count,
+        nodes_with_unknown_data_center_count: node_report
+            .node_count
+            .saturating_sub(join_coverage.nodes_with_known_data_center_count),
+        node_operators_with_known_node_provider_count: join_coverage
+            .node_operators_with_known_node_provider_count,
+        node_operators_with_unknown_node_provider_count: node_operator_report
+            .node_operator_count
+            .saturating_sub(join_coverage.node_operators_with_known_node_provider_count),
+        node_operators_with_known_data_center_count: join_coverage
+            .node_operators_with_known_data_center_count,
+        node_operators_with_unknown_data_center_count: node_operator_report
+            .node_operator_count
+            .saturating_sub(join_coverage.node_operators_with_known_data_center_count),
+        subnet_catalog_stale: subnet_report.catalog_stale,
+        subnet_catalog_stale_reason: subnet_report.stale_reason,
+        registry_versions,
+    }
+}
+
+///
+/// NnsTopologyJoinCoverageCounts
+///
+struct NnsTopologyJoinCoverageCounts {
+    nodes_with_known_node_provider_count: usize,
+    nodes_with_known_node_operator_count: usize,
+    nodes_with_known_data_center_count: usize,
+    node_operators_with_known_node_provider_count: usize,
+    node_operators_with_known_data_center_count: usize,
+}
+
+fn topology_summary_join_coverage_counts(
+    node_report: &NnsNodeListReport,
+    node_provider_report: &NnsNodeProviderListReport,
+    node_operator_report: &NnsNodeOperatorListReport,
+    data_center_report: &NnsDataCenterListReport,
+) -> NnsTopologyJoinCoverageCounts {
     let node_provider_principals = node_provider_report
         .node_providers
         .iter()
@@ -374,17 +453,39 @@ fn topology_summary_report_from_reports(
         .iter()
         .map(|data_center| data_center.data_center_id.as_str())
         .collect::<BTreeSet<_>>();
-    let nodes_with_known_node_provider_count =
-        node_count_with_known_node_provider(&node_report, &node_provider_principals);
-    let nodes_with_known_node_operator_count =
-        node_count_with_known_node_operator(&node_report, &node_operator_principals);
-    let nodes_with_known_data_center_count =
-        node_count_with_known_data_center(&node_report, &data_center_ids);
-    let node_operators_with_known_node_provider_count =
-        operator_count_with_known_node_provider(&node_operator_report, &node_provider_principals);
-    let node_operators_with_known_data_center_count =
-        operator_count_with_known_data_center(&node_operator_report, &data_center_ids);
-    let registry_versions = vec![
+
+    NnsTopologyJoinCoverageCounts {
+        nodes_with_known_node_provider_count: node_count_with_known_node_provider(
+            node_report,
+            &node_provider_principals,
+        ),
+        nodes_with_known_node_operator_count: node_count_with_known_node_operator(
+            node_report,
+            &node_operator_principals,
+        ),
+        nodes_with_known_data_center_count: node_count_with_known_data_center(
+            node_report,
+            &data_center_ids,
+        ),
+        node_operators_with_known_node_provider_count: operator_count_with_known_node_provider(
+            node_operator_report,
+            &node_provider_principals,
+        ),
+        node_operators_with_known_data_center_count: operator_count_with_known_data_center(
+            node_operator_report,
+            &data_center_ids,
+        ),
+    }
+}
+
+fn topology_summary_registry_versions(
+    subnet_report: &SubnetCatalogListReport,
+    node_report: &NnsNodeListReport,
+    node_provider_report: &NnsNodeProviderListReport,
+    node_operator_report: &NnsNodeOperatorListReport,
+    data_center_report: &NnsDataCenterListReport,
+) -> Vec<NnsTopologyRegistryVersionRow> {
+    vec![
         registry_version_row(
             "subnet_catalog",
             subnet_report.registry_version,
@@ -420,52 +521,7 @@ fn topology_summary_report_from_reports(
             Some(data_center_report.source_endpoint.clone()),
             None,
         ),
-    ];
-
-    NnsTopologySummaryReport {
-        schema_version: NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION,
-        network,
-        source_endpoint,
-        subnet_count: subnet_report.subnets.len(),
-        application_subnet_count,
-        system_subnet_count,
-        unknown_subnet_count,
-        routing_range_count: subnet_report
-            .subnets
-            .iter()
-            .map(|subnet| subnet.range_count)
-            .sum(),
-        node_count: node_report.node_count,
-        application_node_count,
-        system_node_count,
-        unknown_node_count,
-        node_provider_count: node_provider_report.node_provider_count,
-        node_operator_count: node_operator_report.node_operator_count,
-        data_center_count: data_center_report.data_center_count,
-        nodes_with_known_node_provider_count,
-        nodes_with_unknown_node_provider_count: node_report
-            .node_count
-            .saturating_sub(nodes_with_known_node_provider_count),
-        nodes_with_known_node_operator_count,
-        nodes_with_unknown_node_operator_count: node_report
-            .node_count
-            .saturating_sub(nodes_with_known_node_operator_count),
-        nodes_with_known_data_center_count,
-        nodes_with_unknown_data_center_count: node_report
-            .node_count
-            .saturating_sub(nodes_with_known_data_center_count),
-        node_operators_with_known_node_provider_count,
-        node_operators_with_unknown_node_provider_count: node_operator_report
-            .node_operator_count
-            .saturating_sub(node_operators_with_known_node_provider_count),
-        node_operators_with_known_data_center_count,
-        node_operators_with_unknown_data_center_count: node_operator_report
-            .node_operator_count
-            .saturating_sub(node_operators_with_known_data_center_count),
-        subnet_catalog_stale: subnet_report.catalog_stale,
-        subnet_catalog_stale_reason: subnet_report.stale_reason,
-        registry_versions,
-    }
+    ]
 }
 
 fn topology_refresh_report_from_reports(
