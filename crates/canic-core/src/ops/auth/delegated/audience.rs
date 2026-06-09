@@ -1,159 +1,223 @@
-use super::canonical::{CanonicalAuthError, role_hash};
-use crate::{cdk::types::Principal, dto::auth::DelegationAudience, ids::CanisterRole};
+use super::canonical::{CanonicalAuthError, role_hash, validate_scope_label};
+use crate::{
+    dto::auth::{DelegatedRoleGrant, DelegationAudience},
+    ids::CanisterRole,
+};
 use thiserror::Error;
+
+pub const MAX_DELEGATED_ROLE_GRANTS: usize = 16;
+pub const MAX_SCOPES_PER_ROLE_GRANT: usize = 32;
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum AudienceError {
-    #[error("delegated auth role hash mismatch")]
-    RoleHashMismatch,
-    #[error("delegated auth principal audience is anonymous principal")]
-    AnonymousPrincipal,
+    #[error("delegated auth project audience is empty")]
+    EmptyProject,
+    #[error("delegated auth project audience contains invalid characters: {project}")]
+    InvalidProject { project: String },
+    #[error("delegated auth role grants must not be empty")]
+    GrantsEmpty,
+    #[error("delegated auth role grants exceed max {max}: {found}")]
+    TooManyGrants { found: usize, max: usize },
+    #[error("delegated auth role grant for {role} has no scopes")]
+    EmptyGrantScopes { role: CanisterRole },
+    #[error("delegated auth role grant for {role} exceeds max scopes {max}: {found}")]
+    TooManyGrantScopes {
+        role: CanisterRole,
+        found: usize,
+        max: usize,
+    },
+    #[error("delegated auth role grants must be strictly sorted and unique")]
+    NonCanonicalGrants,
+    #[error("delegated auth grant scope rejected: {scope}")]
+    GrantScopeRejected { scope: String },
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
 }
 
 pub fn validate_audience_shape(audience: &DelegationAudience) -> Result<(), AudienceError> {
     match audience {
-        DelegationAudience::Role(role) => {
-            role_hash(role)?;
-            Ok(())
+        DelegationAudience::Canic => Ok(()),
+        DelegationAudience::Project(project) => validate_project(project),
+    }
+}
+
+pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), AudienceError> {
+    if grants.is_empty() {
+        return Err(AudienceError::GrantsEmpty);
+    }
+    if grants.len() > MAX_DELEGATED_ROLE_GRANTS {
+        return Err(AudienceError::TooManyGrants {
+            found: grants.len(),
+            max: MAX_DELEGATED_ROLE_GRANTS,
+        });
+    }
+
+    let mut previous = None;
+    for grant in grants {
+        role_hash(&grant.target)?;
+        let current = grant.target.as_str().as_bytes();
+        if previous.is_some_and(|previous| previous >= current) {
+            return Err(AudienceError::NonCanonicalGrants);
         }
-        DelegationAudience::Principal(principal) => validate_principal(*principal),
-    }
-}
+        previous = Some(current);
 
-pub fn expected_role_hash_for_cert_audience(
-    audience: &DelegationAudience,
-) -> Result<Option<[u8; 32]>, AudienceError> {
-    validate_audience_shape(audience)?;
-
-    match audience {
-        DelegationAudience::Principal(_) => Ok(None),
-        DelegationAudience::Role(role) => Ok(Some(role_hash(role)?)),
+        if grant.scopes.is_empty() {
+            return Err(AudienceError::EmptyGrantScopes {
+                role: grant.target.clone(),
+            });
+        }
+        if grant.scopes.len() > MAX_SCOPES_PER_ROLE_GRANT {
+            return Err(AudienceError::TooManyGrantScopes {
+                role: grant.target.clone(),
+                found: grant.scopes.len(),
+                max: MAX_SCOPES_PER_ROLE_GRANT,
+            });
+        }
+        validate_grant_scopes(&grant.scopes)?;
     }
-}
 
-pub fn validate_cert_role_hash(
-    audience: &DelegationAudience,
-    verifier_role_hash: Option<[u8; 32]>,
-) -> Result<(), AudienceError> {
-    let expected = expected_role_hash_for_cert_audience(audience)?;
-    if verifier_role_hash != expected {
-        return Err(AudienceError::RoleHashMismatch);
-    }
     Ok(())
-}
-
-pub const fn audience_uses_role(audience: &DelegationAudience) -> bool {
-    matches!(audience, DelegationAudience::Role(_))
-}
-
-pub fn verifier_is_in_audience(
-    local_principal: Principal,
-    local_role: Option<&CanisterRole>,
-    audience: &DelegationAudience,
-) -> bool {
-    match audience {
-        DelegationAudience::Role(role) => local_role.is_some_and(|local| local == role),
-        DelegationAudience::Principal(principal) => local_principal == *principal,
-    }
 }
 
 pub fn audience_subset(child: &DelegationAudience, parent: &DelegationAudience) -> bool {
     match (child, parent) {
-        (DelegationAudience::Role(child), DelegationAudience::Role(parent)) => child == parent,
-        (DelegationAudience::Principal(child), DelegationAudience::Principal(parent)) => {
+        (DelegationAudience::Canic | DelegationAudience::Project(_), DelegationAudience::Canic) => {
+            true
+        }
+        (DelegationAudience::Project(child), DelegationAudience::Project(parent)) => {
             child == parent
         }
-        (DelegationAudience::Role(_), DelegationAudience::Principal(_))
-        | (DelegationAudience::Principal(_), DelegationAudience::Role(_)) => false,
+        (DelegationAudience::Canic, DelegationAudience::Project(_)) => false,
     }
 }
 
-fn validate_principal(principal: Principal) -> Result<(), AudienceError> {
-    if principal == Principal::anonymous() {
-        return Err(AudienceError::AnonymousPrincipal);
+pub fn audience_accepted(local_project: Option<&str>, audience: &DelegationAudience) -> bool {
+    match audience {
+        DelegationAudience::Canic => true,
+        DelegationAudience::Project(project) => local_project == Some(project.as_str()),
+    }
+}
+
+pub fn role_grants_subset(child: &[DelegatedRoleGrant], parent: &[DelegatedRoleGrant]) -> bool {
+    child.iter().all(|child_grant| {
+        parent
+            .iter()
+            .find(|parent_grant| parent_grant.target == child_grant.target)
+            .is_some_and(|parent_grant| scopes_subset(&child_grant.scopes, &parent_grant.scopes))
+    })
+}
+
+pub fn scopes_for_role(
+    grants: &[DelegatedRoleGrant],
+    local_role: &CanisterRole,
+) -> Option<Vec<String>> {
+    grants
+        .iter()
+        .find(|grant| &grant.target == local_role)
+        .map(|grant| grant.scopes.clone())
+}
+
+fn validate_project(project: &str) -> Result<(), AudienceError> {
+    if project.is_empty() {
+        return Err(AudienceError::EmptyProject);
+    }
+    if !project.bytes().all(is_canonical_label_byte) {
+        return Err(AudienceError::InvalidProject {
+            project: project.to_string(),
+        });
     }
     Ok(())
+}
+
+fn validate_grant_scopes(scopes: &[String]) -> Result<(), AudienceError> {
+    let mut previous = None;
+    for scope in scopes {
+        validate_scope_label(scope).map_err(|err| match err {
+            CanonicalAuthError::InvalidScope { scope } => {
+                AudienceError::GrantScopeRejected { scope }
+            }
+            other => AudienceError::Canonical(other),
+        })?;
+        let current = scope.as_bytes();
+        if previous.is_some_and(|previous| previous >= current) {
+            return Err(AudienceError::Canonical(
+                CanonicalAuthError::NonCanonicalScopes,
+            ));
+        }
+        previous = Some(current);
+    }
+    Ok(())
+}
+
+fn scopes_subset(child: &[String], parent: &[String]) -> bool {
+    child.iter().all(|scope| parent.contains(scope))
+}
+
+const fn is_canonical_label_byte(byte: u8) -> bool {
+    byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b':' | b'-' | b'.')
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
+    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
+        DelegatedRoleGrant {
+            target: CanisterRole::owned(role.to_string()),
+            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
+        }
     }
 
     #[test]
-    fn matching_roles_are_audience_subset() {
-        let cert = DelegationAudience::Role(CanisterRole::new("project_instance"));
-        let claims = DelegationAudience::Role(CanisterRole::new("project_instance"));
-
-        assert!(audience_subset(&claims, &cert));
-    }
-
-    #[test]
-    fn role_and_principal_do_not_cross_match() {
-        let cert = DelegationAudience::Role(CanisterRole::new("project_instance"));
-        let claims = DelegationAudience::Principal(p(1));
-
-        assert!(!audience_subset(&claims, &cert));
-    }
-
-    #[test]
-    fn different_roles_are_not_audience_subset() {
-        let cert = DelegationAudience::Role(CanisterRole::new("project_instance"));
-        let claims = DelegationAudience::Role(CanisterRole::new("project_hub"));
-
-        assert!(!audience_subset(&claims, &cert));
-    }
-
-    #[test]
-    fn verifier_membership_accepts_matching_role() {
-        let audience = DelegationAudience::Role(CanisterRole::new("project_instance"));
-
-        assert!(verifier_is_in_audience(
-            p(9),
-            Some(&CanisterRole::new("project_instance")),
-            &audience
+    fn project_audience_is_subset_of_global_canic_audience() {
+        assert!(audience_subset(
+            &DelegationAudience::Project("demo".to_string()),
+            &DelegationAudience::Canic
         ));
-        assert!(!verifier_is_in_audience(
-            p(9),
-            Some(&CanisterRole::new("project_hub")),
-            &audience
+        assert!(!audience_subset(
+            &DelegationAudience::Canic,
+            &DelegationAudience::Project("demo".to_string())
         ));
     }
 
     #[test]
-    fn cert_role_hash_requires_exact_single_role_hash() {
-        let role = CanisterRole::new("project_instance");
-        let audience = DelegationAudience::Role(role.clone());
-        let expected = role_hash(&role).unwrap();
+    fn project_audience_requires_matching_local_project() {
+        assert!(audience_accepted(
+            Some("demo"),
+            &DelegationAudience::Project("demo".to_string())
+        ));
+        assert!(!audience_accepted(
+            Some("other"),
+            &DelegationAudience::Project("demo".to_string())
+        ));
+    }
 
-        validate_cert_role_hash(&audience, Some(expected)).unwrap();
+    #[test]
+    fn role_grants_require_canonical_order() {
         assert_eq!(
-            validate_cert_role_hash(&audience, None),
-            Err(AudienceError::RoleHashMismatch)
+            validate_role_grants(&[
+                grant("project_instance", &["upload"]),
+                grant("project_hub", &["upload"])
+            ]),
+            Err(AudienceError::NonCanonicalGrants)
         );
     }
 
     #[test]
-    fn principal_only_cert_requires_absent_role_hash() {
-        let audience = DelegationAudience::Principal(p(1));
+    fn role_grants_subset_checks_scopes_per_role() {
+        let parent = [
+            grant("project_hub", &["session", "upload"]),
+            grant("project_instance", &["upload"]),
+        ];
+        let child = [
+            grant("project_hub", &["upload"]),
+            grant("project_instance", &["upload"]),
+        ];
 
-        validate_cert_role_hash(&audience, None).unwrap();
-        assert_eq!(
-            validate_cert_role_hash(&audience, Some([1; 32])),
-            Err(AudienceError::RoleHashMismatch)
-        );
-    }
-
-    #[test]
-    fn audience_shape_rejects_anonymous_principal_audience() {
-        assert_eq!(
-            validate_audience_shape(&DelegationAudience::Principal(Principal::anonymous())),
-            Err(AudienceError::AnonymousPrincipal)
-        );
+        assert!(role_grants_subset(&child, &parent));
+        assert!(!role_grants_subset(
+            &[grant("project_instance", &["admin"])],
+            &parent
+        ));
     }
 }

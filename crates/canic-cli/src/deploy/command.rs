@@ -21,10 +21,6 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
         about: "Dry-run controller authority reconciliation",
     },
     DeploySubcommand {
-        name: "catalog",
-        about: "List or inspect known deployment targets",
-    },
-    DeploySubcommand {
         name: "external",
         about: "Build passive external lifecycle reports",
     },
@@ -45,79 +41,36 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
         about: "Register minimal deployment-target state",
     },
     DeploySubcommand {
-        name: "compare",
-        about: "Compare two deployment truth check artifacts",
-    },
-    DeploySubcommand {
         name: "check",
         about: "Print the local deployment truth check",
     },
     DeploySubcommand {
-        name: "diff",
-        about: "Print the local deployment diff JSON",
-    },
-    DeploySubcommand {
-        name: "inventory",
-        about: "Print the local deployment inventory JSON",
-    },
-    DeploySubcommand {
-        name: "plan",
-        about: "Print the local deployment plan JSON",
-    },
-    DeploySubcommand {
-        name: "report",
-        about: "Print the local deployment safety report JSON",
-    },
-    DeploySubcommand {
-        name: "resume-report",
-        about: "Print passive resume safety JSON from a receipt",
+        name: "inspect",
+        about: "Inspect raw deployment truth artifacts",
     },
 ];
 
 const DEPLOY_HELP_AFTER: &str = "\
 Examples:
-  canic deploy plan demo
-  canic deploy inventory demo
-  canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
-  canic deploy compare --left staging-check.json --right prod-check.json
-  canic deploy diff demo
-  canic deploy report demo
   canic deploy check demo
-  canic deploy catalog list
-  canic deploy catalog inspect demo-local
-  canic deploy authority check demo
-  canic deploy authority evidence demo
-  canic deploy authority report demo
-  canic deploy authority receipt demo
-  canic deploy external plan demo
-  canic deploy external check demo
-  canic deploy external handoff demo
-  canic deploy external proposals demo
-  canic deploy external pending demo
-  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
-  canic deploy external inspect consent --request external-consent.json
-  canic deploy external inspect verification-policy --request external-verification-policy.json
-  canic deploy external inspect verification-check --request external-verification-check.json
-  canic deploy external inspect completion --request external-completion.json
-  canic deploy external verify --request external-verification.json
-  canic deploy root inspect --request root-verification.json
-  canic deploy root verify demo-local --from-check deployment-check.json
-  canic deploy promote plan --request promotion-plan.json
-  canic deploy promote check --request promotion-check.json
-  canic deploy promote diff --request promotion-diff.json
+  canic deploy check demo --format text
+  canic deploy inspect plan demo
+  canic deploy inspect compare --left staging-check.json --right prod-check.json
+  canic deploy inspect catalog list
+  canic deploy inspect root --request root-verification.json
+  canic deploy inspect resume-report --receipt receipt.json demo
+  canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
   canic deploy install demo-local --plan promoted-plan.json
-  canic deploy promote inspect readiness --request promotion-readiness.json
-  canic deploy promote inspect artifact-identity --request promotion-artifacts.json
-  canic deploy promote inspect provenance --request promotion-provenance.json
-  canic deploy resume-report demo
-  canic deploy resume-report --receipt receipt.json demo
-  canic deploy check --profile fast demo
+  canic deploy authority check demo
+  canic deploy external plan demo
+  canic deploy promote plan --request promotion-plan.json
+  canic deploy root verify demo-local --from-check deployment-check.json
 
-Deployment truth commands are read-only checks. Plan-mediated deployment-target
-mutation flows through `canic deploy install <deployment> --plan <file>`.
-`canic install <fleet>` remains the fleet-template bootstrap entrypoint.
-Authority commands are dry-run reconciliation reports and do not mutate
-controller state.";
+Use `canic deploy inspect help` for raw plan, inventory, diff, report,
+comparison, local catalog, root-verification, and resume-safety JSON artifacts.
+Plan-mediated deployment-target mutation flows through `canic deploy install
+<deployment> --plan <file>`. `canic install <fleet>` remains the fleet-template
+bootstrap entrypoint.";
 
 pub fn deploy_command() -> ClapCommand {
     DEPLOY_COMMANDS
@@ -133,8 +86,16 @@ pub fn deploy_command() -> ClapCommand {
 }
 
 pub fn deploy_truth_leaf_command(name: &'static str, about: &'static str) -> ClapCommand {
+    deploy_truth_leaf_command_with_bin_name(name, format!("canic deploy {name}"), about)
+}
+
+pub(super) fn deploy_truth_leaf_command_with_bin_name(
+    name: &'static str,
+    bin_name: impl Into<String>,
+    about: &'static str,
+) -> ClapCommand {
     ClapCommand::new(name)
-        .bin_name(format!("canic deploy {name}"))
+        .bin_name(bin_name.into())
         .about(about)
         .disable_help_flag(true)
         .arg(

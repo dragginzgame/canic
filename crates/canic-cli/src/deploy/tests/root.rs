@@ -13,7 +13,7 @@ fn deploy_root_inspect_parses_request_and_text_format() {
         OsString::from("--format"),
         OsString::from("text"),
     ])
-    .expect("parse deploy root inspect");
+    .expect("parse deploy inspect root");
 
     assert_eq!(options.request, PathBuf::from("root-verification.json"));
     assert_eq!(options.format, output_format::RootOutputFormat::Text);
@@ -25,7 +25,7 @@ fn deploy_root_inspect_defaults_to_json() {
         OsString::from("--request"),
         OsString::from("root-verification.json"),
     ])
-    .expect("parse deploy root inspect");
+    .expect("parse deploy inspect root");
 
     assert_eq!(options.request, PathBuf::from("root-verification.json"));
     assert_eq!(options.format, output_format::RootOutputFormat::Json);
@@ -68,26 +68,16 @@ fn deploy_root_help_documents_passive_boundary() {
     let inspect_help = deploy_root::inspect_usage();
     let verify_help = deploy_root::verify_usage();
 
-    assert!(help.contains("Inspect or verify deployment-root evidence"));
-    assert!(help.contains("deployment-root scoped"));
-    assert!(help.contains("Verify records verified root"));
+    assert!(help.contains("Verify deployment-root state"));
+    assert!(help.contains("canic deploy inspect root"));
+    assert!(!help.contains("canic deploy root inspect"));
+    assert!(inspect_help.contains("Usage: canic deploy inspect root --request <file>"));
     assert!(inspect_help.contains("DeploymentRootVerificationRequestV1-shaped JSON"));
     assert!(inspect_help.contains("does not persist verified root state"));
     assert!(inspect_help.contains("EvidenceSatisfied means"));
     assert!(verify_help.contains("Verifies a registered deployment root"));
     assert!(verify_help.contains("not full deployment verification"));
     assert!(verify_help.contains("does not install"));
-}
-
-#[test]
-fn deploy_root_command_dispatches_inspect() {
-    assert_root_dispatches_leaf(
-        "inspect",
-        [
-            OsString::from("--request"),
-            OsString::from("root-verification.json"),
-        ],
-    );
 }
 
 #[test]
@@ -100,6 +90,25 @@ fn deploy_root_command_dispatches_verify() {
             OsString::from("deployment-check.json"),
         ],
     );
+}
+
+#[test]
+fn deploy_root_inspect_command_is_removed() {
+    let parsed = parse_subcommand(
+        deploy_command(),
+        [
+            OsString::from("root"),
+            OsString::from("inspect"),
+            OsString::from("--request"),
+            OsString::from("root-verification.json"),
+        ],
+    )
+    .expect("parse deploy root command")
+    .expect("root command");
+    assert_eq!(parsed.0, "root");
+
+    let result = parse_subcommand(deploy_root::command(), parsed.1);
+    std::assert_matches!(result, Err(_));
 }
 
 #[test]

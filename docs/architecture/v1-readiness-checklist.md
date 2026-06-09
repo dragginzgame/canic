@@ -98,8 +98,8 @@ canic evidence gate --policy <path> --manifest <path>
 Inspect deployment-target local state:
 
 ```text
-canic deploy catalog list
-canic deploy catalog inspect <deployment>
+canic deploy inspect catalog list
+canic deploy inspect catalog inspect <deployment>
 ```
 
 ## Expected Outputs
@@ -171,8 +171,8 @@ or live-verify the deployment.
 In a fresh checkout without deployment-target state:
 
 ```text
-canic deploy catalog list
-canic deploy catalog list --format json
+canic deploy inspect catalog list
+canic deploy inspect catalog list --format json
 ```
 
 should succeed with zero catalog entries and warnings explaining that no

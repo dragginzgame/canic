@@ -23,6 +23,16 @@ configured root principal + root public key -> root certificate -> shard signatu
 Source: `crates/canic-core/src/dto/auth.rs`
 
 ```rust
+pub enum DelegationAudience {
+    Canic,
+    Project(String),
+}
+
+pub struct DelegatedRoleGrant {
+    pub target: CanisterRole,
+    pub scopes: Vec<String>,
+}
+
 pub struct DelegationCert {
     pub version: u16,
     pub root_pid: Principal,
@@ -37,9 +47,8 @@ pub struct DelegationCert {
     pub issued_at: u64,
     pub expires_at: u64,
     pub max_token_ttl_secs: u64,
-    pub scopes: Vec<String>,
     pub aud: DelegationAudience,
-    pub verifier_role_hash: Option<[u8; 32]>,
+    pub grants: Vec<DelegatedRoleGrant>,
 }
 
 pub struct DelegatedTokenClaims {
@@ -50,7 +59,7 @@ pub struct DelegatedTokenClaims {
     pub issued_at: u64,
     pub expires_at: u64,
     pub aud: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
 }
 
@@ -65,9 +74,21 @@ pub struct AttestationKey {
 }
 ```
 
-Signed structures use `CanicAuthCanonical`. Delegated-token audience is
-singular: one verifier role or one verifier principal. Canonical scope vectors
-must already be sorted and duplicate-free.
+Signed structures use `CanicAuthCanonical`. Delegated-token audience is a
+stable acceptor boundary, not a permission list:
+
+- `Canic` is accepted by any Canic verifier.
+- `Project(project_id)` is accepted only by verifiers whose local project id
+  matches `project_id`.
+
+Role grants carry authority. Grant targets are canister roles, and grant scopes
+are the endpoint capabilities available to that role. Canonical grant vectors
+must already be sorted by role and duplicate-free. Scope vectors inside each
+grant must already be sorted and duplicate-free.
+
+The `version` fields are signed delegated-auth protocol epochs. Verifiers
+accept exactly the current epoch for certificates and token claims. They are not
+negotiation fields and do not imply backwards-compatible verification branches.
 
 ## Crypto Backend and Signing Rules
 
@@ -93,7 +114,7 @@ Delegated-token signing domains are defined in
    - delegated auth is enabled
    - root authority is the local canister
    - certificate TTL and token TTL policy
-   - audience shape and role-hash binding
+   - audience shape and bounded role grants
    - shard public-key hash and deterministic shard derivation binding
 3. Root signs the canonical certificate hash.
 4. Root returns a self-contained `DelegationProof`.
@@ -123,7 +144,7 @@ delegated-auth key config changes.
 1. Caller supplies replay metadata with a bounded TTL.
 2. Shard reserves a command-scoped replay receipt.
 3. Shard obtains or receives a `DelegationProof`.
-4. Shard validates audience, scope, and TTL attenuation.
+4. Shard validates audience, role-grant, and TTL attenuation.
 5. Shard reserves signing quota and cycle budget.
 6. Shard marks the delegated-token ECDSA effect before signing.
 7. Shard signs canonical token claims with its deterministic shard ECDSA path.
@@ -152,15 +173,16 @@ Checks enforced before authorization:
 - shard key binding matches configured key name and deterministic shard path
 - `hash(cert.shard_public_key_sec1) == cert.shard_key_hash`
 - shard token signature verifies under `cert.shard_public_key_sec1`
+- `claims.version` matches the delegated-auth protocol version
 - `claims.issuer_shard_pid == cert.shard_pid`
 - `claims.cert_hash == hash(cert)`
 - certificate and token time windows are valid
 - token does not outlive certificate or root token-TTL policy
 - `claims.aud` is a subset of `cert.aud`
-- `claims.scopes` is a subset of `cert.scopes`
-- local principal or configured local role is in `claims.aud`
-- role audiences match `cert.verifier_role_hash`
-- endpoint required scopes are present in `claims.scopes`
+- local project accepts both `claims.aud` and `cert.aud`
+- `claims.grants` is a subset of `cert.grants`
+- configured local role is present in `claims.grants`
+- endpoint required scopes are present in the grant for the local role
 - delegated session subject binding is enforced before replacing caller identity
 
 No verification step checks for local proof presence.

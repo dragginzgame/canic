@@ -68,9 +68,9 @@ pub enum DelegatedAuthMetricReason {
     CertNotYetValid,
     CertPolicy,
     Disabled,
+    GrantsNotSubset,
     InvalidState,
     IssuerShardPidMismatch,
-    LocalRoleHashMismatch,
     MissingLocalRole,
     Ok,
     RootKey,
@@ -82,11 +82,13 @@ pub enum DelegatedAuthMetricReason {
     ShardSignatureUnavailable,
     TokenAudienceRejected,
     TokenExpired,
+    TokenGrantRejected,
     TokenInvalidWindow,
     TokenIssuedBeforeCert,
     TokenNotYetValid,
     TokenOutlivesCert,
     TokenTtlExceeded,
+    TokenVersionMismatch,
 }
 
 impl DelegatedAuthMetricReason {
@@ -103,9 +105,9 @@ impl DelegatedAuthMetricReason {
             Self::CertNotYetValid => "cert_not_yet_valid",
             Self::CertPolicy => "cert_policy",
             Self::Disabled => "disabled",
+            Self::GrantsNotSubset => "grants_not_subset",
             Self::InvalidState => "invalid_state",
             Self::IssuerShardPidMismatch => "issuer_shard_pid_mismatch",
-            Self::LocalRoleHashMismatch => "local_role_hash_mismatch",
             Self::MissingLocalRole => "missing_local_role",
             Self::Ok => "ok",
             Self::RootKey => "root_key",
@@ -117,11 +119,13 @@ impl DelegatedAuthMetricReason {
             Self::ShardSignatureUnavailable => "shard_signature_unavailable",
             Self::TokenAudienceRejected => "token_audience_rejected",
             Self::TokenExpired => "token_expired",
+            Self::TokenGrantRejected => "token_grant_rejected",
             Self::TokenInvalidWindow => "token_invalid_window",
             Self::TokenIssuedBeforeCert => "token_issued_before_cert",
             Self::TokenNotYetValid => "token_not_yet_valid",
             Self::TokenOutlivesCert => "token_outlives_cert",
             Self::TokenTtlExceeded => "token_ttl_exceeded",
+            Self::TokenVersionMismatch => "token_version_mismatch",
         }
     }
 }

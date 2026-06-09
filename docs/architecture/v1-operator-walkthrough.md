@@ -158,15 +158,15 @@ deployment = "demo-staging"
 List deployment targets recorded in local deployment-target state:
 
 ```text
-canic deploy catalog list
-canic deploy catalog list --format json
+canic deploy inspect catalog list
+canic deploy inspect catalog list --format json
 ```
 
 Inspect one known deployment target:
 
 ```text
-canic deploy catalog inspect demo-staging
-canic deploy catalog inspect demo-staging --format json
+canic deploy inspect catalog inspect demo-staging
+canic deploy inspect catalog inspect demo-staging --format json
 ```
 
 The catalog reads only:
@@ -190,9 +190,9 @@ From a fleet directory, these checks should be safe because they do not query a
 live deployment or mutate project state:
 
 ```text
-canic deploy catalog list
-canic deploy catalog list --format json
-canic deploy catalog list --format json --output /tmp/canic-catalog-smoke.json
+canic deploy inspect catalog list
+canic deploy inspect catalog list --format json
+canic deploy inspect catalog list --format json --output /tmp/canic-catalog-smoke.json
 ```
 
 Expected behavior in a fresh checkout without deployment-target state:

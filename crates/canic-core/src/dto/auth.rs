@@ -15,8 +15,18 @@ pub enum SignatureAlgorithm {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationAudience {
-    Role(CanisterRole),
-    Principal(Principal),
+    Canic,
+    Project(String),
+}
+
+//
+// DelegatedRoleGrant
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedRoleGrant {
+    pub target: CanisterRole,
+    pub scopes: Vec<String>,
 }
 
 //
@@ -75,9 +85,8 @@ pub struct DelegationCert {
     pub issued_at: u64,
     pub expires_at: u64,
     pub max_token_ttl_secs: u64,
-    pub scopes: Vec<String>,
     pub aud: DelegationAudience,
-    pub verifier_role_hash: Option<[u8; 32]>,
+    pub grants: Vec<DelegatedRoleGrant>,
 }
 
 //
@@ -103,7 +112,7 @@ pub struct DelegatedTokenClaims {
     pub issued_at: u64,
     pub expires_at: u64,
     pub aud: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
 }
 
@@ -127,8 +136,8 @@ pub struct DelegationProofIssueRequest {
     #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
     pub shard_pid: Principal,
-    pub scopes: Vec<String>,
     pub aud: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub cert_ttl_secs: u64,
 }
 
@@ -143,7 +152,7 @@ pub struct DelegatedTokenIssueRequest {
     pub proof: DelegationProof,
     pub subject: Principal,
     pub aud: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_secs: u64,
     pub nonce: [u8; 16],
 }
@@ -158,7 +167,7 @@ pub struct DelegatedTokenMintRequest {
     pub metadata: Option<RootRequestMetadata>,
     pub subject: Principal,
     pub aud: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub token_ttl_secs: u64,
     pub cert_ttl_secs: u64,
     pub nonce: [u8; 16],

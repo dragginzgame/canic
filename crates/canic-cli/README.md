@@ -49,8 +49,8 @@ canic build <fleet> <role> --provenance artifacts/<role>-provenance.json
 canic deploy check <deployment> --format envelope-json
 canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
-canic deploy catalog list
-canic deploy catalog inspect <deployment>
+canic deploy inspect catalog list
+canic deploy inspect catalog inspect <deployment>
 canic nns subnet list
 canic nns node list
 ```
@@ -198,7 +198,7 @@ Diagnose the named fleet, replica reachability, saved config path, and root
 readiness:
 
 ```bash
-canic medic test
+canic info medic test
 ```
 
 For downstream projects that combine Canic commands with raw `icp` calls on a

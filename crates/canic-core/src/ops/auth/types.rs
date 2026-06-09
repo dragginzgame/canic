@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedToken, DelegationAudience, DelegationCert, DelegationProof,
+        DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert, DelegationProof,
         InternalInvocationProofPayloadV1, RoleAttestation,
     },
     ops::auth::delegated::mint::PreparedDelegatedToken,
@@ -15,7 +15,7 @@ pub struct SignDelegatedTokenInput {
     pub proof: DelegationProof,
     pub subject: Principal,
     pub audience: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_secs: u64,
     pub nonce: [u8; 16],
 }
@@ -26,7 +26,7 @@ pub struct SignDelegatedTokenInput {
 
 pub struct SignDelegationProofInput {
     pub audience: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub shard_pid: Principal,
     pub cert_ttl_secs: u64,
     pub max_token_ttl_secs: u64,

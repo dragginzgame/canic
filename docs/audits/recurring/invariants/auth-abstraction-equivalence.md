@@ -12,14 +12,14 @@ Current Canic auth surface:
   ingress argument
 - generated endpoint access dispatch routes through
   `access::auth::delegated_token_verified(...)`
-- delegated-token audience is singular:
-  `DelegationAudience::Role(CanisterRole)` or
-  `DelegationAudience::Principal(Principal)`
-- there is no plural `Roles`, `Principals`, or `RolesOrPrincipals` public
-  audience shape
-- role-bound tokens bind one verifier role hash; endpoint policy may accept
-  several roles through role-attestation predicates, but that is separate from
-  delegated-token audience
+- delegated-token audience is a stable acceptor boundary:
+  `DelegationAudience::Canic` or `DelegationAudience::Project(project_id)`
+- there are no verifier-role, verifier-principal, plural-role, or mixed
+  role/principal public audience shapes
+- signed role grants carry the local canister-role scopes authorized by the
+  token; endpoint policy may accept several protected caller roles through
+  role-attestation predicates, but that is separate from delegated-token
+  grants
 - public `canic::start!()` startup selection is metadata-driven and outside
   this auth-equivalence audit except where generated root/non-root endpoint
   bundles expose authenticated surfaces
@@ -42,7 +42,8 @@ Required properties:
 - canonical verifier usage
 - trust-chain checks
 - subject binding
-- singular audience binding
+- stable audience binding
+- local-role grant authorization
 - authorization ordering
 - failure semantics
 
@@ -79,8 +80,9 @@ use domain operation receipts rather than verifier-local token-use state.
 
 This audit must not treat endpoint role policy as delegated-token audience
 policy. A generated endpoint may accept callers from several roles using
-role-attestation predicates, but a delegated token remains bound to exactly one
-role audience or one principal audience.
+role-attestation predicates, but delegated-token audience still answers only
+which Canic/project boundary may accept the token. Delegated-token role grants
+answer what the token may do after that acceptance check passes.
 
 ## Run This Audit After
 
@@ -122,7 +124,7 @@ resolve_authenticated_identity
 delegated_token_verified
 AccessContext
 DelegationAudience
-verifier_role_hash
+DelegatedRoleGrant
 ```
 
 ### 2. Inspect Expansion or Equivalent Implementation
@@ -133,8 +135,8 @@ Confirm:
 
 - generated handlers route through canonical verification
 - no branch omits subject binding
-- no branch widens singular `DelegationAudience` into multi-role or mixed
-  role/principal token semantics
+- no branch widens `DelegationAudience` into role/principal token semantics
+- no branch authorizes from audience without checking the local-role grant
 - no convenience path weakens failure behavior
 - the generated `AccessContext` preserves separate transport-caller and
   authenticated-subject lanes
@@ -198,13 +200,16 @@ delegated session resolution tests.
 
 Audience-focused checks must also prove:
 
-- `DelegationAudience` is singular role-or-principal only
-- no `Roles`, `Principals`, or `RolesOrPrincipals` DTO remains
-- role audience verification uses the verifier-local role
-- principal audience verification uses the verifier-local principal
-- role/principal mixed cert-vs-token audience is rejected
+- `DelegationAudience` is `Canic` or `Project(project_id)` only
+- no verifier-role, verifier-principal, `Roles`, `Principals`, or
+  `RolesOrPrincipals` DTO remains
+- project audience verification uses the verifier-local project id
+- token audience must be a subset of cert audience
+- token grants must be a subset of cert grants
+- local canister role must be present in token grants before required-scope
+  checks pass
 - endpoint multi-role policy uses role-attestation predicates rather than
-  multi-role delegated-token audience
+  delegated-token audience
 
 ## Structural Hotspots
 
@@ -219,6 +224,7 @@ rg -l 'DelegationProof' crates canisters fleets -g '*.rs'
 rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters fleets -g '*.rs'
 rg -n 'RolesOrPrincipals|RoleAudienceMustBeSingular|DelegatedTokenAudience|Roles\\(|Principals\\(' crates docs canisters fleets -g '*.rs' -g '*.md'
 rg -n 'caller::has_role|caller::has_any_role|DelegationAudience::Role|DelegationAudience::Principal|verifier_role_hash' crates canisters fleets docs -g '*.rs' -g '*.md'
+rg -n 'DelegationAudience::Canic|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
 git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth.rs
 ```
 
@@ -230,8 +236,8 @@ git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access cr
 | `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | dispatch from abstraction evaluator to canonical auth verifier | High |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | canonical verifier behavior baseline | High |
 | `crates/canic-core/src/api/auth/session/mod.rs` | delegated session bootstrap | convenience path that must not replace endpoint auth semantics | Medium |
-| `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_matches_local_verifier`, `audiences_match` | singular role/principal audience validation and verifier binding | High |
-| `crates/canic-core/src/dto/auth.rs` | `DelegationAudience`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and singular-audience | Medium |
+| `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | Canic/project audience validation and local-role grant binding | High |
+| `crates/canic-core/src/dto/auth.rs` | `DelegationAudience`, `DelegatedRoleGrant`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and grant-authorized | Medium |
 | `crates/canic/src/macros/endpoints/wasm_store.rs` | `caller::has_role("root")` protected endpoints | role-attestation endpoint policy that must not be confused with delegated-token audience | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.

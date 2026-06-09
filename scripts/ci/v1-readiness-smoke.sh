@@ -107,7 +107,7 @@ main() {
     "$CANIC_BIN" fleet role inspect demo store > inspect-declared.txt
     "$CANIC_BIN" fleet role attach demo store --subnet prime > attach-store.txt
     "$CANIC_BIN" fleet role inspect demo store > inspect-attached.txt
-    "$CANIC_BIN" deploy catalog list --format json --output catalog.json
+    "$CANIC_BIN" deploy inspect catalog list --format json --output catalog.json
     "$CANIC_BIN" evidence gate \
         --policy policy.toml \
         --envelope envelope.json \

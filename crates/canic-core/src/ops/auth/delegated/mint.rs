@@ -1,11 +1,17 @@
 use super::{
-    audience::{AudienceError, audience_subset, validate_audience_shape},
+    audience::{
+        AudienceError, audience_subset, role_grants_subset, validate_audience_shape,
+        validate_role_grants,
+    },
     canonical::{CanonicalAuthError, cert_hash, claims_hash},
     cert_rules::DELEGATED_AUTH_VERSION,
 };
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationProof},
+    dto::auth::{
+        DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
+        DelegationProof,
+    },
 };
 use thiserror::Error;
 
@@ -13,7 +19,7 @@ pub struct MintDelegatedTokenInput<'a> {
     pub proof: &'a DelegationProof,
     pub subject: Principal,
     pub audience: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_secs: u64,
     pub nonce: [u8; 16],
     pub now_secs: u64,
@@ -42,8 +48,8 @@ pub enum MintDelegatedTokenError {
     TokenOutlivesCert,
     #[error("delegated auth token audience is not a subset of cert audience")]
     AudienceNotSubset,
-    #[error("delegated auth token scope rejected: {scope}")]
-    ScopeRejected { scope: String },
+    #[error("delegated auth token grants are not a subset of cert grants")]
+    GrantsNotSubset,
     #[cfg(test)]
     #[error("delegated auth shard signature failed: {0}")]
     SignFailed(String),
@@ -98,10 +104,13 @@ pub fn prepare_delegated_token(
     }
 
     validate_audience_shape(&input.audience)?;
+    validate_role_grants(&input.grants)?;
     if !audience_subset(&input.audience, &cert.aud) {
         return Err(MintDelegatedTokenError::AudienceNotSubset);
     }
-    verify_scopes(&input.scopes, &cert.scopes)?;
+    if !role_grants_subset(&input.grants, &cert.grants) {
+        return Err(MintDelegatedTokenError::GrantsNotSubset);
+    }
 
     let claims = DelegatedTokenClaims {
         version: DELEGATED_AUTH_VERSION,
@@ -111,7 +120,7 @@ pub fn prepare_delegated_token(
         issued_at: input.now_secs,
         expires_at,
         aud: input.audience,
-        scopes: input.scopes,
+        grants: input.grants,
         nonce: input.nonce,
     };
     let claims_hash = claims_hash(&claims)?;
@@ -135,17 +144,6 @@ pub fn finish_delegated_token(
     }
 }
 
-fn verify_scopes(subset: &[String], superset: &[String]) -> Result<(), MintDelegatedTokenError> {
-    for scope in subset {
-        if !superset.contains(scope) {
-            return Err(MintDelegatedTokenError::ScopeRejected {
-                scope: scope.clone(),
-            });
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,7 +153,7 @@ mod tests {
         },
         ids::CanisterRole,
         ops::auth::delegated::{
-            canonical::{public_key_hash, role_hash},
+            canonical::public_key_hash,
             verify::{VerifyDelegatedTokenInput, verify_delegated_token},
         },
     };
@@ -165,7 +163,6 @@ mod tests {
     }
 
     fn cert() -> DelegationCert {
-        let role = CanisterRole::new("project_instance");
         let shard_public_key_sec1 = vec![1, 2, 3];
         let shard_key_hash = public_key_hash(&shard_public_key_sec1);
 
@@ -186,9 +183,11 @@ mod tests {
             issued_at: 100,
             expires_at: 500,
             max_token_ttl_secs: 120,
-            scopes: vec!["read".to_string(), "write".to_string()],
-            aud: DelegationAudience::Role(role.clone()),
-            verifier_role_hash: Some(role_hash(&role).unwrap()),
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![
+                grant("project_hub", &["session", "upload"]),
+                grant("project_instance", &["read", "write"]),
+            ],
         }
     }
 
@@ -225,11 +224,18 @@ mod tests {
         MintDelegatedTokenInput {
             proof,
             subject: p(9),
-            audience: DelegationAudience::Role(CanisterRole::new("project_instance")),
-            scopes: vec!["read".to_string()],
+            audience: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["read"])],
             ttl_secs: 60,
             nonce: [7; 16],
             now_secs: 120,
+        }
+    }
+
+    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
+        DelegatedRoleGrant {
+            target: CanisterRole::owned(role.to_string()),
+            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
         }
     }
 
@@ -277,8 +283,8 @@ mod tests {
             VerifyDelegatedTokenInput {
                 token: &token,
                 root_trust: &trust,
-                local_principal: p(99),
                 local_role: Some(&role),
+                local_project: Some("test"),
                 ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                     max_cert_ttl_secs: 600,
                     max_token_ttl_secs: 120,
@@ -307,8 +313,8 @@ mod tests {
                 VerifyDelegatedTokenInput {
                     token,
                     root_trust: &trust,
-                    local_principal: p(99),
                     local_role: Some(&role),
+                    local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_secs: 600,
                         max_token_ttl_secs: 120,
@@ -323,19 +329,19 @@ mod tests {
     }
 
     #[test]
-    fn mutating_signed_scopes_fails_verifier_signature() {
+    fn mutating_signed_grants_fails_verifier_signature() {
         let (proof, trust) = signed_proof_for_local_root();
         let role = CanisterRole::new("project_instance");
         let mut token = mint_delegated_token(input(&proof), |hash| Ok(hash.to_vec())).unwrap();
-        token.claims.scopes = vec!["write".to_string()];
+        token.claims.grants = vec![grant("project_instance", &["write"])];
 
         assert_eq!(
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
                     root_trust: &trust,
-                    local_principal: p(99),
                     local_role: Some(&role),
+                    local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
                         max_cert_ttl_secs: 600,
                         max_token_ttl_secs: 120,
@@ -357,7 +363,7 @@ mod tests {
     fn mint_delegated_token_rejects_audience_expansion() {
         let proof = proof();
         let mut input = input(&proof);
-        input.audience = DelegationAudience::Role(CanisterRole::new("project_hub"));
+        input.audience = DelegationAudience::Project("other".to_string());
 
         assert_eq!(
             mint_delegated_token(input, |_| Ok(vec![])),
@@ -366,16 +372,14 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_rejects_scope_expansion() {
+    fn mint_delegated_token_rejects_grant_expansion() {
         let proof = proof();
         let mut input = input(&proof);
-        input.scopes = vec!["admin".to_string()];
+        input.grants = vec![grant("project_instance", &["admin"])];
 
         assert_eq!(
             mint_delegated_token(input, |_| Ok(vec![])),
-            Err(MintDelegatedTokenError::ScopeRejected {
-                scope: "admin".to_string(),
-            })
+            Err(MintDelegatedTokenError::GrantsNotSubset)
         );
     }
 

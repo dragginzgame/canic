@@ -4,6 +4,7 @@ mod check;
 mod command;
 mod compare;
 mod external;
+mod inspect;
 mod install;
 mod output_format;
 mod promote;
@@ -88,18 +89,12 @@ where
         }
         Some((command, args)) => match command.as_str() {
             "authority" => authority::run(args),
-            "catalog" => catalog::run(args),
             "external" => external::run(args),
+            "inspect" => inspect::run(args),
             "promote" => promote::run(args),
             "root" => root::run(args),
             "install" => install::run(args),
             "register" => register::run(args),
-            "compare" => compare::run(args),
-            "plan" => truth::run_plan(args),
-            "inventory" => truth::run_inventory(args),
-            "diff" => truth::run_diff(args),
-            "report" => truth::run_report(args),
-            "resume-report" => resume_report::run(args),
             "check" => check::run(args),
             _ => unreachable!("deploy dispatch command only defines known commands"),
         },

@@ -1,12 +1,13 @@
 use super::{
-    audience::{AudienceError, expected_role_hash_for_cert_audience},
+    audience::{AudienceError, validate_audience_shape, validate_role_grants},
     canonical::{CanonicalAuthError, cert_hash, public_key_hash},
     cert_rules::{CertRuleError, DELEGATED_AUTH_VERSION, DelegatedAuthTtlLimits},
 };
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegationAudience, DelegationCert, DelegationProof, ShardKeyBinding, SignatureAlgorithm,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof, ShardKeyBinding,
+        SignatureAlgorithm,
     },
 };
 use thiserror::Error;
@@ -22,8 +23,8 @@ pub struct IssueDelegationProofInput {
     pub issued_at: u64,
     pub cert_ttl_secs: u64,
     pub max_token_ttl_secs: u64,
-    pub scopes: Vec<String>,
     pub audience: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_limits: DelegatedAuthTtlLimits,
 }
 
@@ -45,10 +46,6 @@ pub enum IssueDelegationProofError {
     CertTtlZero,
     #[error("delegated auth cert expires_at overflow")]
     CertExpiresAtOverflow,
-    #[error("delegated auth cert scopes must not be empty")]
-    ScopesEmpty,
-    #[error("delegated auth cert scope is empty")]
-    ScopeEmpty,
     #[cfg(test)]
     #[error("delegated auth root signature failed: {0}")]
     SignFailed(String),
@@ -83,7 +80,8 @@ pub fn prepare_delegation_cert(
         return Err(IssueDelegationProofError::CertTtlZero);
     }
 
-    validate_scopes(&input.scopes)?;
+    validate_audience_shape(&input.audience)?;
+    validate_role_grants(&input.grants)?;
 
     let expires_at = input
         .issued_at
@@ -91,7 +89,6 @@ pub fn prepare_delegation_cert(
         .ok_or(IssueDelegationProofError::CertExpiresAtOverflow)?;
     let root_key_hash = public_key_hash(&input.root_public_key);
     let shard_key_hash = public_key_hash(&input.shard_public_key_sec1);
-    let verifier_role_hash = expected_role_hash_for_cert_audience(&input.audience)?;
 
     let cert = DelegationCert {
         version: DELEGATED_AUTH_VERSION,
@@ -107,9 +104,8 @@ pub fn prepare_delegation_cert(
         issued_at: input.issued_at,
         expires_at,
         max_token_ttl_secs: input.max_token_ttl_secs,
-        scopes: input.scopes,
         aud: input.audience,
-        verifier_role_hash,
+        grants: input.grants,
     };
 
     validate_cert_issuance_rules_for_built_cert(&cert, input.ttl_limits)?;
@@ -138,16 +134,6 @@ fn validate_cert_issuance_rules_for_built_cert(
     ttl_limits: DelegatedAuthTtlLimits,
 ) -> Result<(), CertRuleError> {
     super::cert_rules::validate_cert_issuance_rules(cert, ttl_limits, cert.root_pid)
-}
-
-fn validate_scopes(scopes: &[String]) -> Result<(), IssueDelegationProofError> {
-    if scopes.is_empty() {
-        return Err(IssueDelegationProofError::ScopesEmpty);
-    }
-    if scopes.iter().any(String::is_empty) {
-        return Err(IssueDelegationProofError::ScopeEmpty);
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -181,9 +167,16 @@ mod tests {
             issued_at: 100,
             cert_ttl_secs: 400,
             max_token_ttl_secs: 120,
-            scopes: vec!["read".to_string(), "write".to_string()],
-            audience: DelegationAudience::Role(CanisterRole::new("project_instance")),
+            audience: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["read", "write"])],
             ttl_limits: ttl_limits(),
+        }
+    }
+
+    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
+        DelegatedRoleGrant {
+            target: CanisterRole::owned(role.to_string()),
+            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
         }
     }
 
@@ -209,23 +202,21 @@ mod tests {
             issued.proof.cert.shard_key_hash,
             public_key_hash(&[20, 21, 22])
         );
-        assert_eq!(
-            issued.proof.cert.verifier_role_hash,
-            expected_role_hash_for_cert_audience(&issued.proof.cert.aud).unwrap()
-        );
         assert_eq!(issued.cert_hash, cert_hash(&issued.proof.cert).unwrap());
         assert_eq!(observed_hash, Some(issued.cert_hash));
         assert_eq!(issued.proof.root_sig, issued.cert_hash.to_vec());
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_empty_scopes() {
+    fn issue_delegation_proof_rejects_empty_grants() {
         let mut input = input();
-        input.scopes = vec![];
+        input.grants = vec![];
 
         assert_eq!(
             issue_delegation_proof(input, |hash| Ok(hash.to_vec())),
-            Err(IssueDelegationProofError::ScopesEmpty)
+            Err(IssueDelegationProofError::Audience(
+                AudienceError::GrantsEmpty
+            ))
         );
     }
 
@@ -246,10 +237,12 @@ mod tests {
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_invalid_role_audience() {
+    fn issue_delegation_proof_rejects_invalid_grant_role() {
         let mut input = input();
-        input.audience =
-            DelegationAudience::Role(CanisterRole::owned("ProjectInstance".to_string()));
+        input.grants = vec![DelegatedRoleGrant {
+            target: CanisterRole::owned("ProjectInstance".to_string()),
+            scopes: vec!["read".to_string()],
+        }];
 
         assert_eq!(
             issue_delegation_proof(input, |hash| Ok(hash.to_vec())),

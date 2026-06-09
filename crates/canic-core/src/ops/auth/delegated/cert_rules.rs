@@ -1,10 +1,15 @@
 use super::{
-    audience::{AudienceError, validate_cert_role_hash},
+    audience::{AudienceError, validate_audience_shape, validate_role_grants},
     canonical::public_key_hash,
 };
 use crate::{cdk::types::Principal, dto::auth::DelegationCert};
 use thiserror::Error;
 
+/// Signed delegated-auth protocol epoch.
+///
+/// Verifiers accept exactly this value for both certs and token claims. Do not
+/// add compatibility branches for older epochs; bump this when delegated-token
+/// semantics intentionally hard-cut.
 pub const DELEGATED_AUTH_VERSION: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -94,7 +99,8 @@ pub fn validate_cert_issuance_rules(
         });
     }
 
-    validate_cert_role_hash(&cert.aud, cert.verifier_role_hash)?;
+    validate_audience_shape(&cert.aud)?;
+    validate_role_grants(&cert.grants)?;
 
     if public_key_hash(&cert.shard_public_key_sec1) != cert.shard_key_hash {
         return Err(CertRuleError::ShardPublicKeyHashMismatch);
@@ -107,9 +113,8 @@ pub fn validate_cert_issuance_rules(
 mod tests {
     use super::*;
     use crate::{
-        dto::auth::{DelegationAudience, ShardKeyBinding, SignatureAlgorithm},
+        dto::auth::{DelegatedRoleGrant, DelegationAudience, ShardKeyBinding, SignatureAlgorithm},
         ids::CanisterRole,
-        ops::auth::delegated::canonical::role_hash,
     };
 
     fn p(id: u8) -> Principal {
@@ -145,9 +150,11 @@ mod tests {
             issued_at: 100,
             expires_at: 500,
             max_token_ttl_secs: 120,
-            scopes: vec!["read".to_string()],
-            aud: DelegationAudience::Role(role.clone()),
-            verifier_role_hash: Some(role_hash(&role).unwrap()),
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![DelegatedRoleGrant {
+                target: role,
+                scopes: vec!["read".to_string()],
+            }],
         }
     }
 
@@ -214,13 +221,13 @@ mod tests {
     }
 
     #[test]
-    fn cert_rules_enforce_role_hash_binding() {
+    fn cert_rules_enforce_role_grant_shape() {
         let mut cert = sample_cert();
-        cert.verifier_role_hash = Some([1; 32]);
+        cert.grants = Vec::new();
 
         assert_eq!(
             validate_cert_issuance_rules(&cert, limits(), p(1)),
-            Err(CertRuleError::Audience(AudienceError::RoleHashMismatch))
+            Err(CertRuleError::Audience(AudienceError::GrantsEmpty))
         );
     }
 

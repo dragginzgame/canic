@@ -66,7 +66,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("    deploy"));
     assert!(plain.contains("Manage Canic fleets and roles"));
     assert!(plain.contains("Inspect cached NNS registry data"));
-    assert!(plain.contains("Inspect, register, and plan deployments"));
+    assert!(plain.contains("Check, inspect, register, and install deployments"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
     assert!(!plain.contains("Inspect cached IC network subnet metadata"));
     assert!(!plain.contains("Inspect and refresh the IC subnet catalog"));
@@ -107,10 +107,19 @@ fn command_family_help_returns_ok() {
         &["cycles", "topup", "help"],
         &["deploy", "help"],
         &["deploy", "check", "help"],
-        &["deploy", "diff", "help"],
-        &["deploy", "inventory", "help"],
-        &["deploy", "plan", "help"],
-        &["deploy", "report", "help"],
+        &["deploy", "inspect", "help"],
+        &["deploy", "inspect", "diff", "help"],
+        &["deploy", "inspect", "inventory", "help"],
+        &["deploy", "inspect", "plan", "help"],
+        &["deploy", "inspect", "report", "help"],
+        &["deploy", "inspect", "compare", "help"],
+        &["deploy", "inspect", "catalog", "help"],
+        &["deploy", "inspect", "catalog", "list", "help"],
+        &["deploy", "inspect", "catalog", "inspect", "help"],
+        &["deploy", "inspect", "root", "help"],
+        &["deploy", "inspect", "resume-report", "help"],
+        &["deploy", "root", "help"],
+        &["deploy", "root", "verify", "help"],
         &["info", "help"],
         &["info", "list", "help"],
         &["info", "cycles", "help"],
@@ -520,6 +529,7 @@ fn deploy_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("deploy"),
+            OsString::from("inspect"),
             OsString::from("diff"),
             OsString::from("--version")
         ])
@@ -528,6 +538,7 @@ fn deploy_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("deploy"),
+            OsString::from("inspect"),
             OsString::from("inventory"),
             OsString::from("--version")
         ])
@@ -536,6 +547,7 @@ fn deploy_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("deploy"),
+            OsString::from("inspect"),
             OsString::from("plan"),
             OsString::from("--version")
         ])
@@ -544,11 +556,34 @@ fn deploy_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("deploy"),
+            OsString::from("inspect"),
             OsString::from("report"),
             OsString::from("--version")
         ])
         .is_ok()
     );
+}
+
+#[test]
+fn deploy_raw_artifact_top_level_leaves_are_removed() {
+    for leaf in [
+        "catalog",
+        "compare",
+        "diff",
+        "inventory",
+        "plan",
+        "report",
+        "resume-report",
+    ] {
+        std::assert_matches!(
+            run([
+                OsString::from("deploy"),
+                OsString::from(leaf),
+                OsString::from("help")
+            ]),
+            Err(CliError::Deploy(_))
+        );
+    }
 }
 
 #[test]
@@ -799,13 +834,33 @@ fn global_network_is_forwarded_to_nns_subnet_namespace() {
 #[test]
 fn global_network_is_forwarded_to_deploy() {
     let mut tail = vec![OsString::from("check"), OsString::from("demo")];
-    let mut diff_tail = vec![OsString::from("diff"), OsString::from("demo")];
+    let mut diff_tail = vec![
+        OsString::from("inspect"),
+        OsString::from("diff"),
+        OsString::from("demo"),
+    ];
     let mut install_tail = vec![OsString::from("install"), OsString::from("demo")];
-    let mut inventory_tail = vec![OsString::from("inventory"), OsString::from("demo")];
-    let mut plan_tail = vec![OsString::from("plan"), OsString::from("demo")];
+    let mut inventory_tail = vec![
+        OsString::from("inspect"),
+        OsString::from("inventory"),
+        OsString::from("demo"),
+    ];
+    let mut plan_tail = vec![
+        OsString::from("inspect"),
+        OsString::from("plan"),
+        OsString::from("demo"),
+    ];
     let mut register_tail = vec![OsString::from("register"), OsString::from("demo")];
-    let mut report_tail = vec![OsString::from("report"), OsString::from("demo")];
-    let mut resume_tail = vec![OsString::from("resume-report"), OsString::from("demo")];
+    let mut report_tail = vec![
+        OsString::from("inspect"),
+        OsString::from("report"),
+        OsString::from("demo"),
+    ];
+    let mut resume_tail = vec![
+        OsString::from("inspect"),
+        OsString::from("resume-report"),
+        OsString::from("demo"),
+    ];
     let mut family_tail = Vec::new();
 
     apply_global_network("deploy", &mut tail, Some("ic".to_string()));
@@ -830,6 +885,7 @@ fn global_network_is_forwarded_to_deploy() {
     assert_eq!(
         diff_tail,
         vec![
+            OsString::from("inspect"),
             OsString::from("diff"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
@@ -848,6 +904,7 @@ fn global_network_is_forwarded_to_deploy() {
     assert_eq!(
         inventory_tail,
         vec![
+            OsString::from("inspect"),
             OsString::from("inventory"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
@@ -857,6 +914,7 @@ fn global_network_is_forwarded_to_deploy() {
     assert_eq!(
         plan_tail,
         vec![
+            OsString::from("inspect"),
             OsString::from("plan"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
@@ -875,6 +933,7 @@ fn global_network_is_forwarded_to_deploy() {
     assert_eq!(
         report_tail,
         vec![
+            OsString::from("inspect"),
             OsString::from("report"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
@@ -884,6 +943,7 @@ fn global_network_is_forwarded_to_deploy() {
     assert_eq!(
         resume_tail,
         vec![
+            OsString::from("inspect"),
             OsString::from("resume-report"),
             OsString::from("demo"),
             OsString::from(INTERNAL_NETWORK_OPTION),
@@ -906,6 +966,8 @@ fn global_network_is_forwarded_to_nested_deploy_network_leaves() {
         &["external", "pending", "demo"],
         &["external", "plan", "demo"],
         &["external", "proposals", "demo"],
+        &["inspect", "catalog", "list"],
+        &["inspect", "catalog", "inspect", "demo"],
         &["root", "verify", "demo"],
     ] {
         let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
@@ -921,7 +983,10 @@ fn global_network_is_forwarded_to_nested_deploy_network_leaves() {
 #[test]
 fn global_network_is_not_forwarded_to_request_only_deploy_leaves() {
     for raw_tail in [
-        &["compare", "--left", "a.json", "--right", "b.json"][..],
+        &[
+            "inspect", "compare", "--left", "a.json", "--right", "b.json",
+        ][..],
+        &["inspect", "root", "--request", "request.json"],
         &["external", "verify", "--request", "request.json"],
         &[
             "external",
@@ -931,7 +996,6 @@ fn global_network_is_not_forwarded_to_request_only_deploy_leaves() {
             "request.json",
         ],
         &["promote", "plan", "--request", "request.json"],
-        &["root", "inspect", "--request", "request.json"],
     ] {
         let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
         let original = tail.clone();

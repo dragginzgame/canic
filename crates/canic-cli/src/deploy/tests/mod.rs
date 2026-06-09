@@ -5,6 +5,7 @@ mod deploy_check;
 mod external_builders;
 mod external_commands;
 mod fixtures;
+mod inspect;
 mod install;
 mod promote;
 mod register;

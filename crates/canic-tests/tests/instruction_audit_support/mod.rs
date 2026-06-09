@@ -32,7 +32,7 @@ use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, create_user_shard, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe, install_standalone_canister, issue_delegated_token,
-    request_root_delegation_provision,
+    request_root_delegation_provision, role_grant,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
 use ic_testkit::pic::Pic;

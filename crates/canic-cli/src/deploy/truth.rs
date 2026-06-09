@@ -1,6 +1,6 @@
 use super::{
-    DeployCommandError, DeployTruthOptions, deploy_truth_leaf_command, load_deployment_check,
-    print_json,
+    DeployCommandError, DeployTruthOptions, command::deploy_truth_leaf_command_with_bin_name,
+    load_deployment_check, print_json,
 };
 use crate::{
     cli::{clap::render_usage, help::print_help_or_version},
@@ -19,26 +19,26 @@ struct TruthCommand {
 
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
-  canic deploy plan demo
-  canic --network local deploy plan --profile fast demo
+  canic deploy inspect plan demo
+  canic --network local deploy inspect plan --profile fast demo
 
 Prints the local DeploymentPlanV1 JSON without installing or mutating state.";
 const DEPLOY_INVENTORY_HELP_AFTER: &str = "\
 Examples:
-  canic deploy inventory demo
-  canic --network local deploy inventory --profile fast demo
+  canic deploy inspect inventory demo
+  canic --network local deploy inspect inventory --profile fast demo
 
 Prints the local DeploymentInventoryV1 JSON without installing or mutating state.";
 const DEPLOY_DIFF_HELP_AFTER: &str = "\
 Examples:
-  canic deploy diff demo
-  canic --network local deploy diff --profile fast demo
+  canic deploy inspect diff demo
+  canic --network local deploy inspect diff --profile fast demo
 
 Prints the local DeploymentDiffV1 JSON without installing or mutating state.";
 const DEPLOY_REPORT_HELP_AFTER: &str = "\
 Examples:
-  canic deploy report demo
-  canic --network local deploy report --profile fast demo
+  canic deploy inspect report demo
+  canic --network local deploy inspect report --profile fast demo
 
 Prints the local SafetyReportV1 JSON without installing or mutating state.";
 
@@ -130,7 +130,12 @@ pub(super) fn report_command() -> ClapCommand {
 }
 
 fn truth_command(spec: TruthCommand) -> ClapCommand {
-    deploy_truth_leaf_command(spec.name, spec.about).after_help(spec.help_after)
+    deploy_truth_leaf_command_with_bin_name(
+        spec.name,
+        format!("canic deploy inspect {}", spec.name),
+        spec.about,
+    )
+    .after_help(spec.help_after)
 }
 
 pub(super) fn plan_usage() -> String {

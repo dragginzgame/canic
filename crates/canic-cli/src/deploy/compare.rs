@@ -18,8 +18,8 @@ use std::{ffi::OsString, path::PathBuf};
 
 const DEPLOY_COMPARE_HELP_AFTER: &str = "\
 Examples:
-  canic deploy compare --left staging-check.json --right prod-check.json
-  canic deploy compare --left staging-check.json --right prod-check.json --format text
+  canic deploy inspect compare --left staging-check.json --right prod-check.json
+  canic deploy inspect compare --left staging-check.json --right prod-check.json --format text
 
 Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
 state, install code, or mutate deployments. Each input check's embedded
@@ -121,10 +121,10 @@ impl DeployCompareOptions {
 
 pub(super) fn command() -> ClapCommand {
     ClapCommand::new("compare")
-        .bin_name("canic deploy compare")
+        .bin_name("canic deploy inspect compare")
         .about("Compare two deployment truth check artifacts")
         .disable_help_flag(true)
-        .override_usage("canic deploy compare --left <file> --right <file>")
+        .override_usage("canic deploy inspect compare --left <file> --right <file>")
         .arg(input_file_arg(
             LEFT_ARG,
             "Left DeploymentCheckV1 JSON artifact",

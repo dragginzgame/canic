@@ -48,8 +48,8 @@ impl AuthOps {
             issued_at: input.issued_at,
             cert_ttl_secs: input.cert_ttl_secs,
             max_token_ttl_secs: input.max_token_ttl_secs,
-            scopes: input.scopes,
             audience: input.audience,
+            grants: input.grants,
             ttl_limits: DelegatedAuthTtlLimits {
                 max_cert_ttl_secs: input.max_cert_ttl_secs,
                 max_token_ttl_secs: input.max_token_ttl_secs,

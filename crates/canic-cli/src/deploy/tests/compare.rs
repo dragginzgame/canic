@@ -1,4 +1,5 @@
 use super::super::compare as deploy_compare;
+use super::super::inspect as deploy_inspect;
 use super::super::output_format::CompareOutputFormat;
 use super::fixtures::*;
 use super::*;
@@ -71,18 +72,24 @@ fn deploy_compare_help_documents_passive_artifact_scope() {
 }
 
 #[test]
-fn deploy_compare_command_dispatches_compare() {
-    let mut args = vec![OsString::from("compare")];
+fn deploy_inspect_compare_command_dispatches_compare() {
+    let mut args = vec![OsString::from("inspect"), OsString::from("compare")];
     args.extend(compare_required_args());
     let parsed = parse_subcommand(deploy_command(), args)
-        .expect("parse deploy compare")
+        .expect("parse deploy inspect")
+        .expect("inspect command");
+
+    assert_eq!(parsed.0, "inspect");
+
+    let nested = parse_subcommand(deploy_inspect::command(), parsed.1)
+        .expect("parse deploy inspect compare")
         .expect("compare command");
 
-    assert_eq!(parsed.0, "compare");
-    assert_eq!(parsed.1, compare_required_args());
+    assert_eq!(nested.0, "compare");
+    assert_eq!(nested.1, compare_required_args());
 
     let options =
-        deploy_compare::DeployCompareOptions::parse(parsed.1).expect("parse compare options");
+        deploy_compare::DeployCompareOptions::parse(nested.1).expect("parse compare options");
     assert_eq!(options.left, PathBuf::from("staging-check.json"));
     assert_eq!(options.right, PathBuf::from("prod-check.json"));
 }

@@ -81,7 +81,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "deploy",
-        about: "Inspect, register, and plan deployments",
+        about: "Check, inspect, register, and install deployments",
         scope: CommandScope::Deployment,
     },
     CommandSpec {

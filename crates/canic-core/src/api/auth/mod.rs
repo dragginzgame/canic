@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            AttestationKeySet, DelegatedToken, DelegatedTokenIssueRequest,
+            AttestationKeySet, DelegatedRoleGrant, DelegatedToken, DelegatedTokenIssueRequest,
             DelegatedTokenMintRequest, DelegationAudience, DelegationCert, DelegationProof,
             DelegationProofIssueRequest, InternalInvocationProofRequest, RoleAttestationRequest,
             ShardKeyBinding, SignatureAlgorithm, SignedInternalInvocationProofV1,
@@ -214,8 +214,8 @@ impl AuthApi {
         let proof = Self::request_delegation(DelegationProofIssueRequest {
             metadata: Some(metadata),
             shard_pid: IcOps::canister_self(),
-            scopes: request.scopes.clone(),
             aud: request.aud.clone(),
+            grants: request.grants.clone(),
             cert_ttl_secs: request.cert_ttl_secs,
         })
         .await
@@ -227,7 +227,7 @@ impl AuthApi {
             metadata: None,
             subject: request.subject,
             aud: request.aud,
-            scopes: request.scopes,
+            grants: request.grants,
             ttl_secs: request.token_ttl_secs,
             nonce: request.nonce,
             proof,
@@ -295,7 +295,7 @@ impl AuthApi {
         let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
         let prepared = match AuthOps::prepare_delegation_proof(SignDelegationProofInput {
             audience: request.aud,
-            scopes: request.scopes,
+            grants: request.grants,
             shard_pid: request.shard_pid,
             cert_ttl_secs: request.cert_ttl_secs,
             max_token_ttl_secs,
@@ -396,7 +396,7 @@ impl AuthApi {
             proof: request.proof,
             subject: request.subject,
             audience: request.aud,
-            scopes: request.scopes,
+            grants: request.grants,
             ttl_secs: request.ttl_secs,
             nonce: request.nonce,
         }) {
@@ -728,11 +728,8 @@ impl AuthApi {
     ) -> [u8; 32] {
         let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
         hasher.hash_principal(&request.shard_pid);
-        hasher.hash_u64(request.scopes.len() as u64);
-        for scope in &request.scopes {
-            hasher.hash_str(scope);
-        }
         Self::hash_delegation_audience(&mut hasher, &request.aud);
+        Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.cert_ttl_secs);
         hasher.finish()
     }
@@ -745,7 +742,7 @@ impl AuthApi {
         let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
         hasher.hash_principal(&request.subject);
         Self::hash_delegation_audience(&mut hasher, &request.aud);
-        Self::hash_string_vec(&mut hasher, &request.scopes);
+        Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.token_ttl_secs);
         hasher.hash_u64(request.cert_ttl_secs);
         hasher.hash_bytes(&request.nonce);
@@ -761,7 +758,7 @@ impl AuthApi {
         Self::hash_delegation_proof(&mut hasher, &request.proof);
         hasher.hash_principal(&request.subject);
         Self::hash_delegation_audience(&mut hasher, &request.aud);
-        Self::hash_string_vec(&mut hasher, &request.scopes);
+        Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.ttl_secs);
         hasher.hash_bytes(&request.nonce);
         hasher.finish()
@@ -769,14 +766,21 @@ impl AuthApi {
 
     fn hash_delegation_audience(hasher: &mut ReplayPayloadHasher, aud: &DelegationAudience) {
         match aud {
-            DelegationAudience::Role(role) => {
-                hasher.hash_str("role");
-                hasher.hash_role(role);
+            DelegationAudience::Canic => {
+                hasher.hash_str("canic");
             }
-            DelegationAudience::Principal(principal) => {
-                hasher.hash_str("principal");
-                hasher.hash_principal(principal);
+            DelegationAudience::Project(project) => {
+                hasher.hash_str("project");
+                hasher.hash_str(project);
             }
+        }
+    }
+
+    fn hash_delegated_role_grants(hasher: &mut ReplayPayloadHasher, grants: &[DelegatedRoleGrant]) {
+        hasher.hash_u64(grants.len() as u64);
+        for grant in grants {
+            hasher.hash_role(&grant.target);
+            Self::hash_string_vec(hasher, &grant.scopes);
         }
     }
 
@@ -799,15 +803,8 @@ impl AuthApi {
         hasher.hash_u64(cert.issued_at);
         hasher.hash_u64(cert.expires_at);
         hasher.hash_u64(cert.max_token_ttl_secs);
-        Self::hash_string_vec(hasher, &cert.scopes);
         Self::hash_delegation_audience(hasher, &cert.aud);
-        match cert.verifier_role_hash {
-            Some(hash) => {
-                hasher.hash_bool(true);
-                hasher.hash_bytes(&hash);
-            }
-            None => hasher.hash_bool(false),
-        }
+        Self::hash_delegated_role_grants(hasher, &cert.grants);
     }
 
     fn hash_signature_algorithm(hasher: &mut ReplayPayloadHasher, alg: SignatureAlgorithm) {
@@ -1328,9 +1325,10 @@ mod tests {
         cdk::types::Principal,
         dto::{
             auth::{
-                DelegatedToken, DelegatedTokenClaims, DelegatedTokenIssueRequest,
-                DelegatedTokenMintRequest, DelegationAudience, DelegationCert, DelegationProof,
-                DelegationProofIssueRequest, ShardKeyBinding, SignatureAlgorithm,
+                DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims,
+                DelegatedTokenIssueRequest, DelegatedTokenMintRequest, DelegationAudience,
+                DelegationCert, DelegationProof, DelegationProofIssueRequest, ShardKeyBinding,
+                SignatureAlgorithm,
             },
             error::ErrorCode,
             rpc::RootRequestMetadata,
@@ -1356,9 +1354,16 @@ mod tests {
         DelegationProofIssueRequest {
             metadata: Some(meta(metadata_id, 60)),
             shard_pid: p(2),
-            scopes: vec!["canic.verify".to_string()],
-            aud: DelegationAudience::Principal(p(3)),
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["canic.verify"])],
             cert_ttl_secs: 60,
+        }
+    }
+
+    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
+        DelegatedRoleGrant {
+            target: crate::ids::CanisterRole::owned(role.to_string()),
+            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
         }
     }
 
@@ -1388,9 +1393,8 @@ mod tests {
                 issued_at: 10,
                 expires_at: 100,
                 max_token_ttl_secs: 60,
-                scopes: vec!["canic.verify".to_string()],
-                aud: DelegationAudience::Principal(p(3)),
-                verifier_role_hash: None,
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![grant("project_instance", &["canic.verify"])],
             },
             root_sig: vec![7; 64],
         }
@@ -1400,8 +1404,8 @@ mod tests {
         DelegatedTokenMintRequest {
             metadata: Some(meta(metadata_id, 60)),
             subject: p(8),
-            aud: DelegationAudience::Principal(p(3)),
-            scopes: vec!["canic.verify".to_string()],
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["canic.verify"])],
             token_ttl_secs: 30,
             cert_ttl_secs: 60,
             nonce: [9; 16],
@@ -1413,8 +1417,8 @@ mod tests {
             metadata: Some(meta(metadata_id, 60)),
             proof: delegation_proof(),
             subject: p(8),
-            aud: DelegationAudience::Principal(p(3)),
-            scopes: vec!["canic.verify".to_string()],
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["canic.verify"])],
             ttl_secs: 30,
             nonce: [9; 16],
         }
@@ -1429,8 +1433,8 @@ mod tests {
                 cert_hash: [11; 32],
                 issued_at: 20,
                 expires_at: 50,
-                aud: DelegationAudience::Principal(p(3)),
-                scopes: vec!["canic.verify".to_string()],
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![grant("project_instance", &["canic.verify"])],
                 nonce: [nonce_byte; 16],
             },
             proof: delegation_proof(),

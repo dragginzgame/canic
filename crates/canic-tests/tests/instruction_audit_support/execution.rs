@@ -315,13 +315,13 @@ fn prepare_scenario(
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
             let subject = Principal::from_slice(&[45; 29]);
             let provision =
-                request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, target_pid);
+                request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, TEST);
             let token = issue_delegated_token(
                 &setup.pic,
                 shard_pid,
                 subject,
-                DelegationAudience::Principal(target_pid),
-                vec![cap::VERIFY.to_string()],
+                DelegationAudience::Project("test".to_string()),
+                vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
                 provision.cert.max_token_ttl_secs,
                 provision
                     .cert

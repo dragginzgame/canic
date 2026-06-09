@@ -22,7 +22,8 @@ The canonical boundary must perform or invoke verification stages for:
 
 - token signature validation
 - trust-chain validation
-- singular audience verification
+- stable audience verification
+- local-role grant authorization
 - subject-caller binding
 - required-scope validation
 - freshness / expiry verification
@@ -120,8 +121,8 @@ Confirm:
 - delegated-token verification remains bearer-token verification; domain replay
   protection must live in command operation receipts, not verifier-local token
   use state
-- no endpoint path accepts legacy plural role audience DTOs as delegated-token
-  endpoint audience
+- no endpoint path accepts role/principal audience DTOs or compatibility shims
+  as delegated-token endpoint audience
 - protected internal role predicates require root-signed internal invocation
   proof verification before handler execution
 
@@ -195,8 +196,11 @@ Pressure score guidance:
   authorization
 - endpoint macro accepting authenticated endpoints without a first
   `DelegatedToken` argument
-- endpoint auth accepting `RolesOrPrincipals`, `DelegationAudience::Roles`, or
-  any other plural-role token audience as canonical delegated-token audience
+- endpoint auth accepting `RolesOrPrincipals`, `DelegationAudience::Roles`,
+  `DelegationAudience::Role`, `DelegationAudience::Principal`, or any other
+  role/principal token audience as canonical delegated-token audience
+- endpoint auth authorizing from audience without checking the signed local-role
+  grant
 - protected internal `caller::has_role(...)` / `caller::has_any_role(...)`
   endpoints reaching handlers without `verify_internal_invocation_proof`
 

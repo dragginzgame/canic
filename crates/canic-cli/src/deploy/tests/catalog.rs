@@ -1,4 +1,5 @@
 use super::super::catalog as deploy_catalog;
+use super::super::inspect as deploy_inspect;
 use super::super::output_format::CatalogOutputFormat;
 use super::fixtures::*;
 use super::*;
@@ -58,6 +59,8 @@ fn deploy_catalog_help_documents_passive_deployment_target_scope() {
     let inspect_help = deploy_catalog::inspect_usage();
 
     assert!(help.contains("deployment targets recorded under .canic/<network>/deployments"));
+    assert!(help.contains("canic deploy inspect catalog list"));
+    assert!(!help.contains("canic deploy catalog list"));
     assert!(help.contains("do not query"));
     assert!(help.contains("infer deployments from fleet-template names"));
     assert!(list_help.contains("--format <text|json>"));
@@ -90,15 +93,20 @@ fn assert_catalog_dispatches_leaf<const N: usize>(command: &'static str, args: [
     let expected_args = args.to_vec();
     let parsed = parse_subcommand(
         deploy_command(),
-        std::iter::once(OsString::from("catalog"))
+        std::iter::once(OsString::from("inspect"))
+            .chain(std::iter::once(OsString::from("catalog")))
             .chain(std::iter::once(OsString::from(command)))
             .chain(args),
     )
-    .expect("parse deploy catalog")
-    .expect("catalog command");
+    .expect("parse deploy inspect catalog")
+    .expect("inspect command");
 
-    assert_eq!(parsed.0, "catalog");
-    let nested = parse_subcommand(deploy_catalog::command(), parsed.1)
+    assert_eq!(parsed.0, "inspect");
+    let inspect = parse_subcommand(deploy_inspect::command(), parsed.1)
+        .expect("parse nested inspect")
+        .expect("catalog command");
+    assert_eq!(inspect.0, "catalog");
+    let nested = parse_subcommand(deploy_catalog::command(), inspect.1)
         .expect("parse nested catalog")
         .expect("catalog leaf command");
     assert_eq!(nested.0, command);

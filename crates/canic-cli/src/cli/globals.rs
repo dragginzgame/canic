@@ -174,18 +174,20 @@ fn nns_leaf_accepts_global_network(tail: &[OsString]) -> bool {
 fn deploy_leaf_accepts_global_network(tail: &[OsString]) -> bool {
     let first = tail.first().and_then(|arg| arg.to_str());
     let second = tail.get(1).and_then(|arg| arg.to_str());
+    let third = tail.get(2).and_then(|arg| arg.to_str());
 
     match first {
-        Some(
-            "check" | "diff" | "install" | "inventory" | "plan" | "register" | "report"
-            | "resume-report",
-        ) => true,
-        Some("catalog") => matches!(second, Some("inspect" | "list")),
+        Some("check" | "install" | "register") => true,
         Some("authority") => matches!(second, Some("check" | "evidence" | "receipt" | "report")),
         Some("external") => matches!(
             second,
             Some("check" | "critical-fix" | "handoff" | "pending" | "plan" | "proposals")
         ),
+        Some("inspect") => match second {
+            Some("catalog") => matches!(third, Some("inspect" | "list")),
+            Some("diff" | "inventory" | "plan" | "report" | "resume-report") => true,
+            _ => false,
+        },
         Some("root") => second == Some("verify"),
         _ => false,
     }

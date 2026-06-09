@@ -50,7 +50,7 @@ impl AuthOps {
             proof: &input.proof,
             subject: input.subject,
             audience: input.audience,
-            scopes: input.scopes,
+            grants: input.grants,
             ttl_secs: input.ttl_secs,
             nonce: input.nonce,
             now_secs: IcOps::now_secs(),
@@ -131,13 +131,20 @@ impl AuthOps {
                 return Err(err);
             }
         };
+        let local_project = match ConfigOps::get() {
+            Ok(cfg) => cfg.fleet_name().map(ToOwned::to_owned),
+            Err(err) => {
+                DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
+                return Err(err);
+            }
+        };
 
         let verified = verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: input.token,
                 root_trust: &root_trust,
-                local_principal: IcOps::canister_self(),
                 local_role: Some(&local_role),
+                local_project: local_project.as_deref(),
                 ttl_limits: DelegatedAuthTtlLimits {
                     max_cert_ttl_secs: input.max_cert_ttl_secs,
                     max_token_ttl_secs: input.max_token_ttl_secs,
@@ -244,9 +251,7 @@ const fn delegated_auth_reason_from_verify_error(
         VerifyDelegatedTokenError::IssuerShardPidMismatch => {
             DelegatedAuthMetricReason::IssuerShardPidMismatch
         }
-        VerifyDelegatedTokenError::LocalRoleHashMismatch => {
-            DelegatedAuthMetricReason::LocalRoleHashMismatch
-        }
+        VerifyDelegatedTokenError::GrantsNotSubset => DelegatedAuthMetricReason::GrantsNotSubset,
         VerifyDelegatedTokenError::MissingLocalRole => DelegatedAuthMetricReason::MissingLocalRole,
         VerifyDelegatedTokenError::RootKey(_) => DelegatedAuthMetricReason::RootKey,
         VerifyDelegatedTokenError::RootSignatureInvalid(_) => {
@@ -266,6 +271,9 @@ const fn delegated_auth_reason_from_verify_error(
             DelegatedAuthMetricReason::TokenAudienceRejected
         }
         VerifyDelegatedTokenError::TokenExpired => DelegatedAuthMetricReason::TokenExpired,
+        VerifyDelegatedTokenError::TokenGrantRejected => {
+            DelegatedAuthMetricReason::TokenGrantRejected
+        }
         VerifyDelegatedTokenError::TokenInvalidWindow => {
             DelegatedAuthMetricReason::TokenInvalidWindow
         }
@@ -278,6 +286,9 @@ const fn delegated_auth_reason_from_verify_error(
         }
         VerifyDelegatedTokenError::TokenTtlExceeded { .. } => {
             DelegatedAuthMetricReason::TokenTtlExceeded
+        }
+        VerifyDelegatedTokenError::TokenVersionMismatch { .. } => {
+            DelegatedAuthMetricReason::TokenVersionMismatch
         }
     }
 }

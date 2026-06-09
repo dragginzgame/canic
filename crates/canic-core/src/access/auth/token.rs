@@ -147,8 +147,8 @@ mod tests {
             types,
         },
         dto::auth::{
-            DelegatedToken, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-            DelegationProof, ShardKeyBinding, SignatureAlgorithm,
+            DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
+            DelegationCert, DelegationProof, ShardKeyBinding, SignatureAlgorithm,
         },
     };
 
@@ -222,8 +222,8 @@ mod tests {
                 cert_hash: [3; 32],
                 issued_at: 10,
                 expires_at: 20,
-                aud: DelegationAudience::Principal(p(4)),
-                scopes: scopes.clone(),
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![grant("project_instance", &scopes)],
                 nonce: [5; 16],
             },
             proof: DelegationProof {
@@ -244,13 +244,19 @@ mod tests {
                     issued_at: 10,
                     expires_at: 20,
                     max_token_ttl_secs: 10,
-                    scopes,
-                    aud: DelegationAudience::Principal(p(4)),
-                    verifier_role_hash: None,
+                    aud: DelegationAudience::Project("test".to_string()),
+                    grants: vec![grant("project_instance", &scopes)],
                 },
                 root_sig: vec![12; 64],
             },
             shard_sig: vec![13; 64],
+        }
+    }
+
+    fn grant(role: &str, scopes: &[String]) -> DelegatedRoleGrant {
+        DelegatedRoleGrant {
+            target: crate::ids::CanisterRole::owned(role.to_string()),
+            scopes: scopes.to_vec(),
         }
     }
 

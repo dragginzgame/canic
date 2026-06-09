@@ -35,9 +35,9 @@ const CATALOG_COMMANDS: &[CatalogCommand] = &[LIST_COMMAND, INSPECT_COMMAND];
 
 const DEPLOY_CATALOG_HELP_AFTER: &str = "\
 Examples:
-  canic deploy catalog list
-  canic deploy catalog inspect demo-local
-  canic --network local deploy catalog list --format json --output catalog.json
+  canic deploy inspect catalog list
+  canic deploy inspect catalog inspect demo-local
+  canic --network local deploy inspect catalog list --format json --output catalog.json
 
 Catalog commands are read-only local-state reports. They list or inspect
 deployment targets recorded under .canic/<network>/deployments and do not query
@@ -45,17 +45,17 @@ live deployments, create deployment truth, mutate topology, change
 controllers, install Wasm, or infer deployments from fleet-template names.";
 const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
 Examples:
-  canic deploy catalog list
-  canic deploy catalog list --format json
-  canic --network local deploy catalog list --format json --output catalog.json
+  canic deploy inspect catalog list
+  canic deploy inspect catalog list --format json
+  canic --network local deploy inspect catalog list --format json --output catalog.json
 
 Lists deployment targets from existing local deployment-target state only. This
 does not refresh live state or infer deployments from fleet-template names.";
 const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
 Examples:
-  canic deploy catalog inspect demo-local
-  canic deploy catalog inspect demo-local --format json
-  canic --network local deploy catalog inspect demo-local --format json --output demo-local.json
+  canic deploy inspect catalog inspect demo-local
+  canic deploy inspect catalog inspect demo-local --format json
+  canic --network local deploy inspect catalog inspect demo-local --format json --output demo-local.json
 
 Inspects one deployment target from existing local deployment-target state
 only. The deployment argument is a deployment target, not a fleet template.";
@@ -63,13 +63,13 @@ only. The deployment argument is a deployment target, not a fleet template.";
 const LIST_COMMAND: CatalogCommand = CatalogCommand {
     name: "list",
     about: "List known deployment targets from local state",
-    bin_name: "canic deploy catalog list",
+    bin_name: "canic deploy inspect catalog list",
     help_after: DEPLOY_CATALOG_LIST_HELP_AFTER,
 };
 const INSPECT_COMMAND: CatalogCommand = CatalogCommand {
     name: "inspect",
     about: "Inspect one known deployment target from local state",
-    bin_name: "canic deploy catalog inspect",
+    bin_name: "canic deploy inspect catalog inspect",
     help_after: DEPLOY_CATALOG_INSPECT_HELP_AFTER,
 };
 
@@ -221,7 +221,7 @@ pub(super) fn command() -> ClapCommand {
         .iter()
         .fold(
             ClapCommand::new("catalog")
-                .bin_name("canic deploy catalog")
+                .bin_name("canic deploy inspect catalog")
                 .about("List or inspect known deployment targets")
                 .disable_help_flag(true),
             |command, subcommand| command.subcommand(catalog_passthrough_command(*subcommand)),

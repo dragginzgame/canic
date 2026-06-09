@@ -113,8 +113,8 @@ Expected:
 - delegated-token first-argument decoding is allowed;
 - `authenticated(...)` endpoint predicates require the first endpoint argument
   to be `DelegatedToken`;
-- delegated-token audience handling must not reintroduce multi-role audience
-  support;
+- delegated-token audience handling must not reintroduce role/principal or
+  multi-role audience support;
 - broad payload parsing or conversion is a violation.
 
 ### 5. Auth State And Metrics

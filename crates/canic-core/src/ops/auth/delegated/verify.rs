@@ -1,7 +1,11 @@
 use super::{
-    audience::{AudienceError, audience_subset, audience_uses_role, verifier_is_in_audience},
-    canonical::{CanonicalAuthError, cert_hash, claims_hash, role_hash},
-    cert_rules::{CertRuleError, DelegatedAuthTtlLimits, validate_cert_issuance_rules},
+    audience::{
+        AudienceError, audience_accepted, audience_subset, role_grants_subset, scopes_for_role,
+    },
+    canonical::{CanonicalAuthError, cert_hash, claims_hash},
+    cert_rules::{
+        CertRuleError, DELEGATED_AUTH_VERSION, DelegatedAuthTtlLimits, validate_cert_issuance_rules,
+    },
     root_key::{RootKeyResolutionError, RootKeyResolveRequest, resolve_root_key},
 };
 use crate::{
@@ -14,8 +18,8 @@ use thiserror::Error;
 pub struct VerifyDelegatedTokenInput<'a> {
     pub token: &'a DelegatedToken,
     pub root_trust: &'a RootTrustAnchor,
-    pub local_principal: Principal,
     pub local_role: Option<&'a CanisterRole>,
+    pub local_project: Option<&'a str>,
     pub ttl_limits: DelegatedAuthTtlLimits,
     pub required_scopes: &'a [String],
     pub now_secs: u64,
@@ -43,6 +47,8 @@ pub enum VerifyDelegatedTokenError {
     ShardSignatureInvalid(String),
     #[error("delegated auth token issuer shard pid mismatch")]
     IssuerShardPidMismatch,
+    #[error("delegated auth token claims version mismatch (expected {expected}, found {found})")]
+    TokenVersionMismatch { expected: u16, found: u16 },
     #[error("delegated auth token expiry must be greater than issued_at")]
     TokenInvalidWindow,
     #[error("delegated auth token ttl {ttl_secs}s exceeds cert max {max_ttl_secs}s")]
@@ -65,10 +71,12 @@ pub enum VerifyDelegatedTokenError {
     TokenAudienceRejected,
     #[error("delegated auth verifier is outside cert audience")]
     CertAudienceRejected,
+    #[error("delegated auth token grants are not a subset of cert grants")]
+    GrantsNotSubset,
+    #[error("delegated auth local verifier role is outside token grants")]
+    TokenGrantRejected,
     #[error("delegated auth local verifier role is required")]
     MissingLocalRole,
-    #[error("delegated auth local verifier role hash mismatch")]
-    LocalRoleHashMismatch,
     #[error("delegated auth scope rejected: {scope}")]
     ScopeRejected { scope: String },
     #[error(transparent)]
@@ -125,7 +133,7 @@ where
     )
     .map_err(VerifyDelegatedTokenError::RootSignatureInvalid)?;
 
-    verify_claims(&input, actual_cert_hash)?;
+    let local_scopes = verify_claims(&input, actual_cert_hash)?;
 
     let actual_claims_hash = claims_hash(claims)?;
     verify_signature(
@@ -139,7 +147,7 @@ where
     Ok(VerifiedDelegatedToken {
         subject: claims.subject,
         issuer_shard_pid: claims.issuer_shard_pid,
-        scopes: claims.scopes.clone(),
+        scopes: local_scopes,
         cert_hash: actual_cert_hash,
     })
 }
@@ -161,10 +169,16 @@ const fn verify_cert_time(
 fn verify_claims(
     input: &VerifyDelegatedTokenInput<'_>,
     actual_cert_hash: [u8; 32],
-) -> Result<(), VerifyDelegatedTokenError> {
+) -> Result<Vec<String>, VerifyDelegatedTokenError> {
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
+    if claims.version != DELEGATED_AUTH_VERSION {
+        return Err(VerifyDelegatedTokenError::TokenVersionMismatch {
+            expected: DELEGATED_AUTH_VERSION,
+            found: claims.version,
+        });
+    }
     if claims.issuer_shard_pid != cert.shard_pid {
         return Err(VerifyDelegatedTokenError::IssuerShardPidMismatch);
     }
@@ -198,35 +212,36 @@ fn verify_claims(
         return Err(VerifyDelegatedTokenError::TokenExpired);
     }
 
-    verify_audience(input)?;
-    verify_scopes(&claims.scopes, &cert.scopes)?;
-    verify_scopes(input.required_scopes, &claims.scopes)
+    let local_scopes = verify_audience_and_grants(input)?;
+    verify_scopes(input.required_scopes, &local_scopes)?;
+    Ok(local_scopes)
 }
 
-fn verify_audience(input: &VerifyDelegatedTokenInput<'_>) -> Result<(), VerifyDelegatedTokenError> {
+fn verify_audience_and_grants(
+    input: &VerifyDelegatedTokenInput<'_>,
+) -> Result<Vec<String>, VerifyDelegatedTokenError> {
     let cert_aud = &input.token.proof.cert.aud;
     let claims_aud = &input.token.claims.aud;
-
-    if audience_uses_role(claims_aud) || audience_uses_role(cert_aud) {
-        let local_role = input
-            .local_role
-            .ok_or(VerifyDelegatedTokenError::MissingLocalRole)?;
-        if input.token.proof.cert.verifier_role_hash != Some(role_hash(local_role)?) {
-            return Err(VerifyDelegatedTokenError::LocalRoleHashMismatch);
-        }
-    }
+    let local_role = input
+        .local_role
+        .ok_or(VerifyDelegatedTokenError::MissingLocalRole)?;
 
     if !audience_subset(claims_aud, cert_aud) {
         return Err(VerifyDelegatedTokenError::AudienceNotSubset);
     }
-    if !verifier_is_in_audience(input.local_principal, input.local_role, claims_aud) {
+    if !audience_accepted(input.local_project, claims_aud) {
         return Err(VerifyDelegatedTokenError::TokenAudienceRejected);
     }
-    if !verifier_is_in_audience(input.local_principal, input.local_role, cert_aud) {
+    if !audience_accepted(input.local_project, cert_aud) {
         return Err(VerifyDelegatedTokenError::CertAudienceRejected);
     }
 
-    Ok(())
+    if !role_grants_subset(&input.token.claims.grants, &input.token.proof.cert.grants) {
+        return Err(VerifyDelegatedTokenError::GrantsNotSubset);
+    }
+
+    scopes_for_role(&input.token.claims.grants, local_role)
+        .ok_or(VerifyDelegatedTokenError::TokenGrantRejected)
 }
 
 fn verify_scopes(subset: &[String], superset: &[String]) -> Result<(), VerifyDelegatedTokenError> {
@@ -245,13 +260,10 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{
-            DelegatedTokenClaims, DelegationAudience, DelegationCert, DelegationProof,
-            RootPublicKey, ShardKeyBinding,
+            DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
+            DelegationProof, RootPublicKey, ShardKeyBinding,
         },
-        ops::auth::delegated::{
-            canonical::{public_key_hash, role_hash},
-            cert_rules::DELEGATED_AUTH_VERSION,
-        },
+        ops::auth::delegated::{canonical::public_key_hash, cert_rules::DELEGATED_AUTH_VERSION},
     };
 
     fn p(id: u8) -> Principal {
@@ -290,7 +302,6 @@ mod tests {
     }
 
     fn cert() -> DelegationCert {
-        let role = role();
         let shard_public_key_sec1 = vec![20, 21, 22];
         let shard_key_hash = public_key_hash(&shard_public_key_sec1);
         let root_key = root_key();
@@ -312,9 +323,19 @@ mod tests {
             issued_at: 100,
             expires_at: 500,
             max_token_ttl_secs: 120,
-            scopes: vec!["read".to_string(), "write".to_string()],
-            aud: DelegationAudience::Role(role.clone()),
-            verifier_role_hash: Some(role_hash(&role).unwrap()),
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![
+                grant("project_hub", &["session", "upload"]),
+                grant("project_instance", &["read", "write"]),
+                grant("user_shard", &["session"]),
+            ],
+        }
+    }
+
+    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
+        DelegatedRoleGrant {
+            target: CanisterRole::owned(role.to_string()),
+            scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
         }
     }
 
@@ -330,7 +351,11 @@ mod tests {
                 issued_at: 120,
                 expires_at: 180,
                 aud: cert.aud.clone(),
-                scopes: vec!["read".to_string()],
+                grants: vec![
+                    grant("project_hub", &["upload"]),
+                    grant("project_instance", &["read"]),
+                    grant("user_shard", &["session"]),
+                ],
                 nonce: [7; 16],
             },
             proof: DelegationProof {
@@ -350,8 +375,8 @@ mod tests {
         VerifyDelegatedTokenInput {
             token,
             root_trust: trust,
-            local_principal: p(99),
             local_role,
+            local_project: Some("test"),
             ttl_limits: ttl_limits(),
             required_scopes,
             now_secs: 150,
@@ -437,31 +462,53 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_rejects_noncanonical_cert_vectors() {
+    fn verify_delegated_token_rejects_claims_version_mismatch() {
         let mut token = token();
-        token.proof.cert.scopes = vec!["write".to_string(), "read".to_string()];
+        token.claims.version = DELEGATED_AUTH_VERSION - 1;
         let trust = root_trust();
         let role = role();
 
         assert_eq!(
             verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
-            Err(VerifyDelegatedTokenError::Canonical(
-                CanonicalAuthError::NonCanonicalScopes
+            Err(VerifyDelegatedTokenError::TokenVersionMismatch {
+                expected: DELEGATED_AUTH_VERSION,
+                found: DELEGATED_AUTH_VERSION - 1,
+            })
+        );
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_noncanonical_cert_grants() {
+        let mut token = token();
+        token.proof.cert.grants = vec![
+            grant("project_instance", &["read"]),
+            grant("project_hub", &["upload"]),
+        ];
+        let trust = root_trust();
+        let role = role();
+
+        assert_eq!(
+            verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
+            Err(VerifyDelegatedTokenError::CertRules(
+                CertRuleError::Audience(AudienceError::NonCanonicalGrants)
             ))
         );
     }
 
     #[test]
-    fn verify_delegated_token_rejects_noncanonical_claim_vectors() {
+    fn verify_delegated_token_rejects_noncanonical_claim_grants() {
         let mut token = token();
-        token.claims.scopes = vec!["read".to_string(), "read".to_string()];
+        token.claims.grants = vec![
+            grant("project_instance", &["read"]),
+            grant("project_hub", &["upload"]),
+        ];
         let trust = root_trust();
         let role = role();
 
         assert_eq!(
             verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
             Err(VerifyDelegatedTokenError::Canonical(
-                CanonicalAuthError::NonCanonicalScopes
+                CanonicalAuthError::NonCanonicalRoles
             ))
         );
     }
@@ -469,7 +516,7 @@ mod tests {
     #[test]
     fn verify_delegated_token_rejects_audience_subset_drift() {
         let mut token = token();
-        token.claims.aud = DelegationAudience::Role(CanisterRole::new("project_hub"));
+        token.claims.aud = DelegationAudience::Canic;
         let trust = root_trust();
         let role = role();
 
@@ -480,34 +527,22 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_accepts_exact_principal_audience_without_local_role() {
+    fn verify_delegated_token_rejects_non_matching_project_audience() {
         let mut token = token();
-        token.proof.cert.aud = DelegationAudience::Principal(p(99));
-        token.proof.cert.verifier_role_hash = None;
-        token.claims.aud = DelegationAudience::Principal(p(99));
+        token.proof.cert.aud = DelegationAudience::Project("other".to_string());
+        token.claims.aud = DelegationAudience::Project("other".to_string());
         token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
         let trust = root_trust();
-
-        verify_delegated_token(input(&token, &trust, None, &[]), |_, _, _, _| Ok(())).unwrap();
-    }
-
-    #[test]
-    fn verify_delegated_token_rejects_non_matching_principal_audience() {
-        let mut token = token();
-        token.proof.cert.aud = DelegationAudience::Principal(p(98));
-        token.proof.cert.verifier_role_hash = None;
-        token.claims.aud = DelegationAudience::Principal(p(98));
-        token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
-        let trust = root_trust();
+        let role = role();
 
         assert_eq!(
-            verify_delegated_token(input(&token, &trust, None, &[]), |_, _, _, _| Ok(())),
+            verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
             Err(VerifyDelegatedTokenError::TokenAudienceRejected)
         );
     }
 
     #[test]
-    fn verify_delegated_token_rejects_missing_local_role_for_role_audience() {
+    fn verify_delegated_token_rejects_missing_local_role_for_grant_lookup() {
         let token = token();
         let trust = root_trust();
 
@@ -518,7 +553,32 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_rejects_required_scope_outside_claims() {
+    fn verify_delegated_token_rejects_local_role_outside_token_grants() {
+        let token = token();
+        let trust = root_trust();
+        let role = CanisterRole::new("admin");
+
+        assert_eq!(
+            verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
+            Err(VerifyDelegatedTokenError::TokenGrantRejected)
+        );
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_claim_grant_expansion() {
+        let mut token = token();
+        token.claims.grants = vec![grant("project_instance", &["admin"])];
+        let trust = root_trust();
+        let role = role();
+
+        assert_eq!(
+            verify_delegated_token(input(&token, &trust, Some(&role), &[]), |_, _, _, _| Ok(())),
+            Err(VerifyDelegatedTokenError::GrantsNotSubset)
+        );
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_required_scope_outside_local_role_grant() {
         let token = token();
         let trust = root_trust();
         let role = role();

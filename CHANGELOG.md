@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
 
+- `0.63.5` hard-cuts delegated-token auth to stable Canic/project audiences
+  plus signed role grants, allowing one session token to authorize multiple
+  role-scoped operations without additional per-role ECDSA token minting, and
+  moves raw deployment-truth artifacts under `canic deploy inspect`.
+
 - `0.63.4` hard-cuts live deployment inspection under `canic info`, replacing
   the former top-level metrics, endpoints, and medic commands while adding a
   compact text summary for `canic deploy check`.

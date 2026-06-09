@@ -34,22 +34,20 @@ struct RootCommand {
     help_after: &'static str,
 }
 
-const ROOT_COMMANDS: &[RootCommand] = &[INSPECT_COMMAND, VERIFY_COMMAND];
+const ROOT_COMMANDS: &[RootCommand] = &[VERIFY_COMMAND];
 
 const DEPLOY_ROOT_HELP_AFTER: &str = "\
 Examples:
-  canic deploy root inspect --request root-verification.json
   canic deploy root verify demo-local --from-check deployment-check.json
-  canic deploy root inspect --request root-verification.json --format text
 
-0.47 root commands are deployment-root scoped. Inspect builds passive
-root-verification reports without writing state. Verify records verified root
-state only when a registered deployment target and DeploymentCheckV1 source
-evidence match.";
+Deployment-root verification records verified root state only when a registered
+deployment target and DeploymentCheckV1 source evidence match. Use
+`canic deploy inspect root` to build passive root-verification reports without
+writing state.";
 const DEPLOY_ROOT_INSPECT_HELP_AFTER: &str = "\
 Examples:
-  canic deploy root inspect --request root-verification.json
-  canic deploy root inspect --request root-verification.json --format text
+  canic deploy inspect root --request root-verification.json
+  canic deploy inspect root --request root-verification.json --format text
 
 Reads a DeploymentRootVerificationRequestV1-shaped JSON file and prints a
 DeploymentRootVerificationReportV1 JSON artifact by default, or host-owned
@@ -67,10 +65,10 @@ evidence match. This is not full deployment verification and does not install
 code or mutate canisters.";
 
 const INSPECT_COMMAND: RootCommand = RootCommand {
-    name: "inspect",
+    name: "root",
     about: "Inspect deployment-root verification evidence",
-    bin_name: "canic deploy root inspect",
-    usage: "canic deploy root inspect --request <file>",
+    bin_name: "canic deploy inspect root",
+    usage: "canic deploy inspect root --request <file>",
     help_after: DEPLOY_ROOT_INSPECT_HELP_AFTER,
 };
 const VERIFY_COMMAND: RootCommand = RootCommand {
@@ -111,7 +109,6 @@ where
     }
 
     match parse_subcommand(command(), args).map_err(|_| DeployCommandError::Usage(usage()))? {
-        Some((command, args)) if command == "inspect" => run_inspect(args),
         Some((command, args)) if command == "verify" => run_verify(args),
         _ => {
             println!("{}", usage());
@@ -120,7 +117,7 @@ where
     }
 }
 
-fn run_inspect<I>(args: I) -> Result<(), DeployCommandError>
+pub(super) fn run_inspect<I>(args: I) -> Result<(), DeployCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
@@ -212,14 +209,14 @@ pub(super) fn command() -> ClapCommand {
         .fold(
             ClapCommand::new("root")
                 .bin_name("canic deploy root")
-                .about("Inspect or verify deployment-root evidence")
+                .about("Verify deployment-root state")
                 .disable_help_flag(true),
             |command, subcommand| command.subcommand(root_passthrough_command(*subcommand)),
         )
         .after_help(DEPLOY_ROOT_HELP_AFTER)
 }
 
-fn inspect_command() -> ClapCommand {
+pub(super) fn inspect_command() -> ClapCommand {
     root_leaf_command(INSPECT_COMMAND).arg(
         value_arg("request")
             .long("request")

@@ -11,6 +11,7 @@ use canic::{
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
     CanicPicExt, create_user_shard, issue_delegated_token, request_root_delegation_provision,
+    role_grant,
 };
 use canic_tests::root::{
     RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
@@ -118,13 +119,13 @@ fn delegated_token_verification_uses_cascaded_subnet_state_root_key() {
     let subject = Principal::from_slice(&[55; 29]);
     let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
     let provision =
-        request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, verifier_pid);
+        request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, canister::TEST);
     let token = issue_delegated_token(
         &setup.pic,
         shard_pid,
         subject,
-        DelegationAudience::Principal(verifier_pid),
-        vec![cap::VERIFY.to_string()],
+        DelegationAudience::Project("test".to_string()),
+        vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
         provision.cert.max_token_ttl_secs,
         provision
             .cert

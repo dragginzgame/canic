@@ -1,7 +1,7 @@
 # Canic Authentication Design
 
 - **Status:** canonical current design
-- **Version line:** `0.29.4`
+- **Version line:** current hard-cut delegated-token contract
 - **Audience:** Canic maintainers and downstream application developers
 - **Primary rule:** auth is enforced at endpoints; workflow, ops, policy, DTO, and model code receive already-authenticated input.
 
@@ -19,7 +19,8 @@ Canic has three auth surfaces:
 2. Delegated-token endpoint auth:
    - caller supplies a `DelegatedToken`
    - endpoint guard validates token and binds `claims.subject == msg_caller`
-   - endpoint-required scope must appear in token claims
+   - endpoint-required scope must appear in the token grant for the local
+     canister role
 3. Role attestation for root-mediated capability RPC:
    - root signs a role attestation for a registered canister subject
    - verifier checks the signed attestation and optional role epoch floor
@@ -56,7 +57,7 @@ A verifier validates a delegated token using only:
 - configured root ECDSA key name
 - delegated root public key delivered through cascaded `SubnetState`
 - shard public key embedded in the root-signed certificate
-- local verifier principal and configured role
+- local project id and configured role
 - IC canister time
 
 A verifier must not require:
@@ -82,8 +83,13 @@ pub enum SignatureAlgorithm {
 }
 
 pub enum DelegationAudience {
-    Role(CanisterRole),
-    Principal(Principal),
+    Canic,
+    Project(String),
+}
+
+pub struct DelegatedRoleGrant {
+    pub target: CanisterRole,
+    pub scopes: Vec<String>,
 }
 
 pub enum ShardKeyBinding {
@@ -107,9 +113,8 @@ pub struct DelegationCert {
     pub issued_at: u64,
     pub expires_at: u64,
     pub max_token_ttl_secs: u64,
-    pub scopes: Vec<String>,
     pub aud: DelegationAudience,
-    pub verifier_role_hash: Option<[u8; 32]>,
+    pub grants: Vec<DelegatedRoleGrant>,
 }
 
 pub struct DelegationProof {
@@ -125,7 +130,7 @@ pub struct DelegatedTokenClaims {
     pub issued_at: u64,
     pub expires_at: u64,
     pub aud: DelegationAudience,
-    pub scopes: Vec<String>,
+    pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
 }
 
@@ -140,10 +145,14 @@ pub struct DelegatedToken {
 
 - `root_pid`, `root_key_id`, `root_key_hash`, `alg`: set by root and signed by root.
 - `shard_pid`, `shard_key_id`, `shard_public_key_sec1`, `shard_key_hash`, `shard_key_binding`: set by root after resolving the shard threshold ECDSA public key, then signed by root.
-- `cert.scopes`, `cert.aud`, `verifier_role_hash`, cert time fields, and `max_token_ttl_secs`: set by root and signed by root.
-- `claims.subject`, `claims.aud`, `claims.scopes`, token time fields, and `nonce`: set by shard and signed by shard.
+- `cert.aud`, `cert.grants`, cert time fields, and `max_token_ttl_secs`: set by root and signed by root.
+- `claims.subject`, `claims.aud`, `claims.grants`, token time fields, and `nonce`: set by shard and signed by shard.
 - `claims.cert_hash`: hash of canonical `DelegationCert`; set by shard and verified by every verifier.
 - `claims.issuer_shard_pid`: must equal `cert.shard_pid`; it is descriptive and does not create separate authority.
+
+`cert.version` and `claims.version` are signed delegated-auth protocol epochs.
+Current verifiers accept exactly the current epoch. They are not compatibility
+or negotiation fields.
 
 `nonce` is informational entropy only. Core delegated auth is a bearer-token system and does not track nonce reuse. Replay protection is bounded by token TTL unless an application builds a separate replay store.
 
@@ -164,48 +173,64 @@ derivation_path_hash = sha256(canonical_derivation_path_bytes(path))
 
 Strict canonical rules:
 
-- scopes must already be strictly sorted and duplicate-free
+- role grants must already be strictly sorted by role and duplicate-free
+- scopes inside each grant must already be strictly sorted and duplicate-free
 - role and scope strings must be non-empty ASCII strings using only `[a-z0-9_:-]`
-- principal audiences must not be the anonymous principal
-- no `Any` audience exists
+- project audience strings must be non-empty ASCII strings using only `[a-z0-9_:-.]`
+- no verifier-role or verifier-principal audience exists
 - verifier rejects noncanonical vectors rather than normalizing them at verification time
 
 This is intentional: one semantic token must have one valid canonical encoding.
 
 ### Audience Binding Examples
 
-Delegated-token audiences describe who may accept the token. Principal audiences
-bind directly to one verifier canister principal. Role audiences bind to one
-verifier configured with a Canic role, through `verifier_role_hash`.
+Delegated-token audiences describe which Canic boundary may accept the token.
+Roles and scopes describe what the accepted token may do.
 
-Endpoint authorization is separate from delegated-token audience. A protected
-endpoint may accept several caller roles through protected internal endpoint
-descriptors, but a delegated token audience names exactly one verifier role or
-one verifier principal.
-
-Positive role-targeted certificate:
+Global Canic session token:
 
 ```rust
-let role = CanisterRole::new("project_instance");
-let audience = DelegationAudience::Role(role.clone());
-let verifier_role_hash = Some(role_hash(&role)?);
+let audience = DelegationAudience::Canic;
+let grants = vec![
+    DelegatedRoleGrant {
+        target: CanisterRole::new("project_hub"),
+        scopes: vec!["upload".to_string()],
+    },
+    DelegatedRoleGrant {
+        target: CanisterRole::new("project_instance"),
+        scopes: vec!["upload".to_string()],
+    },
+    DelegatedRoleGrant {
+        target: CanisterRole::new("user_shard"),
+        scopes: vec!["session".to_string()],
+    },
+];
 ```
 
-That certificate can only be accepted by a verifier configured as
-`project_instance`. A token minted under it must keep the same role audience.
+That token may be accepted by any Canic verifier, but authorization still
+requires a grant for the verifier's configured local role.
 
-Positive principal-targeted certificate:
+Project-scoped session token:
 
 ```rust
-let verifier = Principal::from_text("...")?;
-let audience = DelegationAudience::Principal(verifier);
-let verifier_role_hash = None;
+let audience = DelegationAudience::Project("demo".to_string());
+let grants = vec![
+    DelegatedRoleGrant {
+        target: CanisterRole::new("project_hub"),
+        scopes: vec!["upload".to_string()],
+    },
+    DelegatedRoleGrant {
+        target: CanisterRole::new("project_instance"),
+        scopes: vec!["upload".to_string()],
+    },
+];
 ```
 
-That certificate is bound to the verifier principal and carries no role hash.
+That token is accepted only by verifiers whose local project id matches
+`demo`.
 
-Plural and mixed audience variants are not part of the active DTO. Issue
-separate tokens for separate verifier targets.
+Audience must not be used as a role list. A single token may carry several role
+grants while keeping one stable acceptor audience.
 
 ## 5. Root Certificate Issuance
 
@@ -235,8 +260,8 @@ Root issuance steps:
    - `cert_ttl <= auth.delegated_tokens.max_ttl_secs`
    - `cert.max_token_ttl_secs > 0`
    - `cert.max_token_ttl_secs <= cert_ttl`
-   - audience is non-empty and canonical
-   - role-targeted certificate has exact `verifier_role_hash`
+   - audience shape is canonical
+   - role grants are non-empty, bounded, sorted, and canonical
    - `sha256(cert.shard_public_key_sec1) == cert.shard_key_hash`
    - `cert.shard_key_binding` equals the expected key-name and shard-derivation binding
 7. Sign `cert_hash` with the root ECDSA path:
@@ -331,7 +356,7 @@ Shard minting steps:
    - token TTL does not exceed `cert.max_token_ttl_secs`
    - token expiry does not exceed cert expiry
    - token audience is a subset of cert audience
-   - token scopes are a subset of cert scopes
+   - token grants are a subset of cert grants
    - claims are canonical
 7. Reserve signing quota and cycle budget for the requesting caller before
    shard ECDSA.
@@ -382,7 +407,7 @@ Verifier steps:
    - cert TTL policy
    - max token TTL policy
    - audience shape
-   - verifier role hash
+   - role grant shape
    - shard public-key hash
 4. Resolve root trust anchor:
    - one configured root key only
@@ -394,20 +419,21 @@ Verifier steps:
    - key name hash equals current delegated-token ECDSA key name hash
    - derivation path hash equals `["canic", "shard", cert.shard_pid]`
 7. Verify claims:
+   - claims version
    - `claims.issuer_shard_pid == cert.shard_pid`
    - `claims.cert_hash == cert_hash`
    - token window is valid
    - token does not outlive cert
    - token TTL does not exceed `cert.max_token_ttl_secs`
    - `claims.aud` is subset of `cert.aud`
-   - `claims.scopes` is subset of `cert.scopes`
+   - local project accepts both `claims.aud` and `cert.aud`
+   - `claims.grants` is subset of `cert.grants`
 8. Verify shard signature over `claims_hash` using `cert.shard_public_key_sec1`.
-9. Verify verifier audience membership:
-   - principal branch: `self_pid` exact match
-   - role branch: configured local role exact match
-   - if any role branch is used, local role is required and must hash to `cert.verifier_role_hash`
-10. Verify endpoint-required scopes are present in `claims.scopes`.
-11. Verify transport caller binding:
+9. Verify local role authorization:
+   - configured local role is required
+   - token grants include the local role
+   - endpoint-required scopes are present in that local-role grant
+10. Verify transport caller binding:
 
 ```rust
 claims.subject == ic_cdk::caller()
@@ -584,7 +610,7 @@ Expected failures:
 
 - disabled delegated auth config
 - malformed Candid token argument
-- noncanonical scope vectors or invalid audience labels
+- noncanonical role grants, noncanonical grant scopes, or invalid audience labels
 - unknown or mismatched root key
 - missing or stale cascaded `SubnetState` root key
 - root signature failure
@@ -594,9 +620,10 @@ Expected failures:
 - token expired or not yet valid
 - token TTL exceeds cert or config policy
 - audience subset failure
-- verifier not in token/cert audience
-- missing local role for role audience
-- required scope missing
+- local project does not accept token or cert audience
+- missing local role
+- local role missing from token grants
+- required scope missing from local-role grant
 - token subject does not match transport caller
 - delegated-session bootstrap replay conflict
 - role-attestation unknown key after refresh

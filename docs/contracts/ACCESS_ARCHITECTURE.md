@@ -171,7 +171,7 @@ env -u ICP_NETWORK icp canister call <shard> public_assign_project \
 - Caller provides a delegated token as the first candid argument.
 - Endpoint guards apply `auth::authenticated("<required_scope>")`.
 - Verification binds identity to transport principal:
-  `verified.claims.sub == ic_cdk::caller()`.
+  `verified.subject == ic_cdk::caller()`.
 
 ### Relayed endpoints (not supported)
 - No relay authentication envelope is supported.
@@ -184,17 +184,24 @@ env -u ICP_NETWORK icp canister call <shard> public_assign_project \
 - token decode from ingress first argument succeeds
 - root authority principal is available from env
 - delegated token cryptographic and structural verification succeeds
-- `token.claims.sub == caller`
-- required scope exists in token claims
+- `token.claims.subject == caller`
+- required scope exists in the token grant for the local canister role
 
 Cryptographic and structural verification is delegated to
 `ops::auth::AuthOps::verify_token`.
 
 ## Audience Binding
 
-Audience is explicit allow-listing:
-- verifier canister must be in token audience (`self_pid in token.claims.aud`)
-- token audience entries must be allowed by cert audience
+Audience answers which Canic boundary may accept the token:
+- `Canic` is accepted by any Canic verifier.
+- `Project(project_id)` is accepted only when the verifier's local project id
+  matches `project_id`.
+
+Authorization is carried by signed role grants:
+- token audience must be accepted locally and be a subset of cert audience
+- token grants must be a subset of cert grants
+- local canister role must have a token grant
+- endpoint required scopes must be present in the local-role grant
 
 This is enforced in `ops::auth` before access is granted.
 

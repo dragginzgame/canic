@@ -1,6 +1,6 @@
 use super::{
-    DeployCommandError, DeployTruthOptions, deploy_truth_leaf_command, load_deployment_check,
-    print_json, read_json_file, value_arg,
+    DeployCommandError, DeployTruthOptions, command::deploy_truth_leaf_command_with_bin_name,
+    load_deployment_check, print_json, read_json_file, value_arg,
 };
 use crate::{
     cli::{
@@ -19,9 +19,9 @@ use std::{ffi::OsString, path::PathBuf};
 
 const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
-  canic deploy resume-report demo
-  canic deploy resume-report --receipt receipt.json demo
-  canic --network local deploy resume-report --receipt receipt.json --profile fast demo
+  canic deploy inspect resume-report demo
+  canic deploy inspect resume-report --receipt receipt.json demo
+  canic --network local deploy inspect resume-report --receipt receipt.json --profile fast demo
 
 Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
 and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
@@ -103,8 +103,9 @@ impl DeployResumeReportOptions {
 }
 
 pub(super) fn command() -> ClapCommand {
-    deploy_truth_leaf_command(
+    deploy_truth_leaf_command_with_bin_name(
         "resume-report",
+        "canic deploy inspect resume-report",
         "Print passive resume safety JSON from a prior deployment receipt",
     )
     .arg(receipt_arg())

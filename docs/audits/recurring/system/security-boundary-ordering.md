@@ -9,9 +9,9 @@ verification.
 This audit tracks the current hard-cut boundary split:
 
 - public delegated-token endpoint auth uses `auth::authenticated(...)`,
-  singular `DelegationAudience::{Role, Principal}`, subject/caller binding,
-  scope checks, and bearer-token verification without verifier-local token-use
-  writes;
+  stable `DelegationAudience::{Canic, Project}`, signed local-role grant scope
+  checks, subject/caller binding, and bearer-token verification without
+  verifier-local token-use writes;
 - protected internal role endpoints use `caller::has_role(...)` /
   `caller::has_any_role(...)` and must verify root-signed internal invocation
   proof envelopes before decoding handler args or dispatching;
@@ -30,7 +30,7 @@ For endpoint delegated tokens, the required order is:
 2. verify token material;
 3. verify root/shard trust chain;
 4. enforce caller/subject binding;
-5. enforce singular audience and scope;
+5. enforce stable audience and local-role grant scope;
 6. do not write verifier-local token-use state; replay-sensitive endpoint
    commands must use domain operation receipts;
 7. dispatch the endpoint implementation;
@@ -112,9 +112,11 @@ Expected:
 
 - config and local shard/root binding checks happen before verifier success;
 - root cert signature verifies before claim authorization is accepted;
-- audience and scope checks complete before success is returned;
-- `DelegationAudience::Role` is singular and no plural roles/mixed audience
-  DTO is accepted;
+- audience, grant, and required-scope checks complete before success is
+  returned;
+- `DelegationAudience::{Canic, Project}` is the only accepted delegated-token
+  audience shape;
+- no role/principal or plural role audience DTO is accepted;
 - metrics record bounded outcomes but are not authorization inputs.
 
 ### 4. RPC Replay Sequencing

@@ -192,7 +192,7 @@ run_probe() {
     run_packaged_canic fleet list > "$TMP_ROOT/fleet-list.out"
     run_packaged_canic fleet role list downstream > "$TMP_ROOT/role-list.out"
     run_packaged_canic fleet role inspect downstream app > "$TMP_ROOT/app-inspect.out"
-    run_packaged_canic deploy catalog list --format json --output "$TMP_ROOT/catalog.json"
+    run_packaged_canic deploy inspect catalog list --format json --output "$TMP_ROOT/catalog.json"
 }
 
 assert_probe_outputs() {
