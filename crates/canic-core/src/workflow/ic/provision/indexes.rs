@@ -36,7 +36,7 @@ impl ProvisionWorkflow {
             let app_data = RootAppIndexBuilder::build(&registry, &cfg.app_index)?;
 
             if allow_incomplete {
-                AppIndexOps::import_allow_incomplete(app_data)?;
+                AppIndexOps::import_trusted_partial(app_data)?;
             } else {
                 AppIndexOps::import(app_data)?;
             }
@@ -47,7 +47,7 @@ impl ProvisionWorkflow {
             let subnet_data = RootSubnetIndexBuilder::build(&registry, &subnet_index_roles)?;
 
             if allow_incomplete {
-                SubnetIndexOps::import_allow_incomplete(subnet_data)?;
+                SubnetIndexOps::import_trusted_partial(subnet_data)?;
             } else {
                 SubnetIndexOps::import(subnet_data)?;
             }

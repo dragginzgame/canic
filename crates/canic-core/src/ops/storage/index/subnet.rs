@@ -2,7 +2,7 @@ use crate::{
     InternalError,
     dto::topology::SubnetIndexArgs,
     ops::storage::index::mapper::SubnetIndexRecordMapper,
-    ops::storage::index::{ensure_required_roles, ensure_unique_roles},
+    ops::storage::index::{ensure_allowed_roles, ensure_required_roles, ensure_unique_roles},
     ops::{config::ConfigOps, prelude::*},
     storage::stable::index::subnet::{SubnetIndex, SubnetIndexRecord},
 };
@@ -44,7 +44,12 @@ impl SubnetIndexOps {
 
     pub(crate) fn import_args_allow_incomplete(args: SubnetIndexArgs) -> Result<(), InternalError> {
         let data = SubnetIndexRecordMapper::input_to_record(args);
-        Self::import_allow_incomplete(data)
+        ensure_unique_roles(&data.entries, "subnet")?;
+        let subnet_cfg = ConfigOps::current_subnet()?;
+        ensure_allowed_roles(&data.entries, "subnet", &subnet_cfg.subnet_index_roles())?;
+        SubnetIndex::import(data);
+
+        Ok(())
     }
 
     // -------------------------------------------------------------
@@ -55,13 +60,19 @@ impl SubnetIndexOps {
     pub fn import(data: SubnetIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "subnet")?;
         let subnet_cfg = ConfigOps::current_subnet()?;
-        ensure_required_roles(&data.entries, "subnet", &subnet_cfg.subnet_index_roles())?;
+        let required = subnet_cfg.subnet_index_roles();
+        ensure_allowed_roles(&data.entries, "subnet", &required)?;
+        ensure_required_roles(&data.entries, "subnet", &required)?;
         SubnetIndex::import(data);
 
         Ok(())
     }
 
-    pub(crate) fn import_allow_incomplete(data: SubnetIndexRecord) -> Result<(), InternalError> {
+    /// Import a root-built partial index snapshot.
+    ///
+    /// External/propagated DTO snapshots must use `import_args_allow_incomplete`
+    /// so they are checked against the service-derived SubnetIndex role set.
+    pub(crate) fn import_trusted_partial(data: SubnetIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "subnet")?;
         SubnetIndex::import(data);
 

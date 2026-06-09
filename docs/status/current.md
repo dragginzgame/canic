@@ -9,6 +9,30 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- Local `0.64.2` candidate after pushed `0.64.1`: incomplete AppIndex/SubnetIndex
+  import paths now reject roles outside the configured index sets, so stale
+  singleton or non-service entries cannot be accepted through propagated
+  snapshots. Full index imports also reject unexpected roles before checking
+  required roles. Root builders still derive index entries from direct root
+  service records, and builder-generated partial imports use an explicit
+  trusted internal path. The root and detailed `0.64.2` changelogs are drafted.
+  Current validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic-core index_addressing_seam --lib -- --nocapture
+  cargo test --locked -p canic-core index --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::rpc::request::handler --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- `0.64.1` is pushed as the service manager runtime-policy hardening. Runtime
+  registration policy now requires service parents for directory, scaling, and
+  sharding manager pools; singleton child creation remains parent-scoped and
+  valid. Public Candid error-code names for the existing manager-parent policy
+  errors remain compatibility labels, while internal policy variants and
+  messages use service terminology. Detailed notes live in
+  `docs/changelog/0.64.md`.
 - `0.64.0` is pushed as the service/singleton topology split. The config model
   now has explicit `kind = "service"` for root-scoped, root-created canisters;
   root bootstrap, SubnetIndex, and current AppIndex validation are

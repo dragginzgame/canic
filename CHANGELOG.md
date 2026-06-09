@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.64.md](docs/changelog/0.64.md)
 
+- `0.64.2` tightens AppIndex and SubnetIndex imports so propagated and full
+  snapshots cannot accept roles outside the configured service-filtered index
+  sets.
+
 - `0.64.1` hardens service/singleton runtime policy so directory, scaling, and
   sharding manager pools require service parents while parent-scoped singleton
   child creation remains valid.

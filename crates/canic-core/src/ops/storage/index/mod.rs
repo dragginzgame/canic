@@ -24,6 +24,9 @@ pub enum IndexOpsError {
 
     #[error("{index} index missing required roles: {roles}")]
     MissingRoles { index: &'static str, roles: String },
+
+    #[error("{index} index contains unexpected roles: {roles}")]
+    UnexpectedRoles { index: &'static str, roles: String },
 }
 
 impl From<IndexOpsError> for InternalError {
@@ -71,6 +74,31 @@ pub(super) fn ensure_required_roles(
         Err(IndexOpsError::MissingRoles {
             index,
             roles: missing.join(", "),
+        })
+    }
+}
+
+pub(super) fn ensure_allowed_roles(
+    entries: &[(CanisterRole, Principal)],
+    index: &'static str,
+    allowed: &BTreeSet<CanisterRole>,
+) -> Result<(), IndexOpsError> {
+    let mut unexpected = Vec::new();
+    for (role, _) in entries {
+        if !allowed.contains(role) {
+            unexpected.push(role.to_string());
+        }
+    }
+
+    unexpected.sort();
+    unexpected.dedup();
+
+    if unexpected.is_empty() {
+        Ok(())
+    } else {
+        Err(IndexOpsError::UnexpectedRoles {
+            index,
+            roles: unexpected.join(", "),
         })
     }
 }

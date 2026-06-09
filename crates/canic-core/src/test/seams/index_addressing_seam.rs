@@ -1,10 +1,19 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
 use crate::{
+    config::schema::CanisterKind,
+    dto::topology::{AppIndexArgs, IndexEntryInput, SubnetIndexArgs},
     ids::CanisterRole,
-    ops::storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
-    storage::stable::index::subnet::SubnetIndexRecord,
-    test::seams::{lock, p},
+    ops::storage::{
+        index::{app::AppIndexOps, subnet::SubnetIndexOps},
+        registry::subnet::SubnetRegistryOps,
+    },
+    storage::stable::index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
+    test::{
+        config::ConfigTestBuilder,
+        seams::{lock, p},
+        support::import_test_env,
+    },
     workflow::topology::index::query::SubnetIndexQuery,
 };
 
@@ -15,7 +24,7 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetIndexOps::import_allow_incomplete(SubnetIndexRecord {
+    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
         entries: Vec::new(),
     })
     .expect("clear subnet index");
@@ -32,7 +41,7 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
-    SubnetIndexOps::import_allow_incomplete(SubnetIndexRecord {
+    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
         entries: vec![(role.clone(), pid_b)],
     })
     .expect("import subnet index");
@@ -56,7 +65,7 @@ fn index_addressing_does_not_fallback_to_registry() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::remove(&pid);
     }
-    SubnetIndexOps::import_allow_incomplete(SubnetIndexRecord {
+    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
         entries: Vec::new(),
     })
     .expect("clear subnet index");
@@ -79,4 +88,98 @@ fn index_addressing_does_not_fallback_to_registry() {
         .filter(|(_, entry)| entry.role == role)
         .count();
     assert_eq!(registry_count, 1);
+}
+
+#[test]
+fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
+    let _guard = lock();
+
+    let service_role = CanisterRole::new("project_hub");
+    let singleton_role = CanisterRole::new("project_ledger");
+    let service_pid = p(21);
+    let singleton_pid = p(22);
+
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister_kind(service_role.clone(), CanisterKind::Service)
+        .with_prime_canister_kind(singleton_role.clone(), CanisterKind::Singleton)
+        .with_app_index(service_role.clone())
+        .install();
+    import_test_env(service_role.clone(), crate::ids::SubnetRole::PRIME, p(20));
+
+    AppIndexOps::import_trusted_partial(AppIndexRecord {
+        entries: Vec::new(),
+    })
+    .expect("clear app index");
+    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
+        entries: Vec::new(),
+    })
+    .expect("clear subnet index");
+
+    AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
+        role: service_role.clone(),
+        pid: service_pid,
+    }]))
+    .expect("configured app service role should import");
+    SubnetIndexOps::import_args_allow_incomplete(SubnetIndexArgs(vec![IndexEntryInput {
+        role: service_role.clone(),
+        pid: service_pid,
+    }]))
+    .expect("configured subnet service role should import");
+
+    let app_err = AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
+        role: singleton_role.clone(),
+        pid: singleton_pid,
+    }]))
+    .expect_err("app index should reject roles outside explicit app_index");
+    assert!(
+        app_err.to_string().contains("unexpected roles"),
+        "expected unexpected app role error, got: {app_err}"
+    );
+
+    let subnet_err =
+        SubnetIndexOps::import_args_allow_incomplete(SubnetIndexArgs(vec![IndexEntryInput {
+            role: singleton_role.clone(),
+            pid: singleton_pid,
+        }]))
+        .expect_err("subnet index should reject non-service roles");
+    assert!(
+        subnet_err.to_string().contains("unexpected roles"),
+        "expected unexpected subnet role error, got: {subnet_err}"
+    );
+
+    AppIndexOps::import(AppIndexRecord {
+        entries: vec![(service_role.clone(), service_pid)],
+    })
+    .expect("full app index import should accept exact configured role set");
+    SubnetIndexOps::import(SubnetIndexRecord {
+        entries: vec![(service_role.clone(), service_pid)],
+    })
+    .expect("full subnet index import should accept exact configured role set");
+
+    let app_full_err = AppIndexOps::import(AppIndexRecord {
+        entries: vec![
+            (service_role.clone(), service_pid),
+            (singleton_role.clone(), singleton_pid),
+        ],
+    })
+    .expect_err("full app index import should reject roles outside explicit app_index");
+    assert!(
+        app_full_err.to_string().contains("unexpected roles"),
+        "expected unexpected full app role error, got: {app_full_err}"
+    );
+
+    let subnet_full_err = SubnetIndexOps::import(SubnetIndexRecord {
+        entries: vec![
+            (service_role.clone(), service_pid),
+            (singleton_role, singleton_pid),
+        ],
+    })
+    .expect_err("full subnet index import should reject non-service roles");
+    assert!(
+        subnet_full_err.to_string().contains("unexpected roles"),
+        "expected unexpected full subnet role error, got: {subnet_full_err}"
+    );
+
+    assert_eq!(AppIndexOps::get(&service_role), Some(service_pid));
+    assert_eq!(SubnetIndexOps::get(&service_role), Some(service_pid));
 }

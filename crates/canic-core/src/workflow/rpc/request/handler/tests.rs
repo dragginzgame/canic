@@ -119,13 +119,13 @@ struct AppIndexRestore(AppIndexRecord);
 
 impl Drop for AppIndexRestore {
     fn drop(&mut self) {
-        AppIndexOps::import_allow_incomplete(self.0.clone()).expect("restore app index");
+        AppIndexOps::import_trusted_partial(self.0.clone()).expect("restore app index");
     }
 }
 
 fn configure_app_index(entries: Vec<(CanisterRole, Principal)>) -> AppIndexRestore {
     let original = AppIndexOps::data();
-    AppIndexOps::import_allow_incomplete(AppIndexRecord { entries }).expect("import app index");
+    AppIndexOps::import_trusted_partial(AppIndexRecord { entries }).expect("import app index");
     AppIndexRestore(original)
 }
 

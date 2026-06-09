@@ -1,4 +1,4 @@
-use super::{ensure_required_roles, ensure_unique_roles};
+use super::{ensure_allowed_roles, ensure_required_roles, ensure_unique_roles};
 use crate::{
     InternalError,
     dto::topology::AppIndexArgs,
@@ -43,19 +43,29 @@ impl AppIndexOps {
 
     pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
         let data = AppIndexRecordMapper::input_to_record(args);
-        Self::import_allow_incomplete(data)
+        ensure_unique_roles(&data.entries, "app")?;
+        let allowed = ConfigOps::get()?.app_index.clone();
+        ensure_allowed_roles(&data.entries, "app", &allowed)?;
+        AppIndex::import(data);
+
+        Ok(())
     }
 
     pub(crate) fn import(data: AppIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
         let required = ConfigOps::get()?.app_index.clone();
+        ensure_allowed_roles(&data.entries, "app", &required)?;
         ensure_required_roles(&data.entries, "app", &required)?;
         AppIndex::import(data);
 
         Ok(())
     }
 
-    pub(crate) fn import_allow_incomplete(data: AppIndexRecord) -> Result<(), InternalError> {
+    /// Import a root-built partial index snapshot.
+    ///
+    /// External/propagated DTO snapshots must use `import_args_allow_incomplete`
+    /// so they are checked against the configured AppIndex role set.
+    pub(crate) fn import_trusted_partial(data: AppIndexRecord) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
         AppIndex::import(data);
 
