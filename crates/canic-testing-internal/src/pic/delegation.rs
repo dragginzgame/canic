@@ -151,6 +151,6 @@ fn mix_u64(request_id: &mut [u8; 32], offset: usize, value: u64) {
 }
 
 #[must_use]
-pub fn role_grant(target: CanisterRole, scopes: Vec<String>) -> DelegatedRoleGrant {
+pub const fn role_grant(target: CanisterRole, scopes: Vec<String>) -> DelegatedRoleGrant {
     DelegatedRoleGrant { target, scopes }
 }
