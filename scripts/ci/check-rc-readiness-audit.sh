@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/ci/doc-guard-lib.sh"
+
+GUARD_LABEL="RC readiness audit"
 AUDIT="$ROOT/docs/operations/rc-readiness-audit.md"
 OPERATIONS_INDEX="$ROOT/docs/operations/README.md"
 MATRIX="$ROOT/docs/operations/release-validation-matrix.md"
@@ -9,60 +12,33 @@ PACKAGE_CHECKLIST="$ROOT/docs/operations/release-package-install-validation.md"
 OLD_AUDIT_NAME="0.62-rc"
 OLD_AUDIT_NAME="$OLD_AUDIT_NAME-readiness-audit.md"
 
-require_file() {
-    local path="$1"
-    if [ ! -f "$path" ]; then
-        echo "missing required RC readiness audit file: ${path#$ROOT/}" >&2
-        exit 1
-    fi
-}
+require_files "$GUARD_LABEL" "$AUDIT" "$OPERATIONS_INDEX" "$MATRIX" "$PACKAGE_CHECKLIST"
 
-require_text() {
-    local path="$1"
-    local needle="$2"
-    if ! grep -Fq "$needle" "$path"; then
-        echo "missing required RC readiness audit text in ${path#$ROOT/}: $needle" >&2
-        exit 1
-    fi
-}
+forbid_operations_file "$OLD_AUDIT_NAME" "RC readiness audit must use the non-versioned operations path"
+forbid_git_reference "$OLD_AUDIT_NAME" "RC readiness docs must not point at an old versioned audit path" docs CHANGELOG.md .github scripts
 
-require_file "$AUDIT"
-require_file "$OPERATIONS_INDEX"
-require_file "$MATRIX"
-require_file "$PACKAGE_CHECKLIST"
+require_texts "$OPERATIONS_INDEX" "$GUARD_LABEL" "rc-readiness-audit.md"
+require_texts "$MATRIX" "$GUARD_LABEL" "rc-readiness-audit.md"
+require_texts "$PACKAGE_CHECKLIST" "$GUARD_LABEL" "rc-readiness-audit.md"
 
-if [ -e "$ROOT/docs/operations/$OLD_AUDIT_NAME" ]; then
-    echo "RC readiness audit must use the non-versioned operations path" >&2
-    exit 1
-fi
-
-if git -C "$ROOT" grep -n "$OLD_AUDIT_NAME" -- docs CHANGELOG.md .github scripts; then
-    echo "RC readiness docs must not point at an old versioned audit path" >&2
-    exit 1
-fi
-
-require_text "$OPERATIONS_INDEX" "rc-readiness-audit.md"
-require_text "$MATRIX" "rc-readiness-audit.md"
-require_text "$PACKAGE_CHECKLIST" "rc-readiness-audit.md"
-
-require_text "$AUDIT" "## A. Verdict"
-require_text "$AUDIT" "READY TO CLOSE 0.62 IMPLEMENTATION WORK"
-require_text "$AUDIT" "## B. Scope Confirmation"
-require_text "$AUDIT" "## C. 0.62 Completion Summary"
-require_text "$AUDIT" "## D. Blockers"
-require_text "$AUDIT" "None found in this audit."
-require_text "$AUDIT" "## E. Non-Blocking Release-Readiness Work"
-require_text "$AUDIT" "## F. Validation Results"
-require_text "$AUDIT" "## G. Recommendation"
-
-require_text "$AUDIT" "implementation close-out from RC promotion and final release"
-require_text "$AUDIT" "This verdict closes implementation slicing only"
-require_text "$AUDIT" "Move to RC/full validation flow."
-require_text "$AUDIT" "Avoid starting a 0.62.7 implementation slice"
-require_text "$AUDIT" "bash scripts/ci/check-rc-readiness-audit.sh"
-require_text "$AUDIT" "cargo test --locked -p canic-core replay_policy --lib -- --nocapture"
-require_text "$AUDIT" "make package"
-require_text "$AUDIT" "make test-canisters"
-require_text "$AUDIT" "Do not change runtime behavior, CLI output, Candid, JSON/output formats"
+require_texts "$AUDIT" "$GUARD_LABEL" \
+    "## A. Verdict" \
+    "READY TO CLOSE 0.62 IMPLEMENTATION WORK" \
+    "## B. Scope Confirmation" \
+    "## C. 0.62 Completion Summary" \
+    "## D. Blockers" \
+    "None found in this audit." \
+    "## E. Non-Blocking Release-Readiness Work" \
+    "## F. Validation Results" \
+    "## G. Recommendation" \
+    "implementation close-out from RC promotion and final release" \
+    "This verdict closes implementation slicing only" \
+    "Move to RC/full validation flow." \
+    "Avoid starting a 0.62.7 implementation slice" \
+    "bash scripts/ci/check-rc-readiness-audit.sh" \
+    "cargo test --locked -p canic-core replay_policy --lib -- --nocapture" \
+    "make package" \
+    "make test-canisters" \
+    "Do not change runtime behavior, CLI output, Candid, JSON/output formats"
 
 echo "RC readiness audit guard passed"

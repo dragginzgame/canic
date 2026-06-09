@@ -2,13 +2,12 @@
 
 ## Status
 
-Backlog notes only.
+Archived backlog notes. Remaining unfinished ideas from this file are optional
+future ideas, not active release requirements.
 
 These ideas were intentionally removed from the 0.46 release bar so the line
 can stay focused on the deployment-target state hard cut and passive
-two-target comparison. They are not approved numbered follow-on lines, and
-numbering should be assigned only when a future release line is actually
-prepared.
+two-target comparison. They are not approved numbered follow-on lines.
 
 ---
 

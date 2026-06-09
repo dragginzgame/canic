@@ -6,3 +6,7 @@ kept intentionally even when they are not called by the `canic` CLI or CI.
 Do not remove these scripts just because they look unused from automated
 workflows. They cover manual setup, local measurement, and occasional repository
 maintenance tasks.
+
+- `gh-ci.sh` is an optional maintainer helper for inspecting GitHub Actions CI
+  with an authenticated local GitHub CLI session. It is not required for normal
+  Canic development or CI.

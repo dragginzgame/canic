@@ -13,10 +13,7 @@ use canic_host::{
     format::cycles_tc,
     icp::{IcpCli, IcpCommandError, command_display, run_output_with_stderr},
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        resolve_installed_deployment_from_root,
-    },
+    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
@@ -471,7 +468,7 @@ pub(super) fn resolve_deployment(
         },
         root,
     )
-    .map_err(cycles_installed_deployment_error)
+    .map_err(super::cycles_installed_deployment_error)
 }
 
 fn resolve_role_principal(
@@ -725,28 +722,6 @@ fn transfer_usage() -> String {
 
 fn topup_usage() -> String {
     render_usage(topup_command)
-}
-
-fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => CyclesCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => CyclesCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            CyclesCommandError::IcpFailed { command, stderr }
-        }
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            CyclesCommandError::ReplicaQuery(format!("root canister {root} is not present"))
-        }
-        InstalledDeploymentError::Registry(error) => CyclesCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => CyclesCommandError::Io(error),
-    }
 }
 
 pub(super) fn cycles_icp_error(error: IcpCommandError) -> CyclesCommandError {

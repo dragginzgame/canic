@@ -25,7 +25,7 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ env.CANIC_MSRV }}
@@ -39,15 +39,18 @@ jobs:
         run: cargo check --workspace --locked
 
   checks:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          clean: true
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
           components: rustfmt, clippy
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
@@ -76,7 +79,7 @@ jobs:
           icp --version
           ic-wasm --version
       - name: Cache PocketIC server
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
           key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
@@ -86,6 +89,7 @@ jobs:
           BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Layering guards
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         run: bash scripts/ci/run-layering-guards.sh
       - name: Forbidden crypto API guards
@@ -113,80 +117,8 @@ jobs:
       - run: make clippy
       - run: make test-unit
       - name: Build examples (default)
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         run: cargo build -p canic --examples --locked
-
-  tag_checks:
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          clean: true
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
-          components: rustfmt, clippy
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-      - uses: Swatinem/rust-cache@v2
-      - name: Install Rust helper tools
-        run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
-      - name: Install wasm target
-        shell: bash
-        run: |
-          echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
-          rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
-      - name: Install actionlint
-        shell: bash
-        run: |
-          BIN="$(bash scripts/ci/install-actionlint.sh)"
-          echo "ACTIONLINT_BIN=$BIN" >> "$GITHUB_ENV"
-      - name: Lint GitHub Actions workflows
-        shell: bash
-        run: "$ACTIONLINT_BIN"
-      - name: Install ICP CLI tools
-        shell: bash
-        run: |
-          bash scripts/ci/install-icp-cli.sh
-          npm install -g @icp-sdk/ic-wasm
-      - name: Check ICP CLI tools
-        run: |
-          icp --version
-          ic-wasm --version
-      - name: Cache PocketIC server
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
-          key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
-      - name: Install PocketIC server
-        shell: bash
-        run: |
-          BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
-          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
-      - name: Forbidden crypto API guards
-        shell: bash
-        run: bash scripts/ci/run-forbidden-crypto-guards.sh
-      - name: Release validation matrix guard
-        shell: bash
-        run: bash scripts/ci/check-release-validation-matrix.sh
-      - name: Upgrade/state compatibility audit guard
-        shell: bash
-        run: bash scripts/ci/check-upgrade-state-audit.sh
-      - name: Recovery runbooks guard
-        shell: bash
-        run: bash scripts/ci/check-recovery-runbooks.sh
-      - name: Diagnostic consistency audit guard
-        shell: bash
-        run: bash scripts/ci/check-diagnostic-consistency-audit.sh
-      - name: Release package/install validation guard
-        shell: bash
-        run: bash scripts/ci/check-release-package-install-validation.sh
-      - name: RC readiness audit guard
-        shell: bash
-        run: bash scripts/ci/check-rc-readiness-audit.sh
-      - run: make fmt-check
-      - run: make clippy
-      - run: make test-unit
-      - run: cargo build --release --workspace --locked
+      - name: Build release workspace
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: cargo build --release --workspace --locked

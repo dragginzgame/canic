@@ -83,10 +83,10 @@ install_or_update_actionlint() {
     local bin
 
     yellow "actionlint:"
-    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-actionlint.sh $ACTIONLINT_VERSION"
+    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-actionlint.sh"
     require_command curl
     require_command tar
-    bin="$(ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" bash "$ROOT_DIR/scripts/ci/install-actionlint.sh" "$ACTIONLINT_VERSION")"
+    bin="$(ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" bash "$ROOT_DIR/scripts/ci/install-actionlint.sh")"
 
     green "actionlint installed: $("$bin" -version 2>&1)"
     if command -v actionlint >/dev/null 2>&1; then
@@ -157,8 +157,8 @@ install_or_update_icp_cli() {
     mkdir -p "$cargo_bin_dir"
     export PATH="$cargo_bin_dir:$PATH"
     hash -r 2>/dev/null || true
-    cyan_command "CANIC_ICP_CLI_VERSION=$CANIC_ICP_CLI_VERSION bash scripts/ci/install-icp-cli.sh $CANIC_ICP_CLI_VERSION"
-    CANIC_ICP_CLI_VERSION="$CANIC_ICP_CLI_VERSION" bash "$ROOT_DIR/scripts/ci/install-icp-cli.sh" "$CANIC_ICP_CLI_VERSION"
+    cyan_command "bash scripts/ci/install-icp-cli.sh"
+    bash "$ROOT_DIR/scripts/ci/install-icp-cli.sh"
     clean_legacy_icp_npm_cli
     hash -r 2>/dev/null || true
     require_command icp

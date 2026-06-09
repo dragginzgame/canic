@@ -38,10 +38,6 @@ pub(super) fn load_registry_entries(
     Ok(registry)
 }
 
-pub(super) fn resolve_tree_anchor(options: &ListOptions) -> Option<String> {
-    options.subtree.clone()
-}
-
 pub(super) fn list_ready_statuses(
     options: &ListOptions,
     registry: &[RegistryEntry],

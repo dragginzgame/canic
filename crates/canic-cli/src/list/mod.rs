@@ -10,7 +10,7 @@ use canic_host::registry::RegistryParseError;
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
     list_canic_versions, list_cycle_balances, list_module_hashes, list_ready_statuses,
-    load_registry_entries, resolve_tree_anchor, resolve_wasm_sizes,
+    load_registry_entries, resolve_wasm_sizes,
 };
 use options::{ListOptions, config_usage, info_usage};
 use render::RegistryColumnData;
@@ -92,7 +92,7 @@ where
 
 fn run_list_options(options: ListOptions) -> Result<(), ListCommandError> {
     let registry = load_registry_entries(&options)?;
-    let anchor = resolve_tree_anchor(&options);
+    let anchor = options.subtree.clone();
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
     let canic_versions = list_canic_versions(&options, &registry, anchor.as_deref())?;
     let module_hashes = list_module_hashes(&registry, anchor.as_deref())?;

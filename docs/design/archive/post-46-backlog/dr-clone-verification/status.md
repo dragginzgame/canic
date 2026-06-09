@@ -1,15 +1,15 @@
 # Post-46 Backlog Status: DR Clone Verification
 
-Last updated: 2026-05-27
+Last updated: 2026-06-09
 
 ## Purpose
 
-This file is the status log for a post-46 backlog topic. It is not an approved
-numbered release line.
+This file is the archived status log for a post-46 backlog topic.
 
 ## Current State
 
-Topic implementation not started.
+Topic implementation has not started. The open work is optional idea material,
+not an active release requirement.
 
 This topic depends on earlier deployment truth, provenance, promotion, and
 multi-deployment work so disaster-recovery clone verification can compare real
@@ -21,7 +21,7 @@ promoted or implemented.
 
 ## Implemented
 
-- No implementation work for this backlog topic has landed yet.
+- No implementation work for this backlog topic has landed.
 
 ## Not Implemented Yet
 
@@ -32,7 +32,7 @@ promoted or implemented.
 
 ## Drift Log
 
-- No implementation drift recorded yet.
+- 2026-06-09: open DR clone verification work moved to optional ideas.
 
 ## Promotion Criteria
 

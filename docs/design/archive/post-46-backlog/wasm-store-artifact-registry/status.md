@@ -1,15 +1,15 @@
 # Post-46 Backlog Status: Wasm-Store Artifact Registry
 
-Last updated: 2026-05-27
+Last updated: 2026-06-09
 
 ## Purpose
 
-This file is the status log for a post-46 backlog topic. It is not an approved
-numbered release line.
+This file is the archived status log for a post-46 backlog topic.
 
 ## Current State
 
-Topic implementation not started.
+Topic implementation has not started. The open work is optional idea material,
+not an active release requirement.
 
 This topic depends on artifact truth and promotion work so the wasm-store can
 become an explicit artifact registry rather than a hidden deployment helper.
@@ -19,7 +19,7 @@ been promoted or implemented.
 
 ## Implemented
 
-- No implementation work for this backlog topic has landed yet.
+- No implementation work for this backlog topic has landed.
 
 ## Not Implemented Yet
 
@@ -30,7 +30,8 @@ been promoted or implemented.
 
 ## Drift Log
 
-- No implementation drift recorded yet.
+- 2026-06-09: open wasm-store registry, provenance, pinning, retention, and GC
+  work moved to optional ideas.
 
 ## Promotion Criteria
 

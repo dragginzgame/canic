@@ -214,9 +214,9 @@ Stale or risky:
   say "Tentative design notes" even though their status docs mark those lines
   closed. This is less risky than 0.49 because status docs are clear, but it is
   still design-source debt.
-- `docs/design/post-46-backlog/adoption-profiles/status.md` still says the
-  adoption topic has not started. It is now superseded by 0.50 and should be
-  marked complete/superseded.
+- The historical post-46 adoption backlog status was marked superseded by
+  0.50 passive adoption. Active adoption/import remains optional future idea
+  material, not active release scope.
 - Historical changelog/audit entries mention `start_root!` and old
   `canic build <role>` forms. Those are acceptable as history, but stale dated
   audit docs from May still describe old `start_root!` fixtures as current.
@@ -227,9 +227,9 @@ Stale or risky:
 | --- | --- | --- |
 | Adoption profiles | Now complete for passive reporting | Implemented in 0.50; post-46 backlog status is obsolete. Active adoption/import remains a separate future topic. |
 | Adoption gap inventory | Partially complete | Passive classification/reporting landed; mutation/import/controller transfer did not. |
-| CI/GitOps provenance | Still relevant soon | Current artifacts are rich but raw/internal. CI needs stable JSON envelopes, exit classes, source/build provenance, signing, and locks. |
-| DR clone verification | Still relevant later | Depends on stable evidence/provenance and maybe catalogs/groups. 0.46 only compares two archived checks. |
-| `wasm_store` artifact registry | Still relevant later | 0.44/0.50 expose artifact evidence and block registry import; no registry/provenance/retention model exists. |
+| CI/GitOps provenance | Partially complete; remaining scope moved to ideas | 0.51-0.53 now cover envelopes, exit classes, provenance, policy gates, and manifests. Signing, provider wrappers, release evidence, and locks remain optional ideas. |
+| DR clone verification | Moved to ideas | Depends on stable evidence/provenance and maybe catalogs/groups. 0.46 only compares two archived checks. |
+| `wasm_store` artifact registry | Moved to ideas | 0.44/0.50 expose artifact evidence and block registry import; no registry/provenance/retention model exists. |
 | Deployment catalog/groups | Still relevant soon/later | Deployment-target identity exists, but no group/catalog UX. Could follow CI evidence or run in parallel if scoped read-only. |
 | Teardown/test-deployment lifecycle | Still relevant later | Requires catalogs/groups, authority policy, and stronger verification/receipts. |
 | Controller mutation/import | Premature | Authority/adoption reports are passive. Needs apply contract, locks, live verification, and receipts. |
@@ -323,8 +323,8 @@ Alternatives:
 | Workspace test failure in `pic_ingress_payload_limits` | High | Tests/setup | `cargo test --workspace --locked` fails installing `payload_limit_probe` due missing subnet `prime`. | Broad CI confidence is not clean; standalone config behavior may have broken a PocketIC fixture. | Fix fixture/config expectation or use an attached test config for topology-dependent probe. | Yes, before release/merge; no, for design-only planning. |
 | 0.49 design doc contradicted hard cut | Resolved | Docs | Original audit found role-only metadata example and "role alone valid" text in 0.49 design. | Contributors could have reintroduced fallback behavior. | Resolved on 2026-05-31 by updating 0.49 design to implemented hard-cut language. | No. |
 | Older design docs still say tentative | Low | Docs | 0.43-0.46 design docs start with "Tentative design notes". | Design-source confusion. | Mark implemented/closed or point to status logs. | No. |
-| Post-46 adoption backlog status obsolete | Low | Roadmap | `post-46-backlog/adoption-profiles/status.md` says not started. | Roadmap readers may miss 0.50 completion. | Mark superseded by 0.50 passive adoption. | No. |
-| Raw JSON artifacts lack stable public envelope | Medium | Automation | CI/GitOps backlog says no stable public JSON envelope/exit-code contract. | Automation may depend on internal DTOs. | Make 0.51 provenance/envelope line. | No, but should be next. |
+| Post-46 adoption backlog status obsolete | Resolved | Roadmap | The archived backlog status now says passive adoption was superseded by 0.50. | Roadmap readers can distinguish passive adoption from active import. | Active adoption/import is optional idea material. | No. |
+| Raw JSON artifacts lack stable public envelope | Resolved | Automation | 0.51 added the stable evidence envelope and exit-class contract. | Automation no longer needs to branch on command-specific raw DTOs for envelope-enabled surfaces. | Remaining locks/signing/provider wrappers are optional idea material. | No. |
 | Active adoption/import temptation | High | Product safety | 0.50 reports only; recommendations are non-executing. | Premature import could bless foreign state or mutate topology unsafely. | Keep active adoption out until authority/apply/receipt design exists. | Yes for any import feature. |
 | `wasm_store` registry temptation | Medium | Artifacts | 0.44/0.50 expose artifact evidence but no registry model. | Registry metadata could be mistaken for install truth. | Build provenance/envelope first; registry later with pins/GC plan. | No. |
 

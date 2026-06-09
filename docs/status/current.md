@@ -9,6 +9,41 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.63.3` changelog is finalized for the batch where the root topology test
+  helper treats `canic_memory_ledger` as absent from the default root bundle,
+  matching the `diagnostics.memory_ledger = true` opt-in contract from
+  `0.63.1`. Local maintainer CI debugging now has an optional GitHub CLI helper
+  under `scripts/dev/`, and the GitHub Actions workflow uses Node
+  24-compatible first-party action majors (`checkout`/`setup-node` `v6`,
+  `cache` `v5`) after recent CI annotations warned about Node 20 action runtime
+  deprecation.
+  Validation:
+  ```text
+  POCKET_IC_BIN=/tmp/pocket-ic-server-14.0.0/pocket-ic cargo test -p canic-tests --test root_suite root_cases::hierarchy::root_reference_topology_is_consistent -- --test-threads=1 --nocapture
+  actionlint .github/workflows/ci.yml
+  bash -n scripts/dev/gh-ci.sh scripts/dev/install_dev.sh scripts/ci/*.sh
+  scripts/dev/gh-ci.sh --list --limit 3
+  scripts/dev/gh-ci.sh --failed
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- The historical post-46 backlog is no longer an active `0.64` planning line.
+  Historical source material stays under `docs/design/archive/post-46-backlog/`;
+  optional feature-shaped follow-ups now live under
+  `docs/design/ideas/post-46-backlog/`. The deleted 0.64 draft had no concrete
+  release need beyond backlog pressure. Already-covered backlog items remain
+  credited to 0.50 passive adoption, 0.51 evidence envelopes, 0.52 build
+  provenance, 0.53 policy gates/project evidence manifests, and 0.54 passive
+  deployment catalog. Future work should require a named feature need, owner,
+  and release scope before it leaves `ideas/`.
+  Validation:
+  ```text
+  stale-reference scan for the deleted 0.64 path and active-0.64 wording
+  directory absence check for the deleted 0.64 backlog design
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.63.2` adds joined-topology coverage metrics to
   `canic nns topology summary`. The summary now reports whether cached nodes
   resolve to known node-provider, node-operator, and data-center rows, and
@@ -1915,16 +1950,16 @@ inspect only the files needed for the current task.
   deployment/install authority explicitly deferred.
 - 0.51.6 has cleaned up the historical post-46 CI/GitOps provenance backlog.
   The backlog is now marked partially superseded by 0.51, uses the implemented
-  `EvidenceEnvelopeV1` and `ExitClassV1` names. Source/build/artifact
-  provenance is now proposed as 0.52; remaining future scope is CI locks,
-  project manifest semantics, optional signing/attestation, and provider
-  wrappers.
+  `EvidenceEnvelopeV1` and `ExitClassV1` names. Later lines completed
+  source/build/artifact provenance and project evidence manifests; remaining
+  future scope is optional idea material under `docs/design/ideas/`.
 - 0.51.5 has closed the evidence-envelope line with
   `docs/audits/release-lines/0.51-closeout.md`. The audit verdict is PASS: the stable
   envelope model, passive adoption-report and deployment-check emitters, shared
   input fingerprinting, exit-class precedence, envelope comparison, docs, and
-  targeted validation are aligned. The only noted follow-up is historical
-  post-46 backlog wording that still uses pre-0.51 draft names.
+  targeted validation are aligned. The historical post-46 backlog wording has
+  since been reconciled and unfinished feature ideas moved out of active release
+  planning.
 - 0.51.4 has added concrete CI/GitOps guidance for stable evidence envelopes.
   `docs/architecture/evidence-envelopes.md` now shows passive artifact layouts,
   a minimal adoption/deployment-check/compare pipeline, raw JSON vs envelope
@@ -3005,7 +3040,7 @@ inspect only the files needed for the current task.
 - Added changelog governance coverage so `## Unreleased` remains root-only and
   detailed minor changelog files stay versioned.
 - Added per-design-line `status.md` logs to the 0.41-0.46 design directories
-  and post-46 backlog topics.
+  and historical post-46 backlog topics.
   These files are now the durable place to record what actually landed, what
   drifted from the design, and what remains open for each minor.
 - Clarified the deployment roadmap ladder without changing the hard cut:

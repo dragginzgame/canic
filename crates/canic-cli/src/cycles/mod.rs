@@ -17,7 +17,7 @@ use crate::{
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
-use canic_host::registry::RegistryParseError;
+use canic_host::{installed_deployment::InstalledDeploymentError, registry::RegistryParseError};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -111,6 +111,28 @@ where
 fn run_options(options: &CyclesOptions) -> Result<(), CyclesCommandError> {
     let report = cycles_report(options)?;
     write_cycles_report(options, &report)
+}
+
+fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesCommandError {
+    match error {
+        InstalledDeploymentError::NoInstalledDeployment {
+            network,
+            deployment,
+        } => CyclesCommandError::NoInstalledDeployment {
+            network,
+            deployment,
+        },
+        InstalledDeploymentError::InstallState(error) => CyclesCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
+        InstalledDeploymentError::IcpFailed { command, stderr } => {
+            CyclesCommandError::IcpFailed { command, stderr }
+        }
+        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
+            CyclesCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+        }
+        InstalledDeploymentError::Registry(error) => CyclesCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => CyclesCommandError::Io(error),
+    }
 }
 
 #[cfg(test)]

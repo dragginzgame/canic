@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
 
+- `0.63.3` hardens CI and maintainer workflow by sharing operations-doc guard
+  helpers, merging tag validation into the main checks job, moving first-party
+  GitHub Actions pins to Node 24-compatible majors, adding an optional `gh` CI
+  helper, aligning root topology tests with the memory-ledger opt-in contract,
+  and moving historical post-46 leftovers into optional design ideas.
+
 - `0.63.2` adds joined-topology coverage metrics to `canic nns topology
   summary`, showing whether cached nodes and node operators resolve to known
   provider, operator, and data-center rows, and centralizes external dev-tool

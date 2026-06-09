@@ -5,10 +5,12 @@ deployment foundation and the post-46 backlog. It is not itself a release
 contract, an approved numbered follow-on line, or current implementation truth.
 
 Last reconciled after the 0.46 closeout on 2026-05-27.
+Open items from this inventory that remain relevant are optional ideas, not
+active release requirements.
 
 The normative design remains in the per-line design docs and
-`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`. Active backlog
-topics live under `post-46-backlog/`.
+`0.41-deployment-truth-model/0.41-0.46-deployment-roadmap.md`. Optional
+feature ideas live under `docs/design/ideas/post-46-backlog/`.
 
 Status markers:
 
@@ -521,6 +523,6 @@ simple operator guide that explains when backup is unnecessary remains open.
 | --- | --- |
 | `docs/design/0.41-deployment-flexibility/` | Superseded by `0.41-deployment-truth-model/` — remove or redirect to avoid duplicate truths. |
 | INSTALLING vs deployment roadmap | Adopters read install guide, not 0.41 design — gap between “what works now” and “what’s planned” should be one page (`DEPLOYMENT-STATUS.md` or section in OBSERVATIONS). |
-| This inventory | Must remain reconciled backlog source material under `post-46-backlog/`; do not treat it as an approved release design. |
+| This inventory | Must remain archived source material under `docs/design/archive/post-46-backlog/`; unfinished feature ideas now live in `docs/design/ideas/post-46-backlog/` and are not active release requirements. |
 
 ---
