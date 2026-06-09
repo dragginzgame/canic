@@ -833,124 +833,37 @@ fn global_network_is_forwarded_to_nns_subnet_namespace() {
 
 #[test]
 fn global_network_is_forwarded_to_deploy() {
-    let mut tail = vec![OsString::from("check"), OsString::from("demo")];
-    let mut diff_tail = vec![
-        OsString::from("inspect"),
-        OsString::from("diff"),
-        OsString::from("demo"),
-    ];
-    let mut install_tail = vec![OsString::from("install"), OsString::from("demo")];
-    let mut inventory_tail = vec![
-        OsString::from("inspect"),
-        OsString::from("inventory"),
-        OsString::from("demo"),
-    ];
-    let mut plan_tail = vec![
-        OsString::from("inspect"),
-        OsString::from("plan"),
-        OsString::from("demo"),
-    ];
-    let mut register_tail = vec![OsString::from("register"), OsString::from("demo")];
-    let mut report_tail = vec![
-        OsString::from("inspect"),
-        OsString::from("report"),
-        OsString::from("demo"),
-    ];
-    let mut resume_tail = vec![
-        OsString::from("inspect"),
-        OsString::from("resume-report"),
-        OsString::from("demo"),
-    ];
-    let mut family_tail = Vec::new();
+    for raw_tail in [
+        &["check", "demo"][..],
+        &["inspect", "diff", "demo"],
+        &["install", "demo"],
+        &["inspect", "inventory", "demo"],
+        &["inspect", "plan", "demo"],
+        &["register", "demo"],
+        &["inspect", "report", "demo"],
+        &["inspect", "resume-report", "demo"],
+    ] {
+        assert_global_network_forwarded_to_deploy_tail(raw_tail);
+    }
 
-    apply_global_network("deploy", &mut tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut diff_tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut install_tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut inventory_tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut plan_tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut register_tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut report_tail, Some("ic".to_string()));
-    apply_global_network("deploy", &mut resume_tail, Some("ic".to_string()));
+    let mut family_tail = Vec::new();
     apply_global_network("deploy", &mut family_tail, Some("ic".to_string()));
+    assert!(family_tail.is_empty());
+}
+
+fn assert_global_network_forwarded_to_deploy_tail(raw_tail: &[&str]) {
+    let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
+    apply_global_network("deploy", &mut tail, Some("ic".to_string()));
 
     assert_eq!(
         tail,
-        vec![
-            OsString::from("check"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
+        raw_tail
+            .iter()
+            .copied()
+            .chain([INTERNAL_NETWORK_OPTION, "ic"])
+            .map(OsString::from)
+            .collect::<Vec<_>>()
     );
-    assert_eq!(
-        diff_tail,
-        vec![
-            OsString::from("inspect"),
-            OsString::from("diff"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        install_tail,
-        vec![
-            OsString::from("install"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        inventory_tail,
-        vec![
-            OsString::from("inspect"),
-            OsString::from("inventory"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        plan_tail,
-        vec![
-            OsString::from("inspect"),
-            OsString::from("plan"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        register_tail,
-        vec![
-            OsString::from("register"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        report_tail,
-        vec![
-            OsString::from("inspect"),
-            OsString::from("report"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert_eq!(
-        resume_tail,
-        vec![
-            OsString::from("inspect"),
-            OsString::from("resume-report"),
-            OsString::from("demo"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
-            OsString::from("ic")
-        ]
-    );
-    assert!(family_tail.is_empty());
 }
 
 #[test]

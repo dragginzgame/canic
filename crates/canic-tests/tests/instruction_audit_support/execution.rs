@@ -391,12 +391,7 @@ fn execute_root_delegation_issue_scenario(
     let caller = prepared
         .caller_pid
         .expect("auth audit scenario must resolve a shard caller");
-    let verifier_pid = *setup
-        .subnet_index
-        .get(&TEST)
-        .expect("test canister must exist for auth audit scenario");
-    let response =
-        request_root_delegation_provision(&setup.pic, setup.root_id, caller, verifier_pid);
+    let response = request_root_delegation_provision(&setup.pic, setup.root_id, caller, TEST);
     assert_eq!(response.cert.shard_pid, caller);
 }
 
