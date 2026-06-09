@@ -35,7 +35,7 @@ pool.minimum_size = 3
 kind = "root"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]

@@ -93,9 +93,9 @@ impl Validate for ConfigModel {
                 ))
             })?;
 
-            if canister_cfg.kind != CanisterKind::Singleton {
+            if canister_cfg.kind != CanisterKind::Service {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app index canister '{canister_role}' must have kind = \"singleton\"",
+                    "app index canister '{canister_role}' must have kind = \"service\"",
                 )));
             }
         }

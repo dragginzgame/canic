@@ -20,9 +20,12 @@ pub(super) fn validate_registration_policy(
     let parent_cfg = ConfigOps::current_subnet_canister(&parent_role)?;
 
     let observed = policy::topology::registry::RegistryRegistrationObservation {
-        existing_role_pid: matches!(canister_cfg.kind, CanisterKind::Root)
-            .then(|| SubnetRegistryOps::find_pid_for_role(role))
-            .flatten(),
+        existing_role_pid: matches!(
+            canister_cfg.kind,
+            CanisterKind::Root | CanisterKind::Service
+        )
+        .then(|| SubnetRegistryOps::find_pid_for_role(role))
+        .flatten(),
         existing_singleton_under_parent_pid: matches!(canister_cfg.kind, CanisterKind::Singleton)
             .then(|| {
                 if role.is_wasm_store() {

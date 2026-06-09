@@ -39,7 +39,7 @@ pool.minimum_size = 3
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
@@ -56,7 +56,7 @@ delegated_token_signer = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.test]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.test.auth]
 role_attestation_cache = true

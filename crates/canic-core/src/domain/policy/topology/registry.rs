@@ -18,6 +18,12 @@ pub enum RegistryPolicyError {
     #[error("role {role} already registered to {pid}")]
     RoleAlreadyRegistered { role: CanisterRole, pid: Principal },
 
+    #[error("service role {role} must be created by root parent (parent role {parent_role})")]
+    ServiceRequiresRootParent {
+        role: CanisterRole,
+        parent_role: CanisterRole,
+    },
+
     #[error("singleton role {role} already registered under parent {parent_pid} (pid {pid})")]
     SingletonAlreadyRegisteredUnderParent {
         role: CanisterRole,
@@ -137,6 +143,21 @@ impl RegistryPolicy {
                     });
                 }
             }
+            CanisterKind::Service => {
+                if !parent_role.is_root() {
+                    return Err(RegistryPolicyError::ServiceRequiresRootParent {
+                        role: role.clone(),
+                        parent_role: parent_role.clone(),
+                    });
+                }
+
+                if let Some(pid) = observed.existing_role_pid {
+                    return Err(RegistryPolicyError::RoleAlreadyRegistered {
+                        role: role.clone(),
+                        pid,
+                    });
+                }
+            }
             CanisterKind::Singleton => {
                 if role.is_wasm_store() {
                     return Ok(());
@@ -151,7 +172,7 @@ impl RegistryPolicy {
                 }
             }
             CanisterKind::Replica => {
-                if parent_cfg.kind != CanisterKind::Singleton || parent_cfg.scaling.is_none() {
+                if !is_manager_parent_kind(parent_cfg.kind) || parent_cfg.scaling.is_none() {
                     return Err(RegistryPolicyError::ReplicaRequiresSingletonWithScaling {
                         role: role.clone(),
                         parent_role: parent_role.clone(),
@@ -159,7 +180,7 @@ impl RegistryPolicy {
                 }
             }
             CanisterKind::Shard => {
-                if parent_cfg.kind != CanisterKind::Singleton || parent_cfg.sharding.is_none() {
+                if !is_manager_parent_kind(parent_cfg.kind) || parent_cfg.sharding.is_none() {
                     return Err(RegistryPolicyError::ShardRequiresSingletonWithSharding {
                         role: role.clone(),
                         parent_role: parent_role.clone(),
@@ -167,7 +188,7 @@ impl RegistryPolicy {
                 }
             }
             CanisterKind::Instance => {
-                if parent_cfg.kind != CanisterKind::Singleton || parent_cfg.directory.is_none() {
+                if !is_manager_parent_kind(parent_cfg.kind) || parent_cfg.directory.is_none() {
                     return Err(
                         RegistryPolicyError::InstanceRequiresSingletonWithDirectory {
                             role: role.clone(),
@@ -180,4 +201,8 @@ impl RegistryPolicy {
 
         Ok(())
     }
+}
+
+fn is_manager_parent_kind(kind: CanisterKind) -> bool {
+    matches!(kind, CanisterKind::Service | CanisterKind::Singleton)
 }

@@ -152,7 +152,7 @@ package = "app"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 "#,
     )
     .expect("write config");

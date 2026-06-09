@@ -779,11 +779,14 @@ fn validate_subnet_name(subnet: &str) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 fn validate_attach_kind(kind: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if matches!(kind, "singleton" | "shard" | "replica" | "instance") {
+    if matches!(
+        kind,
+        "service" | "singleton" | "shard" | "replica" | "instance"
+    ) {
         return Ok(());
     }
 
-    Err("kind must be one of: singleton, shard, replica, instance".into())
+    Err("kind must be one of: service, singleton, shard, replica, instance".into())
 }
 
 fn toml_string_literal(value: &str) -> String {
@@ -842,7 +845,7 @@ pub(super) fn configured_role_capabilities_from_source(
         .collect())
 }
 
-// Enumerate derived auto-created singleton roles from raw config source.
+// Enumerate derived auto-created service roles from raw config source.
 pub(super) fn configured_role_auto_create_from_source(
     config_source: &str,
 ) -> Result<BTreeSet<String>, Box<dyn std::error::Error>> {

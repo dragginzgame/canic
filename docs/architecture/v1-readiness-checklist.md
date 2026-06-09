@@ -54,7 +54,7 @@ Only attached roles can be built as deployment artifacts:
 
 ```toml
 [subnets.<subnet>.canisters.<role>]
-kind = "singleton"
+kind = "service"
 ```
 
 ## Command Checklist

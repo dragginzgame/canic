@@ -30,7 +30,7 @@ icrc21 = true
 kind = "root"
 
 [subnets.prime.canisters.test]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.test.auth]
 role_attestation_cache = true

@@ -26,7 +26,7 @@ ecdsa_key_name = "key_1"
 kind = "root"
 
 [subnets.prime.canisters.project_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.project_hub.auth]
 role_attestation_cache = true

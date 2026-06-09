@@ -629,7 +629,7 @@ kind = "root"
             config.push_str(
                 r#"
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 "#,
             );
         }

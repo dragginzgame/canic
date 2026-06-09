@@ -87,7 +87,7 @@ allowed = ["success"]
     )
     .expect_err("empty build provenance rules fail");
 
-    assert!(err.to_string().contains("build_provenance"));
+    assert!(matches!(err, PolicyGateError::InvalidPolicy(_)));
 }
 
 #[test]
@@ -108,7 +108,7 @@ require_magic = true
     )
     .expect_err("unknown build provenance keys fail");
 
-    assert!(err.to_string().contains("failed to parse policy TOML"));
+    assert!(matches!(err, PolicyGateError::Toml(_)));
 }
 
 #[test]

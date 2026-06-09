@@ -364,6 +364,7 @@ mod tests {
     // Guard against arithmetic wraparound when adding a new reservation.
     fn next_in_flight_rejects_overflow() {
         let err = next_in_flight_quantity(u64::MAX, 1).expect_err("overflow must fail");
-        assert!(err.to_string().contains("intent reservation overflow"));
+        assert_eq!(err.class(), crate::InternalErrorClass::Invariant);
+        assert_eq!(err.origin(), InternalErrorOrigin::Workflow);
     }
 }

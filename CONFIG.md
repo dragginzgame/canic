@@ -49,7 +49,7 @@ Optional list of controller principals appended to every provisioned canister.
 
 ### `app_index = ["role_a", "role_b", ...]`
 
-Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "singleton"`.
+Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "service"`.
 
 ### `[app]`
 
@@ -73,8 +73,8 @@ Controls the warm canister pool for a subnet.
 - `import.local = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=local` (also used when unset).
 - `import.ic = ["aaaaa-aa", ...]` – canister IDs to import when built with `ICP_ENVIRONMENT=ic`.
   Import is destructive (controllers reset, code uninstalled); failures are logged and skipped.
-If `pool.import.initial` is `0` and the subnet declares singleton roles, root
-bootstrap may create new singleton canisters before queued imports are ready.
+If `pool.import.initial` is `0` and the subnet declares service roles, root
+bootstrap may create new service canisters before queued imports are ready.
 
 ### `[log]`
 
@@ -121,10 +121,10 @@ array.
 
 - `canisters.*` – nested tables describing per-role policies (see below).
 
-Configured `kind = "singleton"` roles are derived as the stable subnet
-services. Root ensures those singleton roles exist during bootstrap and exposes
-them through `canic_subnet_index()`. Shards, replicas, and tenants are created
-by their placement managers instead.
+Configured `kind = "service"` roles are derived as the stable subnet services.
+Root ensures those service roles exist during bootstrap and exposes them through
+`canic_subnet_index()`. Singletons, shards, replicas, and tenants are created by
+their placement managers instead.
 
 ### Implicit `wasm_store`
 
@@ -251,10 +251,10 @@ pool.import.ic = ["aaaaa-aa"]
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -264,7 +264,7 @@ policy.capacity = 100
 policy.max_shards = 4
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 topup.threshold = "10T"
 topup.amount = "5T"
 
@@ -301,7 +301,7 @@ It does not enumerate every published template release.
 Static config owns:
 
 - user-defined canister roles and policies
-- configured singleton roles that root bootstraps and exposes through the subnet index
+- configured service roles that root bootstraps and exposes through the subnet index
 - the explicit app index exported by the prime root
 
 Root-authoritative runtime state owns:

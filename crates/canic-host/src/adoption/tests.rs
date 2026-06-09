@@ -29,7 +29,7 @@ package = "store"
 kind = "root"
 
 [subnets.prime.canisters.api]
-kind = "singleton"
+kind = "service"
 "#;
 
 const BROWNFIELD_CONFIG: &str = r#"
@@ -75,7 +75,7 @@ kind = "canister"
 package = "app"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.root]
 kind = "root"

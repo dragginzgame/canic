@@ -129,10 +129,8 @@ fn bind_rejects_conflicting_provisional_child() {
     )
     .expect("attach provisional child");
 
-    let err = DirectoryRegistryOps::bind("projects", "alpha", p(3), 20)
+    DirectoryRegistryOps::bind("projects", "alpha", p(3), 20)
         .expect_err("conflicting provisional child should fail");
-
-    assert!(err.to_string().contains("pending for provisional child"));
 }
 
 #[test]

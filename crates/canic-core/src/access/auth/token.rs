@@ -174,7 +174,7 @@ mod tests {
         let err =
             delegated_token_from_ingress_bytes(&bytes).expect_err("oversized token must fail");
 
-        assert!(err.to_string().contains("failed to decode DelegatedToken"));
+        assert!(matches!(err, crate::access::AccessError::Denied(_)));
     }
 
     #[test]

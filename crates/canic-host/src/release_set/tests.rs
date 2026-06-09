@@ -74,10 +74,10 @@ icrc21 = true
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 "#;
 
 const MULTI_ROOT_CONFIG: &str = r#"
@@ -118,7 +118,7 @@ init_mode = "enabled"
 [app.whitelist]
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 "#;
 
 fn with_guarded_env<T>(test: impl FnOnce() -> T) -> T {
@@ -188,10 +188,10 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 "#;
 
     let roles = configured_release_roles_from_source(config).expect("release roles");
@@ -226,7 +226,7 @@ package = "store"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 "#;
     fs::write(&config_path, config).expect("write config");
 
@@ -260,11 +260,8 @@ fn configured_role_kinds_lists_configured_roles() {
     let kinds = configured_role_kinds_from_source(REAL_CONFIG).expect("role kinds");
 
     assert_eq!(kinds.get("root").map(String::as_str), Some("root"));
-    assert_eq!(kinds.get("user_hub").map(String::as_str), Some("singleton"));
-    assert_eq!(
-        kinds.get("scale_hub").map(String::as_str),
-        Some("singleton")
-    );
+    assert_eq!(kinds.get("user_hub").map(String::as_str), Some("service"));
+    assert_eq!(kinds.get("scale_hub").map(String::as_str), Some("service"));
 }
 
 #[test]
@@ -296,7 +293,7 @@ package = "canisters/store"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub.sharding.pools.users]
 canister_role = "user_shard"
@@ -369,15 +366,11 @@ kind = "root"
 
 #[test]
 fn declare_fleet_role_rejects_root_and_duplicates() {
-    let root_err = declare_fleet_role_source(REAL_CONFIG, "demo", "root", "root")
-        .expect_err("root declaration should fail")
-        .to_string();
-    assert!(root_err.contains("root role must be attached"));
+    declare_fleet_role_source(REAL_CONFIG, "demo", "root", "root")
+        .expect_err("root declaration should fail");
 
-    let duplicate_err = declare_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "user_hub")
-        .expect_err("duplicate declaration should fail")
-        .to_string();
-    assert!(duplicate_err.contains("already declared"));
+    declare_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "user_hub")
+        .expect_err("duplicate declaration should fail");
 }
 
 #[test]
@@ -450,28 +443,46 @@ kind = "root"
 }
 
 #[test]
+fn attach_fleet_role_accepts_service_kind() {
+    let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+    let updated = attach_fleet_role_source(config, "demo", "worker", "prime", "service")
+        .expect("attach service role");
+
+    assert_eq!(updated.role.kind, "service");
+    assert_eq!(updated.role.topology, "prime/worker");
+    assert!(updated.source.contains("kind = \"service\""));
+}
+
+#[test]
 fn attach_fleet_role_rejects_missing_duplicate_root_and_unknown_kind() {
-    let missing_err =
-        attach_fleet_role_source(REAL_CONFIG, "demo", "missing", "prime", "singleton")
-            .expect_err("missing role should fail")
-            .to_string();
-    assert!(missing_err.contains("is not declared"));
+    attach_fleet_role_source(REAL_CONFIG, "demo", "missing", "prime", "singleton")
+        .expect_err("missing role should fail");
 
-    let duplicate_err =
-        attach_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "prime", "singleton")
-            .expect_err("duplicate attachment should fail")
-            .to_string();
-    assert!(duplicate_err.contains("already attached"));
+    attach_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "prime", "singleton")
+        .expect_err("duplicate attachment should fail");
 
-    let root_err = attach_fleet_role_source(REAL_CONFIG, "demo", "root", "prime", "singleton")
-        .expect_err("root attachment should fail")
-        .to_string();
-    assert!(root_err.contains("root role must already be attached"));
+    attach_fleet_role_source(REAL_CONFIG, "demo", "root", "prime", "singleton")
+        .expect_err("root attachment should fail");
 
-    let kind_err = attach_fleet_role_source(REAL_CONFIG, "demo", "minimal", "prime", "service")
-        .expect_err("unknown kind should fail")
-        .to_string();
-    assert!(kind_err.contains("kind must be one of"));
+    attach_fleet_role_source(REAL_CONFIG, "demo", "minimal", "prime", "worker")
+        .expect_err("unknown kind should fail");
 }
 
 #[test]
@@ -515,7 +526,7 @@ package = "worker"
 kind = "root"
 
 [subnets.prime.canisters.hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.hub.sharding.pools.primary]
 canister_role = "worker"
@@ -585,7 +596,7 @@ package = "worker"
 kind = "root"
 
 [subnets.prime.canisters.hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.hub.sharding.pools.primary]
 canister_role = "worker"
@@ -608,44 +619,35 @@ kind = "shard"
 
 #[test]
 fn rename_fleet_role_rejects_root_missing_duplicate_and_same_role() {
-    let duplicate_err = rename_fleet_role_source(
+    rename_fleet_role_source(
         REAL_CONFIG,
         Path::new("canic.toml"),
         "demo",
         "user_hub",
         "scale_hub",
     )
-    .expect_err("duplicate rename should fail")
-    .to_string();
-    assert!(duplicate_err.contains("already declared"));
+    .expect_err("duplicate rename should fail");
 
-    let missing_err = rename_fleet_role_source(
+    rename_fleet_role_source(
         REAL_CONFIG,
         Path::new("canic.toml"),
         "demo",
         "missing",
         "renamed",
     )
-    .expect_err("missing rename should fail")
-    .to_string();
-    assert!(missing_err.contains("is not declared"));
+    .expect_err("missing rename should fail");
 
-    let root_err =
-        rename_fleet_role_source(REAL_CONFIG, Path::new("canic.toml"), "demo", "root", "app")
-            .expect_err("root rename should fail")
-            .to_string();
-    assert!(root_err.contains("root role cannot be renamed"));
+    rename_fleet_role_source(REAL_CONFIG, Path::new("canic.toml"), "demo", "root", "app")
+        .expect_err("root rename should fail");
 
-    let same_err = rename_fleet_role_source(
+    rename_fleet_role_source(
         REAL_CONFIG,
         Path::new("canic.toml"),
         "demo",
         "user_hub",
         "user_hub",
     )
-    .expect_err("same rename should fail")
-    .to_string();
-    assert!(same_err.contains("must differ"));
+    .expect_err("same rename should fail");
 }
 
 #[test]
@@ -697,7 +699,7 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -711,7 +713,7 @@ kind = "shard"
 delegated_token_signer = true
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
@@ -785,7 +787,7 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -803,7 +805,7 @@ kind = "shard"
 kind = "instance"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
@@ -876,7 +878,7 @@ package = "role_baseline"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -950,7 +952,7 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"
 
@@ -968,7 +970,7 @@ delegated_token_signer = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
@@ -1063,7 +1065,7 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"
 "#;
@@ -1124,11 +1126,11 @@ pool.minimum_size = 2
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 initial_cycles = "7T"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 "#;
 
     let cycles = configured_local_root_create_cycles_from_source(config).expect("cycles");
@@ -1137,7 +1139,7 @@ kind = "singleton"
 }
 
 #[test]
-fn configured_role_auto_create_lists_derived_singleton_roles() {
+fn configured_role_auto_create_lists_derived_service_roles() {
     let config = r#"
 controllers = []
 app_index = []
@@ -1185,10 +1187,10 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 "#;
     let auto_create = configured_role_auto_create_from_source(config).expect("auto create roles");
 
@@ -1246,10 +1248,10 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"

@@ -18,7 +18,7 @@ package = "."
 kind = "root"
 
 [subnets.prime.canisters.test]
-kind = "singleton"
+kind = "service"
 
 [app]
 init_mode = "enabled"

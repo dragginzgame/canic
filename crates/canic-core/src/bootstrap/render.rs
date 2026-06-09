@@ -436,6 +436,9 @@ fn render_canister_kind(kind: CanisterKind) -> TokenStream {
         CanisterKind::Root => {
             quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Root)
         }
+        CanisterKind::Service => {
+            quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Service)
+        }
         CanisterKind::Singleton => {
             quote!(::canic::__internal::core::bootstrap::compiled::CanisterKind::Singleton)
         }

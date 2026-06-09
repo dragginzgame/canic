@@ -8462,7 +8462,7 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
@@ -12618,7 +12618,7 @@ init_mode = "enabled"
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 "#;
 
 fn assert_json_round_trip<T>(value: &T)

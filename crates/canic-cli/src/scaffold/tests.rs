@@ -245,7 +245,7 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
 
     let err = scaffold_canister(&options).expect_err("declared role should fail");
 
-    assert!(err.to_string().contains("already declared"));
+    std::assert_matches!(err, ScaffoldCommandError::Usage(_));
     assert!(!fleet_dir.join("app").exists());
     fs::remove_dir_all(root).expect("remove scaffold temp root");
 }

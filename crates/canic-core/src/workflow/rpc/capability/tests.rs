@@ -6,6 +6,7 @@ use crate::{
             CAPABILITY_VERSION_V1, CapabilityProof, DelegatedGrant, DelegatedGrantProof,
             DelegatedGrantScope, PROOF_VERSION_V1, RoleAttestationProof,
         },
+        error::ErrorCode,
         rpc::{CyclesRequest, RootRequestMetadata},
     },
     ops::storage::state::subnet::SubnetStateOps,
@@ -114,21 +115,21 @@ fn root_capability_hash_ignores_role_attestation_request_epoch() {
 fn project_replay_metadata_rejects_expired_metadata() {
     let err = project_replay_metadata(sample_metadata(1, 2, 900, 50), 1_000)
         .expect_err("expired metadata must fail");
-    assert!(err.message.contains("expired"));
+    assert_eq!(err.code, ErrorCode::Conflict);
 }
 
 #[test]
 fn project_replay_metadata_rejects_expiry_boundary() {
     let err = project_replay_metadata(sample_metadata(1, 2, 900, 50), 950)
         .expect_err("metadata at expiry boundary must fail");
-    assert!(err.message.contains("expired"));
+    assert_eq!(err.code, ErrorCode::Conflict);
 }
 
 #[test]
 fn project_replay_metadata_rejects_future_metadata_beyond_skew() {
     let err = project_replay_metadata(sample_metadata(1, 2, 1_031, 60), 1_000)
         .expect_err("future metadata must fail");
-    assert!(err.message.contains("future"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -257,7 +258,7 @@ fn delegated_grant_blob_rejects_header_mismatch() {
 
     let err =
         super::proof::decode_delegated_grant_blob(&blob).expect_err("header mismatch must fail");
-    assert!(err.message.contains("wire header"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -278,7 +279,7 @@ fn validate_nonroot_cycles_envelope_rejects_non_structural_proof() {
         &role_attestation_capability_proof(PROOF_VERSION_V1),
     )
     .expect_err("non-root path must reject non-structural proof");
-    assert!(err.message.contains("only supports structural proof mode"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -289,7 +290,7 @@ fn validate_root_capability_envelope_rejects_capability_version_mismatch() {
         &CapabilityProof::Structural,
     )
     .expect_err("unsupported capability version must fail");
-    assert!(err.message.contains("capability_version"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -339,7 +340,7 @@ fn validate_root_capability_envelope_rejects_role_attestation_proof_version_mism
         &role_attestation_capability_proof(PROOF_VERSION_V1 + 1),
     )
     .expect_err("unsupported role proof version must fail");
-    assert!(err.message.contains("proof_version"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -354,7 +355,7 @@ fn validate_root_capability_envelope_rejects_delegated_grant_proof_version_misma
         &delegated_grant_capability_proof(proof),
     )
     .expect_err("unsupported delegated grant proof version must fail");
-    assert!(err.message.contains("proof_version"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -362,7 +363,7 @@ fn verify_capability_hash_binding_rejects_mismatch() {
     let err =
         verify_capability_hash_binding(p(1), CAPABILITY_VERSION_V1, &sample_request(10), [0u8; 32])
             .expect_err("mismatched hash must fail");
-    assert!(err.message.contains("capability_hash"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -398,7 +399,7 @@ fn verify_delegated_grant_hash_binding_rejects_mismatch() {
 
     let err = verify_delegated_grant_hash_binding(&proof)
         .expect_err("mismatched delegated grant hash must fail");
-    assert!(err.message.contains("capability_hash"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -449,7 +450,7 @@ fn verify_root_delegated_grant_claims_rejects_subject_mismatch() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("subject mismatch must fail");
-    assert!(err.message.contains("subject"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -464,7 +465,7 @@ fn verify_root_delegated_grant_claims_rejects_issuer_mismatch() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("issuer mismatch must fail");
-    assert!(err.message.contains("issuer"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -479,7 +480,7 @@ fn verify_root_delegated_grant_claims_rejects_audience_mismatch() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("audience mismatch must fail");
-    assert!(err.message.contains("audience"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -494,7 +495,7 @@ fn verify_root_delegated_grant_claims_rejects_scope_family_mismatch() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("scope family mismatch must fail");
-    assert!(err.message.contains("capability_family"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -509,7 +510,7 @@ fn verify_root_delegated_grant_claims_rejects_zero_quota() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("zero quota must fail");
-    assert!(err.message.contains("quota"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -525,7 +526,7 @@ fn verify_root_delegated_grant_claims_rejects_not_yet_valid_window() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("not-yet-valid grant must fail");
-    assert!(err.message.contains("not valid yet"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -541,7 +542,7 @@ fn verify_root_delegated_grant_claims_rejects_expired_window() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("expired grant must fail");
-    assert!(err.message.contains("expired"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -557,7 +558,7 @@ fn verify_root_delegated_grant_claims_rejects_expiry_boundary() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("grant at expiry boundary must fail");
-    assert!(err.message.contains("expired"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -572,7 +573,7 @@ fn verify_root_delegated_grant_claims_rejects_key_id_mismatch() {
     let err =
         verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
             .expect_err("unsupported key_id must fail");
-    assert!(err.message.contains("key_id"));
+    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -596,5 +597,5 @@ fn verify_root_delegated_grant_signature_rejects_invalid_signature() {
 
     let err = verify_root_delegated_grant_signature(&proof.grant, &wrong_signature)
         .expect_err("invalid signature must fail");
-    assert!(err.message.contains("signature invalid"));
+    assert_eq!(err.code, ErrorCode::Forbidden);
 }

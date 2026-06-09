@@ -74,12 +74,12 @@ kind = "root"
 
 # --- App ---
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 # --- User Hub ---
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 # --- User Hub Pools ---
@@ -100,7 +100,7 @@ role_attestation_cache = true
 
 # --- Scale Hub ---
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 # --- Scale Hub Pools ---

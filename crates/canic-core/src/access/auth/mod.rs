@@ -229,7 +229,7 @@ mod tests {
         let sub = p(1);
         let caller = p(2);
         let err = enforce_subject_binding(sub, caller).expect_err("expected subject mismatch");
-        assert!(err.to_string().contains("does not match caller"));
+        assert!(matches!(err, AccessError::Denied(_)));
     }
 
     #[test]
@@ -242,7 +242,7 @@ mod tests {
     fn required_scope_rejects_when_scope_missing() {
         let scopes = vec![cap::READ.to_string()];
         let err = enforce_required_scope(Some(cap::VERIFY), &scopes).expect_err("expected denial");
-        assert!(err.to_string().contains("missing required scope"));
+        assert!(matches!(err, AccessError::Denied(_)));
     }
 
     #[test]

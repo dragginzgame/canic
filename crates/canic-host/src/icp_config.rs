@@ -416,7 +416,7 @@ package = "app"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 "#,
         )
         .expect("write config");
@@ -506,7 +506,7 @@ package = "app"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 "#,
         )
         .expect("write config");
@@ -617,7 +617,7 @@ kind = "singleton"
             .expect("write role declaration");
         }
         for role in roles {
-            let kind = if *role == "root" { "root" } else { "singleton" };
+            let kind = if *role == "root" { "root" } else { "service" };
             write!(
                 source,
                 "\n[subnets.prime.canisters.{role}]\nkind = \"{kind}\"\n"

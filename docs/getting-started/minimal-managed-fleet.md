@@ -124,11 +124,11 @@ package = "registry"
 kind = "root"
 
 [subnets.prime.canisters.hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 [subnets.prime.canisters.registry]
-kind = "singleton"
+kind = "service"
 topup = {}
 ```
 

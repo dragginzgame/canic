@@ -56,24 +56,24 @@ impl SubnetConfig {
 
     /// Roles that root creates automatically during subnet bootstrap.
     ///
-    /// In the hard-cut config model, configured singleton roles are the stable
-    /// subnet services. Shards, replicas, and instances are created by their
-    /// placement managers instead.
+    /// Configured service roles are the stable subnet services. Singletons,
+    /// shards, replicas, and instances are created by their placement managers
+    /// instead.
     #[must_use]
     pub fn auto_create_roles(&self) -> BTreeSet<CanisterRole> {
-        self.singleton_roles()
+        self.service_roles()
     }
 
     /// Roles exposed through the subnet index.
     #[must_use]
     pub fn subnet_index_roles(&self) -> BTreeSet<CanisterRole> {
-        self.singleton_roles()
+        self.service_roles()
     }
 
-    fn singleton_roles(&self) -> BTreeSet<CanisterRole> {
+    fn service_roles(&self) -> BTreeSet<CanisterRole> {
         self.canisters
             .iter()
-            .filter(|&(_role, canister)| canister.kind == CanisterKind::Singleton)
+            .filter(|&(_role, canister)| canister.kind == CanisterKind::Service)
             .map(|(role, _canister)| role.clone())
             .collect()
     }
@@ -293,6 +293,7 @@ pub enum MetricsProfile {
 #[serde(rename_all = "snake_case")]
 pub enum CanisterKind {
     Root,
+    Service,
     Singleton,
     Replica,
     Shard,
@@ -303,6 +304,7 @@ impl fmt::Display for CanisterKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
             Self::Root => "root",
+            Self::Service => "service",
             Self::Singleton => "singleton",
             Self::Replica => "replica",
             Self::Shard => "shard",

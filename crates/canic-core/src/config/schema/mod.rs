@@ -95,7 +95,7 @@ pub trait Validate {
 /// - A PRIME subnet MUST exist
 /// - Exactly one ROOT canister MUST exist globally
 /// - ROOT canister MUST be in the PRIME subnet
-/// - App index canisters must be SINGLETONs in PRIME
+/// - App index canisters must be SERVICEs in PRIME
 /// - Role names are length-limited
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -126,7 +126,7 @@ pub struct ConfigModel {
     pub app: AppConfig,
 
     /// Canister roles that participate in the application index.
-    /// These must exist in the PRIME subnet and be SINGLETON canisters.
+    /// These must exist in the PRIME subnet and be SERVICE canisters.
     #[serde(default)]
     pub app_index: BTreeSet<CanisterRole>,
 

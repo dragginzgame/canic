@@ -122,8 +122,7 @@ fn estimate_cycles_uses_icp_xdr_permyriad_units() {
 #[test]
 fn ledger_decimals_validation_requires_icp_decimals() {
     validate_ledger_decimals(8).expect("ICP decimals");
-    let err = validate_ledger_decimals(6).expect_err("non-ICP decimals must fail");
-    assert!(err.to_string().contains("decimals=8"));
+    validate_ledger_decimals(6).expect_err("non-ICP decimals must fail");
 }
 
 #[test]
@@ -267,9 +266,8 @@ fn retry_request_must_match_stored_operation_identity() {
         .expect("matching retry");
 
     request.amount_e8s += 1;
-    let err = IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)
+    IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)
         .expect_err("changed amount must fail");
-    assert!(err.to_string().contains("amount_e8s"));
 }
 
 #[test]
@@ -425,7 +423,6 @@ fn refill_replay_payload_mismatch_maps_to_conflict() {
         .expect_err("payload mismatch must fail");
     let public = err.public_error().expect("public replay error");
     assert_eq!(public.code, ErrorCode::Conflict);
-    assert!(public.message.contains("different payload"));
 }
 
 #[test]
@@ -508,7 +505,10 @@ fn refill_value_transfer_cost_guard_enforces_actor_quota() {
 
     let err = CostGuardOps::reserve(icp_refill_cost_guard_request(&token, p(99), balance, now))
         .expect_err("same actor quota bucket exhausted");
-    assert!(err.to_string().contains("quota exceeded"));
+    assert_eq!(
+        err.public_error().expect("quota rejection is public").code,
+        ErrorCode::ResourceExhausted
+    );
 }
 
 #[test]

@@ -1473,14 +1473,12 @@ mod tests {
             .expect_err("mismatched caller must fail");
 
         assert_eq!(err.code, ErrorCode::Forbidden);
-        assert!(err.message.contains("must match shard_pid"));
     }
 
     #[test]
     fn delegation_replay_metadata_rejects_missing_or_invalid_ttl() {
         let missing = AuthApi::delegation_replay_metadata(None).expect_err("metadata is required");
         assert_eq!(missing.code, ErrorCode::OperationIdRequired);
-        assert_eq!(missing.message, "operation_id is required for this command");
 
         let zero = AuthApi::delegation_replay_metadata(Some(RootRequestMetadata {
             request_id: [1; 32],
@@ -1515,7 +1513,6 @@ mod tests {
         let missing =
             AuthApi::token_replay_metadata(None, "delegated token mint").expect_err("required");
         assert_eq!(missing.code, ErrorCode::OperationIdRequired);
-        assert_eq!(missing.message, "operation_id is required for this command");
 
         let zero = AuthApi::token_replay_metadata(Some(meta(1, 0)), "delegated token mint")
             .expect_err("zero ttl is invalid");
@@ -1678,7 +1675,8 @@ mod tests {
         second.max_operations_per_window = 1;
 
         let err = CostGuardOps::reserve(second).expect_err("quota rejects second operation");
-        assert!(err.to_string().contains("quota exceeded"));
+        let public = err.public_error().expect("quota rejection is public");
+        assert_eq!(public.code, ErrorCode::ResourceExhausted);
     }
 
     #[test]

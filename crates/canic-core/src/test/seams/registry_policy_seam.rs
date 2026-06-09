@@ -34,6 +34,22 @@ fn root_canister_config() -> CanisterConfig {
     }
 }
 
+fn service_canister_config() -> CanisterConfig {
+    CanisterConfig {
+        kind: CanisterKind::Service,
+        initial_cycles: Cycles::new(0),
+        topup: None,
+        randomness: RandomnessConfig::default(),
+        scaling: None,
+        sharding: None,
+        directory: None,
+        auth: CanisterAuthConfig::default(),
+        standards: StandardsCanisterConfig::default(),
+        diagnostics: DiagnosticsCanisterConfig::default(),
+        metrics: MetricsCanisterConfig::default(),
+    }
+}
+
 fn singleton_canister_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
@@ -75,6 +91,13 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
     }
 }
 
+fn service_scaling_parent_config() -> CanisterConfig {
+    CanisterConfig {
+        kind: CanisterKind::Service,
+        ..singleton_scaling_parent_config()
+    }
+}
+
 fn singleton_sharding_parent_config() -> CanisterConfig {
     CanisterConfig {
         kind: CanisterKind::Singleton,
@@ -88,6 +111,13 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
+    }
+}
+
+fn service_sharding_parent_config() -> CanisterConfig {
+    CanisterConfig {
+        kind: CanisterKind::Service,
+        ..singleton_sharding_parent_config()
     }
 }
 
@@ -114,6 +144,13 @@ fn singleton_directory_parent_config() -> CanisterConfig {
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
+    }
+}
+
+fn service_directory_parent_config() -> CanisterConfig {
+    CanisterConfig {
+        kind: CanisterKind::Service,
+        ..singleton_directory_parent_config()
     }
 }
 
@@ -205,6 +242,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
             assert_eq!(*pid, existing_pid);
         }
         RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. }
+        | RegistryPolicyError::ServiceRequiresRootParent { .. }
         | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
         | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
         | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
@@ -230,6 +268,78 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         .count();
 
     assert_eq!(duplicates, 2);
+}
+
+#[test]
+fn registry_service_policy_blocks_duplicate_role() {
+    let role = CanisterRole::new("project_hub");
+    let parent_role = CanisterRole::ROOT;
+    let existing_pid = p(11);
+    let root_pid = p(12);
+
+    let data = RegistryPolicyInput {
+        entries: vec![TopologyPolicyInput {
+            pid: existing_pid,
+            role: role.clone(),
+            parent_pid: Some(root_pid),
+            module_hash: None,
+        }],
+    };
+
+    let err = RegistryPolicy::can_register_role(
+        &role,
+        root_pid,
+        &data,
+        &service_canister_config(),
+        &parent_role,
+        &root_canister_config(),
+    )
+    .expect_err("policy should reject duplicate service role");
+
+    match &err {
+        RegistryPolicyError::RoleAlreadyRegistered {
+            role: err_role,
+            pid,
+        } => {
+            assert_eq!(err_role, &role);
+            assert_eq!(*pid, existing_pid);
+        }
+        RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. }
+        | RegistryPolicyError::ServiceRequiresRootParent { .. }
+        | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
+        | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
+        | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
+            panic!("expected service duplicate role error")
+        }
+    }
+}
+
+#[test]
+fn registry_service_policy_requires_root_parent() {
+    let role = CanisterRole::new("project_hub");
+    let parent_role = CanisterRole::new("project_instance");
+    let parent_pid = p(13);
+
+    let err = RegistryPolicy::can_register_role(
+        &role,
+        parent_pid,
+        &RegistryPolicyInput { entries: vec![] },
+        &service_canister_config(),
+        &parent_role,
+        &singleton_canister_config(),
+    )
+    .expect_err("service roles should be rejected under non-root parents");
+
+    match err {
+        RegistryPolicyError::ServiceRequiresRootParent {
+            role: err_role,
+            parent_role: err_parent_role,
+        } => {
+            assert_eq!(err_role, role);
+            assert_eq!(err_parent_role, parent_role);
+        }
+        other => panic!("unexpected service parent policy error: {other}"),
+    }
 }
 
 #[test]
@@ -275,6 +385,7 @@ fn registry_singleton_policy_blocks_under_parent() {
             assert_eq!(*pid, existing_pid);
         }
         RegistryPolicyError::RoleAlreadyRegistered { .. }
+        | RegistryPolicyError::ServiceRequiresRootParent { .. }
         | RegistryPolicyError::ReplicaRequiresSingletonWithScaling { .. }
         | RegistryPolicyError::ShardRequiresSingletonWithSharding { .. }
         | RegistryPolicyError::InstanceRequiresSingletonWithDirectory { .. } => {
@@ -405,6 +516,24 @@ fn instance_creation_succeeds_under_singleton_directory_parent() {
 }
 
 #[test]
+fn instance_creation_succeeds_under_service_directory_parent() {
+    let role = CanisterRole::new("instance_child");
+    let parent_role = CanisterRole::new("project_hub");
+    let parent_pid = p(10);
+    let data = RegistryPolicyInput { entries: vec![] };
+
+    RegistryPolicy::can_register_role(
+        &role,
+        parent_pid,
+        &data,
+        &instance_canister_config(),
+        &parent_role,
+        &service_directory_parent_config(),
+    )
+    .expect("instance should be allowed under service directory parent");
+}
+
+#[test]
 fn replica_creation_succeeds_under_singleton_scaling_parent() {
     let role = CanisterRole::new("replica_child");
     let parent_role = CanisterRole::new("scale_hub");
@@ -423,6 +552,24 @@ fn replica_creation_succeeds_under_singleton_scaling_parent() {
 }
 
 #[test]
+fn replica_creation_succeeds_under_service_scaling_parent() {
+    let role = CanisterRole::new("replica_child");
+    let parent_role = CanisterRole::new("scale_hub");
+    let parent_pid = p(8);
+    let data = RegistryPolicyInput { entries: vec![] };
+
+    RegistryPolicy::can_register_role(
+        &role,
+        parent_pid,
+        &data,
+        &replica_canister_config(),
+        &parent_role,
+        &service_scaling_parent_config(),
+    )
+    .expect("replica should be allowed under service scaling parent");
+}
+
+#[test]
 fn shard_creation_succeeds_under_singleton_sharding_parent() {
     let role = CanisterRole::new("shard_child");
     let parent_role = CanisterRole::new("shard_hub");
@@ -438,6 +585,24 @@ fn shard_creation_succeeds_under_singleton_sharding_parent() {
         &singleton_sharding_parent_config(),
     )
     .expect("shard should be allowed under singleton sharding parent");
+}
+
+#[test]
+fn shard_creation_succeeds_under_service_sharding_parent() {
+    let role = CanisterRole::new("shard_child");
+    let parent_role = CanisterRole::new("shard_hub");
+    let parent_pid = p(9);
+    let data = RegistryPolicyInput { entries: vec![] };
+
+    RegistryPolicy::can_register_role(
+        &role,
+        parent_pid,
+        &data,
+        &shard_canister_config(),
+        &parent_role,
+        &service_sharding_parent_config(),
+    )
+    .expect("shard should be allowed under service sharding parent");
 }
 
 #[test]

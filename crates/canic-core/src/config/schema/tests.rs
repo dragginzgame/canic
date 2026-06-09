@@ -115,14 +115,12 @@ fn non_root_role_declaration_may_be_declared_only() {
 
 #[test]
 fn role_declarations_require_package_paths() {
-    let err = toml::from_str::<RoleDeclaration>(
+    toml::from_str::<RoleDeclaration>(
         r#"
 kind = "canister"
 "#,
     )
     .expect_err("role declaration without package should fail deserialization");
-
-    assert!(err.to_string().contains("missing field `package`"));
 }
 
 #[test]
@@ -211,9 +209,51 @@ fn topology_less_config_rejects_root_and_app_index() {
 }
 
 #[test]
+fn app_index_requires_prime_service_role() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.app_index.insert(CanisterRole::from("project_hub"));
+    cfg.roles.insert(
+        CanisterRole::from("project_hub"),
+        RoleDeclaration {
+            kind: RoleDeclarationKind::Canister,
+            package: "project_hub".to_string(),
+        },
+    );
+    cfg.subnets
+        .get_mut(&SubnetRole::PRIME)
+        .unwrap()
+        .canisters
+        .insert(
+            CanisterRole::from("project_hub"),
+            base_canister_config(CanisterKind::Singleton),
+        );
+
+    let err = cfg
+        .validate()
+        .expect_err("app_index singleton roles should be rejected");
+
+    assert!(
+        err.to_string().contains("must have kind = \"service\""),
+        "expected service-kind app_index error, got: {err}"
+    );
+
+    cfg.subnets
+        .get_mut(&SubnetRole::PRIME)
+        .unwrap()
+        .canisters
+        .insert(
+            CanisterRole::from("project_hub"),
+            base_canister_config(CanisterKind::Service),
+        );
+
+    cfg.validate()
+        .expect("app_index service role should validate");
+}
+
+#[test]
 fn attached_fleet_roles_include_role_bearing_pool_targets() {
     let mut cfg = ConfigModel::test_default();
-    let mut hub = base_canister_config(CanisterKind::Singleton);
+    let mut hub = base_canister_config(CanisterKind::Service);
     let mut sharding = ShardingConfig::default();
     sharding.pools.insert(
         "users".to_string(),

@@ -166,7 +166,7 @@ package = "app"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 EOF
 
     printf '\x00asm\x01\x00\x00\x00' | gzip -n > "$DOWNSTREAM_ROOT/.icp/local/canisters/app/app.wasm.gz"

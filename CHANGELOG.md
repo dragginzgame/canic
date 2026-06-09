@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Starts the `0.64` service/singleton topology correction with a dedicated
+  design note, config-model support for `kind = "service"`, and
+  service-derived bootstrap/SubnetIndex/AppIndex validation while preserving
+  parent-scoped singleton semantics for downstream child canisters.
+
 ## [0.63.x] - 2026-06-08 - NNS topology inspection and surface reduction
 
 Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)

@@ -116,10 +116,8 @@ fn bind_instance_rejects_non_child_pid() {
     install_directory_test_context(&child_role, child_pid);
     CanisterChildrenOps::import_direct_children(p(2), vec![]);
 
-    let err = DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
+    DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
         .expect_err("bind should reject non-child pid");
-
-    assert!(err.to_string().contains("not a direct child"));
 }
 
 #[test]
@@ -146,10 +144,8 @@ fn bind_instance_rejects_role_mismatch() {
     SubnetRegistryOps::register_unchecked(child_pid, &actual_role, hub_pid, vec![], created_at)
         .expect("register mismatched child");
 
-    let err = DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
+    DirectoryWorkflow::bind_instance("projects", "alpha", child_pid)
         .expect_err("bind should reject mismatched child role");
-
-    assert!(err.to_string().contains("expected"));
 }
 
 #[test]

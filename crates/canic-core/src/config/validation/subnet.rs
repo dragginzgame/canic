@@ -116,7 +116,15 @@ fn validate_kind(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), Co
             }
         }
 
-        CanisterKind::Singleton => {}
+        CanisterKind::Service => {}
+
+        CanisterKind::Singleton => {
+            if cfg.scaling.is_some() || cfg.sharding.is_some() || cfg.directory.is_some() {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "canister '{canister}' kind = \"singleton\" cannot define scaling, sharding, or directory",
+                )));
+            }
+        }
 
         CanisterKind::Replica | CanisterKind::Shard | CanisterKind::Instance => {
             if cfg.scaling.is_some() || cfg.sharding.is_some() || cfg.directory.is_some() {

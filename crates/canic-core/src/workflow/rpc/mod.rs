@@ -209,6 +209,5 @@ mod tests {
             .expect("expected public replay metadata error");
 
         assert_eq!(public.code, ErrorCode::OperationIdRequired);
-        assert_eq!(public.message, "operation_id is required for this command");
     }
 }

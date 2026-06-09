@@ -425,7 +425,7 @@ pub(super) fn build_internal_invocation_proof(
 mod tests {
     use super::*;
     use crate::{
-        cdk::types::Principal, ops::storage::intent::IntentStoreOps,
+        cdk::types::Principal, dto::error::ErrorCode, ops::storage::intent::IntentStoreOps,
         storage::stable::intent::IntentStore,
     };
 
@@ -454,7 +454,12 @@ mod tests {
         )
         .expect_err("low cycle reserve rejected");
 
-        assert!(err.to_string().contains("cycle reserve"));
+        assert_eq!(
+            err.public_error()
+                .expect("cycle reserve rejection is public")
+                .code,
+            ErrorCode::ResourceExhausted
+        );
         assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
     }
 

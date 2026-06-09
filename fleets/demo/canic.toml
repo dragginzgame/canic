@@ -29,10 +29,10 @@ enabled = false
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.user_hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]

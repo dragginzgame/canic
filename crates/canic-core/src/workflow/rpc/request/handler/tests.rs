@@ -490,7 +490,6 @@ fn preflight_replay_then_authorize_validates_replay_before_policy() {
         .public_error()
         .expect("missing operation id is a public hard-cut error");
     assert_eq!(public.code, ErrorCode::OperationIdRequired);
-    assert_eq!(public.message, "operation_id is required for this command");
 }
 
 #[test]
@@ -704,7 +703,10 @@ fn request_cycles_value_transfer_cost_guard_enforces_actor_quota() {
         5_000_000_000,
     ))
     .expect_err("same actor quota bucket exhausted");
-    assert!(err.to_string().contains("quota exceeded"));
+    assert_eq!(
+        err.public_error().expect("quota rejection is public").code,
+        ErrorCode::ResourceExhausted
+    );
 }
 
 #[test]

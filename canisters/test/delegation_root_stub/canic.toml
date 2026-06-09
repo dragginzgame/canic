@@ -30,7 +30,7 @@ ecdsa_key_name = "key_1"
 kind = "root"
 
 [subnets.prime.canisters.signer]
-kind = "singleton"
+kind = "service"
 initial_cycles = "1T"
 
 [subnets.prime.canisters.signer.auth]
@@ -38,7 +38,7 @@ delegated_token_signer = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.project_hub]
-kind = "singleton"
+kind = "service"
 initial_cycles = "1T"
 
 [subnets.prime.canisters.project_hub.directory.pools.projects]

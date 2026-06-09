@@ -190,7 +190,7 @@ package = "app"
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 topup = {}
 ```
 

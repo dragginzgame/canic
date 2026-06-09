@@ -39,15 +39,15 @@ pool.minimum_size = 3
 kind = "root"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 topup = {}
 
 [subnets.prime.canisters.test]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.test.auth]
 role_attestation_cache = true

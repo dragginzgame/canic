@@ -282,7 +282,7 @@ kind = "canister"
 package = "app"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 "#,
         )
         .expect("config parses");
@@ -310,7 +310,7 @@ kind = "canister"
 package = "app"
 
 [subnets.prime.canisters.app]
-kind = "singleton"
+kind = "service"
 "#,
         )
         .expect("config parses");

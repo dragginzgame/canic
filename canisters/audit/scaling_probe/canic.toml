@@ -22,7 +22,7 @@ package = "../../../fleets/test/scale"
 kind = "root"
 
 [subnets.prime.canisters.scale_hub]
-kind = "singleton"
+kind = "service"
 
 [subnets.prime.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"

@@ -248,7 +248,7 @@ fn hash_bytes(value: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::stable::intent::IntentStore;
+    use crate::{dto::error::ErrorCode, storage::stable::intent::IntentStore};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -281,7 +281,10 @@ mod tests {
         CostGuardOps::complete(&first, 10).expect("first completes");
 
         let err = CostGuardOps::reserve(request(20)).expect_err("same bucket exhausted");
-        assert!(err.to_string().contains("quota exceeded"));
+        assert_eq!(
+            err.public_error().expect("quota rejection is public").code,
+            ErrorCode::ResourceExhausted
+        );
 
         CostGuardOps::reserve(request(70)).expect("next bucket allowed");
     }
@@ -294,7 +297,12 @@ mod tests {
         low.current_cycle_balance = 6;
 
         let err = CostGuardOps::reserve(low).expect_err("low cycle reserve rejected");
-        assert!(err.to_string().contains("cycle reserve"));
+        assert_eq!(
+            err.public_error()
+                .expect("cycle reserve rejection is public")
+                .code,
+            ErrorCode::ResourceExhausted
+        );
         assert_eq!(IntentStoreOps::pending_total().expect("meta"), 0);
     }
 
@@ -323,6 +331,11 @@ mod tests {
         second_req.current_cycle_balance = 8;
 
         let err = CostGuardOps::reserve(second_req).expect_err("outstanding reserve counts");
-        assert!(err.to_string().contains("cycle reserve"));
+        assert_eq!(
+            err.public_error()
+                .expect("cycle reserve rejection is public")
+                .code,
+            ErrorCode::ResourceExhausted
+        );
     }
 }

@@ -65,6 +65,15 @@ fn inline_empty_topup_table_enables_default_topup() {
 }
 
 #[test]
+fn service_kind_parses_and_displays() {
+    let cfg: CanisterConfig =
+        toml::from_str("kind = \"service\"\n").expect("service canister kind should parse");
+
+    assert_eq!(cfg.kind, CanisterKind::Service);
+    assert_eq!(cfg.kind.to_string(), "service");
+}
+
+#[test]
 fn topup_icp_refill_parses_mvp_config() {
     let cfg: CanisterConfig = toml::from_str(
         r#"
@@ -291,10 +300,14 @@ fn sharding_pool_references_must_exist_in_subnet() {
 }
 
 #[test]
-fn singleton_roles_are_derived_for_auto_create_and_subnet_index() {
+fn service_roles_are_derived_for_auto_create_and_subnet_index() {
     let mut subnet = SubnetConfig::default();
     subnet.canisters.insert(
         CanisterRole::from("app"),
+        base_canister_config(CanisterKind::Service),
+    );
+    subnet.canisters.insert(
+        CanisterRole::from("ledger"),
         base_canister_config(CanisterKind::Singleton),
     );
     subnet.canisters.insert(
@@ -306,6 +319,7 @@ fn singleton_roles_are_derived_for_auto_create_and_subnet_index() {
     let subnet_index = subnet.subnet_index_roles();
 
     assert!(auto_create.contains("app"));
+    assert!(!auto_create.contains("ledger"));
     assert!(!auto_create.contains("worker"));
     assert_eq!(auto_create, subnet_index);
 }
@@ -333,13 +347,14 @@ kind = "singleton"
 #[test]
 fn sharding_pool_policy_requires_positive_capacity_and_shards() {
     let managing_role: CanisterRole = "shard_hub".into();
+    let worker_role: CanisterRole = "shard_worker".into();
     let mut canisters = BTreeMap::new();
 
     let mut sharding = ShardingConfig::default();
     sharding.pools.insert(
         "primary".into(),
         ShardPool {
-            canister_role: managing_role.clone(),
+            canister_role: worker_role.clone(),
             policy: ShardPoolPolicy {
                 capacity: 0,
                 initial_shards: 1,
@@ -348,11 +363,12 @@ fn sharding_pool_policy_requires_positive_capacity_and_shards() {
         },
     );
 
+    canisters.insert(worker_role, base_canister_config(CanisterKind::Shard));
     canisters.insert(
         managing_role,
         CanisterConfig {
             sharding: Some(sharding),
-            ..base_canister_config(CanisterKind::Shard)
+            ..base_canister_config(CanisterKind::Service)
         },
     );
 
@@ -398,7 +414,7 @@ fn sharding_pool_policy_rejects_initial_shards_above_max() {
         managing_role,
         CanisterConfig {
             sharding: Some(sharding),
-            ..base_canister_config(CanisterKind::Singleton)
+            ..base_canister_config(CanisterKind::Service)
         },
     );
 
@@ -449,7 +465,7 @@ fn sharding_pool_name_must_fit_bound() {
         managing_role,
         CanisterConfig {
             sharding: Some(sharding),
-            ..base_canister_config(CanisterKind::Shard)
+            ..base_canister_config(CanisterKind::Service)
         },
     );
 
@@ -486,7 +502,7 @@ fn scaling_pool_policy_requires_max_ge_min_when_bounded() {
 
     let manager_cfg = CanisterConfig {
         scaling: Some(ScalingConfig { pools }),
-        ..base_canister_config(CanisterKind::Singleton)
+        ..base_canister_config(CanisterKind::Service)
     };
 
     canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -532,7 +548,7 @@ fn scaling_pool_policy_rejects_initial_workers_above_bounded_max() {
 
     let manager_cfg = CanisterConfig {
         scaling: Some(ScalingConfig { pools }),
-        ..base_canister_config(CanisterKind::Singleton)
+        ..base_canister_config(CanisterKind::Service)
     };
 
     canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -566,7 +582,7 @@ fn scaling_pool_name_must_fit_bound() {
 
     let manager_cfg = CanisterConfig {
         scaling: Some(ScalingConfig { pools }),
-        ..base_canister_config(CanisterKind::Singleton)
+        ..base_canister_config(CanisterKind::Service)
     };
 
     canisters.insert(CanisterRole::from("manager"), manager_cfg);
@@ -597,7 +613,7 @@ fn directory_pool_references_must_exist_in_subnet() {
 
     let manager_cfg = CanisterConfig {
         directory: Some(directory),
-        ..base_canister_config(CanisterKind::Singleton)
+        ..base_canister_config(CanisterKind::Service)
     };
 
     canisters.insert(managing_role, manager_cfg);
@@ -634,7 +650,7 @@ fn directory_pool_target_must_be_instance_kind() {
         managing_role,
         CanisterConfig {
             directory: Some(directory),
-            ..base_canister_config(CanisterKind::Singleton)
+            ..base_canister_config(CanisterKind::Service)
         },
     );
 
@@ -670,7 +686,7 @@ fn directory_pool_requires_non_empty_key_name() {
         managing_role,
         CanisterConfig {
             directory: Some(directory),
-            ..base_canister_config(CanisterKind::Singleton)
+            ..base_canister_config(CanisterKind::Service)
         },
     );
 
@@ -682,6 +698,83 @@ fn directory_pool_requires_non_empty_key_name() {
     subnet
         .validate()
         .expect_err("expected empty directory key name to fail");
+}
+
+#[test]
+fn service_kind_can_own_directory_pool() {
+    let managing_role: CanisterRole = "project_hub".into();
+    let mut canisters = BTreeMap::new();
+
+    let mut directory = DirectoryConfig::default();
+    directory.pools.insert(
+        "projects".into(),
+        DirectoryPool {
+            canister_role: CanisterRole::from("project_instance"),
+            key_name: "project".into(),
+        },
+    );
+
+    canisters.insert(
+        CanisterRole::from("project_instance"),
+        base_canister_config(CanisterKind::Instance),
+    );
+    canisters.insert(
+        managing_role,
+        CanisterConfig {
+            directory: Some(directory),
+            ..base_canister_config(CanisterKind::Service)
+        },
+    );
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect("service manager should accept directory pools");
+}
+
+#[test]
+fn singleton_kind_cannot_own_manager_pools() {
+    let role: CanisterRole = "project_ledger".into();
+    let mut directory = DirectoryConfig::default();
+    directory.pools.insert(
+        "projects".into(),
+        DirectoryPool {
+            canister_role: CanisterRole::from("project_instance"),
+            key_name: "project".into(),
+        },
+    );
+
+    let mut canisters = BTreeMap::new();
+    canisters.insert(
+        CanisterRole::from("project_instance"),
+        base_canister_config(CanisterKind::Instance),
+    );
+    canisters.insert(
+        role,
+        CanisterConfig {
+            directory: Some(directory),
+            ..base_canister_config(CanisterKind::Singleton)
+        },
+    );
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    let err = subnet
+        .validate()
+        .expect_err("singleton manager pools should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("kind = \"singleton\" cannot define scaling, sharding, or directory"),
+        "expected singleton manager-pool validation error, got: {err}"
+    );
 }
 
 #[test]

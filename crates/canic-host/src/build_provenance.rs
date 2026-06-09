@@ -737,7 +737,7 @@ kind = "canister"
 package = "{role}"
 
 [subnets.prime.canisters.{role}]
-kind = "singleton"
+kind = "service"
 "#
             ),
         )
