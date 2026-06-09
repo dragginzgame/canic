@@ -75,7 +75,7 @@ where
 }
 
 fn run_options(options: &MetricsOptions) -> Result<(), MetricsCommandError> {
-    let report = metrics_report(&options)?;
+    let report = metrics_report(options)?;
     write_metrics_report(options, &report)
 }
 

@@ -123,7 +123,7 @@ where
 }
 
 fn run_options(options: &EndpointsOptions) -> Result<(), EndpointsCommandError> {
-    let report = endpoint_report(&options)?;
+    let report = endpoint_report(options)?;
     if options.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
