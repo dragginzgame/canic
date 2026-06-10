@@ -50,6 +50,8 @@ pub enum ReplayPolicy {
 pub enum CostClass {
     None,
     ThresholdEcdsaSign,
+    RootCanisterSignaturePrepare,
+    ShardTokenSign,
     ManagementDeployment,
     ValueTransfer,
     DurablePublish,
@@ -104,8 +106,9 @@ pub struct RootCapabilityCommandReplayPolicy {
     pub cycle_reserve_policy: Option<&'static str>,
 }
 
-const SIGNING_QUOTA_V1: &str = "signing.quota.v1";
-const SIGNING_RESERVE_V1: &str = "signing.cycle_reserve.v1";
+const ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: &str = "root_canister_signature_prepare.quota.v1";
+const SHARD_TOKEN_SIGN_QUOTA_V1: &str = "shard_token_sign.quota.v1";
+const SHARD_TOKEN_SIGN_RESERVE_V1: &str = "shard_token_sign.cycle_reserve.v1";
 const DEPLOYMENT_QUOTA_V1: &str = "deployment.quota.v1";
 const DEPLOYMENT_RESERVE_V1: &str = "deployment.cycle_reserve.v1";
 const VALUE_TRANSFER_QUOTA_V1: &str = "value_transfer.quota.v1";
@@ -142,28 +145,28 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_RESERVE_V1),
     ),
     update_replay_protected(
-        "canic_request_delegation",
-        "auth.issue_delegation_proof.v1",
+        "canic_prepare_delegation_proof",
+        "auth.prepare_delegation_proof.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::RootCanisterSignaturePrepare,
+        Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
+        None,
     ),
     update_replay_protected(
         "canic_request_internal_invocation_proof",
         "auth.issue_internal_invocation_proof.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::None,
+        None,
+        None,
     ),
     update_replay_protected(
         "canic_request_role_attestation",
         "auth.issue_role_attestation.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::None,
+        None,
+        None,
     ),
     update_command_dispatch(
         "canic_response_capability_v1",
@@ -178,11 +181,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_snapshot_convergent("canic_sync_topology", "cascade.sync_topology.v1"),
     update_replay_protected(
         "signer_issue_token",
-        "auth.mint_token.v1",
+        "auth.issue_token.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::ShardTokenSign,
+        Some(SHARD_TOKEN_SIGN_QUOTA_V1),
+        Some(SHARD_TOKEN_SIGN_RESERVE_V1),
     ),
     update_monotonic_publish(
         "canic_template_prepare_admin",
@@ -217,11 +220,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     update_replay_protected(
         "user_shard_issue_token",
-        "auth.mint_token.v1",
+        "auth.issue_token.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::ShardTokenSign,
+        Some(SHARD_TOKEN_SIGN_QUOTA_V1),
+        Some(SHARD_TOKEN_SIGN_RESERVE_V1),
     ),
 ];
 
@@ -297,17 +300,17 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
         "IssueRoleAttestation",
         "root.issue_role_attestation.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::None,
+        None,
+        None,
     ),
     root_capability_replay_protected(
         "IssueInternalInvocationProof",
         "root.issue_internal_invocation_proof.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ThresholdEcdsaSign,
-        Some(SIGNING_QUOTA_V1),
-        Some(SIGNING_RESERVE_V1),
+        CostClass::None,
+        None,
+        None,
     ),
 ];
 
@@ -531,7 +534,7 @@ mod tests {
     use super::*;
     use crate::protocol::{
         CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
-        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS,
+        CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
     };
     use std::{
         collections::BTreeSet,
@@ -580,7 +583,8 @@ mod tests {
                 entry.endpoint
             );
             assert!(
-                entry.cycle_reserve_policy.is_some(),
+                entry.cost_class == CostClass::RootCanisterSignaturePrepare
+                    || entry.cycle_reserve_policy.is_some(),
                 "costed entry {} missing cycle-reserve policy",
                 entry.endpoint
             );
@@ -673,28 +677,33 @@ mod tests {
     }
 
     #[test]
-    fn delegation_proof_issuance_is_manifested_as_implemented() {
+    fn delegation_proof_prepare_is_manifested_as_implemented() {
         let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
-            .find(|entry| entry.endpoint == "canic_request_delegation")
-            .expect("delegation endpoint policy entry");
+            .find(|entry| entry.endpoint == "canic_prepare_delegation_proof")
+            .expect("delegation prepare endpoint policy entry");
 
         assert_eq!(
             entry.implementation_status,
             ReplayImplementationStatus::Implemented
         );
-        assert_eq!(entry.cost_class, CostClass::ThresholdEcdsaSign);
+        assert_eq!(entry.cost_class, CostClass::RootCanisterSignaturePrepare);
+        assert_eq!(
+            entry.quota_policy,
+            Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
+        );
+        assert_eq!(entry.cycle_reserve_policy, None);
         assert_eq!(
             entry.replay_policy,
             ReplayPolicy::ReplayProtected {
-                command_kind: "auth.issue_delegation_proof.v1",
+                command_kind: "auth.prepare_delegation_proof.v1",
                 requires_operation_id: true,
             }
         );
     }
 
     #[test]
-    fn root_auth_material_issuance_is_manifested_as_implemented() {
+    fn root_auth_material_issuance_is_replay_protected_without_ecdsa_cost() {
         for (endpoint, command_kind) in [
             (
                 "canic_request_role_attestation",
@@ -714,7 +723,9 @@ mod tests {
                 entry.implementation_status,
                 ReplayImplementationStatus::Implemented
             );
-            assert_eq!(entry.cost_class, CostClass::ThresholdEcdsaSign);
+            assert_eq!(entry.cost_class, CostClass::None);
+            assert_eq!(entry.quota_policy, None);
+            assert_eq!(entry.cycle_reserve_policy, None);
             assert_eq!(
                 entry.replay_policy,
                 ReplayPolicy::ReplayProtected {
@@ -726,11 +737,11 @@ mod tests {
     }
 
     #[test]
-    fn fleet_delegated_token_mint_wrappers_are_manifested_as_implemented() {
-        let wrappers = fleet_delegated_token_mint_wrapper_names();
+    fn fleet_delegated_token_issue_wrappers_are_manifested_as_implemented() {
+        let wrappers = fleet_delegated_token_issue_wrapper_names();
         assert!(
             !wrappers.is_empty(),
-            "expected at least one fleet delegated-token mint wrapper"
+            "expected at least one fleet delegated-token issue wrapper"
         );
 
         let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
@@ -746,14 +757,14 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(
             missing.is_empty(),
-            "missing replay policy entries for delegated-token mint wrappers: {missing:?}"
+            "missing replay policy entries for delegated-token issue wrappers: {missing:?}"
         );
 
         for wrapper in wrappers {
             let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
                 .iter()
                 .find(|entry| entry.endpoint == wrapper)
-                .expect("delegated-token mint wrapper policy entry");
+                .expect("delegated-token issue wrapper policy entry");
 
             assert_eq!(
                 entry.implementation_status,
@@ -762,13 +773,16 @@ mod tests {
             assert_eq!(
                 entry.replay_policy,
                 ReplayPolicy::ReplayProtected {
-                    command_kind: "auth.mint_token.v1",
+                    command_kind: "auth.issue_token.v1",
                     requires_operation_id: true,
                 }
             );
-            assert_eq!(entry.cost_class, CostClass::ThresholdEcdsaSign);
-            assert_eq!(entry.quota_policy, Some(SIGNING_QUOTA_V1));
-            assert_eq!(entry.cycle_reserve_policy, Some(SIGNING_RESERVE_V1));
+            assert_eq!(entry.cost_class, CostClass::ShardTokenSign);
+            assert_eq!(entry.quota_policy, Some(SHARD_TOKEN_SIGN_QUOTA_V1));
+            assert_eq!(
+                entry.cycle_reserve_policy,
+                Some(SHARD_TOKEN_SIGN_RESERVE_V1)
+            );
         }
     }
 
@@ -942,12 +956,12 @@ mod tests {
             (
                 "IssueRoleAttestation",
                 "root.issue_role_attestation.v1",
-                CostClass::ThresholdEcdsaSign,
+                CostClass::None,
             ),
             (
                 "IssueInternalInvocationProof",
                 "root.issue_internal_invocation_proof.v1",
-                CostClass::ThresholdEcdsaSign,
+                CostClass::None,
             ),
         ] {
             let entry = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
@@ -1133,7 +1147,7 @@ mod tests {
             "canic_wasm_store_admin",
         ]
         .into_iter()
-        .chain(CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS.iter().copied())
+        .chain(CANIC_WASM_STORE_ROOT_UPDATE_METHODS.iter().copied())
         .collect()
     }
 
@@ -1210,7 +1224,7 @@ mod tests {
         .collect()
     }
 
-    fn fleet_delegated_token_mint_wrapper_names() -> BTreeSet<String> {
+    fn fleet_delegated_token_issue_wrapper_names() -> BTreeSet<String> {
         let mut names = BTreeSet::new();
         for root in [
             workspace_root().join("canisters"),
@@ -1219,7 +1233,7 @@ mod tests {
             for path in rust_files_under(&root) {
                 let source = fs::read_to_string(&path)
                     .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
-                names.extend(delegated_token_mint_wrapper_names_from_source(&source));
+                names.extend(delegated_token_issue_wrapper_names_from_source(&source));
             }
         }
         names
@@ -1258,13 +1272,13 @@ mod tests {
         }
     }
 
-    fn delegated_token_mint_wrapper_names_from_source(source: &str) -> Vec<String> {
+    fn delegated_token_issue_wrapper_names_from_source(source: &str) -> Vec<String> {
         let mut names = Vec::new();
         let mut offset = 0;
-        while let Some(relative_call) = source[offset..].find("AuthApi::mint_token") {
+        while let Some(relative_call) = source[offset..].find("AuthApi::issue_token") {
             let call = offset + relative_call;
             let Some(fn_start) = source[..call].rfind("fn ") else {
-                offset = call + "AuthApi::mint_token".len();
+                offset = call + "AuthApi::issue_token".len();
                 continue;
             };
             let attribute_window_start = source[..fn_start]
@@ -1272,7 +1286,7 @@ mod tests {
                 .map_or(0, |index| index + 2);
             let attribute_window = &source[attribute_window_start..fn_start];
             if !attribute_window.contains("#[canic_update") {
-                offset = call + "AuthApi::mint_token".len();
+                offset = call + "AuthApi::issue_token".len();
                 continue;
             }
             let name_start = fn_start + "fn ".len();
@@ -1280,11 +1294,11 @@ mod tests {
                 .find('(')
                 .map(|index| name_start + index)
             else {
-                offset = call + "AuthApi::mint_token".len();
+                offset = call + "AuthApi::issue_token".len();
                 continue;
             };
             names.push(source[name_start..name_end].trim().to_string());
-            offset = call + "AuthApi::mint_token".len();
+            offset = call + "AuthApi::issue_token".len();
         }
         names
     }

@@ -1,4 +1,4 @@
-#[cfg(feature = "auth-crypto")]
+#[cfg(feature = "auth-threshold-ecdsa-sign")]
 use crate::cdk::mgmt::{
     EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, SignWithEcdsaArgs, ecdsa_public_key,
     sign_with_ecdsa,
@@ -14,6 +14,7 @@ use crate::{
         },
     },
 };
+#[cfg(feature = "auth-shard-secp256k1-verify")]
 use k256::ecdsa::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use thiserror::Error as ThisError;
 
@@ -51,7 +52,7 @@ impl From<EcdsaOpsError> for InternalError {
 
 pub struct EcdsaOps;
 
-#[cfg(feature = "auth-crypto")]
+#[cfg(feature = "auth-threshold-ecdsa-sign")]
 impl EcdsaOps {
     // Sign a pre-hashed payload using the configured threshold ECDSA key.
     pub async fn sign_bytes(
@@ -135,7 +136,7 @@ impl EcdsaOps {
     }
 }
 
-#[cfg(not(feature = "auth-crypto"))]
+#[cfg(not(feature = "auth-threshold-ecdsa-sign"))]
 impl EcdsaOps {
     // Fail closed when threshold ECDSA management support is not compiled in.
     #[expect(clippy::unused_async)]
@@ -180,6 +181,7 @@ impl EcdsaOps {
     }
 
     // Verify a pre-hashed signature locally with k256 on every canister build.
+    #[cfg(feature = "auth-shard-secp256k1-verify")]
     pub fn verify_signature(
         public_key_sec1: &[u8],
         msg_hash: [u8; 32],
@@ -229,11 +231,25 @@ impl EcdsaOps {
         );
         Ok(())
     }
+
+    #[cfg(not(feature = "auth-shard-secp256k1-verify"))]
+    pub fn verify_signature(
+        _public_key_sec1: &[u8],
+        _msg_hash: [u8; 32],
+        _signature_bytes: &[u8],
+    ) -> Result<(), InternalError> {
+        record_ecdsa_call(
+            PlatformCallMetricMode::LocalVerify,
+            PlatformCallMetricOutcome::Failed,
+            PlatformCallMetricReason::Unavailable,
+        );
+        Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
+    }
 }
 
 // Return the metric reason for compiled ECDSA management availability.
 const fn threshold_management_availability_reason() -> PlatformCallMetricReason {
-    if cfg!(feature = "auth-crypto") {
+    if cfg!(feature = "auth-threshold-ecdsa-sign") {
         PlatformCallMetricReason::Ok
     } else {
         PlatformCallMetricReason::Unavailable
@@ -249,7 +265,7 @@ fn record_ecdsa_call(
     PlatformCallMetrics::record(PlatformCallMetricSurface::Ecdsa, mode, outcome, reason);
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "auth-shard-secp256k1-verify"))]
 mod tests {
     use super::EcdsaOps;
     use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};

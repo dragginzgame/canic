@@ -3,7 +3,7 @@
 use canic::{
     Error,
     api::auth::AuthApi,
-    dto::auth::{DelegatedToken, DelegatedTokenMintRequest},
+    dto::auth::{DelegatedToken, DelegatedTokenIssueRequest},
     ids::cap,
     prelude::*,
 };
@@ -17,10 +17,10 @@ async fn canic_upgrade() {}
 /// Issue a self-contained delegated token without local proof-cache state.
 #[canic_update]
 async fn user_shard_issue_token(
-    request: DelegatedTokenMintRequest,
+    request: DelegatedTokenIssueRequest,
 ) -> Result<DelegatedToken, Error> {
     canic::access::require_local()?;
-    AuthApi::mint_token(request).await
+    AuthApi::issue_token(request).await
 }
 
 #[cfg(not(canic_disable_bundle_observability_env))]

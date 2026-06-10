@@ -16,7 +16,7 @@ pub(super) struct VerificationInput<'a> {
     pub(super) capability_version: u16,
     pub(super) caller: Principal,
     pub(super) target_canister: Principal,
-    pub(super) now_secs: u64,
+    pub(super) now_ns: u64,
 }
 
 /// CapabilityProofVerifier
@@ -97,7 +97,7 @@ impl CapabilityProofVerifier for DelegatedGrantVerifier<'_> {
             &proof,
             input.caller,
             input.target_canister,
-            input.now_secs,
+            input.now_ns,
         )?;
 
         Ok(VerifiedCapability)
@@ -117,7 +117,7 @@ pub(super) async fn verify_root_capability_proof(
         capability_version,
         caller: crate::ops::ic::IcOps::msg_caller(),
         target_canister: crate::ops::ic::IcOps::canister_self(),
-        now_secs: crate::ops::ic::IcOps::now_secs(),
+        now_ns: crate::ops::ic::IcOps::now_nanos(),
     };
 
     match proof {

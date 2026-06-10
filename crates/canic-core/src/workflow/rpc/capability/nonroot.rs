@@ -90,7 +90,7 @@ pub(super) async fn response_capability_v1_nonroot(
         proof_mode.metric_key(),
     );
 
-    let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
+    let replay_metadata = project_replay_metadata(metadata, IcOps::now_nanos())?;
     let mut request = capability;
     request.metadata = Some(replay_metadata);
     let response = NonrootCyclesCapabilityWorkflow::response_replay_first(request)

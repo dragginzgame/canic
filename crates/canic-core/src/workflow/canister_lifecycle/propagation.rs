@@ -49,7 +49,7 @@ impl PropagationWorkflow {
 
         // Shared index/app-state changes are sibling-visible, so create/adopt
         // state propagation must refresh all root children, not only the target branch.
-        RuntimeAuthWorkflow::publish_root_delegated_key_to_subnet_state().await?;
+        RuntimeAuthWorkflow::publish_root_delegated_grant_key_to_subnet_state().await?;
         let snapshot = ProvisionWorkflow::rebuild_indexes_from_registry(Some(role))?
             .with_app_state()
             .with_subnet_state()

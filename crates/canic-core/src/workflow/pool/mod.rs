@@ -59,7 +59,7 @@ use candid::{decode_one, encode_one};
 const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 const POOL_CREATE_EMPTY_REPLAY_COMMAND_KIND: &str = "pool.create_empty.v1";
 const POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
-const POOL_CREATE_EMPTY_MAX_REPLAY_TTL_SECONDS: u64 = 300;
+const POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS: u64 = 300_000_000_000;
 const POOL_CREATE_EMPTY_QUOTA_WINDOW_SECONDS: u64 = 60;
 const POOL_CREATE_EMPTY_MAX_OPERATIONS_PER_WINDOW: u64 = 10;
 const POOL_CREATE_EMPTY_MIN_CYCLES_AFTER_RESERVATION: u128 = TC;
@@ -487,15 +487,15 @@ fn pool_create_empty_replay_metadata(
     metadata: Option<RootRequestMetadata>,
 ) -> Result<RootRequestMetadata, InternalError> {
     let metadata = metadata.ok_or_else(|| InternalError::public(Error::operation_id_required()))?;
-    if metadata.ttl_seconds == 0 {
+    if metadata.ttl_ns == 0 {
         return Err(InternalError::public(Error::invalid(
-            "pool create-empty replay metadata ttl_seconds must be greater than zero",
+            "pool create-empty replay metadata ttl_ns must be greater than zero",
         )));
     }
-    if metadata.ttl_seconds > POOL_CREATE_EMPTY_MAX_REPLAY_TTL_SECONDS {
+    if metadata.ttl_ns > POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS {
         return Err(InternalError::public(Error::invalid(format!(
-            "pool create-empty replay metadata ttl_seconds={} exceeds max {}",
-            metadata.ttl_seconds, POOL_CREATE_EMPTY_MAX_REPLAY_TTL_SECONDS
+            "pool create-empty replay metadata ttl_ns={} exceeds max {}",
+            metadata.ttl_ns, POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS
         ))));
     }
     Ok(metadata)
@@ -559,7 +559,15 @@ fn reserve_pool_create_empty_replay(
         payload_hash,
         secs_to_ns(now_secs),
     )
-    .with_expires_at_ns(secs_to_ns(now_secs.saturating_add(metadata.ttl_seconds)));
+    .with_expires_at_ns(
+        secs_to_ns(now_secs)
+            .checked_add(metadata.ttl_ns)
+            .ok_or_else(|| {
+                InternalError::public(Error::invalid(
+                    "pool create-empty replay metadata ttl_ns overflows nanoseconds",
+                ))
+            })?,
+    );
 
     match reserve_or_replay_receipt(replay_input) {
         Ok(ReplayReceiptDecision::Fresh(token)) => Ok(PoolCreateEmptyReplayReservation::Fresh {
@@ -884,10 +892,10 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn metadata(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
+    fn metadata(id: u8, ttl_ns: u64) -> RootRequestMetadata {
         RootRequestMetadata {
             request_id: [id; 32],
-            ttl_seconds,
+            ttl_ns,
         }
     }
 
@@ -935,7 +943,7 @@ mod tests {
 
         let too_large = pool_create_empty_replay_metadata(Some(metadata(
             1,
-            POOL_CREATE_EMPTY_MAX_REPLAY_TTL_SECONDS + 1,
+            POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS + 1,
         )))
         .expect_err("oversized ttl is invalid");
         assert_eq!(
@@ -948,15 +956,12 @@ mod tests {
     fn pool_create_empty_replay_metadata_accepts_bounded_ttl() {
         let accepted = pool_create_empty_replay_metadata(Some(metadata(
             3,
-            POOL_CREATE_EMPTY_MAX_REPLAY_TTL_SECONDS,
+            POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS,
         )))
         .expect("bounded ttl is accepted");
 
         assert_eq!(accepted.request_id, [3; 32]);
-        assert_eq!(
-            accepted.ttl_seconds,
-            POOL_CREATE_EMPTY_MAX_REPLAY_TTL_SECONDS
-        );
+        assert_eq!(accepted.ttl_ns, POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS);
     }
 
     #[test]

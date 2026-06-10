@@ -3,8 +3,7 @@ use super::{
         AudienceError, audience_subset, role_grants_subset, validate_audience_shape,
         validate_role_grants,
     },
-    canonical::{CanonicalAuthError, cert_hash, claims_hash},
-    cert_rules::DELEGATED_AUTH_VERSION,
+    canonical::{CanonicalAuthError, cert_hash, claims_hash, shard_token_hash},
 };
 use crate::{
     cdk::types::Principal,
@@ -20,15 +19,16 @@ pub struct MintDelegatedTokenInput<'a> {
     pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
-    pub ttl_secs: u64,
+    pub ttl_ns: u64,
     pub nonce: [u8; 16],
-    pub now_secs: u64,
+    pub now_ns: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedDelegatedToken {
     pub claims: DelegatedTokenClaims,
     pub claims_hash: [u8; 32],
+    pub shard_token_hash: [u8; 32],
     pub proof: DelegationProof,
 }
 
@@ -42,8 +42,8 @@ pub enum MintDelegatedTokenError {
     TokenTtlZero,
     #[error("delegated auth token expires_at overflow")]
     TokenExpiresAtOverflow,
-    #[error("delegated auth token ttl {ttl_secs}s exceeds cert max {max_ttl_secs}s")]
-    TokenTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },
+    #[error("delegated auth token ttl {ttl_ns}ns exceeds cert max {max_ttl_ns}ns")]
+    TokenTtlExceeded { ttl_ns: u64, max_ttl_ns: u64 },
     #[error("delegated auth token expires after cert")]
     TokenOutlivesCert,
     #[error("delegated auth token audience is not a subset of cert audience")]
@@ -69,7 +69,7 @@ where
 {
     let prepared = prepare_delegated_token(input)?;
     let shard_sig =
-        sign_claims_hash(prepared.claims_hash).map_err(MintDelegatedTokenError::SignFailed)?;
+        sign_claims_hash(prepared.shard_token_hash).map_err(MintDelegatedTokenError::SignFailed)?;
     Ok(finish_delegated_token(prepared, shard_sig))
 }
 
@@ -79,27 +79,27 @@ pub fn prepare_delegated_token(
 ) -> Result<PreparedDelegatedToken, MintDelegatedTokenError> {
     let cert = &input.proof.cert;
 
-    if input.now_secs < cert.issued_at {
+    if input.now_ns < cert.not_before_ns {
         return Err(MintDelegatedTokenError::CertNotYetValid);
     }
-    if input.now_secs >= cert.expires_at {
+    if input.now_ns >= cert.expires_at_ns {
         return Err(MintDelegatedTokenError::CertExpired);
     }
-    if input.ttl_secs == 0 {
+    if input.ttl_ns == 0 {
         return Err(MintDelegatedTokenError::TokenTtlZero);
     }
-    if input.ttl_secs > cert.max_token_ttl_secs {
+    if input.ttl_ns > cert.max_token_ttl_ns {
         return Err(MintDelegatedTokenError::TokenTtlExceeded {
-            ttl_secs: input.ttl_secs,
-            max_ttl_secs: cert.max_token_ttl_secs,
+            ttl_ns: input.ttl_ns,
+            max_ttl_ns: cert.max_token_ttl_ns,
         });
     }
 
     let expires_at = input
-        .now_secs
-        .checked_add(input.ttl_secs)
+        .now_ns
+        .checked_add(input.ttl_ns)
         .ok_or(MintDelegatedTokenError::TokenExpiresAtOverflow)?;
-    if expires_at > cert.expires_at {
+    if expires_at > cert.expires_at_ns {
         return Err(MintDelegatedTokenError::TokenOutlivesCert);
     }
 
@@ -113,21 +113,22 @@ pub fn prepare_delegated_token(
     }
 
     let claims = DelegatedTokenClaims {
-        version: DELEGATED_AUTH_VERSION,
         subject: input.subject,
         issuer_shard_pid: cert.shard_pid,
         cert_hash: cert_hash(cert)?,
-        issued_at: input.now_secs,
-        expires_at,
+        issued_at_ns: input.now_ns,
+        expires_at_ns: expires_at,
         aud: input.audience,
         grants: input.grants,
         nonce: input.nonce,
     };
     let claims_hash = claims_hash(&claims)?;
+    let shard_token_hash = shard_token_hash(&claims)?;
 
     Ok(PreparedDelegatedToken {
         claims,
         claims_hash,
+        shard_token_hash,
         proof: input.proof.clone(),
     })
 }
@@ -149,11 +150,12 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{
-            DelegationCert, RootPublicKey, RootTrustAnchor, ShardKeyBinding, SignatureAlgorithm,
+            DelegationCert, IcCanisterSignatureProofV1, RootProof, ShardKeyBinding,
+            ShardSignatureAlgorithm,
         },
         ids::CanisterRole,
         ops::auth::delegated::{
-            canonical::public_key_hash,
+            canonical::shard_key_hash,
             verify::{VerifyDelegatedTokenInput, verify_delegated_token},
         },
     };
@@ -163,26 +165,27 @@ mod tests {
     }
 
     fn cert() -> DelegationCert {
-        let shard_public_key_sec1 = vec![1, 2, 3];
-        let shard_key_hash = public_key_hash(&shard_public_key_sec1);
+        let shard_public_key_sec1 = vec![1; 33];
+        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
+            key_name_hash: [3; 32],
+            derivation_path_hash: [4; 32],
+        };
+        let shard_sig_alg = ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1;
+        let shard_key_hash =
+            shard_key_hash(shard_sig_alg, &shard_public_key_sec1, shard_key_binding);
 
         DelegationCert {
-            version: DELEGATED_AUTH_VERSION,
             root_pid: p(1),
-            root_key_id: "root-key".to_string(),
-            root_key_hash: [9; 32],
-            alg: SignatureAlgorithm::EcdsaP256Sha256,
             shard_pid: p(2),
             shard_key_id: "shard-key".to_string(),
+            shard_sig_alg,
             shard_public_key_sec1,
             shard_key_hash,
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
-                key_name_hash: [3; 32],
-                derivation_path_hash: [4; 32],
-            },
-            issued_at: 100,
-            expires_at: 500,
-            max_token_ttl_secs: 120,
+            shard_key_binding,
+            issued_at_ns: 100,
+            not_before_ns: 100,
+            expires_at_ns: 500,
+            max_token_ttl_ns: 120,
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![
                 grant("project_hub", &["session", "upload"]),
@@ -194,30 +197,15 @@ mod tests {
     fn proof() -> DelegationProof {
         DelegationProof {
             cert: cert(),
-            root_sig: vec![10, 11, 12],
+            root_proof: root_proof(10),
         }
     }
 
-    fn signed_proof_for_local_root() -> (DelegationProof, RootTrustAnchor) {
-        let mut proof = proof();
-        let root_public_key = vec![13, 14, 15];
-        proof.cert.root_key_hash = public_key_hash(&root_public_key);
-        proof.root_sig = cert_hash(&proof.cert).unwrap().to_vec();
-
-        let trust = RootTrustAnchor {
-            root_pid: p(1),
-            root_key: RootPublicKey {
-                root_pid: p(1),
-                key_id: "root-key".to_string(),
-                alg: SignatureAlgorithm::EcdsaP256Sha256,
-                public_key_sec1: root_public_key,
-                key_hash: proof.cert.root_key_hash,
-                not_before: 90,
-                not_after: None,
-            },
-        };
-
-        (proof, trust)
+    fn root_proof(byte: u8) -> RootProof {
+        RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![byte; 8],
+            public_key_der: vec![byte; 4],
+        })
     }
 
     fn input(proof: &DelegationProof) -> MintDelegatedTokenInput<'_> {
@@ -226,9 +214,9 @@ mod tests {
             subject: p(9),
             audience: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["read"])],
-            ttl_secs: 60,
+            ttl_ns: 60,
             nonce: [7; 16],
-            now_secs: 120,
+            now_ns: 120,
         }
     }
 
@@ -239,12 +227,7 @@ mod tests {
         }
     }
 
-    fn verify_hash_signature(
-        _: &[u8],
-        hash: [u8; 32],
-        sig: &[u8],
-        _: SignatureAlgorithm,
-    ) -> Result<(), String> {
+    fn verify_hash_signature(_: &[u8], hash: [u8; 32], sig: &[u8]) -> Result<(), String> {
         if sig == hash.as_slice() {
             Ok(())
         } else {
@@ -265,16 +248,19 @@ mod tests {
 
         assert_eq!(token.claims.subject, p(9));
         assert_eq!(token.claims.issuer_shard_pid, proof.cert.shard_pid);
-        assert_eq!(token.claims.issued_at, 120);
-        assert_eq!(token.claims.expires_at, 180);
+        assert_eq!(token.claims.issued_at_ns, 120);
+        assert_eq!(token.claims.expires_at_ns, 180);
         assert_eq!(token.proof, proof);
         assert_eq!(token.shard_sig, vec![20, 21, 22]);
-        assert_eq!(observed_hash, Some(claims_hash(&token.claims).unwrap()));
+        assert_eq!(
+            observed_hash,
+            Some(shard_token_hash(&token.claims).unwrap())
+        );
     }
 
     #[test]
     fn minted_token_feeds_the_pure_verifier() {
-        let (proof, trust) = signed_proof_for_local_root();
+        let proof = proof();
         let token = mint_delegated_token(input(&proof), |_| Ok(vec![20, 21, 22])).unwrap();
         let role = CanisterRole::new("project_instance");
         let required_scopes = vec!["read".to_string()];
@@ -282,24 +268,24 @@ mod tests {
         verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: &token,
-                root_trust: &trust,
                 local_role: Some(&role),
                 local_project: Some("test"),
                 ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
-                    max_cert_ttl_secs: 600,
-                    max_token_ttl_secs: 120,
+                    max_cert_ttl_ns: 600,
+                    max_token_ttl_ns: 120,
                 },
                 required_scopes: &required_scopes,
-                now_secs: 130,
+                now_ns: 130,
             },
-            |_, _, _, _| Ok(()),
+            |_, _, _| Ok(()),
+            |_, _, _| Ok(()),
         )
         .unwrap();
     }
 
     #[test]
     fn minted_tokens_with_different_nonces_verify_when_signed() {
-        let (proof, trust) = signed_proof_for_local_root();
+        let proof = proof();
         let role = CanisterRole::new("project_instance");
         let mut left_input = input(&proof);
         left_input.nonce = [1; 16];
@@ -312,16 +298,16 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token,
-                    root_trust: &trust,
                     local_role: Some(&role),
                     local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
-                        max_cert_ttl_secs: 600,
-                        max_token_ttl_secs: 120,
+                        max_cert_ttl_ns: 600,
+                        max_token_ttl_ns: 120,
                     },
                     required_scopes: &[],
-                    now_secs: 130,
+                    now_ns: 130,
                 },
+                |_, _, _| Ok(()),
                 verify_hash_signature,
             )
             .unwrap();
@@ -330,7 +316,7 @@ mod tests {
 
     #[test]
     fn mutating_signed_grants_fails_verifier_signature() {
-        let (proof, trust) = signed_proof_for_local_root();
+        let proof = proof();
         let role = CanisterRole::new("project_instance");
         let mut token = mint_delegated_token(input(&proof), |hash| Ok(hash.to_vec())).unwrap();
         token.claims.grants = vec![grant("project_instance", &["write"])];
@@ -339,16 +325,16 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
-                    root_trust: &trust,
                     local_role: Some(&role),
                     local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
-                        max_cert_ttl_secs: 600,
-                        max_token_ttl_secs: 120,
+                        max_cert_ttl_ns: 600,
+                        max_token_ttl_ns: 120,
                     },
                     required_scopes: &[],
-                    now_secs: 130,
+                    now_ns: 130,
                 },
+                |_, _, _| Ok(()),
                 verify_hash_signature,
             ),
             Err(
@@ -387,25 +373,25 @@ mod tests {
     fn mint_delegated_token_accepts_ttl_equal_to_cert_limit() {
         let proof = proof();
         let mut input = input(&proof);
-        input.ttl_secs = 120;
+        input.ttl_ns = 120;
 
         let token = mint_delegated_token(input, |hash| Ok(hash.to_vec())).unwrap();
 
-        assert_eq!(token.claims.issued_at, 120);
-        assert_eq!(token.claims.expires_at, 240);
+        assert_eq!(token.claims.issued_at_ns, 120);
+        assert_eq!(token.claims.expires_at_ns, 240);
     }
 
     #[test]
     fn mint_delegated_token_rejects_token_ttl_above_cert_limit() {
         let proof = proof();
         let mut input = input(&proof);
-        input.ttl_secs = 121;
+        input.ttl_ns = 121;
 
         assert_eq!(
             mint_delegated_token(input, |_| Ok(vec![])),
             Err(MintDelegatedTokenError::TokenTtlExceeded {
-                ttl_secs: 121,
-                max_ttl_secs: 120,
+                ttl_ns: 121,
+                max_ttl_ns: 120,
             })
         );
     }
@@ -414,8 +400,8 @@ mod tests {
     fn mint_delegated_token_rejects_token_outliving_cert() {
         let proof = proof();
         let mut input = input(&proof);
-        input.now_secs = 490;
-        input.ttl_secs = 20;
+        input.now_ns = 490;
+        input.ttl_ns = 20;
 
         assert_eq!(
             mint_delegated_token(input, |_| Ok(vec![])),

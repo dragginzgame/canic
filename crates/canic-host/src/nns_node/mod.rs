@@ -25,6 +25,7 @@ pub const NNS_NODE_LIST_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_NODE_INFO_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_NODE_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_NODE_SUBNET_KIND_APPLICATION: &str = "application";
+pub const NNS_NODE_SUBNET_KIND_CLOUD_ENGINE: &str = "cloud_engine";
 pub const NNS_NODE_SUBNET_KIND_SYSTEM: &str = "system";
 pub const NNS_NODE_SUBNET_KIND_UNKNOWN: &str = "unknown";
 const COMPACT_PRINCIPAL_CHARS: usize = 5;

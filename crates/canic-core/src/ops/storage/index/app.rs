@@ -41,6 +41,18 @@ impl AppIndexOps {
         AppIndexRecordMapper::record_to_input(AppIndex::export())
     }
 
+    pub(crate) fn filter_args_for_local_config(
+        args: AppIndexArgs,
+    ) -> Result<AppIndexArgs, InternalError> {
+        let allowed = ConfigOps::get()?.app_index.clone();
+        Ok(AppIndexArgs(
+            args.0
+                .into_iter()
+                .filter(|entry| allowed.contains(&entry.role))
+                .collect(),
+        ))
+    }
+
     pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
         let data = AppIndexRecordMapper::input_to_record(args);
         ensure_unique_roles(&data.entries, "app")?;

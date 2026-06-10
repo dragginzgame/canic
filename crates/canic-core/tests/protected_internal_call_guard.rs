@@ -7,7 +7,7 @@ use std::{
 };
 
 use canic_core::protocol::{
-    CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS, CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
+    CANIC_WASM_STORE_ROOT_UPDATE_METHODS, CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
 };
 
 const FIRST_PARTY_SRC_ROOTS: &[&str] = &[
@@ -23,9 +23,10 @@ const RAW_CALL_PATTERNS: &[&str] = &["Call::", "CallOps::", "ic_cdk::call::Call"
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InternalEndpointClass {
-    ProtectedInternalRpc,
     StructuralBootstrap,
+    StructuralAuthQuery,
     StructuralQueryException,
+    StructuralRootUpdate,
     ExistingCapabilityRpc,
     Discovery,
     OperatorRawPath,
@@ -43,8 +44,12 @@ const INTERNAL_ENDPOINT_CLASSIFICATIONS: &[InternalEndpointClassification] = &[
         class: InternalEndpointClass::OperatorRawPath,
     },
     InternalEndpointClassification {
-        method: "canic_request_delegation",
+        method: "canic_prepare_delegation_proof",
         class: InternalEndpointClass::StructuralBootstrap,
+    },
+    InternalEndpointClassification {
+        method: "canic_get_delegation_proof",
+        class: InternalEndpointClass::StructuralAuthQuery,
     },
     InternalEndpointClassification {
         method: "canic_request_role_attestation",
@@ -64,19 +69,19 @@ const INTERNAL_ENDPOINT_CLASSIFICATIONS: &[InternalEndpointClassification] = &[
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_prepare",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_stage_manifest",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_publish_chunk",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_info",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_status",
@@ -84,19 +89,19 @@ const INTERNAL_ENDPOINT_CLASSIFICATIONS: &[InternalEndpointClassification] = &[
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_prepare_gc",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_begin_gc",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_complete_gc",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_wasm_store_chunk",
-        class: InternalEndpointClass::ProtectedInternalRpc,
+        class: InternalEndpointClass::StructuralRootUpdate,
     },
     InternalEndpointClassification {
         method: "canic_ready",
@@ -155,7 +160,7 @@ fn raw_call_guard_catches_multiline_protected_method_literals() {
 async fn wrong(pid: Principal) {
     let _ = CallOps::unbounded_wait(
         pid,
-        "canic_wasm_store_prepare",
+        "project_instance_record_visit",
     )
     .execute()
     .await;
@@ -178,7 +183,7 @@ fn raw_call_guard_catches_multiline_protected_method_constants() {
 async fn wrong(pid: Principal) {
     let _ = Call::unbounded_wait(
         pid,
-        CANIC_WASM_STORE_PREPARE,
+        PROJECT_INSTANCE_RECORD_VISIT,
     )
     .execute()
     .await;
@@ -231,7 +236,7 @@ fn raw_call_guard_does_not_treat_canic_call_as_raw_call() {
 async fn allowed(pid: Principal) {
     let _ = CanicCall::unbounded_wait(
         pid,
-        "canic_wasm_store_prepare",
+        "project_instance_record_visit",
     )
     .execute()
     .await;
@@ -270,7 +275,7 @@ async fn multi_role_endpoint() -> Result<(), canic::Error> {
 }
 
 #[test]
-fn first_party_internal_endpoints_have_explicit_0_40_classification() {
+fn first_party_internal_endpoints_have_explicit_0_65_classification() {
     let declared = declared_internal_endpoints();
     let classified = classification_map();
     let declared_methods = declared.keys().copied().collect::<BTreeSet<_>>();
@@ -284,11 +289,11 @@ fn first_party_internal_endpoints_have_explicit_0_40_classification() {
 
     assert!(
         missing.is_empty(),
-        "first-party internal endpoints must be classified for the 0.40 protected-call model: {missing:#?}"
+        "first-party internal endpoints must be classified for the 0.65 internal-call model: {missing:#?}"
     );
     assert!(
         stale.is_empty(),
-        "0.40 internal endpoint classifications must correspond to declared first-party internal endpoints: {stale:#?}"
+        "0.65 internal endpoint classifications must correspond to declared first-party internal endpoints: {stale:#?}"
     );
 
     for (method, declarations) in declared {
@@ -302,15 +307,15 @@ fn first_party_internal_endpoints_have_explicit_0_40_classification() {
 }
 
 #[test]
-fn wasm_store_macro_declarations_match_protected_method_manifest() {
+fn wasm_store_macro_declarations_match_root_update_method_manifest() {
     let source = read_workspace_file("crates/canic/src/macros/endpoints/wasm_store.rs");
-    let protected_methods = protected_wasm_store_methods_declared_by_macro(&source);
+    let root_update_methods = root_update_wasm_store_methods_declared_by_macro(&source);
     let structural_query_methods = structural_wasm_store_queries_declared_by_macro(&source);
 
     assert_eq!(
-        protected_methods,
-        method_set(CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS),
-        "macro-declared protected wasm-store update methods must match the protocol manifest"
+        root_update_methods,
+        method_set(CANIC_WASM_STORE_ROOT_UPDATE_METHODS),
+        "macro-declared root-only wasm-store update methods must match the protocol manifest"
     );
     assert_eq!(
         structural_query_methods,
@@ -318,11 +323,12 @@ fn wasm_store_macro_declarations_match_protected_method_manifest() {
         "macro-declared structural wasm-store query exceptions must match the protocol manifest"
     );
 
-    for method in CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
+    for method in CANIC_WASM_STORE_ROOT_UPDATE_METHODS {
         let declaration = declaration_prefix(&source, method);
         assert!(
-            declaration.contains("canic_update(internal, requires(caller::has_role(\"root\"))"),
-            "{method} must be declared as a protected root-role update"
+            declaration.contains("canic_update(internal")
+                && declaration.contains("requires(caller::is_root())"),
+            "{method} must be declared as a direct root-principal update"
         );
     }
 
@@ -336,15 +342,15 @@ fn wasm_store_macro_declarations_match_protected_method_manifest() {
 }
 
 #[test]
-fn wasm_store_did_matches_protected_method_manifest() {
+fn wasm_store_did_matches_root_update_method_manifest() {
     let did = read_workspace_file("crates/canic-wasm-store/wasm_store.did");
-    let protected_methods = protected_wasm_store_methods_in_did(&did);
+    let root_update_methods = root_update_wasm_store_methods_in_did(&did);
     let structural_query_methods = structural_wasm_store_queries_in_did(&did);
 
     assert_eq!(
-        protected_methods,
-        method_set(CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS),
-        "did protected wasm-store update methods must match the protocol manifest"
+        root_update_methods,
+        method_set(CANIC_WASM_STORE_ROOT_UPDATE_METHODS),
+        "did root-only wasm-store update methods must match the protocol manifest"
     );
     assert_eq!(
         structural_query_methods,
@@ -352,15 +358,15 @@ fn wasm_store_did_matches_protected_method_manifest() {
         "did structural wasm-store query exceptions must match the protocol manifest"
     );
 
-    for method in CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
+    for method in CANIC_WASM_STORE_ROOT_UPDATE_METHODS {
         let line = did_service_line(&did, method);
         assert!(
-            line.contains(" : () -> "),
-            "{method} must expose a no-argument raw-ingress wrapper ABI: {line}"
+            !line.contains(" : () -> ") || method.ends_with("_gc"),
+            "{method} must expose its typed root-call ABI: {line}"
         );
         assert!(
             !line.contains(" query"),
-            "{method} must be an update method in the protected raw-ingress ABI: {line}"
+            "{method} must be an update method in the root-call ABI: {line}"
         );
     }
 
@@ -422,7 +428,7 @@ fn protected_internal_method_guard_includes_shared_protocol_descriptors() {
 
 #[test]
 fn canic_call_dispatches_protected_envelope_as_raw_ingress_bytes() {
-    let source = read_workspace_file("crates/canic-core/src/api/ic/canic.rs");
+    let source = read_workspace_file("crates/canic-core/src/api/ic/canic/mod.rs");
 
     assert!(
         source.contains(".with_raw_args(encode_internal_call_envelope_raw(envelope)?)"),
@@ -556,10 +562,7 @@ fn protected_internal_method_tokens() -> BTreeSet<String> {
 
 fn protected_internal_method_names() -> BTreeSet<String> {
     let workspace = workspace_root();
-    let mut methods = CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS
-        .iter()
-        .map(|method| (*method).to_string())
-        .collect::<BTreeSet<_>>();
+    let mut methods = BTreeSet::new();
 
     for root in FIRST_PARTY_SRC_ROOTS {
         collect_protected_methods_from_dir(&workspace.join(root), &mut methods);
@@ -787,7 +790,7 @@ fn classification_map() -> BTreeMap<&'static str, InternalEndpointClass> {
         let previous = classifications.insert(classification.method, classification.class);
         assert!(
             previous.is_none(),
-            "duplicate 0.40 internal endpoint classification for {}",
+            "duplicate 0.65 internal endpoint classification for {}",
             classification.method
         );
     }
@@ -796,20 +799,24 @@ fn classification_map() -> BTreeMap<&'static str, InternalEndpointClass> {
 
 fn assert_class_matches_declaration(method: &str, class: InternalEndpointClass, attribute: &str) {
     match class {
-        InternalEndpointClass::ProtectedInternalRpc => assert!(
-            attribute.contains("canic_update(internal")
-                && attribute.contains("caller::has_role")
-                && CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS.contains(&method),
-            "{method} must be a protected update endpoint: {attribute}"
-        ),
         InternalEndpointClass::StructuralBootstrap => assert!(
             attribute.contains("canic_update(internal") && !attribute.contains("caller::has_role"),
             "{method} must remain a structural bootstrap update exception: {attribute}"
+        ),
+        InternalEndpointClass::StructuralAuthQuery => assert!(
+            attribute.contains("canic_query(internal") && !attribute.contains("caller::has_role"),
+            "{method} must remain a structural auth query exception: {attribute}"
         ),
         InternalEndpointClass::StructuralQueryException => assert!(
             attribute.contains("canic_query(internal")
                 && CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS.contains(&method),
             "{method} must remain a structural query exception: {attribute}"
+        ),
+        InternalEndpointClass::StructuralRootUpdate => assert!(
+            attribute.contains("canic_update(internal")
+                && attribute.contains("caller::is_root")
+                && CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(&method),
+            "{method} must remain a direct root-principal update: {attribute}"
         ),
         InternalEndpointClass::ExistingCapabilityRpc => assert!(
             attribute.contains("canic_update(internal") && !attribute.contains("caller::has_role"),
@@ -856,10 +863,11 @@ fn did_service_line<'a>(did: &'a str, method: &str) -> &'a str {
         .unwrap_or_else(|| panic!("missing wasm-store did service method {method}"))
 }
 
-fn protected_wasm_store_methods_declared_by_macro(source: &str) -> BTreeSet<&'static str> {
+fn root_update_wasm_store_methods_declared_by_macro(source: &str) -> BTreeSet<&'static str> {
     wasm_store_methods_declared_by_macro(source)
         .into_iter()
-        .filter(|(_, attribute)| attribute.contains("caller::has_role(\"root\")"))
+        .filter(|(_, attribute)| attribute.contains("caller::is_root()"))
+        .filter(|(_, attribute)| attribute.contains("canic_update(internal"))
         .map(|(method, _)| method)
         .collect()
 }
@@ -923,7 +931,7 @@ fn matching_bracket(source: &str, open: usize) -> Option<usize> {
     None
 }
 
-fn protected_wasm_store_methods_in_did(did: &str) -> BTreeSet<&'static str> {
+fn root_update_wasm_store_methods_in_did(did: &str) -> BTreeSet<&'static str> {
     did.lines()
         .filter(|line| !line.contains(" query"))
         .filter_map(did_method_name)

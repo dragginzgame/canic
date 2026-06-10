@@ -6,7 +6,7 @@ use canic::{
     Error,
     api::auth::AuthApi,
     cdk::candid::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenMintRequest, SignedRoleAttestation},
+    dto::auth::{DelegatedToken, DelegatedTokenIssueRequest, SignedRoleAttestation},
     ids::cap,
     prelude::*,
 };
@@ -23,8 +23,8 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 #[canic_update]
-async fn signer_issue_token(request: DelegatedTokenMintRequest) -> Result<DelegatedToken, Error> {
-    AuthApi::mint_token(request).await
+async fn signer_issue_token(request: DelegatedTokenIssueRequest) -> Result<DelegatedToken, Error> {
+    AuthApi::issue_token(request).await
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]

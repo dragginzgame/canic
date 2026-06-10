@@ -1,5 +1,5 @@
 use super::{
-    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_SECONDS,
+    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_NS,
     REPLAY_PURGE_SCAN_LIMIT, RootContext,
 };
 use crate::{
@@ -417,10 +417,10 @@ fn check_cycles_replay(
         command_kind: root_request_cycles_command_kind()
             .expect("root request cycles command kind is valid"),
         operation_id: OperationId::from_bytes(metadata.request_id),
-        ttl_seconds: metadata.ttl_seconds,
+        ttl_ns: metadata.ttl_ns,
         payload_hash,
-        now: ctx.now,
-        max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
+        now_ns: replay_ops::guard::secs_to_ns(ctx.now),
+        max_ttl_ns: MAX_ROOT_TTL_NS,
         purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
     })
     .map_err(map_replay_guard_error)?;
@@ -589,10 +589,7 @@ fn mark_request_cycles_recovery_required(
 // Convert replay guard failures into the existing workflow replay error surface.
 fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
     match err {
-        ReplayGuardError::InvalidTtl {
-            ttl_seconds,
-            max_ttl_seconds,
-        } => {
+        ReplayGuardError::InvalidTtl { ttl_ns, max_ttl_ns } => {
             ReplayMetrics::record(
                 ReplayMetricOperation::Check,
                 ReplayMetricOutcome::Failed,
@@ -602,11 +599,19 @@ fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::TtlExceeded,
             );
-            RpcWorkflowError::InvalidReplayTtl {
-                ttl_seconds,
-                max_ttl_seconds,
-            }
-            .into()
+            RpcWorkflowError::InvalidReplayTtl { ttl_ns, max_ttl_ns }.into()
+        }
+        ReplayGuardError::TtlOverflow { now_ns, ttl_ns } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InvalidTtl,
+            );
+            RootCapabilityMetrics::record_replay(
+                RootCapabilityMetricKey::RequestCycles,
+                RootCapabilityMetricOutcome::TtlExceeded,
+            );
+            RpcWorkflowError::ReplayTtlOverflow { now_ns, ttl_ns }.into()
         }
         ReplayGuardError::ReceiptDecodeFailed(message) => {
             map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))

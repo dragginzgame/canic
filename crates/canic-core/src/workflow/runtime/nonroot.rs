@@ -45,13 +45,27 @@ pub fn init_nonroot_canister(
         )
     })?;
 
-    AppIndexOps::import_args_allow_incomplete(payload.app_index).map_err(|err| {
+    let app_index =
+        AppIndexOps::filter_args_for_local_config(payload.app_index).map_err(|err| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("app index filter failed: {err}"),
+            )
+        })?;
+    AppIndexOps::import_args_allow_incomplete(app_index).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("app index import failed: {err}"),
         )
     })?;
-    SubnetIndexOps::import_args_allow_incomplete(payload.subnet_index).map_err(|err| {
+    let subnet_index =
+        SubnetIndexOps::filter_args_for_local_config(payload.subnet_index).map_err(|err| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("subnet index filter failed: {err}"),
+            )
+        })?;
+    SubnetIndexOps::import_args_allow_incomplete(subnet_index).map_err(|err| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             format!("subnet index import failed: {err}"),

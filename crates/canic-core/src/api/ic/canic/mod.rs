@@ -34,6 +34,7 @@ use serde::de::DeserializeOwned;
 use std::borrow::Cow;
 
 const DEFAULT_INTERNAL_CALL_PROOF_TTL_SECS: u64 = 120;
+const NS_PER_SEC: u64 = 1_000_000_000;
 
 ///
 /// CanicCall
@@ -336,6 +337,7 @@ impl CanicCallBuilder<'_> {
     pub async fn execute(self) -> Result<CallResult, Error> {
         validate_internal_call_target_method(&self.method)?;
         let ttl_secs = self.proof_ttl_secs()?;
+        let ttl_ns = secs_to_ns(ttl_secs)?;
         let role = self
             .caller_role
             .ok_or_else(|| Error::invalid("CanicCall requires with_caller_role(...)"))?;
@@ -346,7 +348,7 @@ impl CanicCallBuilder<'_> {
             subnet_id: EnvOps::subnet_pid().ok(),
             audience: self.canister_id,
             audience_method: self.method.clone(),
-            ttl_secs,
+            ttl_ns,
             metadata: None,
         };
         let args = self.args.into_owned();
@@ -419,6 +421,11 @@ fn effective_internal_call_proof_ttl_secs(requested: u64, max: u64) -> Result<u6
         ));
     }
     Ok(effective)
+}
+
+fn secs_to_ns(secs: u64) -> Result<u64, Error> {
+    secs.checked_mul(NS_PER_SEC)
+        .ok_or_else(|| Error::invalid("duration overflows nanoseconds"))
 }
 
 async fn execute_internal_call_once(

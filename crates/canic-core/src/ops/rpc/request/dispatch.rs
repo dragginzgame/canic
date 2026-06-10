@@ -16,7 +16,7 @@ use candid::encode_one;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
+const DEFAULT_ROOT_REQUEST_TTL_NS: u64 = 300_000_000_000;
 const ROOT_REQUEST_METADATA_DOMAIN_V1: &[u8] = b"canic-root-request-metadata-v1";
 static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
@@ -212,7 +212,7 @@ impl Rpc for CyclesRpc {
 fn new_request_metadata() -> RootRequestMetadata {
     RootRequestMetadata {
         request_id: generate_request_id(),
-        ttl_seconds: DEFAULT_ROOT_REQUEST_TTL_SECONDS,
+        ttl_ns: DEFAULT_ROOT_REQUEST_TTL_NS,
     }
 }
 
@@ -242,7 +242,7 @@ mod tests {
     fn metadata(id: u8) -> RootRequestMetadata {
         RootRequestMetadata {
             request_id: [id; 32],
-            ttl_seconds: 123,
+            ttl_ns: 123_000_000_000,
         }
     }
 

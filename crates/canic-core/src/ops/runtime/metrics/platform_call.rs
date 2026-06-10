@@ -92,6 +92,7 @@ impl PlatformCallMetricOutcome {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[allow(dead_code)]
 #[remain::sorted]
 pub enum PlatformCallMetricReason {
     CandidDecode,

@@ -90,8 +90,16 @@ Configure log retention for every canister.
 Root-signed delegated token authentication (cert -> proof -> token).
 
 - `enabled: bool` – enable delegated token auth (default `true`).
-- `ecdsa_key_name: string` – signing key name for delegated-token proofs and tokens (default `"key_1"`).
+- `ecdsa_key_name: string` – threshold ECDSA key name for shard token signatures (default `"key_1"`). Delegated-token root proof verification does not use this key.
+- `root_canister_id: string` – optional verifier trust anchor for root canister-signature proofs. If omitted, runtime verification uses the initialized Canic root env.
+- `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider.
+- `network: "mainnet" | "local" | "pocketic" | "testnet"` – operator label for the configured verifier trust anchor (default `"mainnet"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
+
+When delegated-token verification is enabled on a non-root endpoint canister,
+startup requires IC canister-signature verification support and an effective
+root canister id plus raw IC root public key. The verifier does not read
+`SubnetState.auth.delegated_root_public_key` for root proof verification.
 
 ### `[auth.role_attestation]`
 
@@ -237,6 +245,9 @@ app_index = ["user_hub", "scale_hub"]
 
 [auth.delegated_tokens]
 enabled = true
+# root_canister_id = "..."
+# ic_root_public_key_raw_hex = "..."
+network = "local"
 
 [standards]
 icrc21 = true

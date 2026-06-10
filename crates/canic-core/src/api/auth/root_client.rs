@@ -1,7 +1,7 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        AttestationKeySet, DelegationProof, DelegationProofIssueRequest,
+        AttestationKeySet, DelegationProofIssueRequest, DelegationProofPrepareResponse,
         InternalInvocationProofRequest, RoleAttestationRequest, SignedInternalInvocationProofV1,
         SignedRoleAttestation,
     },
@@ -22,8 +22,8 @@ pub(super) struct RootAuthMaterialClient {
 impl RootAuthMaterialClient {
     const ATTESTATION_KEY_SET: RootAuthMaterialEndpoint =
         RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_ATTESTATION_KEY_SET);
-    const DELEGATION: RootAuthMaterialEndpoint =
-        RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_REQUEST_DELEGATION);
+    const DELEGATION_PREPARE: RootAuthMaterialEndpoint =
+        RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_PREPARE_DELEGATION_PROOF);
     const INTERNAL_INVOCATION_PROOF: RootAuthMaterialEndpoint =
         RootAuthMaterialEndpoint::structural_bootstrap(
             protocol::CANIC_REQUEST_INTERNAL_INVOCATION_PROOF,
@@ -33,7 +33,7 @@ impl RootAuthMaterialClient {
     #[cfg(test)]
     const ENDPOINTS: &[RootAuthMaterialEndpoint] = &[
         Self::ATTESTATION_KEY_SET,
-        Self::DELEGATION,
+        Self::DELEGATION_PREPARE,
         Self::INTERNAL_INVOCATION_PROOF,
         Self::ROLE_ATTESTATION,
     ];
@@ -42,11 +42,12 @@ impl RootAuthMaterialClient {
         Self { root_pid }
     }
 
-    pub(super) async fn request_delegation(
+    pub(super) async fn prepare_delegation_proof(
         &self,
         request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProof, InternalError> {
-        self.call_rpc_result(Self::DELEGATION, request).await
+    ) -> Result<DelegationProofPrepareResponse, InternalError> {
+        self.call_rpc_result(Self::DELEGATION_PREPARE, request)
+            .await
     }
 
     pub(super) async fn request_role_attestation(
@@ -125,7 +126,7 @@ mod tests {
     fn root_auth_material_client_endpoint_table_is_structural_bootstrap_only() {
         let expected = BTreeSet::from([
             protocol::CANIC_ATTESTATION_KEY_SET,
-            protocol::CANIC_REQUEST_DELEGATION,
+            protocol::CANIC_PREPARE_DELEGATION_PROOF,
             protocol::CANIC_REQUEST_INTERNAL_INVOCATION_PROOF,
             protocol::CANIC_REQUEST_ROLE_ATTESTATION,
         ]);

@@ -1,5 +1,5 @@
 use super::{
-    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_SECONDS,
+    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_NS,
     REPLAY_PAYLOAD_HASH_DOMAIN, REPLAY_PURGE_SCAN_LIMIT, RootCapability, RootContext,
     RootReplayInput,
 };
@@ -88,7 +88,7 @@ pub(super) fn check_existing_replay(
         ctx,
         replay_input.descriptor.command_kind,
         OperationId::from_bytes(replay_input.metadata.request_id),
-        replay_input.metadata.ttl_seconds,
+        replay_input.metadata.ttl_ns,
         replay_input.payload_hash,
     )
     .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?
@@ -118,7 +118,7 @@ fn evaluate_replay(
         ctx,
         replay_input.descriptor.command_kind,
         OperationId::from_bytes(replay_input.metadata.request_id),
-        replay_input.metadata.ttl_seconds,
+        replay_input.metadata.ttl_ns,
         replay_input.payload_hash,
     )
     .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?;
@@ -199,10 +199,7 @@ fn map_replay_guard_error(
     err: ReplayGuardError,
 ) -> InternalError {
     match err {
-        ReplayGuardError::InvalidTtl {
-            ttl_seconds,
-            max_ttl_seconds,
-        } => {
+        ReplayGuardError::InvalidTtl { ttl_ns, max_ttl_ns } => {
             ReplayMetrics::record(
                 ReplayMetricOperation::Check,
                 ReplayMetricOutcome::Failed,
@@ -212,11 +209,19 @@ fn map_replay_guard_error(
                 capability_key,
                 RootCapabilityMetricOutcome::TtlExceeded,
             );
-            RpcWorkflowError::InvalidReplayTtl {
-                ttl_seconds,
-                max_ttl_seconds,
-            }
-            .into()
+            RpcWorkflowError::InvalidReplayTtl { ttl_ns, max_ttl_ns }.into()
+        }
+        ReplayGuardError::TtlOverflow { now_ns, ttl_ns } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InvalidTtl,
+            );
+            RootCapabilityMetrics::record_replay(
+                capability_key,
+                RootCapabilityMetricOutcome::TtlExceeded,
+            );
+            RpcWorkflowError::ReplayTtlOverflow { now_ns, ttl_ns }.into()
         }
         ReplayGuardError::ReceiptDecodeFailed(message) => {
             map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
@@ -465,7 +470,7 @@ mod replay {
         ctx: &RootContext,
         command_kind: &'static str,
         operation_id: OperationId,
-        ttl_seconds: u64,
+        ttl_ns: u64,
         payload_hash: [u8; 32],
     ) -> Result<ReplayDecision, ReplayGuardError> {
         let command_kind =
@@ -474,10 +479,10 @@ mod replay {
             caller: ctx.caller,
             command_kind,
             operation_id,
-            ttl_seconds,
+            ttl_ns,
             payload_hash,
-            now: ctx.now,
-            max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
+            now_ns: secs_to_ns(ctx.now),
+            max_ttl_ns: MAX_ROOT_TTL_NS,
             purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
         })
     }
@@ -489,7 +494,7 @@ mod replay {
         ctx: &RootContext,
         command_kind: &'static str,
         operation_id: OperationId,
-        ttl_seconds: u64,
+        ttl_ns: u64,
         payload_hash: [u8; 32],
     ) -> Result<Option<ReplayDecision>, ReplayGuardError> {
         let command_kind =
@@ -498,10 +503,10 @@ mod replay {
             caller: ctx.caller,
             command_kind,
             operation_id,
-            ttl_seconds,
+            ttl_ns,
             payload_hash,
-            now: ctx.now,
-            max_ttl_seconds: MAX_ROOT_TTL_SECONDS,
+            now_ns: secs_to_ns(ctx.now),
+            max_ttl_ns: MAX_ROOT_TTL_NS,
             purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
         })
     }

@@ -2,8 +2,14 @@ use super::{RootCapability, RootContext, nonroot_cycles, validate_role_attestati
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{InternalInvocationProofRequest, RoleAttestationRequest},
-    dto::rpc::{RecycleCanisterRequest, UpgradeCanisterRequest},
+    dto::{
+        auth::{InternalInvocationProofRequest, RoleAttestationRequest},
+        error::Error,
+        rpc::{
+            CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest,
+            UpgradeCanisterRequest,
+        },
+    },
     log,
     log::Topic,
     ops::{
@@ -30,7 +36,7 @@ pub(super) fn authorize(
 
     let descriptor = capability.descriptor();
     let decision = match capability {
-        RootCapability::Provision(_req) => authorize_root_only(ctx),
+        RootCapability::Provision(req) => authorize_provision(ctx, req),
         RootCapability::Upgrade(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
         }
@@ -79,6 +85,33 @@ pub(super) fn authorize(
     }
 
     decision
+}
+
+fn authorize_provision(
+    ctx: &RootContext,
+    req: &CreateCanisterRequest,
+) -> Result<(), InternalError> {
+    if ctx.caller == ctx.self_pid {
+        return Ok(());
+    }
+
+    if !ctx.is_root_env {
+        return EnvOps::require_root();
+    }
+
+    if !matches!(&req.parent, CreateCanisterParent::ThisCanister) {
+        return Err(InternalError::public(Error::forbidden(
+            "non-root structural provision requires parent=ThisCanister",
+        )));
+    }
+
+    if !SubnetRegistryOps::is_registered(ctx.caller) {
+        return Err(InternalError::public(Error::forbidden(
+            "non-root structural provision requires caller to be registered in subnet registry",
+        )));
+    }
+
+    Ok(())
 }
 
 fn authorize_root_only(ctx: &RootContext) -> Result<(), InternalError> {
@@ -150,7 +183,7 @@ fn authorize_issue_role_attestation(
         .into());
     }
 
-    validate_role_attestation_ttl(req.ttl_secs)?;
+    validate_role_attestation_ttl(req.ttl_ns)?;
 
     Ok(())
 }
@@ -191,7 +224,7 @@ fn authorize_issue_internal_invocation_proof(
         .into());
     }
 
-    validate_role_attestation_ttl(req.ttl_secs)?;
+    validate_role_attestation_ttl(req.ttl_ns)?;
 
     Ok(())
 }

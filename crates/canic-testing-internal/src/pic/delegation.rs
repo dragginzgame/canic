@@ -2,16 +2,17 @@ use candid::Principal;
 use canic::{
     Error,
     dto::auth::{
-        DelegatedRoleGrant, DelegatedToken, DelegatedTokenMintRequest, DelegationAudience,
-        DelegationProof, DelegationProofIssueRequest,
+        AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken, DelegatedTokenIssueRequest,
+        DelegationAudience, DelegationProof, DelegationProofGetRequest,
+        DelegationProofIssueRequest, DelegationProofPrepareResponse,
     },
-    dto::rpc::RootRequestMetadata,
     ids::{CanisterRole, cap},
     protocol,
 };
 use ic_testkit::pic::Pic;
 
 const USER_SHARD_LOCAL_PUBLIC_KEY_TEST: &str = "user_shard_local_public_key_test";
+const TOKEN_CERT_EXPIRY_MARGIN_NS: u64 = 1_000_000_000;
 
 // Create one user shard through the reference `user_hub` path.
 #[must_use]
@@ -21,31 +22,30 @@ pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal
     created.expect("create_account application failed")
 }
 
-// Mint one delegated token from a prepared shard with caller-selected claims.
+// Issue one delegated token from a prepared shard with caller-selected claims.
 #[must_use]
 pub fn issue_delegated_token(
     pic: &Pic,
     shard_pid: Principal,
+    proof: DelegationProof,
     subject: Principal,
     aud: DelegationAudience,
     grants: Vec<DelegatedRoleGrant>,
-    token_ttl_secs: u64,
-    cert_ttl_secs: u64,
+    token_ttl_ns: u64,
 ) -> DelegatedToken {
-    let request = DelegatedTokenMintRequest {
-        metadata: Some(mint_token_request_metadata(
+    let request = DelegatedTokenIssueRequest {
+        metadata: Some(issue_token_request_metadata(
             shard_pid,
             subject,
             &aud,
             &grants,
-            token_ttl_secs,
-            cert_ttl_secs,
+            token_ttl_ns,
         )),
+        proof,
         subject,
         aud,
         grants,
-        token_ttl_secs,
-        cert_ttl_secs,
+        ttl_ns: token_ttl_ns,
         nonce: [0; 16],
     };
     let issued: Result<DelegatedToken, Error> =
@@ -53,9 +53,9 @@ pub fn issue_delegated_token(
     issued.expect("user_shard_issue_token application failed")
 }
 
-// Request one canonical root-issued delegation for a shard/verifier pair.
+// Obtain one canonical root-issued proof through the prepare/update + get/query flow.
 #[must_use]
-pub fn request_root_delegation_provision(
+pub fn obtain_root_delegation_proof(
     pic: &Pic,
     root_id: Principal,
     shard_pid: Principal,
@@ -68,21 +68,49 @@ pub fn request_root_delegation_provision(
         shard_pid,
         aud: DelegationAudience::Project("test".to_string()),
         grants: vec![role_grant(verifier_role, vec![cap::VERIFY.to_string()])],
-        cert_ttl_secs: 60,
+        cert_ttl_ns: 60_000_000_000,
     };
-    let response: Result<DelegationProof, Error> = pic.update_call_as_or_panic(
+    let prepared: Result<DelegationProofPrepareResponse, Error> = pic.update_call_as_or_panic(
         root_id,
         shard_pid,
-        protocol::CANIC_REQUEST_DELEGATION,
+        protocol::CANIC_PREPARE_DELEGATION_PROOF,
         (request,),
     );
-    response.expect("canic_request_delegation application failed")
+    let prepared = prepared.expect("canic_prepare_delegation_proof application failed");
+    let response: Result<DelegationProof, Error> = pic.query_call_as_or_panic(
+        root_id,
+        shard_pid,
+        protocol::CANIC_GET_DELEGATION_PROOF,
+        (DelegationProofGetRequest {
+            cert_hash: prepared.cert_hash,
+        },),
+    );
+    response.expect("canic_get_delegation_proof application failed")
+}
+
+/// Pick a reusable token TTL that stays inside the root-certified proof window.
+#[must_use]
+pub fn token_ttl_within_proof(pic: &Pic, proof: &DelegationProof) -> u64 {
+    let remaining_cert_ttl_ns = proof
+        .cert
+        .expires_at_ns
+        .saturating_sub(pic.current_time_nanos());
+    let bounded_ttl_ns = remaining_cert_ttl_ns
+        .saturating_sub(TOKEN_CERT_EXPIRY_MARGIN_NS)
+        .min(proof.cert.max_token_ttl_ns);
+
+    assert!(
+        bounded_ttl_ns > 0,
+        "delegation proof must have enough remaining lifetime for token issuance"
+    );
+
+    bounded_ttl_ns
 }
 
 fn root_delegation_request_metadata(
     shard_pid: Principal,
     verifier_role: &CanisterRole,
-) -> RootRequestMetadata {
+) -> AuthRequestMetadata {
     let mut request_id = [0u8; 32];
     for (index, byte) in shard_pid.as_slice().iter().enumerate() {
         request_id[index % request_id.len()] ^= *byte;
@@ -90,20 +118,19 @@ fn root_delegation_request_metadata(
     for (index, byte) in verifier_role.as_str().as_bytes().iter().enumerate() {
         request_id[(index + 13) % request_id.len()] ^= *byte;
     }
-    RootRequestMetadata {
+    AuthRequestMetadata {
         request_id,
-        ttl_seconds: 60,
+        ttl_ns: 60_000_000_000,
     }
 }
 
-fn mint_token_request_metadata(
+fn issue_token_request_metadata(
     shard_pid: Principal,
     subject: Principal,
     aud: &DelegationAudience,
     grants: &[DelegatedRoleGrant],
-    token_ttl_secs: u64,
-    cert_ttl_secs: u64,
-) -> RootRequestMetadata {
+    token_ttl_ns: u64,
+) -> AuthRequestMetadata {
     let mut request_id = [0u8; 32];
     mix_principal(&mut request_id, 0, shard_pid);
     mix_principal(&mut request_id, 7, subject);
@@ -119,11 +146,10 @@ fn mint_token_request_metadata(
             }
         }
     }
-    mix_u64(&mut request_id, 3, token_ttl_secs);
-    mix_u64(&mut request_id, 11, cert_ttl_secs);
-    RootRequestMetadata {
+    mix_u64(&mut request_id, 3, token_ttl_ns);
+    AuthRequestMetadata {
         request_id,
-        ttl_seconds: 60,
+        ttl_ns: 60_000_000_000,
     }
 }
 

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-09
+Last updated: 2026-06-10
 
 ## Purpose
 
@@ -9,6 +9,38 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.65.0` hard-cut implementation is locally closed for design/code
+  validation, with broad uncommitted changes and no Cargo version bump yet.
+  Delegated-token root proofs now use `RootProof::IcCanisterSignatureV1`,
+  issued through `canic_prepare_delegation_proof` update plus
+  `canic_get_delegation_proof` query. Delegated-token verification uses
+  configured root canister id plus raw IC root key instead of
+  `SubnetState.auth.delegated_root_public_key`; auth/replay protocol DTO times
+  use `_ns`; one-shot fresh-proof `mint_token` is removed from the normal auth
+  surface; fresh one-shot root ECDSA role-attestation and internal-invocation
+  proof issuance hard-fails before signing-cycle reservation; public auth
+  features are split into canister-signature, shard secp256k1 verification, and
+  threshold ECDSA signing capabilities. Root auth certified data has a single
+  owner around the exact `"sig"` tree shape, root-proof preparation and shard
+  token signing have separate metrics/cost classes, canister-signature
+  verification and delegated-token size/decode benchmarks compile, and mainnet
+  deployment truth blocks root auth signing canisters on `cloud_engine` subnets.
+  Active architecture/contract/install docs describe the hard-cut
+  canister-signature trust model; the old SubnetState root-key addendum is
+  marked superseded. `docs/design/0.65-canister-signatures/0.65-design.md` has
+  no unchecked rollout items. Late validation fixes now keep delegated-token
+  verification on exact nanosecond IC time, keep test shard token TTLs inside
+  the root cert expiry, refresh the root test artifact stamp after local ICP
+  prebuilds, and align the wasm-store direct-call test with the current
+  root-only direct update contract. Current validation:
+  ```text
+  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
+  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test root_suite -- --test-threads=1 --nocapture
+  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test root_wasm_store_reconcile -- --test-threads=1 --nocapture
+  make test
+  make fmt-check
+  git diff --check
+  ```
 - Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64
   topology line with no required deferred implementation work. The 0.64 design
   note is marked implemented/closed, old open questions are recorded as closed

@@ -1140,13 +1140,12 @@ where
 
 fn subnet_info_from_record(subnet_principal: &str, record: &SubnetRecord) -> SubnetInfo {
     let subnet_kind = match SubnetType::try_from(record.subnet_type).ok() {
-        Some(
-            SubnetType::Application | SubnetType::VerifiedApplication | SubnetType::CloudEngine,
-        ) => SubnetKind::Application,
+        Some(SubnetType::Application | SubnetType::VerifiedApplication) => SubnetKind::Application,
+        Some(SubnetType::CloudEngine) => SubnetKind::CloudEngine,
         Some(SubnetType::System) => SubnetKind::System,
         Some(SubnetType::Unspecified) | None => SubnetKind::Unknown,
     };
-    let charges_apply_by_default = subnet_kind == SubnetKind::Application;
+    let charges_apply_by_default = subnet_kind.charges_apply_by_default();
     SubnetInfo {
         subnet_principal: subnet_principal.to_string(),
         subnet_kind,
@@ -1430,9 +1429,8 @@ struct AssignedNodeRelation {
 
 fn subnet_kind_text(record: &SubnetRecord) -> String {
     match SubnetType::try_from(record.subnet_type).ok() {
-        Some(
-            SubnetType::Application | SubnetType::VerifiedApplication | SubnetType::CloudEngine,
-        ) => "application",
+        Some(SubnetType::Application | SubnetType::VerifiedApplication) => "application",
+        Some(SubnetType::CloudEngine) => "cloud_engine",
         Some(SubnetType::System) => "system",
         Some(SubnetType::Unspecified) | None => "unknown",
     }
@@ -1543,6 +1541,31 @@ mod tests {
         let system = catalog.subnet_by_principal(SUBNET_B).expect("system");
         assert_eq!(system.subnet_kind, SubnetKind::System);
         assert!(!system.charges_apply_by_default);
+    }
+
+    #[test]
+    fn registry_records_preserve_cloud_engine_subnet_type() {
+        let request = MainnetRegistryFetchRequest {
+            endpoint: "https://icp-api.io".to_string(),
+            fetched_at: "2026-06-04T00:00:00Z".to_string(),
+            fetched_by: "test".to_string(),
+        };
+        let subnet_records = BTreeMap::from([(
+            SUBNET_A.to_string(),
+            subnet_record(SubnetType::CloudEngine, 13),
+        )]);
+        let catalog = catalog_from_parts_for_test(
+            &request,
+            42,
+            subnet_list_record([SUBNET_A]),
+            routing_table_record([(CANISTER_A, CANISTER_A, SUBNET_A)]),
+            subnet_records,
+        )
+        .expect("catalog");
+
+        let subnet = catalog.subnet_by_principal(SUBNET_A).expect("subnet");
+        assert_eq!(subnet.subnet_kind, SubnetKind::CloudEngine);
+        assert!(subnet.charges_apply_by_default);
     }
 
     #[test]

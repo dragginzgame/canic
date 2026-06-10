@@ -27,9 +27,9 @@ pub(super) fn verify_root_delegated_grant_proof(
     proof: &DelegatedGrantProof,
     caller: Principal,
     target_canister: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Result<(), Error> {
-    verify_root_delegated_grant_claims(capability, proof, caller, target_canister, now_secs)?;
+    verify_root_delegated_grant_claims(capability, proof, caller, target_canister, now_ns)?;
     verify_root_delegated_grant_signature(&proof.grant, &proof.grant_sig)
 }
 
@@ -38,7 +38,7 @@ pub(super) fn verify_root_delegated_grant_claims(
     proof: &DelegatedGrantProof,
     caller: Principal,
     target_canister: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Result<(), Error> {
     if proof.key_id != super::DELEGATED_GRANT_KEY_ID_V1 {
         return Err(Error::invalid(format!(
@@ -80,17 +80,17 @@ pub(super) fn verify_root_delegated_grant_claims(
             "delegated grant quota must be greater than zero",
         ));
     }
-    if grant.expires_at <= grant.issued_at {
+    if grant.expires_at_ns <= grant.issued_at_ns {
         return Err(Error::invalid(
             "delegated grant expires_at must be greater than issued_at",
         ));
     }
-    if now_secs < grant.issued_at {
+    if now_ns < grant.issued_at_ns {
         return Err(Error::forbidden(
             "delegated grant is not valid yet for current time",
         ));
     }
-    if now_secs >= grant.expires_at {
+    if now_ns >= grant.expires_at_ns {
         return Err(Error::forbidden("delegated grant has expired"));
     }
 

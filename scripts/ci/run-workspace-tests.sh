@@ -99,6 +99,11 @@ prebuild_root_test_artifacts() {
     echo "==> $label"
     local started_at="$SECONDS"
     bash scripts/ci/build-ci-wasm-artifacts.sh
+    # The generic prebuild writes .icp/local/canisters directly, while the
+    # root harness stamp records profile-specific env such as internal test
+    # endpoints. Invalidate that stamp so root tests do not trust prebuild
+    # artifacts as matching a later profile-specific build.
+    rm -f .icp/canic-build-env.stamp
     local elapsed
     elapsed="$(elapsed_seconds "$started_at")"
     echo "==> $label done in $elapsed"

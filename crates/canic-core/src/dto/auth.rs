@@ -1,15 +1,6 @@
 use crate::dto::{prelude::*, rpc::RootRequestMetadata};
 
 //
-// SignatureAlgorithm
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum SignatureAlgorithm {
-    EcdsaP256Sha256,
-}
-
-//
 // DelegationAudience
 //
 
@@ -30,40 +21,43 @@ pub struct DelegatedRoleGrant {
 }
 
 //
-// RootPublicKey
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootPublicKey {
-    pub root_pid: Principal,
-    pub key_id: String,
-    pub alg: SignatureAlgorithm,
-    pub public_key_sec1: Vec<u8>,
-    pub key_hash: [u8; 32],
-    pub not_before: u64,
-    pub not_after: Option<u64>,
-}
-
-//
-// RootTrustAnchor
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootTrustAnchor {
-    pub root_pid: Principal,
-    pub root_key: RootPublicKey,
-}
-
-//
 // ShardKeyBinding
 //
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ShardKeyBinding {
-    IcThresholdEcdsa {
+    IcThresholdEcdsaSecp256k1 {
         key_name_hash: [u8; 32],
         derivation_path_hash: [u8; 32],
     },
+}
+
+//
+// ShardSignatureAlgorithm
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ShardSignatureAlgorithm {
+    IcThresholdEcdsaSecp256k1,
+}
+
+//
+// RootProof
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootProof {
+    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
+}
+
+//
+// IcCanisterSignatureProofV1
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcCanisterSignatureProofV1 {
+    pub signature_cbor: Vec<u8>,
+    pub public_key_der: Vec<u8>,
 }
 
 //
@@ -72,19 +66,17 @@ pub enum ShardKeyBinding {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationCert {
-    pub version: u16,
     pub root_pid: Principal,
-    pub root_key_id: String,
-    pub root_key_hash: [u8; 32],
-    pub alg: SignatureAlgorithm,
     pub shard_pid: Principal,
     pub shard_key_id: String,
+    pub shard_sig_alg: ShardSignatureAlgorithm,
     pub shard_public_key_sec1: Vec<u8>,
     pub shard_key_hash: [u8; 32],
     pub shard_key_binding: ShardKeyBinding,
-    pub issued_at: u64,
-    pub expires_at: u64,
-    pub max_token_ttl_secs: u64,
+    pub issued_at_ns: u64,
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub max_token_ttl_ns: u64,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
 }
@@ -96,7 +88,7 @@ pub struct DelegationCert {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProof {
     pub cert: DelegationCert,
-    pub root_sig: Vec<u8>,
+    pub root_proof: RootProof,
 }
 
 //
@@ -105,12 +97,11 @@ pub struct DelegationProof {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedTokenClaims {
-    pub version: u16,
     pub subject: Principal,
     pub issuer_shard_pid: Principal,
     pub cert_hash: [u8; 32],
-    pub issued_at: u64,
-    pub expires_at: u64,
+    pub issued_at_ns: u64,
+    pub expires_at_ns: u64,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
@@ -128,17 +119,47 @@ pub struct DelegatedToken {
 }
 
 //
+// AuthRequestMetadata
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuthRequestMetadata {
+    pub request_id: [u8; 32],
+    pub ttl_ns: u64,
+}
+
+//
 // DelegationProofIssueRequest
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProofIssueRequest {
     #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
+    pub metadata: Option<AuthRequestMetadata>,
     pub shard_pid: Principal,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
-    pub cert_ttl_secs: u64,
+    pub cert_ttl_ns: u64,
+}
+
+//
+// DelegationProofPrepareResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationProofPrepareResponse {
+    pub cert: DelegationCert,
+    pub cert_hash: [u8; 32],
+    pub retrieval_expires_at_ns: u64,
+}
+
+//
+// DelegationProofGetRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationProofGetRequest {
+    pub cert_hash: [u8; 32],
 }
 
 //
@@ -148,28 +169,12 @@ pub struct DelegationProofIssueRequest {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedTokenIssueRequest {
     #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
+    pub metadata: Option<AuthRequestMetadata>,
     pub proof: DelegationProof,
     pub subject: Principal,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
-    pub ttl_secs: u64,
-    pub nonce: [u8; 16],
-}
-
-//
-// DelegatedTokenMintRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedTokenMintRequest {
-    #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
-    pub subject: Principal,
-    pub aud: DelegationAudience,
-    pub grants: Vec<DelegatedRoleGrant>,
-    pub token_ttl_secs: u64,
-    pub cert_ttl_secs: u64,
+    pub ttl_ns: u64,
     pub nonce: [u8; 16],
 }
 
@@ -184,7 +189,7 @@ pub struct RoleAttestationRequest {
     #[serde(default)]
     pub subnet_id: Option<Principal>,
     pub audience: Principal,
-    pub ttl_secs: u64,
+    pub ttl_ns: u64,
     pub epoch: u64,
     #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
@@ -201,8 +206,8 @@ pub struct RoleAttestation {
     #[serde(default)]
     pub subnet_id: Option<Principal>,
     pub audience: Principal,
-    pub issued_at: u64,
-    pub expires_at: u64,
+    pub issued_at_ns: u64,
+    pub expires_at_ns: u64,
     pub epoch: u64,
 }
 
@@ -229,7 +234,7 @@ pub struct InternalInvocationProofRequest {
     pub subnet_id: Option<Principal>,
     pub audience: Principal,
     pub audience_method: String,
-    pub ttl_secs: u64,
+    pub ttl_ns: u64,
     #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
@@ -246,8 +251,8 @@ pub struct InternalInvocationProofPayloadV1 {
     pub subnet_id: Option<Principal>,
     pub audience: Principal,
     pub audience_method: String,
-    pub issued_at: u64,
-    pub expires_at: u64,
+    pub issued_at_ns: u64,
+    pub expires_at_ns: u64,
     pub epoch: u64,
 }
 

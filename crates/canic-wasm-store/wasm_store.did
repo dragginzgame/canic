@@ -119,8 +119,40 @@ type SubnetRootPublicKeyInput = record {
   public_key_sec1 : blob;
 };
 type SubnetStateInput = record { auth : SubnetAuthStateInput };
+type TemplateChunkingMode = variant { Inline; Chunked };
+type TemplateChunkInput = record {
+  bytes : blob;
+  chunk_index : nat32;
+  template_id : text;
+  version : text;
+};
 type TemplateChunkResponse = record { bytes : blob };
+type TemplateChunkSetPrepareInput = record {
+  chunk_hashes : vec blob;
+  payload_hash : blob;
+  payload_size_bytes : nat64;
+  template_id : text;
+  version : text;
+};
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
+type TemplateManifestInput = record {
+  approved_at : opt nat64;
+  chunking_mode : TemplateChunkingMode;
+  created_at : nat64;
+  manifest_state : TemplateManifestState;
+  payload_hash : blob;
+  payload_size_bytes : nat64;
+  role : text;
+  store_binding : text;
+  template_id : text;
+  version : text;
+};
+type TemplateManifestState = variant {
+  Staged;
+  Approved;
+  Blocked;
+  Deprecated;
+};
 type TopologyChildren = record {
   children : vec IndexEntryInput;
   parent_pid : principal;
@@ -188,13 +220,13 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_sync_topology : (TopologySnapshotInput) -> (Result_5);
   canic_wasm_store_begin_gc : () -> (Result_5);
   canic_wasm_store_catalog : () -> (Result_6) query;
-  canic_wasm_store_chunk : () -> (Result_7);
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_7);
   canic_wasm_store_complete_gc : () -> (Result_5);
-  canic_wasm_store_info : () -> (Result_8);
-  canic_wasm_store_prepare : () -> (Result_8);
+  canic_wasm_store_info : (text, text) -> (Result_8);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_8);
   canic_wasm_store_prepare_gc : () -> (Result_5);
-  canic_wasm_store_publish_chunk : () -> (Result_5);
-  canic_wasm_store_stage_manifest : () -> (Result_5);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_5);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_5);
   canic_wasm_store_status : () -> (Result_9) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

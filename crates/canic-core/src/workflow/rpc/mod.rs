@@ -51,11 +51,11 @@ pub enum RpcWorkflowError {
     #[error("missing replay metadata for capability '{0}'")]
     MissingReplayMetadata(&'static str),
 
-    #[error("invalid replay ttl_seconds={ttl_seconds}; max={max_ttl_seconds}")]
-    InvalidReplayTtl {
-        ttl_seconds: u64,
-        max_ttl_seconds: u64,
-    },
+    #[error("invalid replay ttl_ns={ttl_ns}; max={max_ttl_ns}")]
+    InvalidReplayTtl { ttl_ns: u64, max_ttl_ns: u64 },
+
+    #[error("replay ttl_ns overflow: now_ns={now_ns}, ttl_ns={ttl_ns}")]
+    ReplayTtlOverflow { now_ns: u64, ttl_ns: u64 },
 
     #[error("replay request expired for capability '{0}'")]
     ReplayExpired(&'static str),
@@ -89,7 +89,7 @@ pub enum RpcWorkflowError {
     #[error("delegation request caller {0} must match shard_pid {1}")]
     DelegationCallerShardMismatch(Principal, Principal),
 
-    #[error("delegation ttl_secs must be greater than zero (got {0})")]
+    #[error("delegation ttl_ns must be greater than zero (got {0})")]
     DelegationInvalidTtl(u64),
 
     #[error("delegation audience must not be empty")]
@@ -151,10 +151,8 @@ pub enum RpcWorkflowError {
         local: Principal,
     },
 
-    #[error(
-        "role attestation ttl_secs must satisfy 0 < ttl_secs <= {max_ttl_secs} (got {ttl_secs})"
-    )]
-    RoleAttestationInvalidTtl { ttl_secs: u64, max_ttl_secs: u64 },
+    #[error("role attestation ttl_ns must satisfy 0 < ttl_ns <= {max_ttl_ns} (got {ttl_ns})")]
+    RoleAttestationInvalidTtl { ttl_ns: u64, max_ttl_ns: u64 },
 
     #[error("internal invocation proof audience {audience} is not known to root")]
     InternalInvocationProofAudienceUnknown { audience: Principal },

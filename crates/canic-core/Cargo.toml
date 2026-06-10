@@ -19,17 +19,24 @@ ignored = ["serde_bytes"]
 [features]
 default = []
 sharding = []
-auth-crypto = []
+auth-root-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
+auth-root-canister-sig-verify = ["dep:ic-signature-verification"]
+auth-shard-secp256k1-verify = ["dep:k256"]
+auth-threshold-ecdsa-sign = []
+auth-delegated-token-verify = ["auth-root-canister-sig-verify", "auth-shard-secp256k1-verify"]
 
 [dependencies]
 async-trait = { workspace = true }
 candid = { workspace = true }
+ic-canister-sig-creation = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
 ic-cdk-management-canister = { workspace = true }
 ic-cdk-timers = { workspace = true }
+ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
+ic-signature-verification = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }
-k256 = { workspace = true }
+k256 = { workspace = true, optional = true }
 remain = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
@@ -48,6 +55,7 @@ candid = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 futures = { workspace = true }
+k256 = { workspace = true }
 
 [[bench]]
 name = "serialize"

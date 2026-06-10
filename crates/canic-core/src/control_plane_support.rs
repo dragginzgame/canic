@@ -10,13 +10,10 @@ pub mod protocol {
     pub use crate::protocol::{
         CANIC_WASM_STORE_BEGIN_GC, CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_CHUNK,
         CANIC_WASM_STORE_COMPLETE_GC, CANIC_WASM_STORE_INFO, CANIC_WASM_STORE_PREPARE,
-        CANIC_WASM_STORE_PREPARE_GC, CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS,
-        CANIC_WASM_STORE_PUBLISH_CHUNK, CANIC_WASM_STORE_STAGE_MANIFEST, CANIC_WASM_STORE_STATUS,
-        CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS, canic_wasm_store_begin_gc_endpoint,
-        canic_wasm_store_chunk_endpoint, canic_wasm_store_complete_gc_endpoint,
-        canic_wasm_store_info_endpoint, canic_wasm_store_method_requires_internal_proof,
-        canic_wasm_store_prepare_endpoint, canic_wasm_store_prepare_gc_endpoint,
-        canic_wasm_store_publish_chunk_endpoint, canic_wasm_store_stage_manifest_endpoint,
+        CANIC_WASM_STORE_PREPARE_GC, CANIC_WASM_STORE_PUBLISH_CHUNK,
+        CANIC_WASM_STORE_ROOT_UPDATE_METHODS, CANIC_WASM_STORE_STAGE_MANIFEST,
+        CANIC_WASM_STORE_STATUS, CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
+        canic_wasm_store_method_requires_internal_proof,
     };
 }
 

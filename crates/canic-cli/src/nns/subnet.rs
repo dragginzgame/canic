@@ -410,7 +410,7 @@ fn list_command() -> ClapCommand {
                 .long("kind")
                 .value_name("kind")
                 .value_parser(clap::value_parser!(SubnetKind))
-                .help("Filter by subnet kind: application, system, or unknown"),
+                .help("Filter by subnet kind: application, cloud_engine, system, or unknown"),
         )
         .arg(
             value_arg("specialization")

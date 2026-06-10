@@ -74,8 +74,10 @@ configured fleet role name, such as `app`, `hub`, or `registry`. The `fleet`
 value is the fleet template name from `[fleet] name = "..."`, not a deployment
 target name.
 Root canisters also need the `control-plane` feature on their runtime `canic`
-dependency. Enable `auth-crypto` too when delegated token material is enabled
-for the fleet.
+dependency. When delegated-token material is enabled, root issuers also need
+`auth-root-canister-sig-create`; canisters that mint shard tokens need
+`auth-threshold-ecdsa-sign`; endpoint verifiers need
+`auth-delegated-token-verify`.
 
 For a path checkout:
 
@@ -358,8 +360,9 @@ Canic-owned methods.
 - If a child cannot find its config at build time, check the path passed to
   `canic::build!`; it is relative to the canister crate directory.
 - If the root canister does not compile or bootstrap delegated-auth material,
-  confirm the runtime dependency enables the `auth-crypto` and `control-plane`
-  features.
+  confirm the runtime dependency enables `control-plane` plus the delegated-auth
+  features required by that role, such as `auth-root-canister-sig-create` for
+  root proof issuance and `auth-threshold-ecdsa-sign` for shard token signing.
 - Each canister crate must declare its fleet-scoped role with
   `[package.metadata.canic] fleet = "<fleet>"` and `role = "<role>"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not

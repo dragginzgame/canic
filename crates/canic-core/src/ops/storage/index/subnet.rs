@@ -42,6 +42,18 @@ impl SubnetIndexOps {
         SubnetIndexRecordMapper::record_to_input(SubnetIndex::export())
     }
 
+    pub(crate) fn filter_args_for_local_config(
+        args: SubnetIndexArgs,
+    ) -> Result<SubnetIndexArgs, InternalError> {
+        let allowed = ConfigOps::current_subnet()?.subnet_index_roles();
+        Ok(SubnetIndexArgs(
+            args.0
+                .into_iter()
+                .filter(|entry| allowed.contains(&entry.role))
+                .collect(),
+        ))
+    }
+
     pub(crate) fn import_args_allow_incomplete(args: SubnetIndexArgs) -> Result<(), InternalError> {
         let data = SubnetIndexRecordMapper::input_to_record(args);
         ensure_unique_roles(&data.entries, "subnet")?;

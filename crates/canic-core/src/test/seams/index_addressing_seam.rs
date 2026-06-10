@@ -90,6 +90,26 @@ fn index_addressing_does_not_fallback_to_registry() {
     assert_eq!(registry_count, 1);
 }
 
+fn install_index_service_test_config(service_role: &CanisterRole, singleton_role: &CanisterRole) {
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister_kind(service_role.clone(), CanisterKind::Service)
+        .with_prime_canister_kind(singleton_role.clone(), CanisterKind::Singleton)
+        .with_app_index(service_role.clone())
+        .install();
+    import_test_env(service_role.clone(), crate::ids::SubnetRole::PRIME, p(20));
+}
+
+fn clear_app_and_subnet_indexes() {
+    AppIndexOps::import_trusted_partial(AppIndexRecord {
+        entries: Vec::new(),
+    })
+    .expect("clear app index");
+    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
+        entries: Vec::new(),
+    })
+    .expect("clear subnet index");
+}
+
 #[test]
 fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
     let _guard = lock();
@@ -99,21 +119,8 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
     let service_pid = p(21);
     let singleton_pid = p(22);
 
-    let _config = ConfigTestBuilder::new()
-        .with_prime_canister_kind(service_role.clone(), CanisterKind::Service)
-        .with_prime_canister_kind(singleton_role.clone(), CanisterKind::Singleton)
-        .with_app_index(service_role.clone())
-        .install();
-    import_test_env(service_role.clone(), crate::ids::SubnetRole::PRIME, p(20));
-
-    AppIndexOps::import_trusted_partial(AppIndexRecord {
-        entries: Vec::new(),
-    })
-    .expect("clear app index");
-    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
-        entries: Vec::new(),
-    })
-    .expect("clear subnet index");
+    install_index_service_test_config(&service_role, &singleton_role);
+    clear_app_and_subnet_indexes();
 
     AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
         role: service_role.clone(),
@@ -182,4 +189,44 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
 
     assert_eq!(AppIndexOps::get(&service_role), Some(service_pid));
     assert_eq!(SubnetIndexOps::get(&service_role), Some(service_pid));
+}
+
+#[test]
+fn local_index_filters_drop_roles_outside_configured_service_sets() {
+    let _guard = lock();
+
+    let service_role = CanisterRole::new("project_hub");
+    let singleton_role = CanisterRole::new("project_ledger");
+    let service_pid = p(21);
+    let singleton_pid = p(22);
+
+    install_index_service_test_config(&service_role, &singleton_role);
+
+    let filtered_app = AppIndexOps::filter_args_for_local_config(AppIndexArgs(vec![
+        IndexEntryInput {
+            role: service_role.clone(),
+            pid: service_pid,
+        },
+        IndexEntryInput {
+            role: singleton_role.clone(),
+            pid: singleton_pid,
+        },
+    ]))
+    .expect("filter app index for local config");
+    assert_eq!(filtered_app.0.len(), 1);
+    assert_eq!(&filtered_app.0[0].role, &service_role);
+
+    let filtered_subnet = SubnetIndexOps::filter_args_for_local_config(SubnetIndexArgs(vec![
+        IndexEntryInput {
+            role: service_role.clone(),
+            pid: service_pid,
+        },
+        IndexEntryInput {
+            role: singleton_role,
+            pid: singleton_pid,
+        },
+    ]))
+    .expect("filter subnet index for local config");
+    assert_eq!(filtered_subnet.0.len(), 1);
+    assert_eq!(&filtered_subnet.0[0].role, &service_role);
 }

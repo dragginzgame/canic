@@ -20,13 +20,15 @@ fn topology_summary_counts_existing_reports() {
         data_center_report_fixture(),
     );
 
-    assert_eq!(report.schema_version, 2);
+    assert_eq!(report.schema_version, 3);
     assert_eq!(report.subnet_count, 2);
     assert_eq!(report.application_subnet_count, 1);
+    assert_eq!(report.cloud_engine_subnet_count, 0);
     assert_eq!(report.system_subnet_count, 1);
     assert_eq!(report.routing_range_count, 3);
     assert_eq!(report.node_count, 3);
     assert_eq!(report.application_node_count, 2);
+    assert_eq!(report.cloud_engine_node_count, 0);
     assert_eq!(report.system_node_count, 1);
     assert_eq!(report.node_provider_count, 1);
     assert_eq!(report.node_operator_count, 2);
@@ -305,7 +307,7 @@ fn subnet_row(
         subnet_label: subnet_kind.as_str().to_string(),
         subnet_label_source: ClassificationSource::Computed,
         node_count: Some(node_count),
-        charges_apply_by_default: subnet_kind == SubnetKind::Application,
+        charges_apply_by_default: subnet_kind.charges_apply_by_default(),
         range_count,
         ranges_shown: 0,
         range_offset: 0,

@@ -7,6 +7,7 @@ mod delegated;
 mod delegation;
 mod error;
 mod keys;
+mod root_canister_sig;
 mod token;
 mod types;
 mod verify;
@@ -15,9 +16,8 @@ pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
 pub use types::{
-    PreparedDelegatedTokenSignature, PreparedInternalInvocationProofSignature,
-    PreparedRoleAttestationSignature, PreparedRootDelegationProof, SignDelegatedTokenInput,
-    SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
+    DelegatedTokenVerifierConfig, PreparedDelegatedTokenSignature, PreparedRootDelegationProof,
+    SignDelegatedTokenInput, SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
 };
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";
@@ -45,23 +45,13 @@ pub struct InternalInvocationProofVerificationInput<'a> {
     pub target_method: &'a str,
     pub accepted_roles: &'a [CanisterRole],
     pub verifier_subnet: Option<Principal>,
-    pub now_secs: u64,
+    pub now_ns: u64,
     pub min_accepted_epoch: u64,
 }
 
 impl AuthOps {
-    /// Return the current minimum accepted attestation epoch for a role.
-    pub fn current_role_epoch(role: &CanisterRole) -> Result<u64, InternalError> {
-        let cfg = crate::ops::config::ConfigOps::role_attestation_config()?;
-        Ok(cfg
-            .min_accepted_epoch_by_role
-            .get(role.as_str())
-            .copied()
-            .unwrap_or(0))
-    }
-
-    // Publish the root delegated-token public key into cascaded subnet state.
-    pub async fn publish_delegated_token_root_key_material() -> Result<(), InternalError> {
+    // Publish the legacy delegated-grant root public key into cascaded subnet state.
+    pub async fn publish_delegated_grant_root_key_material() -> Result<(), InternalError> {
         let root_pid = IcOps::canister_self();
         let delegated_key_name = keys::delegated_tokens_key_name()?;
         keys::ensure_root_public_key_published(&delegated_key_name, root_pid).await
@@ -72,7 +62,7 @@ impl AuthOps {
         let root_pid = IcOps::canister_self();
         let now_secs = IcOps::now_secs();
 
-        Self::publish_delegated_token_root_key_material().await?;
+        Self::publish_delegated_grant_root_key_material().await?;
 
         let attestation_key_name = keys::attestation_key_name()?;
         keys::ensure_attestation_key_cached(&attestation_key_name, root_pid, now_secs).await?;

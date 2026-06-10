@@ -59,7 +59,7 @@ pub fn reserve_root_replay(
     max_entries: usize,
     max_entries_per_caller: usize,
 ) -> Result<(), ReplayReserveError> {
-    if replay_slot::active_root_slot_len_for_caller(pending.caller, pending.issued_at)
+    if replay_slot::active_root_slot_len_for_caller(pending.caller, pending.issued_at_ns)
         >= max_entries_per_caller
     {
         return Err(ReplayReserveError::CallerCapacityReached {
@@ -274,8 +274,8 @@ mod tests {
             caller,
             receipt_token: Box::new(receipt_token),
             payload_hash: [7u8; 32],
-            issued_at: 1_000,
-            expires_at: 1_300,
+            issued_at_ns: secs_to_ns(1_000),
+            expires_at_ns: secs_to_ns(1_300),
         }
     }
 

@@ -345,6 +345,8 @@ pub struct AuthConfig {
 ///
 /// Semantics:
 /// - enabled = false => delegated token auth disabled entirely
+/// - root_canister_id = None => use the initialized Canic root env
+/// - ic_root_public_key_raw_hex = None => use the runtime IC root-key provider
 /// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
 ///
@@ -359,6 +361,15 @@ pub struct DelegatedTokenConfig {
     pub ecdsa_key_name: String,
 
     #[serde(default)]
+    pub root_canister_id: Option<String>,
+
+    #[serde(default)]
+    pub ic_root_public_key_raw_hex: Option<String>,
+
+    #[serde(default = "default_delegated_tokens_network")]
+    pub network: String,
+
+    #[serde(default)]
     pub max_ttl_secs: Option<u64>,
 }
 
@@ -370,11 +381,18 @@ fn default_delegated_tokens_ecdsa_key_name() -> String {
     "key_1".to_string()
 }
 
+fn default_delegated_tokens_network() -> String {
+    "mainnet".to_string()
+}
+
 impl Default for DelegatedTokenConfig {
     fn default() -> Self {
         Self {
             enabled: default_delegated_tokens_enabled(),
             ecdsa_key_name: default_delegated_tokens_ecdsa_key_name(),
+            root_canister_id: None,
+            ic_root_public_key_raw_hex: None,
+            network: default_delegated_tokens_network(),
             max_ttl_secs: None,
         }
     }

@@ -20,10 +20,10 @@ pub struct RootReplayGuardInput {
     pub caller: Principal,
     pub command_kind: CommandKind,
     pub operation_id: OperationId,
-    pub ttl_seconds: u64,
+    pub ttl_ns: u64,
     pub payload_hash: [u8; 32],
-    pub now: u64,
-    pub max_ttl_seconds: u64,
+    pub now_ns: u64,
+    pub max_ttl_ns: u64,
     pub purge_scan_limit: usize,
 }
 
@@ -35,8 +35,8 @@ pub struct ReplayPending {
     pub caller: Principal,
     pub receipt_token: Box<ReplayReceiptToken>,
     pub payload_hash: [u8; 32],
-    pub issued_at: u64,
-    pub expires_at: u64,
+    pub issued_at_ns: u64,
+    pub expires_at_ns: u64,
 }
 
 /// ReplayDecision
@@ -66,10 +66,8 @@ pub struct ReplayCached {
 /// Mechanical guard failures emitted before decision classification.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayGuardError {
-    InvalidTtl {
-        ttl_seconds: u64,
-        max_ttl_seconds: u64,
-    },
+    InvalidTtl { ttl_ns: u64, max_ttl_ns: u64 },
+    TtlOverflow { now_ns: u64, ttl_ns: u64 },
     ReceiptDecodeFailed(String),
 }
 
@@ -83,19 +81,15 @@ pub fn evaluate_root_replay(
         return Ok(decision);
     }
 
-    ttl::validate_replay_ttl(input.ttl_seconds, input.max_ttl_seconds).map_err(
-        |ttl::ReplayTtlError::InvalidTtl {
-             ttl_seconds,
-             max_ttl_seconds,
-         }| ReplayGuardError::InvalidTtl {
-            ttl_seconds,
-            max_ttl_seconds,
-        },
-    )?;
+    validate_input_ttl(&input)?;
 
-    let now_ns = secs_to_ns(input.now);
-    let expires_at = input.now.saturating_add(input.ttl_seconds);
-    let expires_at_ns = secs_to_ns(expires_at);
+    let now_ns = input.now_ns;
+    let expires_at_ns = now_ns
+        .checked_add(input.ttl_ns)
+        .ok_or(ReplayGuardError::TtlOverflow {
+            now_ns,
+            ttl_ns: input.ttl_ns,
+        })?;
     let actor = ReplayActor::direct_caller(input.caller);
     let receipt_input = ReplayReceiptReserveInput::new(
         input.command_kind,
@@ -128,9 +122,8 @@ pub fn evaluate_existing_root_replay(
         return Ok(Some(decision));
     }
 
-    let now_ns = secs_to_ns(input.now);
-    let expires_at = input.now.saturating_add(input.ttl_seconds);
-    let expires_at_ns = secs_to_ns(expires_at);
+    let now_ns = input.now_ns;
+    let expires_at_ns = now_ns.saturating_add(input.ttl_ns);
     let actor = ReplayActor::direct_caller(input.caller);
     let receipt_input = ReplayReceiptReserveInput::new(
         input.command_kind,
@@ -163,7 +156,7 @@ fn evaluate_cross_command_replay(input: &RootReplayGuardInput) -> Option<ReplayD
         return None;
     }
 
-    let now_ns = secs_to_ns(input.now);
+    let now_ns = input.now_ns;
     if matches.iter().any(|record| {
         record
             .expires_at_ns
@@ -180,16 +173,14 @@ fn map_receipt_decision(decision: ReplayReceiptDecision) -> ReplayDecision {
             let receipt = receipt_token.receipt();
             let caller = receipt.actor.effective_principal;
             let payload_hash = receipt.payload_hash;
-            let issued_at = receipt.created_at_ns / 1_000_000_000;
-            let expires_at = receipt
-                .expires_at_ns
-                .map_or(u64::MAX, |expires_at_ns| expires_at_ns / 1_000_000_000);
+            let issued_at_ns = receipt.created_at_ns;
+            let expires_at_ns = receipt.expires_at_ns.unwrap_or(u64::MAX);
             ReplayDecision::Fresh(ReplayPending {
                 caller,
                 receipt_token: Box::new(receipt_token),
                 payload_hash,
-                issued_at,
-                expires_at,
+                issued_at_ns,
+                expires_at_ns,
             })
         }
         ReplayReceiptDecision::ReturnCommitted(receipt) => {
@@ -215,6 +206,14 @@ fn map_receipt_decision(decision: ReplayReceiptDecision) -> ReplayDecision {
 #[must_use]
 pub const fn secs_to_ns(secs: u64) -> u64 {
     secs.saturating_mul(1_000_000_000)
+}
+
+fn validate_input_ttl(input: &RootReplayGuardInput) -> Result<(), ReplayGuardError> {
+    ttl::validate_replay_ttl(input.ttl_ns, input.max_ttl_ns).map_err(|err| match err {
+        ttl::ReplayTtlError::InvalidTtl { ttl_ns, max_ttl_ns } => {
+            ReplayGuardError::InvalidTtl { ttl_ns, max_ttl_ns }
+        }
+    })
 }
 
 #[cfg(test)]
@@ -244,10 +243,10 @@ mod tests {
             caller: p(1),
             command_kind: CommandKind::new("root.test.v1").expect("command kind"),
             operation_id: OperationId::from_bytes([9u8; 32]),
-            ttl_seconds: 60,
+            ttl_ns: secs_to_ns(60),
             payload_hash: [7u8; 32],
-            now: 1_000,
-            max_ttl_seconds: 300,
+            now_ns: secs_to_ns(1_000),
+            max_ttl_ns: secs_to_ns(300),
             purge_scan_limit: 16,
         }
     }
@@ -350,7 +349,7 @@ mod tests {
         ReplayReceiptOps::reset_for_tests();
 
         let mut input = base_input();
-        input.now = 1_500;
+        input.now_ns = secs_to_ns(1_500);
         seed_receipt(&input, ReplayReceiptStatus::Reserved);
 
         let decision = evaluate_root_replay(input).expect("decision");
@@ -362,7 +361,7 @@ mod tests {
         ReplayReceiptOps::reset_for_tests();
 
         let mut input = base_input();
-        input.now = 1_200;
+        input.now_ns = secs_to_ns(1_200);
         seed_receipt(&input, ReplayReceiptStatus::Committed);
 
         let decision = evaluate_root_replay(input).expect("decision");
@@ -374,15 +373,15 @@ mod tests {
         ReplayReceiptOps::reset_for_tests();
 
         let mut input = base_input();
-        input.ttl_seconds = 0;
-        let max_ttl_seconds = input.max_ttl_seconds;
+        input.ttl_ns = 0;
+        let max_ttl_ns = input.max_ttl_ns;
 
         let err = evaluate_root_replay(input).expect_err("zero ttl must fail");
         assert_eq!(
             err,
             ReplayGuardError::InvalidTtl {
-                ttl_seconds: 0,
-                max_ttl_seconds,
+                ttl_ns: 0,
+                max_ttl_ns,
             }
         );
     }
@@ -392,17 +391,11 @@ mod tests {
         ReplayReceiptOps::reset_for_tests();
 
         let mut input = base_input();
-        input.ttl_seconds = input.max_ttl_seconds + 1;
-        let ttl_seconds = input.ttl_seconds;
-        let max_ttl_seconds = input.max_ttl_seconds;
+        input.ttl_ns = input.max_ttl_ns + 1;
+        let ttl_ns = input.ttl_ns;
+        let max_ttl_ns = input.max_ttl_ns;
 
         let err = evaluate_root_replay(input).expect_err("ttl above max must fail");
-        assert_eq!(
-            err,
-            ReplayGuardError::InvalidTtl {
-                ttl_seconds,
-                max_ttl_seconds,
-            }
-        );
+        assert_eq!(err, ReplayGuardError::InvalidTtl { ttl_ns, max_ttl_ns });
     }
 }

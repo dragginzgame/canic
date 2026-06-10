@@ -7,7 +7,7 @@ fn role_attestation_verification_paths() {
     let root_id = setup.root_id;
 
     // Happy path should verify a freshly issued self-attestation.
-    let issued = issue_self_attestation(pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, root_id);
     let verified: Result<(), Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
@@ -17,7 +17,7 @@ fn role_attestation_verification_paths() {
     verified.expect("attestation verification failed");
 
     // Mismatched caller must fail even with an otherwise valid attestation.
-    let issued = issue_self_attestation(pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, root_id);
     let verified: Result<(), Error> = pic.update_call_as_or_panic(
         root_id,
         Principal::anonymous(),
@@ -33,7 +33,7 @@ fn role_attestation_verification_paths() {
 
     // Audience binding must be enforced by the verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
-    let issued = issue_self_attestation(pic, root_id, 60, wrong_audience);
+    let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, wrong_audience);
     let verified: Result<(), Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
@@ -48,7 +48,7 @@ fn role_attestation_verification_paths() {
     );
 
     // Epoch floors higher than the attestation epoch must fail closed.
-    let issued = issue_self_attestation(pic, root_id, 60, root_id);
+    let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, root_id);
     let verified: Result<(), Error> = pic.update_call_as_or_panic(
         root_id,
         root_id,
@@ -63,7 +63,7 @@ fn role_attestation_verification_paths() {
     );
 
     // Expiry is time-sensitive, so keep it last after advancing the clock.
-    let issued = issue_self_attestation(pic, root_id, 1, root_id);
+    let issued = issue_self_attestation(pic, root_id, TEST_SHORT_ROLE_ATTESTATION_TTL_NS, root_id);
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
     let verified: Result<(), Error> = pic.update_call_as_or_panic(
@@ -95,10 +95,17 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
         root_id,
         root_id,
         "root_issue_self_attestation_test_with_key",
-        (60u64, root_id, 0u64, previous_key_id, previous_key_seed),
+        (
+            TEST_ROLE_ATTESTATION_TTL_NS,
+            root_id,
+            0u64,
+            previous_key_id,
+            previous_key_seed,
+        ),
     );
     let previous_attestation = previous_attestation.expect("previous-key attestation failed");
-    let grace_until = previous_attestation.payload.issued_at.saturating_add(5);
+    let previous_issued_at_secs = previous_attestation.payload.issued_at_ns / NS_PER_SEC;
+    let grace_until = previous_issued_at_secs.saturating_add(5);
 
     let set_keys: Result<(), Error> = pic.update_call_as_or_panic(
         root_id,
@@ -116,7 +123,7 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
                 current_key_id,
                 current_key_seed,
                 AttestationKeyStatus::Current,
-                Some(previous_attestation.payload.issued_at),
+                Some(previous_issued_at_secs),
                 None,
             ),
         ],),
@@ -151,7 +158,13 @@ fn role_attestation_verify_handles_rotated_key_grace_window() {
         root_id,
         root_id,
         "root_issue_self_attestation_test_with_key",
-        (60u64, root_id, 0u64, current_key_id, current_key_seed),
+        (
+            TEST_ROLE_ATTESTATION_TTL_NS,
+            root_id,
+            0u64,
+            current_key_id,
+            current_key_seed,
+        ),
     );
     let current_attestation = current_attestation.expect("current-key attestation failed");
 

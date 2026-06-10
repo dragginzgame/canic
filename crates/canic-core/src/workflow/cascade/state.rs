@@ -252,11 +252,13 @@ impl StateCascadeWorkflow {
         }
 
         if let Some(index) = &snapshot.app_index {
-            AppIndexOps::import_args_allow_incomplete(index.clone())?;
+            let filtered = AppIndexOps::filter_args_for_local_config(index.clone())?;
+            AppIndexOps::import_args_allow_incomplete(filtered)?;
         }
 
         if let Some(index) = &snapshot.subnet_index {
-            SubnetIndexOps::import_args_allow_incomplete(index.clone())?;
+            let filtered = SubnetIndexOps::filter_args_for_local_config(index.clone())?;
+            SubnetIndexOps::import_args_allow_incomplete(filtered)?;
         }
 
         Ok(())

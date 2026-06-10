@@ -12,28 +12,28 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             ::canic::api::canister::template::WasmStoreCanisterApi::catalog()
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_prepare(
             request: ::canic::dto::template::TemplateChunkSetPrepareInput,
         ) -> Result<::canic::dto::template::TemplateChunkSetInfoResponse, ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::prepare(request)
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_stage_manifest(
             request: ::canic::dto::template::TemplateManifestInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::stage_manifest(request)
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
+        #[$crate::canic_update(internal, requires(caller::is_root()), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
         async fn canic_wasm_store_publish_chunk(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request)
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_info(
             template_id: ::canic::ids::TemplateId,
             version: ::canic::ids::TemplateVersion,
@@ -47,22 +47,22 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             ::canic::api::canister::template::WasmStoreCanisterApi::status()
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_prepare_gc() -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::prepare_gc()
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_begin_gc() -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::begin_gc()
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_complete_gc() -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::complete_gc().await
         }
 
-        #[$crate::canic_update(internal, requires(caller::has_role("root")))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_wasm_store_chunk(
             template_id: ::canic::ids::TemplateId,
             version: ::canic::ids::TemplateVersion,

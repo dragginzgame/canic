@@ -41,7 +41,7 @@ async fn canic_upgrade() {}
 
 #[canic_update]
 async fn root_issue_self_attestation(
-    ttl_secs: u64,
+    ttl_ns: u64,
     audience: candid::Principal,
     epoch: u64,
 ) -> Result<SignedRoleAttestation, Error> {
@@ -51,7 +51,7 @@ async fn root_issue_self_attestation(
         role: CanisterRole::ROOT,
         subnet_id: None,
         audience,
-        ttl_secs,
+        ttl_ns,
         epoch,
         metadata: None,
     };
@@ -60,25 +60,26 @@ async fn root_issue_self_attestation(
 
 #[canic_update]
 async fn root_issue_self_attestation_test(
-    ttl_secs: u64,
+    ttl_ns: u64,
     audience: candid::Principal,
     epoch: u64,
 ) -> Result<SignedRoleAttestation, Error> {
-    if ttl_secs == 0 {
-        return Err(Error::invalid("ttl_secs must be greater than zero"));
+    if ttl_ns == 0 {
+        return Err(Error::invalid("ttl_ns must be greater than zero"));
     }
 
     let caller = msg_caller();
-    let issued_at = ic_cdk::api::time() / 1_000_000_000;
-    let expires_at = issued_at.saturating_add(ttl_secs);
+    let issued_at_ns = ic_cdk::api::time();
+    let issued_at_secs = issued_at_ns / 1_000_000_000;
+    let expires_at_ns = issued_at_ns.saturating_add(ttl_ns);
 
     let payload = RoleAttestation {
         subject: caller,
         role: CanisterRole::ROOT,
         subnet_id: None,
         audience,
-        issued_at,
-        expires_at,
+        issued_at_ns,
+        expires_at_ns,
         epoch,
     };
 
@@ -87,14 +88,14 @@ async fn root_issue_self_attestation_test(
 
     AuthApi::replace_attestation_key_set(AttestationKeySet {
         root_pid: canister_self(),
-        generated_at: issued_at,
+        generated_at: issued_at_secs,
         keys: vec![AttestationKey {
             key_id: TEST_ATTESTATION_KEY_ID,
             key_hash: public_key_hash(&public_key),
             key_name: TEST_ATTESTATION_KEY_NAME.to_string(),
             public_key,
             status: AttestationKeyStatus::Current,
-            valid_from: Some(issued_at),
+            valid_from: Some(issued_at_secs),
             valid_until: None,
         }],
     });
@@ -108,26 +109,26 @@ async fn root_issue_self_attestation_test(
 
 #[canic_update]
 async fn root_issue_self_attestation_test_with_key(
-    ttl_secs: u64,
+    ttl_ns: u64,
     audience: candid::Principal,
     epoch: u64,
     key_id: u32,
     key_seed: u8,
 ) -> Result<SignedRoleAttestation, Error> {
-    if ttl_secs == 0 {
-        return Err(Error::invalid("ttl_secs must be greater than zero"));
+    if ttl_ns == 0 {
+        return Err(Error::invalid("ttl_ns must be greater than zero"));
     }
 
     let caller = msg_caller();
-    let issued_at = ic_cdk::api::time() / 1_000_000_000;
-    let expires_at = issued_at.saturating_add(ttl_secs);
+    let issued_at_ns = ic_cdk::api::time();
+    let expires_at_ns = issued_at_ns.saturating_add(ttl_ns);
     let payload = RoleAttestation {
         subject: caller,
         role: CanisterRole::ROOT,
         subnet_id: None,
         audience,
-        issued_at,
-        expires_at,
+        issued_at_ns,
+        expires_at_ns,
         epoch,
     };
 
@@ -185,9 +186,9 @@ async fn root_now_secs() -> Result<u64, Error> {
 async fn root_bootstrap_delegated_session(
     token: DelegatedToken,
     delegated_subject: candid::Principal,
-    requested_ttl_secs: Option<u64>,
+    requested_ttl_ns: Option<u64>,
 ) -> Result<(), Error> {
-    AuthApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_secs)
+    AuthApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_ns)
 }
 
 #[canic_update]

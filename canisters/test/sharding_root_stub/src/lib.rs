@@ -38,12 +38,12 @@ async fn canic_response_capability_v1(
 async fn canic_request_role_attestation(
     request: RoleAttestationRequest,
 ) -> Result<SignedRoleAttestation, Error> {
-    if request.ttl_secs == 0 {
-        return Err(Error::invalid("ttl_secs must be greater than zero"));
+    if request.ttl_ns == 0 {
+        return Err(Error::invalid("ttl_ns must be greater than zero"));
     }
 
-    let issued_at = cdk::api::time() / 1_000_000_000;
-    let expires_at = issued_at.saturating_add(request.ttl_secs);
+    let issued_at_ns = cdk::api::time();
+    let expires_at_ns = issued_at_ns.saturating_add(request.ttl_ns);
 
     Ok(SignedRoleAttestation {
         payload: RoleAttestation {
@@ -51,8 +51,8 @@ async fn canic_request_role_attestation(
             role: request.role,
             subnet_id: request.subnet_id,
             audience: request.audience,
-            issued_at,
-            expires_at,
+            issued_at_ns,
+            expires_at_ns,
             epoch: request.epoch,
         },
         signature: Vec::new(),

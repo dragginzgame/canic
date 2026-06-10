@@ -166,6 +166,28 @@ fn system_subnet_has_no_catalog_rate() {
 }
 
 #[test]
+fn cloud_engine_subnet_keeps_application_rate_class() {
+    let root = temp_dir("canic-subnet-host-cloud-engine");
+    let mut catalog = fixture_catalog();
+    catalog.subnets[0].subnet_kind = SubnetKind::CloudEngine;
+    catalog.subnets[0].subnet_label = "cloud_engine".to_string();
+    catalog.subnets[0].charges_apply_by_default = true;
+    write_catalog(&root, catalog);
+    let request = info_request(&root, CANISTER_A);
+
+    let report = build_subnet_catalog_info_report(&request).expect("info report");
+
+    let _ = fs::remove_dir_all(root);
+    assert_eq!(report.subnet_kind, SubnetKind::CloudEngine);
+    assert!(report.charges_apply_to_subject);
+    assert_eq!(
+        report.charge_applicability_reason,
+        "charged_user_canister_subnet"
+    );
+    assert_eq!(report.cycles_per_billion_instructions, Some(2_615_384_616));
+}
+
+#[test]
 fn stale_status_is_deterministic() {
     let catalog = fixture_catalog();
     let fresh = catalog_stale_status(&catalog, 1_780_531_300, 200);

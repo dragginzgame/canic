@@ -21,10 +21,16 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "valid cycles proof",
     );
     // A valid child caller with a root-audience attestation should authorize the cycles request.
-    let issued = issue_self_attestation_as(pic, root_id, signer_id, 60, root_id);
-    let issued_at = issued.payload.issued_at;
+    let issued = issue_self_attestation_as(
+        pic,
+        root_id,
+        signer_id,
+        TEST_ROLE_ATTESTATION_TTL_NS,
+        root_id,
+    );
+    let issued_at_ns = issued.payload.issued_at_ns;
     let envelope =
-        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 1, 9);
+        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at_ns, 1, 9);
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
@@ -42,13 +48,19 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "tampered signature rejection",
     );
     // Tampering with the signature must fail during attestation verification.
-    let mut issued = issue_self_attestation_as(pic, root_id, signer_id, 60, root_id);
-    let issued_at = issued.payload.issued_at;
+    let mut issued = issue_self_attestation_as(
+        pic,
+        root_id,
+        signer_id,
+        TEST_ROLE_ATTESTATION_TTL_NS,
+        root_id,
+    );
+    let issued_at_ns = issued.payload.issued_at_ns;
     if let Some(first) = issued.signature.first_mut() {
         *first ^= 0x01;
     }
     let envelope =
-        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 6, 4);
+        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at_ns, 6, 4);
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
@@ -67,8 +79,14 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "capability hash mismatch rejection",
     );
     // Capability hashes must match the request exactly.
-    let issued = issue_self_attestation_as(pic, root_id, signer_id, 60, root_id);
-    let issued_at = issued.payload.issued_at;
+    let issued = issue_self_attestation_as(
+        pic,
+        root_id,
+        signer_id,
+        TEST_ROLE_ATTESTATION_TTL_NS,
+        root_id,
+    );
+    let issued_at_ns = issued.payload.issued_at_ns;
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
@@ -78,7 +96,7 @@ fn capability_endpoint_role_attestation_proof_paths() {
             capability_hash: [0u8; 32],
             attestation: issued,
         }),
-        metadata: capability_metadata(issued_at, 9, 1, 60),
+        metadata: capability_metadata(issued_at_ns, 9, 1, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
@@ -99,10 +117,16 @@ fn capability_endpoint_role_attestation_proof_paths() {
     );
     // Audience mismatches must be enforced by the capability verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
-    let issued = issue_self_attestation_as(pic, root_id, signer_id, 60, wrong_audience);
-    let issued_at = issued.payload.issued_at;
+    let issued = issue_self_attestation_as(
+        pic,
+        root_id,
+        signer_id,
+        TEST_ROLE_ATTESTATION_TTL_NS,
+        wrong_audience,
+    );
+    let issued_at_ns = issued.payload.issued_at_ns;
     let envelope =
-        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at, 3, 7);
+        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at_ns, 3, 7);
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
@@ -121,11 +145,17 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "expiry rejection",
     );
     // Expiry is time-sensitive, so keep it last after advancing the clock.
-    let issued = issue_self_attestation_as(pic, root_id, signer_id, 1, root_id);
-    let issued_at = issued.payload.issued_at;
+    let issued = issue_self_attestation_as(
+        pic,
+        root_id,
+        signer_id,
+        TEST_SHORT_ROLE_ATTESTATION_TTL_NS,
+        root_id,
+    );
+    let issued_at_ns = issued.payload.issued_at_ns;
     pic.advance_time(Duration::from_secs(2));
     pic.tick();
-    let envelope = cycles_role_attestation_envelope(root_id, request, issued, issued_at, 2, 8);
+    let envelope = cycles_role_attestation_envelope(root_id, request, issued, issued_at_ns, 2, 8);
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
         signer_id,
@@ -152,8 +182,8 @@ fn capability_endpoint_policy_and_structural_paths() {
     let pic = setup.pic.pic();
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
-    let issued = issue_self_attestation(pic, root_id, 60, root_id);
-    let issued_at = issued.payload.issued_at;
+    let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, root_id);
+    let issued_at_ns = issued.payload.issued_at_ns;
 
     test_progress(
         "capability_endpoint_policy_and_structural_paths",
@@ -165,7 +195,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         role: CanisterRole::ROOT,
         subnet_id: None,
         audience: root_id,
-        ttl_secs: 60,
+        ttl_ns: TEST_ROLE_ATTESTATION_TTL_NS,
         epoch: 0,
         metadata: None,
     });
@@ -179,7 +209,7 @@ fn capability_endpoint_policy_and_structural_paths() {
             capability_hash: subject_mismatch_hash,
             attestation: issued.clone(),
         }),
-        metadata: capability_metadata(issued_at, 4, 6, 60),
+        metadata: capability_metadata(issued_at_ns, 4, 6, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
@@ -208,7 +238,7 @@ fn capability_endpoint_policy_and_structural_paths() {
             capability_hash: subject_mismatch_hash,
             attestation: issued.clone(),
         }),
-        metadata: capability_metadata(issued_at, 4, 66, 60),
+        metadata: capability_metadata(issued_at_ns, 4, 66, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let envelope_b = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
@@ -219,7 +249,7 @@ fn capability_endpoint_policy_and_structural_paths() {
             capability_hash: subject_mismatch_hash,
             attestation: issued,
         }),
-        metadata: capability_metadata(issued_at, 4, 66, 60),
+        metadata: capability_metadata(issued_at_ns, 4, 66, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let first: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
@@ -264,7 +294,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         capability_version: CAPABILITY_VERSION_V1,
         capability: cycles_request.clone(),
         proof: CapabilityProof::Structural,
-        metadata: capability_metadata(issued_at, 7, 3, 60),
+        metadata: capability_metadata(issued_at_ns, 7, 3, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
@@ -287,7 +317,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         role: CanisterRole::ROOT,
         subnet_id: None,
         audience: root_id,
-        ttl_secs: 60,
+        ttl_ns: TEST_ROLE_ATTESTATION_TTL_NS,
         epoch: 0,
         metadata: None,
     });
@@ -296,7 +326,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         capability_version: CAPABILITY_VERSION_V1,
         capability: unsupported_structural_request,
         proof: CapabilityProof::Structural,
-        metadata: capability_metadata(issued_at, 7, 3, 60),
+        metadata: capability_metadata(issued_at_ns, 7, 3, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
@@ -334,14 +364,14 @@ fn capability_endpoint_policy_and_structural_paths() {
                 },
                 capability_hash,
                 quota: 1,
-                issued_at,
-                expires_at: issued_at.saturating_add(60),
+                issued_at_ns,
+                expires_at_ns: issued_at_ns.saturating_add(TEST_ROLE_ATTESTATION_TTL_NS),
                 epoch: 0,
             },
             grant_sig: vec![1, 2, 3],
             key_id: 1,
         }),
-        metadata: capability_metadata(issued_at, 8, 2, 60),
+        metadata: capability_metadata(issued_at_ns, 8, 2, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,

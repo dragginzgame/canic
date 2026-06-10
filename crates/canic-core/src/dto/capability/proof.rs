@@ -33,8 +33,8 @@ pub struct DelegatedGrant {
     pub scope: DelegatedGrantScope,
     pub capability_hash: [u8; 32],
     pub quota: u64,
-    pub issued_at: u64,
-    pub expires_at: u64,
+    pub issued_at_ns: u64,
+    pub expires_at_ns: u64,
     pub epoch: u64,
 }
 

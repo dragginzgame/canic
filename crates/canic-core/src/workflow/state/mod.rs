@@ -36,7 +36,7 @@ impl AppStateWorkflow {
             return Ok(response);
         }
 
-        RuntimeAuthWorkflow::publish_root_delegated_key_to_subnet_state().await?;
+        RuntimeAuthWorkflow::publish_root_delegated_grant_key_to_subnet_state().await?;
 
         let snapshot = StateSnapshotBuilder::new()?
             .with_app_state()

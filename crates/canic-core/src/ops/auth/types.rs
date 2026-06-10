@@ -2,7 +2,6 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert, DelegationProof,
-        InternalInvocationProofPayloadV1, RoleAttestation,
     },
     ops::auth::delegated::mint::PreparedDelegatedToken,
 };
@@ -16,7 +15,7 @@ pub struct SignDelegatedTokenInput {
     pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
-    pub ttl_secs: u64,
+    pub ttl_ns: u64,
     pub nonce: [u8; 16],
 }
 
@@ -25,24 +24,25 @@ pub struct SignDelegatedTokenInput {
 //
 
 pub struct SignDelegationProofInput {
+    pub operation_id: [u8; 32],
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub shard_pid: Principal,
-    pub cert_ttl_secs: u64,
-    pub max_token_ttl_secs: u64,
-    pub max_cert_ttl_secs: u64,
-    pub issued_at: u64,
+    pub cert_ttl_ns: u64,
+    pub max_token_ttl_ns: u64,
+    pub max_cert_ttl_ns: u64,
+    pub issued_at_ns: u64,
 }
 
 //
 // PreparedRootDelegationProof
 //
 
+#[derive(Clone)]
 pub struct PreparedRootDelegationProof {
     pub cert: DelegationCert,
     pub cert_hash: [u8; 32],
-    pub key_name: String,
-    pub root_derivation_path: Vec<Vec<u8>>,
+    pub retrieval_expires_at_ns: u64,
 }
 
 //
@@ -57,25 +57,12 @@ pub struct PreparedDelegatedTokenSignature {
 }
 
 //
-// PreparedRoleAttestationSignature
+// DelegatedTokenVerifierConfig
 //
 
-pub struct PreparedRoleAttestationSignature {
-    pub payload: RoleAttestation,
-    pub message_hash: [u8; 32],
-    pub key_name: String,
-    pub derivation_path: Vec<Vec<u8>>,
-}
-
-//
-// PreparedInternalInvocationProofSignature
-//
-
-pub struct PreparedInternalInvocationProofSignature {
-    pub payload: InternalInvocationProofPayloadV1,
-    pub message_hash: [u8; 32],
-    pub key_name: String,
-    pub derivation_path: Vec<Vec<u8>>,
+pub struct DelegatedTokenVerifierConfig {
+    pub root_canister_id: Principal,
+    pub ic_root_public_key_raw: Vec<u8>,
 }
 
 //
@@ -84,8 +71,8 @@ pub struct PreparedInternalInvocationProofSignature {
 
 pub struct VerifyDelegatedTokenRuntimeInput<'a> {
     pub token: &'a DelegatedToken,
-    pub max_cert_ttl_secs: u64,
-    pub max_token_ttl_secs: u64,
+    pub max_cert_ttl_ns: u64,
+    pub max_token_ttl_ns: u64,
     pub required_scopes: &'a [String],
-    pub now_secs: u64,
+    pub now_ns: u64,
 }

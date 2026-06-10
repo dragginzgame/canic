@@ -12,7 +12,7 @@ pub(super) fn verify_role_attestation_claims(
     caller: Principal,
     self_pid: Principal,
     verifier_subnet: Option<Principal>,
-    now_secs: u64,
+    now_ns: u64,
     min_accepted_epoch: u64,
 ) -> Result<(), AuthOpsError> {
     attestation::verify_role_attestation_claims(
@@ -20,7 +20,7 @@ pub(super) fn verify_role_attestation_claims(
         caller,
         self_pid,
         verifier_subnet,
-        now_secs,
+        now_ns,
         min_accepted_epoch,
     )
 }

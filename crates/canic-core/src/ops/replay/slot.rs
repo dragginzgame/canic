@@ -1,7 +1,7 @@
 use crate::ops::{
     replay::{
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
-        guard::{ReplayPending, secs_to_ns},
+        guard::ReplayPending,
         receipt::{commit_receipt_response, reserve_receipt_token},
     },
     storage::replay::ReplayReceiptOps,
@@ -22,7 +22,7 @@ pub fn commit_root_slot(pending: &ReplayPending, response_bytes: Vec<u8>) {
         &pending.receipt_token,
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
         response_bytes,
-        secs_to_ns(pending.issued_at),
+        pending.issued_at_ns,
     );
 }
 
@@ -38,13 +38,10 @@ pub fn root_slot_len() -> usize {
 ///
 /// Return the number of non-expired replay receipts currently stored for a caller.
 #[must_use]
-pub fn active_root_slot_len_for_caller(
-    caller: crate::cdk::types::Principal,
-    now_secs: u64,
-) -> usize {
+pub fn active_root_slot_len_for_caller(caller: crate::cdk::types::Principal, now_ns: u64) -> usize {
     ReplayReceiptOps::active_len_for_actor(
         crate::ops::replay::model::ReplayActor::direct_caller(caller),
-        secs_to_ns(now_secs),
+        now_ns,
     )
 }
 

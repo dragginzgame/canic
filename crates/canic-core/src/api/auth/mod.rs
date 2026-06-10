@@ -2,14 +2,14 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            AttestationKeySet, DelegatedRoleGrant, DelegatedToken, DelegatedTokenIssueRequest,
-            DelegatedTokenMintRequest, DelegationAudience, DelegationCert, DelegationProof,
-            DelegationProofIssueRequest, InternalInvocationProofRequest, RoleAttestationRequest,
-            ShardKeyBinding, SignatureAlgorithm, SignedInternalInvocationProofV1,
-            SignedRoleAttestation,
+            AttestationKeySet, AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken,
+            DelegatedTokenIssueRequest, DelegationAudience, DelegationCert, DelegationProof,
+            DelegationProofGetRequest, DelegationProofIssueRequest, DelegationProofPrepareResponse,
+            InternalInvocationProofRequest, RoleAttestationRequest, ShardKeyBinding,
+            SignedInternalInvocationProofV1, SignedRoleAttestation,
         },
         error::{Error, ErrorCode},
-        rpc::{Request as RootRequest, Response as RootCapabilityResponse, RootRequestMetadata},
+        rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
     ids::CanisterRole,
@@ -42,7 +42,6 @@ use crate::{
 };
 use candid::{decode_one, encode_one};
 use root_client::RootAuthMaterialClient;
-use sha2::{Digest, Sha256};
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
@@ -65,17 +64,12 @@ impl AuthApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
-    const DELEGATION_REPLAY_COMMAND_KIND: &str = "auth.issue_delegation_proof.v1";
+    const DELEGATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_delegation_proof.v1";
     const DELEGATION_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
-    const MAX_DELEGATION_REPLAY_TTL_SECONDS: u64 = 300;
-    const DELEGATION_SIGNING_QUOTA_WINDOW_SECONDS: u64 = 60;
-    const MAX_DELEGATION_SIGNING_OPERATIONS_PER_WINDOW: u64 = 60;
-    const DELEGATION_SIGNING_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
-    const MIN_DELEGATION_SIGNING_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
+    const MAX_DELEGATION_REPLAY_TTL_NS: u64 = 300_000_000_000;
     const TOKEN_ISSUE_REPLAY_COMMAND_KIND: &str = "auth.issue_token.v1";
-    const TOKEN_MINT_REPLAY_COMMAND_KIND: &str = "auth.mint_token.v1";
     const TOKEN_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
-    const MAX_TOKEN_REPLAY_TTL_SECONDS: u64 = 300;
+    const MAX_TOKEN_REPLAY_TTL_NS: u64 = 300_000_000_000;
     const TOKEN_SIGNING_QUOTA_WINDOW_SECONDS: u64 = 60;
     const MAX_TOKEN_SIGNING_OPERATIONS_PER_WINDOW: u64 = 60;
     const TOKEN_SIGNING_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
@@ -115,17 +109,17 @@ impl AuthApi {
     // verified subject to the caller before dispatch.
     fn verify_token_material(
         token: &DelegatedToken,
-        max_cert_ttl_secs: u64,
-        max_token_ttl_secs: u64,
+        max_cert_ttl_ns: u64,
+        max_token_ttl_ns: u64,
         required_scopes: &[String],
-        now_secs: u64,
+        now_ns: u64,
     ) -> Result<Principal, Error> {
         AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token,
-            max_cert_ttl_secs,
-            max_token_ttl_secs,
+            max_cert_ttl_ns,
+            max_token_ttl_ns,
             required_scopes,
-            now_secs,
+            now_ns,
         })
         .map(|verified| verified.subject)
         .map_err(Self::map_auth_error)
@@ -180,99 +174,38 @@ impl AuthApi {
         .await
     }
 
-    /// Request a root proof, then issue a self-contained delegated token.
-    pub async fn mint_token(request: DelegatedTokenMintRequest) -> Result<DelegatedToken, Error> {
-        let label = "delegated token mint";
-        let metadata = Self::token_replay_metadata(request.metadata, "delegated token mint")?;
-        let operation_id = OperationId::from_bytes(metadata.request_id);
-        let command_kind = Self::token_mint_replay_command_kind();
-        let caller = IcOps::msg_caller();
-        let actor = ReplayActor::direct_caller(caller);
-        let payload_hash = Self::token_mint_replay_payload_hash(&command_kind, &actor, &request);
-        let token = match Self::reserve_token_replay_receipt(
-            command_kind.clone(),
-            metadata,
-            actor,
-            payload_hash,
-        )? {
-            ReplayReceiptDecision::Fresh(token) => {
-                Self::log_token_replay_reserved(label, &command_kind, operation_id, caller);
-                token
-            }
-            decision => {
-                Self::log_token_replay_decision(
-                    label,
-                    &command_kind,
-                    operation_id,
-                    caller,
-                    &decision,
-                );
-                return Self::map_token_replay_decision(decision, label);
-            }
-        };
-
-        let proof = Self::request_delegation(DelegationProofIssueRequest {
-            metadata: Some(metadata),
-            shard_pid: IcOps::canister_self(),
-            aud: request.aud.clone(),
-            grants: request.grants.clone(),
-            cert_ttl_secs: request.cert_ttl_secs,
-        })
-        .await
-        .inspect_err(|_| {
-            abort_reserved_receipt(&token);
-        })?;
-
-        let issue_request = DelegatedTokenIssueRequest {
-            metadata: None,
-            subject: request.subject,
-            aud: request.aud,
-            grants: request.grants,
-            ttl_secs: request.token_ttl_secs,
-            nonce: request.nonce,
-            proof,
-        };
-
-        Self::issue_fresh_token_from_proof(
-            token,
-            command_kind,
-            caller,
-            operation_id,
-            label,
-            issue_request,
-        )
-        .await
-    }
-
-    /// Request a self-contained delegation proof from root over RPC.
-    pub async fn request_delegation(
+    /// Prepare a root delegation proof from root over RPC.
+    pub async fn prepare_delegation_proof(
         request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProof, Error> {
+    ) -> Result<DelegationProofPrepareResponse, Error> {
         let request = metadata::with_delegation_request_metadata(request);
-        Self::request_delegation_remote(request).await
+        Self::prepare_delegation_proof_remote(request).await
     }
 
-    /// Issue a self-contained delegation proof from the local root.
-    pub async fn issue_delegation_proof(
+    /// Prepare a root-certified delegation proof from the local root update path.
+    pub async fn prepare_delegation_proof_root(
         request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProof, Error> {
+    ) -> Result<DelegationProofPrepareResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
         let caller = IcOps::msg_caller();
         Self::validate_delegation_request_caller(caller, request.shard_pid)?;
-        let max_cert_ttl_secs = Self::delegated_token_max_ttl_secs()?;
+        let max_cert_ttl_ns = Self::delegated_token_max_ttl_ns()?;
         let metadata = Self::delegation_replay_metadata(request.metadata)?;
         let command_kind = Self::delegation_replay_command_kind();
         let actor = ReplayActor::direct_caller(caller);
         let payload_hash = Self::delegation_replay_payload_hash(&command_kind, &actor, &request);
-        let now_secs = IcOps::now_secs();
+        let now_ns = IcOps::now_nanos();
+        let expires_at_ns = now_ns.checked_add(metadata.ttl_ns).ok_or_else(|| {
+            Error::invalid("delegation proof replay metadata ttl_ns overflows nanoseconds")
+        })?;
         let replay_input = ReplayReceiptReserveInput::new(
             command_kind.clone(),
             OperationId::from_bytes(metadata.request_id),
             actor,
             payload_hash,
-            secs_to_ns(now_secs),
+            now_ns,
         )
-        .with_expires_at_ns(secs_to_ns(now_secs.saturating_add(metadata.ttl_seconds)));
+        .with_expires_at_ns(expires_at_ns);
 
         let token = match reserve_or_replay_receipt(replay_input)
             .map_err(Self::map_delegation_replay_store_error)?
@@ -281,26 +214,34 @@ impl AuthApi {
             decision => return Self::map_delegation_replay_decision(decision),
         };
 
-        Self::issue_fresh_delegation_proof(token, command_kind, caller, request, max_cert_ttl_secs)
-            .await
+        Self::prepare_fresh_delegation_proof(token, caller, request, max_cert_ttl_ns).await
     }
 
-    async fn issue_fresh_delegation_proof(
-        token: ReplayReceiptToken,
-        command_kind: CommandKind,
-        caller: Principal,
-        request: DelegationProofIssueRequest,
-        max_cert_ttl_secs: u64,
+    /// Retrieve a prepared self-contained delegation proof from the local root query path.
+    pub fn get_delegation_proof_root(
+        request: DelegationProofGetRequest,
     ) -> Result<DelegationProof, Error> {
-        let max_token_ttl_secs = request.cert_ttl_secs.min(max_cert_ttl_secs);
+        EnvOps::require_root().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        AuthOps::get_delegation_proof(caller, request.cert_hash).map_err(Self::map_auth_error)
+    }
+
+    async fn prepare_fresh_delegation_proof(
+        token: ReplayReceiptToken,
+        _caller: Principal,
+        request: DelegationProofIssueRequest,
+        max_cert_ttl_ns: u64,
+    ) -> Result<DelegationProofPrepareResponse, Error> {
+        let max_token_ttl_ns = request.cert_ttl_ns.min(max_cert_ttl_ns);
         let prepared = match AuthOps::prepare_delegation_proof(SignDelegationProofInput {
+            operation_id: token.receipt().operation_id.into_bytes(),
             audience: request.aud,
             grants: request.grants,
             shard_pid: request.shard_pid,
-            cert_ttl_secs: request.cert_ttl_secs,
-            max_token_ttl_secs,
-            max_cert_ttl_secs,
-            issued_at: IcOps::now_secs(),
+            cert_ttl_ns: request.cert_ttl_ns,
+            max_token_ttl_ns,
+            max_cert_ttl_ns,
+            issued_at_ns: IcOps::now_nanos(),
         })
         .await
         {
@@ -311,52 +252,15 @@ impl AuthApi {
             }
         };
 
-        let cost_permit = match CostGuardOps::reserve(CostGuardRequest {
-            cost_class: crate::replay_policy::CostClass::ThresholdEcdsaSign,
-            command_kind,
-            quota_subject: caller,
-            payer: IcOps::canister_self(),
-            now_secs: IcOps::now_secs(),
-            quota_window_secs: Self::DELEGATION_SIGNING_QUOTA_WINDOW_SECONDS,
-            max_operations_per_window: Self::MAX_DELEGATION_SIGNING_OPERATIONS_PER_WINDOW,
-            current_cycle_balance: MgmtOps::canister_cycle_balance().to_u128(),
-            cycle_reservation_cycles: Self::DELEGATION_SIGNING_CYCLE_RESERVATION_CYCLES,
-            min_cycles_after_reservation: Self::MIN_DELEGATION_SIGNING_CYCLES_AFTER_RESERVATION,
-        }) {
-            Ok(permit) => permit,
-            Err(err) => {
-                abort_reserved_receipt(&token);
-                return Err(Self::map_auth_error(err));
-            }
+        let response = DelegationProofPrepareResponse {
+            cert: prepared.cert,
+            cert_hash: prepared.cert_hash,
+            retrieval_expires_at_ns: prepared.retrieval_expires_at_ns,
         };
 
-        mark_external_effect_in_flight(
-            &token,
-            ExternalEffectDescriptor::ThresholdEcdsaSign {
-                key_id_hash: Self::hash_delegation_effect_key(&prepared.key_name),
-                purpose: EcdsaPurpose::DelegationProof,
-                message_hash: prepared.cert_hash,
-            },
-            secs_to_ns(IcOps::now_secs()),
-        );
-
-        let proof = match AuthOps::sign_prepared_delegation_proof(&cost_permit, prepared).await {
-            Ok(proof) => proof,
-            Err(err) => {
-                let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
-                mark_recovery_required(
-                    &token,
-                    RecoveryReason::ExternalEffectStatusUnknown,
-                    secs_to_ns(IcOps::now_secs()),
-                );
-                return Err(Self::map_auth_error(err));
-            }
-        };
-
-        let response_bytes = match Self::encode_delegation_proof_response(&proof) {
+        let response_bytes = match Self::encode_delegation_prepare_response(&response) {
             Ok(response_bytes) => response_bytes,
             Err(err) => {
-                let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
                 mark_recovery_required(
                     &token,
                     RecoveryReason::ResponseCommitFailed,
@@ -366,22 +270,13 @@ impl AuthApi {
             }
         };
 
-        if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
-            mark_recovery_required(
-                &token,
-                RecoveryReason::ResponseCommitFailed,
-                secs_to_ns(IcOps::now_secs()),
-            );
-            return Err(Self::map_auth_error(err));
-        }
-
         commit_receipt_response(
             &token,
             Self::DELEGATION_REPLAY_RESPONSE_SCHEMA_VERSION,
             response_bytes,
             secs_to_ns(IcOps::now_secs()),
         );
-        Ok(proof)
+        Ok(response)
     }
 
     async fn issue_fresh_token_from_proof(
@@ -397,7 +292,7 @@ impl AuthApi {
             subject: request.subject,
             audience: request.aud,
             grants: request.grants,
-            ttl_secs: request.ttl_secs,
+            ttl_ns: request.ttl_ns,
             nonce: request.nonce,
         }) {
             Ok(prepared) => prepared,
@@ -560,7 +455,7 @@ impl AuthApi {
 
         let caller = IcOps::msg_caller();
         let self_pid = IcOps::canister_self();
-        let now_secs = IcOps::now_secs();
+        let now_ns = IcOps::now_nanos();
         let verifier_subnet = Some(EnvOps::subnet_pid().map_err(Error::from)?);
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
 
@@ -573,7 +468,7 @@ impl AuthApi {
                     target_method,
                     accepted_roles,
                     verifier_subnet,
-                    now_secs,
+                    now_ns,
                     min_accepted_epoch,
                 },
             )
@@ -643,15 +538,18 @@ impl AuthApi {
     }
 
     // Resolve the root-owned TTL ceiling from delegated-token config.
-    fn delegated_token_max_ttl_secs() -> Result<u64, Error> {
+    fn delegated_token_max_ttl_ns() -> Result<u64, Error> {
         let cfg = ConfigOps::delegated_tokens_config().map_err(Error::from)?;
         if !cfg.enabled {
             return Err(Error::forbidden(Self::DELEGATED_TOKENS_DISABLED));
         }
 
-        Ok(cfg
+        let max_ttl_secs = cfg
             .max_ttl_secs
-            .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS))
+            .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
+        max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
+            Error::invalid("auth.delegated_tokens.max_ttl_secs overflows nanoseconds")
+        })
     }
 
     fn validate_delegation_request_caller(
@@ -668,39 +566,39 @@ impl AuthApi {
     }
 
     fn delegation_replay_metadata(
-        metadata: Option<RootRequestMetadata>,
-    ) -> Result<RootRequestMetadata, Error> {
+        metadata: Option<AuthRequestMetadata>,
+    ) -> Result<AuthRequestMetadata, Error> {
         let metadata = metadata.ok_or_else(Error::operation_id_required)?;
-        if metadata.ttl_seconds == 0 {
+        if metadata.ttl_ns == 0 {
             return Err(Error::invalid(
-                "delegation proof replay metadata ttl_seconds must be greater than zero",
+                "delegation proof replay metadata ttl_ns must be greater than zero",
             ));
         }
-        if metadata.ttl_seconds > Self::MAX_DELEGATION_REPLAY_TTL_SECONDS {
+        if metadata.ttl_ns > Self::MAX_DELEGATION_REPLAY_TTL_NS {
             return Err(Error::invalid(format!(
-                "delegation proof replay metadata ttl_seconds={} exceeds max {}",
-                metadata.ttl_seconds,
-                Self::MAX_DELEGATION_REPLAY_TTL_SECONDS
+                "delegation proof replay metadata ttl_ns={} exceeds max {}",
+                metadata.ttl_ns,
+                Self::MAX_DELEGATION_REPLAY_TTL_NS
             )));
         }
         Ok(metadata)
     }
 
     fn token_replay_metadata(
-        metadata: Option<RootRequestMetadata>,
+        metadata: Option<AuthRequestMetadata>,
         label: &str,
-    ) -> Result<RootRequestMetadata, Error> {
+    ) -> Result<AuthRequestMetadata, Error> {
         let metadata = metadata.ok_or_else(Error::operation_id_required)?;
-        if metadata.ttl_seconds == 0 {
+        if metadata.ttl_ns == 0 {
             return Err(Error::invalid(format!(
-                "{label} replay metadata ttl_seconds must be greater than zero"
+                "{label} replay metadata ttl_ns must be greater than zero"
             )));
         }
-        if metadata.ttl_seconds > Self::MAX_TOKEN_REPLAY_TTL_SECONDS {
+        if metadata.ttl_ns > Self::MAX_TOKEN_REPLAY_TTL_NS {
             return Err(Error::invalid(format!(
-                "{label} replay metadata ttl_seconds={} exceeds max {}",
-                metadata.ttl_seconds,
-                Self::MAX_TOKEN_REPLAY_TTL_SECONDS
+                "{label} replay metadata ttl_ns={} exceeds max {}",
+                metadata.ttl_ns,
+                Self::MAX_TOKEN_REPLAY_TTL_NS
             )));
         }
         Ok(metadata)
@@ -716,11 +614,6 @@ impl AuthApi {
             .expect("delegated-token issue replay command kind is a valid static label")
     }
 
-    fn token_mint_replay_command_kind() -> CommandKind {
-        CommandKind::new(Self::TOKEN_MINT_REPLAY_COMMAND_KIND)
-            .expect("delegated-token mint replay command kind is a valid static label")
-    }
-
     fn delegation_replay_payload_hash(
         command_kind: &CommandKind,
         actor: &ReplayActor,
@@ -730,22 +623,7 @@ impl AuthApi {
         hasher.hash_principal(&request.shard_pid);
         Self::hash_delegation_audience(&mut hasher, &request.aud);
         Self::hash_delegated_role_grants(&mut hasher, &request.grants);
-        hasher.hash_u64(request.cert_ttl_secs);
-        hasher.finish()
-    }
-
-    fn token_mint_replay_payload_hash(
-        command_kind: &CommandKind,
-        actor: &ReplayActor,
-        request: &DelegatedTokenMintRequest,
-    ) -> [u8; 32] {
-        let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
-        hasher.hash_principal(&request.subject);
-        Self::hash_delegation_audience(&mut hasher, &request.aud);
-        Self::hash_delegated_role_grants(&mut hasher, &request.grants);
-        hasher.hash_u64(request.token_ttl_secs);
-        hasher.hash_u64(request.cert_ttl_secs);
-        hasher.hash_bytes(&request.nonce);
+        hasher.hash_u64(request.cert_ttl_ns);
         hasher.finish()
     }
 
@@ -759,7 +637,7 @@ impl AuthApi {
         hasher.hash_principal(&request.subject);
         Self::hash_delegation_audience(&mut hasher, &request.aud);
         Self::hash_delegated_role_grants(&mut hasher, &request.grants);
-        hasher.hash_u64(request.ttl_secs);
+        hasher.hash_u64(request.ttl_ns);
         hasher.hash_bytes(&request.nonce);
         hasher.finish()
     }
@@ -786,40 +664,53 @@ impl AuthApi {
 
     fn hash_delegation_proof(hasher: &mut ReplayPayloadHasher, proof: &DelegationProof) {
         Self::hash_delegation_cert(hasher, &proof.cert);
-        hasher.hash_bytes(&proof.root_sig);
+        Self::hash_root_proof(hasher, &proof.root_proof);
     }
 
     fn hash_delegation_cert(hasher: &mut ReplayPayloadHasher, cert: &DelegationCert) {
-        hasher.hash_u64(u64::from(cert.version));
         hasher.hash_principal(&cert.root_pid);
-        hasher.hash_str(&cert.root_key_id);
-        hasher.hash_bytes(&cert.root_key_hash);
-        Self::hash_signature_algorithm(hasher, cert.alg);
         hasher.hash_principal(&cert.shard_pid);
         hasher.hash_str(&cert.shard_key_id);
+        Self::hash_shard_signature_algorithm(hasher, cert.shard_sig_alg);
         hasher.hash_bytes(&cert.shard_public_key_sec1);
         hasher.hash_bytes(&cert.shard_key_hash);
         Self::hash_shard_key_binding(hasher, cert.shard_key_binding);
-        hasher.hash_u64(cert.issued_at);
-        hasher.hash_u64(cert.expires_at);
-        hasher.hash_u64(cert.max_token_ttl_secs);
+        hasher.hash_u64(cert.issued_at_ns);
+        hasher.hash_u64(cert.not_before_ns);
+        hasher.hash_u64(cert.expires_at_ns);
+        hasher.hash_u64(cert.max_token_ttl_ns);
         Self::hash_delegation_audience(hasher, &cert.aud);
         Self::hash_delegated_role_grants(hasher, &cert.grants);
     }
 
-    fn hash_signature_algorithm(hasher: &mut ReplayPayloadHasher, alg: SignatureAlgorithm) {
+    fn hash_root_proof(hasher: &mut ReplayPayloadHasher, proof: &crate::dto::auth::RootProof) {
+        match proof {
+            crate::dto::auth::RootProof::IcCanisterSignatureV1(proof) => {
+                hasher.hash_str("IcCanisterSignatureV1");
+                hasher.hash_bytes(&proof.signature_cbor);
+                hasher.hash_bytes(&proof.public_key_der);
+            }
+        }
+    }
+
+    fn hash_shard_signature_algorithm(
+        hasher: &mut ReplayPayloadHasher,
+        alg: crate::dto::auth::ShardSignatureAlgorithm,
+    ) {
         match alg {
-            SignatureAlgorithm::EcdsaP256Sha256 => hasher.hash_str("EcdsaP256Sha256"),
+            crate::dto::auth::ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1 => {
+                hasher.hash_str("IcThresholdEcdsaSecp256k1");
+            }
         }
     }
 
     fn hash_shard_key_binding(hasher: &mut ReplayPayloadHasher, binding: ShardKeyBinding) {
         match binding {
-            ShardKeyBinding::IcThresholdEcdsa {
+            ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
                 key_name_hash,
                 derivation_path_hash,
             } => {
-                hasher.hash_str("IcThresholdEcdsa");
+                hasher.hash_str("IcThresholdEcdsaSecp256k1");
                 hasher.hash_bytes(&key_name_hash);
                 hasher.hash_bytes(&derivation_path_hash);
             }
@@ -835,19 +726,22 @@ impl AuthApi {
 
     fn reserve_token_replay_receipt(
         command_kind: CommandKind,
-        metadata: RootRequestMetadata,
+        metadata: AuthRequestMetadata,
         actor: ReplayActor,
         payload_hash: [u8; 32],
     ) -> Result<ReplayReceiptDecision, Error> {
-        let now_secs = IcOps::now_secs();
+        let now_ns = IcOps::now_nanos();
+        let expires_at_ns = now_ns.checked_add(metadata.ttl_ns).ok_or_else(|| {
+            Error::invalid("delegated token issue replay metadata ttl_ns overflows nanoseconds")
+        })?;
         let replay_input = ReplayReceiptReserveInput::new(
             command_kind,
             OperationId::from_bytes(metadata.request_id),
             actor,
             payload_hash,
-            secs_to_ns(now_secs),
+            now_ns,
         )
-        .with_expires_at_ns(secs_to_ns(now_secs.saturating_add(metadata.ttl_seconds)));
+        .with_expires_at_ns(expires_at_ns);
 
         reserve_or_replay_receipt(replay_input).map_err(Self::map_delegation_replay_store_error)
     }
@@ -873,7 +767,7 @@ impl AuthApi {
         current_cycle_balance: u128,
     ) -> CostGuardRequest {
         CostGuardRequest {
-            cost_class: crate::replay_policy::CostClass::ThresholdEcdsaSign,
+            cost_class: crate::replay_policy::CostClass::ShardTokenSign,
             command_kind,
             quota_subject: caller,
             payer,
@@ -888,13 +782,13 @@ impl AuthApi {
 
     fn map_delegation_replay_decision(
         decision: ReplayReceiptDecision,
-    ) -> Result<DelegationProof, Error> {
+    ) -> Result<DelegationProofPrepareResponse, Error> {
         match decision {
             ReplayReceiptDecision::Fresh(_) => {
                 Err(Error::invariant("fresh delegation replay decision escaped"))
             }
             ReplayReceiptDecision::ReturnCommitted(receipt) => {
-                Self::decode_delegation_proof_response(&receipt)
+                Self::decode_delegation_prepare_response(&receipt)
             }
             ReplayReceiptDecision::OperationInProgress => Err(Error::conflict(
                 "delegation proof request is already in progress; retry later with the same request id",
@@ -1182,10 +1076,12 @@ impl AuthApi {
         }
     }
 
-    fn encode_delegation_proof_response(proof: &DelegationProof) -> Result<Vec<u8>, Error> {
-        encode_one(proof).map_err(|err| {
+    fn encode_delegation_prepare_response(
+        response: &DelegationProofPrepareResponse,
+    ) -> Result<Vec<u8>, Error> {
+        encode_one(response).map_err(|err| {
             Error::internal(format!(
-                "failed to encode delegation proof replay response: {err}"
+                "failed to encode delegation proof prepare replay response: {err}"
             ))
         })
     }
@@ -1198,9 +1094,9 @@ impl AuthApi {
         })
     }
 
-    fn decode_delegation_proof_response(
+    fn decode_delegation_prepare_response(
         receipt: &crate::ops::replay::model::ReplayReceipt,
-    ) -> Result<DelegationProof, Error> {
+    ) -> Result<DelegationProofPrepareResponse, Error> {
         let response_schema_version = receipt.response_schema_version.ok_or_else(|| {
             Error::internal("delegation replay receipt is missing response schema version")
         })?;
@@ -1214,7 +1110,7 @@ impl AuthApi {
         })?;
         decode_one(response_bytes).map_err(|err| {
             Error::internal(format!(
-                "failed to decode delegation proof replay response: {err}"
+                "failed to decode delegation proof prepare replay response: {err}"
             ))
         })
     }
@@ -1239,23 +1135,16 @@ impl AuthApi {
             ))
         })
     }
-
-    fn hash_delegation_effect_key(key_name: &str) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(b"canic-delegation-proof-effect-key:v1");
-        hasher.update(key_name.as_bytes());
-        hasher.finalize().into()
-    }
 }
 
 impl AuthApi {
-    // Route a self-contained delegation proof request over RPC to root.
-    async fn request_delegation_remote(
+    // Route a delegation proof prepare request over RPC to root.
+    async fn prepare_delegation_proof_remote(
         request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProof, Error> {
+    ) -> Result<DelegationProofPrepareResponse, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
         RootAuthMaterialClient::new(root_pid)
-            .request_delegation(request)
+            .prepare_delegation_proof(request)
             .await
             .map_err(Self::map_auth_error)
     }
@@ -1325,25 +1214,13 @@ mod tests {
         cdk::types::Principal,
         dto::{
             auth::{
-                DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims,
-                DelegatedTokenIssueRequest, DelegatedTokenMintRequest, DelegationAudience,
-                DelegationCert, DelegationProof, DelegationProofIssueRequest, ShardKeyBinding,
-                SignatureAlgorithm,
+                AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenIssueRequest,
+                DelegationAudience, DelegationCert, DelegationProof, DelegationProofIssueRequest,
+                IcCanisterSignatureProofV1, RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
             },
             error::ErrorCode,
-            rpc::RootRequestMetadata,
         },
-        ops::{
-            auth::{AuthExpiryError, AuthOpsError},
-            cost_guard::CostGuardOps,
-            replay::{
-                model::{ReplayActor, ReplayReceiptStatus},
-                receipt::{ReplayReceiptDecision, commit_receipt_response},
-            },
-            storage::replay::ReplayReceiptOps,
-        },
-        replay_policy::CostClass,
-        storage::stable::intent::IntentStore,
+        ops::auth::{AuthExpiryError, AuthOpsError},
     };
 
     fn p(id: u8) -> Principal {
@@ -1352,11 +1229,11 @@ mod tests {
 
     fn delegation_request(metadata_id: u8) -> DelegationProofIssueRequest {
         DelegationProofIssueRequest {
-            metadata: Some(meta(metadata_id, 60)),
+            metadata: Some(meta(metadata_id, 60_000_000_000)),
             shard_pid: p(2),
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["canic.verify"])],
-            cert_ttl_secs: 60,
+            cert_ttl_ns: 60_000_000_000,
         }
     }
 
@@ -1367,98 +1244,58 @@ mod tests {
         }
     }
 
-    fn meta(id: u8, ttl_seconds: u64) -> RootRequestMetadata {
-        RootRequestMetadata {
+    fn meta(id: u8, ttl_ns: u64) -> AuthRequestMetadata {
+        AuthRequestMetadata {
             request_id: [id; 32],
-            ttl_seconds,
+            ttl_ns,
         }
     }
 
     fn delegation_proof() -> DelegationProof {
         DelegationProof {
             cert: DelegationCert {
-                version: 1,
                 root_pid: p(1),
-                root_key_id: "root-key".to_string(),
-                root_key_hash: [2; 32],
-                alg: SignatureAlgorithm::EcdsaP256Sha256,
                 shard_pid: p(2),
                 shard_key_id: "shard-key".to_string(),
+                shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
                 shard_public_key_sec1: vec![3; 33],
                 shard_key_hash: [4; 32],
-                shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
+                shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
                     key_name_hash: [5; 32],
                     derivation_path_hash: [6; 32],
                 },
-                issued_at: 10,
-                expires_at: 100,
-                max_token_ttl_secs: 60,
+                issued_at_ns: 10,
+                not_before_ns: 10,
+                expires_at_ns: 100,
+                max_token_ttl_ns: 60,
                 aud: DelegationAudience::Project("test".to_string()),
                 grants: vec![grant("project_instance", &["canic.verify"])],
             },
-            root_sig: vec![7; 64],
-        }
-    }
-
-    fn mint_request(metadata_id: u8) -> DelegatedTokenMintRequest {
-        DelegatedTokenMintRequest {
-            metadata: Some(meta(metadata_id, 60)),
-            subject: p(8),
-            aud: DelegationAudience::Project("test".to_string()),
-            grants: vec![grant("project_instance", &["canic.verify"])],
-            token_ttl_secs: 30,
-            cert_ttl_secs: 60,
-            nonce: [9; 16],
+            root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                signature_cbor: vec![7; 64],
+                public_key_der: vec![8; 32],
+            }),
         }
     }
 
     fn issue_request(metadata_id: u8) -> DelegatedTokenIssueRequest {
         DelegatedTokenIssueRequest {
-            metadata: Some(meta(metadata_id, 60)),
+            metadata: Some(meta(metadata_id, 60_000_000_000)),
             proof: delegation_proof(),
             subject: p(8),
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["canic.verify"])],
-            ttl_secs: 30,
+            ttl_ns: 30_000_000_000,
             nonce: [9; 16],
         }
-    }
-
-    fn delegated_token(nonce_byte: u8) -> DelegatedToken {
-        DelegatedToken {
-            claims: DelegatedTokenClaims {
-                version: 1,
-                subject: p(8),
-                issuer_shard_pid: p(2),
-                cert_hash: [11; 32],
-                issued_at: 20,
-                expires_at: 50,
-                aud: DelegationAudience::Project("test".to_string()),
-                grants: vec![grant("project_instance", &["canic.verify"])],
-                nonce: [nonce_byte; 16],
-            },
-            proof: delegation_proof(),
-            shard_sig: vec![12; 64],
-        }
-    }
-
-    fn reserve_mint_receipt(
-        request: &DelegatedTokenMintRequest,
-        actor: ReplayActor,
-    ) -> ReplayReceiptDecision {
-        let command_kind = AuthApi::token_mint_replay_command_kind();
-        let metadata = request.metadata.expect("mint request metadata");
-        let payload_hash = AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, request);
-        AuthApi::reserve_token_replay_receipt(command_kind, metadata, actor, payload_hash)
-            .expect("mint receipt reservation")
     }
 
     #[test]
     fn internal_invocation_not_yet_valid_maps_to_non_retryable_proof_expiry() {
         let err = AuthApi::map_internal_invocation_verify_error(AuthOpsError::Expiry(
             AuthExpiryError::AttestationNotYetValid {
-                issued_at: 20,
-                now_secs: 10,
+                issued_at_ns: 20,
+                now_ns: 10,
             },
         ));
 
@@ -1480,16 +1317,16 @@ mod tests {
         let missing = AuthApi::delegation_replay_metadata(None).expect_err("metadata is required");
         assert_eq!(missing.code, ErrorCode::OperationIdRequired);
 
-        let zero = AuthApi::delegation_replay_metadata(Some(RootRequestMetadata {
+        let zero = AuthApi::delegation_replay_metadata(Some(AuthRequestMetadata {
             request_id: [1; 32],
-            ttl_seconds: 0,
+            ttl_ns: 0,
         }))
         .expect_err("zero ttl is invalid");
         assert_eq!(zero.code, ErrorCode::InvalidInput);
 
-        let too_large = AuthApi::delegation_replay_metadata(Some(RootRequestMetadata {
+        let too_large = AuthApi::delegation_replay_metadata(Some(AuthRequestMetadata {
             request_id: [1; 32],
-            ttl_seconds: AuthApi::MAX_DELEGATION_REPLAY_TTL_SECONDS + 1,
+            ttl_ns: AuthApi::MAX_DELEGATION_REPLAY_TTL_NS + 1,
         }))
         .expect_err("oversized ttl is invalid");
         assert_eq!(too_large.code, ErrorCode::InvalidInput);
@@ -1519,7 +1356,7 @@ mod tests {
         assert_eq!(zero.code, ErrorCode::InvalidInput);
 
         let too_large = AuthApi::token_replay_metadata(
-            Some(meta(1, AuthApi::MAX_TOKEN_REPLAY_TTL_SECONDS + 1)),
+            Some(meta(1, AuthApi::MAX_TOKEN_REPLAY_TTL_NS + 1)),
             "delegated token mint",
         )
         .expect_err("oversized ttl is invalid");
@@ -1532,151 +1369,12 @@ mod tests {
         let actor = crate::ops::replay::model::ReplayActor::direct_caller(p(2));
         let a = delegation_request(1);
         let mut b = a.clone();
-        b.cert_ttl_secs += 1;
+        b.cert_ttl_ns += 1;
 
         assert_ne!(
             AuthApi::delegation_replay_payload_hash(&command_kind, &actor, &a),
             AuthApi::delegation_replay_payload_hash(&command_kind, &actor, &b)
         );
-    }
-
-    #[test]
-    fn delegated_token_mint_payload_hash_ignores_metadata() {
-        let command_kind = AuthApi::token_mint_replay_command_kind();
-        let actor = crate::ops::replay::model::ReplayActor::direct_caller(p(2));
-        let a = mint_request(1);
-        let b = mint_request(9);
-
-        assert_eq!(
-            AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, &a),
-            AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, &b)
-        );
-    }
-
-    #[test]
-    fn delegated_token_mint_payload_hash_binds_authoritative_payload() {
-        let command_kind = AuthApi::token_mint_replay_command_kind();
-        let actor = crate::ops::replay::model::ReplayActor::direct_caller(p(2));
-        let a = mint_request(1);
-        let mut b = a.clone();
-        b.token_ttl_secs += 1;
-
-        assert_ne!(
-            AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, &a),
-            AuthApi::token_mint_replay_payload_hash(&command_kind, &actor, &b)
-        );
-    }
-
-    #[test]
-    fn delegated_token_mint_committed_replay_returns_cached_token() {
-        ReplayReceiptOps::reset_for_tests();
-
-        let request = mint_request(21);
-        let actor = ReplayActor::direct_caller(p(44));
-        let token = match reserve_mint_receipt(&request, actor) {
-            ReplayReceiptDecision::Fresh(token) => token,
-            decision => panic!("expected fresh receipt, got {decision:?}"),
-        };
-        let response = delegated_token(31);
-        let response_bytes =
-            AuthApi::encode_delegated_token_response(&response).expect("response encoding");
-
-        commit_receipt_response(
-            &token,
-            AuthApi::TOKEN_REPLAY_RESPONSE_SCHEMA_VERSION,
-            response_bytes,
-            2_000,
-        );
-
-        let replay = reserve_mint_receipt(&request, actor);
-        let cached = AuthApi::map_token_replay_decision(replay, "delegated token mint")
-            .expect("committed replay returns cached token");
-
-        assert_eq!(cached, response);
-    }
-
-    #[test]
-    fn delegated_token_mint_replay_rejects_actor_and_payload_mismatch() {
-        ReplayReceiptOps::reset_for_tests();
-
-        let request = mint_request(22);
-        let actor = ReplayActor::direct_caller(p(44));
-        match reserve_mint_receipt(&request, actor) {
-            ReplayReceiptDecision::Fresh(_) => {}
-            decision => panic!("expected fresh receipt, got {decision:?}"),
-        }
-
-        let actor_mismatch = reserve_mint_receipt(&request, ReplayActor::direct_caller(p(45)));
-        assert_eq!(actor_mismatch, ReplayReceiptDecision::ActorMismatch);
-
-        let mut changed = request;
-        changed.token_ttl_secs += 1;
-        let payload_mismatch = reserve_mint_receipt(&changed, actor);
-        assert_eq!(payload_mismatch, ReplayReceiptDecision::PayloadMismatch);
-    }
-
-    #[test]
-    fn delegated_token_mint_in_progress_duplicate_blocks_before_effect() {
-        ReplayReceiptOps::reset_for_tests();
-
-        let request = mint_request(23);
-        let actor = ReplayActor::direct_caller(p(44));
-        let token = match reserve_mint_receipt(&request, actor) {
-            ReplayReceiptDecision::Fresh(token) => token,
-            decision => panic!("expected fresh receipt, got {decision:?}"),
-        };
-
-        let duplicate = reserve_mint_receipt(&request, actor);
-        let err = AuthApi::map_token_replay_decision(duplicate, "delegated token mint")
-            .expect_err("duplicate in-progress mint must block");
-        assert_eq!(err.code, ErrorCode::Conflict);
-
-        let stored = ReplayReceiptOps::get(token.key())
-            .expect("stored receipt")
-            .into_receipt()
-            .expect("receipt decode");
-        assert_eq!(stored.status, ReplayReceiptStatus::Reserved);
-        assert_eq!(stored.effect, None);
-    }
-
-    #[test]
-    fn delegated_token_signing_quota_rejects_before_signing_adapter() {
-        IntentStore::reset_for_tests();
-
-        let command_kind = AuthApi::token_mint_replay_command_kind();
-        let caller = p(44);
-        let payer = p(2);
-        let current_cycle_balance = AuthApi::TOKEN_SIGNING_CYCLE_RESERVATION_CYCLES
-            + AuthApi::MIN_TOKEN_SIGNING_CYCLES_AFTER_RESERVATION
-            + 1;
-        let mut first = AuthApi::token_signing_cost_guard_request_at(
-            command_kind.clone(),
-            caller,
-            payer,
-            10,
-            current_cycle_balance,
-        );
-        first.max_operations_per_window = 1;
-        assert_eq!(first.cost_class, CostClass::ThresholdEcdsaSign);
-        assert_eq!(first.command_kind, command_kind);
-        assert_eq!(first.quota_subject, caller);
-        assert_eq!(first.payer, payer);
-
-        let permit = CostGuardOps::reserve(first).expect("first signing operation reserves");
-        CostGuardOps::complete(&permit, 10).expect("first signing operation completes");
-
-        let mut second = AuthApi::token_signing_cost_guard_request_at(
-            AuthApi::token_mint_replay_command_kind(),
-            caller,
-            payer,
-            20,
-            current_cycle_balance,
-        );
-        second.max_operations_per_window = 1;
-
-        let err = CostGuardOps::reserve(second).expect_err("quota rejects second operation");
-        let public = err.public_error().expect("quota rejection is public");
-        assert_eq!(public.code, ErrorCode::ResourceExhausted);
     }
 
     #[test]

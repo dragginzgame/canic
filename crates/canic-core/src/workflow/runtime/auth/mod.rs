@@ -55,7 +55,7 @@ impl RuntimeAuthWorkflow {
         if root_requires_auth_crypto(&cfg) && !EcdsaOps::threshold_management_enabled() {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "delegated auth is configured in canic.toml, but this root build does not include threshold ECDSA management support; enable the `auth-crypto` feature for the root canister build".to_string(),
+                "delegated auth is configured in canic.toml, but this root build does not include threshold ECDSA public-key management support; enable the `auth-threshold-ecdsa-sign` feature for the root canister build".to_string(),
             ));
         }
 
@@ -71,12 +71,37 @@ impl RuntimeAuthWorkflow {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' is configured as a delegated auth signer, but this build does not include threshold ECDSA management support; enable the `auth-crypto` feature for that canister build",
+                    "canister '{canister_role}' is configured as a delegated auth signer, but this build does not include threshold ECDSA management support; enable the `auth-threshold-ecdsa-sign` feature for that canister build",
                 ),
             ));
         }
 
+        Self::ensure_delegated_token_verifier_contract(canister_role, canister_cfg)?;
+
         Ok(())
+    }
+
+    /// Fail fast when a non-root delegated-token verifier lacks hard-cut trust anchors.
+    fn ensure_delegated_token_verifier_contract(
+        canister_role: &CanisterRole,
+        canister_cfg: &crate::config::schema::CanisterConfig,
+    ) -> Result<(), InternalError> {
+        let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
+        if !delegated_tokens_cfg.enabled || !nonroot_requires_delegated_token_verifier(canister_cfg)
+        {
+            return Ok(());
+        }
+
+        if !AuthOps::root_canister_sig_verify_enabled() {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!(
+                    "canister '{canister_role}' has delegated token verification enabled, but this build does not include IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
+                ),
+            ));
+        }
+
+        AuthOps::delegated_token_verifier_config().map(|_| ())
     }
 
     /// Check local signer key material when the current canister is a delegated signer.
@@ -101,8 +126,8 @@ impl RuntimeAuthWorkflow {
         Ok(())
     }
 
-    /// Ensure root delegated auth trust material is published in subnet state.
-    pub async fn publish_root_delegated_key_to_subnet_state() -> Result<(), InternalError> {
+    /// Ensure legacy delegated-grant root trust material is published in subnet state.
+    pub async fn publish_root_delegated_grant_key_to_subnet_state() -> Result<(), InternalError> {
         EnvOps::require_root()?;
 
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
@@ -110,7 +135,7 @@ impl RuntimeAuthWorkflow {
             return Ok(());
         }
 
-        AuthOps::publish_delegated_token_root_key_material().await
+        AuthOps::publish_delegated_grant_root_key_material().await
     }
 
     /// Verify a role attestation, refreshing root keys once on unknown key.
@@ -127,7 +152,7 @@ impl RuntimeAuthWorkflow {
 
         let caller = IcOps::msg_caller();
         let self_pid = IcOps::canister_self();
-        let now_secs = IcOps::now_secs();
+        let now_ns = IcOps::now_nanos();
         let verifier_subnet = Some(EnvOps::subnet_pid()?);
         let root_pid = EnvOps::root_pid()?;
 
@@ -137,7 +162,7 @@ impl RuntimeAuthWorkflow {
                 caller,
                 self_pid,
                 verifier_subnet,
-                now_secs,
+                now_ns,
                 min_accepted_epoch,
             )
             .map(|_| ())
@@ -268,8 +293,8 @@ fn log_attestation_verifier_rejection(
         attestation.key_id,
         attestation.payload.audience,
         display_optional(attestation.payload.subnet_id),
-        attestation.payload.issued_at,
-        attestation.payload.expires_at,
+        attestation.payload.issued_at_ns,
+        attestation.payload.expires_at_ns,
         attestation.payload.epoch,
         err
     );
@@ -292,9 +317,19 @@ const fn nonroot_requires_auth_crypto(
     canister_cfg.auth.delegated_token_signer
 }
 
+// Decide whether one non-root runtime must carry delegated-token verifier support.
+const fn nonroot_requires_delegated_token_verifier(
+    canister_cfg: &crate::config::schema::CanisterConfig,
+) -> bool {
+    canister_cfg.auth.delegated_token_signer || canister_cfg.auth.role_attestation_cache
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{RuntimeAuthWorkflow, nonroot_requires_auth_crypto, root_requires_auth_crypto};
+    use super::{
+        RuntimeAuthWorkflow, nonroot_requires_auth_crypto,
+        nonroot_requires_delegated_token_verifier, root_requires_auth_crypto,
+    };
     use crate::{
         config::schema::{CanisterAuthConfig, CanisterKind},
         ids::CanisterRole,
@@ -376,6 +411,51 @@ mod tests {
         };
 
         assert!(!nonroot_requires_auth_crypto(&verifier_cfg));
+    }
+
+    #[test]
+    fn default_nonroot_does_not_require_delegated_token_verifier() {
+        let cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+
+        assert!(!nonroot_requires_delegated_token_verifier(&cfg));
+    }
+
+    #[test]
+    fn auth_material_nonroot_requires_delegated_token_verifier() {
+        let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+        verifier_cfg.auth = CanisterAuthConfig {
+            delegated_token_signer: false,
+            role_attestation_cache: true,
+        };
+
+        let mut signer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
+        signer_cfg.auth = CanisterAuthConfig {
+            delegated_token_signer: true,
+            role_attestation_cache: false,
+        };
+
+        assert!(nonroot_requires_delegated_token_verifier(&verifier_cfg));
+        assert!(nonroot_requires_delegated_token_verifier(&signer_cfg));
+    }
+
+    #[cfg(not(feature = "auth-root-canister-sig-verify"))]
+    #[test]
+    fn delegated_token_verifier_startup_requires_canister_signature_verify_feature() {
+        let _ = ConfigTestBuilder::new().install();
+        let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+        verifier_cfg.auth = CanisterAuthConfig {
+            delegated_token_signer: false,
+            role_attestation_cache: true,
+        };
+        let role = CanisterRole::new("app");
+
+        let err = RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&role, &verifier_cfg)
+            .expect_err("expected verifier feature error");
+
+        assert!(
+            err.to_string().contains("auth-delegated-token-verify"),
+            "expected delegated-token verifier feature error, got: {err}"
+        );
     }
 
     #[test]

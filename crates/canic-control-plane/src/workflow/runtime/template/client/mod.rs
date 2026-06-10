@@ -7,7 +7,6 @@ use crate::{
 };
 use candid::{CandidType, utils::ArgumentEncoder};
 use canic_core::{
-    api::ic::{CanicInternalClient, ProtectedInternalEndpoint},
     control_plane_support::{
         cdk::types::Principal, error::InternalError, ops::ic::call::CallOps, protocol,
     },
@@ -22,40 +21,23 @@ pub(in crate::workflow::runtime::template) struct WasmStoreInternalClient {
 }
 
 impl WasmStoreInternalClient {
-    const BEGIN_GC: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_BEGIN_GC,
-        protocol::canic_wasm_store_begin_gc_endpoint,
-    );
+    const BEGIN_GC: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_BEGIN_GC);
     const CATALOG: WasmStoreEndpoint =
         WasmStoreEndpoint::structural_query(protocol::CANIC_WASM_STORE_CATALOG);
-    const CHUNK: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_CHUNK,
-        protocol::canic_wasm_store_chunk_endpoint,
-    );
-    const COMPLETE_GC: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_COMPLETE_GC,
-        protocol::canic_wasm_store_complete_gc_endpoint,
-    );
-    const INFO: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_INFO,
-        protocol::canic_wasm_store_info_endpoint,
-    );
-    const PREPARE: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_PREPARE,
-        protocol::canic_wasm_store_prepare_endpoint,
-    );
-    const PREPARE_GC: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_PREPARE_GC,
-        protocol::canic_wasm_store_prepare_gc_endpoint,
-    );
-    const PUBLISH_CHUNK: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
-        protocol::canic_wasm_store_publish_chunk_endpoint,
-    );
-    const STAGE_MANIFEST: WasmStoreEndpoint = WasmStoreEndpoint::protected(
-        protocol::CANIC_WASM_STORE_STAGE_MANIFEST,
-        protocol::canic_wasm_store_stage_manifest_endpoint,
-    );
+    const CHUNK: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_CHUNK);
+    const COMPLETE_GC: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_COMPLETE_GC);
+    const INFO: WasmStoreEndpoint = WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_INFO);
+    const PREPARE: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_PREPARE);
+    const PREPARE_GC: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_PREPARE_GC);
+    const PUBLISH_CHUNK: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_PUBLISH_CHUNK);
+    const STAGE_MANIFEST: WasmStoreEndpoint =
+        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_STAGE_MANIFEST);
     const STATUS: WasmStoreEndpoint =
         WasmStoreEndpoint::structural_query(protocol::CANIC_WASM_STORE_STATUS);
     #[cfg(test)]
@@ -183,22 +165,12 @@ impl WasmStoreInternalClient {
         T: CandidType + serde::de::DeserializeOwned,
         A: ArgumentEncoder,
     {
-        let call_res: Result<T, Error> = if endpoint.requires_internal_proof() {
-            let descriptor = endpoint
-                .protected_descriptor()
-                .expect("protected endpoints must carry generated metadata");
-            let value = CanicInternalClient::new(self.store_pid)
-                .call_update_result_with_single_role::<T, _>(&descriptor, arg)
-                .await
-                .map_err(InternalError::public)?;
-            Ok(value)
-        } else {
-            let call = CallOps::unbounded_wait(self.store_pid, endpoint.method)
-                .with_args(arg)?
-                .execute()
-                .await?;
-            call.candid::<Result<T, Error>>()?
-        };
+        debug_assert!(!endpoint.requires_internal_proof());
+        let call = CallOps::unbounded_wait(self.store_pid, endpoint.method)
+            .with_args(arg)?
+            .execute()
+            .await?;
+        let call_res: Result<T, Error> = call.candid::<Result<T, Error>>()?;
 
         call_res.map_err(InternalError::public)
     }
@@ -210,48 +182,21 @@ impl WasmStoreInternalClient {
 #[derive(Clone, Copy)]
 struct WasmStoreEndpoint {
     method: &'static str,
-    abi: WasmStoreEndpointAbi,
 }
 
 impl WasmStoreEndpoint {
-    const fn protected(
-        method: &'static str,
-        descriptor: fn() -> ProtectedInternalEndpoint,
-    ) -> Self {
-        Self {
-            method,
-            abi: WasmStoreEndpointAbi::ProtectedUpdate { descriptor },
-        }
+    const fn root_update(method: &'static str) -> Self {
+        Self { method }
     }
 
     const fn structural_query(method: &'static str) -> Self {
-        Self {
-            method,
-            abi: WasmStoreEndpointAbi::StructuralQuery,
-        }
+        Self { method }
     }
 
     const fn requires_internal_proof(&self) -> bool {
-        matches!(self.abi, WasmStoreEndpointAbi::ProtectedUpdate { .. })
+        let _ = self;
+        false
     }
-
-    fn protected_descriptor(&self) -> Option<ProtectedInternalEndpoint> {
-        match self.abi {
-            WasmStoreEndpointAbi::ProtectedUpdate { descriptor } => Some(descriptor()),
-            WasmStoreEndpointAbi::StructuralQuery => None,
-        }
-    }
-}
-
-///
-/// WasmStoreEndpointAbi
-///
-#[derive(Clone, Copy)]
-enum WasmStoreEndpointAbi {
-    ProtectedUpdate {
-        descriptor: fn() -> ProtectedInternalEndpoint,
-    },
-    StructuralQuery,
 }
 
 // Borrowed chunk publish input for store-side chunk staging.
@@ -266,19 +211,23 @@ struct TemplateChunkInputRef<'a> {
 #[cfg(test)]
 mod tests {
     use super::WasmStoreInternalClient;
-    use canic_core::control_plane_support::{ids::CanisterRole, protocol};
+    use canic_core::control_plane_support::protocol;
     use std::collections::BTreeSet;
 
     #[test]
     fn typed_client_endpoint_table_matches_protocol_manifests() {
-        let protected = WasmStoreInternalClient::ENDPOINTS
+        let root_updates = WasmStoreInternalClient::ENDPOINTS
             .iter()
-            .filter(|endpoint| endpoint.requires_internal_proof())
+            .filter(|endpoint| {
+                protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(&endpoint.method)
+            })
             .map(|endpoint| endpoint.method)
             .collect::<BTreeSet<_>>();
         let structural = WasmStoreInternalClient::ENDPOINTS
             .iter()
-            .filter(|endpoint| !endpoint.requires_internal_proof())
+            .filter(|endpoint| {
+                protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS.contains(&endpoint.method)
+            })
             .map(|endpoint| endpoint.method)
             .collect::<BTreeSet<_>>();
         let all = WasmStoreInternalClient::ENDPOINTS
@@ -287,8 +236,8 @@ mod tests {
             .collect::<BTreeSet<_>>();
 
         assert_eq!(
-            protected,
-            protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS
+            root_updates,
+            protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS
                 .iter()
                 .copied()
                 .collect::<BTreeSet<_>>()
@@ -308,16 +257,14 @@ mod tests {
     }
 
     #[test]
-    fn protected_endpoint_table_uses_generated_descriptors() {
+    fn root_update_endpoint_table_uses_direct_calls() {
         for endpoint in WasmStoreInternalClient::ENDPOINTS
             .iter()
-            .filter(|endpoint| endpoint.requires_internal_proof())
+            .filter(|endpoint| {
+                protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(&endpoint.method)
+            })
         {
-            let descriptor = endpoint
-                .protected_descriptor()
-                .expect("protected endpoint should carry descriptor metadata");
-            assert_eq!(descriptor.method(), endpoint.method);
-            assert_eq!(descriptor.single_role(), Some(&CanisterRole::ROOT));
+            assert!(!endpoint.requires_internal_proof());
         }
     }
 }

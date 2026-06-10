@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-        ShardKeyBinding, SignatureAlgorithm,
+        ShardKeyBinding, ShardSignatureAlgorithm,
     },
     ids::CanisterRole,
 };
@@ -10,6 +10,8 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
+const SHARD_KEY_HASH_DOMAIN: &[u8] = b"canic-shard-key-v1";
+const SHARD_TOKEN_SIGNATURE_DOMAIN: &[u8] = b"canic-shard-delegated-token";
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -48,8 +50,33 @@ pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalA
     Ok(hash_bytes(&claims_bytes(claims)?))
 }
 
+pub fn shard_token_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
+    let claims_bytes = claims_bytes(claims)?;
+    let mut out = Vec::with_capacity(1 + SHARD_TOKEN_SIGNATURE_DOMAIN.len() + claims_bytes.len());
+    out.push(
+        u8::try_from(SHARD_TOKEN_SIGNATURE_DOMAIN.len())
+            .expect("shard token signature domain length fits in u8"),
+    );
+    out.extend_from_slice(SHARD_TOKEN_SIGNATURE_DOMAIN);
+    out.extend_from_slice(&claims_bytes);
+    Ok(hash_bytes(&out))
+}
+
 pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
     hash_bytes(public_key_sec1)
+}
+
+pub fn shard_key_hash(
+    alg: ShardSignatureAlgorithm,
+    public_key_sec1: &[u8],
+    binding: ShardKeyBinding,
+) -> [u8; 32] {
+    let mut out = Vec::with_capacity(128);
+    out.extend_from_slice(SHARD_KEY_HASH_DOMAIN);
+    encode_shard_signature_algorithm(&mut out, alg);
+    encode_bytes(&mut out, public_key_sec1);
+    encode_shard_key_binding(&mut out, binding);
+    hash_bytes(&out)
 }
 
 pub fn key_name_hash(key_name: &str) -> [u8; 32] {
@@ -76,19 +103,17 @@ pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthError> {
 pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> {
     let mut out = domain_bytes(CanonicalDomain::DelegationCert);
 
-    encode_u16(&mut out, cert.version);
     encode_principal(&mut out, cert.root_pid);
-    encode_string(&mut out, &cert.root_key_id);
-    encode_fixed_32(&mut out, cert.root_key_hash);
-    encode_algorithm(&mut out, cert.alg);
     encode_principal(&mut out, cert.shard_pid);
     encode_string(&mut out, &cert.shard_key_id);
+    encode_shard_signature_algorithm(&mut out, cert.shard_sig_alg);
     encode_bytes(&mut out, &cert.shard_public_key_sec1);
     encode_fixed_32(&mut out, cert.shard_key_hash);
     encode_shard_key_binding(&mut out, cert.shard_key_binding);
-    encode_u64(&mut out, cert.issued_at);
-    encode_u64(&mut out, cert.expires_at);
-    encode_u64(&mut out, cert.max_token_ttl_secs);
+    encode_u64(&mut out, cert.issued_at_ns);
+    encode_u64(&mut out, cert.not_before_ns);
+    encode_u64(&mut out, cert.expires_at_ns);
+    encode_u64(&mut out, cert.max_token_ttl_ns);
     encode_audience(&mut out, &cert.aud)?;
     encode_role_grants(&mut out, &cert.grants)?;
 
@@ -98,12 +123,11 @@ pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> 
 pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalAuthError> {
     let mut out = domain_bytes(CanonicalDomain::DelegatedTokenClaims);
 
-    encode_u16(&mut out, claims.version);
     encode_principal(&mut out, claims.subject);
     encode_principal(&mut out, claims.issuer_shard_pid);
     encode_fixed_32(&mut out, claims.cert_hash);
-    encode_u64(&mut out, claims.issued_at);
-    encode_u64(&mut out, claims.expires_at);
+    encode_u64(&mut out, claims.issued_at_ns);
+    encode_u64(&mut out, claims.expires_at_ns);
     encode_audience(&mut out, &claims.aud)?;
     encode_role_grants(&mut out, &claims.grants)?;
     out.extend_from_slice(&claims.nonce);
@@ -122,9 +146,9 @@ fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
-fn encode_algorithm(out: &mut Vec<u8>, alg: SignatureAlgorithm) {
+fn encode_shard_signature_algorithm(out: &mut Vec<u8>, alg: ShardSignatureAlgorithm) {
     let tag = match alg {
-        SignatureAlgorithm::EcdsaP256Sha256 => 1,
+        ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1 => 1,
     };
     out.push(tag);
 }
@@ -166,7 +190,7 @@ fn encode_role_grants(
 
 fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBinding) {
     match binding {
-        ShardKeyBinding::IcThresholdEcdsa {
+        ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
             key_name_hash,
             derivation_path_hash,
         } => {
@@ -270,10 +294,6 @@ fn encode_fixed_32(out: &mut Vec<u8>, bytes: [u8; 32]) {
     out.extend_from_slice(&bytes);
 }
 
-fn encode_u16(out: &mut Vec<u8>, value: u16) {
-    out.extend_from_slice(&value.to_be_bytes());
-}
-
 fn encode_u64(out: &mut Vec<u8>, value: u64) {
     out.extend_from_slice(&value.to_be_bytes());
 }
@@ -293,22 +313,20 @@ mod tests {
 
     fn sample_cert() -> DelegationCert {
         DelegationCert {
-            version: 2,
             root_pid: p(1),
-            root_key_id: "root-key".to_string(),
-            root_key_hash: [2; 32],
-            alg: SignatureAlgorithm::EcdsaP256Sha256,
             shard_pid: p(3),
             shard_key_id: "shard-key".to_string(),
+            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
             shard_public_key_sec1: vec![4, 5, 6],
             shard_key_hash: [7; 32],
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
+            shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
                 key_name_hash: [8; 32],
                 derivation_path_hash: [9; 32],
             },
-            issued_at: 100,
-            expires_at: 200,
-            max_token_ttl_secs: 60,
+            issued_at_ns: 100,
+            not_before_ns: 100,
+            expires_at_ns: 200,
+            max_token_ttl_ns: 60,
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["read", "write"])],
         }
@@ -351,12 +369,11 @@ mod tests {
     #[test]
     fn claims_hash_rejects_noncanonical_scopes() {
         let claims = DelegatedTokenClaims {
-            version: 2,
             subject: p(10),
             issuer_shard_pid: p(11),
             cert_hash: [12; 32],
-            issued_at: 100,
-            expires_at: 120,
+            issued_at_ns: 100,
+            expires_at_ns: 120,
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![DelegatedRoleGrant {
                 target: CanisterRole::new("project_instance"),
@@ -376,12 +393,11 @@ mod tests {
     #[test]
     fn claims_hash_rejects_noncanonical_scope_order() {
         let left = DelegatedTokenClaims {
-            version: 2,
             subject: p(10),
             issuer_shard_pid: p(11),
             cert_hash: [12; 32],
-            issued_at: 100,
-            expires_at: 120,
+            issued_at_ns: 100,
+            expires_at_ns: 120,
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["write", "read"])],
             nonce: [14; 16],

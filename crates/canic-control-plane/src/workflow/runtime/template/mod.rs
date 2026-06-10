@@ -349,11 +349,11 @@ mod tests {
     }
 
     #[test]
-    fn wasm_store_protected_method_classifier_matches_protocol_list() {
-        for method in protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
+    fn wasm_store_root_update_method_classifier_matches_protocol_list() {
+        for method in protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS {
             assert!(
-                WasmStoreInternalClient::method_requires_internal_proof(method),
-                "{method} must use CanicCall"
+                !WasmStoreInternalClient::method_requires_internal_proof(method),
+                "{method} must use a direct root-principal call"
             );
         }
 

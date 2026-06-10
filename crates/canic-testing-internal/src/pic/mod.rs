@@ -20,7 +20,8 @@ pub use audit::{
 };
 pub use canic::{CanicPicExt, install_standalone_canister, role_pid, wait_until_ready};
 pub use delegation::{
-    create_user_shard, issue_delegated_token, request_root_delegation_provision, role_grant,
+    create_user_shard, issue_delegated_token, obtain_root_delegation_proof, role_grant,
+    token_ttl_within_proof,
 };
 pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,

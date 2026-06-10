@@ -1,4 +1,6 @@
 use super::*;
+use crate::subnet_catalog::{SubnetCatalogCacheRequest, load_cached_subnet_catalog};
+use canic_subnet_catalog::{MAINNET_NETWORK, SubnetKind};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -47,7 +49,13 @@ pub fn check_local_deployment(
         config_path: request.config_path.clone(),
         observed_at: request.observed_at.clone(),
     })?;
-    let diff = compare_plan_to_inventory(&plan, &inventory);
+    let mut diff = compare_plan_to_inventory(&plan, &inventory);
+    apply_root_canister_signature_subnet_check(
+        &mut diff,
+        &inventory,
+        &request.network,
+        &request.icp_root,
+    );
     let report = safety_report_from_diff(
         format!(
             "local:{}:{}:report",
@@ -71,6 +79,73 @@ pub fn check_local_deployment(
         diff,
         report,
     })
+}
+
+pub(super) fn apply_root_canister_signature_subnet_check(
+    diff: &mut DeploymentDiffV1,
+    inventory: &DeploymentInventoryV1,
+    network: &str,
+    icp_root: &std::path::Path,
+) {
+    if network != MAINNET_NETWORK {
+        return;
+    }
+    let Some(root) = &inventory.observed_root else {
+        return;
+    };
+    let request = SubnetCatalogCacheRequest {
+        icp_root: icp_root.to_path_buf(),
+        network: network.to_string(),
+    };
+    let catalog = match load_cached_subnet_catalog(&request) {
+        Ok(cached) => cached.catalog,
+        Err(err) => {
+            diff.hard_failures.push(finding(
+                "root_auth_subnet_evidence_missing",
+                format!(
+                    "cannot verify root canister-signature subnet kind for {}: {err}",
+                    root.observed_canister_id
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(root.observed_canister_id.clone()),
+            ));
+            refresh_resume_safety(diff);
+            return;
+        }
+    };
+    let resolved = match catalog.resolve_canister(&root.observed_canister_id) {
+        Ok(resolved) => resolved,
+        Err(err) => {
+            diff.hard_failures.push(finding(
+                "root_auth_subnet_resolution_failed",
+                format!(
+                    "cannot resolve root canister-signature subnet kind for {}: {err}",
+                    root.observed_canister_id
+                ),
+                SafetySeverityV1::HardFailure,
+                Some(root.observed_canister_id.clone()),
+            ));
+            refresh_resume_safety(diff);
+            return;
+        }
+    };
+    if resolved.subnet.subnet_kind == SubnetKind::CloudEngine {
+        diff.hard_failures.push(finding(
+            "root_auth_cloud_engine_subnet",
+            format!(
+                "root canister {} resolves to cloud_engine subnet {}; IC canister signatures from cloud_engine subnets are invalid",
+                root.observed_canister_id, resolved.subnet.subnet_principal
+            ),
+            SafetySeverityV1::HardFailure,
+            Some(root.observed_canister_id.clone()),
+        ));
+        refresh_resume_safety(diff);
+    }
+}
+
+fn refresh_resume_safety(diff: &mut DeploymentDiffV1) {
+    diff.resume_safety.status = safety_status(&diff.hard_failures, &diff.warnings);
+    diff.resume_safety.reasons = resume_safety_reasons(&diff.hard_failures, &diff.warnings);
 }
 
 /// Compare intended deployment state with observed inventory into a machine diff.

@@ -62,8 +62,8 @@ mod tests {
             role: role.clone(),
             subnet_id: None,
             audience,
-            issued_at: 10,
-            expires_at: 20,
+            issued_at_ns: 10,
+            expires_at_ns: 20,
             epoch: 3,
         };
         let internal_proof = InternalInvocationProofPayloadV1 {
@@ -72,8 +72,8 @@ mod tests {
             subnet_id: None,
             audience,
             audience_method: "system_add_project_to_user".to_string(),
-            issued_at: 10,
-            expires_at: 20,
+            issued_at_ns: 10,
+            expires_at_ns: 20,
             epoch: 3,
         };
 

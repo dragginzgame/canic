@@ -13,6 +13,8 @@ use crate::{
 };
 use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
 
+const NS_PER_SEC: u64 = 1_000_000_000;
+
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
 }
@@ -27,14 +29,14 @@ fn sample_request(cycles: u128) -> Request {
 fn sample_metadata(
     request_id: u8,
     nonce: u8,
-    issued_at: u64,
-    ttl_seconds: u32,
+    issued_at_ns: u64,
+    ttl_ns: u64,
 ) -> CapabilityRequestMetadata {
     CapabilityRequestMetadata {
         request_id: [request_id; 16],
         nonce: [nonce; 16],
-        issued_at,
-        ttl_seconds,
+        issued_at_ns,
+        ttl_ns,
     }
 }
 
@@ -69,14 +71,14 @@ fn root_capability_hash_ignores_request_metadata() {
         cycles: 10,
         metadata: Some(RootRequestMetadata {
             request_id: [1u8; 32],
-            ttl_seconds: 60,
+            ttl_ns: 60 * NS_PER_SEC,
         }),
     });
     let req_b = Request::Cycles(CyclesRequest {
         cycles: 10,
         metadata: Some(RootRequestMetadata {
             request_id: [2u8; 32],
-            ttl_seconds: 120,
+            ttl_ns: 120 * NS_PER_SEC,
         }),
     });
 
@@ -93,11 +95,11 @@ fn root_capability_hash_ignores_role_attestation_request_epoch() {
             role: crate::ids::CanisterRole::new("project_hub"),
             subnet_id: Some(p(2)),
             audience: p(3),
-            ttl_secs: 60,
+            ttl_ns: 60 * NS_PER_SEC,
             epoch,
             metadata: Some(RootRequestMetadata {
                 request_id: [4u8; 32],
-                ttl_seconds: 60,
+                ttl_ns: 60 * NS_PER_SEC,
             }),
         })
     };
@@ -113,29 +115,46 @@ fn root_capability_hash_ignores_role_attestation_request_epoch() {
 
 #[test]
 fn project_replay_metadata_rejects_expired_metadata() {
-    let err = project_replay_metadata(sample_metadata(1, 2, 900, 50), 1_000)
-        .expect_err("expired metadata must fail");
+    let err = project_replay_metadata(
+        sample_metadata(1, 2, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
+        1_000 * NS_PER_SEC,
+    )
+    .expect_err("expired metadata must fail");
     assert_eq!(err.code, ErrorCode::Conflict);
 }
 
 #[test]
 fn project_replay_metadata_rejects_expiry_boundary() {
-    let err = project_replay_metadata(sample_metadata(1, 2, 900, 50), 950)
-        .expect_err("metadata at expiry boundary must fail");
+    let err = project_replay_metadata(
+        sample_metadata(1, 2, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
+        950 * NS_PER_SEC,
+    )
+    .expect_err("metadata at expiry boundary must fail");
     assert_eq!(err.code, ErrorCode::Conflict);
 }
 
 #[test]
 fn project_replay_metadata_rejects_future_metadata_beyond_skew() {
-    let err = project_replay_metadata(sample_metadata(1, 2, 1_031, 60), 1_000)
-        .expect_err("future metadata must fail");
+    let err = project_replay_metadata(
+        sample_metadata(1, 2, 1_031 * NS_PER_SEC, 60 * NS_PER_SEC),
+        1_000 * NS_PER_SEC,
+    )
+    .expect_err("future metadata must fail");
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
 fn project_replay_metadata_binds_nonce_into_request_id() {
-    let a = project_replay_metadata(sample_metadata(3, 1, 1_000, 60), 1_000).expect("a");
-    let b = project_replay_metadata(sample_metadata(3, 2, 1_000, 60), 1_000).expect("b");
+    let a = project_replay_metadata(
+        sample_metadata(3, 1, 1_000 * NS_PER_SEC, 60 * NS_PER_SEC),
+        1_000 * NS_PER_SEC,
+    )
+    .expect("a");
+    let b = project_replay_metadata(
+        sample_metadata(3, 2, 1_000 * NS_PER_SEC, 60 * NS_PER_SEC),
+        1_000 * NS_PER_SEC,
+    )
+    .expect("b");
     assert_ne!(a.request_id, b.request_id);
 }
 
@@ -145,12 +164,12 @@ fn with_root_request_metadata_overrides_existing_metadata() {
         cycles: 10,
         metadata: Some(RootRequestMetadata {
             request_id: [7u8; 32],
-            ttl_seconds: 10,
+            ttl_ns: 10 * NS_PER_SEC,
         }),
     });
     let metadata = RootRequestMetadata {
         request_id: [9u8; 32],
-        ttl_seconds: 60,
+        ttl_ns: 60 * NS_PER_SEC,
     };
 
     let updated = with_root_request_metadata(request, metadata);
@@ -167,8 +186,8 @@ fn sample_signed_attestation() -> SignedRoleAttestation {
             role: crate::ids::CanisterRole::ROOT,
             subnet_id: None,
             audience: p(2),
-            issued_at: 1_000,
-            expires_at: 2_000,
+            issued_at_ns: 1_000 * NS_PER_SEC,
+            expires_at_ns: 2_000 * NS_PER_SEC,
             epoch: 1,
         },
         signature: vec![],
@@ -180,7 +199,7 @@ fn sample_delegated_grant_proof(
     capability: &Request,
     caller: Principal,
     target_canister: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> DelegatedGrantProof {
     let capability_hash =
         root_capability_hash(target_canister, CAPABILITY_VERSION_V1, capability).expect("hash");
@@ -197,8 +216,8 @@ fn sample_delegated_grant_proof(
             },
             capability_hash,
             quota: 1,
-            issued_at: now_secs.saturating_sub(10),
-            expires_at: now_secs.saturating_add(10),
+            issued_at_ns: now_ns.saturating_sub(10 * NS_PER_SEC),
+            expires_at_ns: now_ns.saturating_add(10 * NS_PER_SEC),
             epoch: 0,
         },
         grant_sig: vec![1],
@@ -252,7 +271,7 @@ fn role_attestation_blob_round_trips() {
 #[test]
 fn delegated_grant_blob_rejects_header_mismatch() {
     let request = sample_request(10);
-    let proof = sample_delegated_grant_proof(&request, p(2), p(1), 100);
+    let proof = sample_delegated_grant_proof(&request, p(2), p(1), 100 * NS_PER_SEC);
     let mut blob = super::proof::encode_delegated_grant_blob(&proof).expect("encode blob");
     blob.capability_hash = [9u8; 32];
 
@@ -308,7 +327,7 @@ fn validate_root_capability_envelope_returns_structural_mode() {
 #[test]
 fn validate_root_capability_envelope_returns_delegated_grant_mode() {
     let request = sample_request(10);
-    let proof = sample_delegated_grant_proof(&request, p(2), p(1), 100);
+    let proof = sample_delegated_grant_proof(&request, p(2), p(1), 100 * NS_PER_SEC);
     let capability_proof = delegated_grant_capability_proof(proof);
     let proof = validate_root_capability_envelope(
         CapabilityService::Root,
@@ -346,7 +365,7 @@ fn validate_root_capability_envelope_rejects_role_attestation_proof_version_mism
 #[test]
 fn validate_root_capability_envelope_rejects_delegated_grant_proof_version_mismatch() {
     let request = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&request, p(2), p(1), 100);
+    let mut proof = sample_delegated_grant_proof(&request, p(2), p(1), 100 * NS_PER_SEC);
     proof.proof_version = PROOF_VERSION_V1 + 1;
 
     let err = validate_root_capability_envelope(
@@ -389,8 +408,8 @@ fn verify_delegated_grant_hash_binding_rejects_mismatch() {
             },
             capability_hash: [2u8; 32],
             quota: 1,
-            issued_at: 1,
-            expires_at: 2,
+            issued_at_ns: NS_PER_SEC,
+            expires_at_ns: 2 * NS_PER_SEC,
             epoch: 0,
         },
         grant_sig: vec![],
@@ -414,8 +433,8 @@ fn delegated_grant_hash_changes_with_payload() {
         },
         capability_hash: [1u8; 32],
         quota: 1,
-        issued_at: 10,
-        expires_at: 20,
+        issued_at_ns: 10 * NS_PER_SEC,
+        expires_at_ns: 20 * NS_PER_SEC,
         epoch: 0,
     };
     let mut grant_b = grant_a.clone();
@@ -428,150 +447,150 @@ fn delegated_grant_hash_changes_with_payload() {
 
 #[test]
 fn verify_root_delegated_grant_claims_accepts_matching_scope() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
 
-    verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+    verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
         .expect("matching delegated grant claims must verify");
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_subject_mismatch() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
     proof.grant.subject = p(3);
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("subject mismatch must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_issuer_mismatch() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
     proof.grant.issuer = p(9);
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("issuer mismatch must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_audience_mismatch() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
     proof.grant.audience = vec![p(99)];
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("audience mismatch must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_scope_family_mismatch() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
     proof.grant.scope.capability_family = "Upgrade".to_string();
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("scope family mismatch must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_zero_quota() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
     proof.grant.quota = 0;
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("zero quota must fail");
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_not_yet_valid_window() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
-    proof.grant.issued_at = now_secs + 10;
-    proof.grant.expires_at = now_secs + 20;
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
+    proof.grant.issued_at_ns = now_ns + 10 * NS_PER_SEC;
+    proof.grant.expires_at_ns = now_ns + 20 * NS_PER_SEC;
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("not-yet-valid grant must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_expired_window() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
-    proof.grant.issued_at = now_secs - 20;
-    proof.grant.expires_at = now_secs - 10;
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
+    proof.grant.issued_at_ns = now_ns - 20 * NS_PER_SEC;
+    proof.grant.expires_at_ns = now_ns - 10 * NS_PER_SEC;
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("expired grant must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_expiry_boundary() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
-    proof.grant.issued_at = now_secs - 20;
-    proof.grant.expires_at = now_secs;
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
+    proof.grant.issued_at_ns = now_ns - 20 * NS_PER_SEC;
+    proof.grant.expires_at_ns = now_ns;
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("grant at expiry boundary must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
 fn verify_root_delegated_grant_claims_rejects_key_id_mismatch() {
-    let now_secs = 100;
+    let now_ns = 100 * NS_PER_SEC;
     let caller = p(2);
     let target_canister = p(1);
     let capability = sample_request(10);
-    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_secs);
+    let mut proof = sample_delegated_grant_proof(&capability, caller, target_canister, now_ns);
     proof.key_id = DELEGATED_GRANT_KEY_ID_V1 + 1;
 
     let err =
-        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_secs)
+        verify_root_delegated_grant_claims(&capability, &proof, caller, target_canister, now_ns)
             .expect_err("unsupported key_id must fail");
     assert_eq!(err.code, ErrorCode::InvalidInput);
 }
@@ -579,7 +598,7 @@ fn verify_root_delegated_grant_claims_rejects_key_id_mismatch() {
 #[test]
 fn verify_root_delegated_grant_signature_accepts_valid_signature() {
     let capability = sample_request(10);
-    let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100);
+    let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100 * NS_PER_SEC);
     let (public_key, signature) = sign_delegated_grant(7, &proof.grant);
     SubnetStateOps::set_delegated_root_public_key("key_1".to_string(), public_key);
 
@@ -590,7 +609,7 @@ fn verify_root_delegated_grant_signature_accepts_valid_signature() {
 #[test]
 fn verify_root_delegated_grant_signature_rejects_invalid_signature() {
     let capability = sample_request(10);
-    let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100);
+    let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100 * NS_PER_SEC);
     let (public_key, _signature) = sign_delegated_grant(7, &proof.grant);
     let (_, wrong_signature) = sign_delegated_grant(8, &proof.grant);
     SubnetStateOps::set_delegated_root_public_key("key_1".to_string(), public_key);

@@ -238,12 +238,23 @@ fn render_auth_config(config: &AuthConfig) -> TokenStream {
 fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
     let enabled = config.enabled;
     let ecdsa_key_name = render_owned_string(&config.ecdsa_key_name);
+    let root_canister_id = render_option(config.root_canister_id.as_ref(), |value| {
+        render_owned_string(value)
+    });
+    let ic_root_public_key_raw_hex =
+        render_option(config.ic_root_public_key_raw_hex.as_ref(), |value| {
+            render_owned_string(value)
+        });
+    let network = render_owned_string(&config.network);
     let max_ttl_secs = render_option(config.max_ttl_secs.as_ref(), |value| quote!(#value));
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::DelegatedTokenConfig {
             enabled: #enabled,
             ecdsa_key_name: #ecdsa_key_name,
+            root_canister_id: #root_canister_id,
+            ic_root_public_key_raw_hex: #ic_root_public_key_raw_hex,
+            network: #network,
             max_ttl_secs: #max_ttl_secs,
         }
     }

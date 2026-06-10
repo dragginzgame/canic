@@ -900,7 +900,9 @@ fn subnet_row(
 
 fn charge_applicability(subject: ResolvedSubnetSubject, kind: SubnetKind) -> (bool, String) {
     match kind {
-        SubnetKind::Application => (true, "charged_user_canister_subnet".to_string()),
+        SubnetKind::Application | SubnetKind::CloudEngine => {
+            (true, "charged_user_canister_subnet".to_string())
+        }
         SubnetKind::System if subject == ResolvedSubnetSubject::Subnet => {
             (false, "system_subnet_core_canister".to_string())
         }
@@ -910,7 +912,7 @@ fn charge_applicability(subject: ResolvedSubnetSubject, kind: SubnetKind) -> (bo
 }
 
 fn catalog_cycles_per_billion(subnet: &SubnetInfo) -> Option<u128> {
-    if subnet.subnet_kind != SubnetKind::Application {
+    if !subnet.subnet_kind.charges_apply_by_default() {
         return None;
     }
     let node_count = u128::from(subnet.node_count?);

@@ -36,8 +36,8 @@ pub enum CapabilityService {
 pub struct CapabilityRequestMetadata {
     pub request_id: [u8; 16],
     pub nonce: [u8; 16],
-    pub issued_at: u64,
-    pub ttl_seconds: u32,
+    pub issued_at_ns: u64,
+    pub ttl_ns: u64,
 }
 
 //

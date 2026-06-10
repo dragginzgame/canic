@@ -16,6 +16,9 @@ package = "."
 kind = "canister"
 package = "../../../fleets/test/scale"
 
+[auth.delegated_tokens]
+enabled = false
+
 [subnets.prime]
 
 [subnets.prime.canisters.root]

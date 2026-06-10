@@ -343,6 +343,42 @@ fn delegated_tokens_max_ttl_zero_is_invalid() {
 }
 
 #[test]
+fn delegated_tokens_invalid_root_canister_id_is_invalid() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.root_canister_id = Some("not a principal".to_string());
+
+    cfg.validate()
+        .expect_err("expected invalid root canister id to fail");
+}
+
+#[test]
+fn delegated_tokens_invalid_ic_root_public_key_hex_is_invalid() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some("not-hex".to_string());
+
+    cfg.validate()
+        .expect_err("expected invalid root key hex to fail");
+}
+
+#[test]
+fn delegated_tokens_ic_root_public_key_hex_must_be_raw_length() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some("00".repeat(95));
+
+    cfg.validate()
+        .expect_err("expected short raw root key to fail");
+}
+
+#[test]
+fn delegated_tokens_network_must_be_known() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.network = "mars".to_string();
+
+    cfg.validate()
+        .expect_err("expected invalid network to fail");
+}
+
+#[test]
 fn role_attestation_max_ttl_zero_is_invalid() {
     let mut cfg = ConfigModel::test_default();
     cfg.auth.role_attestation.max_ttl_secs = 0;

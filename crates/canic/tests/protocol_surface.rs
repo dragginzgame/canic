@@ -101,18 +101,18 @@ fn wasm_store_canonical_did_parses() {
 }
 
 #[test]
-fn public_protocol_reexports_wasm_store_protection_manifest() {
+fn public_protocol_reexports_wasm_store_root_update_manifest() {
     assert_eq!(
-        canic::protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS,
-        canic_core::protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS
+        canic::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
+        canic_core::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS
     );
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS,
         canic_core::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS
     );
 
-    for method in canic::protocol::CANIC_WASM_STORE_PROTECTED_UPDATE_METHODS {
-        assert!(canic::protocol::canic_wasm_store_method_requires_internal_proof(method));
+    for method in canic::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS {
+        assert!(!canic::protocol::canic_wasm_store_method_requires_internal_proof(method));
     }
     for method in canic::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS {
         assert!(!canic::protocol::canic_wasm_store_method_requires_internal_proof(method));

@@ -1,5 +1,3 @@
-#[cfg(test)]
-use crate::dto::auth::{InternalInvocationProofPayloadV1, RoleAttestation};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -30,39 +28,31 @@ pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
 const MAX_ROOT_REPLAY_ENTRIES_PER_CALLER: usize = 512;
-const MAX_ROOT_TTL_SECONDS: u64 = 300;
+const MAX_ROOT_TTL_NS: u64 = 300_000_000_000;
 const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
+const NS_PER_SEC: u64 = 1_000_000_000;
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
 
-fn max_role_attestation_ttl_seconds() -> u64 {
-    ConfigOps::role_attestation_config().map_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, |cfg| {
-        cfg.max_ttl_secs
-    })
+fn max_role_attestation_ttl_ns() -> u64 {
+    let max_ttl_secs = ConfigOps::role_attestation_config()
+        .map_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, |cfg| {
+            cfg.max_ttl_secs
+        });
+    max_ttl_secs.saturating_mul(NS_PER_SEC)
 }
 
-fn validate_role_attestation_ttl(ttl_secs: u64) -> Result<u64, InternalError> {
-    let max_ttl_secs = max_role_attestation_ttl_seconds();
-    if ttl_secs == 0 || ttl_secs > max_ttl_secs {
+fn validate_role_attestation_ttl(ttl_ns: u64) -> Result<u64, InternalError> {
+    let max_ttl_ns = max_role_attestation_ttl_ns();
+    if ttl_ns == 0 || ttl_ns > max_ttl_ns {
         return Err(
             crate::workflow::rpc::RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_secs,
-                max_ttl_secs,
+                ttl_ns,
+                max_ttl_ns,
             }
             .into(),
         );
     }
-    Ok(max_ttl_secs)
-}
-
-fn attestation_expires_at(issued_at: u64, ttl_secs: u64) -> Result<u64, InternalError> {
-    let max_ttl_secs = validate_role_attestation_ttl(ttl_secs)?;
-    issued_at.checked_add(ttl_secs).ok_or_else(|| {
-        crate::workflow::rpc::RpcWorkflowError::RoleAttestationInvalidTtl {
-            ttl_secs,
-            max_ttl_secs,
-        }
-        .into()
-    })
+    Ok(max_ttl_ns)
 }
 
 ///
@@ -292,22 +282,6 @@ impl RootResponseWorkflow {
         reason: crate::ops::replay::model::RecoveryReason,
     ) {
         replay::mark_recovery_required(pending, reason);
-    }
-
-    #[cfg(test)]
-    fn build_role_attestation(
-        ctx: &RootContext,
-        req: &crate::dto::auth::RoleAttestationRequest,
-    ) -> Result<RoleAttestation, InternalError> {
-        execute::build_role_attestation(ctx, req.clone())
-    }
-
-    #[cfg(test)]
-    fn build_internal_invocation_proof(
-        ctx: &RootContext,
-        req: &crate::dto::auth::InternalInvocationProofRequest,
-    ) -> Result<InternalInvocationProofPayloadV1, InternalError> {
-        execute::build_internal_invocation_proof(ctx, req.clone())
     }
 
     fn extract_root_context() -> Result<RootContext, InternalError> {

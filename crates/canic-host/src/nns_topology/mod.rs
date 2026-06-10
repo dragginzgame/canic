@@ -5,10 +5,11 @@ use crate::{
         build_nns_data_center_list_report, refresh_nns_data_center_report,
     },
     nns_node::{
-        NNS_NODE_SUBNET_KIND_APPLICATION, NNS_NODE_SUBNET_KIND_SYSTEM,
-        NNS_NODE_SUBNET_KIND_UNKNOWN, NnsNodeCacheRequest, NnsNodeHostError, NnsNodeListFilters,
-        NnsNodeListReport, NnsNodeListRequest, NnsNodeRefreshReport, NnsNodeRefreshRequest,
-        build_nns_node_list_report, refresh_nns_node_report,
+        NNS_NODE_SUBNET_KIND_APPLICATION, NNS_NODE_SUBNET_KIND_CLOUD_ENGINE,
+        NNS_NODE_SUBNET_KIND_SYSTEM, NNS_NODE_SUBNET_KIND_UNKNOWN, NnsNodeCacheRequest,
+        NnsNodeHostError, NnsNodeListFilters, NnsNodeListReport, NnsNodeListRequest,
+        NnsNodeRefreshReport, NnsNodeRefreshRequest, build_nns_node_list_report,
+        refresh_nns_node_report,
     },
     nns_node_operator::{
         NnsNodeOperatorCacheRequest, NnsNodeOperatorHostError, NnsNodeOperatorListReport,
@@ -34,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
 use thiserror::Error as ThisError;
 
-pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 2;
+pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 3;
 pub const NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 
 ///
@@ -71,11 +72,13 @@ pub struct NnsTopologySummaryReport {
     pub source_endpoint: String,
     pub subnet_count: usize,
     pub application_subnet_count: usize,
+    pub cloud_engine_subnet_count: usize,
     pub system_subnet_count: usize,
     pub unknown_subnet_count: usize,
     pub routing_range_count: usize,
     pub node_count: usize,
     pub application_node_count: usize,
+    pub cloud_engine_node_count: usize,
     pub system_node_count: usize,
     pub unknown_node_count: usize,
     pub node_provider_count: usize,
@@ -353,10 +356,13 @@ fn topology_summary_report_from_reports(
     data_center_report: NnsDataCenterListReport,
 ) -> NnsTopologySummaryReport {
     let application_subnet_count = subnet_count_by_kind(&subnet_report, SubnetKind::Application);
+    let cloud_engine_subnet_count = subnet_count_by_kind(&subnet_report, SubnetKind::CloudEngine);
     let system_subnet_count = subnet_count_by_kind(&subnet_report, SubnetKind::System);
     let unknown_subnet_count = subnet_count_by_kind(&subnet_report, SubnetKind::Unknown);
     let application_node_count =
         node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_APPLICATION);
+    let cloud_engine_node_count =
+        node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_CLOUD_ENGINE);
     let system_node_count = node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_SYSTEM);
     let unknown_node_count = node_count_by_subnet_kind(&node_report, NNS_NODE_SUBNET_KIND_UNKNOWN);
     let join_coverage = topology_summary_join_coverage_counts(
@@ -379,6 +385,7 @@ fn topology_summary_report_from_reports(
         source_endpoint,
         subnet_count: subnet_report.subnets.len(),
         application_subnet_count,
+        cloud_engine_subnet_count,
         system_subnet_count,
         unknown_subnet_count,
         routing_range_count: subnet_report
@@ -388,6 +395,7 @@ fn topology_summary_report_from_reports(
             .sum(),
         node_count: node_report.node_count,
         application_node_count,
+        cloud_engine_node_count,
         system_node_count,
         unknown_node_count,
         node_provider_count: node_provider_report.node_provider_count,
@@ -784,6 +792,11 @@ fn render_kind_table(report: &NnsTopologySummaryReport) -> String {
             NNS_NODE_SUBNET_KIND_APPLICATION.to_string(),
             report.application_subnet_count.to_string(),
             report.application_node_count.to_string(),
+        ],
+        [
+            NNS_NODE_SUBNET_KIND_CLOUD_ENGINE.to_string(),
+            report.cloud_engine_subnet_count.to_string(),
+            report.cloud_engine_node_count.to_string(),
         ],
         [
             NNS_NODE_SUBNET_KIND_SYSTEM.to_string(),

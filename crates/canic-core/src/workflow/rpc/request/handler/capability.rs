@@ -179,7 +179,7 @@ fn hash_issue_role_attestation_payload(req: &RoleAttestationRequest) -> [u8; 32]
     super::replay::hash_role(&mut hasher, &req.role);
     super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
     super::replay::hash_principal(&mut hasher, &req.audience);
-    super::replay::hash_u64(&mut hasher, req.ttl_secs);
+    super::replay::hash_u64(&mut hasher, req.ttl_ns);
     super::replay::finish_payload_hash(hasher)
 }
 
@@ -191,7 +191,7 @@ fn hash_issue_internal_invocation_proof_payload(req: &InternalInvocationProofReq
     super::replay::hash_optional_principal(&mut hasher, req.subnet_id);
     super::replay::hash_principal(&mut hasher, &req.audience);
     super::replay::hash_str(&mut hasher, &req.audience_method);
-    super::replay::hash_u64(&mut hasher, req.ttl_secs);
+    super::replay::hash_u64(&mut hasher, req.ttl_ns);
     super::replay::finish_payload_hash(hasher)
 }
 

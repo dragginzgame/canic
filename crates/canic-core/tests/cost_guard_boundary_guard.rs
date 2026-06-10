@@ -40,7 +40,7 @@ fn threshold_ecdsa_sign_adapter_requires_cost_guard_permit() {
 
     assert_eq!(
         permit_args, 2,
-        "both auth-crypto and non-auth-crypto EcdsaOps::sign_bytes implementations must require CostGuardPermit"
+        "both threshold-ECDSA and non-threshold-ECDSA EcdsaOps::sign_bytes implementations must require CostGuardPermit"
     );
 }
 

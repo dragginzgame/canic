@@ -47,8 +47,13 @@ pub enum AuthValidationError {
     #[error("attestation subnet was set but verifier subnet is unavailable")]
     AttestationSubnetUnavailable,
 
-    #[error("attestation expires_at ({expires_at}) must be greater than issued_at ({issued_at})")]
-    AttestationInvalidWindow { issued_at: u64, expires_at: u64 },
+    #[error(
+        "attestation expires_at_ns ({expires_at_ns}) must be greater than issued_at_ns ({issued_at_ns})"
+    )]
+    AttestationInvalidWindow {
+        issued_at_ns: u64,
+        expires_at_ns: u64,
+    },
 
     #[error("delegated token auth disabled (set auth.delegated_tokens.enabled=true in canic.toml)")]
     DelegatedTokenAuthDisabled,
@@ -76,9 +81,6 @@ pub enum AuthSignatureError {
 
     #[error("attestation signature invalid: {0}")]
     AttestationSignatureInvalid(String),
-
-    #[error("root public key unavailable for delegated-token verification")]
-    RootPublicKeyUnavailable,
 
     #[error("shard public key unavailable for shard '{shard_pid}'")]
     ShardPublicKeyUnavailable { shard_pid: Principal },
@@ -167,11 +169,11 @@ pub enum AuthExpiryError {
     #[error("delegated token ttl exceeds max {max_ttl_secs}s (ttl {ttl_secs}s)")]
     TokenTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },
 
-    #[error("attestation expired at {expires_at} (now {now_secs})")]
-    AttestationExpired { expires_at: u64, now_secs: u64 },
+    #[error("attestation expired at {expires_at_ns} (now {now_ns})")]
+    AttestationExpired { expires_at_ns: u64, now_ns: u64 },
 
-    #[error("attestation not yet valid (issued_at {issued_at}, now {now_secs})")]
-    AttestationNotYetValid { issued_at: u64, now_secs: u64 },
+    #[error("attestation not yet valid (issued_at_ns {issued_at_ns}, now {now_ns})")]
+    AttestationNotYetValid { issued_at_ns: u64, now_ns: u64 },
 
     #[error(
         "attestation key_id {key_id} is not valid yet (valid_from {valid_from}, now {now_secs})"

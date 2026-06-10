@@ -10,7 +10,7 @@ use crate::{
             RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::{RequestFamily, RootRequestMetadata},
+        rpc::{CreateCanisterParent, RootRequestMetadata},
     },
     ops::{
         OpsError,
@@ -70,8 +70,9 @@ pub trait Rpc {
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError>;
 }
 
-const DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_SECONDS: u64 = 300;
-const DEFAULT_CAPABILITY_METADATA_TTL_SECONDS: u32 = 300;
+const NS_PER_SEC: u64 = 1_000_000_000;
+const DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_NS: u64 = 300_000_000_000;
+const DEFAULT_CAPABILITY_METADATA_TTL_NS: u64 = 300_000_000_000;
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 const ROOT_ATTESTATION_REQUEST_ID_DOMAIN_V1: &[u8] = b"canic-root-attestation-request-id-v1";
 const ROOT_CAPABILITY_NONCE_DOMAIN_V1: &[u8] = b"canic-root-capability-nonce-v1";
@@ -135,7 +136,7 @@ impl RpcOps {
         rpc: R,
     ) -> Result<R::Response, InternalError> {
         let request = rpc.into_request();
-        let call_res = if request.family() == RequestFamily::RequestCycles {
+        let call_res = if uses_structural_capability_proof(&request) {
             Self::call_response_capability_v1_structural(target_pid, request).await?
         } else {
             let root_pid = EnvOps::root_pid()?;
@@ -167,7 +168,7 @@ impl RpcOps {
             self_pid,
             &role,
             min_accepted_epoch,
-            IcOps::now_secs(),
+            IcOps::now_nanos(),
         ) {
             return Ok(attestation);
         }
@@ -177,7 +178,12 @@ impl RpcOps {
             role,
             subnet_id: None,
             audience: audience_pid,
-            ttl_secs: cfg.max_ttl_secs,
+            ttl_ns: cfg.max_ttl_secs.checked_mul(NS_PER_SEC).ok_or_else(|| {
+                InternalError::ops(
+                    InternalErrorOrigin::Ops,
+                    "auth.role_attestation.max_ttl_secs overflows nanoseconds",
+                )
+            })?,
             epoch: min_accepted_epoch,
             metadata: Some(new_root_attestation_request_metadata()),
         };
@@ -263,6 +269,16 @@ impl RpcOps {
     }
 }
 
+const fn uses_structural_capability_proof(request: &Request) -> bool {
+    match request {
+        Request::CreateCanister(req) => {
+            matches!(&req.parent, CreateCanisterParent::ThisCanister)
+        }
+        Request::UpgradeCanister(_) | Request::RecycleCanister(_) | Request::Cycles(_) => true,
+        Request::IssueRoleAttestation(_) | Request::IssueInternalInvocationProof(_) => false,
+    }
+}
+
 fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetadata {
     let metadata = request_metadata(request);
     let request_id = metadata.map_or([0u8; 16], |m| {
@@ -270,15 +286,13 @@ fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetad
         out.copy_from_slice(&m.request_id[..16]);
         out
     });
-    let ttl_seconds = metadata.map_or(DEFAULT_CAPABILITY_METADATA_TTL_SECONDS, |m| {
-        u32::try_from(m.ttl_seconds.min(u64::from(u32::MAX))).expect("ttl_seconds bounded to u32")
-    });
+    let ttl_ns = metadata.map_or(DEFAULT_CAPABILITY_METADATA_TTL_NS, |m| m.ttl_ns);
 
     CapabilityRequestMetadata {
         request_id,
         nonce: generate_capability_nonce(),
-        issued_at: IcOps::now_secs(),
-        ttl_seconds,
+        issued_at_ns: IcOps::now_nanos(),
+        ttl_ns,
     }
 }
 
@@ -289,13 +303,13 @@ fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetad
 #[derive(Clone, Copy)]
 struct CapabilitySourceMetadata {
     request_id: [u8; 32],
-    ttl_seconds: u64,
+    ttl_ns: u64,
 }
 
 fn request_metadata(request: &Request) -> Option<CapabilitySourceMetadata> {
     request.metadata().map(|m| CapabilitySourceMetadata {
         request_id: m.request_id,
-        ttl_seconds: m.ttl_seconds,
+        ttl_ns: m.ttl_ns,
     })
 }
 
@@ -326,7 +340,7 @@ fn cached_root_response_attestation(
     subject_pid: Principal,
     role: &CanisterRole,
     min_accepted_epoch: u64,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Option<SignedRoleAttestation> {
     ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
         let cached = entry.as_ref()?;
@@ -339,7 +353,7 @@ fn cached_root_response_attestation(
             && &payload.role == role
             && payload.audience == audience_pid
             && payload.epoch >= min_accepted_epoch
-            && now_secs <= payload.expires_at;
+            && now_ns < payload.expires_at_ns;
 
         if !valid {
             *entry = None;
@@ -397,7 +411,7 @@ fn root_capability_hash(
 fn new_root_attestation_request_metadata() -> RootRequestMetadata {
     RootRequestMetadata {
         request_id: generate_root_attestation_request_id(),
-        ttl_seconds: DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_SECONDS,
+        ttl_ns: DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_NS,
     }
 }
 
@@ -437,7 +451,7 @@ mod tests {
     fn sample_attestation(
         subject: Principal,
         audience: Principal,
-        expires_at: u64,
+        expires_at_ns: u64,
         epoch: u64,
     ) -> SignedRoleAttestation {
         SignedRoleAttestation {
@@ -446,8 +460,8 @@ mod tests {
                 role: USER_HUB_ROLE,
                 subnet_id: None,
                 audience,
-                issued_at: 100,
-                expires_at,
+                issued_at_ns: 100,
+                expires_at_ns,
                 epoch,
             },
             signature: vec![1, 2, 3],
@@ -456,14 +470,13 @@ mod tests {
     }
 
     #[test]
-    #[expect(clippy::cast_possible_truncation)]
-    fn capability_metadata_from_request_uses_request_id_prefix_and_ttl_clamp() {
-        let request_id = std::array::from_fn(|i| i as u8);
+    fn capability_metadata_from_request_uses_request_id_prefix_and_ttl_ns() {
+        let request_id = std::array::from_fn(|i| u8::try_from(i).unwrap());
         let request = Request::cycles(CyclesRequest {
             cycles: 1,
             metadata: Some(RootRequestMetadata {
                 request_id,
-                ttl_seconds: u64::MAX,
+                ttl_ns: u64::MAX,
             }),
         });
 
@@ -472,10 +485,10 @@ mod tests {
             .try_into()
             .expect("request_id prefix must be 16 bytes");
         assert_eq!(metadata.request_id, expected_prefix);
-        assert_eq!(metadata.ttl_seconds, u32::MAX);
+        assert_eq!(metadata.ttl_ns, u64::MAX);
         assert!(
-            metadata.issued_at > 1_700_000_000,
-            "issued_at should be host-time seconds in tests"
+            metadata.issued_at_ns > 1_700_000_000_000_000_000,
+            "issued_at_ns should be host-time nanoseconds in tests"
         );
     }
 
@@ -488,10 +501,7 @@ mod tests {
 
         let metadata = capability_metadata_from_request(&request);
         assert_eq!(metadata.request_id, [0u8; 16]);
-        assert_eq!(
-            metadata.ttl_seconds,
-            DEFAULT_CAPABILITY_METADATA_TTL_SECONDS
-        );
+        assert_eq!(metadata.ttl_ns, DEFAULT_CAPABILITY_METADATA_TTL_NS);
     }
 
     #[test]

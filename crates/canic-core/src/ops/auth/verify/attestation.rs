@@ -13,10 +13,10 @@ pub(super) fn verify_role_attestation_claims(
     caller: Principal,
     self_pid: Principal,
     verifier_subnet: Option<Principal>,
-    now_secs: u64,
+    now_ns: u64,
     min_accepted_epoch: u64,
 ) -> Result<(), AuthOpsError> {
-    verify_attestation_time_window(payload.issued_at, payload.expires_at, now_secs)?;
+    verify_attestation_time_window(payload.issued_at_ns, payload.expires_at_ns, now_ns)?;
 
     if payload.subject != caller {
         return Err(AuthScopeError::AttestationSubjectMismatch {
@@ -63,7 +63,7 @@ pub(super) fn verify_internal_invocation_proof_claims(
     payload: &InternalInvocationProofPayloadV1,
     input: InternalInvocationProofVerificationInput<'_>,
 ) -> Result<(), AuthOpsError> {
-    verify_attestation_time_window(payload.issued_at, payload.expires_at, input.now_secs)?;
+    verify_attestation_time_window(payload.issued_at_ns, payload.expires_at_ns, input.now_ns)?;
 
     if payload.subject != input.caller {
         return Err(AuthScopeError::AttestationSubjectMismatch {
@@ -125,30 +125,30 @@ pub(super) fn verify_internal_invocation_proof_claims(
 }
 
 fn verify_attestation_time_window(
-    issued_at: u64,
-    expires_at: u64,
-    now_secs: u64,
+    issued_at_ns: u64,
+    expires_at_ns: u64,
+    now_ns: u64,
 ) -> Result<(), AuthOpsError> {
-    if expires_at <= issued_at {
+    if expires_at_ns <= issued_at_ns {
         return Err(AuthValidationError::AttestationInvalidWindow {
-            issued_at,
-            expires_at,
+            issued_at_ns,
+            expires_at_ns,
         }
         .into());
     }
 
-    if now_secs < issued_at {
+    if now_ns < issued_at_ns {
         return Err(AuthExpiryError::AttestationNotYetValid {
-            issued_at,
-            now_secs,
+            issued_at_ns,
+            now_ns,
         }
         .into());
     }
 
-    if now_secs >= expires_at {
+    if now_ns >= expires_at_ns {
         return Err(AuthExpiryError::AttestationExpired {
-            expires_at,
-            now_secs,
+            expires_at_ns,
+            now_ns,
         }
         .into());
     }
@@ -210,8 +210,8 @@ mod tests {
             subnet_id: Some(p(3)),
             audience: p(2),
             audience_method: "system_add_project_to_user".to_string(),
-            issued_at: 10,
-            expires_at: 20,
+            issued_at_ns: 10,
+            expires_at_ns: 20,
             epoch: 4,
         }
     }
@@ -227,7 +227,7 @@ mod tests {
             target_method,
             accepted_roles,
             verifier_subnet: Some(p(3)),
-            now_secs: 15,
+            now_ns: 15,
             min_accepted_epoch,
         }
     }
@@ -238,8 +238,8 @@ mod tests {
             role: CanisterRole::new("project_hub"),
             subnet_id: Some(p(3)),
             audience: p(2),
-            issued_at: 10,
-            expires_at: 20,
+            issued_at_ns: 10,
+            expires_at_ns: 20,
             epoch: 4,
         }
     }
@@ -304,8 +304,8 @@ mod tests {
     fn internal_invocation_claims_reject_future_issued_at() {
         let accepted = [CanisterRole::new("project_hub")];
         let mut payload = payload();
-        payload.issued_at = 16;
-        payload.expires_at = 30;
+        payload.issued_at_ns = 16;
+        payload.expires_at_ns = 30;
 
         let err = verify_internal_invocation_proof_claims(
             &payload,
@@ -323,7 +323,7 @@ mod tests {
     fn internal_invocation_claims_reject_invalid_time_window() {
         let accepted = [CanisterRole::new("project_hub")];
         let mut payload = payload();
-        payload.expires_at = payload.issued_at;
+        payload.expires_at_ns = payload.issued_at_ns;
 
         let err = verify_internal_invocation_proof_claims(
             &payload,
@@ -341,8 +341,8 @@ mod tests {
     fn internal_invocation_claims_reject_expiry_boundary() {
         let accepted = [CanisterRole::new("project_hub")];
         let mut payload = payload();
-        payload.issued_at = 10;
-        payload.expires_at = 15;
+        payload.issued_at_ns = 10;
+        payload.expires_at_ns = 15;
 
         let err = verify_internal_invocation_proof_claims(
             &payload,
@@ -359,8 +359,8 @@ mod tests {
     #[test]
     fn role_attestation_claims_reject_future_issued_at() {
         let mut payload = role_attestation();
-        payload.issued_at = 16;
-        payload.expires_at = 30;
+        payload.issued_at_ns = 16;
+        payload.expires_at_ns = 30;
 
         let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
             .expect_err("future issued_at must reject");
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn role_attestation_claims_reject_invalid_time_window() {
         let mut payload = role_attestation();
-        payload.expires_at = payload.issued_at;
+        payload.expires_at_ns = payload.issued_at_ns;
 
         let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
             .expect_err("invalid attestation time window must reject");
@@ -388,8 +388,8 @@ mod tests {
     #[test]
     fn role_attestation_claims_reject_expiry_boundary() {
         let mut payload = role_attestation();
-        payload.issued_at = 10;
-        payload.expires_at = 15;
+        payload.issued_at_ns = 10;
+        payload.expires_at_ns = 15;
 
         let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
             .expect_err("attestation at expiry boundary must reject");

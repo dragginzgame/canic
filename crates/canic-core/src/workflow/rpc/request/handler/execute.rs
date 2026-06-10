@@ -1,25 +1,20 @@
 use super::{
-    RootCapability, RootContext, attestation_expires_at, nonroot_cycles,
-    nonroot_cycles::AuthorizedCyclesGrant, replay,
+    RootCapability, RootContext, nonroot_cycles, nonroot_cycles::AuthorizedCyclesGrant, replay,
 };
 use crate::{
     InternalError,
     cdk::types::{Principal, TC},
     domain::policy::topology::TopologyPolicyError,
-    dto::auth::{
-        InternalInvocationProofPayloadV1, InternalInvocationProofRequest, RoleAttestation,
-        RoleAttestationRequest,
-    },
+    dto::auth::{InternalInvocationProofRequest, RoleAttestationRequest},
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
         RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
         UpgradeCanisterResponse,
     },
-    format::display_optional,
     log,
     log::Topic,
     ops::{
-        auth::AuthOps,
+        auth::AuthValidationError,
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
@@ -39,10 +34,6 @@ use crate::{
     },
 };
 
-const ROOT_AUTH_SIGNING_QUOTA_WINDOW_SECONDS: u64 = 60;
-const MAX_ROOT_AUTH_SIGNING_OPERATIONS_PER_WINDOW: u64 = 60;
-const ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES: u128 = 1_000_000_000;
-const MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 const ROOT_PROVISION_COMMAND_KIND: &str = "root.provision.v1";
 const ROOT_PROVISION_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_ROOT_PROVISION_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 10;
@@ -71,10 +62,10 @@ pub(super) async fn execute_root_capability(
             Ok(Response::Cycles(response))
         }
         RootCapability::IssueRoleAttestation(req) => {
-            execute_issue_role_attestation(ctx, pending, req).await
+            execute_issue_role_attestation(ctx, pending, req)
         }
         RootCapability::IssueInternalInvocationProof(req) => {
-            execute_issue_internal_invocation_proof(ctx, pending, req).await
+            execute_issue_internal_invocation_proof(ctx, pending, req)
         }
     };
 
@@ -90,27 +81,6 @@ pub(super) async fn execute_root_capability(
     }
 
     result
-}
-
-fn reserve_auth_material_signing_cost_guard(
-    ctx: &RootContext,
-    command_kind: &'static str,
-    current_cycle_balance: u128,
-) -> Result<CostGuardPermit, InternalError> {
-    let command_kind =
-        CommandKind::new(command_kind).expect("root auth signing command kind is valid");
-    CostGuardOps::reserve(CostGuardRequest {
-        cost_class: CostClass::ThresholdEcdsaSign,
-        command_kind,
-        quota_subject: ctx.caller,
-        payer: ctx.self_pid,
-        now_secs: IcOps::now_secs(),
-        quota_window_secs: ROOT_AUTH_SIGNING_QUOTA_WINDOW_SECONDS,
-        max_operations_per_window: MAX_ROOT_AUTH_SIGNING_OPERATIONS_PER_WINDOW,
-        current_cycle_balance,
-        cycle_reservation_cycles: ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES,
-        min_cycles_after_reservation: MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION,
-    })
 }
 
 async fn execute_provision(
@@ -291,191 +261,47 @@ async fn execute_recycle(req: &RecycleCanisterRequest) -> Result<Response, Inter
     Ok(Response::RecycleCanister(RecycleCanisterResponse {}))
 }
 
-async fn execute_issue_role_attestation(
+fn execute_issue_role_attestation(
     ctx: &RootContext,
     pending: &ReplayPending,
     req: RoleAttestationRequest,
 ) -> Result<Response, InternalError> {
-    let payload = build_role_attestation(ctx, req)?;
-    let prepared = AuthOps::prepare_role_attestation_signature(payload).await?;
-    let cost_permit = reserve_auth_material_signing_cost_guard(
-        ctx,
-        "root.issue_role_attestation.v1",
-        MgmtOps::canister_cycle_balance().to_u128(),
-    )?;
-    replay::mark_external_effect_in_flight(
-        pending,
-        AuthOps::role_attestation_signing_effect(&prepared),
-    );
-    let signed = match AuthOps::sign_prepared_role_attestation(&cost_permit, prepared).await {
-        Ok(signed) => signed,
-        Err(err) => {
-            let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
-            replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown);
-            return Err(err);
-        }
-    };
-    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
-        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed);
-        return Err(err);
-    }
     log!(
         Topic::Auth,
-        Info,
-        "role attestation issued subject={} role={} audience={} subnet={} issued_at={} expires_at={} epoch={}",
-        signed.payload.subject,
-        signed.payload.role,
-        signed.payload.audience,
-        display_optional(signed.payload.subnet_id),
-        signed.payload.issued_at,
-        signed.payload.expires_at,
-        signed.payload.epoch
+        Warn,
+        "role attestation one-shot root ECDSA issuance rejected in 0.65 caller={} replay_key={:?} subject={} role={} audience={}",
+        ctx.caller,
+        pending.receipt_token.key(),
+        req.subject,
+        req.role,
+        req.audience
     );
-    Ok(Response::RoleAttestationIssued(signed))
+    Err(AuthValidationError::Auth(
+        "role attestation one-shot root ECDSA issuance is disabled in 0.65; use delegated tokens for normal auth"
+            .to_string(),
+    )
+    .into())
 }
 
-async fn execute_issue_internal_invocation_proof(
+fn execute_issue_internal_invocation_proof(
     ctx: &RootContext,
     pending: &ReplayPending,
     req: InternalInvocationProofRequest,
 ) -> Result<Response, InternalError> {
-    let payload = build_internal_invocation_proof(ctx, req)?;
-    let prepared = AuthOps::prepare_internal_invocation_proof_signature(payload).await?;
-    let cost_permit = reserve_auth_material_signing_cost_guard(
-        ctx,
-        "root.issue_internal_invocation_proof.v1",
-        MgmtOps::canister_cycle_balance().to_u128(),
-    )?;
-    replay::mark_external_effect_in_flight(
-        pending,
-        AuthOps::internal_invocation_proof_signing_effect(&prepared),
-    );
-    let signed = match AuthOps::sign_prepared_internal_invocation_proof(&cost_permit, prepared)
-        .await
-    {
-        Ok(signed) => signed,
-        Err(err) => {
-            let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
-            replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown);
-            return Err(err);
-        }
-    };
-    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
-        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed);
-        return Err(err);
-    }
     log!(
         Topic::Auth,
-        Info,
-        "internal invocation proof issued subject={} role={} audience={} method={} subnet={} issued_at={} expires_at={} epoch={}",
-        signed.payload.subject,
-        signed.payload.role,
-        signed.payload.audience,
-        signed.payload.audience_method,
-        display_optional(signed.payload.subnet_id),
-        signed.payload.issued_at,
-        signed.payload.expires_at,
-        signed.payload.epoch
+        Warn,
+        "internal invocation proof one-shot root ECDSA issuance rejected in 0.65 caller={} replay_key={:?} subject={} role={} audience={} method={}",
+        ctx.caller,
+        pending.receipt_token.key(),
+        req.subject,
+        req.role,
+        req.audience,
+        req.audience_method
     );
-    Ok(Response::InternalInvocationProofIssued(signed))
-}
-
-pub(super) fn build_role_attestation(
-    ctx: &RootContext,
-    req: RoleAttestationRequest,
-) -> Result<RoleAttestation, InternalError> {
-    let expires_at = attestation_expires_at(ctx.now, req.ttl_secs)?;
-    let epoch = AuthOps::current_role_epoch(&req.role)?;
-
-    Ok(RoleAttestation {
-        subject: req.subject,
-        role: req.role,
-        subnet_id: req.subnet_id,
-        audience: req.audience,
-        issued_at: ctx.now,
-        expires_at,
-        epoch,
-    })
-}
-
-pub(super) fn build_internal_invocation_proof(
-    ctx: &RootContext,
-    req: InternalInvocationProofRequest,
-) -> Result<InternalInvocationProofPayloadV1, InternalError> {
-    if req.audience_method.trim().is_empty() {
-        return Err(RpcWorkflowError::InternalInvocationProofMethodEmpty.into());
-    }
-
-    let expires_at = attestation_expires_at(ctx.now, req.ttl_secs)?;
-    let epoch = AuthOps::current_role_epoch(&req.role)?;
-
-    Ok(InternalInvocationProofPayloadV1 {
-        subject: req.subject,
-        role: req.role,
-        subnet_id: req.subnet_id,
-        audience: req.audience,
-        audience_method: req.audience_method,
-        issued_at: ctx.now,
-        expires_at,
-        epoch,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        cdk::types::Principal, dto::error::ErrorCode, ops::storage::intent::IntentStoreOps,
-        storage::stable::intent::IntentStore,
-    };
-
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
-    fn ctx() -> RootContext {
-        RootContext {
-            caller: p(3),
-            self_pid: p(42),
-            is_root_env: true,
-            subnet_id: p(4),
-            now: 2_000,
-        }
-    }
-
-    #[test]
-    fn auth_material_signing_cost_guard_rejects_low_cycle_reserve_before_recording_intents() {
-        IntentStore::reset_for_tests();
-
-        let err = reserve_auth_material_signing_cost_guard(
-            &ctx(),
-            "root.issue_role_attestation.v1",
-            ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES,
-        )
-        .expect_err("low cycle reserve rejected");
-
-        assert_eq!(
-            err.public_error()
-                .expect("cycle reserve rejection is public")
-                .code,
-            ErrorCode::ResourceExhausted
-        );
-        assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
-    }
-
-    #[test]
-    fn auth_material_signing_cost_guard_reservation_completes() {
-        IntentStore::reset_for_tests();
-
-        let permit = reserve_auth_material_signing_cost_guard(
-            &ctx(),
-            "root.issue_internal_invocation_proof.v1",
-            ROOT_AUTH_SIGNING_CYCLE_RESERVATION_CYCLES
-                + MIN_ROOT_AUTH_SIGNING_CYCLES_AFTER_RESERVATION,
-        )
-        .expect("reservation");
-
-        CostGuardOps::complete(&permit, ctx().now).expect("complete");
-        assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
-    }
+    Err(AuthValidationError::Auth(
+        "internal invocation proof one-shot root ECDSA issuance is disabled in 0.65; use delegated tokens for normal auth"
+            .to_string(),
+    )
+    .into())
 }

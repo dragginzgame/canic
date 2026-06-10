@@ -11,13 +11,16 @@ Current architecture notes:
 
 - [Adoption Profiles](adoption-profiles.md)
 - [Authentication](authentication.md)
-- [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
 - [Build Artifacts](build-artifacts.md)
 - [Build Provenance CI Policy](build-provenance-ci-policy.md)
 - [CI Policy Gates](ci-policy-gates.md)
 - [Evidence Envelopes](evidence-envelopes.md)
 - [V1 Readiness Checklist](v1-readiness-checklist.md)
 - [V1 Operator Walkthrough](v1-operator-walkthrough.md)
+
+Historical/superseded notes:
+
+- [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
 
 Operational runbooks:
 

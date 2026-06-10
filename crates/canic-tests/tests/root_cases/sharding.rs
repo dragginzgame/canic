@@ -1,17 +1,13 @@
 use canic::{
     Error,
     cdk::types::Principal,
-    dto::{
-        auth::DelegationAudience, placement::sharding::ShardingRegistryResponse,
-        state::SubnetStateResponse,
-    },
+    dto::{auth::DelegationAudience, placement::sharding::ShardingRegistryResponse},
     ids::{CanisterRole, cap},
-    protocol,
 };
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
-    CanicPicExt, create_user_shard, issue_delegated_token, request_root_delegation_provision,
-    role_grant,
+    CanicPicExt, create_user_shard, issue_delegated_token, obtain_root_delegation_proof,
+    role_grant, token_ttl_within_proof,
 };
 use canic_tests::root::{
     RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
@@ -88,22 +84,8 @@ fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
 }
 
 #[test]
-fn delegated_token_verification_uses_cascaded_subnet_state_root_key() {
+fn delegated_token_verification_uses_self_contained_root_proof() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
-
-    let root_state: Result<SubnetStateResponse, Error> = setup
-        .pic
-        .query_call(setup.root_id, protocol::CANIC_SUBNET_STATE, ())
-        .expect("root subnet state transport failed");
-    let root_key = root_state
-        .expect("root subnet state application failed")
-        .auth
-        .delegated_root_public_key
-        .expect("root must publish delegated root key into subnet state");
-    assert!(
-        !root_key.public_key_sec1.is_empty(),
-        "published delegated root key must have SEC1 bytes",
-    );
 
     let user_hub_pid = setup
         .subnet_index
@@ -118,19 +100,16 @@ fn delegated_token_verification_uses_cascaded_subnet_state_root_key() {
 
     let subject = Principal::from_slice(&[55; 29]);
     let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
-    let provision =
-        request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, canister::TEST);
+    let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, shard_pid, canister::TEST);
+    let token_ttl_ns = token_ttl_within_proof(&setup.pic, &proof);
     let token = issue_delegated_token(
         &setup.pic,
         shard_pid,
+        proof,
         subject,
         DelegationAudience::Project("test".to_string()),
         vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
-        provision.cert.max_token_ttl_secs,
-        provision
-            .cert
-            .expires_at
-            .saturating_sub(provision.cert.issued_at),
+        token_ttl_ns,
     );
 
     let verified: Result<Result<(), Error>, _> = setup.pic.update_call_as(

@@ -1,6 +1,6 @@
 use super::proof_cache::{
     cache_internal_invocation_proof, cached_internal_invocation_proof,
-    clear_internal_invocation_proof_cache,
+    clear_internal_invocation_proof_cache, internal_invocation_proof_refresh_margin_ns,
 };
 use super::*;
 use crate::{
@@ -22,8 +22,8 @@ fn proof() -> SignedInternalInvocationProofV1 {
             subnet_id: None,
             audience: p(2),
             audience_method: "system_add_project_to_user".to_string(),
-            issued_at: 10,
-            expires_at: 20,
+            issued_at_ns: 10 * NS_PER_SEC,
+            expires_at_ns: 20 * NS_PER_SEC,
             epoch: 3,
         },
         signature: vec![1, 2, 3],
@@ -38,7 +38,7 @@ fn request() -> InternalInvocationProofRequest {
         subnet_id: Some(p(9)),
         audience: p(2),
         audience_method: "system_add_project_to_user".to_string(),
-        ttl_secs: 120,
+        ttl_ns: 120 * NS_PER_SEC,
         metadata: None,
     }
 }
@@ -137,6 +137,14 @@ fn canic_call_clamps_requested_proof_ttl_to_config_max() {
         effective_internal_call_proof_ttl_secs(1200, 900).expect("ttl"),
         900
     );
+}
+
+#[test]
+fn canic_call_ttl_secs_to_ns_rejects_overflow() {
+    let err = secs_to_ns(u64::MAX).expect_err("ttl seconds overflow must reject");
+
+    assert_eq!(err.code, ErrorCode::InvalidInput);
+    assert!(err.message.contains("overflows nanoseconds"));
 }
 
 #[test]
@@ -295,9 +303,9 @@ fn internal_invocation_proof_cache_reuses_exact_fresh_edge() {
     let request = request();
     let mut proof = proof();
     proof.payload.subnet_id = request.subnet_id;
-    cache_internal_invocation_proof(&request, &cfg(0), p(7), 12, proof.clone());
+    cache_internal_invocation_proof(&request, &cfg(0), p(7), 12 * NS_PER_SEC, proof.clone());
 
-    let cached = cached_internal_invocation_proof(&request, &cfg(0), p(7), 12)
+    let cached = cached_internal_invocation_proof(&request, &cfg(0), p(7), 12 * NS_PER_SEC)
         .expect("fresh matching proof should cache-hit");
 
     assert_eq!(cached, proof);
@@ -309,11 +317,11 @@ fn internal_invocation_proof_cache_rejects_near_expiry_entry() {
     let request = request();
     let mut proof = proof();
     proof.payload.subnet_id = request.subnet_id;
-    proof.payload.issued_at = 10;
-    proof.payload.expires_at = 20;
-    cache_internal_invocation_proof(&request, &cfg(0), p(7), 18, proof);
+    proof.payload.issued_at_ns = 10 * NS_PER_SEC;
+    proof.payload.expires_at_ns = 20 * NS_PER_SEC;
+    cache_internal_invocation_proof(&request, &cfg(0), p(7), 18 * NS_PER_SEC, proof);
 
-    assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 18).is_none());
+    assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 18 * NS_PER_SEC).is_none());
 }
 
 #[test]
@@ -322,11 +330,11 @@ fn internal_invocation_proof_cache_rejects_future_issued_at_entry() {
     let request = request();
     let mut proof = proof();
     proof.payload.subnet_id = request.subnet_id;
-    proof.payload.issued_at = 20;
-    proof.payload.expires_at = 40;
-    cache_internal_invocation_proof(&request, &cfg(0), p(7), 12, proof);
+    proof.payload.issued_at_ns = 20 * NS_PER_SEC;
+    proof.payload.expires_at_ns = 40 * NS_PER_SEC;
+    cache_internal_invocation_proof(&request, &cfg(0), p(7), 12 * NS_PER_SEC, proof);
 
-    assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 12).is_none());
+    assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 12 * NS_PER_SEC).is_none());
 }
 
 #[test]
@@ -335,11 +343,11 @@ fn internal_invocation_proof_cache_rejects_invalid_time_window() {
     let request = request();
     let mut proof = proof();
     proof.payload.subnet_id = request.subnet_id;
-    proof.payload.issued_at = 20;
-    proof.payload.expires_at = 20;
-    cache_internal_invocation_proof(&request, &cfg(0), p(7), 20, proof);
+    proof.payload.issued_at_ns = 20 * NS_PER_SEC;
+    proof.payload.expires_at_ns = 20 * NS_PER_SEC;
+    cache_internal_invocation_proof(&request, &cfg(0), p(7), 20 * NS_PER_SEC, proof);
 
-    assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 20).is_none());
+    assert!(cached_internal_invocation_proof(&request, &cfg(0), p(7), 20 * NS_PER_SEC).is_none());
 }
 
 #[test]
@@ -349,9 +357,35 @@ fn internal_invocation_proof_cache_rejects_epoch_below_local_floor() {
     let mut proof = proof();
     proof.payload.subnet_id = request.subnet_id;
     proof.payload.epoch = 3;
-    cache_internal_invocation_proof(&request, &cfg(0), p(7), 12, proof);
+    cache_internal_invocation_proof(&request, &cfg(0), p(7), 12 * NS_PER_SEC, proof);
 
-    assert!(cached_internal_invocation_proof(&request, &cfg(4), p(7), 12).is_none());
+    assert!(cached_internal_invocation_proof(&request, &cfg(4), p(7), 12 * NS_PER_SEC).is_none());
+}
+
+#[test]
+fn internal_invocation_proof_refresh_margin_has_ns_min_and_max() {
+    let mut proof = proof();
+    proof.payload.issued_at_ns = 10 * NS_PER_SEC;
+    proof.payload.expires_at_ns = 11 * NS_PER_SEC;
+    assert_eq!(
+        internal_invocation_proof_refresh_margin_ns(&proof),
+        NS_PER_SEC,
+        "one-second proof windows should keep a one-second refresh floor"
+    );
+
+    proof.payload.expires_at_ns = 20 * NS_PER_SEC;
+    assert_eq!(
+        internal_invocation_proof_refresh_margin_ns(&proof),
+        2 * NS_PER_SEC,
+        "ten-second proof windows should use the one-fifth refresh margin"
+    );
+
+    proof.payload.expires_at_ns = 1_000 * NS_PER_SEC;
+    assert_eq!(
+        internal_invocation_proof_refresh_margin_ns(&proof),
+        30 * NS_PER_SEC,
+        "long proof windows should clamp to the configured thirty-second max"
+    );
 }
 
 #[test]

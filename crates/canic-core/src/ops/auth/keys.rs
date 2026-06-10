@@ -45,16 +45,16 @@ pub(super) fn attestation_key_name() -> Result<String, InternalError> {
     Ok(cfg.ecdsa_key_name)
 }
 
-pub(super) fn root_derivation_path() -> Vec<Vec<u8>> {
-    vec![DERIVATION_NAMESPACE.to_vec(), ROOT_PATH_SEGMENT.to_vec()]
-}
-
 pub(super) fn shard_derivation_path(shard_pid: Principal) -> Vec<Vec<u8>> {
     vec![
         DERIVATION_NAMESPACE.to_vec(),
         SHARD_PATH_SEGMENT.to_vec(),
         shard_pid.as_slice().to_vec(),
     ]
+}
+
+pub(super) fn root_derivation_path() -> Vec<Vec<u8>> {
+    vec![DERIVATION_NAMESPACE.to_vec(), ROOT_PATH_SEGMENT.to_vec()]
 }
 
 pub(super) fn attestation_derivation_path() -> Vec<Vec<u8>> {

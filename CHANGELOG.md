@@ -12,6 +12,13 @@ present.
 
 ## Unreleased
 
+- Hard-cut delegated-token root proofs toward IC canister signatures with an
+  update/query prepare/get flow, configured verifier trust anchors, no
+  one-shot fresh-proof mint path, and nanosecond-native auth/replay protocol
+  DTOs without a compatibility version lane. Normal auth also hard-fails old
+  one-shot root ECDSA role-attestation and internal-invocation proof issuance
+  before reserving signing cycles.
+
 ## [0.64.x] - 2026-06-09 - Service/singleton topology split
 
 Detailed patch breakdown: [docs/changelog/0.64.md](docs/changelog/0.64.md)
@@ -76,7 +83,7 @@ Detailed patch breakdown: [docs/changelog/0.63.md](docs/changelog/0.63.md)
   ```text
   canic nns topology summary
   canic nns node list --subnet <subnet|subnet-prefix>
-  canic nns node list --kind <application|system|unknown>
+  canic nns node list --kind <application|cloud_engine|system|unknown>
   canic nns node list --data-center <data-center|data-center-prefix>
   canic nns node list --node-provider <node-provider|node-provider-prefix>
   canic nns node list --node-operator <node-operator|node-operator-prefix>

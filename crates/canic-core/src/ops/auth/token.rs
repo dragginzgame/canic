@@ -1,12 +1,12 @@
 use super::{
-    AuthOps, PreparedDelegatedTokenSignature, SignDelegatedTokenInput,
-    VerifyDelegatedTokenRuntimeInput,
+    AuthOps, DelegatedTokenVerifierConfig, PreparedDelegatedTokenSignature,
+    SignDelegatedTokenInput, VerifyDelegatedTokenRuntimeInput,
     delegated::mint::{
         MintDelegatedTokenError, MintDelegatedTokenInput, finish_delegated_token,
         prepare_delegated_token,
     },
     delegated::{
-        canonical::{derivation_path_hash, key_name_hash, public_key_hash},
+        canonical::{derivation_path_hash, key_name_hash},
         cert_rules::DelegatedAuthTtlLimits,
         verify::{
             VerifiedDelegatedToken, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
@@ -14,12 +14,15 @@ use super::{
         },
     },
     keys,
+    root_canister_sig::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, RootPayloadKind},
 };
 use crate::{
     InternalError,
-    dto::auth::{DelegatedToken, RootPublicKey, RootTrustAnchor, ShardKeyBinding},
+    cdk::{types::Principal, utils::hash::decode_hex},
+    config::schema::DelegatedTokenConfig,
+    dto::auth::{DelegatedToken, ShardKeyBinding},
     ops::{
-        auth::{AuthScopeError, AuthSignatureError, AuthValidationError},
+        auth::{AuthScopeError, AuthValidationError},
         config::ConfigOps,
         cost_guard::CostGuardPermit,
         ic::{IcOps, ecdsa::EcdsaOps},
@@ -28,7 +31,6 @@ use crate::{
             env::EnvOps,
             metrics::delegated_auth::{DelegatedAuthMetricReason, DelegatedAuthMetrics},
         },
-        storage::state::subnet::SubnetStateOps,
     },
 };
 
@@ -51,16 +53,16 @@ impl AuthOps {
             subject: input.subject,
             audience: input.audience,
             grants: input.grants,
-            ttl_secs: input.ttl_secs,
+            ttl_ns: input.ttl_ns,
             nonce: input.nonce,
-            now_secs: IcOps::now_secs(),
+            now_ns: IcOps::now_nanos(),
         })
         .map_err(map_mint_delegated_token_error)?;
 
         let key_name = keys::delegated_tokens_key_name()?;
         let derivation_path = keys::shard_derivation_path(local);
         Ok(PreparedDelegatedTokenSignature {
-            message_hash: prepared.claims_hash,
+            message_hash: prepared.shard_token_hash,
             prepared,
             key_name,
             derivation_path,
@@ -78,8 +80,16 @@ impl AuthOps {
             key_name,
             derivation_path,
         } = prepared;
+        DelegatedAuthMetrics::record_shard_token_sign_started();
         let shard_sig =
-            EcdsaOps::sign_bytes(permit, &key_name, derivation_path, message_hash).await?;
+            match EcdsaOps::sign_bytes(permit, &key_name, derivation_path, message_hash).await {
+                Ok(signature) => signature,
+                Err(err) => {
+                    DelegatedAuthMetrics::record_shard_token_sign_failed();
+                    return Err(err);
+                }
+            };
+        DelegatedAuthMetrics::record_shard_token_sign_completed();
 
         Ok(finish_delegated_token(prepared, shard_sig))
     }
@@ -93,6 +103,13 @@ impl AuthOps {
             purpose: EcdsaPurpose::DelegatedToken,
             message_hash: prepared.message_hash,
         }
+    }
+
+    /// Resolve verifier-local trust anchors for delegated-token verification.
+    pub(crate) fn delegated_token_verifier_config()
+    -> Result<DelegatedTokenVerifierConfig, InternalError> {
+        let cfg = ConfigOps::delegated_tokens_config()?;
+        Self::delegated_token_verifier_config_from(&cfg)
     }
 
     /// Verify a self-contained delegated token without local proof lookup.
@@ -112,18 +129,18 @@ impl AuthOps {
             DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::Disabled);
             return Err(AuthValidationError::DelegatedTokenAuthDisabled.into());
         }
-
-        if let Err(err) = Self::verify_shard_key_binding(input.token) {
-            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::ShardKeyBinding);
-            return Err(err);
-        }
-        let root_trust = match Self::root_trust_anchor(input.token, input.now_secs) {
-            Ok(root_trust) => root_trust,
+        let verifier_cfg = match Self::delegated_token_verifier_config_from(&cfg) {
+            Ok(verifier_cfg) => verifier_cfg,
             Err(err) => {
                 DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::RootKey);
                 return Err(err);
             }
         };
+
+        if let Err(err) = Self::verify_shard_key_binding(input.token) {
+            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::ShardKeyBinding);
+            return Err(err);
+        }
         let local_role = match EnvOps::canister_role() {
             Ok(local_role) => local_role,
             Err(err) => {
@@ -142,17 +159,38 @@ impl AuthOps {
         let verified = verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: input.token,
-                root_trust: &root_trust,
                 local_role: Some(&local_role),
                 local_project: local_project.as_deref(),
                 ttl_limits: DelegatedAuthTtlLimits {
-                    max_cert_ttl_secs: input.max_cert_ttl_secs,
-                    max_token_ttl_secs: input.max_token_ttl_secs,
+                    max_cert_ttl_ns: input.max_cert_ttl_ns,
+                    max_token_ttl_ns: input.max_token_ttl_ns,
                 },
                 required_scopes: input.required_scopes,
-                now_secs: input.now_secs,
+                now_ns: input.now_ns,
             },
-            |public_key, hash, sig, _alg| {
+            |cert_hash, root_proof, root_pid| {
+                if root_pid != verifier_cfg.root_canister_id {
+                    return Err(AuthValidationError::InvalidRootAuthority {
+                        expected: verifier_cfg.root_canister_id,
+                        found: root_pid,
+                    }
+                    .to_string());
+                }
+                Self::verify_root_canister_signature_proof(
+                    RootPayloadKind::DelegationCert,
+                    cert_hash,
+                    root_proof,
+                    verifier_cfg.root_canister_id,
+                    &verifier_cfg.ic_root_public_key_raw,
+                )
+                .map_err(|err| err.to_string())
+            },
+            |public_key, hash, sig| {
+                if public_key.len() != 33 {
+                    return Err(
+                        "delegated auth shard public key is not compressed SEC1".to_string()
+                    );
+                }
                 EcdsaOps::verify_signature(public_key, hash, sig).map_err(|err| err.to_string())
             },
         )
@@ -167,35 +205,12 @@ impl AuthOps {
         Ok(verified)
     }
 
-    fn root_trust_anchor(
-        token: &DelegatedToken,
-        now_secs: u64,
-    ) -> Result<RootTrustAnchor, InternalError> {
-        let cert = &token.proof.cert;
-        let key_name = keys::delegated_tokens_key_name()?;
-        if cert.root_key_id != key_name {
-            return Err(AuthValidationError::Auth(format!(
-                "delegated auth root key id mismatch (expected {key_name}, found {})",
-                cert.root_key_id
-            ))
-            .into());
-        }
-
-        let root_public_key = SubnetStateOps::delegated_root_public_key(&key_name)
-            .ok_or(AuthSignatureError::RootPublicKeyUnavailable)?;
-        let key_hash = public_key_hash(&root_public_key);
-
-        Ok(RootTrustAnchor {
-            root_pid: EnvOps::root_pid()?,
-            root_key: RootPublicKey {
-                root_pid: cert.root_pid,
-                key_id: cert.root_key_id.clone(),
-                alg: cert.alg,
-                public_key_sec1: root_public_key,
-                key_hash,
-                not_before: cert.issued_at.min(now_secs),
-                not_after: None,
-            },
+    fn delegated_token_verifier_config_from(
+        cfg: &DelegatedTokenConfig,
+    ) -> Result<DelegatedTokenVerifierConfig, InternalError> {
+        Ok(DelegatedTokenVerifierConfig {
+            root_canister_id: configured_root_canister_id(cfg)?,
+            ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg)?,
         })
     }
 
@@ -205,7 +220,7 @@ impl AuthOps {
         let expected_derivation_path_hash =
             derivation_path_hash(&keys::shard_derivation_path(cert.shard_pid));
         match cert.shard_key_binding {
-            ShardKeyBinding::IcThresholdEcdsa {
+            ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
                 key_name_hash: observed_key_name_hash,
                 derivation_path_hash: observed_derivation_path_hash,
             } => {
@@ -221,6 +236,56 @@ impl AuthOps {
         }
         Ok(())
     }
+}
+
+fn configured_root_canister_id(cfg: &DelegatedTokenConfig) -> Result<Principal, InternalError> {
+    let Some(root_canister_id) = cfg.root_canister_id.as_deref() else {
+        return EnvOps::root_pid();
+    };
+    let root_canister_id = root_canister_id.trim();
+    if root_canister_id.is_empty() {
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.root_canister_id must not be empty when set".to_string(),
+        )
+        .into());
+    }
+
+    Principal::from_text(root_canister_id).map_err(|err| {
+        AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.root_canister_id is not a valid principal: {err}"
+        ))
+        .into()
+    })
+}
+
+fn configured_ic_root_public_key_raw(cfg: &DelegatedTokenConfig) -> Result<Vec<u8>, InternalError> {
+    let ic_root_public_key_raw = match cfg.ic_root_public_key_raw_hex.as_deref() {
+        Some(root_key_hex) => {
+            let root_key_hex = root_key_hex.trim();
+            if root_key_hex.is_empty() {
+                return Err(AuthValidationError::Auth(
+                    "auth.delegated_tokens.ic_root_public_key_raw_hex must not be empty when set"
+                        .to_string(),
+                )
+                .into());
+            }
+            decode_hex(root_key_hex).map_err(|err| {
+                AuthValidationError::Auth(format!(
+                    "auth.delegated_tokens.ic_root_public_key_raw_hex is not valid hex: {err}"
+                ))
+            })?
+        }
+        None => AuthOps::ic_root_public_key_raw()?,
+    };
+
+    if ic_root_public_key_raw.len() != IC_ROOT_PUBLIC_KEY_RAW_LENGTH {
+        return Err(AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.ic_root_public_key_raw must be {IC_ROOT_PUBLIC_KEY_RAW_LENGTH} raw bytes"
+        ))
+        .into());
+    }
+
+    Ok(ic_root_public_key_raw)
 }
 
 fn map_mint_delegated_token_error(err: MintDelegatedTokenError) -> InternalError {
@@ -253,12 +318,8 @@ const fn delegated_auth_reason_from_verify_error(
         }
         VerifyDelegatedTokenError::GrantsNotSubset => DelegatedAuthMetricReason::GrantsNotSubset,
         VerifyDelegatedTokenError::MissingLocalRole => DelegatedAuthMetricReason::MissingLocalRole,
-        VerifyDelegatedTokenError::RootKey(_) => DelegatedAuthMetricReason::RootKey,
         VerifyDelegatedTokenError::RootSignatureInvalid(_) => {
             DelegatedAuthMetricReason::RootSignatureInvalid
-        }
-        VerifyDelegatedTokenError::RootSignatureUnavailable => {
-            DelegatedAuthMetricReason::RootSignatureUnavailable
         }
         VerifyDelegatedTokenError::ScopeRejected { .. } => DelegatedAuthMetricReason::ScopeRejected,
         VerifyDelegatedTokenError::ShardSignatureInvalid(_) => {
@@ -286,9 +347,6 @@ const fn delegated_auth_reason_from_verify_error(
         }
         VerifyDelegatedTokenError::TokenTtlExceeded { .. } => {
             DelegatedAuthMetricReason::TokenTtlExceeded
-        }
-        VerifyDelegatedTokenError::TokenVersionMismatch { .. } => {
-            DelegatedAuthMetricReason::TokenVersionMismatch
         }
     }
 }

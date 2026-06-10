@@ -15,6 +15,8 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum DelegatedAuthMetricOperation {
+    PrepareRootProof,
+    SignShardToken,
     VerifyToken,
 }
 
@@ -23,6 +25,8 @@ impl DelegatedAuthMetricOperation {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::PrepareRootProof => "prepare_root_proof",
+            Self::SignShardToken => "sign_shard_token",
             Self::VerifyToken => "verify_token",
         }
     }
@@ -74,12 +78,14 @@ pub enum DelegatedAuthMetricReason {
     MissingLocalRole,
     Ok,
     RootKey,
+    #[allow(dead_code)]
+    RootProofPrepareFailed,
     RootSignatureInvalid,
-    RootSignatureUnavailable,
     ScopeRejected,
     ShardKeyBinding,
     ShardSignatureInvalid,
     ShardSignatureUnavailable,
+    ShardTokenSignFailed,
     TokenAudienceRejected,
     TokenExpired,
     TokenGrantRejected,
@@ -88,7 +94,6 @@ pub enum DelegatedAuthMetricReason {
     TokenNotYetValid,
     TokenOutlivesCert,
     TokenTtlExceeded,
-    TokenVersionMismatch,
 }
 
 impl DelegatedAuthMetricReason {
@@ -111,12 +116,13 @@ impl DelegatedAuthMetricReason {
             Self::MissingLocalRole => "missing_local_role",
             Self::Ok => "ok",
             Self::RootKey => "root_key",
+            Self::RootProofPrepareFailed => "root_proof_prepare_failed",
             Self::RootSignatureInvalid => "root_signature_invalid",
-            Self::RootSignatureUnavailable => "root_signature_unavailable",
             Self::ScopeRejected => "scope_rejected",
             Self::ShardKeyBinding => "shard_key_binding",
             Self::ShardSignatureInvalid => "shard_signature_invalid",
             Self::ShardSignatureUnavailable => "shard_signature_unavailable",
+            Self::ShardTokenSignFailed => "shard_token_sign_failed",
             Self::TokenAudienceRejected => "token_audience_rejected",
             Self::TokenExpired => "token_expired",
             Self::TokenGrantRejected => "token_grant_rejected",
@@ -125,7 +131,6 @@ impl DelegatedAuthMetricReason {
             Self::TokenNotYetValid => "token_not_yet_valid",
             Self::TokenOutlivesCert => "token_outlives_cert",
             Self::TokenTtlExceeded => "token_ttl_exceeded",
-            Self::TokenVersionMismatch => "token_version_mismatch",
         }
     }
 }
@@ -164,6 +169,63 @@ impl DelegatedAuthMetrics {
             DelegatedAuthMetricOperation::VerifyToken,
             DelegatedAuthMetricOutcome::Started,
             DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that root proof preparation started.
+    #[allow(dead_code)]
+    pub fn record_root_proof_prepare_started() {
+        Self::record(
+            DelegatedAuthMetricOperation::PrepareRootProof,
+            DelegatedAuthMetricOutcome::Started,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that root proof preparation completed successfully.
+    #[allow(dead_code)]
+    pub fn record_root_proof_prepare_completed() {
+        Self::record(
+            DelegatedAuthMetricOperation::PrepareRootProof,
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that root proof preparation failed.
+    #[allow(dead_code)]
+    pub fn record_root_proof_prepare_failed() {
+        Self::record(
+            DelegatedAuthMetricOperation::PrepareRootProof,
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::RootProofPrepareFailed,
+        );
+    }
+
+    /// Record that shard token signing started.
+    pub fn record_shard_token_sign_started() {
+        Self::record(
+            DelegatedAuthMetricOperation::SignShardToken,
+            DelegatedAuthMetricOutcome::Started,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that shard token signing completed successfully.
+    pub fn record_shard_token_sign_completed() {
+        Self::record(
+            DelegatedAuthMetricOperation::SignShardToken,
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that shard token signing failed.
+    pub fn record_shard_token_sign_failed() {
+        Self::record(
+            DelegatedAuthMetricOperation::SignShardToken,
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::ShardTokenSignFailed,
         );
     }
 
@@ -265,12 +327,66 @@ mod tests {
     fn record_verify_outcomes_increment() {
         DelegatedAuthMetrics::reset();
 
+        DelegatedAuthMetrics::record_root_proof_prepare_started();
+        DelegatedAuthMetrics::record_root_proof_prepare_completed();
+        DelegatedAuthMetrics::record_root_proof_prepare_failed();
+        DelegatedAuthMetrics::record_shard_token_sign_started();
+        DelegatedAuthMetrics::record_shard_token_sign_completed();
+        DelegatedAuthMetrics::record_shard_token_sign_failed();
         DelegatedAuthMetrics::record_verify_started();
         DelegatedAuthMetrics::record_verify_completed();
         DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::TokenExpired);
         DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::TokenExpired);
 
         let map = event_snapshot_map();
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::PrepareRootProof,
+                outcome: DelegatedAuthMetricOutcome::Started,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::PrepareRootProof,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::PrepareRootProof,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::RootProofPrepareFailed,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::SignShardToken,
+                outcome: DelegatedAuthMetricOutcome::Started,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::SignShardToken,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::SignShardToken,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::ShardTokenSignFailed,
+            }),
+            Some(&1)
+        );
         assert_eq!(
             map.get(&DelegatedAuthMetricKey {
                 operation: DelegatedAuthMetricOperation::VerifyToken,

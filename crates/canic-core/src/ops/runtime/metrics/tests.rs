@@ -774,6 +774,8 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
 
     let principal = Principal::from_slice(&[42; 29]);
     DelegatedAuthMetrics::record_authority(principal);
+    DelegatedAuthMetrics::record_root_proof_prepare_completed();
+    DelegatedAuthMetrics::record_shard_token_sign_completed();
     DelegatedAuthMetrics::record_verify_started();
     DelegatedAuthMetrics::record_verify_completed();
     DelegatedAuthMetrics::record(
@@ -790,6 +792,16 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
     let entries = entries(MetricsKind::Security);
 
     assert_metric_count(&entries, &["delegated_auth", "delegated_auth_authority"], 1);
+    assert_metric_count(
+        &entries,
+        &["delegated_auth", "prepare_root_proof", "completed", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &["delegated_auth", "sign_shard_token", "completed", "ok"],
+        1,
+    );
     assert_metric_count(
         &entries,
         &["delegated_auth", "verify_token", "started", "ok"],

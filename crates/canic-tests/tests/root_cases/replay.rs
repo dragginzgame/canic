@@ -23,7 +23,6 @@ use canic_tests::root::{
     harness::{RootSetup, setup_cached_root},
     workers::create_worker,
 };
-use std::convert::TryFrom;
 use std::time::Duration;
 
 #[test]
@@ -66,24 +65,24 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
             canister_role: canister::SCALE_REPLICA,
             parent: CreateCanisterParent::ThisCanister,
             extra_arg: None,
-            metadata: Some(metadata([30u8; 32], 120)),
+            metadata: Some(metadata([30u8; 32], 120_000_000_000)),
         }),
         Request::UpgradeCanister(UpgradeCanisterRequest {
             canister_pid: test_pid,
-            metadata: Some(metadata([31u8; 32], 120)),
+            metadata: Some(metadata([31u8; 32], 120_000_000_000)),
         }),
         Request::Cycles(CyclesRequest {
             cycles: 1_000_000,
-            metadata: Some(metadata([32u8; 32], 120)),
+            metadata: Some(metadata([32u8; 32], 120_000_000_000)),
         }),
         Request::IssueRoleAttestation(canic::dto::auth::RoleAttestationRequest {
             subject: unauthorized,
             role: canister::TEST,
             subnet_id: None,
             audience: setup.root_id,
-            ttl_secs: 60,
+            ttl_ns: 60_000_000_000,
             epoch: 0,
-            metadata: Some(metadata([33u8; 32], 120)),
+            metadata: Some(metadata([33u8; 32], 120_000_000_000)),
         }),
         Request::IssueInternalInvocationProof(canic::dto::auth::InternalInvocationProofRequest {
             subject: unauthorized,
@@ -91,8 +90,8 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
             subnet_id: None,
             audience: test_pid,
             audience_method: "test".to_string(),
-            ttl_secs: 60,
-            metadata: Some(metadata([34u8; 32], 120)),
+            ttl_ns: 60_000_000_000,
+            metadata: Some(metadata([34u8; 32], 120_000_000_000)),
         }),
     ];
 
@@ -126,7 +125,7 @@ fn upgrade_policy_denies_registered_non_parent_caller() {
 
     let request = Request::UpgradeCanister(UpgradeCanisterRequest {
         canister_pid: app_pid,
-        metadata: Some(metadata([34u8; 32], 120)),
+        metadata: Some(metadata([34u8; 32], 120_000_000_000)),
     });
     let err = root_response_as(&setup, caller, request)
         .expect_err("non-parent caller must be denied by upgrade policy");
@@ -150,7 +149,7 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
 
     let request = Request::Cycles(CyclesRequest {
         cycles: 1_111_000,
-        metadata: Some(metadata([36u8; 32], 120)),
+        metadata: Some(metadata([36u8; 32], 120_000_000_000)),
     });
 
     let first = root_response_as(&setup, caller, request.clone()).expect("first cycles call works");
@@ -190,7 +189,7 @@ fn root_cycles_request_increases_direct_child_balance() {
     let amount = 321_000u128;
     let request = Request::Cycles(CyclesRequest {
         cycles: amount,
-        metadata: Some(metadata([81u8; 32], 120)),
+        metadata: Some(metadata([81u8; 32], 120_000_000_000)),
     });
 
     let before = canister_cycle_balance(&setup, caller);
@@ -248,7 +247,7 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
 
     let request = UpgradeCanisterRequest {
         canister_pid: target,
-        metadata: Some(metadata([37u8; 32], 120)),
+        metadata: Some(metadata([37u8; 32], 120_000_000_000)),
     };
 
     let first = match root_response_as(&setup, caller, Request::UpgradeCanister(request.clone())) {
@@ -296,7 +295,7 @@ fn replay_rejects_cross_variant_same_request_id() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup.root_id;
 
-    let metadata = metadata([11u8; 32], 120);
+    let metadata = metadata([11u8; 32], 120_000_000_000);
     let target = setup
         .subnet_index
         .get(&canister::APP)
@@ -346,7 +345,7 @@ fn replay_rejects_same_variant_mutated_payload() {
         .copied()
         .expect("test canister must exist");
 
-    let metadata = metadata([12u8; 32], 120);
+    let metadata = metadata([12u8; 32], 120_000_000_000);
 
     let first = Request::Cycles(CyclesRequest {
         cycles: 777,
@@ -386,7 +385,7 @@ fn replay_returns_cached_response_for_identical_request() {
         .copied()
         .expect("test canister must exist");
 
-    let metadata = metadata([13u8; 32], 120);
+    let metadata = metadata([13u8; 32], 120_000_000_000);
     let request = Request::Cycles(CyclesRequest {
         cycles: 999,
         metadata: Some(metadata),
@@ -428,7 +427,7 @@ fn cycles_rejects_when_requested_above_root_balance() {
 
     let request = Request::Cycles(CyclesRequest {
         cycles: u128::MAX,
-        metadata: Some(metadata([18u8; 32], 120)),
+        metadata: Some(metadata([18u8; 32], 120_000_000_000)),
     });
 
     let err = root_response_as(&setup, caller, request)
@@ -460,7 +459,7 @@ fn replay_rejects_ttl_above_max() {
 
     let request = Request::Cycles(CyclesRequest {
         cycles: 1,
-        metadata: Some(metadata([14u8; 32], 301)),
+        metadata: Some(metadata([14u8; 32], 301_000_000_000)),
     });
 
     let err = root_response_as(&setup, caller, request).expect_err("ttl above max must reject");
@@ -487,7 +486,7 @@ fn replay_rejects_expired_request() {
         .copied()
         .expect("test canister must exist");
 
-    let metadata = metadata([15u8; 32], 1);
+    let metadata = metadata([15u8; 32], 1_000_000_000);
     let request = Request::Cycles(CyclesRequest {
         cycles: 123,
         metadata: Some(metadata),
@@ -529,7 +528,7 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
         .copied()
         .expect("test canister exists");
 
-    let metadata = metadata([16u8; 32], 120);
+    let metadata = metadata([16u8; 32], 120_000_000_000);
     let request = UpgradeCanisterRequest {
         canister_pid: app,
         metadata: Some(metadata),
@@ -614,7 +613,7 @@ fn capability_response_as(
     caller: Principal,
     request: Request,
 ) -> Result<Response, Error> {
-    let (request_id, nonce, ttl_seconds) = capability_metadata_from_request(&request);
+    let (request_id, nonce, ttl_ns) = capability_metadata_from_request(&request);
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
@@ -623,8 +622,8 @@ fn capability_response_as(
         metadata: CapabilityRequestMetadata {
             request_id,
             nonce,
-            issued_at: target_now_secs(setup, target_pid),
-            ttl_seconds,
+            issued_at_ns: target_now_ns(setup, target_pid),
+            ttl_ns,
         },
     };
 
@@ -772,13 +771,13 @@ fn metric_event_parts(event: &str) -> (&'static str, &'static str) {
     }
 }
 
-// Read one canister's current time in seconds for capability metadata issuance.
-fn target_now_secs(setup: &RootSetup, canister_id: Principal) -> u64 {
+// Read one canister's current time in nanoseconds for capability metadata issuance.
+fn target_now_ns(setup: &RootSetup, canister_id: Principal) -> u64 {
     let _ = canister_id;
-    setup.pic.current_time_nanos() / 1_000_000_000
+    setup.pic.current_time_nanos()
 }
 
-fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u32) {
+fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u64) {
     let metadata = match request {
         Request::CreateCanister(req) => req.metadata,
         Request::UpgradeCanister(req) => req.metadata,
@@ -794,11 +793,9 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
             request_id.copy_from_slice(&meta.request_id[..16]);
             let mut nonce = [0u8; 16];
             nonce.copy_from_slice(&meta.request_id[16..]);
-            let ttl_seconds =
-                u32::try_from(meta.ttl_seconds.min(u64::from(u32::MAX))).expect("ttl bounded");
-            (request_id, nonce, ttl_seconds)
+            (request_id, nonce, meta.ttl_ns)
         }
-        None => ([0u8; 16], [0u8; 16], 60),
+        None => ([0u8; 16], [0u8; 16], 60_000_000_000),
     }
 }
 
@@ -809,9 +806,6 @@ fn is_canister_status_decode_failure(err: &Error) -> bool {
             || err.message.contains("decode_one failed"))
 }
 
-const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata {
-    RootRequestMetadata {
-        request_id,
-        ttl_seconds,
-    }
+const fn metadata(request_id: [u8; 32], ttl_ns: u64) -> RootRequestMetadata {
+    RootRequestMetadata { request_id, ttl_ns }
 }

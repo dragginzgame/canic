@@ -56,13 +56,16 @@ impl AuthApi {
         }
 
         let issued_at = IcOps::now_secs();
-        let max_ttl_secs = Self::delegated_token_max_ttl_secs()?;
+        let issued_at_ns = issued_at
+            .checked_mul(1_000_000_000)
+            .ok_or_else(|| Error::invalid("current time overflows nanoseconds"))?;
+        let max_ttl_ns = Self::delegated_token_max_ttl_ns()?;
         let verified_subject = Self::verify_token_material(
             &bootstrap_token,
-            max_ttl_secs,
-            max_ttl_secs,
+            max_ttl_ns,
+            max_ttl_ns,
             &[],
-            issued_at,
+            issued_at_ns,
         )
         .inspect_err(|_| record_session_bootstrap_rejected_token_invalid())?;
 
@@ -76,9 +79,10 @@ impl AuthApi {
         let configured_max_ttl_secs = cfg
             .max_ttl_secs
             .unwrap_or(Self::MAX_DELEGATED_SESSION_TTL_SECS);
+        let token_expires_at_secs = bootstrap_token.claims.expires_at_ns / 1_000_000_000;
         let expires_at = Self::clamp_delegated_session_expires_at(
             issued_at,
-            bootstrap_token.claims.expires_at,
+            token_expires_at_secs,
             configured_max_ttl_secs,
             requested_ttl_secs,
         )
@@ -113,7 +117,7 @@ impl AuthApi {
                 delegated_pid: delegated_subject,
                 token_fingerprint,
                 bound_at: issued_at,
-                expires_at: bootstrap_token.claims.expires_at,
+                expires_at: token_expires_at_secs,
             },
             issued_at,
         );

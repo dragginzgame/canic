@@ -4,85 +4,122 @@ use super::{
         canonical::{derivation_path_hash, key_name_hash},
         cert_rules::DelegatedAuthTtlLimits,
         issue::{
-            IssueDelegationProofError, IssueDelegationProofInput, PreparedDelegationCert,
-            finish_delegation_proof, prepare_delegation_cert,
+            IssueDelegationProofError, IssueDelegationProofInput, finish_delegation_proof,
+            prepare_delegation_cert,
         },
     },
     keys,
+    root_canister_sig::RootPayloadKind,
 };
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{DelegationProof, ShardKeyBinding},
+    dto::auth::{DelegationProof, ShardKeyBinding, ShardSignatureAlgorithm},
     ops::{
         auth::AuthValidationError,
-        cost_guard::CostGuardPermit,
         ic::{IcOps, ecdsa::EcdsaOps},
-        storage::state::subnet::SubnetStateOps,
     },
 };
+use std::{cell::RefCell, collections::BTreeMap};
+
+thread_local! {
+    static PENDING_DELEGATION_PROOFS: RefCell<BTreeMap<PendingDelegationProofKey, PreparedRootDelegationProof>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct PendingDelegationProofKey {
+    cert_hash: [u8; 32],
+    prepared_by: Vec<u8>,
+}
+
+impl PendingDelegationProofKey {
+    fn new(cert_hash: [u8; 32], prepared_by: Principal) -> Self {
+        Self {
+            cert_hash,
+            prepared_by: prepared_by.as_slice().to_vec(),
+        }
+    }
+}
 
 impl AuthOps {
-    /// Prepare a canonical delegation proof certificate before root ECDSA.
+    /// Prepare a canonical delegation proof certificate and certify its canister-signature path.
     pub(crate) async fn prepare_delegation_proof(
         input: SignDelegationProofInput,
     ) -> Result<PreparedRootDelegationProof, InternalError> {
         let root_pid = IcOps::canister_self();
         let key_name = keys::delegated_tokens_key_name()?;
-        let root_derivation_path = keys::root_derivation_path();
         let shard_derivation_path = keys::shard_derivation_path(input.shard_pid);
 
-        let root_public_key = Self::local_root_public_key(root_pid).await?;
         let shard_public_key_sec1 = Self::local_shard_public_key_sec1(input.shard_pid).await?;
         let prepared = prepare_delegation_cert(IssueDelegationProofInput {
             root_pid,
-            root_key_id: key_name.clone(),
-            root_public_key,
             shard_pid: input.shard_pid,
             shard_key_id: key_name.clone(),
+            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
             shard_public_key_sec1,
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
+            shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
                 key_name_hash: key_name_hash(&key_name),
                 derivation_path_hash: derivation_path_hash(&shard_derivation_path),
             },
-            issued_at: input.issued_at,
-            cert_ttl_secs: input.cert_ttl_secs,
-            max_token_ttl_secs: input.max_token_ttl_secs,
+            issued_at_ns: input.issued_at_ns,
+            cert_ttl_ns: input.cert_ttl_ns,
+            max_token_ttl_ns: input.max_token_ttl_ns,
             audience: input.audience,
             grants: input.grants,
             ttl_limits: DelegatedAuthTtlLimits {
-                max_cert_ttl_secs: input.max_cert_ttl_secs,
-                max_token_ttl_secs: input.max_token_ttl_secs,
+                max_cert_ttl_ns: input.max_cert_ttl_ns,
+                max_token_ttl_ns: input.max_token_ttl_ns,
             },
         })
         .map_err(map_issue_delegation_proof_error)?;
-
-        Ok(PreparedRootDelegationProof {
+        let prepared_root_signature = Self::prepare_root_canister_signature(
+            RootPayloadKind::DelegationCert,
+            input.operation_id,
+            prepared.cert_hash,
+            input.shard_pid,
+            input.issued_at_ns,
+        )?;
+        let prepared = PreparedRootDelegationProof {
             cert: prepared.cert,
             cert_hash: prepared.cert_hash,
-            key_name,
-            root_derivation_path,
-        })
+            retrieval_expires_at_ns: prepared_root_signature.retrieval_expires_at_ns,
+        };
+        cache_prepared_delegation_proof(input.shard_pid, prepared.clone());
+
+        Ok(prepared)
     }
 
-    /// Sign and finish an already-prepared root delegation proof.
-    pub(crate) async fn sign_prepared_delegation_proof(
-        permit: &CostGuardPermit,
-        prepared: PreparedRootDelegationProof,
+    /// Finish an already-prepared root delegation proof from query-only certificate material.
+    pub(crate) fn get_delegation_proof(
+        caller: Principal,
+        cert_hash: [u8; 32],
     ) -> Result<DelegationProof, InternalError> {
-        let root_sig = EcdsaOps::sign_bytes(
-            permit,
-            &prepared.key_name,
-            prepared.root_derivation_path,
+        let prepared = PENDING_DELEGATION_PROOFS
+            .with(|pending| {
+                pending
+                    .borrow()
+                    .get(&PendingDelegationProofKey::new(cert_hash, caller))
+                    .cloned()
+            })
+            .ok_or_else(|| {
+                AuthValidationError::Auth(
+                    "delegation proof was not prepared or has expired".to_string(),
+                )
+            })?;
+        let root_proof = Self::get_root_canister_signature_proof(
+            RootPayloadKind::DelegationCert,
             prepared.cert_hash,
-        )
-        .await?;
+            caller,
+            prepared.cert.root_pid,
+            IcOps::now_nanos(),
+        )?;
         Ok(finish_delegation_proof(
-            PreparedDelegationCert {
+            super::delegated::issue::PreparedDelegationCert {
                 cert: prepared.cert,
                 cert_hash: prepared.cert_hash,
             },
-            root_sig,
+            root_proof,
         )
         .proof)
     }
@@ -95,29 +132,15 @@ impl AuthOps {
         EcdsaOps::public_key_sec1(&key_name, keys::shard_derivation_path(shard_pid), shard_pid)
             .await
     }
+}
 
-    /// Resolve the root delegation public key from local subnet state, publishing it on root when absent.
-    pub(crate) async fn local_root_public_key(
-        root_pid: Principal,
-    ) -> Result<Vec<u8>, InternalError> {
-        let local = IcOps::canister_self();
-        if root_pid != local {
-            return Err(AuthValidationError::InvalidRootAuthority {
-                expected: local,
-                found: root_pid,
-            }
-            .into());
-        }
-
-        let key_name = keys::delegated_tokens_key_name()?;
-        if let Some(root_public_key) = SubnetStateOps::delegated_root_public_key(&key_name) {
-            return Ok(root_public_key);
-        }
-
-        keys::ensure_root_public_key_published(&key_name, root_pid).await?;
-        SubnetStateOps::delegated_root_public_key(&key_name)
-            .ok_or_else(|| super::AuthSignatureError::RootPublicKeyUnavailable.into())
-    }
+fn cache_prepared_delegation_proof(caller: Principal, prepared: PreparedRootDelegationProof) {
+    PENDING_DELEGATION_PROOFS.with(|pending| {
+        pending.borrow_mut().insert(
+            PendingDelegationProofKey::new(prepared.cert_hash, caller),
+            prepared,
+        );
+    });
 }
 
 fn map_issue_delegation_proof_error(err: IssueDelegationProofError) -> InternalError {

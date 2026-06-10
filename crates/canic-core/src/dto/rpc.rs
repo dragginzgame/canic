@@ -229,7 +229,7 @@ impl From<Request> for RootCapabilityCommand {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootRequestMetadata {
     pub request_id: [u8; 32],
-    pub ttl_seconds: u64,
+    pub ttl_ns: u64,
 }
 
 //
@@ -370,7 +370,7 @@ mod tests {
     fn metadata(id: u8) -> RootRequestMetadata {
         RootRequestMetadata {
             request_id: [id; 32],
-            ttl_seconds: 60,
+            ttl_ns: 60_000_000_000,
         }
     }
 
@@ -399,7 +399,7 @@ mod tests {
                 role: CanisterRole::new("test"),
                 subnet_id: None,
                 audience: p(6),
-                ttl_secs: 60,
+                ttl_ns: 60_000_000_000,
                 epoch: 0,
                 metadata: None,
             }),
@@ -409,7 +409,7 @@ mod tests {
                 subnet_id: None,
                 audience: p(6),
                 audience_method: "canic_internal".to_string(),
-                ttl_secs: 60,
+                ttl_ns: 60_000_000_000,
                 metadata: None,
             }),
         ]
@@ -462,7 +462,7 @@ mod tests {
             role: CanisterRole::new("test"),
             subnet_id: None,
             audience: p(6),
-            ttl_secs: 60,
+            ttl_ns: 60_000_000_000,
             epoch: 99,
             metadata: Some(metadata(9)),
         })

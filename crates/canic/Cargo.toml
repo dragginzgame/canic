@@ -19,7 +19,11 @@ metrics = []
 control-plane = ["dep:canic-control-plane"]
 icp-refill = []
 sharding = ["canic-core/sharding"]
-auth-crypto = ["canic-core/auth-crypto"]
+auth-root-canister-sig-create = ["canic-core/auth-root-canister-sig-create"]
+auth-root-canister-sig-verify = ["canic-core/auth-root-canister-sig-verify"]
+auth-shard-secp256k1-verify = ["canic-core/auth-shard-secp256k1-verify"]
+auth-threshold-ecdsa-sign = ["canic-core/auth-threshold-ecdsa-sign"]
+auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
 
 [dependencies]
 candid = { workspace = true }

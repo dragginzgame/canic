@@ -1,7 +1,4 @@
-use super::{
-    AuthOps, PreparedInternalInvocationProofSignature, PreparedRoleAttestationSignature,
-    ROLE_ATTESTATION_KEY_ID_V1, crypto, delegated::canonical::key_name_hash, keys, verify,
-};
+use super::{AuthOps, crypto, keys, verify};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -14,108 +11,12 @@ use crate::{
             AuthOpsError, AuthSignatureError, AuthValidationError,
             InternalInvocationProofVerificationInput,
         },
-        cost_guard::CostGuardPermit,
         ic::{IcOps, ecdsa::EcdsaOps},
-        replay::model::{EcdsaPurpose, ExternalEffectDescriptor},
         storage::auth::AuthStateOps,
     },
 };
 
 impl AuthOps {
-    /// Prepare a role attestation payload before root ECDSA signing.
-    pub(crate) async fn prepare_role_attestation_signature(
-        payload: RoleAttestation,
-    ) -> Result<PreparedRoleAttestationSignature, InternalError> {
-        let key_name = keys::attestation_key_name()?;
-        keys::ensure_attestation_key_cached(&key_name, IcOps::canister_self(), IcOps::now_secs())
-            .await?;
-        let hash = crypto::role_attestation_hash(&payload)?;
-        Ok(PreparedRoleAttestationSignature {
-            payload,
-            message_hash: hash,
-            key_name,
-            derivation_path: keys::attestation_derivation_path(),
-        })
-    }
-
-    /// Sign a prepared role attestation payload using the attestation domain.
-    pub(crate) async fn sign_prepared_role_attestation(
-        permit: &CostGuardPermit,
-        prepared: PreparedRoleAttestationSignature,
-    ) -> Result<SignedRoleAttestation, InternalError> {
-        let signature = EcdsaOps::sign_bytes(
-            permit,
-            &prepared.key_name,
-            prepared.derivation_path,
-            prepared.message_hash,
-        )
-        .await?;
-
-        Ok(SignedRoleAttestation {
-            payload: prepared.payload,
-            signature,
-            key_id: ROLE_ATTESTATION_KEY_ID_V1,
-        })
-    }
-
-    /// Prepare a method-scoped internal invocation proof before root ECDSA signing.
-    pub(crate) async fn prepare_internal_invocation_proof_signature(
-        payload: InternalInvocationProofPayloadV1,
-    ) -> Result<PreparedInternalInvocationProofSignature, InternalError> {
-        let key_name = keys::attestation_key_name()?;
-        keys::ensure_attestation_key_cached(&key_name, IcOps::canister_self(), IcOps::now_secs())
-            .await?;
-        let hash = crypto::internal_invocation_proof_hash(&payload)?;
-        Ok(PreparedInternalInvocationProofSignature {
-            payload,
-            message_hash: hash,
-            key_name,
-            derivation_path: keys::attestation_derivation_path(),
-        })
-    }
-
-    /// Sign a prepared method-scoped internal invocation proof using the 0.40 proof domain.
-    pub(crate) async fn sign_prepared_internal_invocation_proof(
-        permit: &CostGuardPermit,
-        prepared: PreparedInternalInvocationProofSignature,
-    ) -> Result<SignedInternalInvocationProofV1, InternalError> {
-        let signature = EcdsaOps::sign_bytes(
-            permit,
-            &prepared.key_name,
-            prepared.derivation_path,
-            prepared.message_hash,
-        )
-        .await?;
-
-        Ok(SignedInternalInvocationProofV1 {
-            payload: prepared.payload,
-            signature,
-            key_id: ROLE_ATTESTATION_KEY_ID_V1,
-        })
-    }
-
-    /// Describe the root ECDSA effect for a prepared role attestation signature.
-    pub(crate) fn role_attestation_signing_effect(
-        prepared: &PreparedRoleAttestationSignature,
-    ) -> ExternalEffectDescriptor {
-        ExternalEffectDescriptor::ThresholdEcdsaSign {
-            key_id_hash: key_name_hash(&prepared.key_name),
-            purpose: EcdsaPurpose::RoleAttestation,
-            message_hash: prepared.message_hash,
-        }
-    }
-
-    /// Describe the root ECDSA effect for a prepared internal invocation proof signature.
-    pub(crate) fn internal_invocation_proof_signing_effect(
-        prepared: &PreparedInternalInvocationProofSignature,
-    ) -> ExternalEffectDescriptor {
-        ExternalEffectDescriptor::ThresholdEcdsaSign {
-            key_id_hash: key_name_hash(&prepared.key_name),
-            purpose: EcdsaPurpose::InternalInvocationProof,
-            message_hash: prepared.message_hash,
-        }
-    }
-
     pub async fn attestation_key_set() -> Result<AttestationKeySet, InternalError> {
         let root_pid = IcOps::canister_self();
         let now_secs = IcOps::now_secs();
@@ -138,7 +39,7 @@ impl AuthOps {
         caller: Principal,
         self_pid: Principal,
         verifier_subnet: Option<Principal>,
-        now_secs: u64,
+        now_ns: u64,
         min_accepted_epoch: u64,
     ) -> Result<RoleAttestation, AuthOpsError> {
         if attestation.signature.is_empty() {
@@ -152,6 +53,7 @@ impl AuthOps {
                 key_id: attestation.key_id,
             },
         )?;
+        let now_secs = now_ns / 1_000_000_000;
         verify::verify_attestation_key_validity(&key, now_secs)?;
 
         let public_key = key.public_key;
@@ -165,7 +67,7 @@ impl AuthOps {
             caller,
             self_pid,
             verifier_subnet,
-            now_secs,
+            now_ns,
             min_accepted_epoch,
         )?;
 
@@ -187,7 +89,7 @@ impl AuthOps {
                 key_id: proof.key_id,
             },
         )?;
-        verify::verify_attestation_key_validity(&key, input.now_secs)?;
+        verify::verify_attestation_key_validity(&key, input.now_ns / 1_000_000_000)?;
 
         let public_key = key.public_key;
         let hash = crypto::internal_invocation_proof_hash(&proof.payload)

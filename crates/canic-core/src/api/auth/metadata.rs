@@ -1,7 +1,8 @@
 use crate::{
     dto::{
         auth::{
-            DelegationProofIssueRequest, InternalInvocationProofRequest, RoleAttestationRequest,
+            AuthRequestMetadata, DelegationProofIssueRequest, InternalInvocationProofRequest,
+            RoleAttestationRequest,
         },
         rpc::RootRequestMetadata,
     },
@@ -10,7 +11,8 @@ use crate::{
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const DEFAULT_ROOT_REQUEST_TTL_SECONDS: u64 = 300;
+const DEFAULT_ROOT_REQUEST_TTL_NS: u64 = 300_000_000_000;
+const DEFAULT_AUTH_REQUEST_TTL_NS: u64 = DEFAULT_ROOT_REQUEST_TTL_NS;
 const AUTH_ROOT_REQUEST_METADATA_DOMAIN: &[u8] = b"canic-auth-root-request-metadata-v1";
 static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
@@ -27,7 +29,7 @@ pub(super) fn with_delegation_request_metadata(
     mut request: DelegationProofIssueRequest,
 ) -> DelegationProofIssueRequest {
     if request.metadata.is_none() {
-        request.metadata = Some(new_request_metadata());
+        request.metadata = Some(new_auth_request_metadata());
     }
     request
 }
@@ -44,7 +46,14 @@ pub(super) fn with_internal_invocation_proof_request_metadata(
 fn new_request_metadata() -> RootRequestMetadata {
     RootRequestMetadata {
         request_id: generate_request_id(),
-        ttl_seconds: DEFAULT_ROOT_REQUEST_TTL_SECONDS,
+        ttl_ns: DEFAULT_ROOT_REQUEST_TTL_NS,
+    }
+}
+
+fn new_auth_request_metadata() -> AuthRequestMetadata {
+    AuthRequestMetadata {
+        request_id: generate_request_id(),
+        ttl_ns: DEFAULT_AUTH_REQUEST_TTL_NS,
     }
 }
 

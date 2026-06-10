@@ -13,7 +13,7 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
         "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
             setup_root(RootSetupProfile::Topology)
         }
-        "root:canic_request_delegation:fresh-shard"
+        "root:canic_prepare_delegation_proof:fresh-shard"
         | "test:test_verify_delegated_token:valid-delegated-token" => {
             setup_root(RootSetupProfile::Sharding)
         }
@@ -293,7 +293,7 @@ fn prepare_scenario(
                 delegated_token: None,
             }
         }
-        "root:canic_request_delegation:fresh-shard" => {
+        "root:canic_prepare_delegation_proof:fresh-shard" => {
             let user_hub_pid = *setup
                 .subnet_index
                 .get(&USER_HUB)
@@ -314,19 +314,16 @@ fn prepare_scenario(
             let shard_pid =
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
             let subject = Principal::from_slice(&[45; 29]);
-            let provision =
-                request_root_delegation_provision(&setup.pic, setup.root_id, shard_pid, TEST);
+            let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, shard_pid, TEST);
+            let token_ttl_ns = token_ttl_within_proof(&setup.pic, &proof);
             let token = issue_delegated_token(
                 &setup.pic,
                 shard_pid,
+                proof,
                 subject,
                 DelegationAudience::Project("test".to_string()),
                 vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
-                provision.cert.max_token_ttl_secs,
-                provision
-                    .cert
-                    .expires_at
-                    .saturating_sub(provision.cert.issued_at),
+                token_ttl_ns,
             );
             PreparedScenario {
                 target_pid,
@@ -350,7 +347,7 @@ fn execute_scenario(
 ) {
     let target_pid = prepared.target_pid;
     match scenario.key {
-        "root:canic_request_delegation:fresh-shard" => {
+        "root:canic_prepare_delegation_proof:fresh-shard" => {
             execute_root_delegation_issue_scenario(setup, target_pid, prepared);
         }
         "test:test:minimal-valid" => {
@@ -391,8 +388,8 @@ fn execute_root_delegation_issue_scenario(
     let caller = prepared
         .caller_pid
         .expect("auth audit scenario must resolve a shard caller");
-    let response = request_root_delegation_provision(&setup.pic, setup.root_id, caller, TEST);
-    assert_eq!(response.cert.shard_pid, caller);
+    let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, caller, TEST);
+    assert_eq!(proof.cert.shard_pid, caller);
 }
 
 // Execute the verifier-side delegated token confirmation scenario.
@@ -425,7 +422,7 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
         .expect("test canister must exist for root capability request");
     let request = Request::Cycles(CyclesRequest {
         cycles: 999,
-        metadata: Some(metadata([90u8; 32], 120)),
+        metadata: Some(metadata([90u8; 32], 120_000_000_000)),
     });
     let response = root_capability_response_as(setup, target_pid, caller, request)
         .expect("fresh root cycles capability request must succeed");
@@ -721,7 +718,7 @@ fn root_capability_response_as(
     caller: Principal,
     request: Request,
 ) -> Result<Response, Error> {
-    let (request_id, nonce, ttl_seconds) = capability_metadata_from_request(&request);
+    let (request_id, nonce, ttl_ns) = capability_metadata_from_request(&request);
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
@@ -730,8 +727,8 @@ fn root_capability_response_as(
         metadata: CapabilityRequestMetadata {
             request_id,
             nonce,
-            issued_at: target_now_secs(setup, target_pid),
-            ttl_seconds,
+            issued_at_ns: target_now_ns(setup, target_pid),
+            ttl_ns,
         },
     };
 
@@ -746,14 +743,14 @@ fn root_capability_response_as(
         .map(|response| response.response)
 }
 
-// Read one canister's current time in seconds for capability metadata issuance.
-fn target_now_secs(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
+// Read one canister's current time in nanoseconds for capability metadata issuance.
+fn target_now_ns(setup: &root::harness::RootSetup, canister_id: Principal) -> u64 {
     let _ = canister_id;
-    setup.pic.current_time_nanos() / 1_000_000_000
+    setup.pic.current_time_nanos()
 }
 
 // Rebuild the capability metadata tuple that the structural envelope expects.
-fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u32) {
+fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u64) {
     let metadata = match request {
         Request::CreateCanister(req) => req.metadata,
         Request::UpgradeCanister(req) => req.metadata,
@@ -769,20 +766,15 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
             request_id.copy_from_slice(&meta.request_id[..16]);
             let mut nonce = [0u8; 16];
             nonce.copy_from_slice(&meta.request_id[16..]);
-            let ttl_seconds =
-                u32::try_from(meta.ttl_seconds.min(u64::from(u32::MAX))).expect("ttl bounded");
-            (request_id, nonce, ttl_seconds)
+            (request_id, nonce, meta.ttl_ns)
         }
-        None => ([0u8; 16], [0u8; 16], 60),
+        None => ([0u8; 16], [0u8; 16], 60_000_000_000),
     }
 }
 
 // Build one deterministic root request metadata value for audit scenarios.
-const fn metadata(request_id: [u8; 32], ttl_seconds: u64) -> RootRequestMetadata {
-    RootRequestMetadata {
-        request_id,
-        ttl_seconds,
-    }
+const fn metadata(request_id: [u8; 32], ttl_ns: u64) -> RootRequestMetadata {
+    RootRequestMetadata { request_id, ttl_ns }
 }
 
 #[cfg(test)]

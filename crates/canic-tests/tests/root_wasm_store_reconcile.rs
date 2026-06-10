@@ -226,7 +226,7 @@ fn root_fixed_target_capacity_failure_is_rejected_without_fleet_mutation() {
 }
 
 #[test]
-fn root_raw_wasm_store_update_call_is_rejected_before_dispatch() {
+fn root_direct_wasm_store_update_call_accepts_root_and_rejects_non_root() {
     let setup = setup_root_with_small_implicit_store();
     let overview = publication_overview(&setup.pic, setup.root_id);
     let store_pid = overview
@@ -234,18 +234,33 @@ fn root_raw_wasm_store_update_call_is_rejected_before_dispatch() {
         .first()
         .expect("small-store setup must produce at least one managed wasm_store")
         .pid;
-    let template_id = TemplateId::from("canary:raw-protected-update".to_string());
-    let fixture = release_fixture(&template_id, "99.0.0-raw-protected-update", 128);
+    let template_id = TemplateId::from("canary:direct-root-update".to_string());
+    let fixture = release_fixture(&template_id, "99.0.0-direct-root-update", 128);
 
     let response: Result<Result<TemplateChunkSetInfoResponse, Error>, _> =
         setup.pic.update_call_as(
             store_pid,
             setup.root_id,
             protocol::CANIC_WASM_STORE_PREPARE,
-            (fixture.prepare,),
+            (fixture.prepare.clone(),),
         );
 
-    assert_protected_raw_call_rejected(response);
+    let prepared = response
+        .expect("direct root wasm_store prepare transport failed")
+        .expect("direct root wasm_store prepare application failed");
+    assert_eq!(prepared.chunk_hashes, fixture.prepare.chunk_hashes);
+
+    let response: Result<Result<TemplateChunkSetInfoResponse, Error>, _> =
+        setup.pic.update_call_as(
+            store_pid,
+            candid::Principal::anonymous(),
+            protocol::CANIC_WASM_STORE_PREPARE,
+            (fixture.prepare,),
+        );
+    let err = response
+        .expect("non-root wasm_store prepare transport should return a typed Canic error")
+        .expect_err("non-root wasm_store prepare must be rejected");
+    assert_eq!(err.code, ErrorCode::Unauthorized);
 }
 
 #[test]
@@ -789,21 +804,6 @@ fn live_store_status(
         .expect("wasm_store status transport failed");
 
     response.expect("wasm_store status application failed")
-}
-
-// Assert that a protected update cannot be called with its old raw Candid args.
-fn assert_protected_raw_call_rejected<T, E: std::fmt::Debug>(
-    response: Result<Result<T, Error>, E>,
-) {
-    match response {
-        Ok(Ok(_)) => panic!("raw call to protected wasm_store update unexpectedly succeeded"),
-        Ok(Err(err)) => assert_eq!(err.code, ErrorCode::InternalRpcMalformed),
-        Err(err) => {
-            panic!(
-                "protected endpoint should return a typed Canic error instead of trapping: {err:?}"
-            )
-        }
-    }
 }
 
 // Choose one payload size that must overflow the current store but still fit an empty fresh store.

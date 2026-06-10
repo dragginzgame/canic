@@ -1,6 +1,9 @@
+use crate::cdk::{types::Principal, utils::hash::decode_hex};
 use crate::config::schema::{
     AuthConfig, ConfigSchemaError, DelegatedTokenConfig, RoleAttestationConfig, Validate,
 };
+
+const IC_ROOT_PUBLIC_KEY_RAW_BYTES: usize = 96;
 
 impl Validate for AuthConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
@@ -23,6 +26,48 @@ impl Validate for DelegatedTokenConfig {
             return Err(ConfigSchemaError::ValidationError(
                 "auth.delegated_tokens.max_ttl_secs must be greater than zero".into(),
             ));
+        }
+
+        if let Some(root_canister_id) = self.root_canister_id.as_deref() {
+            if root_canister_id.trim().is_empty() {
+                return Err(ConfigSchemaError::ValidationError(
+                    "auth.delegated_tokens.root_canister_id must not be empty when set".into(),
+                ));
+            }
+            Principal::from_text(root_canister_id).map_err(|err| {
+                ConfigSchemaError::ValidationError(format!(
+                    "auth.delegated_tokens.root_canister_id is not a valid principal: {err}"
+                ))
+            })?;
+        }
+
+        if let Some(root_key_hex) = self.ic_root_public_key_raw_hex.as_deref() {
+            if root_key_hex.trim().is_empty() {
+                return Err(ConfigSchemaError::ValidationError(
+                    "auth.delegated_tokens.ic_root_public_key_raw_hex must not be empty when set"
+                        .into(),
+                ));
+            }
+            let root_key = decode_hex(root_key_hex.trim()).map_err(|err| {
+                ConfigSchemaError::ValidationError(format!(
+                    "auth.delegated_tokens.ic_root_public_key_raw_hex is not valid hex: {err}"
+                ))
+            })?;
+            if root_key.len() != IC_ROOT_PUBLIC_KEY_RAW_BYTES {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "auth.delegated_tokens.ic_root_public_key_raw_hex must decode to {IC_ROOT_PUBLIC_KEY_RAW_BYTES} bytes"
+                )));
+            }
+        }
+
+        match self.network.as_str() {
+            "mainnet" | "local" | "pocketic" | "testnet" => {}
+            _ => {
+                return Err(ConfigSchemaError::ValidationError(
+                    "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet"
+                        .into(),
+                ));
+            }
         }
 
         Ok(())

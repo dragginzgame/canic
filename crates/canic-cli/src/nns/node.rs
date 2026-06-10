@@ -13,11 +13,11 @@ use crate::{
 use canic_host::{
     nns_node::{
         DEFAULT_NNS_NODE_SOURCE_ENDPOINT, NNS_NODE_SUBNET_KIND_APPLICATION,
-        NNS_NODE_SUBNET_KIND_SYSTEM, NNS_NODE_SUBNET_KIND_UNKNOWN, NnsNodeCacheRequest,
-        NnsNodeInfoRequest, NnsNodeListFilters, NnsNodeListRequest, NnsNodeRefreshRequest,
-        build_nns_node_info_report, build_nns_node_list_report, nns_node_info_report_text,
-        nns_node_list_report_text, nns_node_list_report_verbose_text, nns_node_refresh_report_text,
-        refresh_nns_node_report,
+        NNS_NODE_SUBNET_KIND_CLOUD_ENGINE, NNS_NODE_SUBNET_KIND_SYSTEM,
+        NNS_NODE_SUBNET_KIND_UNKNOWN, NnsNodeCacheRequest, NnsNodeInfoRequest, NnsNodeListFilters,
+        NnsNodeListRequest, NnsNodeRefreshRequest, build_nns_node_info_report,
+        build_nns_node_list_report, nns_node_info_report_text, nns_node_list_report_text,
+        nns_node_list_report_verbose_text, nns_node_refresh_report_text, refresh_nns_node_report,
     },
     release_set::icp_root,
 };
@@ -226,9 +226,10 @@ fn node_list_command() -> clap::Command {
         .arg(
             value_arg(SUBNET_KIND_FILTER_ARG)
                 .long(SUBNET_KIND_FILTER_ARG)
-                .value_name("application|system|unknown")
+                .value_name("application|cloud_engine|system|unknown")
                 .value_parser([
                     NNS_NODE_SUBNET_KIND_APPLICATION,
+                    NNS_NODE_SUBNET_KIND_CLOUD_ENGINE,
                     NNS_NODE_SUBNET_KIND_SYSTEM,
                     NNS_NODE_SUBNET_KIND_UNKNOWN,
                 ])

@@ -18,6 +18,7 @@ use crate::{
 const DELEGATED_TOKEN_DECODING_QUOTA: usize = 256 * 1024;
 const DELEGATED_TOKEN_MAX_TYPE_LEN: usize = 16 * 1024;
 const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
+const NS_PER_SEC: u64 = 1_000_000_000;
 
 pub(super) fn delegated_token_verified(
     authenticated_subject: Principal,
@@ -26,12 +27,12 @@ pub(super) fn delegated_token_verified(
 ) -> Result<Principal, AccessError> {
     let token = delegated_token_from_args()?;
 
-    let now_secs = IcOps::now_secs();
+    let now_ns = IcOps::now_nanos();
 
     verify_token(
         token,
         authenticated_subject,
-        now_secs,
+        now_ns,
         required_scope,
         call_kind,
     )
@@ -41,20 +42,20 @@ pub(super) fn delegated_token_verified(
 fn verify_token(
     token: DelegatedToken,
     caller: Principal,
-    now_secs: u64,
+    now_ns: u64,
     required_scope: Option<&str>,
     _call_kind: EndpointCallKind,
 ) -> Result<Principal, AccessError> {
-    let max_ttl_secs = delegated_token_max_ttl_secs()?;
+    let max_ttl_ns = delegated_token_max_ttl_ns()?;
     let required_scopes = required_scope
         .map(|scope| vec![scope.to_string()])
         .unwrap_or_default();
     let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
         token: &token,
-        max_cert_ttl_secs: max_ttl_secs,
-        max_token_ttl_secs: max_ttl_secs,
+        max_cert_ttl_ns: max_ttl_ns,
+        max_token_ttl_ns: max_ttl_ns,
         required_scopes: &required_scopes,
-        now_secs,
+        now_ns,
     })
     .map_err(|err| AccessError::Denied(err.to_string()))?;
 
@@ -123,7 +124,7 @@ fn delegated_token_from_bytes(bytes: &[u8]) -> Result<DelegatedToken, String> {
 }
 
 // Resolve the verifier-side TTL policy from delegated-token config.
-fn delegated_token_max_ttl_secs() -> Result<u64, AccessError> {
+fn delegated_token_max_ttl_ns() -> Result<u64, AccessError> {
     let cfg = ConfigOps::delegated_tokens_config()
         .map_err(|_| dependency_unavailable("delegated token config unavailable"))?;
     if !cfg.enabled {
@@ -133,9 +134,12 @@ fn delegated_token_max_ttl_secs() -> Result<u64, AccessError> {
         ));
     }
 
-    Ok(cfg
+    let max_ttl_secs = cfg
         .max_ttl_secs
-        .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS))
+        .unwrap_or(DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS);
+    max_ttl_secs.checked_mul(NS_PER_SEC).ok_or_else(|| {
+        AccessError::Denied("auth.delegated_tokens.max_ttl_secs overflows nanoseconds".to_string())
+    })
 }
 
 #[cfg(test)]
@@ -148,7 +152,8 @@ mod tests {
         },
         dto::auth::{
             DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-            DelegationCert, DelegationProof, ShardKeyBinding, SignatureAlgorithm,
+            DelegationCert, DelegationProof, IcCanisterSignatureProofV1, RootProof,
+            ShardKeyBinding, ShardSignatureAlgorithm,
         },
     };
 
@@ -212,42 +217,57 @@ mod tests {
         assert!(bind < scope);
     }
 
+    #[test]
+    fn delegated_auth_guard_uses_nanosecond_now_for_verification() {
+        let source = include_str!("token.rs");
+        let start = source
+            .find("pub(super) fn delegated_token_verified")
+            .expect("delegated_token_verified exists");
+        let end = source[start..]
+            .find("// Verify a delegated token")
+            .map_or(source.len(), |offset| start + offset);
+        let body = &source[start..end];
+
+        assert!(body.contains("IcOps::now_nanos()"));
+        assert!(!body.contains("IcOps::now_secs()"));
+    }
+
     // Build one structurally complete delegated token for access decode tests.
     fn token_with_scopes(scopes: Vec<String>) -> DelegatedToken {
         DelegatedToken {
             claims: DelegatedTokenClaims {
-                version: 1,
                 subject: p(1),
                 issuer_shard_pid: p(2),
                 cert_hash: [3; 32],
-                issued_at: 10,
-                expires_at: 20,
+                issued_at_ns: 10,
+                expires_at_ns: 20,
                 aud: DelegationAudience::Project("test".to_string()),
                 grants: vec![grant("project_instance", &scopes)],
                 nonce: [5; 16],
             },
             proof: DelegationProof {
                 cert: DelegationCert {
-                    version: 1,
                     root_pid: p(6),
-                    root_key_id: "root-key".to_string(),
-                    root_key_hash: [7; 32],
-                    alg: SignatureAlgorithm::EcdsaP256Sha256,
                     shard_pid: p(2),
                     shard_key_id: "shard-key".to_string(),
+                    shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
                     shard_public_key_sec1: vec![8; 33],
                     shard_key_hash: [9; 32],
-                    shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
+                    shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
                         key_name_hash: [10; 32],
                         derivation_path_hash: [11; 32],
                     },
-                    issued_at: 10,
-                    expires_at: 20,
-                    max_token_ttl_secs: 10,
+                    issued_at_ns: 10,
+                    not_before_ns: 10,
+                    expires_at_ns: 20,
+                    max_token_ttl_ns: 10,
                     aud: DelegationAudience::Project("test".to_string()),
                     grants: vec![grant("project_instance", &scopes)],
                 },
-                root_sig: vec![12; 64],
+                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                    signature_cbor: vec![12; 64],
+                    public_key_der: vec![13; 32],
+                }),
             },
             shard_sig: vec![13; 64],
         }

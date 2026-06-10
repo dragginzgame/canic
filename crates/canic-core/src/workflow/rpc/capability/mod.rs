@@ -30,7 +30,7 @@ mod tests;
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 const DELEGATED_GRANT_SIGNING_DOMAIN_V1: &[u8] = b"CANIC_DELEGATED_GRANT_V1";
 const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
-const MAX_CAPABILITY_CLOCK_SKEW_SECONDS: u64 = 30;
+const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
 const DELEGATED_GRANT_KEY_ID_V1: u32 = 1;
 
 /// RootCapabilityProofMode
@@ -209,9 +209,9 @@ fn verify_root_delegated_grant_proof(
     proof: &DelegatedGrantProof,
     caller: Principal,
     target_canister: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Result<(), Error> {
-    grant::verify_root_delegated_grant_proof(capability, proof, caller, target_canister, now_secs)
+    grant::verify_root_delegated_grant_proof(capability, proof, caller, target_canister, now_ns)
 }
 
 #[cfg(test)]
@@ -220,9 +220,9 @@ fn verify_root_delegated_grant_claims(
     proof: &DelegatedGrantProof,
     caller: Principal,
     target_canister: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Result<(), Error> {
-    grant::verify_root_delegated_grant_claims(capability, proof, caller, target_canister, now_secs)
+    grant::verify_root_delegated_grant_claims(capability, proof, caller, target_canister, now_ns)
 }
 
 #[cfg(test)]
@@ -256,7 +256,7 @@ const fn with_root_request_metadata(request: Request, metadata: RootRequestMetad
 
 fn project_replay_metadata(
     metadata: CapabilityRequestMetadata,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Result<RootRequestMetadata, Error> {
-    replay::project_replay_metadata(metadata, now_secs)
+    replay::project_replay_metadata(metadata, now_ns)
 }

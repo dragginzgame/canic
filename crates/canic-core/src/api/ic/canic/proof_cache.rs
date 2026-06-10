@@ -10,7 +10,8 @@ use crate::{
 };
 use std::{cell::RefCell, collections::BTreeMap};
 
-const INTERNAL_CALL_PROOF_REFRESH_MARGIN_MAX_SECS: u64 = 30;
+const ONE_SECOND_NS: u64 = 1_000_000_000;
+const INTERNAL_CALL_PROOF_REFRESH_MARGIN_MAX_NS: u64 = 30_000_000_000;
 
 thread_local! {
     static INTERNAL_INVOCATION_PROOF_CACHE:
@@ -31,7 +32,7 @@ struct InternalInvocationProofCacheKey {
     subnet_id: Option<Principal>,
     audience: Principal,
     audience_method: String,
-    ttl_secs: u64,
+    ttl_ns: u64,
 }
 
 pub(super) async fn internal_invocation_proof_for_request(
@@ -39,13 +40,13 @@ pub(super) async fn internal_invocation_proof_for_request(
 ) -> Result<SignedInternalInvocationProofV1, Error> {
     let cfg = ConfigOps::role_attestation_config().map_err(Error::from)?;
     let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-    let now_secs = IcOps::now_secs();
+    let now_ns = IcOps::now_nanos();
 
-    if let Some(proof) = cached_internal_invocation_proof(&request, &cfg, root_pid, now_secs) {
+    if let Some(proof) = cached_internal_invocation_proof(&request, &cfg, root_pid, now_ns) {
         return Ok(proof);
     }
 
-    fresh_internal_invocation_proof_for_request_with_context(request, cfg, root_pid, now_secs).await
+    fresh_internal_invocation_proof_for_request_with_context(request, cfg, root_pid, now_ns).await
 }
 
 pub(super) async fn fresh_internal_invocation_proof_for_request(
@@ -53,19 +54,19 @@ pub(super) async fn fresh_internal_invocation_proof_for_request(
 ) -> Result<SignedInternalInvocationProofV1, Error> {
     let cfg = ConfigOps::role_attestation_config().map_err(Error::from)?;
     let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-    let now_secs = IcOps::now_secs();
-    fresh_internal_invocation_proof_for_request_with_context(request, cfg, root_pid, now_secs).await
+    let now_ns = IcOps::now_nanos();
+    fresh_internal_invocation_proof_for_request_with_context(request, cfg, root_pid, now_ns).await
 }
 
 async fn fresh_internal_invocation_proof_for_request_with_context(
     request: InternalInvocationProofRequest,
     cfg: RoleAttestationConfig,
     root_pid: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Result<SignedInternalInvocationProofV1, Error> {
     let proof =
         crate::api::auth::AuthApi::request_internal_invocation_proof(request.clone()).await?;
-    cache_internal_invocation_proof(&request, &cfg, root_pid, now_secs, proof.clone());
+    cache_internal_invocation_proof(&request, &cfg, root_pid, now_ns, proof.clone());
     Ok(proof)
 }
 
@@ -82,7 +83,7 @@ fn internal_invocation_proof_cache_key(
         subnet_id: request.subnet_id,
         audience: request.audience,
         audience_method: request.audience_method.clone(),
-        ttl_secs: request.ttl_secs,
+        ttl_ns: request.ttl_ns,
     }
 }
 
@@ -90,7 +91,7 @@ pub(super) fn cached_internal_invocation_proof(
     request: &InternalInvocationProofRequest,
     cfg: &RoleAttestationConfig,
     root_pid: Principal,
-    now_secs: u64,
+    now_ns: u64,
 ) -> Option<SignedInternalInvocationProofV1> {
     let key = internal_invocation_proof_cache_key(request, cfg, root_pid);
     let min_accepted_epoch = cfg
@@ -101,7 +102,7 @@ pub(super) fn cached_internal_invocation_proof(
 
     INTERNAL_INVOCATION_PROOF_CACHE.with_borrow_mut(|cache| {
         let proof = cache.get(&key)?;
-        if internal_invocation_proof_is_reusable(proof, request, now_secs, min_accepted_epoch) {
+        if internal_invocation_proof_is_reusable(proof, request, now_ns, min_accepted_epoch) {
             Some(proof.clone())
         } else {
             cache.remove(&key);
@@ -114,7 +115,7 @@ pub(super) fn cache_internal_invocation_proof(
     request: &InternalInvocationProofRequest,
     cfg: &RoleAttestationConfig,
     root_pid: Principal,
-    now_secs: u64,
+    now_ns: u64,
     proof: SignedInternalInvocationProofV1,
 ) {
     let min_accepted_epoch = cfg
@@ -122,7 +123,7 @@ pub(super) fn cache_internal_invocation_proof(
         .get(request.role.as_str())
         .copied()
         .unwrap_or(0);
-    if !internal_invocation_proof_is_reusable(&proof, request, now_secs, min_accepted_epoch) {
+    if !internal_invocation_proof_is_reusable(&proof, request, now_ns, min_accepted_epoch) {
         return;
     }
 
@@ -147,11 +148,11 @@ pub(super) fn invalidate_internal_invocation_proof(
 fn internal_invocation_proof_is_reusable(
     proof: &SignedInternalInvocationProofV1,
     request: &InternalInvocationProofRequest,
-    now_secs: u64,
+    now_ns: u64,
     min_accepted_epoch: u64,
 ) -> bool {
     let payload = &proof.payload;
-    if payload.expires_at <= payload.issued_at || now_secs < payload.issued_at {
+    if payload.expires_at_ns <= payload.issued_at_ns || now_ns < payload.issued_at_ns {
         return false;
     }
 
@@ -161,17 +162,19 @@ fn internal_invocation_proof_is_reusable(
         && payload.audience == request.audience
         && payload.audience_method == request.audience_method
         && payload.epoch >= min_accepted_epoch
-        && now_secs.saturating_add(internal_invocation_proof_refresh_margin_secs(proof))
-            < payload.expires_at
+        && now_ns.saturating_add(internal_invocation_proof_refresh_margin_ns(proof))
+            < payload.expires_at_ns
 }
 
-fn internal_invocation_proof_refresh_margin_secs(proof: &SignedInternalInvocationProofV1) -> u64 {
+pub(super) fn internal_invocation_proof_refresh_margin_ns(
+    proof: &SignedInternalInvocationProofV1,
+) -> u64 {
     proof
         .payload
-        .expires_at
-        .saturating_sub(proof.payload.issued_at)
+        .expires_at_ns
+        .saturating_sub(proof.payload.issued_at_ns)
         .saturating_div(5)
-        .clamp(1, INTERNAL_CALL_PROOF_REFRESH_MARGIN_MAX_SECS)
+        .clamp(ONE_SECOND_NS, INTERNAL_CALL_PROOF_REFRESH_MARGIN_MAX_NS)
 }
 
 #[cfg(test)]

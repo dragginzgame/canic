@@ -1,28 +1,27 @@
 use super::{
     audience::{AudienceError, validate_audience_shape, validate_role_grants},
-    canonical::{CanonicalAuthError, cert_hash, public_key_hash},
-    cert_rules::{CertRuleError, DELEGATED_AUTH_VERSION, DelegatedAuthTtlLimits},
+    canonical::{CanonicalAuthError, cert_hash, shard_key_hash},
+    cert_rules::{CertRuleError, DelegatedAuthTtlLimits},
 };
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof, ShardKeyBinding,
-        SignatureAlgorithm,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof, RootProof,
+        ShardKeyBinding, ShardSignatureAlgorithm,
     },
 };
 use thiserror::Error;
 
 pub struct IssueDelegationProofInput {
     pub root_pid: Principal,
-    pub root_key_id: String,
-    pub root_public_key: Vec<u8>,
     pub shard_pid: Principal,
     pub shard_key_id: String,
+    pub shard_sig_alg: ShardSignatureAlgorithm,
     pub shard_public_key_sec1: Vec<u8>,
     pub shard_key_binding: ShardKeyBinding,
-    pub issued_at: u64,
-    pub cert_ttl_secs: u64,
-    pub max_token_ttl_secs: u64,
+    pub issued_at_ns: u64,
+    pub cert_ttl_ns: u64,
+    pub max_token_ttl_ns: u64,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_limits: DelegatedAuthTtlLimits,
@@ -46,9 +45,6 @@ pub enum IssueDelegationProofError {
     CertTtlZero,
     #[error("delegated auth cert expires_at overflow")]
     CertExpiresAtOverflow,
-    #[cfg(test)]
-    #[error("delegated auth root signature failed: {0}")]
-    SignFailed(String),
     #[error(transparent)]
     Audience(#[from] AudienceError),
     #[error(transparent)]
@@ -57,26 +53,21 @@ pub enum IssueDelegationProofError {
     CertRules(#[from] CertRuleError),
 }
 
-/// Build and sign one self-validating delegation proof.
+/// Build one self-validating delegation proof from an already-created root proof.
 #[cfg(test)]
-pub fn issue_delegation_proof<F>(
+pub fn issue_delegation_proof(
     input: IssueDelegationProofInput,
-    sign_cert_hash: F,
-) -> Result<IssuedDelegationProof, IssueDelegationProofError>
-where
-    F: FnOnce([u8; 32]) -> Result<Vec<u8>, String>,
-{
+    root_proof: RootProof,
+) -> Result<IssuedDelegationProof, IssueDelegationProofError> {
     let prepared = prepare_delegation_cert(input)?;
-    let root_sig =
-        sign_cert_hash(prepared.cert_hash).map_err(IssueDelegationProofError::SignFailed)?;
-    Ok(finish_delegation_proof(prepared, root_sig))
+    Ok(finish_delegation_proof(prepared, root_proof))
 }
 
 /// Prepare one canonical delegation certificate before root signing.
 pub fn prepare_delegation_cert(
     input: IssueDelegationProofInput,
 ) -> Result<PreparedDelegationCert, IssueDelegationProofError> {
-    if input.cert_ttl_secs == 0 {
+    if input.cert_ttl_ns == 0 {
         return Err(IssueDelegationProofError::CertTtlZero);
     }
 
@@ -84,26 +75,27 @@ pub fn prepare_delegation_cert(
     validate_role_grants(&input.grants)?;
 
     let expires_at = input
-        .issued_at
-        .checked_add(input.cert_ttl_secs)
+        .issued_at_ns
+        .checked_add(input.cert_ttl_ns)
         .ok_or(IssueDelegationProofError::CertExpiresAtOverflow)?;
-    let root_key_hash = public_key_hash(&input.root_public_key);
-    let shard_key_hash = public_key_hash(&input.shard_public_key_sec1);
+    let shard_key_hash = shard_key_hash(
+        input.shard_sig_alg,
+        &input.shard_public_key_sec1,
+        input.shard_key_binding,
+    );
 
     let cert = DelegationCert {
-        version: DELEGATED_AUTH_VERSION,
         root_pid: input.root_pid,
-        root_key_id: input.root_key_id,
-        root_key_hash,
-        alg: SignatureAlgorithm::EcdsaP256Sha256,
         shard_pid: input.shard_pid,
         shard_key_id: input.shard_key_id,
+        shard_sig_alg: input.shard_sig_alg,
         shard_public_key_sec1: input.shard_public_key_sec1,
         shard_key_hash,
         shard_key_binding: input.shard_key_binding,
-        issued_at: input.issued_at,
-        expires_at,
-        max_token_ttl_secs: input.max_token_ttl_secs,
+        issued_at_ns: input.issued_at_ns,
+        not_before_ns: input.issued_at_ns,
+        expires_at_ns: expires_at,
+        max_token_ttl_ns: input.max_token_ttl_ns,
         aud: input.audience,
         grants: input.grants,
     };
@@ -118,12 +110,12 @@ pub fn prepare_delegation_cert(
 /// Combine a prepared certificate with its root signature.
 pub fn finish_delegation_proof(
     prepared: PreparedDelegationCert,
-    root_sig: Vec<u8>,
+    root_proof: RootProof,
 ) -> IssuedDelegationProof {
     IssuedDelegationProof {
         proof: DelegationProof {
             cert: prepared.cert,
-            root_sig,
+            root_proof,
         },
         cert_hash: prepared.cert_hash,
     }
@@ -147,26 +139,26 @@ mod tests {
 
     fn ttl_limits() -> DelegatedAuthTtlLimits {
         DelegatedAuthTtlLimits {
-            max_cert_ttl_secs: 600,
-            max_token_ttl_secs: 120,
+            max_cert_ttl_ns: 600,
+            max_token_ttl_ns: 120,
         }
     }
 
     fn input() -> IssueDelegationProofInput {
+        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
+            key_name_hash: [3; 32],
+            derivation_path_hash: [4; 32],
+        };
         IssueDelegationProofInput {
             root_pid: p(1),
-            root_key_id: "root-key".to_string(),
-            root_public_key: vec![10, 11, 12],
             shard_pid: p(2),
             shard_key_id: "shard-key".to_string(),
-            shard_public_key_sec1: vec![20, 21, 22],
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsa {
-                key_name_hash: [3; 32],
-                derivation_path_hash: [4; 32],
-            },
-            issued_at: 100,
-            cert_ttl_secs: 400,
-            max_token_ttl_secs: 120,
+            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
+            shard_public_key_sec1: vec![20; 33],
+            shard_key_binding,
+            issued_at_ns: 100,
+            cert_ttl_ns: 400,
+            max_token_ttl_ns: 120,
             audience: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["read", "write"])],
             ttl_limits: ttl_limits(),
@@ -180,31 +172,34 @@ mod tests {
         }
     }
 
-    #[test]
-    fn issue_delegation_proof_signs_exact_cert_hash() {
-        let mut observed_hash = None;
-
-        let issued = issue_delegation_proof(input(), |hash| {
-            observed_hash = Some(hash);
-            Ok(hash.to_vec())
+    fn root_proof(byte: u8) -> RootProof {
+        RootProof::IcCanisterSignatureV1(crate::dto::auth::IcCanisterSignatureProofV1 {
+            signature_cbor: vec![byte; 8],
+            public_key_der: vec![byte; 4],
         })
-        .unwrap();
+    }
 
-        assert_eq!(issued.proof.cert.version, DELEGATED_AUTH_VERSION);
+    #[test]
+    fn issue_delegation_proof_embeds_exact_root_proof() {
+        let expected_root_proof = root_proof(9);
+        let issued = issue_delegation_proof(input(), expected_root_proof.clone()).unwrap();
+
         assert_eq!(issued.proof.cert.root_pid, p(1));
-        assert_eq!(issued.proof.cert.issued_at, 100);
-        assert_eq!(issued.proof.cert.expires_at, 500);
-        assert_eq!(
-            issued.proof.cert.root_key_hash,
-            public_key_hash(&[10, 11, 12])
-        );
+        assert_eq!(issued.proof.cert.issued_at_ns, 100);
+        assert_eq!(issued.proof.cert.expires_at_ns, 500);
         assert_eq!(
             issued.proof.cert.shard_key_hash,
-            public_key_hash(&[20, 21, 22])
+            shard_key_hash(
+                ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
+                &[20; 33],
+                ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
+                    key_name_hash: [3; 32],
+                    derivation_path_hash: [4; 32],
+                },
+            )
         );
         assert_eq!(issued.cert_hash, cert_hash(&issued.proof.cert).unwrap());
-        assert_eq!(observed_hash, Some(issued.cert_hash));
-        assert_eq!(issued.proof.root_sig, issued.cert_hash.to_vec());
+        assert_eq!(issued.proof.root_proof, expected_root_proof);
     }
 
     #[test]
@@ -213,7 +208,7 @@ mod tests {
         input.grants = vec![];
 
         assert_eq!(
-            issue_delegation_proof(input, |hash| Ok(hash.to_vec())),
+            issue_delegation_proof(input, root_proof(1)),
             Err(IssueDelegationProofError::Audience(
                 AudienceError::GrantsEmpty
             ))
@@ -223,14 +218,14 @@ mod tests {
     #[test]
     fn issue_delegation_proof_rejects_cert_ttl_above_limits() {
         let mut input = input();
-        input.cert_ttl_secs = 601;
+        input.cert_ttl_ns = 601;
 
         assert_eq!(
-            issue_delegation_proof(input, |hash| Ok(hash.to_vec())),
+            issue_delegation_proof(input, root_proof(1)),
             Err(IssueDelegationProofError::CertRules(
                 CertRuleError::CertTtlExceeded {
-                    ttl_secs: 601,
-                    max_ttl_secs: 600,
+                    ttl_ns: 601,
+                    max_ttl_ns: 600,
                 }
             ))
         );
@@ -245,21 +240,11 @@ mod tests {
         }];
 
         assert_eq!(
-            issue_delegation_proof(input, |hash| Ok(hash.to_vec())),
+            issue_delegation_proof(input, root_proof(1)),
             Err(IssueDelegationProofError::Audience(
                 AudienceError::Canonical(super::CanonicalAuthError::InvalidRole {
                     role: "ProjectInstance".to_string(),
                 })
-            ))
-        );
-    }
-
-    #[test]
-    fn issue_delegation_proof_rejects_signing_failure() {
-        assert_eq!(
-            issue_delegation_proof(input(), |_| Err("sign failed".to_string())),
-            Err(IssueDelegationProofError::SignFailed(
-                "sign failed".to_string()
             ))
         );
     }

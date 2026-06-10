@@ -93,7 +93,7 @@ pub(super) async fn response_capability_v1_root(
         proof_mode.metric_key(),
     );
 
-    let replay_metadata = project_replay_metadata(metadata, IcOps::now_secs())?;
+    let replay_metadata = project_replay_metadata(metadata, IcOps::now_nanos())?;
     let capability = with_root_request_metadata(capability, replay_metadata);
     let response = RootResponseWorkflow::response_replay_first(capability)
         .await
