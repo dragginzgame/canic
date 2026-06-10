@@ -3,18 +3,16 @@ pub mod request;
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
-        auth::{RoleAttestationRequest, SignedRoleAttestation},
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
-            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1, PROOF_VERSION_V1,
-            RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
+            RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::{CreateCanisterParent, RootRequestMetadata},
+        rpc::{CreateCanisterParent, Request as DtoRequest},
     },
     ops::{
         OpsError,
-        config::ConfigOps,
         ic::{
             IcOps,
             call::{CallOps, CallResult},
@@ -25,13 +23,9 @@ use crate::{
     },
     protocol,
 };
-use candid::encode_one;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
-use std::{
-    cell::RefCell,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error as ThisError;
 
 ///
@@ -70,28 +64,9 @@ pub trait Rpc {
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError>;
 }
 
-const NS_PER_SEC: u64 = 1_000_000_000;
-const DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_NS: u64 = 300_000_000_000;
 const DEFAULT_CAPABILITY_METADATA_TTL_NS: u64 = 300_000_000_000;
-const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
-const ROOT_ATTESTATION_REQUEST_ID_DOMAIN_V1: &[u8] = b"canic-root-attestation-request-id-v1";
 const ROOT_CAPABILITY_NONCE_DOMAIN_V1: &[u8] = b"canic-root-capability-nonce-v1";
-static ROOT_ATTESTATION_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
-
-thread_local! {
-    static ROOT_RESPONSE_ATTESTATION_CACHE: RefCell<Option<CachedRootResponseAttestation>> =
-        const { RefCell::new(None) };
-}
-
-#[derive(Clone)]
-struct CachedRootResponseAttestation {
-    root_pid: Principal,
-    audience_pid: Principal,
-    subject_pid: Principal,
-    role: CanisterRole,
-    attestation: SignedRoleAttestation,
-}
 
 ///
 /// RpcOps
@@ -136,92 +111,14 @@ impl RpcOps {
         rpc: R,
     ) -> Result<R::Response, InternalError> {
         let request = rpc.into_request();
-        let call_res = if uses_structural_capability_proof(&request) {
-            Self::call_response_capability_v1_structural(target_pid, request).await?
-        } else {
-            let root_pid = EnvOps::root_pid()?;
-            let attestation = Self::request_root_response_attestation(root_pid, target_pid).await?;
-            Self::call_response_capability_v1(target_pid, request, attestation).await?
-        };
+        if !uses_structural_capability_proof(&request) {
+            return Err(non_structural_capability_proof_error(&request));
+        }
 
+        let call_res = Self::call_response_capability_v1_structural(target_pid, request).await?;
         let response = R::try_from_response(call_res)?;
 
         Ok(response)
-    }
-
-    async fn request_root_response_attestation(
-        root_pid: Principal,
-        audience_pid: Principal,
-    ) -> Result<SignedRoleAttestation, InternalError> {
-        let self_pid = IcOps::canister_self();
-        let role = EnvOps::canister_role()?;
-        let cfg = ConfigOps::role_attestation_config()?;
-        let min_accepted_epoch = cfg
-            .min_accepted_epoch_by_role
-            .get(role.as_str())
-            .copied()
-            .unwrap_or(0);
-
-        if let Some(attestation) = cached_root_response_attestation(
-            root_pid,
-            audience_pid,
-            self_pid,
-            &role,
-            min_accepted_epoch,
-            IcOps::now_nanos(),
-        ) {
-            return Ok(attestation);
-        }
-
-        let request = RoleAttestationRequest {
-            subject: self_pid,
-            role,
-            subnet_id: None,
-            audience: audience_pid,
-            ttl_ns: cfg.max_ttl_secs.checked_mul(NS_PER_SEC).ok_or_else(|| {
-                InternalError::ops(
-                    InternalErrorOrigin::Ops,
-                    "auth.role_attestation.max_ttl_secs overflows nanoseconds",
-                )
-            })?,
-            epoch: min_accepted_epoch,
-            metadata: Some(new_root_attestation_request_metadata()),
-        };
-
-        let attestation: SignedRoleAttestation =
-            Self::call_rpc_result(root_pid, protocol::CANIC_REQUEST_ROLE_ATTESTATION, request)
-                .await?;
-        cache_root_response_attestation(root_pid, audience_pid, self_pid, attestation.clone());
-        Ok(attestation)
-    }
-
-    async fn call_response_capability_v1(
-        target_pid: Principal,
-        request: Request,
-        attestation: SignedRoleAttestation,
-    ) -> Result<Response, InternalError> {
-        let dto_request: crate::dto::rpc::Request = request.clone();
-        let capability_hash = root_capability_hash(target_pid, &dto_request)?;
-        let proof = RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash,
-            attestation,
-        }
-        .try_into()
-        .map_err(InternalError::public)?;
-        let envelope = RootCapabilityEnvelopeV1 {
-            service: CapabilityService::Root,
-            capability_version: CAPABILITY_VERSION_V1,
-            capability: dto_request,
-            proof,
-            metadata: capability_metadata_from_request(&request),
-        };
-
-        let response: RootCapabilityResponseV1 =
-            Self::call_rpc_result(target_pid, protocol::CANIC_RESPONSE_CAPABILITY_V1, envelope)
-                .await?;
-
-        Ok(response.response)
     }
 
     async fn call_response_capability_v1_structural(
@@ -279,6 +176,17 @@ const fn uses_structural_capability_proof(request: &Request) -> bool {
     }
 }
 
+fn non_structural_capability_proof_error(request: &Request) -> InternalError {
+    let request: DtoRequest = request.clone();
+    InternalError::ops(
+        InternalErrorOrigin::Ops,
+        format!(
+            "non-structural root capability proof is disabled in 0.65 for {}; use a structural capability path or delegated-token endpoint",
+            request.family().label()
+        ),
+    )
+}
+
 fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetadata {
     let metadata = request_metadata(request);
     let request_id = metadata.map_or([0u8; 16], |m| {
@@ -331,105 +239,6 @@ fn generate_capability_nonce() -> [u8; 16] {
     out
 }
 
-// cached_root_response_attestation
-//
-// Reuse a still-valid root-issued role attestation for the same audience.
-fn cached_root_response_attestation(
-    root_pid: Principal,
-    audience_pid: Principal,
-    subject_pid: Principal,
-    role: &CanisterRole,
-    min_accepted_epoch: u64,
-    now_ns: u64,
-) -> Option<SignedRoleAttestation> {
-    ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
-        let cached = entry.as_ref()?;
-        let payload = &cached.attestation.payload;
-        let valid = cached.root_pid == root_pid
-            && cached.audience_pid == audience_pid
-            && cached.subject_pid == subject_pid
-            && &cached.role == role
-            && payload.subject == subject_pid
-            && &payload.role == role
-            && payload.audience == audience_pid
-            && payload.epoch >= min_accepted_epoch
-            && now_ns < payload.expires_at_ns;
-
-        if !valid {
-            *entry = None;
-            return None;
-        }
-
-        Some(cached.attestation.clone())
-    })
-}
-
-// cache_root_response_attestation
-//
-// Store the latest root-issued role attestation for repeated outbound RPC use.
-fn cache_root_response_attestation(
-    root_pid: Principal,
-    audience_pid: Principal,
-    subject_pid: Principal,
-    attestation: SignedRoleAttestation,
-) {
-    ROOT_RESPONSE_ATTESTATION_CACHE.with_borrow_mut(|entry| {
-        *entry = Some(CachedRootResponseAttestation {
-            root_pid,
-            audience_pid,
-            subject_pid,
-            role: attestation.payload.role.clone(),
-            attestation,
-        });
-    });
-}
-
-fn root_capability_hash(
-    target_canister: Principal,
-    capability: &crate::dto::rpc::Request,
-) -> Result<[u8; 32], InternalError> {
-    let canonical = capability.clone().canonical_capability_payload();
-    let payload = encode_one(&(
-        target_canister,
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        canonical,
-    ))
-    .map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            format!("failed to encode capability payload: {err}"),
-        )
-    })?;
-
-    let mut hasher = Sha256::new();
-    hasher.update(CAPABILITY_HASH_DOMAIN_V1);
-    hasher.update(payload);
-    Ok(hasher.finalize().into())
-}
-
-fn new_root_attestation_request_metadata() -> RootRequestMetadata {
-    RootRequestMetadata {
-        request_id: generate_root_attestation_request_id(),
-        ttl_ns: DEFAULT_ROOT_ATTESTATION_REQUEST_TTL_NS,
-    }
-}
-
-fn generate_root_attestation_request_id() -> [u8; 32] {
-    let nonce = ROOT_ATTESTATION_REQUEST_NONCE.fetch_add(1, Ordering::Relaxed);
-    let now = IcOps::now_secs();
-    let caller = IcOps::metadata_entropy_caller();
-    let canister = IcOps::metadata_entropy_canister();
-
-    let mut hasher = Sha256::new();
-    hasher.update(ROOT_ATTESTATION_REQUEST_ID_DOMAIN_V1);
-    hasher.update(now.to_be_bytes());
-    hasher.update(nonce.to_be_bytes());
-    hasher.update(caller.as_slice());
-    hasher.update(canister.as_slice());
-    hasher.finalize().into()
-}
-
 ///
 /// TESTS
 ///
@@ -437,36 +246,13 @@ fn generate_root_attestation_request_id() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::{
-        auth::RoleAttestation,
-        rpc::{CyclesRequest, RootRequestMetadata},
+    use crate::dto::rpc::{
+        CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest, RootRequestMetadata,
+        UpgradeCanisterRequest,
     };
-
-    const USER_HUB_ROLE: CanisterRole = CanisterRole::new("user_hub");
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
-    }
-
-    fn sample_attestation(
-        subject: Principal,
-        audience: Principal,
-        expires_at_ns: u64,
-        epoch: u64,
-    ) -> SignedRoleAttestation {
-        SignedRoleAttestation {
-            payload: RoleAttestation {
-                subject,
-                role: USER_HUB_ROLE,
-                subnet_id: None,
-                audience,
-                issued_at_ns: 100,
-                expires_at_ns,
-                epoch,
-            },
-            signature: vec![1, 2, 3],
-            key_id: 7,
-        }
     }
 
     #[test]
@@ -505,124 +291,54 @@ mod tests {
     }
 
     #[test]
-    fn cached_root_response_attestation_reuses_matching_entry() {
-        let root_pid = p(1);
-        let audience_pid = p(2);
-        let subject_pid = p(3);
-        let attestation = sample_attestation(subject_pid, audience_pid, 500, 9);
-
-        cache_root_response_attestation(root_pid, audience_pid, subject_pid, attestation.clone());
-
-        let cached = cached_root_response_attestation(
-            root_pid,
-            audience_pid,
-            subject_pid,
-            &USER_HUB_ROLE,
-            9,
-            400,
-        )
-        .expect("matching cached attestation");
-
-        assert_eq!(cached, attestation);
+    fn structural_capability_proof_support_is_exact() {
+        assert!(uses_structural_capability_proof(&Request::cycles(
+            CyclesRequest {
+                cycles: 1,
+                metadata: None,
+            },
+        )));
+        assert!(uses_structural_capability_proof(
+            &Request::upgrade_canister(UpgradeCanisterRequest {
+                canister_pid: p(1),
+                metadata: None,
+            },)
+        ));
+        assert!(uses_structural_capability_proof(
+            &Request::recycle_canister(RecycleCanisterRequest {
+                canister_pid: p(2),
+                metadata: None,
+            },)
+        ));
+        assert!(uses_structural_capability_proof(&Request::create_canister(
+            CreateCanisterRequest {
+                canister_role: CanisterRole::new("child"),
+                parent: CreateCanisterParent::ThisCanister,
+                extra_arg: None,
+                metadata: None,
+            },
+        )));
+        assert!(!uses_structural_capability_proof(
+            &Request::create_canister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("child"),
+                parent: CreateCanisterParent::Root,
+                extra_arg: None,
+                metadata: None,
+            },)
+        ));
     }
 
     #[test]
-    fn cached_root_response_attestation_reuses_root_newer_epoch_above_local_floor() {
-        let root_pid = p(11);
-        let audience_pid = p(12);
-        let subject_pid = p(13);
-        let attestation = sample_attestation(subject_pid, audience_pid, 500, 12);
+    fn non_structural_capability_proof_error_names_hard_cut() {
+        let request = Request::create_canister(CreateCanisterRequest {
+            canister_role: CanisterRole::new("child"),
+            parent: CreateCanisterParent::Root,
+            extra_arg: None,
+            metadata: None,
+        });
 
-        cache_root_response_attestation(root_pid, audience_pid, subject_pid, attestation.clone());
+        let err = non_structural_capability_proof_error(&request);
 
-        let cached = cached_root_response_attestation(
-            root_pid,
-            audience_pid,
-            subject_pid,
-            &USER_HUB_ROLE,
-            7,
-            400,
-        )
-        .expect("root-issued newer epoch above the local floor should be reusable");
-
-        assert_eq!(cached, attestation);
-    }
-
-    #[test]
-    fn cached_root_response_attestation_rejects_epoch_below_local_floor() {
-        let root_pid = p(21);
-        let audience_pid = p(22);
-        let subject_pid = p(23);
-
-        cache_root_response_attestation(
-            root_pid,
-            audience_pid,
-            subject_pid,
-            sample_attestation(subject_pid, audience_pid, 500, 3),
-        );
-
-        assert!(
-            cached_root_response_attestation(
-                root_pid,
-                audience_pid,
-                subject_pid,
-                &USER_HUB_ROLE,
-                7,
-                400,
-            )
-            .is_none(),
-            "cached attestation below the local epoch floor must not be reused"
-        );
-    }
-
-    #[test]
-    fn cached_root_response_attestation_invalidates_expired_entry() {
-        let root_pid = p(4);
-        let audience_pid = p(5);
-        let subject_pid = p(6);
-
-        cache_root_response_attestation(
-            root_pid,
-            audience_pid,
-            subject_pid,
-            sample_attestation(subject_pid, audience_pid, 120, 11),
-        );
-
-        assert!(
-            cached_root_response_attestation(
-                root_pid,
-                audience_pid,
-                subject_pid,
-                &USER_HUB_ROLE,
-                11,
-                121,
-            )
-            .is_none(),
-            "expired cache entry must not be reused"
-        );
-    }
-
-    #[test]
-    fn cached_root_response_attestation_rejects_payload_subject_drift() {
-        let root_pid = p(7);
-        let audience_pid = p(8);
-        let subject_pid = p(9);
-        let mut attestation = sample_attestation(subject_pid, audience_pid, 500, 13);
-        attestation.payload.subject = p(10);
-
-        cache_root_response_attestation(root_pid, audience_pid, subject_pid, attestation);
-
-        assert!(
-            cached_root_response_attestation(
-                root_pid,
-                audience_pid,
-                subject_pid,
-                &USER_HUB_ROLE,
-                13,
-                400,
-            )
-            .is_none(),
-            "cached attestation payload must still bind the requested subject"
-        );
+        assert!(err.to_string().contains("disabled in 0.65"));
     }
 }

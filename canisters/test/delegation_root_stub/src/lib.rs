@@ -8,7 +8,7 @@ use canic::{
     api::canister::CanisterRole,
     dto::auth::{
         AttestationKey, AttestationKeySet, AttestationKeyStatus, DelegatedToken, RoleAttestation,
-        RoleAttestationRequest, SignedRoleAttestation,
+        SignedRoleAttestation,
     },
     prelude::*,
 };
@@ -38,25 +38,6 @@ canic::start!(
 async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
-
-#[canic_update]
-async fn root_issue_self_attestation(
-    ttl_ns: u64,
-    audience: candid::Principal,
-    epoch: u64,
-) -> Result<SignedRoleAttestation, Error> {
-    let caller = msg_caller();
-    let request = RoleAttestationRequest {
-        subject: caller,
-        role: CanisterRole::ROOT,
-        subnet_id: None,
-        audience,
-        ttl_ns,
-        epoch,
-        metadata: None,
-    };
-    AuthApi::request_role_attestation(request)
-}
 
 #[canic_update]
 async fn root_issue_self_attestation_test(

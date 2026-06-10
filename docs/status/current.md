@@ -66,19 +66,20 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.2` candidate starts the post-hard-cut auth cleanup pass. Normal
+- `0.65.2` is pushed as the post-hard-cut auth surface cleanup pass. Normal
   client helpers for one-shot root ECDSA role-attestation and
-  internal-invocation proof issuance now fail locally with the hard-cut `0.65`
+  internal-invocation proof issuance failed locally with the hard-cut `0.65`
   error instead of routing to root only to be rejected. The root rejection
-  endpoints and workflow tests remain as explicit compatibility-failure
-  coverage, while `RootAuthMaterialClient` now lists only the still-needed
+  endpoints and workflow tests remained as explicit compatibility-failure
+  coverage, while `RootAuthMaterialClient` listed only the still-needed
   structural bootstrap calls for attestation key-set refresh and delegation
   proof preparation. The stale outbound protected-internal proof cache and
   public client surface (`CanicCall`, `CanicInternalClient`, and
-  `canic_internal_client!`) are removed, leaving protected endpoint descriptors
-  only as retained verifier/rejection metadata. Active docs direct normal
-  parent/shard calls to delegated-token endpoints until a replacement
-  protected-internal proof protocol exists. Current validation:
+  `canic_internal_client!`) were removed, leaving protected endpoint
+  descriptors only as retained verifier/rejection metadata. Active docs direct
+  normal parent/shard calls to delegated-token endpoints until a replacement
+  protected-internal proof protocol exists. The root and detailed `0.65.2`
+  changelogs are finalized. Validation:
   ```text
   cargo test --locked -p canic-core request_role_attestation_fails_locally_after_hard_cut --lib -- --nocapture
   cargo test --locked -p canic-core request_internal_invocation_proof_fails_locally_after_hard_cut --lib -- --nocapture
@@ -91,6 +92,34 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   cargo check --locked -p canic-core -p canic
   cargo check --locked -p project_hub_stub -p project_instance_stub -p project-protocol-stub
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  git diff --check
+  ```
+- Local `0.65.3` candidate continues the hard-cut cleanup by deleting the dead
+  normal-auth `AuthApi::request_role_attestation` and
+  `AuthApi::request_internal_invocation_proof` wrappers instead of retaining
+  public methods that only return the hard-cut error. The root
+  `canic_request_role_attestation` and
+  `canic_request_internal_invocation_proof` rejection endpoints remain as the
+  explicit compatibility-failure surface. The stale delegation root test
+  endpoint `root_issue_self_attestation` is also removed; the explicit
+  `*_test` attestation helpers used by PIC role-attestation tests remain. The
+  sharding root test stub also no longer exposes a direct fake-signing
+  `canic_request_role_attestation` endpoint; its capability RPC path continues
+  to reject role-attestation issuance. Outbound root-capability RPC now rejects
+  non-structural proof paths locally instead of fetching or caching a fresh
+  root response attestation from the removed one-shot issuer.
+  Current validation:
+  ```text
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core ops::rpc --lib -- --nocapture
+  cargo check --locked -p delegation_root_stub
+  cargo check --locked -p sharding_root_stub
+  cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo check --locked -p canic-core -p canic
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
 - Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64

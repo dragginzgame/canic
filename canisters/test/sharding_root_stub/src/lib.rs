@@ -4,10 +4,7 @@
 
 use canic::{
     Error, cdk,
-    dto::auth::{
-        AttestationKey, AttestationKeySet, AttestationKeyStatus, RoleAttestation,
-        RoleAttestationRequest, SignedRoleAttestation,
-    },
+    dto::auth::{AttestationKey, AttestationKeySet, AttestationKeyStatus},
     dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     dto::rpc::{
         CreateCanisterResponse, CyclesResponse, RecycleCanisterResponse, Request, Response,
@@ -32,32 +29,6 @@ async fn canic_response_capability_v1(
 ) -> Result<RootCapabilityResponseV1, Error> {
     let response = handle_request(envelope.capability).await?;
     Ok(RootCapabilityResponseV1 { response })
-}
-
-#[cdk::update]
-async fn canic_request_role_attestation(
-    request: RoleAttestationRequest,
-) -> Result<SignedRoleAttestation, Error> {
-    if request.ttl_ns == 0 {
-        return Err(Error::invalid("ttl_ns must be greater than zero"));
-    }
-
-    let issued_at_ns = cdk::api::time();
-    let expires_at_ns = issued_at_ns.saturating_add(request.ttl_ns);
-
-    Ok(SignedRoleAttestation {
-        payload: RoleAttestation {
-            subject: request.subject,
-            role: request.role,
-            subnet_id: request.subnet_id,
-            audience: request.audience,
-            issued_at_ns,
-            expires_at_ns,
-            epoch: request.epoch,
-        },
-        signature: Vec::new(),
-        key_id: STUB_ATTESTATION_KEY_ID,
-    })
 }
 
 #[cdk::update]

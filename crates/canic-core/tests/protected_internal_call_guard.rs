@@ -436,6 +436,44 @@ fn removed_protected_internal_client_surface_stays_removed() {
     );
 }
 
+#[test]
+fn removed_normal_auth_one_shot_wrappers_stay_removed() {
+    let auth_api = read_workspace_file("crates/canic-core/src/api/auth/mod.rs");
+    let rpc_ops = read_workspace_file("crates/canic-core/src/ops/rpc/mod.rs");
+    let delegation_root = read_workspace_file("canisters/test/delegation_root_stub/src/lib.rs");
+    let sharding_root = read_workspace_file("canisters/test/sharding_root_stub/src/lib.rs");
+
+    assert!(
+        !auth_api.contains("pub fn request_role_attestation(")
+            && !auth_api.contains("pub async fn request_role_attestation(")
+            && !auth_api.contains("pub fn request_internal_invocation_proof(")
+            && !auth_api.contains("pub async fn request_internal_invocation_proof("),
+        "normal-auth one-shot role/internal proof wrappers must stay removed after the 0.65 hard cut"
+    );
+    assert!(
+        auth_api.contains("pub async fn request_role_attestation_root(")
+            && auth_api.contains("pub async fn request_internal_invocation_proof_root("),
+        "root rejection endpoints must remain explicit compatibility-failure surfaces"
+    );
+    assert!(
+        !rpc_ops.contains("request_root_response_attestation")
+            && !rpc_ops.contains("ROOT_RESPONSE_ATTESTATION_CACHE")
+            && !rpc_ops.contains("CachedRootResponseAttestation")
+            && !rpc_ops.contains("CANIC_REQUEST_ROLE_ATTESTATION"),
+        "outbound root-response RPC must not request or cache fresh role attestations after the 0.65 hard cut"
+    );
+    assert!(
+        !delegation_root.contains("fn root_issue_self_attestation(")
+            && delegation_root.contains("fn root_issue_self_attestation_test("),
+        "delegation root stub must keep explicit test helpers without the stale normal-auth endpoint"
+    );
+    assert!(
+        !sharding_root.contains("fn canic_request_role_attestation(")
+            && sharding_root.contains("issue_role_attestation unsupported in sharding_root_stub"),
+        "sharding root stub must reject role attestation through capability RPC without a direct fake-signing endpoint"
+    );
+}
+
 fn scan_dir(root: &Path, protected_methods: &BTreeSet<String>, violations: &mut Vec<String>) {
     let Ok(entries) = fs::read_dir(root) else {
         return;
