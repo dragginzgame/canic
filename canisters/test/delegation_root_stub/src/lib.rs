@@ -55,7 +55,7 @@ async fn root_issue_self_attestation(
         epoch,
         metadata: None,
     };
-    AuthApi::request_role_attestation(request).await
+    AuthApi::request_role_attestation(request)
 }
 
 #[canic_update]

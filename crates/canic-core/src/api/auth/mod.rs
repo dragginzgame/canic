@@ -388,14 +388,14 @@ impl AuthApi {
     }
 
     /// Reject removed one-shot root ECDSA role-attestation issuance.
-    pub async fn request_role_attestation(
+    pub fn request_role_attestation(
         _request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
         Err(Error::invalid(Self::ROLE_ATTESTATION_ONE_SHOT_DISABLED))
     }
 
     /// Reject removed one-shot root ECDSA internal-invocation proof issuance.
-    pub async fn request_internal_invocation_proof(
+    pub fn request_internal_invocation_proof(
         _request: InternalInvocationProofRequest,
     ) -> Result<SignedInternalInvocationProofV1, Error> {
         Err(Error::invalid(
@@ -1204,7 +1204,6 @@ mod tests {
         ids::CanisterRole,
         ops::auth::{AuthExpiryError, AuthOpsError},
     };
-    use futures::executor::block_on;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -1299,7 +1298,7 @@ mod tests {
 
     #[test]
     fn request_role_attestation_fails_locally_after_hard_cut() {
-        let err = block_on(AuthApi::request_role_attestation(role_attestation_request()))
+        let err = AuthApi::request_role_attestation(role_attestation_request())
             .expect_err("one-shot root ECDSA role attestation is disabled");
 
         assert_eq!(err.code, ErrorCode::InvalidInput);
@@ -1311,10 +1310,8 @@ mod tests {
 
     #[test]
     fn request_internal_invocation_proof_fails_locally_after_hard_cut() {
-        let err = block_on(AuthApi::request_internal_invocation_proof(
-            internal_invocation_request(),
-        ))
-        .expect_err("one-shot root ECDSA internal proof is disabled");
+        let err = AuthApi::request_internal_invocation_proof(internal_invocation_request())
+            .expect_err("one-shot root ECDSA internal proof is disabled");
 
         assert_eq!(err.code, ErrorCode::InvalidInput);
         assert!(
