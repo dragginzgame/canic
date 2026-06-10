@@ -509,10 +509,11 @@ Security boundaries:
 Feature requirements:
 
 - root proof issuer: `control-plane`, `auth-root-canister-sig-create`,
-  `auth-threshold-ecdsa-sign` while shard keys still come from threshold ECDSA
+  `auth-threshold-ecdsa-public-key` while shard keys still come from threshold
+  ECDSA
 - endpoint verifier: `auth-delegated-token-verify`
 - shard token issuer using threshold ECDSA: `auth-threshold-ecdsa-sign`
-- role/internal attestation signer: `auth-threshold-ecdsa-sign`
+- role/internal attestation key publisher: `auth-threshold-ecdsa-public-key`
 
 ## 11. Revocation and TTL
 

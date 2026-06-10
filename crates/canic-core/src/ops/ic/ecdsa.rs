@@ -1,8 +1,7 @@
+#[cfg(feature = "auth-threshold-ecdsa-public-key")]
+use crate::cdk::mgmt::{EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, ecdsa_public_key};
 #[cfg(feature = "auth-threshold-ecdsa-sign")]
-use crate::cdk::mgmt::{
-    EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, SignWithEcdsaArgs, ecdsa_public_key,
-    sign_with_ecdsa,
-};
+use crate::cdk::mgmt::{SignWithEcdsaArgs, sign_with_ecdsa};
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -24,7 +23,7 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum EcdsaOpsError {
-    #[error("threshold ecdsa management support is not enabled in this canister build")]
+    #[error("threshold ecdsa support is not enabled in this canister build")]
     ThresholdEcdsaUnavailable,
 
     #[error("ecdsa public key call failed: {0}")]
@@ -94,7 +93,29 @@ impl EcdsaOps {
 
         Ok(response.signature)
     }
+}
 
+#[cfg(not(feature = "auth-threshold-ecdsa-sign"))]
+impl EcdsaOps {
+    // Fail closed when threshold ECDSA signing support is not compiled in.
+    #[expect(clippy::unused_async)]
+    pub async fn sign_bytes(
+        _permit: &CostGuardPermit,
+        _key_name: &str,
+        _derivation_path: Vec<Vec<u8>>,
+        _msg_hash: [u8; 32],
+    ) -> Result<Vec<u8>, InternalError> {
+        record_ecdsa_call(
+            PlatformCallMetricMode::Update,
+            PlatformCallMetricOutcome::Failed,
+            threshold_sign_availability_reason(),
+        );
+        Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
+    }
+}
+
+#[cfg(feature = "auth-threshold-ecdsa-public-key")]
+impl EcdsaOps {
     // Fetch a SEC1-encoded threshold ECDSA public key for the requested path.
     pub async fn public_key_sec1(
         key_name: &str,
@@ -136,24 +157,8 @@ impl EcdsaOps {
     }
 }
 
-#[cfg(not(feature = "auth-threshold-ecdsa-sign"))]
+#[cfg(not(feature = "auth-threshold-ecdsa-public-key"))]
 impl EcdsaOps {
-    // Fail closed when threshold ECDSA management support is not compiled in.
-    #[expect(clippy::unused_async)]
-    pub async fn sign_bytes(
-        _permit: &CostGuardPermit,
-        _key_name: &str,
-        _derivation_path: Vec<Vec<u8>>,
-        _msg_hash: [u8; 32],
-    ) -> Result<Vec<u8>, InternalError> {
-        record_ecdsa_call(
-            PlatformCallMetricMode::Update,
-            PlatformCallMetricOutcome::Failed,
-            threshold_management_availability_reason(),
-        );
-        Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
-    }
-
     // Fail closed when threshold ECDSA public-key fetch support is not compiled in.
     #[expect(clippy::unused_async)]
     pub async fn public_key_sec1(
@@ -164,18 +169,27 @@ impl EcdsaOps {
         record_ecdsa_call(
             PlatformCallMetricMode::Query,
             PlatformCallMetricOutcome::Failed,
-            threshold_management_availability_reason(),
+            threshold_public_key_availability_reason(),
         );
         Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
     }
 }
 
 impl EcdsaOps {
-    // Report whether threshold ECDSA management support is compiled into this build.
+    // Report whether threshold ECDSA public-key fetch support is compiled in.
     #[must_use]
-    pub const fn threshold_management_enabled() -> bool {
+    pub const fn threshold_public_key_fetch_enabled() -> bool {
         matches!(
-            threshold_management_availability_reason(),
+            threshold_public_key_availability_reason(),
+            PlatformCallMetricReason::Ok
+        )
+    }
+
+    // Report whether threshold ECDSA signing support is compiled in.
+    #[must_use]
+    pub const fn threshold_sign_enabled() -> bool {
+        matches!(
+            threshold_sign_availability_reason(),
             PlatformCallMetricReason::Ok
         )
     }
@@ -247,8 +261,17 @@ impl EcdsaOps {
     }
 }
 
-// Return the metric reason for compiled ECDSA management availability.
-const fn threshold_management_availability_reason() -> PlatformCallMetricReason {
+// Return the metric reason for compiled threshold ECDSA public-key availability.
+const fn threshold_public_key_availability_reason() -> PlatformCallMetricReason {
+    if cfg!(feature = "auth-threshold-ecdsa-public-key") {
+        PlatformCallMetricReason::Ok
+    } else {
+        PlatformCallMetricReason::Unavailable
+    }
+}
+
+// Return the metric reason for compiled threshold ECDSA signing availability.
+const fn threshold_sign_availability_reason() -> PlatformCallMetricReason {
     if cfg!(feature = "auth-threshold-ecdsa-sign") {
         PlatformCallMetricReason::Ok
     } else {

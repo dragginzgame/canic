@@ -9,8 +9,9 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.65.0` hard-cut implementation is locally closed for design/code
-  validation, with broad uncommitted changes and no Cargo version bump yet.
+- `0.65.0` hard-cut implementation has been published, and the release
+  changelog has been finalized in `CHANGELOG.md` plus
+  `docs/changelog/0.65.md`.
   Delegated-token root proofs now use `RootProof::IcCanisterSignatureV1`,
   issued through `canic_prepare_delegation_proof` update plus
   `canic_get_delegation_proof` query. Delegated-token verification uses
@@ -39,6 +40,30 @@ inspect only the files needed for the current task.
   TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test root_wasm_store_reconcile -- --test-threads=1 --nocapture
   make test
   make fmt-check
+  git diff --check
+  ```
+- Local `0.65.1` candidate changelog is drafted in `CHANGELOG.md` and
+  `docs/changelog/0.65.md`. The patch decouples delegated-token root proof
+  startup from root threshold-ECDSA signing. `auth-threshold-ecdsa-public-key`
+  now gates management-canister ECDSA public-key fetches, while
+  `auth-threshold-ecdsa-sign` gates signing and includes the public-key feature.
+  Root runtime startup requires `auth-root-canister-sig-create` plus
+  `auth-threshold-ecdsa-public-key` for configured delegated-token proof
+  issuance, and shard token issuers require `auth-threshold-ecdsa-sign`.
+  Legacy delegated-grant root public-key publication now skips cleanly when
+  public-key fetch support is not compiled. Current validation:
+  ```text
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core --features auth-root-canister-sig-create,auth-threshold-ecdsa-public-key workflow::runtime::auth --lib -- --nocapture
+  cargo check --locked -p canic-core --features auth-root-canister-sig-create
+  cargo check --locked -p canic-core --features auth-root-canister-sig-create,auth-threshold-ecdsa-public-key
+  cargo check --locked -p canic-core --features auth-delegated-token-verify,auth-threshold-ecdsa-sign
+  cargo check --locked -p canic --features auth-root-canister-sig-create,auth-threshold-ecdsa-public-key,control-plane
+  cargo check --locked -p canic --features auth-threshold-ecdsa-sign
+  cargo check --locked -p delegation_root_stub
+  cargo check --locked -p delegation_signer_stub
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
 - Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64

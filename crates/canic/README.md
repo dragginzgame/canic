@@ -35,7 +35,8 @@ These features can also be selected explicitly when default features are off:
 - `auth-root-canister-sig-create` - enables root canister-signature proof creation
 - `auth-root-canister-sig-verify` - enables IC canister-signature proof verification
 - `auth-shard-secp256k1-verify` - enables shard secp256k1 token-signature verification
-- `auth-threshold-ecdsa-sign` - enables threshold ECDSA signing/key management calls
+- `auth-threshold-ecdsa-public-key` - enables threshold ECDSA public-key fetches
+- `auth-threshold-ecdsa-sign` - enables threshold ECDSA signing calls
 - `auth-delegated-token-verify` - enables delegated-token verification, including
   root canister-signature and shard secp256k1 verification
 

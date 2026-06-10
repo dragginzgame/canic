@@ -12,12 +12,18 @@ present.
 
 ## Unreleased
 
-- Hard-cut delegated-token root proofs toward IC canister signatures with an
-  update/query prepare/get flow, configured verifier trust anchors, no
-  one-shot fresh-proof mint path, and nanosecond-native auth/replay protocol
-  DTOs without a compatibility version lane. Normal auth also hard-fails old
-  one-shot root ECDSA role-attestation and internal-invocation proof issuance
-  before reserving signing cycles.
+## [0.65.x] - 2026-06-10 - Canister-signature delegated auth
+
+Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
+
+- `0.65.1` splits threshold-ECDSA public-key fetch support from threshold-ECDSA
+  signing so root delegated-token proof issuers no longer need the signing
+  feature while shard token issuers still do.
+
+- `0.65.0` hard-cuts delegated-token root proofs from root threshold ECDSA to
+  IC canister signatures with an update/query prepare-get flow, reusable
+  self-contained endpoint tokens, configured verifier trust anchors,
+  nanosecond-native auth DTOs, and no legacy root ECDSA verifier branch.
 
 ## [0.64.x] - 2026-06-09 - Service/singleton topology split
 

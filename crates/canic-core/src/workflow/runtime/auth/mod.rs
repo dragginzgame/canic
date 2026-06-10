@@ -49,13 +49,24 @@ impl DelegatedTokenSignerPrewarmPlan {
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
-    /// Fail fast when root delegated-auth config requires threshold ECDSA support.
+    /// Fail fast when root delegated-auth config requires missing crypto support.
     pub fn ensure_root_crypto_contract() -> Result<(), InternalError> {
         let cfg = ConfigOps::get()?;
-        if root_requires_auth_crypto(&cfg) && !EcdsaOps::threshold_management_enabled() {
+        if root_requires_delegated_token_proofs(&cfg)
+            && !AuthOps::root_canister_sig_create_enabled()
+        {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "delegated auth is configured in canic.toml, but this root build does not include threshold ECDSA public-key management support; enable the `auth-threshold-ecdsa-sign` feature for the root canister build".to_string(),
+                "delegated token signing is configured in canic.toml, but this root build does not include IC canister-signature creation support; enable the `auth-root-canister-sig-create` feature for the root canister build".to_string(),
+            ));
+        }
+
+        if root_requires_threshold_ecdsa_public_keys(&cfg)
+            && !EcdsaOps::threshold_public_key_fetch_enabled()
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "root auth public-key certification is configured in canic.toml, but this root build does not include threshold ECDSA public-key fetch support; enable the `auth-threshold-ecdsa-public-key` feature for the root canister build".to_string(),
             ));
         }
 
@@ -67,11 +78,11 @@ impl RuntimeAuthWorkflow {
         canister_role: &CanisterRole,
         canister_cfg: &crate::config::schema::CanisterConfig,
     ) -> Result<(), InternalError> {
-        if nonroot_requires_auth_crypto(canister_cfg) && !EcdsaOps::threshold_management_enabled() {
+        if nonroot_requires_auth_crypto(canister_cfg) && !EcdsaOps::threshold_sign_enabled() {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' is configured as a delegated auth signer, but this build does not include threshold ECDSA management support; enable the `auth-threshold-ecdsa-sign` feature for that canister build",
+                    "canister '{canister_role}' is configured as a delegated auth signer, but this build does not include threshold ECDSA signing support; enable the `auth-threshold-ecdsa-sign` feature for that canister build",
                 ),
             ));
         }
@@ -132,6 +143,14 @@ impl RuntimeAuthWorkflow {
 
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
         if !delegated_tokens_cfg.enabled {
+            return Ok(());
+        }
+        if !EcdsaOps::threshold_public_key_fetch_enabled() {
+            log!(
+                Topic::Auth,
+                Debug,
+                "skipping legacy delegated-grant root public-key publication because threshold ECDSA public-key fetch support is not compiled in"
+            );
             return Ok(());
         }
 
@@ -300,13 +319,26 @@ fn log_attestation_verifier_rejection(
     );
 }
 
-// Decide whether the root runtime must carry threshold-ECDSA management support.
-fn root_requires_auth_crypto(cfg: &ConfigModel) -> bool {
+// Decide whether the root runtime must create canister-signature root proofs.
+fn root_requires_delegated_token_proofs(cfg: &ConfigModel) -> bool {
     cfg.subnets.values().any(|subnet| {
         subnet.canisters.values().any(|canister| {
-            (cfg.auth.delegated_tokens.enabled && canister.auth.delegated_token_signer)
-                || canister.auth.role_attestation_cache
+            cfg.auth.delegated_tokens.enabled && canister.auth.delegated_token_signer
         })
+    })
+}
+
+// Decide whether root must fetch threshold-ECDSA public keys.
+fn root_requires_threshold_ecdsa_public_keys(cfg: &ConfigModel) -> bool {
+    root_requires_delegated_token_proofs(cfg) || root_requires_role_attestation_public_keys(cfg)
+}
+
+fn root_requires_role_attestation_public_keys(cfg: &ConfigModel) -> bool {
+    cfg.subnets.values().any(|subnet| {
+        subnet
+            .canisters
+            .values()
+            .any(|canister| canister.auth.role_attestation_cache)
     })
 }
 
@@ -328,7 +360,8 @@ const fn nonroot_requires_delegated_token_verifier(
 mod tests {
     use super::{
         RuntimeAuthWorkflow, nonroot_requires_auth_crypto,
-        nonroot_requires_delegated_token_verifier, root_requires_auth_crypto,
+        nonroot_requires_delegated_token_verifier, root_requires_delegated_token_proofs,
+        root_requires_threshold_ecdsa_public_keys,
     };
     use crate::{
         config::schema::{CanisterAuthConfig, CanisterKind},
@@ -337,7 +370,7 @@ mod tests {
     };
 
     #[test]
-    fn root_requires_auth_crypto_for_delegated_signer_when_delegated_tokens_enabled() {
+    fn root_requires_canister_signature_proofs_for_delegated_signer_when_enabled() {
         let mut signer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         signer_cfg.auth = CanisterAuthConfig {
             delegated_token_signer: true,
@@ -352,11 +385,12 @@ mod tests {
             .with_prime_canister("user_shard", signer_cfg)
             .build();
 
-        assert!(root_requires_auth_crypto(&cfg));
+        assert!(root_requires_delegated_token_proofs(&cfg));
+        assert!(root_requires_threshold_ecdsa_public_keys(&cfg));
     }
 
     #[test]
-    fn root_requires_auth_crypto_for_role_attestation_cache_when_delegated_tokens_disabled() {
+    fn root_requires_public_key_fetch_for_role_attestation_cache_when_delegated_tokens_disabled() {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_signer: false,
@@ -372,7 +406,8 @@ mod tests {
             .build();
         cfg.auth.delegated_tokens.enabled = false;
 
-        assert!(root_requires_auth_crypto(&cfg));
+        assert!(!root_requires_delegated_token_proofs(&cfg));
+        assert!(root_requires_threshold_ecdsa_public_keys(&cfg));
     }
 
     #[test]
@@ -392,14 +427,16 @@ mod tests {
             .build();
         cfg.auth.delegated_tokens.enabled = false;
 
-        assert!(!root_requires_auth_crypto(&cfg));
+        assert!(!root_requires_delegated_token_proofs(&cfg));
+        assert!(!root_requires_threshold_ecdsa_public_keys(&cfg));
     }
 
     #[test]
     fn root_does_not_require_auth_crypto_without_auth_roles() {
         let cfg = ConfigTestBuilder::new().build();
 
-        assert!(!root_requires_auth_crypto(&cfg));
+        assert!(!root_requires_delegated_token_proofs(&cfg));
+        assert!(!root_requires_threshold_ecdsa_public_keys(&cfg));
     }
 
     #[test]

@@ -150,6 +150,10 @@ impl AuthOps {
     pub(crate) const fn root_canister_sig_verify_enabled() -> bool {
         cfg!(feature = "auth-root-canister-sig-verify")
     }
+
+    pub(crate) const fn root_canister_sig_create_enabled() -> bool {
+        cfg!(feature = "auth-root-canister-sig-create")
+    }
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
