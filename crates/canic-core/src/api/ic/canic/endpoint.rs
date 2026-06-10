@@ -6,8 +6,9 @@ use crate::{dto::error::Error, ids::CanisterRole};
 /// Generated metadata for one protected Canic internal endpoint.
 ///
 /// Endpoint macros emit this descriptor next to protected internal endpoints.
-/// Callers should pass it to `CanicInternalClient` instead of repeating method
-/// names and accepted-role metadata by hand.
+/// In 0.65, the outbound protected-internal client surface is removed, but the
+/// descriptor remains the retained source of method names and accepted-role
+/// metadata for verifier/rejection paths and future replacement work.
 ///
 
 #[derive(Clone, Debug)]
@@ -80,7 +81,7 @@ impl ProtectedInternalEndpoint {
     pub fn required_single_role(&self) -> Result<CanisterRole, Error> {
         self.single_role().cloned().ok_or_else(|| {
             Error::invalid(format!(
-                "protected internal endpoint '{}' accepts {} roles [{}]; choose a caller role explicitly with call_update(..., caller_role, args)",
+                "protected internal endpoint '{}' accepts {} roles [{}]; choose a caller role explicitly",
                 self.method(),
                 self.accepted_roles.len(),
                 self.accepted_roles_label()

@@ -14,19 +14,10 @@ use canic::{
     ids::cap,
     prelude::*,
 };
-use project_protocol_stub::project_instance_record_visit_endpoint;
 
 const PROJECTS_POOL: &str = "projects";
 
 canic::start!();
-
-canic::canic_internal_client! {
-    struct ProjectInstanceInternalClient {
-        fn record_visit = project_instance_record_visit_endpoint; (
-            project_key: String,
-        ) -> ();
-    }
-}
 
 // Keep the test hub setup hook empty.
 async fn canic_setup() {}
@@ -92,14 +83,6 @@ async fn lookup_project_entry(
     project_key: String,
 ) -> Result<Option<DirectoryEntryStatusResponse>, Error> {
     Ok(DirectoryApi::lookup_entry(PROJECTS_POOL, &project_key))
-}
-
-/// Notify one project instance through the protected internal-call client path.
-#[canic_update]
-async fn notify_project_instance(instance_id: Principal, project_key: String) -> Result<(), Error> {
-    ProjectInstanceInternalClient::new(instance_id)
-        .record_visit(project_key)
-        .await
 }
 
 canic::finish!();

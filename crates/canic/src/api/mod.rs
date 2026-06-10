@@ -25,9 +25,7 @@ pub mod env {
 /// IC primitives (calls, HTTP, crypto, network, system APIs)
 pub mod ic {
     pub use crate::__internal::core::api::ic::{
-        Call, CallBuilder, CallResult, CanicCall, CanicCallBuilder, CanicInternalCallOptions,
-        CanicInternalClient, CanicInternalWaitMode, IntentKey, IntentReservation,
-        ProtectedInternalEndpoint,
+        Call, CallBuilder, CallResult, IntentKey, IntentReservation, ProtectedInternalEndpoint,
     };
 
     pub mod http {

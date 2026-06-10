@@ -149,7 +149,7 @@ fn first_party_code_does_not_raw_call_protected_internal_methods() {
 
     assert!(
         violations.is_empty(),
-        "protected Canic internal methods must be called through CanicCall: {violations:#?}"
+        "protected Canic internal methods must not be called through raw or removed protected-client paths: {violations:#?}"
     );
 }
 
@@ -214,29 +214,6 @@ async fn allowed(pid: Principal) {
     let _ = CallOps::unbounded_wait(
         pid,
         "canic_wasm_store_catalog",
-    )
-    .execute()
-    .await;
-}
-"#;
-
-    let violations = raw_call_violations_in_source(
-        Path::new("crates/example/src/lib.rs"),
-        source,
-        &protected_methods,
-    );
-
-    assert!(violations.is_empty(), "{violations:#?}");
-}
-
-#[test]
-fn raw_call_guard_does_not_treat_canic_call_as_raw_call() {
-    let protected_methods = protected_internal_method_tokens();
-    let source = r#"
-async fn allowed(pid: Principal) {
-    let _ = CanicCall::unbounded_wait(
-        pid,
-        "project_instance_record_visit",
     )
     .execute()
     .await;
@@ -384,7 +361,7 @@ fn wasm_store_did_matches_root_update_method_manifest() {
 }
 
 #[test]
-fn project_fixture_uses_shared_descriptor_generated_client_path() {
+fn project_fixture_keeps_descriptor_but_not_removed_generated_client_path() {
     let protocol = read_workspace_file("canisters/test/project_protocol_stub/src/lib.rs");
     let instance = read_workspace_file("canisters/test/project_instance_stub/src/lib.rs");
     let hub = read_workspace_file("canisters/test/project_hub_stub/src/lib.rs");
@@ -403,16 +380,13 @@ fn project_fixture_uses_shared_descriptor_generated_client_path() {
         "project instance fixture endpoint must be protected by project_hub role proof"
     );
     assert!(
-        hub.contains("canic::canic_internal_client!")
-            && hub.contains("project_instance_record_visit_endpoint")
-            && hub.contains(".record_visit(project_key)"),
-        "project hub fixture must call the instance through the generated protected client"
-    );
-    assert!(
-        !hub.contains("ProtectedInternalEndpoint::new")
+        !hub.contains("canic::canic_internal_client!")
+            && !hub.contains("project_instance_record_visit_endpoint")
+            && !hub.contains(".record_visit(project_key)")
+            && !hub.contains("ProtectedInternalEndpoint::new")
             && !hub.contains("CanicCall::")
             && !hub.contains("Call::"),
-        "project hub fixture must not hand-build protected metadata or bypass the generated client"
+        "project hub fixture must not retain removed protected-internal client paths"
     );
 }
 
@@ -427,16 +401,38 @@ fn protected_internal_method_guard_includes_shared_protocol_descriptors() {
 }
 
 #[test]
-fn canic_call_dispatches_protected_envelope_as_raw_ingress_bytes() {
+fn removed_protected_internal_client_surface_stays_removed() {
+    let workspace = workspace_root();
     let source = read_workspace_file("crates/canic-core/src/api/ic/canic/mod.rs");
+    let facade = read_workspace_file("crates/canic/src/api/mod.rs");
+    let prelude = read_workspace_file("crates/canic/src/prelude/mod.rs");
+    let macros = read_workspace_file("crates/canic/src/macros/mod.rs");
 
     assert!(
-        source.contains(".with_raw_args(encode_internal_call_envelope_raw(envelope)?)"),
-        "CanicCall must send protected envelopes through the raw-args boundary"
+        !source.contains("pub struct CanicCall")
+            && !source.contains("pub struct CanicInternalClient")
+            && !source.contains("CanicInternalCallOptions")
+            && !source.contains("CanicInternalWaitMode"),
+        "core protected-internal client types must stay removed after the 0.65 hard cut"
     );
     assert!(
-        !source.contains(".with_arg(envelope)?"),
-        "CanicCall must not expose the protected envelope as a typed Candid argument"
+        !facade.contains("CanicCall")
+            && !facade.contains("CanicInternalClient")
+            && !facade.contains("CanicInternalCallOptions")
+            && !prelude.contains("CanicCall")
+            && !prelude.contains("CanicInternalClient"),
+        "public facade and prelude must not export removed protected-internal clients"
+    );
+    assert!(
+        !macros.contains("macro_rules! canic_internal_client")
+            && !macros.contains("__canic_internal_client_execute"),
+        "canic_internal_client! must stay removed after fresh proof issuance is disabled"
+    );
+    assert!(
+        !workspace
+            .join("crates/canic-core/src/api/ic/canic/proof_cache.rs")
+            .exists(),
+        "outbound internal-invocation proof cache must not be retained after fresh issuance is disabled"
     );
 }
 

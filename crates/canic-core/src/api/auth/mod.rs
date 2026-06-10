@@ -76,6 +76,8 @@ impl AuthApi {
     const MIN_TOKEN_SIGNING_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
+    const ROLE_ATTESTATION_ONE_SHOT_DISABLED: &str = "role attestation one-shot root ECDSA issuance is disabled in 0.65; use delegated tokens for normal auth";
+    const INTERNAL_INVOCATION_PROOF_ONE_SHOT_DISABLED: &str = "internal invocation proof one-shot root ECDSA issuance is disabled in 0.65; use delegated tokens for normal auth";
 
     // Map internal auth failures onto public endpoint errors.
     fn map_auth_error(err: crate::InternalError) -> Error {
@@ -385,20 +387,20 @@ impl AuthApi {
         Ok(delegated_token)
     }
 
-    /// Request a signed role attestation from root over RPC.
+    /// Reject removed one-shot root ECDSA role-attestation issuance.
     pub async fn request_role_attestation(
-        request: RoleAttestationRequest,
+        _request: RoleAttestationRequest,
     ) -> Result<SignedRoleAttestation, Error> {
-        let request = metadata::with_root_attestation_request_metadata(request);
-        Self::request_role_attestation_remote(request).await
+        Err(Error::invalid(Self::ROLE_ATTESTATION_ONE_SHOT_DISABLED))
     }
 
-    /// Request a method-scoped internal invocation proof from root over RPC.
+    /// Reject removed one-shot root ECDSA internal-invocation proof issuance.
     pub async fn request_internal_invocation_proof(
-        request: InternalInvocationProofRequest,
+        _request: InternalInvocationProofRequest,
     ) -> Result<SignedInternalInvocationProofV1, Error> {
-        let request = metadata::with_internal_invocation_proof_request_metadata(request);
-        Self::request_internal_invocation_proof_remote(request).await
+        Err(Error::invalid(
+            Self::INTERNAL_INVOCATION_PROOF_ONE_SHOT_DISABLED,
+        ))
     }
 
     /// Return the current root role-attestation key set.
@@ -1183,28 +1185,6 @@ impl AuthApi {
             )),
         }
     }
-
-    // Route a canonical role-attestation request over RPC to root.
-    async fn request_role_attestation_remote(
-        request: RoleAttestationRequest,
-    ) -> Result<SignedRoleAttestation, Error> {
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RootAuthMaterialClient::new(root_pid)
-            .request_role_attestation(request)
-            .await
-            .map_err(Self::map_auth_error)
-    }
-
-    // Route a canonical internal-invocation proof request over RPC to root.
-    async fn request_internal_invocation_proof_remote(
-        request: InternalInvocationProofRequest,
-    ) -> Result<SignedInternalInvocationProofV1, Error> {
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RootAuthMaterialClient::new(root_pid)
-            .request_internal_invocation_proof(request)
-            .await
-            .map_err(Self::map_auth_error)
-    }
 }
 
 #[cfg(test)]
@@ -1216,12 +1196,15 @@ mod tests {
             auth::{
                 AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenIssueRequest,
                 DelegationAudience, DelegationCert, DelegationProof, DelegationProofIssueRequest,
-                IcCanisterSignatureProofV1, RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
+                IcCanisterSignatureProofV1, InternalInvocationProofRequest, RoleAttestationRequest,
+                RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
             },
             error::ErrorCode,
         },
+        ids::CanisterRole,
         ops::auth::{AuthExpiryError, AuthOpsError},
     };
+    use futures::executor::block_on;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -1288,6 +1271,56 @@ mod tests {
             ttl_ns: 30_000_000_000,
             nonce: [9; 16],
         }
+    }
+
+    fn role_attestation_request() -> RoleAttestationRequest {
+        RoleAttestationRequest {
+            subject: p(10),
+            role: CanisterRole::new("project_instance"),
+            subnet_id: None,
+            audience: p(11),
+            ttl_ns: 60_000_000_000,
+            epoch: 0,
+            metadata: None,
+        }
+    }
+
+    fn internal_invocation_request() -> InternalInvocationProofRequest {
+        InternalInvocationProofRequest {
+            subject: p(12),
+            role: CanisterRole::new("project_instance"),
+            subnet_id: None,
+            audience: p(13),
+            audience_method: "canic_internal".to_string(),
+            ttl_ns: 60_000_000_000,
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn request_role_attestation_fails_locally_after_hard_cut() {
+        let err = block_on(AuthApi::request_role_attestation(role_attestation_request()))
+            .expect_err("one-shot root ECDSA role attestation is disabled");
+
+        assert_eq!(err.code, ErrorCode::InvalidInput);
+        assert!(
+            err.message.contains("disabled in 0.65"),
+            "expected hard-cut error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn request_internal_invocation_proof_fails_locally_after_hard_cut() {
+        let err = block_on(AuthApi::request_internal_invocation_proof(
+            internal_invocation_request(),
+        ))
+        .expect_err("one-shot root ECDSA internal proof is disabled");
+
+        assert_eq!(err.code, ErrorCode::InvalidInput);
+        assert!(
+            err.message.contains("disabled in 0.65"),
+            "expected hard-cut error, got: {err}"
+        );
     }
 
     #[test]

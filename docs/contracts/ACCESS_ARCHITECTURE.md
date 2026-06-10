@@ -30,41 +30,37 @@ separate policy family.
   use the raw transport caller, not delegated user identity.
 - `caller::has_role(role)` and `caller::has_any_role([...])` are protected
   internal-call predicates. They require a root-signed method-scoped invocation
-  proof and are valid only on protected internal update endpoints.
-- Protected internal endpoint macros emit descriptor metadata for generated
-  clients. Typed internal clients should use `CanicInternalClient` and those
-  descriptors so method names, envelope proof scope, and accepted caller roles
-  come from the protected endpoint declaration instead of being duplicated at
-  call sites.
-- `CanicCall` transports the protected envelope as raw ingress bytes to a
-  no-argument protected wrapper. The envelope is decoded inside Canic code so
-  malformed protected calls return typed Canic errors instead of pre-dispatch
-  Candid decode traps.
+  proof and are valid only on protected internal update endpoints. In `0.65`,
+  fresh one-shot root ECDSA proof issuance for this surface is disabled.
+- Protected internal endpoint macros emit descriptor metadata. These
+  descriptors are retained as protocol metadata, but the outbound
+  `CanicCall`, `CanicInternalClient`, and `canic_internal_client!` client
+  surfaces are removed in `0.65` normal auth because no fresh
+  internal-invocation proof can be issued by one update call.
+- Historical `CanicCall` transported a protected envelope as raw ingress bytes
+  to a no-argument protected wrapper. The retained wrapper decoder still maps
+  malformed protected calls to typed Canic errors, but normal fresh calls should
+  use delegated-token endpoints until a replacement protected-internal proof
+  protocol exists.
 - The generated descriptor accessor name is
-  `canic_internal_endpoint_<endpoint>()`; `canic_internal_client!` consumes
-  those accessors to generate typed protected update client methods. Single-role
-  descriptors can infer the caller role; multi-role descriptors require an
-  explicit `role = ...` clause in the generated client method declaration.
+  `canic_internal_endpoint_<endpoint>()`. Single-role descriptors expose the
+  accepted caller role; multi-role descriptors require any future replacement
+  client to choose the caller role explicitly.
 - Cross-canister callers that cannot depend on the target implementation crate
   should put shared descriptors in a protocol module with
-  `canic_protected_endpoint!`, then bind `canic_internal_client!` methods to
-  those shared descriptor functions. Shared protocol modules may define a small
-  descriptor table in one macro invocation. The descriptor remains the source of
-  truth for method name and accepted-role metadata.
+  `canic_protected_endpoint!`. Shared protocol modules may define a small
+  descriptor table in one macro invocation. The descriptor remains the source
+  of truth for method name and accepted-role metadata.
 - The project hub/instance test fixture is the canonical app-style pattern:
-  target canister implements a protected `caller::has_role(...)` endpoint, a
-  shared protocol crate owns the descriptor, and the caller canister generates
-  a typed client from that descriptor.
+  target canister keeps a protected `caller::has_role(...)` endpoint and a
+  shared protocol crate owns the descriptor, but no normal client path calls it
+  while fresh proof issuance is disabled.
 - Protected internal endpoint descriptors must name a concrete exported method
   and at least one accepted caller role. Empty or whitespace-only descriptor
   metadata is invalid because it would create a generated client method that
   cannot request a method-scoped proof. Empty, whitespace-only, or duplicate
   caller roles are also invalid; role metadata is the protected client's
   authorization contract.
-- Generated protected clients carry `CanicInternalCallOptions` for wait mode,
-  attached cycles, and requested proof TTL. These transport knobs must stay on
-  the protected client path and must not require callers to bypass descriptor
-  metadata or use raw `Call`.
 - The old AppIndex-only `caller::has_app_role(role)` predicate was removed in
   0.40 because verifier-local AppIndex state is not sufficient authorization
   for sibling Canic RPC.
@@ -73,9 +69,14 @@ separate policy family.
 
 ## Protected Internal Call Recipes
 
-For hub-to-shard or parent-to-child calls, prefer a generated internal client
-bound to the protected endpoint descriptor. The target endpoint declares the
-accepted caller role:
+`0.65` status: fresh protected-internal calls are disabled in normal auth, and
+the old outbound client APIs are removed. Use public delegated-token
+authenticated endpoints for new hub-to-shard or parent-to-child application
+calls. The example below documents the retained descriptor shape for existing
+verification/rejection coverage and future replacement work; it is not a
+working fresh-call recipe in `0.65`.
+
+The target endpoint declares the accepted caller role:
 
 ```rust
 use canic::cdk::types::Principal;
@@ -90,59 +91,38 @@ async fn assign_project(user_id: Principal, project_id: Principal) -> Result<(),
 }
 ```
 
-The endpoint macro emits `canic_internal_endpoint_assign_project()`. The caller
-can use that descriptor with `canic_internal_client!`:
+The endpoint macro emits `canic_internal_endpoint_assign_project()` as retained
+metadata:
 
 ```rust
-canic::canic_internal_client! {
-    pub struct ProjectHubInternalClient {
-        fn assign_project = canic_internal_endpoint_assign_project; (
-            user_id: Principal,
-            project_id: Principal,
-        ) -> ();
-    }
-}
-
-let client = ProjectHubInternalClient::new(shard_pid);
-client.assign_project(user_id, project_id).await?;
+let descriptor = canic_internal_endpoint_assign_project();
+assert_eq!(descriptor.method(), "wire_assign_project");
 ```
 
-If the endpoint accepts multiple caller roles, choose the role explicitly in the
-client method declaration:
+Shared protocol crates can publish the same metadata with
+`canic_protected_endpoint!`:
 
 ```rust
 use canic::api::canister::CanisterRole;
 
-canic::canic_internal_client! {
-    pub struct ProjectHubInternalClient {
-        fn admin_repair = shared_multi_role_project_endpoint,
-            role = CanisterRole::new("admin_hub"); (
-            project_id: Principal,
-        ) -> ();
-    }
+canic::canic_protected_endpoint! {
+    pub fn shared_assign_project =
+        "wire_assign_project",
+        role = CanisterRole::new("project_hub");
 }
 ```
 
-For a one-off lower-level call, still pass the generated descriptor and the
-parent/hub caller role explicitly:
+For normal calls, expose a public delegated-token authenticated endpoint:
 
 ```rust
-use canic::{
-    api::{canister::CanisterRole, ic::CanicInternalClient},
-    cdk::types::Principal,
-};
-
-let response: MyResponse = CanicInternalClient::new(shard_pid)
-    .call_update_result(
-        &canic_internal_endpoint_assign_project(),
-        CanisterRole::new("project_hub"),
-        (user_id, project_id),
-    )
-    .await?;
+#[canic::canic_update(requires(auth::authenticated("project.assign")))]
+async fn assign_project(token: canic::dto::auth::DelegatedToken, request: AssignRequest)
+    -> Result<(), canic::Error>
+{
+    let _ = token;
+    assign_project_impl(request).await
+}
 ```
-
-The third argument is a Candid argument tuple. Use `(arg,)` for one argument and
-`(a, b)` for two arguments.
 
 Raw `icp canister call` commands must call public, non-internal application
 endpoints. A raw call to a protected internal endpoint with the original Candid

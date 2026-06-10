@@ -42,9 +42,9 @@ inspect only the files needed for the current task.
   make fmt-check
   git diff --check
   ```
-- Local `0.65.1` candidate changelog is drafted in `CHANGELOG.md` and
-  `docs/changelog/0.65.md`. The patch decouples delegated-token root proof
-  startup from root threshold-ECDSA signing. `auth-threshold-ecdsa-public-key`
+- `0.65.1` is pushed as the threshold-ECDSA public-key feature split. The
+  patch decouples delegated-token root proof startup from root threshold-ECDSA
+  signing. `auth-threshold-ecdsa-public-key`
   now gates management-canister ECDSA public-key fetches, while
   `auth-threshold-ecdsa-sign` gates signing and includes the public-key feature.
   Root runtime startup requires `auth-root-canister-sig-create` plus
@@ -64,6 +64,33 @@ inspect only the files needed for the current task.
   cargo check --locked -p delegation_signer_stub
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.2` candidate starts the post-hard-cut auth cleanup pass. Normal
+  client helpers for one-shot root ECDSA role-attestation and
+  internal-invocation proof issuance now fail locally with the hard-cut `0.65`
+  error instead of routing to root only to be rejected. The root rejection
+  endpoints and workflow tests remain as explicit compatibility-failure
+  coverage, while `RootAuthMaterialClient` now lists only the still-needed
+  structural bootstrap calls for attestation key-set refresh and delegation
+  proof preparation. The stale outbound protected-internal proof cache and
+  public client surface (`CanicCall`, `CanicInternalClient`, and
+  `canic_internal_client!`) are removed, leaving protected endpoint descriptors
+  only as retained verifier/rejection metadata. Active docs direct normal
+  parent/shard calls to delegated-token endpoints until a replacement
+  protected-internal proof protocol exists. Current validation:
+  ```text
+  cargo test --locked -p canic-core request_role_attestation_fails_locally_after_hard_cut --lib -- --nocapture
+  cargo test --locked -p canic-core request_internal_invocation_proof_fails_locally_after_hard_cut --lib -- --nocapture
+  cargo test --locked -p canic-core root_auth_material_client_endpoint_table_is_structural_bootstrap_only --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core api::ic::canic --lib -- --nocapture
+  cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
+  cargo test --locked -p canic --test protected_endpoint_macro -- --nocapture
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo check --locked -p project_hub_stub -p project_instance_stub -p project-protocol-stub
   git diff --check
   ```
 - Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64

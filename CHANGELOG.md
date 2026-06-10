@@ -12,6 +12,18 @@ present.
 
 ## Unreleased
 
+- Removes the obsolete normal-client RPC path for one-shot root ECDSA
+  role-attestation and internal-invocation proof issuance. Those public helpers
+  now fail locally with the hard-cut `0.65` error while root rejection endpoints
+  remain available for explicit compatibility-failure coverage.
+
+- Removes the outbound protected-internal fresh-proof cache and dead public
+  client surface (`CanicCall`, `CanicInternalClient`, and
+  `canic_internal_client!`). Protected endpoint descriptors remain as retained
+  verifier/rejection metadata, while active docs direct normal parent/shard
+  calls to delegated-token authenticated endpoints until a replacement
+  protected-internal proof protocol exists.
+
 ## [0.65.x] - 2026-06-10 - Canister-signature delegated auth
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)

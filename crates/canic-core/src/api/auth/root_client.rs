@@ -1,10 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{
-        AttestationKeySet, DelegationProofIssueRequest, DelegationProofPrepareResponse,
-        InternalInvocationProofRequest, RoleAttestationRequest, SignedInternalInvocationProofV1,
-        SignedRoleAttestation,
-    },
+    dto::auth::{AttestationKeySet, DelegationProofIssueRequest, DelegationProofPrepareResponse},
     error::InternalError,
     ops::rpc::RpcOps,
     protocol,
@@ -24,19 +20,9 @@ impl RootAuthMaterialClient {
         RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_ATTESTATION_KEY_SET);
     const DELEGATION_PREPARE: RootAuthMaterialEndpoint =
         RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_PREPARE_DELEGATION_PROOF);
-    const INTERNAL_INVOCATION_PROOF: RootAuthMaterialEndpoint =
-        RootAuthMaterialEndpoint::structural_bootstrap(
-            protocol::CANIC_REQUEST_INTERNAL_INVOCATION_PROOF,
-        );
-    const ROLE_ATTESTATION: RootAuthMaterialEndpoint =
-        RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_REQUEST_ROLE_ATTESTATION);
     #[cfg(test)]
-    const ENDPOINTS: &[RootAuthMaterialEndpoint] = &[
-        Self::ATTESTATION_KEY_SET,
-        Self::DELEGATION_PREPARE,
-        Self::INTERNAL_INVOCATION_PROOF,
-        Self::ROLE_ATTESTATION,
-    ];
+    const ENDPOINTS: &[RootAuthMaterialEndpoint] =
+        &[Self::ATTESTATION_KEY_SET, Self::DELEGATION_PREPARE];
 
     pub(super) const fn new(root_pid: Principal) -> Self {
         Self { root_pid }
@@ -47,21 +33,6 @@ impl RootAuthMaterialClient {
         request: DelegationProofIssueRequest,
     ) -> Result<DelegationProofPrepareResponse, InternalError> {
         self.call_rpc_result(Self::DELEGATION_PREPARE, request)
-            .await
-    }
-
-    pub(super) async fn request_role_attestation(
-        &self,
-        request: RoleAttestationRequest,
-    ) -> Result<SignedRoleAttestation, InternalError> {
-        self.call_rpc_result(Self::ROLE_ATTESTATION, request).await
-    }
-
-    pub(super) async fn request_internal_invocation_proof(
-        &self,
-        request: InternalInvocationProofRequest,
-    ) -> Result<SignedInternalInvocationProofV1, InternalError> {
-        self.call_rpc_result(Self::INTERNAL_INVOCATION_PROOF, request)
             .await
     }
 
@@ -127,8 +98,6 @@ mod tests {
         let expected = BTreeSet::from([
             protocol::CANIC_ATTESTATION_KEY_SET,
             protocol::CANIC_PREPARE_DELEGATION_PROOF,
-            protocol::CANIC_REQUEST_INTERNAL_INVOCATION_PROOF,
-            protocol::CANIC_REQUEST_ROLE_ATTESTATION,
         ]);
         let actual = RootAuthMaterialClient::ENDPOINTS
             .iter()

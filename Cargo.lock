@@ -3215,7 +3215,6 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "project-protocol-stub",
 ]
 
 [[package]]

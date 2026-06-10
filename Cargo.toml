@@ -89,7 +89,6 @@ ic-testkit = "0.1.11"
 icrc-ledger-types = { version = "0.2", default-features = false }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
-project-protocol-stub = { version = "0.65.1", path = "canisters/test/project_protocol_stub" }
 prost = "0.14.3"
 quote = "1.0"
 rand_chacha = "0.10"

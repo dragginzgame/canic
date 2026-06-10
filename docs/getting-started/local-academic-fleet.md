@@ -104,27 +104,31 @@ a raw ICP upgrade, or a deployment registration fix.
 
 ## Parent To Shard Calls
 
-For Canic-protected internal endpoints, the hub or parent canister should call
-the shard through the generated protected endpoint descriptor and an explicit
-caller role. Do not hand-build the internal envelope in application code. The
-canonical recipes live in
+In `0.65`, fresh root ECDSA proof issuance for Canic-protected internal
+endpoints is disabled and the old outbound protected-internal client APIs are
+removed. Protected endpoint descriptors remain as retained
+verification/descriptor surface. Parent-to-shard application calls should use
+public delegated-token authenticated endpoints until protected internal calls
+have an explicit update/query root-certified replacement.
+
+The retained descriptor contract is documented in
 [ACCESS_ARCHITECTURE.md](../contracts/ACCESS_ARCHITECTURE.md#protected-internal-call-recipes).
 
 ```rust
-use canic::__internal::core::api::ic::canic::CanicInternalClient;
-use canic::ids::CanisterRole;
-
-let result: MyResponse = CanicInternalClient::new(shard_pid)
-    .call_update_result(
-        &project_shard_endpoint(),
-        CanisterRole::new("user_hub"),
-        (tenant_id, request),
-    )
-    .await?;
+#[canic::canic_update(
+    name = "assign_project",
+    requires(auth::authenticated("project.assign"))
+)]
+async fn assign_project(token: canic::dto::auth::DelegatedToken, request: AssignRequest)
+    -> Result<MyResponse, canic::Error>
+{
+    // Endpoint auth verifies the reusable delegated token before handler code.
+    Ok(assign_project_impl(token, request).await?)
+}
 ```
 
-Use tuple Candid arguments for multi-argument methods. Use public, non-internal
-application endpoints for raw external calls from scripts or tests.
+Use public, non-internal application endpoints for raw external calls from
+scripts or tests.
 
 ## Metrics And Deployed Wasm
 
