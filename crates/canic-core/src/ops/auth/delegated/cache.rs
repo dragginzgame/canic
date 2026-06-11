@@ -108,12 +108,12 @@ fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
 }
 
 #[cfg(test)]
-pub(crate) fn positive_cache_clear_for_tests() {
+pub fn positive_cache_clear_for_tests() {
     DELEGATED_TOKEN_PROOF_CACHE.with_borrow_mut(BTreeMap::clear);
 }
 
 #[cfg(test)]
-pub(crate) fn positive_cache_len_for_tests() -> usize {
+pub fn positive_cache_len_for_tests() -> usize {
     DELEGATED_TOKEN_PROOF_CACHE.with_borrow(BTreeMap::len)
 }
 

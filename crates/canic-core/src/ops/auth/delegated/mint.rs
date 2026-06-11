@@ -62,14 +62,14 @@ pub enum MintDelegatedTokenError {
 #[cfg(test)]
 pub fn mint_delegated_token<F>(
     input: MintDelegatedTokenInput<'_>,
-    issue_proof: F,
+    create_issuer_proof: F,
 ) -> Result<DelegatedToken, MintDelegatedTokenError>
 where
     F: FnOnce([u8; 32]) -> Result<IssuerProof, String>,
 {
     let prepared = prepare_delegated_token(input)?;
-    let issuer_proof =
-        issue_proof(prepared.claims_hash).map_err(MintDelegatedTokenError::IssuerProofFailed)?;
+    let issuer_proof = create_issuer_proof(prepared.claims_hash)
+        .map_err(MintDelegatedTokenError::IssuerProofFailed)?;
     Ok(finish_delegated_token(prepared, issuer_proof))
 }
 

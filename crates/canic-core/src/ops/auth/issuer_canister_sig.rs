@@ -384,8 +384,8 @@ mod tests {
         );
         let domain = issuer_sig_domain(IssuerPayloadKind::DelegatedTokenClaims);
 
-        assert_eq!(msg[0], domain.len() as u8);
-        assert_eq!(&msg[1..1 + domain.len()], domain);
+        assert_eq!(usize::from(msg[0]), domain.len());
+        assert_eq!(&msg[1..=domain.len()], domain);
         assert_eq!(&msg[1 + domain.len()..], payload_hash);
     }
 
