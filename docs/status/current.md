@@ -264,7 +264,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.12` candidate exposes the controller-gated non-root
+- `0.65.12` is committed as the controller-gated non-root
   `canic_install_active_delegation_proof` endpoint. `AuthApi` now has a public
   install wrapper over the `.11` validation/store path, the non-root auth
   provisioning endpoint bundle emits the installer, protocol constants include
@@ -282,6 +282,35 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-core -p canic -p canic-testing-internal
   cargo fmt --all -- --check
   cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.13` candidate adds the issuer canister-signature primitive for
+  the next token-issuer hard cut. `canic-core` and facade `canic` now expose
+  `auth-issuer-canister-sig-create` and
+  `auth-issuer-canister-sig-verify`; the issuer auth module now mirrors the
+  root SignatureMap pattern for claim-hash prepare/get, refreshes certified
+  data to the exact `labeled_hash(b"sig", SIGNATURES.root_hash())` shape,
+  stores caller-bound pending retrieval metadata with the one-minute retrieval
+  window, returns `IssuerProof::IcCanisterSignatureV1`, and verifies issuer
+  canister id, seed, `domain_len || issuer_domain || claims_hash`, and raw IC
+  root key. Issuer-proof prepare metrics and an
+  `IssuerCanisterSignaturePrepare` replay cost class are present for the
+  upcoming public endpoint. This does not yet replace `DelegatedToken.shard_sig`
+  with `issuer_proof` or remove shard ECDSA normal-auth features. Current
+  validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic-core ops::auth::issuer_canister_sig --lib -- --nocapture
+  cargo test --locked -p canic-core ops::runtime::metrics::delegated_auth --lib -- --nocapture
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo check --locked -p canic-core --features auth-issuer-canister-sig-create
+  cargo check --locked -p canic-core --features auth-issuer-canister-sig-verify
+  cargo check --locked -p canic --features auth-issuer-canister-sig-create
+  cargo check --locked -p canic --features auth-issuer-canister-sig-verify
+  cargo check --locked -p canic-core -p canic -p canic-testing-internal
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo clippy --locked -p canic-core --lib --features auth-issuer-canister-sig-create,auth-issuer-canister-sig-verify -- -D warnings
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```

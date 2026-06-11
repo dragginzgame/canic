@@ -222,6 +222,7 @@ const fn cost_class_label(cost_class: CostClass) -> &'static str {
         CostClass::None => "none",
         CostClass::ThresholdEcdsaSign => "ecdsa",
         CostClass::RootCanisterSignaturePrepare => "root_canister_signature_prepare",
+        CostClass::IssuerCanisterSignaturePrepare => "issuer_canister_signature_prepare",
         CostClass::ShardTokenSign => "shard_token_sign",
         CostClass::ManagementDeployment => "deploy",
         CostClass::ValueTransfer => "transfer",

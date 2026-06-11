@@ -103,6 +103,8 @@ checklist below tracks their removal or conversion.
       `issuer_proof_binding_hash`, issuer canister-signature
       seed/domain/message helpers, and the future issuer-proof verifier cache
       key helper.
+- [x] Add issuer canister-signature SignatureMap prepare/get/verify primitive
+      behind issuer-specific create/verify feature gates.
 - [x] Add persisted `ActiveDelegationProof` DTO/storage foundation with stable
       auth records and fail-closed active proof lookup outside the proof
       validity window.
@@ -149,8 +151,8 @@ checklist below tracks their removal or conversion.
       normal delegated-token auth DTOs.
 - [ ] Add issuer prepare/get delegated-token canister-signature flow.
 - [x] Add `install_active_delegation_proof` endpoint.
-- [ ] Add issuer canister-signature local verification against issuer canister id
-      plus raw IC root key.
+- [x] Add issuer canister-signature local verification against issuer canister
+      id plus raw IC root key.
 - [ ] Extend canister-signature issuer deployment checks to token issuer canisters
       as well as root issuers.
 - [ ] Add required `SignedRoleAttestation = RootCertified<RoleAttestation>`

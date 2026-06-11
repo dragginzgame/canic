@@ -51,6 +51,7 @@ pub enum CostClass {
     None,
     ThresholdEcdsaSign,
     RootCanisterSignaturePrepare,
+    IssuerCanisterSignaturePrepare,
     ShardTokenSign,
     ManagementDeployment,
     ValueTransfer,

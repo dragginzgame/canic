@@ -15,6 +15,7 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum DelegatedAuthMetricOperation {
+    PrepareIssuerProof,
     PrepareRootProof,
     SignShardToken,
     VerifyToken,
@@ -25,6 +26,7 @@ impl DelegatedAuthMetricOperation {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::PrepareIssuerProof => "prepare_issuer_proof",
             Self::PrepareRootProof => "prepare_root_proof",
             Self::SignShardToken => "sign_shard_token",
             Self::VerifyToken => "verify_token",
@@ -74,6 +76,7 @@ pub enum DelegatedAuthMetricReason {
     Disabled,
     GrantsNotSubset,
     InvalidState,
+    IssuerProofPrepareFailed,
     IssuerShardPidMismatch,
     MissingLocalRole,
     Ok,
@@ -112,6 +115,7 @@ impl DelegatedAuthMetricReason {
             Self::Disabled => "disabled",
             Self::GrantsNotSubset => "grants_not_subset",
             Self::InvalidState => "invalid_state",
+            Self::IssuerProofPrepareFailed => "issuer_proof_prepare_failed",
             Self::IssuerShardPidMismatch => "issuer_shard_pid_mismatch",
             Self::MissingLocalRole => "missing_local_role",
             Self::Ok => "ok",
@@ -199,6 +203,36 @@ impl DelegatedAuthMetrics {
             DelegatedAuthMetricOperation::PrepareRootProof,
             DelegatedAuthMetricOutcome::Failed,
             DelegatedAuthMetricReason::RootProofPrepareFailed,
+        );
+    }
+
+    /// Record that issuer proof preparation started.
+    #[allow(dead_code)]
+    pub fn record_issuer_proof_prepare_started() {
+        Self::record(
+            DelegatedAuthMetricOperation::PrepareIssuerProof,
+            DelegatedAuthMetricOutcome::Started,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that issuer proof preparation completed successfully.
+    #[allow(dead_code)]
+    pub fn record_issuer_proof_prepare_completed() {
+        Self::record(
+            DelegatedAuthMetricOperation::PrepareIssuerProof,
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that issuer proof preparation failed.
+    #[allow(dead_code)]
+    pub fn record_issuer_proof_prepare_failed() {
+        Self::record(
+            DelegatedAuthMetricOperation::PrepareIssuerProof,
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::IssuerProofPrepareFailed,
         );
     }
 
@@ -330,6 +364,9 @@ mod tests {
         DelegatedAuthMetrics::record_root_proof_prepare_started();
         DelegatedAuthMetrics::record_root_proof_prepare_completed();
         DelegatedAuthMetrics::record_root_proof_prepare_failed();
+        DelegatedAuthMetrics::record_issuer_proof_prepare_started();
+        DelegatedAuthMetrics::record_issuer_proof_prepare_completed();
+        DelegatedAuthMetrics::record_issuer_proof_prepare_failed();
         DelegatedAuthMetrics::record_shard_token_sign_started();
         DelegatedAuthMetrics::record_shard_token_sign_completed();
         DelegatedAuthMetrics::record_shard_token_sign_failed();
@@ -360,6 +397,30 @@ mod tests {
                 operation: DelegatedAuthMetricOperation::PrepareRootProof,
                 outcome: DelegatedAuthMetricOutcome::Failed,
                 reason: DelegatedAuthMetricReason::RootProofPrepareFailed,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::PrepareIssuerProof,
+                outcome: DelegatedAuthMetricOutcome::Started,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::PrepareIssuerProof,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::PrepareIssuerProof,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::IssuerProofPrepareFailed,
             }),
             Some(&1)
         );

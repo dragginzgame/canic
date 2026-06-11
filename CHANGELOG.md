@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.13` adds issuer canister-signature create/verify feature gates,
+  issuer SignatureMap prepare/get/verify primitives, issuer-proof prepare
+  metrics, and an issuer canister-signature replay cost class for the upcoming
+  token-issuer hard cut.
+
 - `0.65.12` exposes the controller-gated
   `canic_install_active_delegation_proof` non-root issuer endpoint, pins its
   replay-policy classification, and refreshes the canonical wasm-store Candid
