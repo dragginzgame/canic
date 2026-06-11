@@ -51,6 +51,15 @@ pub enum RootProof {
 }
 
 //
+// IssuerProof
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IssuerProof {
+    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
+}
+
+//
 // IcCanisterSignatureProofV1
 //
 
@@ -58,6 +67,24 @@ pub enum RootProof {
 pub struct IcCanisterSignatureProofV1 {
     pub signature_cbor: Vec<u8>,
     pub public_key_der: Vec<u8>,
+}
+
+//
+// IssuerProofAlgorithm
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IssuerProofAlgorithm {
+    IcCanisterSignatureV1,
+}
+
+//
+// IssuerProofBinding
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IssuerProofBinding {
+    IcCanisterSignatureV1 { seed_hash: [u8; 32] },
 }
 
 //

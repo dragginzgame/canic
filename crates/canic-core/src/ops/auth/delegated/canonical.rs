@@ -2,7 +2,8 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-        DelegationProof, RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
+        DelegationProof, IssuerProof, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+        ShardKeyBinding, ShardSignatureAlgorithm,
     },
     ids::CanisterRole,
 };
@@ -12,6 +13,7 @@ use thiserror::Error;
 const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
 const SHARD_KEY_HASH_DOMAIN: &[u8] = b"canic-shard-key-v1";
 const SHARD_TOKEN_SIGNATURE_DOMAIN: &[u8] = b"canic-shard-delegated-token";
+const ISSUER_PROOF_BINDING_HASH_DOMAIN: &[u8] = b"canic-issuer-proof-binding-v1";
 pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
 
 #[repr(u8)]
@@ -22,6 +24,7 @@ pub enum CanonicalDomain {
     DelegationProof = 3,
     RoleHash = 4,
     DerivationPath = 5,
+    IssuerProof = 6,
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
@@ -56,6 +59,29 @@ pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalA
 
 pub fn proof_hash(proof: &DelegationProof) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(hash_bytes(&proof_bytes(proof)?))
+}
+
+pub fn issuer_proof_hash(proof: &IssuerProof) -> [u8; 32] {
+    hash_bytes(&issuer_proof_bytes(proof))
+}
+
+#[expect(
+    dead_code,
+    reason = "issuer-proof binding hash is used when DelegationCert carries issuer authority"
+)]
+pub fn issuer_proof_binding_hash(
+    issuer_pid: Principal,
+    issuer_proof_alg: IssuerProofAlgorithm,
+    issuer_proof_binding: IssuerProofBinding,
+    issuer_signer_generation: Option<u64>,
+) -> [u8; 32] {
+    let mut out = Vec::with_capacity(128);
+    out.extend_from_slice(ISSUER_PROOF_BINDING_HASH_DOMAIN);
+    encode_principal(&mut out, issuer_pid);
+    encode_issuer_proof_algorithm(&mut out, issuer_proof_alg);
+    encode_issuer_proof_binding(&mut out, issuer_proof_binding);
+    encode_optional_u64(&mut out, issuer_signer_generation);
+    hash_bytes(&out)
 }
 
 pub fn shard_token_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
@@ -153,6 +179,12 @@ pub fn proof_bytes(proof: &DelegationProof) -> Result<Vec<u8>, CanonicalAuthErro
     Ok(out)
 }
 
+pub fn issuer_proof_bytes(proof: &IssuerProof) -> Vec<u8> {
+    let mut out = domain_bytes(CanonicalDomain::IssuerProof);
+    encode_issuer_proof(&mut out, proof);
+    out
+}
+
 fn domain_bytes(domain: CanonicalDomain) -> Vec<u8> {
     let mut out = Vec::with_capacity(128);
     out.extend_from_slice(DOMAIN_SEPARATOR);
@@ -167,6 +199,13 @@ fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
 fn encode_shard_signature_algorithm(out: &mut Vec<u8>, alg: ShardSignatureAlgorithm) {
     let tag = match alg {
         ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1 => 1,
+    };
+    out.push(tag);
+}
+
+fn encode_issuer_proof_algorithm(out: &mut Vec<u8>, alg: IssuerProofAlgorithm) {
+    let tag = match alg {
+        IssuerProofAlgorithm::IcCanisterSignatureV1 => 1,
     };
     out.push(tag);
 }
@@ -225,6 +264,25 @@ fn encode_root_proof(out: &mut Vec<u8>, proof: &RootProof) {
             out.push(1);
             encode_bytes(out, &proof.signature_cbor);
             encode_bytes(out, &proof.public_key_der);
+        }
+    }
+}
+
+fn encode_issuer_proof(out: &mut Vec<u8>, proof: &IssuerProof) {
+    match proof {
+        IssuerProof::IcCanisterSignatureV1(proof) => {
+            out.push(1);
+            encode_bytes(out, &proof.signature_cbor);
+            encode_bytes(out, &proof.public_key_der);
+        }
+    }
+}
+
+fn encode_issuer_proof_binding(out: &mut Vec<u8>, binding: IssuerProofBinding) {
+    match binding {
+        IssuerProofBinding::IcCanisterSignatureV1 { seed_hash } => {
+            out.push(1);
+            encode_fixed_32(out, seed_hash);
         }
     }
 }
@@ -343,6 +401,16 @@ fn encode_u64(out: &mut Vec<u8>, value: u64) {
     out.extend_from_slice(&value.to_be_bytes());
 }
 
+fn encode_optional_u64(out: &mut Vec<u8>, value: Option<u64>) {
+    match value {
+        Some(value) => {
+            out.push(1);
+            encode_u64(out, value);
+        }
+        None => out.push(0),
+    }
+}
+
 fn encode_len(out: &mut Vec<u8>, len: usize) {
     let len = u32::try_from(len).expect("delegated auth canonical vector length exceeds u32");
     out.extend_from_slice(&len.to_be_bytes());
@@ -351,6 +419,7 @@ fn encode_len(out: &mut Vec<u8>, len: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::auth::IcCanisterSignatureProofV1;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -515,5 +584,67 @@ mod tests {
 
         assert_ne!(derivation_path_hash(&left), derivation_path_hash(&right));
         assert_eq!(key_name_hash("icp_test_key"), key_name_hash("icp_test_key"));
+    }
+
+    #[test]
+    fn issuer_proof_hash_binds_signature_and_public_key() {
+        let proof = IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![1, 2, 3],
+            public_key_der: vec![4, 5, 6],
+        });
+        let mut changed_signature = proof.clone();
+        let mut changed_public_key = proof.clone();
+        let IssuerProof::IcCanisterSignatureV1(changed) = &mut changed_signature;
+        changed.signature_cbor[0] ^= 1;
+        let IssuerProof::IcCanisterSignatureV1(changed) = &mut changed_public_key;
+        changed.public_key_der[0] ^= 1;
+
+        assert_ne!(
+            issuer_proof_hash(&proof),
+            issuer_proof_hash(&changed_signature)
+        );
+        assert_ne!(
+            issuer_proof_hash(&proof),
+            issuer_proof_hash(&changed_public_key)
+        );
+    }
+
+    #[test]
+    fn issuer_proof_binding_hash_binds_authority_context() {
+        let binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [7; 32] };
+        let base = issuer_proof_binding_hash(
+            p(1),
+            IssuerProofAlgorithm::IcCanisterSignatureV1,
+            binding,
+            None,
+        );
+
+        assert_ne!(
+            base,
+            issuer_proof_binding_hash(
+                p(2),
+                IssuerProofAlgorithm::IcCanisterSignatureV1,
+                binding,
+                None,
+            )
+        );
+        assert_ne!(
+            base,
+            issuer_proof_binding_hash(
+                p(1),
+                IssuerProofAlgorithm::IcCanisterSignatureV1,
+                IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [8; 32] },
+                None,
+            )
+        );
+        assert_ne!(
+            base,
+            issuer_proof_binding_hash(
+                p(1),
+                IssuerProofAlgorithm::IcCanisterSignatureV1,
+                binding,
+                Some(1),
+            )
+        );
     }
 }

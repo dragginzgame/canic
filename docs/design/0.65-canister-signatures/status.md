@@ -95,6 +95,10 @@ checklist below tracks their removal or conversion.
 - [x] Add opaque issuer-signed `ext: Option<Vec<u8>>` to delegated-token issue
       requests and claims, include it in canonical claims hashing, and bound it
       to 4096 bytes.
+- [x] Add issuer-proof DTOs, canonical `IssuerProof` hashing,
+      `issuer_proof_binding_hash`, issuer canister-signature
+      seed/domain/message helpers, and the future issuer-proof verifier cache
+      key helper.
 - [x] Add pending-proof metadata and enforce `retrieval_expires_at_ns`.
 - [x] Add overflow-safe time checks.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.

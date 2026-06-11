@@ -180,7 +180,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.7` candidate adds opaque signed delegated-token `ext` bytes to
+- `0.65.7` is committed as opaque signed delegated-token `ext` bytes on
   the current token leg. `DelegatedTokenIssueRequest` and
   `DelegatedTokenClaims` now carry `ext: Option<Vec<u8>>`; canonical claims
   encoding includes a distinct ext presence marker plus ext bytes; the current
@@ -193,6 +193,25 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
   cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
   cargo check --locked -p canic-testing-internal
+  ```
+- Local `0.65.8` candidate starts the issuer-proof hard cut without flipping
+  endpoint behavior yet. It adds `IssuerProof`,
+  `IssuerProofAlgorithm`, and `IssuerProofBinding` DTOs; canonical
+  `IssuerProof` bytes/hash; `issuer_proof_binding_hash` over issuer principal,
+  proof algorithm, binding, and optional signer generation; issuer
+  canister-signature seed/domain/verifier-message helpers for
+  `DelegatedTokenClaims`; and a future positive-cache key helper that binds
+  proof hash, claims hash, `issuer_proof_hash`, and caller. Current runtime
+  verification still uses the shard-signature wrapper until `DelegatedToken`
+  carries `issuer_proof`. Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::issuer_canister_sig --lib -- --nocapture
+  cargo fmt --all -- --check
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
   ```
 - Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64
   topology line with no required deferred implementation work. The 0.64 design

@@ -1,5 +1,8 @@
-use super::canonical::{CanonicalAuthError, claims_hash, proof_hash};
-use crate::{cdk::types::Principal, dto::auth::DelegatedToken};
+use super::canonical::{CanonicalAuthError, claims_hash, issuer_proof_hash, proof_hash};
+use crate::{
+    cdk::types::Principal,
+    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof, IssuerProof},
+};
 use sha2::{Digest, Sha256};
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -28,6 +31,42 @@ pub fn delegated_token_cache_key(
     let claims_hash = claims_hash(&token.claims)?;
     let signature_hash = hash_bytes(&token.shard_sig);
 
+    Ok(delegated_token_cache_key_from_hashes(
+        proof_hash,
+        claims_hash,
+        signature_hash,
+        caller,
+    ))
+}
+
+#[expect(
+    dead_code,
+    reason = "issuer-proof cache key is used when DelegatedToken carries issuer_proof"
+)]
+pub fn delegated_token_issuer_proof_cache_key(
+    proof: &DelegationProof,
+    claims: &DelegatedTokenClaims,
+    issuer_proof: &IssuerProof,
+    caller: Principal,
+) -> Result<[u8; 32], CanonicalAuthError> {
+    let proof_hash = proof_hash(proof)?;
+    let claims_hash = claims_hash(claims)?;
+    let signature_hash = issuer_proof_hash(issuer_proof);
+
+    Ok(delegated_token_cache_key_from_hashes(
+        proof_hash,
+        claims_hash,
+        signature_hash,
+        caller,
+    ))
+}
+
+fn delegated_token_cache_key_from_hashes(
+    proof_hash: [u8; 32],
+    claims_hash: [u8; 32],
+    signature_hash: [u8; 32],
+    caller: Principal,
+) -> [u8; 32] {
     let mut bytes = Vec::with_capacity(
         DELEGATED_TOKEN_CACHE_KEY_DOMAIN.len()
             + proof_hash.len()
@@ -40,7 +79,7 @@ pub fn delegated_token_cache_key(
     bytes.extend_from_slice(&claims_hash);
     bytes.extend_from_slice(&signature_hash);
     bytes.extend_from_slice(caller.as_slice());
-    Ok(hash_bytes(&bytes))
+    hash_bytes(&bytes)
 }
 
 pub fn positive_cache_get(key: [u8; 32], now_ns: u64) -> Option<CachedDelegatedTokenProofValidity> {
@@ -109,7 +148,7 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-            DelegationProof, IcCanisterSignatureProofV1, RootProof, ShardKeyBinding,
+            DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof, ShardKeyBinding,
             ShardSignatureAlgorithm,
         },
         ids::CanisterRole,
@@ -186,6 +225,41 @@ mod tests {
     }
 
     #[test]
+    fn issuer_proof_cache_key_binds_issuer_proof_and_ext() {
+        let token = token();
+        let issuer_proof = sample_issuer_proof(1);
+        let key = delegated_token_issuer_proof_cache_key(
+            &token.proof,
+            &token.claims,
+            &issuer_proof,
+            p(9),
+        )
+        .expect("issuer proof key");
+
+        let changed_proof = sample_issuer_proof(2);
+        let proof_key = delegated_token_issuer_proof_cache_key(
+            &token.proof,
+            &token.claims,
+            &changed_proof,
+            p(9),
+        )
+        .expect("changed issuer proof key");
+
+        let mut changed_claims = token.claims.clone();
+        changed_claims.ext = Some(b"different".to_vec());
+        let claims_key = delegated_token_issuer_proof_cache_key(
+            &token.proof,
+            &changed_claims,
+            &issuer_proof,
+            p(9),
+        )
+        .expect("changed claims key");
+
+        assert_ne!(key, proof_key);
+        assert_ne!(key, claims_key);
+    }
+
+    #[test]
     fn positive_cache_hit_expires_at_valid_until_boundary() {
         positive_cache_clear_for_tests();
         let key = [7; 32];
@@ -234,5 +308,12 @@ mod tests {
         );
         assert_eq!(positive_cache_get([0; 32], 5), None);
         assert!(positive_cache_get(extra_key, 5).is_some());
+    }
+
+    fn sample_issuer_proof(byte: u8) -> IssuerProof {
+        IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![byte; 64],
+            public_key_der: vec![byte + 1; 32],
+        })
     }
 }

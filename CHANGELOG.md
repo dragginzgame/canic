@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.8` adds the issuer-proof DTO, canonical hashing, binding-hash, verifier
+  message, and future cache-key foundations for the zero-ECDSA token leg.
+
 - `0.65.7` adds opaque issuer-signed delegated-token `ext` bytes to the
   current token claims and request shape, with canonical hash coverage and a
   bounded payload size.

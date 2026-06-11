@@ -6,6 +6,7 @@ mod crypto;
 mod delegated;
 mod delegation;
 mod error;
+mod issuer_canister_sig;
 mod keys;
 mod root_canister_sig;
 mod token;
