@@ -49,7 +49,6 @@ fn capability_endpoint_rejects_role_attestation_proofs_after_hard_cut() {
 }
 
 #[test]
-#[expect(clippy::too_many_lines)]
 fn capability_endpoint_policy_and_structural_paths() {
     test_progress(
         "capability_endpoint_policy_and_structural_paths",
