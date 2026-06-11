@@ -53,7 +53,6 @@ pub fn issue_delegated_token(
         aud,
         grants,
         ttl_ns: token_ttl_ns,
-        nonce: [0; 16],
         ext: None,
     };
     let prepared: Result<DelegatedTokenPrepareResponse, Error> = pic.update_call_as_or_panic(

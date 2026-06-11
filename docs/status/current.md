@@ -361,11 +361,9 @@ inspect only the files needed for the current task.
   then hit the known `Failed to bind PocketIC server to address 127.0.0.1:0`
   infrastructure panic. The idle test process group was interrupted with
   `kill -INT`.
-  Follow-up from design review: the active 0.65 design/status docs require
-  deterministic issuer-side token nonce derivation with no `raw_rand` or
-  management-canister call during `prepare_delegated_token`, a certified-data
-  owner source guard, and explicit forwarded-user-token rejection coverage;
-  implementation remains pending.
+  Follow-up from design review: the active 0.65 design/status docs require a
+  certified-data owner source guard and explicit forwarded-user-token rejection
+  coverage; implementation remains pending.
 - `0.65.17` is pushed and deletes the remaining legacy protected-internal
   call envelope protocol and verifier-root-key leftovers from active code. The
   slice removes `canic_protected_endpoint!`, `ProtectedInternalEndpoint`,
@@ -412,6 +410,30 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic-core ops::auth::delegated::verify --lib -- --nocapture
   cargo test --locked -p canic-core ops::auth::verify::attestation --lib -- --nocapture
   cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.19` candidate removes caller-provided delegated-token nonce
+  input. `DelegatedTokenPrepareRequest`, `SignDelegatedTokenInput`, and the
+  internal mint input no longer accept nonce bytes; issuer token preparation
+  derives `DelegatedTokenClaims.nonce` from `"canic-token-nonce-v1"`,
+  `prepared_by`, prepare `operation_id`, `subject`, `issuer_pid`, and selected
+  `cert_hash`. Delegated-token prepare replay payload hashing no longer binds a
+  request nonce field, while replay identity still binds the operation id
+  through shared replay receipts and binds subject, audience, grants, TTL, and
+  `ext` through the payload hash. The auth trust-chain CI guard now rejects
+  `raw_rand`, management-canister calls, `.await`, and direct call sites in the
+  token preparation modules. Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::auth::delegated::mint --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo check --locked -p canic-testing-internal
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo check --locked -p canic-tests
+  cargo check --locked -p canic-core -p canic
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  bash scripts/ci/run-auth-trust-chain-guards.sh
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check

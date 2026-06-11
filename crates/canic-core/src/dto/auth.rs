@@ -215,7 +215,6 @@ pub struct DelegatedTokenPrepareRequest {
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
-    pub nonce: [u8; 16],
     #[serde(default)]
     pub ext: Option<Vec<u8>>,
 }

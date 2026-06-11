@@ -58,4 +58,14 @@ then
     reject "role-attestation key refresh or key-cache surface detected"
 fi
 
+# Delegated-token prepare derives its nonce deterministically from local inputs.
+# It must remain synchronous and must not call the management canister for
+# randomness or any other side effect.
+if rg -n "raw_rand|management_canister|\\.await|Call::|ic_cdk::call" \
+    crates/canic-core/src/ops/auth/token.rs \
+    crates/canic-core/src/ops/auth/delegated/mint.rs
+then
+    reject "delegated-token prepare contains async or management-canister side effect"
+fi
+
 exit "$fail"

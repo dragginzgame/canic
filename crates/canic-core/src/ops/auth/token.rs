@@ -89,11 +89,12 @@ impl AuthOps {
 
         let prepared = prepare_delegated_token(MintDelegatedTokenInput {
             proof: &active_proof.proof,
+            operation_id,
+            prepared_by,
             subject: input.subject,
             audience: input.audience,
             grants: input.grants,
             ttl_ns: input.ttl_ns,
-            nonce: input.nonce,
             ext: input.ext,
             now_ns,
         })

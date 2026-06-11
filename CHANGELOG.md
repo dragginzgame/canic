@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.19` removes caller-provided delegated-token nonce input and derives
+  signed token nonces issuer-side from caller, prepare operation id, subject,
+  issuer, and cert hash, with a CI guard preventing async or
+  management-canister calls in token preparation.
+
 - `0.65.18` adds the explicit 60-second future-skew allowance for delegated
   token cert/token and role-attestation verifier not-from-the-future checks
   while preserving strict expiry boundaries.

@@ -16,7 +16,6 @@ pub struct SignDelegatedTokenInput {
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
-    pub nonce: [u8; 16],
     pub ext: Option<Vec<u8>>,
 }
 

@@ -135,7 +135,6 @@ impl AuthApi {
                 audience: request.aud,
                 grants: request.grants,
                 ttl_ns: request.ttl_ns,
-                nonce: request.nonce,
                 ext: request.ext,
             },
             metadata.request_id,
@@ -585,7 +584,6 @@ impl AuthApi {
         Self::hash_delegation_audience(&mut hasher, &request.aud);
         Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.ttl_ns);
-        hasher.hash_bytes(&request.nonce);
         Self::hash_optional_bytes(&mut hasher, request.ext.as_deref());
         hasher.finish()
     }
@@ -951,7 +949,6 @@ mod tests {
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["canic.verify"])],
             ttl_ns: 30_000_000_000,
-            nonce: [9; 16],
             ext: None,
         }
     }
@@ -1050,7 +1047,7 @@ mod tests {
         let actor = crate::ops::replay::model::ReplayActor::direct_caller(p(2));
         let a = token_prepare_request(1);
         let mut b = a.clone();
-        b.nonce = [10; 16];
+        b.ttl_ns += 1;
 
         assert_ne!(
             AuthApi::token_prepare_replay_payload_hash(&command_kind, &actor, &a),

@@ -12,15 +12,19 @@ use crate::{
         DelegationProof, IssuerProof,
     },
 };
+use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+const TOKEN_NONCE_DOMAIN: &[u8] = b"canic-token-nonce-v1";
 
 pub struct MintDelegatedTokenInput<'a> {
     pub proof: &'a DelegationProof,
+    pub operation_id: [u8; 32],
+    pub prepared_by: Principal,
     pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
-    pub nonce: [u8; 16],
     pub ext: Option<Vec<u8>>,
     pub now_ns: u64,
 }
@@ -112,15 +116,24 @@ pub fn prepare_delegated_token(
         return Err(MintDelegatedTokenError::GrantsNotSubset);
     }
 
+    let cert_hash = cert_hash(cert)?;
+    let nonce = delegated_token_nonce(
+        input.prepared_by,
+        input.operation_id,
+        input.subject,
+        cert.issuer_pid,
+        cert_hash,
+    );
+
     let claims = DelegatedTokenClaims {
         subject: input.subject,
         issuer_pid: cert.issuer_pid,
-        cert_hash: cert_hash(cert)?,
+        cert_hash,
         issued_at_ns: input.now_ns,
         expires_at_ns: expires_at,
         aud: input.audience,
         grants: input.grants,
-        nonce: input.nonce,
+        nonce,
         ext: input.ext,
     };
     let claims_hash = claims_hash(&claims)?;
@@ -130,6 +143,26 @@ pub fn prepare_delegated_token(
         claims_hash,
         proof: input.proof.clone(),
     })
+}
+
+pub fn delegated_token_nonce(
+    prepared_by: Principal,
+    operation_id: [u8; 32],
+    subject: Principal,
+    issuer_pid: Principal,
+    cert_hash: [u8; 32],
+) -> [u8; 16] {
+    let mut hasher = Sha256::new();
+    hasher.update(TOKEN_NONCE_DOMAIN);
+    hasher.update(prepared_by.as_slice());
+    hasher.update(operation_id);
+    hasher.update(subject.as_slice());
+    hasher.update(issuer_pid.as_slice());
+    hasher.update(cert_hash);
+    let digest: [u8; 32] = hasher.finalize().into();
+    let mut nonce = [0u8; 16];
+    nonce.copy_from_slice(&digest[..16]);
+    nonce
 }
 
 /// Combine prepared token claims with their issuer canister-signature proof.
@@ -210,11 +243,12 @@ mod tests {
     fn input(proof: &DelegationProof) -> MintDelegatedTokenInput<'_> {
         MintDelegatedTokenInput {
             proof,
+            operation_id: [4; 32],
+            prepared_by: p(9),
             subject: p(9),
             audience: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["read"])],
             ttl_ns: 60,
-            nonce: [7; 16],
             ext: None,
             now_ns: 120,
         }
@@ -262,6 +296,16 @@ mod tests {
         assert_eq!(token.claims.issuer_pid, proof.cert.issuer_pid);
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 180);
+        assert_eq!(
+            token.claims.nonce,
+            delegated_token_nonce(
+                p(9),
+                [4; 32],
+                p(9),
+                proof.cert.issuer_pid,
+                cert_hash(&proof.cert).unwrap()
+            )
+        );
         assert_eq!(token.claims.ext, None);
         assert_eq!(token.proof, proof);
         let IssuerProof::IcCanisterSignatureV1(issuer_proof) = &token.issuer_proof;
@@ -317,17 +361,19 @@ mod tests {
     }
 
     #[test]
-    fn minted_tokens_with_different_nonces_verify_when_signed() {
+    fn minted_tokens_with_different_operation_ids_derive_different_nonces() {
         let proof = proof();
         let role = CanisterRole::new("project_instance");
         let mut left_input = input(&proof);
-        left_input.nonce = [1; 16];
+        left_input.operation_id = [1; 32];
         let mut right_input = input(&proof);
-        right_input.nonce = [2; 16];
+        right_input.operation_id = [2; 32];
         let left =
             mint_delegated_token(left_input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
         let right =
             mint_delegated_token(right_input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+
+        assert_ne!(left.claims.nonce, right.claims.nonce);
 
         for token in [&left, &right] {
             verify_delegated_token(

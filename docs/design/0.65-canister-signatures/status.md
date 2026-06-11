@@ -114,10 +114,10 @@ below tracks their removal or conversion.
 - [x] Add verifier skew tests proving an issuer clock 30 seconds ahead of the
       verifier passes and an issuer clock 120 seconds ahead fails for delegated
       token and role-attestation verification.
-- [ ] Remove caller-provided delegated-token nonce input and derive
+- [x] Remove caller-provided delegated-token nonce input and derive
       `DelegatedTokenClaims.nonce` issuer-side from caller, prepare operation
       id, subject, issuer, and selected cert hash without `raw_rand`.
-- [ ] Add a source guard proving `prepare_delegated_token` contains no
+- [x] Add a source guard proving `prepare_delegated_token` contains no
       `raw_rand`, management-canister call, or `.await`.
 - [ ] Add a source guard proving no root or token issuer module outside the auth
       certified-data owner calls `set_certified_data`.

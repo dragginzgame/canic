@@ -124,8 +124,8 @@ Expiry remains strict. Verifiers must not add grace after `expires_at_ns`.
 `DelegatedTokenClaims.nonce` is deterministic issuer-generated uniqueness
 material. It is not secret, not a replay key, and not an authorization input.
 `prepare_delegated_token` must not call the management canister, including
-`raw_rand`, to produce it. The recommended nonce derivation hashes caller,
-prepare operation id, subject, issuer, and selected cert hash under
+`raw_rand`, to produce it. The nonce derivation hashes caller, prepare
+operation id, subject, issuer, and selected cert hash under
 `"canic-token-nonce-v1"` and takes the first 16 bytes.
 
 ## Canonical Hashes
