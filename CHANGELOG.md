@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.20` pins the auth certified-data ownership boundary in CI so only the
+  root and issuer canister-signature helpers may call `certified_data_set`, and
+  both must commit the exact labeled `"sig"` tree.
+
 - `0.65.19` removes caller-provided delegated-token nonce input and derives
   signed token nonces issuer-side from caller, prepare operation id, subject,
   issuer, and cert hash, with a CI guard preventing async or

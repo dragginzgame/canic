@@ -361,9 +361,9 @@ inspect only the files needed for the current task.
   then hit the known `Failed to bind PocketIC server to address 127.0.0.1:0`
   infrastructure panic. The idle test process group was interrupted with
   `kill -INT`.
-  Follow-up from design review: the active 0.65 design/status docs require a
-  certified-data owner source guard and explicit forwarded-user-token rejection
-  coverage; implementation remains pending.
+  Follow-up from design review: the active 0.65 design/status docs require
+  explicit forwarded-user-token rejection coverage; implementation remains
+  pending.
 - `0.65.17` is pushed and deletes the remaining legacy protected-internal
   call envelope protocol and verifier-root-key leftovers from active code. The
   slice removes `canic_protected_endpoint!`, `ProtectedInternalEndpoint`,
@@ -399,7 +399,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.18` candidate adds the explicit
+- `0.65.18` is pushed and adds the explicit
   `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` verifier allowance for
   not-from-the-future checks. Delegated-token verification now accepts
   delegation cert `not_before_ns` and token `claims.issued_at_ns` values up to
@@ -414,7 +414,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.19` candidate removes caller-provided delegated-token nonce
+- `0.65.19` is pushed and removes caller-provided delegated-token nonce
   input. `DelegatedTokenPrepareRequest`, `SignDelegatedTokenInput`, and the
   internal mint input no longer accept nonce bytes; issuer token preparation
   derives `DelegatedTokenClaims.nonce` from `"canic-token-nonce-v1"`,
@@ -433,6 +433,18 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-tests
   cargo check --locked -p canic-core -p canic
   cargo clippy --locked -p canic-core --lib -- -D warnings
+  bash scripts/ci/run-auth-trust-chain-guards.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.20` candidate pins the auth certified-data ownership boundary in
+  CI. The auth trust-chain guard now requires the only active Rust
+  `certified_data_set` callers to be the root and issuer canister-signature
+  helpers, and it requires both owners to commit
+  `labeled_hash(LABEL_SIG, signature_root_hash)` so the canister-signature
+  `"sig"` tree shape cannot drift. Current validation:
+  ```text
   bash scripts/ci/run-auth-trust-chain-guards.sh
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture

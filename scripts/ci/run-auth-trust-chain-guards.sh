@@ -68,4 +68,33 @@ then
     reject "delegated-token prepare contains async or management-canister side effect"
 fi
 
+# Root and issuer auth canisters each have one certified-data owner for the
+# exact canister-signature `"sig"` tree. Do not let unrelated modules overwrite
+# certified data or introduce a different witness shape.
+certified_data_files="$(rg -l "certified_data_set" \
+    crates/canic-core/src crates/canic/src canisters/test fleets/test \
+    --glob '*.rs' | sort || true)"
+expected_certified_data_files="$(printf '%s\n%s' \
+    "crates/canic-core/src/ops/auth/issuer_canister_sig.rs" \
+    "crates/canic-core/src/ops/auth/root_canister_sig.rs")"
+
+if [[ "$certified_data_files" != "$expected_certified_data_files" ]]; then
+    if [[ -n "$certified_data_files" ]]; then
+        printf '%s\n' "$certified_data_files" >&2
+    fi
+    reject "unexpected certified_data_set owner detected"
+fi
+
+if ! rg -q "certified_data_set\\(labeled_hash\\(LABEL_SIG, signature_root_hash\\)\\)" \
+    crates/canic-core/src/ops/auth/root_canister_sig.rs
+then
+    reject "root canister-signature certified-data owner no longer commits labeled sig tree"
+fi
+
+if ! rg -q "certified_data_set\\(labeled_hash\\(LABEL_SIG, signature_root_hash\\)\\)" \
+    crates/canic-core/src/ops/auth/issuer_canister_sig.rs
+then
+    reject "issuer canister-signature certified-data owner no longer commits labeled sig tree"
+fi
+
 exit "$fail"

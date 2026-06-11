@@ -119,7 +119,7 @@ below tracks their removal or conversion.
       id, subject, issuer, and selected cert hash without `raw_rand`.
 - [x] Add a source guard proving `prepare_delegated_token` contains no
       `raw_rand`, management-canister call, or `.await`.
-- [ ] Add a source guard proving no root or token issuer module outside the auth
+- [x] Add a source guard proving no root or token issuer module outside the auth
       certified-data owner calls `set_certified_data`.
 - [ ] Add a negative verifier test proving a user token presented by a
       forwarding canister is rejected with `SubjectCallerMismatch`.
