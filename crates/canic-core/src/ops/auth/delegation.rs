@@ -1,6 +1,10 @@
 use super::{
     AuthOps, PreparedRootDelegationProof, SignDelegationProofInput,
     delegated::{
+        active_proof::{
+            InstallActiveDelegationProofError, InstallActiveDelegationProofInput,
+            install_active_delegation_proof as build_active_delegation_proof,
+        },
         canonical::{derivation_path_hash, key_name_hash},
         cert_rules::DelegatedAuthTtlLimits,
         issue::{
@@ -136,6 +140,47 @@ impl AuthOps {
 
     #[expect(
         dead_code,
+        reason = "install endpoint macro lands after core active-proof validation"
+    )]
+    pub(crate) fn install_active_delegation_proof(
+        proof: DelegationProof,
+        installed_by: Principal,
+    ) -> Result<ActiveDelegationProof, InternalError> {
+        let cfg = Self::delegated_token_verifier_config()?;
+        let now_ns = IcOps::now_nanos();
+        let active_proof = build_active_delegation_proof(
+            InstallActiveDelegationProofInput {
+                proof,
+                installed_by,
+                this_canister: IcOps::canister_self(),
+                now_ns,
+            },
+            |cert_hash, root_proof, root_pid| {
+                if root_pid != cfg.root_canister_id {
+                    return Err(AuthValidationError::InvalidRootAuthority {
+                        expected: cfg.root_canister_id,
+                        found: root_pid,
+                    }
+                    .to_string());
+                }
+                Self::verify_root_canister_signature_proof(
+                    RootPayloadKind::DelegationCert,
+                    cert_hash,
+                    root_proof,
+                    cfg.root_canister_id,
+                    &cfg.ic_root_public_key_raw,
+                )
+                .map_err(|err| err.to_string())
+            },
+        )
+        .map_err(map_install_active_delegation_proof_error)?;
+
+        Self::set_active_delegation_proof(active_proof.clone());
+        Ok(active_proof)
+    }
+
+    #[expect(
+        dead_code,
         reason = "active delegation proof storage is consumed by the issuer prepare/get flow"
     )]
     #[must_use]
@@ -143,10 +188,6 @@ impl AuthOps {
         AuthStateOps::active_delegation_proof(now_ns)
     }
 
-    #[expect(
-        dead_code,
-        reason = "active delegation proof install endpoint lands with issuer prepare/get flow"
-    )]
     pub(crate) fn set_active_delegation_proof(proof: ActiveDelegationProof) {
         AuthStateOps::set_active_delegation_proof(proof);
     }
@@ -170,5 +211,11 @@ fn cache_prepared_delegation_proof(caller: Principal, prepared: PreparedRootDele
 }
 
 fn map_issue_delegation_proof_error(err: IssueDelegationProofError) -> InternalError {
+    AuthValidationError::Auth(err.to_string()).into()
+}
+
+fn map_install_active_delegation_proof_error(
+    err: InstallActiveDelegationProofError,
+) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()
 }

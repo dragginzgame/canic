@@ -230,7 +230,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.10` candidate adds the persisted active-delegation-proof
+- `0.65.10` is committed as the persisted active-delegation-proof
   foundation for issuer-local token issuance. `ActiveDelegationProof` is now a
   passive DTO, stable auth state has explicit active-proof records with
   backward-compatible default decode, `AuthStateOps` exposes set/get/clear
@@ -243,6 +243,24 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-core -p canic -p canic-testing-internal
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.11` candidate adds active-delegation-proof install validation
+  for issuer-local root-certified authority. It adds passive install
+  request/response DTOs and a pure validation helper that requires the
+  delegation cert to target the current issuer canister, rejects not-yet-valid
+  or expired certs, computes the canonical cert hash, verifies the root
+  canister-signature proof through configured root trust anchors, and persists
+  the resulting `ActiveDelegationProof` with install metadata and a refresh
+  target inside the cert lifetime. The public install endpoint and issuer
+  prepare/get token canister-signature flow remain pending. Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::auth::delegated::active_proof --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic -p canic-testing-internal
+  cargo fmt --all -- --check
+  cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```

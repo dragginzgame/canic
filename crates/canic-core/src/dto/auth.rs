@@ -135,6 +135,24 @@ pub struct ActiveDelegationProof {
 }
 
 //
+// InstallActiveDelegationProofRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InstallActiveDelegationProofRequest {
+    pub proof: DelegationProof,
+}
+
+//
+// InstallActiveDelegationProofResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InstallActiveDelegationProofResponse {
+    pub active_proof: ActiveDelegationProof,
+}
+
+//
 // DelegatedTokenClaims
 //
 

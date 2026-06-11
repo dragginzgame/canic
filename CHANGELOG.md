@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.11` adds active-delegation-proof install validation and request/response
+  DTOs, verifying issuer binding, cert validity time bounds, canonical cert
+  hash, and root canister-signature proof before persisting issuer authority.
+
 - `0.65.10` adds the persisted `ActiveDelegationProof` foundation for issuer
   token issuance, with explicit stable auth records and auth-state accessors
   that fail closed outside the proof validity window.

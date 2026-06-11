@@ -1,3 +1,4 @@
+pub(super) mod active_proof;
 mod audience;
 pub(super) mod cache;
 pub(super) mod canonical;
