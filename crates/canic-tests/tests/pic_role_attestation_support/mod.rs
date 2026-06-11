@@ -1,5 +1,4 @@
 pub use candid::Principal;
-pub use canic_core::api::rpc::RpcApi;
 pub use canic_core::dto::{
     auth::{
         RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
