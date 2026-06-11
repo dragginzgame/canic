@@ -24,7 +24,7 @@ fn capability_endpoint_policy_and_structural_paths() {
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
-        capability: cycles_request.clone(),
+        capability: cycles_request,
         proof: CapabilityProof::Structural,
         metadata: capability_metadata(issued_at_ns, 7, 3, TEST_ROLE_ATTESTATION_TTL_NS),
     };

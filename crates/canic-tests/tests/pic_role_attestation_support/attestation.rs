@@ -64,11 +64,6 @@ fn attestation_request_id(caller: Principal, ttl_ns: u64, audience: Principal) -
     out
 }
 
-pub fn root_capability_hash(target_canister: Principal, capability: &Request) -> [u8; 32] {
-    RpcApi::root_capability_hash(target_canister, CAPABILITY_VERSION_V1, capability)
-        .expect("compute root capability hash")
-}
-
 pub const fn capability_metadata(
     issued_at_ns: u64,
     request_id_seed: u8,

@@ -25,7 +25,7 @@ mod metrics;
 
 pub use attestation::{
     TEST_ROLE_ATTESTATION_TTL_NS, TEST_SHORT_ROLE_ATTESTATION_TTL_NS, capability_metadata,
-    issue_self_attestation, root_capability_hash,
+    issue_self_attestation,
 };
 pub use calls::test_progress;
 pub use metrics::{metric_count_for_labels, query_metric_entries};
