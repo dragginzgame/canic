@@ -204,24 +204,6 @@ pub struct DelegationProofGetRequest {
 }
 
 //
-// DelegatedTokenIssueRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedTokenIssueRequest {
-    #[serde(default)]
-    pub metadata: Option<AuthRequestMetadata>,
-    pub proof: DelegationProof,
-    pub subject: Principal,
-    pub aud: DelegationAudience,
-    pub grants: Vec<DelegatedRoleGrant>,
-    pub ttl_ns: u64,
-    pub nonce: [u8; 16],
-    #[serde(default)]
-    pub ext: Option<Vec<u8>>,
-}
-
-//
 // DelegatedTokenPrepareRequest
 //
 
@@ -292,14 +274,33 @@ pub struct RoleAttestation {
 }
 
 //
+// RoleAttestationPrepareResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RoleAttestationPrepareResponse {
+    pub payload: RoleAttestation,
+    pub payload_hash: [u8; 32],
+    pub retrieval_expires_at_ns: u64,
+}
+
+//
+// RoleAttestationGetRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RoleAttestationGetRequest {
+    pub payload_hash: [u8; 32],
+}
+
+//
 // SignedRoleAttestation
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
-    pub signature: Vec<u8>,
-    pub key_id: u32,
+    pub root_proof: RootProof,
 }
 
 //

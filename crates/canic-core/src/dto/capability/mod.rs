@@ -3,21 +3,11 @@ use crate::dto::{
     rpc::{CyclesRequest, CyclesResponse, Request, Response},
 };
 
-pub mod proof;
-
-pub use proof::{DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope, RoleAttestationProof};
-
 //
 // CapabilityVersion
 //
 
 pub const CAPABILITY_VERSION_V1: u16 = 1;
-
-//
-// ProofVersion
-//
-
-pub const PROOF_VERSION_V1: u16 = 1;
 
 //
 // CapabilityService
@@ -41,25 +31,12 @@ pub struct CapabilityRequestMetadata {
 }
 
 //
-// CapabilityProofBlob
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct CapabilityProofBlob {
-    pub proof_version: u16,
-    pub capability_hash: [u8; 32],
-    pub payload: Vec<u8>,
-}
-
-//
 // CapabilityProof
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum CapabilityProof {
     Structural,
-    RoleAttestation(CapabilityProofBlob),
-    DelegatedGrant(CapabilityProofBlob),
 }
 
 //

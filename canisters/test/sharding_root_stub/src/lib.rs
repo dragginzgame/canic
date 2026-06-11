@@ -63,12 +63,6 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
         Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse {
             cycles_transferred: req.cycles,
         })),
-        Request::IssueRoleAttestation(_) => Err(Error::invalid(
-            "issue_role_attestation unsupported in sharding_root_stub",
-        )),
-        Request::IssueInternalInvocationProof(_) => Err(Error::invalid(
-            "issue_internal_invocation_proof unsupported in sharding_root_stub",
-        )),
     }
 }
 

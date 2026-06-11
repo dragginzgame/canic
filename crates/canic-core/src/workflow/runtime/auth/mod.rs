@@ -10,17 +10,14 @@ use crate::{
         auth::{AuthExpiryError, AuthOps, AuthOpsError, AuthValidationError},
         config::ConfigOps,
         ic::{IcOps, ecdsa::EcdsaOps},
-        rpc::RpcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_epoch_rejected, record_attestation_refresh_failed,
-            record_attestation_unknown_key_id, record_attestation_verify_failed,
+            record_attestation_epoch_rejected, record_attestation_unknown_key_id,
+            record_attestation_verify_failed,
         },
     },
-    protocol,
     workflow::prelude::*,
 };
-use std::future::Future;
 
 ///
 /// DelegatedTokenSignerPrewarmPlan
@@ -48,12 +45,12 @@ impl RuntimeAuthWorkflow {
             ));
         }
 
-        if root_requires_role_attestation_public_keys(&cfg)
-            && !EcdsaOps::threshold_public_key_fetch_enabled()
+        if root_requires_role_attestation_proofs(&cfg)
+            && !AuthOps::root_canister_sig_create_enabled()
         {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "root auth public-key certification is configured in canic.toml, but this root build does not include threshold ECDSA public-key fetch support; enable the `auth-threshold-ecdsa-public-key` feature for the root canister build".to_string(),
+                "role attestation issuance is configured in canic.toml, but this root build does not include IC canister-signature creation support; enable the `auth-root-canister-sig-create` feature for the root canister build".to_string(),
             ));
         }
 
@@ -87,8 +84,7 @@ impl RuntimeAuthWorkflow {
         canister_cfg: &crate::config::schema::CanisterConfig,
     ) -> Result<(), InternalError> {
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
-        if !delegated_tokens_cfg.enabled || !nonroot_requires_delegated_token_verifier(canister_cfg)
-        {
+        if !nonroot_requires_delegated_token_verifier(canister_cfg) {
             return Ok(());
         }
 
@@ -96,12 +92,16 @@ impl RuntimeAuthWorkflow {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' has delegated token verification enabled, but this build does not include IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
+                    "canister '{canister_role}' has auth proof verification enabled, but this build does not include IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
                 ),
             ));
         }
 
-        AuthOps::delegated_token_verifier_config().map(|_| ())
+        if delegated_tokens_cfg.enabled || canister_cfg.auth.role_attestation_cache {
+            AuthOps::delegated_token_verifier_config().map(|_| ())
+        } else {
+            Ok(())
+        }
     }
 
     /// Check local issuer support when the current canister mints delegated tokens.
@@ -143,11 +143,12 @@ impl RuntimeAuthWorkflow {
         AuthOps::publish_delegated_grant_root_key_material().await
     }
 
-    /// Verify a role attestation, refreshing root keys once on unknown key.
+    /// Verify a role attestation locally from its embedded root proof.
     pub async fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), InternalError> {
+        std::future::ready(()).await;
         let configured_min_accepted_epoch = ConfigOps::role_attestation_config()?
             .min_accepted_epoch_by_role
             .get(attestation.payload.role.as_str())
@@ -159,102 +160,22 @@ impl RuntimeAuthWorkflow {
         let self_pid = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
         let verifier_subnet = Some(EnvOps::subnet_pid()?);
-        let root_pid = EnvOps::root_pid()?;
 
-        let verify = || {
-            AuthOps::verify_role_attestation_cached(
-                attestation,
-                caller,
-                self_pid,
-                verifier_subnet,
-                now_ns,
-                min_accepted_epoch,
-            )
-            .map(|_| ())
-        };
-        let refresh = || async {
-            let key_set =
-                RpcOps::call_rpc_result(root_pid, protocol::CANIC_ATTESTATION_KEY_SET, ()).await?;
-            AuthOps::replace_attestation_key_set(key_set);
-            Ok(())
-        };
-
-        match verify_role_attestation_with_single_refresh(verify, refresh).await {
-            Ok(()) => Ok(()),
-            Err(RoleAttestationVerifyFlowError::Initial(err)) => {
+        match AuthOps::verify_role_attestation_cached(
+            attestation,
+            caller,
+            self_pid,
+            verifier_subnet,
+            now_ns,
+            min_accepted_epoch,
+        ) {
+            Ok(_) => Ok(()),
+            Err(err) => {
                 record_attestation_verifier_rejection(&err);
-                log_attestation_verifier_rejection(&err, attestation, caller, self_pid, "cached");
-                Err(err.into())
-            }
-            Err(RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
-                record_attestation_verifier_rejection(&trigger);
-                log_attestation_verifier_rejection(
-                    &trigger,
-                    attestation,
-                    caller,
-                    self_pid,
-                    "cache_miss_refresh",
-                );
-                record_attestation_refresh_failed();
-                log!(
-                    Topic::Auth,
-                    Warn,
-                    "role attestation refresh failed local={} caller={} key_id={} error={}",
-                    self_pid,
-                    caller,
-                    attestation.key_id,
-                    source
-                );
-                Err(source)
-            }
-            Err(RoleAttestationVerifyFlowError::PostRefresh(err)) => {
-                record_attestation_verifier_rejection(&err);
-                log_attestation_verifier_rejection(
-                    &err,
-                    attestation,
-                    caller,
-                    self_pid,
-                    "post_refresh",
-                );
+                log_attestation_verifier_rejection(&err, attestation, caller, self_pid);
                 Err(err.into())
             }
         }
-    }
-}
-
-#[derive(Debug)]
-enum RoleAttestationVerifyFlowError {
-    Initial(AuthOpsError),
-    Refresh {
-        trigger: AuthOpsError,
-        source: InternalError,
-    },
-    PostRefresh(AuthOpsError),
-}
-
-async fn verify_role_attestation_with_single_refresh<Verify, Refresh, RefreshFuture>(
-    mut verify: Verify,
-    mut refresh: Refresh,
-) -> Result<(), RoleAttestationVerifyFlowError>
-where
-    Verify: FnMut() -> Result<(), AuthOpsError>,
-    Refresh: FnMut() -> RefreshFuture,
-    RefreshFuture: Future<Output = Result<(), InternalError>>,
-{
-    match verify() {
-        Ok(()) => Ok(()),
-        Err(
-            err @ AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }),
-        ) => {
-            refresh()
-                .await
-                .map_err(|source| RoleAttestationVerifyFlowError::Refresh {
-                    trigger: err,
-                    source,
-                })?;
-            verify().map_err(RoleAttestationVerifyFlowError::PostRefresh)
-        }
-        Err(err) => Err(RoleAttestationVerifyFlowError::Initial(err)),
     }
 }
 
@@ -284,18 +205,15 @@ fn log_attestation_verifier_rejection(
     attestation: &SignedRoleAttestation,
     caller: Principal,
     self_pid: Principal,
-    phase: &str,
 ) {
     log!(
         Topic::Auth,
         Warn,
-        "role attestation rejected phase={} local={} caller={} subject={} role={} key_id={} audience={} subnet={} issued_at={} expires_at={} epoch={} error={}",
-        phase,
+        "role attestation rejected local={} caller={} subject={} role={} audience={} subnet={} issued_at={} expires_at={} epoch={} error={}",
         self_pid,
         caller,
         attestation.payload.subject,
         attestation.payload.role,
-        attestation.key_id,
         attestation.payload.audience,
         display_optional(attestation.payload.subnet_id),
         attestation.payload.issued_at_ns,
@@ -314,7 +232,7 @@ fn root_requires_delegated_token_proofs(cfg: &ConfigModel) -> bool {
     })
 }
 
-fn root_requires_role_attestation_public_keys(cfg: &ConfigModel) -> bool {
+fn root_requires_role_attestation_proofs(cfg: &ConfigModel) -> bool {
     cfg.subnets.values().any(|subnet| {
         subnet
             .canisters
@@ -342,7 +260,7 @@ mod tests {
     use super::{
         RuntimeAuthWorkflow, nonroot_requires_delegated_token_issuer,
         nonroot_requires_delegated_token_verifier, root_requires_delegated_token_proofs,
-        root_requires_role_attestation_public_keys,
+        root_requires_role_attestation_proofs,
     };
     use crate::{
         config::schema::{CanisterAuthConfig, CanisterKind},
@@ -367,11 +285,12 @@ mod tests {
             .build();
 
         assert!(root_requires_delegated_token_proofs(&cfg));
-        assert!(!root_requires_role_attestation_public_keys(&cfg));
+        assert!(!root_requires_role_attestation_proofs(&cfg));
     }
 
     #[test]
-    fn root_requires_public_key_fetch_for_role_attestation_cache_when_delegated_tokens_disabled() {
+    fn root_requires_canister_signature_proofs_for_role_attestation_cache_when_delegated_tokens_disabled()
+     {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_signer: false,
@@ -388,7 +307,7 @@ mod tests {
         cfg.auth.delegated_tokens.enabled = false;
 
         assert!(!root_requires_delegated_token_proofs(&cfg));
-        assert!(root_requires_role_attestation_public_keys(&cfg));
+        assert!(root_requires_role_attestation_proofs(&cfg));
     }
 
     #[test]
@@ -409,7 +328,7 @@ mod tests {
         cfg.auth.delegated_tokens.enabled = false;
 
         assert!(!root_requires_delegated_token_proofs(&cfg));
-        assert!(!root_requires_role_attestation_public_keys(&cfg));
+        assert!(!root_requires_role_attestation_proofs(&cfg));
     }
 
     #[test]
@@ -417,7 +336,7 @@ mod tests {
         let cfg = ConfigTestBuilder::new().build();
 
         assert!(!root_requires_delegated_token_proofs(&cfg));
-        assert!(!root_requires_role_attestation_public_keys(&cfg));
+        assert!(!root_requires_role_attestation_proofs(&cfg));
     }
 
     #[test]

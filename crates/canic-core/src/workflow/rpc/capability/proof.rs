@@ -31,11 +31,6 @@ pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), E
         Request::RecycleCanister(request) => {
             verify_root_structural_child_target(caller, request.canister_pid, "recycle")
         }
-        Request::IssueRoleAttestation(_) | Request::IssueInternalInvocationProof(_) => {
-            Err(Error::forbidden(
-                "structural proof is only supported for root cycles, child provision, child upgrade, and child recycle capabilities",
-            ))
-        }
     }
 }
 

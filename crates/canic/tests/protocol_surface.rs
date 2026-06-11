@@ -169,6 +169,41 @@ fn active_delegation_proof_installer_surface_is_pinned() {
 }
 
 #[test]
+fn root_role_attestation_prepare_get_surface_is_pinned() {
+    assert_eq!(
+        canic::protocol::CANIC_PREPARE_ROLE_ATTESTATION,
+        canic_core::protocol::CANIC_PREPARE_ROLE_ATTESTATION
+    );
+    assert_eq!(
+        canic::protocol::CANIC_GET_ROLE_ATTESTATION,
+        canic_core::protocol::CANIC_GET_ROLE_ATTESTATION
+    );
+    assert_eq!(
+        canic::protocol::CANIC_PREPARE_ROLE_ATTESTATION,
+        "canic_prepare_role_attestation"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_GET_ROLE_ATTESTATION,
+        "canic_get_role_attestation"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    assert!(
+        source.contains("fn canic_prepare_role_attestation(")
+            && source.contains("RoleAttestationPrepareResponse")
+            && source.contains("AuthApi::prepare_role_attestation_root"),
+        "root auth endpoint bundle must expose role-attestation prepare"
+    );
+    assert!(
+        source.contains("fn canic_get_role_attestation(")
+            && source.contains("RoleAttestationGetRequest")
+            && source.contains("AuthApi::get_role_attestation_root"),
+        "root auth endpoint bundle must expose role-attestation get"
+    );
+}
+
+#[test]
 fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
     let source = read_text(&macro_path);

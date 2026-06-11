@@ -5,7 +5,6 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        config::ConfigOps,
         ic::IcOps,
         replay::guard::ReplayPending,
         runtime::env::EnvOps,
@@ -29,31 +28,7 @@ const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
 const MAX_ROOT_REPLAY_ENTRIES_PER_CALLER: usize = 512;
 const MAX_ROOT_TTL_NS: u64 = 300_000_000_000;
-const DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS: u64 = 900;
-const NS_PER_SEC: u64 = 1_000_000_000;
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
-
-fn max_role_attestation_ttl_ns() -> u64 {
-    let max_ttl_secs = ConfigOps::role_attestation_config()
-        .map_or(DEFAULT_MAX_ROLE_ATTESTATION_TTL_SECONDS, |cfg| {
-            cfg.max_ttl_secs
-        });
-    max_ttl_secs.saturating_mul(NS_PER_SEC)
-}
-
-fn validate_role_attestation_ttl(ttl_ns: u64) -> Result<u64, InternalError> {
-    let max_ttl_ns = max_role_attestation_ttl_ns();
-    if ttl_ns == 0 || ttl_ns > max_ttl_ns {
-        return Err(
-            crate::workflow::rpc::RpcWorkflowError::RoleAttestationInvalidTtl {
-                ttl_ns,
-                max_ttl_ns,
-            }
-            .into(),
-        );
-    }
-    Ok(max_ttl_ns)
-}
 
 ///
 /// RootContext
@@ -86,6 +61,7 @@ enum RootPreflight {
 
 #[derive(Clone, Copy, Debug)]
 enum AuthorizationPipelineOrder {
+    #[cfg(test)]
     AuthorizeThenReplay,
     ReplayThenAuthorize,
 }
@@ -97,11 +73,6 @@ enum AuthorizationPipelineOrder {
 pub struct RootResponseWorkflow;
 
 impl RootResponseWorkflow {
-    /// Handle a root-bound orchestration request and produce a [`Response`].
-    pub async fn response(req: Request) -> Result<Response, InternalError> {
-        Self::response_with_pipeline(req, AuthorizationPipelineOrder::AuthorizeThenReplay).await
-    }
-
     /// Handle a root-bound orchestration request using replay-before-policy
     /// ordering for capability-envelope execution.
     pub async fn response_replay_first(req: Request) -> Result<Response, InternalError> {
@@ -179,6 +150,7 @@ impl RootResponseWorkflow {
         order: AuthorizationPipelineOrder,
     ) -> Result<RootPreflight, InternalError> {
         match order {
+            #[cfg(test)]
             AuthorizationPipelineOrder::AuthorizeThenReplay => {
                 if let Some(preflight) = Self::check_existing_replay(ctx, capability)? {
                     return match preflight {
@@ -262,6 +234,7 @@ impl RootResponseWorkflow {
         replay::check_replay(ctx, capability)
     }
 
+    #[cfg(test)]
     fn check_existing_replay(
         ctx: &RootContext,
         capability: &RootCapability,

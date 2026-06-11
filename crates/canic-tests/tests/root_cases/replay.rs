@@ -75,24 +75,6 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
             cycles: 1_000_000,
             metadata: Some(metadata([32u8; 32], 120_000_000_000)),
         }),
-        Request::IssueRoleAttestation(canic::dto::auth::RoleAttestationRequest {
-            subject: unauthorized,
-            role: canister::TEST,
-            subnet_id: None,
-            audience: setup.root_id,
-            ttl_ns: 60_000_000_000,
-            epoch: 0,
-            metadata: Some(metadata([33u8; 32], 120_000_000_000)),
-        }),
-        Request::IssueInternalInvocationProof(canic::dto::auth::InternalInvocationProofRequest {
-            subject: unauthorized,
-            role: canister::TEST,
-            subnet_id: None,
-            audience: test_pid,
-            audience_method: "test".to_string(),
-            ttl_ns: 60_000_000_000,
-            metadata: Some(metadata([34u8; 32], 120_000_000_000)),
-        }),
     ];
 
     for request in cases {
@@ -783,8 +765,6 @@ fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u
         Request::UpgradeCanister(req) => req.metadata,
         Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
-        Request::IssueRoleAttestation(req) => req.metadata,
-        Request::IssueInternalInvocationProof(req) => req.metadata,
     };
 
     match metadata {

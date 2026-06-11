@@ -299,23 +299,28 @@ Root proof issuer canisters must not be deployed on a subnet whose canister
 signatures are invalid. Deployment tooling enforces this; runtime may also trap
 on an explicit deployment assertion.
 
-## 6. Shard Token Issuance
+## 6. Issuer Token Issuance
 
 Entrypoint path:
 
 ```text
-AuthApi::issue_token
-  -> reserve auth.issue_token.v1 replay receipt
-  -> guarded shard token signing
+AuthApi::prepare_delegated_token
+  -> reserve auth.prepare_delegated_token.v1 replay receipt
+  -> add issuer canister-signature map entry
+  -> set_certified_data(labeled_hash("sig", SIGNATURES.root_hash()))
+
+AuthApi::get_delegated_token
+  -> return the prepared claims plus issuer canister-signature proof
 ```
 
-Shard issuance steps:
+Issuer issuance steps:
 
 1. Require caller-provided replay metadata.
-2. Return the committed `DelegatedToken` for the same operation id, actor, and
+2. Return the committed prepare response for the same operation id, actor, and
    payload.
 3. Reject the same operation id with a different actor or payload.
-4. Require `proof.cert.shard_pid == self`.
+4. Require an installed `ActiveDelegationProof` whose cert issuer is this
+   canister.
 5. Prepare `DelegatedTokenClaims`.
 6. Enforce:
    - root proof verifies
@@ -326,25 +331,14 @@ Shard issuance steps:
    - token audience is a subset of cert audience
    - token grants are a subset of cert grants
    - claims are canonical
-7. Reserve signing quota and cycle budget for the requesting caller before
-   shard ECDSA.
-8. Mark `ThresholdEcdsaSign(DelegatedToken)` in the replay receipt before shard
-   ECDSA.
-9. Sign `shard_token_hash` with the shard ECDSA path:
+7. Add an issuer canister-signature entry for the canonical claims hash.
+8. Commit the exact prepare response.
+9. Query retrieval is caller-bound and returns the self-contained
+   `DelegatedToken`.
 
-```text
-["canic", "shard", self_pid_bytes]
-```
-
-10. Commit the exact `DelegatedToken` response.
-
-The normal auth surface has no single-call fresh-proof `mint_token`. Fleet,
-CLI, and test helpers may choreograph prepare, get, and issue calls from
-off-canister code.
-
-0.65 removes root threshold ECDSA cost only. Shard token issuance still uses
-threshold ECDSA, so callers should reuse delegated tokens for their TTL instead
-of minting a fresh token for each endpoint request.
+The normal auth surface has no single-call token issuance path. Fleet, CLI, and
+test helpers choreograph prepare/get from off-canister code. Normal delegated
+auth does not call `management_canister.sign_with_ecdsa`.
 
 ## 7. Verifier Algorithm
 
@@ -356,7 +350,7 @@ Verifier steps:
 2. Resolve verifier trust config:
    - `auth.delegated_tokens.root_canister_id`, or initialized root env
    - `auth.delegated_tokens.ic_root_public_key_raw_hex`, or runtime/test root-key provider
-   - `auth.delegated_tokens.ecdsa_key_name` for shard key binding
+   - issuer canister-signature proof embedded in the token
 3. Verify certificate policy:
    - configured root principal
    - cert time window
@@ -427,10 +421,9 @@ Session storage is not delegated-token proof storage.
 ## 9. Role Attestation
 
 Role attestation is separate from delegated-token proof validation. In 0.65,
-fresh one-shot root ECDSA issuance for role attestations and internal invocation
-proofs is removed from the normal auth surface. The root RPC commands remain
-replay-protected but hard-fail before reserving signing cycles or recording a
-threshold-ECDSA external effect.
+role attestations use root canister signatures with the same update-then-query
+shape as root delegation proofs. Fresh one-shot root ECDSA issuance remains
+removed from the normal auth surface.
 
 Data:
 
@@ -447,34 +440,37 @@ pub struct RoleAttestation {
 
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
-    pub signature: Vec<u8>,
-    pub key_id: u32,
+    pub root_proof: RootProof,
 }
 ```
 
-Historical root ECDSA role attestations used:
+Root canister-signature role attestations use:
 
 ```text
-["canic", "attestation", "root"]
+RootPayloadKind::RoleAttestation
 ```
+
+Issuance flow:
+
+- `canic_prepare_role_attestation` is an update call on the root canister
+- `canic_get_role_attestation` is a query call by the same caller
+- retrieval is caller-bound and returns the embedded root proof
 
 Verifier behavior:
 
-- verify attestation signature under the cached role-attestation key
-- on unknown attestation key id, refresh the key set from root once and retry
-- preserve root-provided `AttestationKey.key_name` and `AttestationKey.key_hash`
+- hash the canonical `RoleAttestation` payload
+- verify the embedded root canister-signature proof against the configured root
+  canister id and raw IC root public key
+- enforce subject, role, audience, subnet, time window, and minimum accepted
+  epoch locally
+- make no root, issuer, or management-canister call on the protected path
 
 Current issuance rule:
 
-- `canic_request_role_attestation` hard-fails in normal 0.65 auth
-- `canic_request_internal_invocation_proof` hard-fails in normal 0.65 auth
-- root capability endpoints reject role-attestation capability proofs; the DTO
-  remains only as wire-decodable rejected input
+- `canic_request_role_attestation` is not exposed in normal 0.65 auth
+- `canic_request_internal_invocation_proof` is not exposed in normal 0.65 auth
+- standalone capability proof DTOs are not part of the active protocol
 - delegated tokens are the supported reusable endpoint-auth path
-- do not retag root-provided key bytes with verifier-local config
-- enforce subject, role, audience, subnet, time window, and minimum accepted epoch
-
-The attestation key set is shared key state, not delegated-token proof state.
 
 ## 10. Configuration
 
@@ -494,7 +490,6 @@ Role attestation:
 
 ```toml
 [auth.role_attestation]
-ecdsa_key_name = "test_key_1"
 max_ttl_secs = 300
 
 [auth.role_attestation.min_accepted_epoch_by_role]
@@ -509,7 +504,6 @@ Security boundaries:
   provider is the root canister-signature trust anchor.
 - `auth.delegated_tokens.ecdsa_key_name` defines the shard delegated-token ECDSA
   key family.
-- `auth.role_attestation.ecdsa_key_name` defines role-attestation key material.
 - verifier `local_role` config is trusted; a canister configured with the wrong
   role is compromised for delegated-auth purposes.
 
@@ -520,7 +514,9 @@ Feature requirements:
   ECDSA
 - endpoint verifier: `auth-delegated-token-verify`
 - shard token issuer using threshold ECDSA: `auth-threshold-ecdsa-sign`
-- role/internal attestation key publisher: `auth-threshold-ecdsa-public-key`
+- role attestation issuer: `control-plane`, `auth-root-canister-sig-create`
+- role attestation verifier: `auth-root-canister-sig-verify` with configured
+  root canister id and raw IC root public key
 
 ## 11. Revocation and TTL
 

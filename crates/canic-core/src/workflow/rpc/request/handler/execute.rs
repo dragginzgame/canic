@@ -5,7 +5,6 @@ use crate::{
     InternalError,
     cdk::types::{Principal, TC},
     domain::policy::topology::TopologyPolicyError,
-    dto::auth::{InternalInvocationProofRequest, RoleAttestationRequest},
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
         RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
@@ -14,7 +13,6 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        auth::AuthValidationError,
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
@@ -60,12 +58,6 @@ pub(super) async fn execute_root_capability(
                 nonroot_cycles::execute_request_cycles(ctx, pending, &req).await
             }?;
             Ok(Response::Cycles(response))
-        }
-        RootCapability::IssueRoleAttestation(req) => {
-            execute_issue_role_attestation(ctx, pending, req)
-        }
-        RootCapability::IssueInternalInvocationProof(req) => {
-            execute_issue_internal_invocation_proof(ctx, pending, req)
         }
     };
 
@@ -259,49 +251,4 @@ async fn execute_recycle(req: &RecycleCanisterRequest) -> Result<Response, Inter
     PoolWorkflow::pool_recycle_canister(req.canister_pid).await?;
 
     Ok(Response::RecycleCanister(RecycleCanisterResponse {}))
-}
-
-fn execute_issue_role_attestation(
-    ctx: &RootContext,
-    pending: &ReplayPending,
-    req: RoleAttestationRequest,
-) -> Result<Response, InternalError> {
-    log!(
-        Topic::Auth,
-        Warn,
-        "role attestation one-shot root ECDSA issuance rejected in 0.65 caller={} replay_key={:?} subject={} role={} audience={}",
-        ctx.caller,
-        pending.receipt_token.key(),
-        req.subject,
-        req.role,
-        req.audience
-    );
-    Err(AuthValidationError::Auth(
-        "role attestation one-shot root ECDSA issuance is disabled in 0.65; use delegated tokens for normal auth"
-            .to_string(),
-    )
-    .into())
-}
-
-fn execute_issue_internal_invocation_proof(
-    ctx: &RootContext,
-    pending: &ReplayPending,
-    req: InternalInvocationProofRequest,
-) -> Result<Response, InternalError> {
-    log!(
-        Topic::Auth,
-        Warn,
-        "internal invocation proof one-shot root ECDSA issuance rejected in 0.65 caller={} replay_key={:?} subject={} role={} audience={} method={}",
-        ctx.caller,
-        pending.receipt_token.key(),
-        req.subject,
-        req.role,
-        req.audience,
-        req.audience_method
-    );
-    Err(AuthValidationError::Auth(
-        "internal invocation proof one-shot root ECDSA issuance is disabled in 0.65; use delegated tokens for normal auth"
-            .to_string(),
-    )
-    .into())
 }

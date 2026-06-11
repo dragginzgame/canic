@@ -3,15 +3,14 @@ use crate::{
     dto::{
         auth::{
             AttestationKeySet, AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken,
-            DelegatedTokenGetRequest, DelegatedTokenIssueRequest, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationAudience, DelegationProof,
-            DelegationProofGetRequest, DelegationProofIssueRequest, DelegationProofPrepareResponse,
+            DelegatedTokenGetRequest, DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse,
+            DelegationAudience, DelegationProof, DelegationProofGetRequest,
+            DelegationProofIssueRequest, DelegationProofPrepareResponse,
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
-            InternalInvocationProofRequest, RoleAttestationRequest,
+            RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
             SignedInternalInvocationProofV1, SignedRoleAttestation,
         },
         error::{Error, ErrorCode},
-        rpc::{Request as RootRequest, Response as RootCapabilityResponse},
     },
     error::InternalErrorClass,
     ids::CanisterRole,
@@ -20,7 +19,7 @@ use crate::{
     ops::{
         auth::{
             AuthExpiryError, AuthOps, AuthOpsError, AuthValidationError, SignDelegatedTokenInput,
-            SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
+            SignDelegationProofInput, SignRoleAttestationInput, VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
         ic::IcOps,
@@ -35,8 +34,8 @@ use crate::{
         },
         runtime::env::EnvOps,
         runtime::metrics::auth::record_attestation_refresh_failed,
+        storage::registry::subnet::SubnetRegistryOps,
     },
-    workflow::rpc::request::handler::RootResponseWorkflow,
 };
 use candid::{decode_one, encode_one};
 use root_client::RootAuthMaterialClient;
@@ -65,10 +64,12 @@ impl AuthApi {
     const DELEGATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_delegation_proof.v1";
     const DELEGATION_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
     const MAX_DELEGATION_REPLAY_TTL_NS: u64 = 300_000_000_000;
+    const ROLE_ATTESTATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_role_attestation.v1";
+    const ROLE_ATTESTATION_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
+    const MAX_ROLE_ATTESTATION_REPLAY_TTL_NS: u64 = 300_000_000_000;
     const TOKEN_PREPARE_REPLAY_COMMAND_KIND: &str = "auth.prepare_delegated_token.v1";
     const TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
     const MAX_TOKEN_REPLAY_TTL_NS: u64 = 300_000_000_000;
-    const DELEGATED_TOKEN_ONE_SHOT_DISABLED: &str = "one-shot delegated token issue_token is disabled; use prepare_delegated_token update plus get_delegated_token query";
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
 
@@ -119,14 +120,6 @@ impl AuthApi {
         })
         .map(|verified| verified.subject)
         .map_err(Self::map_auth_error)
-    }
-
-    /// Issue a delegated token from an explicit self-contained proof.
-    pub async fn issue_token(
-        _request: DelegatedTokenIssueRequest,
-    ) -> Result<DelegatedToken, Error> {
-        std::future::ready(()).await;
-        Err(Error::invalid(Self::DELEGATED_TOKEN_ONE_SHOT_DISABLED))
     }
 
     /// Prepare a delegated token from the issuer-local active delegation proof.
@@ -272,6 +265,91 @@ impl AuthApi {
         AuthOps::get_delegation_proof(caller, request.cert_hash).map_err(Self::map_auth_error)
     }
 
+    /// Prepare a root-certified role attestation from the local root update path.
+    pub fn prepare_role_attestation_root(
+        request: RoleAttestationRequest,
+    ) -> Result<RoleAttestationPrepareResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        let caller = IcOps::msg_caller();
+        Self::validate_role_attestation_request(caller, &request)?;
+        let metadata = Self::role_attestation_replay_metadata(request.metadata)?;
+        let command_kind = Self::role_attestation_replay_command_kind();
+        let actor = ReplayActor::direct_caller(caller);
+        let payload_hash =
+            Self::role_attestation_replay_payload_hash(&command_kind, &actor, &request);
+        let now_ns = IcOps::now_nanos();
+        let expires_at_ns = now_ns.checked_add(metadata.ttl_ns).ok_or_else(|| {
+            Error::invalid("role attestation replay metadata ttl_ns overflows nanoseconds")
+        })?;
+        let replay_input = ReplayReceiptReserveInput::new(
+            command_kind,
+            OperationId::from_bytes(metadata.request_id),
+            actor,
+            payload_hash,
+            now_ns,
+        )
+        .with_expires_at_ns(expires_at_ns);
+
+        let token = match reserve_or_replay_receipt(replay_input)
+            .map_err(Self::map_role_attestation_replay_store_error)?
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            decision => return Self::map_role_attestation_replay_decision(decision),
+        };
+
+        let prepared = match AuthOps::prepare_role_attestation(SignRoleAttestationInput {
+            operation_id: token.receipt().operation_id.into_bytes(),
+            subject: request.subject,
+            role: request.role,
+            subnet_id: request.subnet_id,
+            audience: request.audience,
+            ttl_ns: request.ttl_ns,
+            epoch: request.epoch,
+            issued_at_ns: now_ns,
+        }) {
+            Ok(prepared) => prepared,
+            Err(err) => {
+                abort_reserved_receipt(&token);
+                return Err(Self::map_auth_error(err));
+            }
+        };
+
+        let response = RoleAttestationPrepareResponse {
+            payload: prepared.payload,
+            payload_hash: prepared.payload_hash,
+            retrieval_expires_at_ns: prepared.retrieval_expires_at_ns,
+        };
+
+        let response_bytes = match Self::encode_role_attestation_prepare_response(&response) {
+            Ok(response_bytes) => response_bytes,
+            Err(err) => {
+                mark_recovery_required(
+                    &token,
+                    RecoveryReason::ResponseCommitFailed,
+                    secs_to_ns(IcOps::now_secs()),
+                );
+                return Err(err);
+            }
+        };
+
+        commit_receipt_response(
+            &token,
+            Self::ROLE_ATTESTATION_REPLAY_RESPONSE_SCHEMA_VERSION,
+            response_bytes,
+            secs_to_ns(IcOps::now_secs()),
+        );
+        Ok(response)
+    }
+
+    /// Retrieve a prepared role attestation with its root canister-signature proof.
+    pub fn get_role_attestation_root(
+        request: RoleAttestationGetRequest,
+    ) -> Result<SignedRoleAttestation, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        AuthOps::get_role_attestation(IcOps::msg_caller(), request.payload_hash)
+            .map_err(Self::map_auth_error)
+    }
+
     fn prepare_fresh_delegation_proof(
         token: ReplayReceiptToken,
         _caller: Principal,
@@ -323,7 +401,7 @@ impl AuthApi {
         Ok(response)
     }
 
-    /// Return the current root role-attestation key set.
+    /// Return the legacy root attestation key set used by keyed internal proofs.
     pub async fn attestation_key_set() -> Result<AttestationKeySet, Error> {
         AuthOps::attestation_key_set()
             .await
@@ -343,12 +421,12 @@ impl AuthApi {
         })
     }
 
-    /// Replace the verifier-local role-attestation key set.
+    /// Replace the verifier-local legacy attestation key set.
     pub fn replace_attestation_key_set(key_set: AttestationKeySet) {
         AuthOps::replace_attestation_key_set(key_set);
     }
 
-    /// Verify a role attestation, refreshing root keys once on unknown key.
+    /// Verify a role attestation locally from its embedded root proof.
     pub async fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
@@ -404,9 +482,9 @@ impl AuthApi {
             Ok(())
         };
 
-        match verify_flow::verify_role_attestation_with_single_refresh(verify, refresh).await {
+        match verify_flow::verify_keyed_proof_with_single_refresh(verify, refresh).await {
             Ok(()) => Ok(()),
-            Err(verify_flow::RoleAttestationVerifyFlowError::Initial(err)) => {
+            Err(verify_flow::KeyedProofVerifyFlowError::Initial(err)) => {
                 verify_flow::record_attestation_verifier_rejection(&err);
                 log!(
                     Topic::Auth,
@@ -424,7 +502,7 @@ impl AuthApi {
                 );
                 Err(Self::map_internal_invocation_verify_error(err))
             }
-            Err(verify_flow::RoleAttestationVerifyFlowError::Refresh { trigger, source }) => {
+            Err(verify_flow::KeyedProofVerifyFlowError::Refresh { trigger, source }) => {
                 verify_flow::record_attestation_verifier_rejection(&trigger);
                 record_attestation_refresh_failed();
                 log!(
@@ -438,7 +516,7 @@ impl AuthApi {
                 );
                 Err(Self::map_auth_error(source))
             }
-            Err(verify_flow::RoleAttestationVerifyFlowError::PostRefresh(err)) => {
+            Err(verify_flow::KeyedProofVerifyFlowError::PostRefresh(err)) => {
                 verify_flow::record_attestation_verifier_rejection(&err);
                 log!(
                     Topic::Auth,
@@ -487,6 +565,58 @@ impl AuthApi {
         )))
     }
 
+    fn validate_role_attestation_request(
+        caller: Principal,
+        request: &RoleAttestationRequest,
+    ) -> Result<(), Error> {
+        if request.subject != caller {
+            return Err(Error::forbidden(format!(
+                "role attestation subject {} must match caller {}",
+                request.subject, caller
+            )));
+        }
+
+        let registered = SubnetRegistryOps::get(request.subject).ok_or_else(|| {
+            Error::forbidden(format!(
+                "role attestation subject {} is not registered",
+                request.subject
+            ))
+        })?;
+        if registered.role != request.role {
+            return Err(Error::forbidden(format!(
+                "role attestation role mismatch for subject {}: requested {}, registered {}",
+                request.subject, request.role, registered.role
+            )));
+        }
+
+        if let Some(requested_subnet) = request.subnet_id {
+            let local_subnet = EnvOps::subnet_pid().map_err(Error::from)?;
+            if requested_subnet != local_subnet {
+                return Err(Error::forbidden(format!(
+                    "role attestation subnet mismatch for subject {}: requested {}, local {}",
+                    request.subject, requested_subnet, local_subnet
+                )));
+            }
+        }
+
+        let max_ttl_ns = Self::role_attestation_max_ttl_ns()?;
+        if request.ttl_ns == 0 || request.ttl_ns > max_ttl_ns {
+            return Err(Error::invalid(format!(
+                "role attestation ttl_ns must satisfy 0 < ttl_ns <= {max_ttl_ns} (got {})",
+                request.ttl_ns
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn role_attestation_max_ttl_ns() -> Result<u64, Error> {
+        let cfg = ConfigOps::role_attestation_config().map_err(Error::from)?;
+        cfg.max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
+            Error::invalid("auth.role_attestation.max_ttl_secs overflows nanoseconds")
+        })
+    }
+
     fn delegation_replay_metadata(
         metadata: Option<AuthRequestMetadata>,
     ) -> Result<AuthRequestMetadata, Error> {
@@ -501,6 +631,25 @@ impl AuthApi {
                 "delegation proof replay metadata ttl_ns={} exceeds max {}",
                 metadata.ttl_ns,
                 Self::MAX_DELEGATION_REPLAY_TTL_NS
+            )));
+        }
+        Ok(metadata)
+    }
+
+    fn role_attestation_replay_metadata(
+        metadata: Option<crate::dto::rpc::RootRequestMetadata>,
+    ) -> Result<crate::dto::rpc::RootRequestMetadata, Error> {
+        let metadata = metadata.ok_or_else(Error::operation_id_required)?;
+        if metadata.ttl_ns == 0 {
+            return Err(Error::invalid(
+                "role attestation replay metadata ttl_ns must be greater than zero",
+            ));
+        }
+        if metadata.ttl_ns > Self::MAX_ROLE_ATTESTATION_REPLAY_TTL_NS {
+            return Err(Error::invalid(format!(
+                "role attestation replay metadata ttl_ns={} exceeds max {}",
+                metadata.ttl_ns,
+                Self::MAX_ROLE_ATTESTATION_REPLAY_TTL_NS
             )));
         }
         Ok(metadata)
@@ -531,6 +680,11 @@ impl AuthApi {
             .expect("delegation replay command kind is a valid static label")
     }
 
+    fn role_attestation_replay_command_kind() -> CommandKind {
+        CommandKind::new(Self::ROLE_ATTESTATION_REPLAY_COMMAND_KIND)
+            .expect("role attestation replay command kind is a valid static label")
+    }
+
     fn token_prepare_replay_command_kind() -> CommandKind {
         CommandKind::new(Self::TOKEN_PREPARE_REPLAY_COMMAND_KIND)
             .expect("delegated-token prepare replay command kind is a valid static label")
@@ -546,6 +700,24 @@ impl AuthApi {
         Self::hash_delegation_audience(&mut hasher, &request.aud);
         Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.cert_ttl_ns);
+        hasher.finish()
+    }
+
+    fn role_attestation_replay_payload_hash(
+        command_kind: &CommandKind,
+        actor: &ReplayActor,
+        request: &RoleAttestationRequest,
+    ) -> [u8; 32] {
+        let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
+        hasher.hash_principal(&request.subject);
+        hasher.hash_role(&request.role);
+        hasher.hash_bool(request.subnet_id.is_some());
+        if let Some(subnet_id) = request.subnet_id {
+            hasher.hash_principal(&subnet_id);
+        }
+        hasher.hash_principal(&request.audience);
+        hasher.hash_u64(request.ttl_ns);
+        hasher.hash_u64(request.epoch);
         hasher.finish()
     }
 
@@ -690,6 +862,93 @@ impl AuthApi {
         })
     }
 
+    fn map_role_attestation_replay_decision(
+        decision: ReplayReceiptDecision,
+    ) -> Result<RoleAttestationPrepareResponse, Error> {
+        match decision {
+            ReplayReceiptDecision::Fresh(_) => Err(Error::invariant(
+                "fresh role attestation replay decision escaped",
+            )),
+            ReplayReceiptDecision::ReturnCommitted(receipt) => {
+                Self::decode_role_attestation_prepare_response(&receipt)
+            }
+            ReplayReceiptDecision::OperationInProgress => Err(Error::conflict(
+                "role attestation prepare request is already in progress; retry later with the same request id",
+            )),
+            ReplayReceiptDecision::ActorMismatch => Err(Error::conflict(
+                "role attestation prepare request id was reused by a different caller",
+            )),
+            ReplayReceiptDecision::PayloadMismatch => Err(Error::conflict(
+                "role attestation prepare request id was reused with a different payload",
+            )),
+            ReplayReceiptDecision::Expired => Err(Error::conflict(
+                "role attestation prepare replay receipt expired; retry with a new request id",
+            )),
+            ReplayReceiptDecision::RecoveryRequired(reason) => Err(Error::conflict(format!(
+                "role attestation prepare request requires recovery before replay: {reason:?}"
+            ))),
+            ReplayReceiptDecision::TerminalFailed {
+                error_code,
+                error_bytes,
+                error_bytes_truncated,
+            } => Err(Error::conflict(format!(
+                "role attestation prepare request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
+                error_bytes.len()
+            ))),
+            ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
+                Err(Error::exhausted(format!(
+                    "role attestation prepare pending replay receipt quota exceeded for caller; max_pending={max_pending}"
+                )))
+            }
+            ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
+                Err(Error::exhausted(format!(
+                    "role attestation prepare pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
+                )))
+            }
+        }
+    }
+
+    fn map_role_attestation_replay_store_error(err: ReplayReceiptStoreError) -> Error {
+        match err {
+            ReplayReceiptStoreError::ReceiptDecodeFailed(message) => Error::internal(format!(
+                "failed to decode role attestation replay receipt: {message}"
+            )),
+        }
+    }
+
+    fn encode_role_attestation_prepare_response(
+        response: &RoleAttestationPrepareResponse,
+    ) -> Result<Vec<u8>, Error> {
+        encode_one(response).map_err(|err| {
+            Error::internal(format!(
+                "failed to encode role attestation prepare replay response: {err}"
+            ))
+        })
+    }
+
+    fn decode_role_attestation_prepare_response(
+        receipt: &crate::ops::replay::model::ReplayReceipt,
+    ) -> Result<RoleAttestationPrepareResponse, Error> {
+        let response_schema_version = receipt.response_schema_version.ok_or_else(|| {
+            Error::internal(
+                "role attestation prepare replay receipt is missing response schema version",
+            )
+        })?;
+        if response_schema_version != Self::ROLE_ATTESTATION_REPLAY_RESPONSE_SCHEMA_VERSION {
+            return Err(Error::internal(format!(
+                "unsupported role attestation prepare replay response schema version {response_schema_version}"
+            )));
+        }
+        let response_bytes = receipt.response_bytes.as_deref().ok_or_else(|| {
+            Error::internal("role attestation prepare replay receipt is missing response bytes")
+        })?;
+        decode_one(response_bytes).map_err(|err| {
+            Error::internal(format!(
+                "failed to decode role attestation prepare replay response: {err}"
+            ))
+        })
+    }
+
     fn map_delegation_replay_decision(
         decision: ReplayReceiptDecision,
     ) -> Result<DelegationProofPrepareResponse, Error> {
@@ -786,41 +1045,6 @@ impl AuthApi {
             .prepare_delegation_proof(request)
             .await
             .map_err(Self::map_auth_error)
-    }
-
-    // Execute one local root role-attestation request.
-    pub async fn request_role_attestation_root(
-        request: RoleAttestationRequest,
-    ) -> Result<SignedRoleAttestation, Error> {
-        let request = metadata::with_root_attestation_request_metadata(request);
-        let response = RootResponseWorkflow::response(RootRequest::issue_role_attestation(request))
-            .await
-            .map_err(Self::map_auth_error)?;
-
-        match response {
-            RootCapabilityResponse::RoleAttestationIssued(response) => Ok(response),
-            _ => Err(Error::internal(
-                "invalid root response type for role attestation request",
-            )),
-        }
-    }
-
-    // Execute one local root internal-invocation proof request.
-    pub async fn request_internal_invocation_proof_root(
-        request: InternalInvocationProofRequest,
-    ) -> Result<SignedInternalInvocationProofV1, Error> {
-        let request = metadata::with_internal_invocation_proof_request_metadata(request);
-        let response =
-            RootResponseWorkflow::response(RootRequest::issue_internal_invocation_proof(request))
-                .await
-                .map_err(Self::map_auth_error)?;
-
-        match response {
-            RootCapabilityResponse::InternalInvocationProofIssued(response) => Ok(response),
-            _ => Err(Error::internal(
-                "invalid root response type for internal invocation proof request",
-            )),
-        }
     }
 }
 

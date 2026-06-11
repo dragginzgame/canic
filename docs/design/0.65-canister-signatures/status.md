@@ -19,14 +19,13 @@ Delegated-token root proof hard cut is locally closed, but delegated-token auth
 is not closeout-clean while token issuer signatures remain
 threshold-ECDSA-backed.
 
-`SignedRoleAttestation` remains required 0.65 scope and still needs prepare/get
-plus local verification.
+`SignedRoleAttestation` now uses root canister-signature prepare/get plus local
+embedded-proof verification.
 
-Delegated-grant capability proofs are no longer an acceptable retained normal
-auth ECDSA surface. Standalone `CapabilityProof::DelegatedGrant` envelopes now
-hard-fail before payload decode, hash checks, signature verification, replay,
-or capability execution. Token grants remain `DelegatedRoleGrant` values inside
-delegation certs and delegated-token claims.
+Delegated-grant capability proofs are not retained in the active protocol.
+Standalone capability proof DTOs and proof-mode branches are removed. Token
+grants remain `DelegatedRoleGrant` values inside delegation certs and
+delegated-token claims.
 
 ## Audit Status
 
@@ -63,11 +62,12 @@ Expected result:
   external-chain modules that no auth code imports or calls
 
 Current local result: this release-blocking audit is not yet clean. Delegated
-token issuer certs and test fleet token issuance no longer match the shard ECDSA
-DTO/signing path. Remaining active-code matches are the public threshold-ECDSA
-feature definitions, the isolated ECDSA ops module, historical replay external
-effect records/tests, and the still-pending role-attestation public-key fetch
-compatibility path. The checklist below tracks their removal or conversion.
+token issuer certs, test fleet token issuance, and `SignedRoleAttestation`
+verification no longer match the shard/root ECDSA signing path. Remaining
+active-code matches are the public threshold-ECDSA feature definitions, the
+isolated ECDSA ops module, historical replay external effect records/tests, and
+legacy internal-invocation/attestation-key compatibility helpers. The checklist
+below tracks their removal or conversion.
 
 ## Implementation Checklist
 
@@ -131,10 +131,10 @@ compatibility path. The checklist below tracks their removal or conversion.
 - [x] Add explicit revocation/TTL tradeoff.
 - [x] Add deployment check: root canister-signature issuer is not on
       `cloud_engine`.
-- [x] Reject old one-shot root ECDSA role-attestation and
+- [x] Remove old one-shot root ECDSA role-attestation and
       internal-invocation-proof issuance from normal auth.
-- [x] Reject old inbound `CapabilityProof::RoleAttestation` envelopes as the
-      retired ECDSA capability proof mode.
+- [x] Remove old inbound standalone capability proof DTOs and proof-mode
+      branches.
 - [x] Route non-root placement create/upgrade/recycle away from one-shot role
       attestations; structural child provision is limited to
       `CreateCanisterParent::ThisCanister`.
@@ -152,9 +152,9 @@ compatibility path. The checklist below tracks their removal or conversion.
       id plus raw IC root key.
 - [x] Extend canister-signature issuer deployment checks to token issuer canisters
       as well as root issuers.
-- [ ] Add required `SignedRoleAttestation = RootCertified<RoleAttestation>`
+- [x] Add required `SignedRoleAttestation = RootCertified<RoleAttestation>`
       prepare/get root proof flow using `RootProof::IcCanisterSignatureV1`.
-- [ ] Add local `SignedRoleAttestation` verification against configured root
+- [x] Add local `SignedRoleAttestation` verification against configured root
       canister id plus raw IC root key, with no root or management-canister call
       on the protected endpoint hot path.
 - [x] Hard-fail/remove delegated-grant capability proofs from normal auth.

@@ -1,10 +1,4 @@
-use crate::dto::{
-    auth::{
-        InternalInvocationProofRequest, RoleAttestationRequest, SignedInternalInvocationProofV1,
-        SignedRoleAttestation,
-    },
-    prelude::*,
-};
+use crate::dto::prelude::*;
 
 //
 // Request
@@ -18,8 +12,6 @@ pub enum Request {
     UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
     Cycles(CyclesRequest),
-    IssueRoleAttestation(RoleAttestationRequest),
-    IssueInternalInvocationProof(InternalInvocationProofRequest),
 }
 
 impl Request {
@@ -55,22 +47,6 @@ impl Request {
         Self::Cycles(request)
     }
 
-    // issue_role_attestation
-    //
-    // Build a root request for role attestation issuance.
-    #[must_use]
-    pub const fn issue_role_attestation(request: RoleAttestationRequest) -> Self {
-        Self::IssueRoleAttestation(request)
-    }
-
-    // issue_internal_invocation_proof
-    //
-    // Build a root request for method-scoped internal invocation proof issuance.
-    #[must_use]
-    pub const fn issue_internal_invocation_proof(request: InternalInvocationProofRequest) -> Self {
-        Self::IssueInternalInvocationProof(request)
-    }
-
     // family
     //
     // Resolve the request capability family without exposing variant matches at call sites.
@@ -81,8 +57,6 @@ impl Request {
             Self::UpgradeCanister(_) => RequestFamily::Upgrade,
             Self::RecycleCanister(_) => RequestFamily::RecycleCanister,
             Self::Cycles(_) => RequestFamily::RequestCycles,
-            Self::IssueRoleAttestation(_) => RequestFamily::IssueRoleAttestation,
-            Self::IssueInternalInvocationProof(_) => RequestFamily::IssueInternalInvocationProof,
         }
     }
 
@@ -96,8 +70,6 @@ impl Request {
             Self::UpgradeCanister(req) => req.metadata,
             Self::RecycleCanister(req) => req.metadata,
             Self::Cycles(req) => req.metadata,
-            Self::IssueRoleAttestation(req) => req.metadata,
-            Self::IssueInternalInvocationProof(req) => req.metadata,
         }
     }
 
@@ -111,8 +83,6 @@ impl Request {
             Self::UpgradeCanister(req) => req.metadata = Some(metadata),
             Self::RecycleCanister(req) => req.metadata = Some(metadata),
             Self::Cycles(req) => req.metadata = Some(metadata),
-            Self::IssueRoleAttestation(req) => req.metadata = Some(metadata),
-            Self::IssueInternalInvocationProof(req) => req.metadata = Some(metadata),
         }
         self
     }
@@ -127,8 +97,6 @@ impl Request {
             Self::UpgradeCanister(req) => req.metadata = None,
             Self::RecycleCanister(req) => req.metadata = None,
             Self::Cycles(req) => req.metadata = None,
-            Self::IssueRoleAttestation(req) => req.metadata = None,
-            Self::IssueInternalInvocationProof(req) => req.metadata = None,
         }
         self
     }
@@ -140,9 +108,6 @@ impl Request {
     #[must_use]
     pub const fn canonical_capability_payload(mut self) -> Self {
         self = self.without_metadata();
-        if let Self::IssueRoleAttestation(req) = &mut self {
-            req.epoch = 0;
-        }
         self
     }
 
@@ -170,8 +135,6 @@ pub enum RequestFamily {
     Upgrade,
     RecycleCanister,
     RequestCycles,
-    IssueRoleAttestation,
-    IssueInternalInvocationProof,
 }
 
 impl RequestFamily {
@@ -185,8 +148,6 @@ impl RequestFamily {
             Self::Upgrade => "Upgrade",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
-            Self::IssueRoleAttestation => "IssueRoleAttestation",
-            Self::IssueInternalInvocationProof => "IssueInternalInvocationProof",
         }
     }
 }
@@ -203,8 +164,6 @@ pub enum RootCapabilityCommand {
     UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
-    IssueRoleAttestation(RoleAttestationRequest),
-    IssueInternalInvocationProof(InternalInvocationProofRequest),
 }
 
 impl From<Request> for RootCapabilityCommand {
@@ -214,8 +173,6 @@ impl From<Request> for RootCapabilityCommand {
             Request::UpgradeCanister(req) => Self::UpgradeCanister(req),
             Request::RecycleCanister(req) => Self::RecycleCanister(req),
             Request::Cycles(req) => Self::RequestCycles(req),
-            Request::IssueRoleAttestation(req) => Self::IssueRoleAttestation(req),
-            Request::IssueInternalInvocationProof(req) => Self::IssueInternalInvocationProof(req),
         }
     }
 }
@@ -315,8 +272,6 @@ pub enum Response {
     UpgradeCanister(UpgradeCanisterResponse),
     RecycleCanister(RecycleCanisterResponse),
     Cycles(CyclesResponse),
-    RoleAttestationIssued(SignedRoleAttestation),
-    InternalInvocationProofIssued(SignedInternalInvocationProofV1),
 }
 
 //
@@ -394,24 +349,6 @@ mod tests {
                 cycles: 100,
                 metadata: None,
             }),
-            Request::issue_role_attestation(RoleAttestationRequest {
-                subject: p(5),
-                role: CanisterRole::new("test"),
-                subnet_id: None,
-                audience: p(6),
-                ttl_ns: 60_000_000_000,
-                epoch: 0,
-                metadata: None,
-            }),
-            Request::issue_internal_invocation_proof(InternalInvocationProofRequest {
-                subject: p(5),
-                role: CanisterRole::new("test"),
-                subnet_id: None,
-                audience: p(6),
-                audience_method: "canic_internal".to_string(),
-                ttl_ns: 60_000_000_000,
-                metadata: None,
-            }),
         ]
     }
 
@@ -428,8 +365,6 @@ mod tests {
                 RequestFamily::Upgrade,
                 RequestFamily::RecycleCanister,
                 RequestFamily::RequestCycles,
-                RequestFamily::IssueRoleAttestation,
-                RequestFamily::IssueInternalInvocationProof,
             ]
         );
     }
@@ -452,28 +387,6 @@ mod tests {
                 None,
                 "without_metadata must strip metadata for every request variant"
             );
-        }
-    }
-
-    #[test]
-    fn canonical_capability_payload_strips_metadata_and_ignored_epoch() {
-        let canonical = Request::issue_role_attestation(RoleAttestationRequest {
-            subject: p(5),
-            role: CanisterRole::new("test"),
-            subnet_id: None,
-            audience: p(6),
-            ttl_ns: 60_000_000_000,
-            epoch: 99,
-            metadata: Some(metadata(9)),
-        })
-        .canonical_capability_payload();
-
-        match canonical {
-            Request::IssueRoleAttestation(req) => {
-                assert_eq!(req.metadata, None);
-                assert_eq!(req.epoch, 0);
-            }
-            other => panic!("expected role-attestation request, got {other:?}"),
         }
     }
 

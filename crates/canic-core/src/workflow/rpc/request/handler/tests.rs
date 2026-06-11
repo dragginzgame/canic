@@ -2,7 +2,6 @@ use super::*;
 use crate::{
     cdk::types::{Principal, TC},
     dto::{
-        auth::{InternalInvocationProofRequest, RoleAttestationRequest},
         error::ErrorCode,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
@@ -16,7 +15,7 @@ use crate::{
         replay::{
             guard::secs_to_ns,
             model::{
-                CommandKind, EcdsaPurpose, ExternalEffectDescriptor, OperationId,
+                CommandKind, ExternalEffectDescriptor, OperationId,
                 REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason,
                 ReplayActor, ReplayReceiptStatus,
             },
@@ -29,13 +28,11 @@ use crate::{
             },
         },
         storage::{
-            index::app::AppIndexOps, registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps,
-            state::app::AppStateOps,
+            registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps, state::app::AppStateOps,
         },
     },
     replay_policy::CostClass,
     storage::stable::env::{Env, EnvRecord},
-    storage::stable::index::app::AppIndexRecord,
     storage::stable::replay::ReplayReceiptRecord,
     storage::stable::state::app::{AppMode, AppStateRecord},
 };
@@ -88,13 +85,6 @@ fn seed_root_replay_receipt(
     );
 }
 
-fn replay_pending_for(ctx: &RootContext, capability: &RootCapability) -> ReplayPending {
-    match RootResponseWorkflow::check_replay(ctx, capability).expect("replay preflight") {
-        replay::ReplayPreflight::Fresh(pending) => pending,
-        replay::ReplayPreflight::Cached(_) => panic!("fresh replay expected"),
-    }
-}
-
 ///
 /// EnvRestore
 ///
@@ -115,24 +105,6 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
         ..EnvRecord::default()
     });
     EnvRestore(original)
-}
-
-///
-/// AppIndexRestore
-///
-
-struct AppIndexRestore(AppIndexRecord);
-
-impl Drop for AppIndexRestore {
-    fn drop(&mut self) {
-        AppIndexOps::import_trusted_partial(self.0.clone()).expect("restore app index");
-    }
-}
-
-fn configure_app_index(entries: Vec<(CanisterRole, Principal)>) -> AppIndexRestore {
-    let original = AppIndexOps::data();
-    AppIndexOps::import_trusted_partial(AppIndexRecord { entries }).expect("import app index");
-    AppIndexRestore(original)
 }
 
 fn cycles_funding_snapshot_map() -> HashMap<
@@ -279,38 +251,6 @@ fn authorize_recycle_allows_direct_child_caller() {
 
     RootResponseWorkflow::authorize(&ctx, &capability)
         .expect("direct child recycle must authorize");
-}
-
-#[test]
-fn map_request_maps_issue_role_attestation() {
-    let req = Request::IssueRoleAttestation(RoleAttestationRequest {
-        subject: p(2),
-        role: CanisterRole::new("test"),
-        subnet_id: Some(p(7)),
-        audience: p(8),
-        ttl_ns: secs_to_ns(120),
-        epoch: 1,
-        metadata: None,
-    });
-
-    let mapped = RootResponseWorkflow::map_request(req);
-    assert_eq!(mapped.capability_name(), "IssueRoleAttestation");
-}
-
-#[test]
-fn map_request_maps_issue_internal_invocation_proof() {
-    let req = Request::IssueInternalInvocationProof(InternalInvocationProofRequest {
-        subject: p(2),
-        role: CanisterRole::new("project_hub"),
-        subnet_id: Some(p(7)),
-        audience: p(8),
-        audience_method: "system_add_project_to_user".to_string(),
-        ttl_ns: secs_to_ns(120),
-        metadata: None,
-    });
-
-    let mapped = RootResponseWorkflow::map_request(req);
-    assert_eq!(mapped.capability_name(), "IssueInternalInvocationProof");
 }
 
 #[test]
@@ -800,320 +740,6 @@ fn request_cycles_marks_deposit_external_effect() {
 }
 
 #[test]
-fn authorize_rejects_role_attestation_when_subject_mismatches_caller() {
-    let ctx = RootContext {
-        caller: p(1),
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject: p(3),
-        role: CanisterRole::new("test"),
-        subnet_id: None,
-        audience: p(8),
-        ttl_ns: secs_to_ns(60),
-        epoch: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("must match caller"),
-        "expected subject/caller mismatch error, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_role_attestation_when_subject_not_registered() {
-    let subject = p(41);
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject,
-        role: CanisterRole::new("test"),
-        subnet_id: None,
-        audience: p(8),
-        ttl_ns: secs_to_ns(60),
-        epoch: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("not registered"),
-        "expected subject not registered error, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_role_attestation_when_requested_role_differs_from_registry() {
-    let subject = p(42);
-    SubnetRegistryOps::register_root(subject, 1);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject,
-        role: CanisterRole::new("test"),
-        subnet_id: None,
-        audience: p(8),
-        ttl_ns: secs_to_ns(60),
-        epoch: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("role mismatch"),
-        "expected role mismatch error, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_role_attestation_when_subnet_mismatch() {
-    let subject = p(44);
-    SubnetRegistryOps::register_root(subject, 1);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject,
-        role: CanisterRole::ROOT,
-        subnet_id: Some(p(7)),
-        audience: p(8),
-        ttl_ns: secs_to_ns(60),
-        epoch: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("subnet mismatch"),
-        "expected subnet mismatch error, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_role_attestation_invalid_ttl_before_execution() {
-    let subject = p(45);
-    SubnetRegistryOps::register_root(subject, 1);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject,
-        role: CanisterRole::ROOT,
-        subnet_id: None,
-        audience: p(8),
-        ttl_ns: 0,
-        epoch: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("ttl_ns"),
-        "expected ttl denial, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_accepts_internal_invocation_proof_from_app_index_role() {
-    let subject = p(51);
-    let audience = p(52);
-    let role = CanisterRole::new("project_hub");
-    let _app_index = configure_app_index(vec![
-        (role.clone(), subject),
-        (CanisterRole::new("user_hub"), audience),
-    ]);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
-        subject,
-        role,
-        subnet_id: Some(p(2)),
-        audience,
-        audience_method: "system_add_project_to_user".to_string(),
-        ttl_ns: secs_to_ns(60),
-        metadata: None,
-    });
-
-    RootResponseWorkflow::authorize(&ctx, &capability)
-        .expect("AppIndex role should authorize internal proof issuance");
-}
-
-#[test]
-fn authorize_rejects_internal_invocation_proof_with_unknown_audience() {
-    let subject = p(53);
-    let role = CanisterRole::new("project_hub");
-    let _app_index = configure_app_index(vec![(role.clone(), subject)]);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
-        subject,
-        role,
-        subnet_id: None,
-        audience: p(54),
-        audience_method: "system_add_project_to_user".to_string(),
-        ttl_ns: secs_to_ns(60),
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("audience"),
-        "expected audience denial, got: {err}"
-    );
-}
-
-#[test]
-fn authorize_rejects_internal_invocation_proof_invalid_ttl_before_execution() {
-    let subject = p(55);
-    let audience = p(56);
-    let role = CanisterRole::new("project_hub");
-    let _app_index = configure_app_index(vec![
-        (role.clone(), subject),
-        (CanisterRole::new("user_hub"), audience),
-    ]);
-
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
-        subject,
-        role,
-        subnet_id: None,
-        audience,
-        audience_method: "system_add_project_to_user".to_string(),
-        ttl_ns: 0,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("ttl_ns"),
-        "expected ttl denial, got: {err}"
-    );
-}
-
-#[test]
-fn execute_role_attestation_hard_fails_one_shot_root_ecdsa_issuance() {
-    ReplayReceiptOps::reset_for_tests();
-
-    let subject = p(42);
-    SubnetRegistryOps::register_root(subject, 1);
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 1_000,
-    };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject,
-        role: CanisterRole::ROOT,
-        subnet_id: Some(p(2)),
-        audience: p(8),
-        ttl_ns: secs_to_ns(60),
-        epoch: 0,
-        metadata: Some(meta(9, secs_to_ns(60))),
-    });
-    RootResponseWorkflow::authorize(&ctx, &capability).expect("request authorizes");
-    let pending = replay_pending_for(&ctx, &capability);
-
-    let err = futures::executor::block_on(RootResponseWorkflow::execute_root_capability(
-        &ctx, &pending, capability, None,
-    ))
-    .expect_err("one-shot root ECDSA role attestation is disabled");
-
-    RootResponseWorkflow::abort_replay(pending);
-    assert!(
-        err.to_string().contains("disabled in 0.65"),
-        "expected hard-cut error, got: {err}"
-    );
-}
-
-#[test]
-fn execute_internal_invocation_proof_hard_fails_one_shot_root_ecdsa_issuance() {
-    ReplayReceiptOps::reset_for_tests();
-
-    let subject = p(53);
-    let audience = p(54);
-    let role = CanisterRole::new("project_hub");
-    let _app_index = configure_app_index(vec![
-        (role.clone(), subject),
-        (CanisterRole::new("user_hub"), audience),
-    ]);
-    let ctx = RootContext {
-        caller: subject,
-        self_pid: p(9),
-        is_root_env: true,
-        subnet_id: p(2),
-        now: 1_000,
-    };
-    let capability = RootCapability::IssueInternalInvocationProof(InternalInvocationProofRequest {
-        subject,
-        role,
-        subnet_id: Some(p(2)),
-        audience,
-        audience_method: "system_add_project_to_user".to_string(),
-        ttl_ns: secs_to_ns(60),
-        metadata: Some(meta(10, secs_to_ns(60))),
-    });
-    RootResponseWorkflow::authorize(&ctx, &capability).expect("request authorizes");
-    let pending = replay_pending_for(&ctx, &capability);
-
-    let err = futures::executor::block_on(RootResponseWorkflow::execute_root_capability(
-        &ctx, &pending, capability, None,
-    ))
-    .expect_err("one-shot root ECDSA internal proof is disabled");
-
-    RootResponseWorkflow::abort_replay(pending);
-    assert!(
-        err.to_string().contains("disabled in 0.65"),
-        "expected hard-cut error, got: {err}"
-    );
-}
-
-#[test]
 fn payload_hash_ignores_metadata() {
     let hash_a = RootCapability::RequestCycles(CyclesRequest {
         cycles: 42,
@@ -1127,27 +753,6 @@ fn payload_hash_ignores_metadata() {
     .payload_hash();
 
     assert_eq!(hash_a, hash_b, "metadata must not affect payload hash");
-}
-
-#[test]
-fn role_attestation_payload_hash_ignores_request_epoch() {
-    let request = |epoch| {
-        RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-            subject: p(1),
-            role: CanisterRole::new("project_hub"),
-            subnet_id: Some(p(2)),
-            audience: p(3),
-            ttl_ns: secs_to_ns(60),
-            epoch,
-            metadata: Some(meta(1, secs_to_ns(60))),
-        })
-    };
-
-    assert_eq!(
-        request(0).payload_hash(),
-        request(7).payload_hash(),
-        "RoleAttestationRequest.epoch is caller-supplied legacy input and must not affect replay identity"
-    );
 }
 
 #[test]
@@ -1295,13 +900,8 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
         subnet_id: p(6),
         now: 1_000,
     };
-    let capability = RootCapability::IssueRoleAttestation(RoleAttestationRequest {
-        subject: p(5),
-        role: CanisterRole::new("app"),
-        subnet_id: None,
-        audience: p(9),
-        ttl_ns: secs_to_ns(60),
-        epoch: 0,
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
         metadata: Some(meta(17, secs_to_ns(60))),
     });
 
@@ -1312,10 +912,9 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
     let key = pending.receipt_token.key();
-    let effect = ExternalEffectDescriptor::ThresholdEcdsaSign {
-        key_id_hash: [1; 32],
-        purpose: EcdsaPurpose::RoleAttestation,
-        message_hash: [2; 32],
+    let effect = ExternalEffectDescriptor::ManagementCall {
+        canister: ctx.caller,
+        method: "deposit_cycles".to_string(),
     };
 
     mark_external_effect_in_flight(&pending.receipt_token, effect.clone(), secs_to_ns(1_001));

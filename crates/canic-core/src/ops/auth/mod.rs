@@ -18,7 +18,8 @@ pub use error::{
 };
 pub use types::{
     DelegatedTokenVerifierConfig, PreparedDelegatedTokenIssuerProof, PreparedRootDelegationProof,
-    SignDelegatedTokenInput, SignDelegationProofInput, VerifyDelegatedTokenRuntimeInput,
+    PreparedRootRoleAttestation, SignDelegatedTokenInput, SignDelegationProofInput,
+    SignRoleAttestationInput, VerifyDelegatedTokenRuntimeInput,
 };
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";

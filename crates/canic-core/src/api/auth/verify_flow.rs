@@ -8,7 +8,7 @@ use crate::ops::{
 use std::future::Future;
 
 #[derive(Debug)]
-pub(super) enum RoleAttestationVerifyFlowError {
+pub(super) enum KeyedProofVerifyFlowError {
     Initial(AuthOpsError),
     Refresh {
         trigger: AuthOpsError,
@@ -17,10 +17,10 @@ pub(super) enum RoleAttestationVerifyFlowError {
     PostRefresh(AuthOpsError),
 }
 
-pub(super) async fn verify_role_attestation_with_single_refresh<Verify, Refresh, RefreshFuture>(
+pub(super) async fn verify_keyed_proof_with_single_refresh<Verify, Refresh, RefreshFuture>(
     mut verify: Verify,
     mut refresh: Refresh,
-) -> Result<(), RoleAttestationVerifyFlowError>
+) -> Result<(), KeyedProofVerifyFlowError>
 where
     Verify: FnMut() -> Result<(), AuthOpsError>,
     Refresh: FnMut() -> RefreshFuture,
@@ -33,13 +33,13 @@ where
         ) => {
             refresh()
                 .await
-                .map_err(|source| RoleAttestationVerifyFlowError::Refresh {
+                .map_err(|source| KeyedProofVerifyFlowError::Refresh {
                     trigger: err,
                     source,
                 })?;
-            verify().map_err(RoleAttestationVerifyFlowError::PostRefresh)
+            verify().map_err(KeyedProofVerifyFlowError::PostRefresh)
         }
-        Err(err) => Err(RoleAttestationVerifyFlowError::Initial(err)),
+        Err(err) => Err(KeyedProofVerifyFlowError::Initial(err)),
     }
 }
 
@@ -66,7 +66,7 @@ pub(super) fn record_attestation_verifier_rejection(err: &AuthOpsError) {
 
 #[cfg(test)]
 mod tests {
-    use super::{RoleAttestationVerifyFlowError, verify_role_attestation_with_single_refresh};
+    use super::{KeyedProofVerifyFlowError, verify_keyed_proof_with_single_refresh};
     use crate::{
         InternalError, InternalErrorOrigin,
         ops::auth::{AuthOpsError, AuthSignatureError, AuthValidationError},
@@ -75,11 +75,11 @@ mod tests {
     use std::cell::Cell;
 
     #[test]
-    fn role_attestation_refreshes_once_for_unknown_key_id() {
+    fn keyed_proof_refreshes_once_for_unknown_key_id() {
         let verify_calls = Cell::new(0);
         let refresh_calls = Cell::new(0);
 
-        let result = block_on(verify_role_attestation_with_single_refresh(
+        let result = block_on(verify_keyed_proof_with_single_refresh(
             || {
                 let call = verify_calls.get();
                 verify_calls.set(call + 1);
@@ -101,11 +101,11 @@ mod tests {
     }
 
     #[test]
-    fn role_attestation_does_not_refresh_signature_failures() {
+    fn keyed_proof_does_not_refresh_signature_failures() {
         let verify_calls = Cell::new(0);
         let refresh_calls = Cell::new(0);
 
-        let result = block_on(verify_role_attestation_with_single_refresh(
+        let result = block_on(verify_keyed_proof_with_single_refresh(
             || {
                 verify_calls.set(verify_calls.get() + 1);
                 Err(AuthOpsError::Signature(
@@ -120,20 +120,20 @@ mod tests {
 
         std::assert_matches!(
             result,
-            Err(RoleAttestationVerifyFlowError::Initial(
-                AuthOpsError::Signature(AuthSignatureError::AttestationSignatureUnavailable)
-            ))
+            Err(KeyedProofVerifyFlowError::Initial(AuthOpsError::Signature(
+                AuthSignatureError::AttestationSignatureUnavailable
+            )))
         );
         assert_eq!(verify_calls.get(), 1);
         assert_eq!(refresh_calls.get(), 0);
     }
 
     #[test]
-    fn role_attestation_reports_post_refresh_failure_after_single_retry() {
+    fn keyed_proof_reports_post_refresh_failure_after_single_retry() {
         let verify_calls = Cell::new(0);
         let refresh_calls = Cell::new(0);
 
-        let result = block_on(verify_role_attestation_with_single_refresh(
+        let result = block_on(verify_keyed_proof_with_single_refresh(
             || {
                 verify_calls.set(verify_calls.get() + 1);
                 Err(unknown_key())
@@ -146,7 +146,7 @@ mod tests {
 
         std::assert_matches!(
             result,
-            Err(RoleAttestationVerifyFlowError::PostRefresh(
+            Err(KeyedProofVerifyFlowError::PostRefresh(
                 AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId {
                     key_id: 7
                 })
@@ -157,11 +157,11 @@ mod tests {
     }
 
     #[test]
-    fn role_attestation_reports_refresh_failure_without_second_verify() {
+    fn keyed_proof_reports_refresh_failure_without_second_verify() {
         let verify_calls = Cell::new(0);
         let refresh_calls = Cell::new(0);
 
-        let result = block_on(verify_role_attestation_with_single_refresh(
+        let result = block_on(verify_keyed_proof_with_single_refresh(
             || {
                 verify_calls.set(verify_calls.get() + 1);
                 Err(unknown_key())
@@ -179,7 +179,7 @@ mod tests {
 
         std::assert_matches!(
             result,
-            Err(RoleAttestationVerifyFlowError::Refresh {
+            Err(KeyedProofVerifyFlowError::Refresh {
                 trigger: AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId {
                     key_id: 7
                 }),

@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.16` moves `SignedRoleAttestation` onto root canister signatures with
+  explicit prepare/get endpoints, local embedded-proof verification, no
+  verifier-side root key refresh, and no ECDSA key rotation semantics for role
+  attestations.
+
 - `0.65.15` removes active shard ECDSA key material from delegated-token
   delegation certs, renames the token authority fields to issuer terminology,
   binds certs to issuer canister-signature authority, removes threshold

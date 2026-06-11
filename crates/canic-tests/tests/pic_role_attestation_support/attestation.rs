@@ -22,14 +22,46 @@ pub fn issue_self_attestation_as(
     ttl_ns: u64,
     audience: Principal,
 ) -> SignedRoleAttestation {
-    let issued: Result<SignedRoleAttestation, Error> = pic.update_call_as_or_panic(
+    let prepared: Result<RoleAttestationPrepareResponse, Error> = pic.update_call_as_or_panic(
         root_id,
         caller,
-        "root_issue_self_attestation_test",
-        (ttl_ns, audience, 0u64),
+        "canic_prepare_role_attestation",
+        (RoleAttestationRequest {
+            subject: caller,
+            role: CanisterRole::ROOT,
+            subnet_id: None,
+            audience,
+            ttl_ns,
+            epoch: 0,
+            metadata: Some(RootRequestMetadata {
+                request_id: attestation_request_id(caller, ttl_ns, audience),
+                ttl_ns: TEST_ROLE_ATTESTATION_TTL_NS,
+            }),
+        },),
+    );
+    let prepared = prepared.expect("role attestation prepare failed");
+    let issued: Result<SignedRoleAttestation, Error> = pic.query_call_as_or_panic(
+        root_id,
+        caller,
+        "canic_get_role_attestation",
+        (RoleAttestationGetRequest {
+            payload_hash: prepared.payload_hash,
+        },),
     );
 
     issued.expect("attestation issuance failed")
+}
+
+fn attestation_request_id(caller: Principal, ttl_ns: u64, audience: Principal) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    out[..8].copy_from_slice(&ttl_ns.to_be_bytes());
+    for (idx, byte) in caller.as_slice().iter().take(12).enumerate() {
+        out[8 + idx] = *byte;
+    }
+    for (idx, byte) in audience.as_slice().iter().take(12).enumerate() {
+        out[20 + idx] = *byte;
+    }
+    out
 }
 
 pub fn root_capability_hash(target_canister: Principal, capability: &Request) -> [u8; 32] {

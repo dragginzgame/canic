@@ -152,21 +152,14 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     update_replay_protected(
-        "canic_request_internal_invocation_proof",
-        "auth.issue_internal_invocation_proof.v1",
+        "canic_prepare_role_attestation",
+        "auth.prepare_role_attestation.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::None,
-        None,
+        CostClass::RootCanisterSignaturePrepare,
+        Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
         None,
     ),
-    update_replay_protected(
-        "canic_request_role_attestation",
-        "auth.issue_role_attestation.v1",
-        ReplayImplementationStatus::Implemented,
-        CostClass::None,
-        None,
-        None,
-    ),
+    query_read_only("canic_get_role_attestation"),
     update_command_dispatch(
         "canic_response_capability_v1",
         "root.capability_rpc.v1",
@@ -292,22 +285,6 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
         CostClass::ValueTransfer,
         Some(VALUE_TRANSFER_QUOTA_V1),
         Some(VALUE_TRANSFER_RESERVE_V1),
-    ),
-    root_capability_replay_protected(
-        "IssueRoleAttestation",
-        "root.issue_role_attestation.v1",
-        ReplayImplementationStatus::Implemented,
-        CostClass::None,
-        None,
-        None,
-    ),
-    root_capability_replay_protected(
-        "IssueInternalInvocationProof",
-        "root.issue_internal_invocation_proof.v1",
-        ReplayImplementationStatus::Implemented,
-        CostClass::None,
-        None,
-        None,
     ),
 ];
 
@@ -728,40 +705,6 @@ mod tests {
     }
 
     #[test]
-    fn root_auth_material_issuance_is_replay_protected_without_ecdsa_cost() {
-        for (endpoint, command_kind) in [
-            (
-                "canic_request_role_attestation",
-                "auth.issue_role_attestation.v1",
-            ),
-            (
-                "canic_request_internal_invocation_proof",
-                "auth.issue_internal_invocation_proof.v1",
-            ),
-        ] {
-            let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-                .iter()
-                .find(|entry| entry.endpoint == endpoint)
-                .expect("root auth-material policy entry");
-
-            assert_eq!(
-                entry.implementation_status,
-                ReplayImplementationStatus::Implemented
-            );
-            assert_eq!(entry.cost_class, CostClass::None);
-            assert_eq!(entry.quota_policy, None);
-            assert_eq!(entry.cycle_reserve_policy, None);
-            assert_eq!(
-                entry.replay_policy,
-                ReplayPolicy::ReplayProtected {
-                    command_kind,
-                    requires_operation_id: true,
-                }
-            );
-        }
-    }
-
-    #[test]
     fn active_delegation_proof_install_is_controller_maintenance() {
         let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
@@ -816,6 +759,41 @@ mod tests {
             .iter()
             .find(|entry| entry.endpoint == "canic_get_delegated_token")
             .expect("delegated-token get policy entry");
+
+        assert_eq!(get.endpoint_kind, EndpointKind::Query);
+        assert_eq!(get.replay_policy, ReplayPolicy::QueryOrReadOnly);
+        assert_eq!(get.cost_class, CostClass::None);
+    }
+
+    #[test]
+    fn role_attestation_prepare_get_endpoints_are_manifested() {
+        let prepare = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_prepare_role_attestation")
+            .expect("role-attestation prepare policy entry");
+
+        assert_eq!(
+            prepare.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(
+            prepare.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                command_kind: "auth.prepare_role_attestation.v1",
+                requires_operation_id: true,
+            }
+        );
+        assert_eq!(prepare.cost_class, CostClass::RootCanisterSignaturePrepare);
+        assert_eq!(
+            prepare.quota_policy,
+            Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
+        );
+        assert_eq!(prepare.cycle_reserve_policy, None);
+
+        let get = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_get_role_attestation")
+            .expect("role-attestation get policy entry");
 
         assert_eq!(get.endpoint_kind, EndpointKind::Query);
         assert_eq!(get.replay_policy, ReplayPolicy::QueryOrReadOnly);
@@ -988,16 +966,6 @@ mod tests {
                 "RequestCycles",
                 "root.request_cycles.v1",
                 CostClass::ValueTransfer,
-            ),
-            (
-                "IssueRoleAttestation",
-                "root.issue_role_attestation.v1",
-                CostClass::None,
-            ),
-            (
-                "IssueInternalInvocationProof",
-                "root.issue_internal_invocation_proof.v1",
-                CostClass::None,
             ),
         ] {
             let entry = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST

@@ -12,8 +12,6 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
 pub enum RootCapabilityMetricKey {
-    IssueInternalInvocationProof,
-    IssueRoleAttestation,
     Provision,
     RecycleCanister,
     RequestCycles,
@@ -24,8 +22,6 @@ impl RootCapabilityMetricKey {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::IssueInternalInvocationProof => "IssueInternalInvocationProof",
-            Self::IssueRoleAttestation => "IssueRoleAttestation",
             Self::Provision => "Provision",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",
@@ -103,8 +99,6 @@ impl RootCapabilityMetricOutcome {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
 pub enum RootCapabilityMetricProofMode {
-    DelegatedGrant,
-    RoleAttestation,
     Structural,
     Unspecified,
 }
@@ -113,8 +107,6 @@ impl RootCapabilityMetricProofMode {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::DelegatedGrant => "DelegatedGrant",
-            Self::RoleAttestation => "RoleAttestation",
             Self::Structural => "Structural",
             Self::Unspecified => "Unspecified",
         }
@@ -341,12 +333,7 @@ mod tests {
         RootCapabilityMetrics::record_proof(
             RootCapabilityMetricKey::Provision,
             RootCapabilityMetricOutcome::Accepted,
-            RootCapabilityMetricProofMode::RoleAttestation,
-        );
-        RootCapabilityMetrics::record_proof(
-            RootCapabilityMetricKey::Provision,
-            RootCapabilityMetricOutcome::Accepted,
-            RootCapabilityMetricProofMode::DelegatedGrant,
+            RootCapabilityMetricProofMode::Structural,
         );
 
         let map = snapshot_map();
@@ -373,16 +360,7 @@ mod tests {
                 RootCapabilityMetricKey::Provision,
                 RootCapabilityMetricEventType::Proof,
                 RootCapabilityMetricOutcome::Accepted,
-                RootCapabilityMetricProofMode::RoleAttestation,
-            )),
-            Some(&1)
-        );
-        assert_eq!(
-            map.get(&(
-                RootCapabilityMetricKey::Provision,
-                RootCapabilityMetricEventType::Proof,
-                RootCapabilityMetricOutcome::Accepted,
-                RootCapabilityMetricProofMode::DelegatedGrant,
+                RootCapabilityMetricProofMode::Structural,
             )),
             Some(&1)
         );

@@ -1,7 +1,6 @@
 use super::*;
 use crate::dto::{
-    auth::RoleAttestationRequest,
-    capability::{CAPABILITY_VERSION_V1, CapabilityProof, CapabilityProofBlob, PROOF_VERSION_V1},
+    capability::{CAPABILITY_VERSION_V1, CapabilityProof},
     error::ErrorCode,
     rpc::{CyclesRequest, RootRequestMetadata},
 };
@@ -81,32 +80,6 @@ fn root_capability_hash_ignores_request_metadata() {
 }
 
 #[test]
-fn root_capability_hash_ignores_role_attestation_request_epoch() {
-    let request = |epoch| {
-        Request::IssueRoleAttestation(RoleAttestationRequest {
-            subject: p(1),
-            role: crate::ids::CanisterRole::new("project_hub"),
-            subnet_id: Some(p(2)),
-            audience: p(3),
-            ttl_ns: 60 * NS_PER_SEC,
-            epoch,
-            metadata: Some(RootRequestMetadata {
-                request_id: [4u8; 32],
-                ttl_ns: 60 * NS_PER_SEC,
-            }),
-        })
-    };
-
-    let hash_a = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &request(0)).expect("hash a");
-    let hash_b = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &request(9)).expect("hash b");
-
-    assert_eq!(
-        hash_a, hash_b,
-        "root capability proof binding must ignore caller-supplied role-attestation epoch"
-    );
-}
-
-#[test]
 fn project_replay_metadata_rejects_expired_metadata() {
     let err = project_replay_metadata(
         sample_metadata(1, 2, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
@@ -172,22 +145,6 @@ fn with_root_request_metadata_overrides_existing_metadata() {
     }
 }
 
-fn role_attestation_capability_proof(proof_version: u16) -> CapabilityProof {
-    CapabilityProof::RoleAttestation(CapabilityProofBlob {
-        proof_version,
-        capability_hash: [0u8; 32],
-        payload: Vec::new(),
-    })
-}
-
-fn delegated_grant_capability_proof(proof_version: u16) -> CapabilityProof {
-    CapabilityProof::DelegatedGrant(CapabilityProofBlob {
-        proof_version,
-        capability_hash: [0u8; 32],
-        payload: Vec::new(),
-    })
-}
-
 #[test]
 fn validate_nonroot_cycles_envelope_accepts_structural_cycles() {
     validate_nonroot_cycles_envelope(
@@ -196,17 +153,6 @@ fn validate_nonroot_cycles_envelope_accepts_structural_cycles() {
         &CapabilityProof::Structural,
     )
     .expect("structural cycles envelope must be accepted for non-root path");
-}
-
-#[test]
-fn validate_nonroot_cycles_envelope_rejects_non_structural_proof() {
-    let err = validate_nonroot_cycles_envelope(
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        &role_attestation_capability_proof(PROOF_VERSION_V1),
-    )
-    .expect_err("non-root path must reject non-structural proof");
-    assert_eq!(err.code, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -242,36 +188,6 @@ fn validate_nonroot_cycles_envelope_returns_structural_mode() {
     .expect("valid non-root structural proof must validate");
 
     assert_eq!(proof.mode(), RootCapabilityProofMode::Structural);
-}
-
-#[test]
-fn validate_root_capability_envelope_rejects_role_attestation_proof_after_hard_cut() {
-    let err = validate_root_capability_envelope(
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        &role_attestation_capability_proof(PROOF_VERSION_V1),
-    )
-    .expect_err("role-attestation capability proofs must fail after the hard cut");
-    assert_eq!(err.code, ErrorCode::Forbidden);
-    assert!(
-        err.message.contains("disabled in 0.65"),
-        "expected hard-cut rejection, got: {err:?}"
-    );
-}
-
-#[test]
-fn validate_root_capability_envelope_rejects_delegated_grant_proof_after_hard_cut() {
-    let err = validate_root_capability_envelope(
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        &delegated_grant_capability_proof(PROOF_VERSION_V1),
-    )
-    .expect_err("standalone delegated-grant capability proofs must fail after the hard cut");
-    assert_eq!(err.code, ErrorCode::Forbidden);
-    assert!(
-        err.message.contains("disabled in 0.65"),
-        "expected hard-cut rejection, got: {err:?}"
-    );
 }
 
 #[test]

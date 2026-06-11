@@ -28,8 +28,6 @@ mod tests;
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
-const ROLE_ATTESTATION_CAPABILITY_PROOF_DISABLED: &str = "role-attestation capability proofs are disabled in 0.65; use structural capability proofs or delegated-token endpoints";
-const DELEGATED_GRANT_CAPABILITY_PROOF_DISABLED: &str = "standalone delegated-grant capability proofs are disabled in 0.65; use delegated-token endpoints";
 
 /// RootCapabilityProofMode
 ///
@@ -37,8 +35,6 @@ const DELEGATED_GRANT_CAPABILITY_PROOF_DISABLED: &str = "standalone delegated-gr
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RootCapabilityProofMode {
     Structural,
-    RoleAttestation,
-    DelegatedGrant,
 }
 
 impl RootCapabilityProofMode {
@@ -46,8 +42,6 @@ impl RootCapabilityProofMode {
     const fn from_proof(proof: &CapabilityProof) -> Self {
         match proof {
             CapabilityProof::Structural => Self::Structural,
-            CapabilityProof::RoleAttestation(_) => Self::RoleAttestation,
-            CapabilityProof::DelegatedGrant(_) => Self::DelegatedGrant,
         }
     }
 
@@ -55,8 +49,6 @@ impl RootCapabilityProofMode {
     const fn label(self) -> &'static str {
         match self {
             Self::Structural => "Structural",
-            Self::RoleAttestation => "RoleAttestation",
-            Self::DelegatedGrant => "DelegatedGrant",
         }
     }
 
@@ -64,8 +56,6 @@ impl RootCapabilityProofMode {
     const fn metric_key(self) -> RootCapabilityMetricProofMode {
         match self {
             Self::Structural => RootCapabilityMetricProofMode::Structural,
-            Self::RoleAttestation => RootCapabilityMetricProofMode::RoleAttestation,
-            Self::DelegatedGrant => RootCapabilityMetricProofMode::DelegatedGrant,
         }
     }
 }
@@ -80,15 +70,9 @@ pub(super) enum RootCapabilityProof {
 
 impl RootCapabilityProof {
     /// Validate the proof wire header and expose the typed proof view.
-    fn validate(proof: &CapabilityProof) -> Result<Self, Error> {
+    const fn validate(proof: &CapabilityProof) -> Self {
         match proof {
-            CapabilityProof::Structural => Ok(Self::Structural),
-            CapabilityProof::RoleAttestation(_) => {
-                Err(Error::forbidden(ROLE_ATTESTATION_CAPABILITY_PROOF_DISABLED))
-            }
-            CapabilityProof::DelegatedGrant(_) => {
-                Err(Error::forbidden(DELEGATED_GRANT_CAPABILITY_PROOF_DISABLED))
-            }
+            CapabilityProof::Structural => Self::Structural,
         }
     }
 
@@ -175,10 +159,6 @@ const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetri
         RequestFamily::Upgrade => RootCapabilityMetricKey::Upgrade,
         RequestFamily::RecycleCanister => RootCapabilityMetricKey::RecycleCanister,
         RequestFamily::RequestCycles => RootCapabilityMetricKey::RequestCycles,
-        RequestFamily::IssueRoleAttestation => RootCapabilityMetricKey::IssueRoleAttestation,
-        RequestFamily::IssueInternalInvocationProof => {
-            RootCapabilityMetricKey::IssueInternalInvocationProof
-        }
     }
 }
 

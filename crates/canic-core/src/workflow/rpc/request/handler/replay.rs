@@ -76,6 +76,7 @@ pub(super) fn check_replay(
 /// check_existing_replay
 ///
 /// Run a non-reserving replay probe for auth-first paths.
+#[cfg(test)]
 pub(super) fn check_existing_replay(
     ctx: &RootContext,
     capability: &RootCapability,
@@ -370,13 +371,6 @@ pub(super) fn payload_hasher() -> Sha256 {
     hasher
 }
 
-/// hash_u64
-///
-/// Append one fixed-width `u64` field to the replay payload hash.
-pub(super) fn hash_u64(hasher: &mut Sha256, value: u64) {
-    hasher.update(value.to_be_bytes());
-}
-
 /// hash_u128
 ///
 /// Append one fixed-width `u128` field to the replay payload hash.
@@ -418,16 +412,6 @@ pub(super) fn hash_role(hasher: &mut Sha256, role: &CanisterRole) {
 /// Append one principal field to the replay payload hash.
 pub(super) fn hash_principal(hasher: &mut Sha256, principal: &Principal) {
     hash_bytes(hasher, principal.as_slice());
-}
-
-/// hash_optional_principal
-///
-/// Append one optional principal field to the replay payload hash.
-pub(super) fn hash_optional_principal(hasher: &mut Sha256, principal: Option<Principal>) {
-    hash_bool(hasher, principal.is_some());
-    if let Some(principal) = principal {
-        hash_principal(hasher, &principal);
-    }
 }
 
 /// hash_optional_bytes
@@ -490,6 +474,7 @@ mod replay {
     /// evaluate_existing_root_replay
     ///
     /// Call the ops replay guard without classifying fresh requests.
+    #[cfg(test)]
     pub(super) fn evaluate_existing_root_replay(
         ctx: &RootContext,
         command_kind: &'static str,

@@ -314,7 +314,54 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.15` candidate removes the active shard ECDSA key/signature
+- Local `0.65.16` candidate moves `SignedRoleAttestation` from root ECDSA
+  signatures to root canister-signature proofs. The root auth bundle now emits
+  `canic_prepare_role_attestation` update plus `canic_get_role_attestation`
+  query; prepare validates caller/subject/role/subnet/TTL, replay-protects the
+  request under `auth.prepare_role_attestation.v1`, caches caller-bound pending
+  payload metadata, and commits the root `"sig"` certified-data tree. Get
+  returns the prepared payload with `RootProof::IcCanisterSignatureV1`.
+  Runtime role-attestation verification now verifies the embedded root proof
+  against the configured root canister id plus raw IC root key and performs
+  local subject/audience/subnet/time/epoch checks with no root refresh or
+  management-canister call on the protected path. The old direct one-shot
+  `canic_request_role_attestation` endpoint,
+  `AuthApi::request_role_attestation_root` wrapper, and role-attestation
+  capability-RPC issuance variant are removed. Legacy standalone capability
+  proof DTOs and disabled proof-mode branches are removed; root capability
+  envelopes now accept only structural proofs. The ECDSA attestation key refresh
+  timer is now inert for role attestations, and the PIC role-attestation helper
+  uses the real prepare/get flow. Current validation:
+  ```text
+  cargo fmt --all
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core -p canic
+  cargo check --locked -p delegation_root_stub -p delegation_signer_stub -p canister_root -p canister_user_shard -p canic-tests
+  cargo check --locked -p delegation_root_stub -p delegation_signer_stub -p sharding_root_stub
+  cargo test --locked -p canic-core ops::auth::root_canister_sig --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::rpc --lib -- --nocapture
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+  cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo check --locked -p canic-core --features auth-root-canister-sig-create,auth-root-canister-sig-verify
+  cargo check --locked -p canic --features auth-root-canister-sig-create,auth-root-canister-sig-verify
+  cargo check --locked -p canic-tests
+  git diff --check
+  ```
+  Attempted targeted PocketIC validation:
+  ```text
+  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test pic_role_attestation verification -- --test-threads=1 --nocapture
+  ```
+  That run rebuilt local wasm artifacts and reached serialized PocketIC startup,
+  then hit the known `Failed to bind PocketIC server to address 127.0.0.1:0`
+  infrastructure panic. The idle test process group was interrupted with
+  `kill -INT`.
+- `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
   `issuer_pid`, `issuer_proof_alg`, `issuer_proof_binding`,
   `issuer_proof_binding_hash`, and `issuer_signer_generation`; basic 0.65
@@ -326,8 +373,9 @@ inspect only the files needed for the current task.
   canister-signature creation for delegated-token issuers, and the checked-in
   wasm-store Candid surface reflects the issuer-bound cert shape. Remaining
   ECDSA scan matches are isolated to the standalone ECDSA ops feature
-  definitions, historical replay effect tests/records, and the pending
-  role-attestation ECDSA compatibility path. Current validation:
+  definitions, historical replay effect tests/records, and legacy
+  attestation-key helpers used by keyed internal-invocation proofs. Current
+  validation:
   ```text
   cargo check --locked -p canic-core -p canic
   cargo check --locked -p canic-core --features auth-root-canister-sig-create,auth-issuer-canister-sig-create,auth-delegated-token-verify
@@ -337,7 +385,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
   cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
   ```
-- Local `0.65.14` candidate flips delegated tokens from shard ECDSA signatures
+- `0.65.14` is committed and flips delegated tokens from shard ECDSA signatures
   to issuer canister-signature proofs. `DelegatedToken` now carries
   `issuer_proof`, runtime verification validates the issuer proof over the
   canonical claims hash, and the positive verifier cache key binds
@@ -346,11 +394,11 @@ inspect only the files needed for the current task.
   query; prepare uses the installed `ActiveDelegationProof`, enforces
   `subject == msg.caller()`, is replay-protected under
   `auth.prepare_delegated_token.v1`, and stores caller-bound pending token
-  metadata for query retrieval. The old `AuthApi::issue_token` remains only as
-  a legacy hard-fail API, test fleet one-shot issue wrappers are removed, and
-  the PIC helper now installs active proof material before prepare/get. The old
-  shard-token replay entries plus stale shard/threshold ECDSA signing cost
-  classes are removed from normal auth. Current validation:
+  metadata for query retrieval. `AuthApi::issue_token` and
+  `DelegatedTokenIssueRequest` are removed, test fleet one-shot issue wrappers
+  are removed, and the PIC helper now installs active proof material before
+  prepare/get. The old shard-token replay entries plus stale shard/threshold
+  ECDSA signing cost classes are removed from normal auth. Current validation:
   ```text
   cargo fmt --all -- --check
   cargo check --locked -p canic-core -p canic

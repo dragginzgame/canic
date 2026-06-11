@@ -115,6 +115,7 @@ pub fn evaluate_root_replay(
 ///
 /// Evaluate only existing replay state, leaving fresh requests unreserved and
 /// otherwise unclassified for callers that must authorize before reserving.
+#[cfg(test)]
 pub fn evaluate_existing_root_replay(
     input: RootReplayGuardInput,
 ) -> Result<Option<ReplayDecision>, ReplayGuardError> {

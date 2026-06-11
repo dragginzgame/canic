@@ -172,7 +172,6 @@ const fn uses_structural_capability_proof(request: &Request) -> bool {
             matches!(&req.parent, CreateCanisterParent::ThisCanister)
         }
         Request::UpgradeCanister(_) | Request::RecycleCanister(_) | Request::Cycles(_) => true,
-        Request::IssueRoleAttestation(_) | Request::IssueInternalInvocationProof(_) => false,
     }
 }
 
@@ -181,7 +180,7 @@ fn non_structural_capability_proof_error(request: &Request) -> InternalError {
     InternalError::ops(
         InternalErrorOrigin::Ops,
         format!(
-            "non-structural root capability proof is disabled in 0.65 for {}; use a structural capability path or delegated-token endpoint",
+            "non-structural root capability proof is not supported for {}; use a structural capability path or delegated-token endpoint",
             request.family().label()
         ),
     )
@@ -326,19 +325,5 @@ mod tests {
                 metadata: None,
             },)
         ));
-    }
-
-    #[test]
-    fn non_structural_capability_proof_error_names_hard_cut() {
-        let request = Request::create_canister(CreateCanisterRequest {
-            canister_role: CanisterRole::new("child"),
-            parent: CreateCanisterParent::Root,
-            extra_arg: None,
-            metadata: None,
-        });
-
-        let err = non_structural_capability_proof_error(&request);
-
-        assert!(err.to_string().contains("disabled in 0.65"));
     }
 }

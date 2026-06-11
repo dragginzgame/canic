@@ -1,9 +1,7 @@
-use super::{RootCapability, RootContext, nonroot_cycles, validate_role_attestation_ttl};
+use super::{RootCapability, RootContext, nonroot_cycles};
 use crate::{
     InternalError,
-    cdk::types::Principal,
     dto::{
-        auth::{InternalInvocationProofRequest, RoleAttestationRequest},
         error::Error,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, RecycleCanisterRequest,
@@ -15,7 +13,7 @@ use crate::{
     ops::{
         runtime::env::EnvOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
-        storage::{index::app::AppIndexOps, registry::subnet::SubnetRegistryOps},
+        storage::registry::subnet::SubnetRegistryOps,
     },
     workflow::rpc::RpcWorkflowError,
 };
@@ -44,11 +42,6 @@ pub(super) fn authorize(
             authorize_root_only(ctx).and_then(|()| authorize_recycle(ctx, req))
         }
         RootCapability::RequestCycles(_) => unreachable!("handled before generic authorization"),
-        RootCapability::IssueRoleAttestation(req) => {
-            authorize_root_only(ctx).and_then(|()| authorize_issue_role_attestation(ctx, req))
-        }
-        RootCapability::IssueInternalInvocationProof(req) => authorize_root_only(ctx)
-            .and_then(|()| authorize_issue_internal_invocation_proof(ctx, req)),
     };
 
     match &decision {
@@ -143,120 +136,4 @@ fn authorize_recycle(ctx: &RootContext, req: &RecycleCanisterRequest) -> Result<
     }
 
     Ok(())
-}
-
-fn authorize_issue_role_attestation(
-    ctx: &RootContext,
-    req: &RoleAttestationRequest,
-) -> Result<(), InternalError> {
-    if req.subject != ctx.caller {
-        return Err(RpcWorkflowError::RoleAttestationSubjectMismatch {
-            caller: ctx.caller,
-            subject: req.subject,
-        }
-        .into());
-    }
-
-    let registered = SubnetRegistryOps::get(req.subject).ok_or(
-        RpcWorkflowError::RoleAttestationSubjectNotRegistered {
-            subject: req.subject,
-        },
-    )?;
-
-    if registered.role != req.role {
-        return Err(RpcWorkflowError::RoleAttestationRoleMismatch {
-            subject: req.subject,
-            requested: req.role.clone(),
-            registered: registered.role,
-        }
-        .into());
-    }
-
-    if let Some(requested_subnet) = req.subnet_id
-        && requested_subnet != ctx.subnet_id
-    {
-        return Err(RpcWorkflowError::RoleAttestationSubnetMismatch {
-            subject: req.subject,
-            requested: requested_subnet,
-            local: ctx.subnet_id,
-        }
-        .into());
-    }
-
-    validate_role_attestation_ttl(req.ttl_ns)?;
-
-    Ok(())
-}
-
-fn authorize_issue_internal_invocation_proof(
-    ctx: &RootContext,
-    req: &InternalInvocationProofRequest,
-) -> Result<(), InternalError> {
-    if req.subject != ctx.caller {
-        return Err(RpcWorkflowError::RoleAttestationSubjectMismatch {
-            caller: ctx.caller,
-            subject: req.subject,
-        }
-        .into());
-    }
-
-    authorize_subject_role(req)?;
-
-    if let Some(requested_subnet) = req.subnet_id
-        && requested_subnet != ctx.subnet_id
-    {
-        return Err(RpcWorkflowError::RoleAttestationSubnetMismatch {
-            subject: req.subject,
-            requested: requested_subnet,
-            local: ctx.subnet_id,
-        }
-        .into());
-    }
-
-    if req.audience_method.trim().is_empty() {
-        return Err(RpcWorkflowError::InternalInvocationProofMethodEmpty.into());
-    }
-
-    if !is_known_audience(ctx, req.audience) {
-        return Err(RpcWorkflowError::InternalInvocationProofAudienceUnknown {
-            audience: req.audience,
-        }
-        .into());
-    }
-
-    validate_role_attestation_ttl(req.ttl_ns)?;
-
-    Ok(())
-}
-
-fn authorize_subject_role(req: &InternalInvocationProofRequest) -> Result<(), InternalError> {
-    if AppIndexOps::get(&req.role) == Some(req.subject) {
-        return Ok(());
-    }
-
-    let registered = SubnetRegistryOps::get(req.subject).ok_or(
-        RpcWorkflowError::RoleAttestationSubjectNotRegistered {
-            subject: req.subject,
-        },
-    )?;
-
-    if registered.role != req.role {
-        return Err(RpcWorkflowError::RoleAttestationRoleMismatch {
-            subject: req.subject,
-            requested: req.role.clone(),
-            registered: registered.role,
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-fn is_known_audience(ctx: &RootContext, audience: Principal) -> bool {
-    audience == ctx.self_pid
-        || SubnetRegistryOps::is_registered(audience)
-        || AppIndexOps::data()
-            .entries
-            .iter()
-            .any(|(_, pid)| *pid == audience)
 }

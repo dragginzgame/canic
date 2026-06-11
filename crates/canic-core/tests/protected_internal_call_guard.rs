@@ -52,12 +52,12 @@ const INTERNAL_ENDPOINT_CLASSIFICATIONS: &[InternalEndpointClassification] = &[
         class: InternalEndpointClass::StructuralAuthQuery,
     },
     InternalEndpointClassification {
-        method: "canic_request_role_attestation",
+        method: "canic_prepare_role_attestation",
         class: InternalEndpointClass::StructuralBootstrap,
     },
     InternalEndpointClassification {
-        method: "canic_request_internal_invocation_proof",
-        class: InternalEndpointClass::StructuralBootstrap,
+        method: "canic_get_role_attestation",
+        class: InternalEndpointClass::StructuralAuthQuery,
     },
     InternalEndpointClassification {
         method: "canic_attestation_key_set",
@@ -397,110 +397,6 @@ fn protected_internal_method_guard_includes_shared_protocol_descriptors() {
     assert!(
         protected_methods.contains("project_instance_record_visit"),
         "shared protocol descriptors must be included in the raw-call guard method set"
-    );
-}
-
-#[test]
-fn removed_protected_internal_client_surface_stays_removed() {
-    let workspace = workspace_root();
-    let source = read_workspace_file("crates/canic-core/src/api/ic/canic/mod.rs");
-    let facade = read_workspace_file("crates/canic/src/api/mod.rs");
-    let prelude = read_workspace_file("crates/canic/src/prelude/mod.rs");
-    let macros = read_workspace_file("crates/canic/src/macros/mod.rs");
-
-    assert!(
-        !source.contains("pub struct CanicCall")
-            && !source.contains("pub struct CanicInternalClient")
-            && !source.contains("CanicInternalCallOptions")
-            && !source.contains("CanicInternalWaitMode"),
-        "core protected-internal client types must stay removed after the 0.65 hard cut"
-    );
-    assert!(
-        !facade.contains("CanicCall")
-            && !facade.contains("CanicInternalClient")
-            && !facade.contains("CanicInternalCallOptions")
-            && !prelude.contains("CanicCall")
-            && !prelude.contains("CanicInternalClient"),
-        "public facade and prelude must not export removed protected-internal clients"
-    );
-    assert!(
-        !macros.contains("macro_rules! canic_internal_client")
-            && !macros.contains("__canic_internal_client_execute"),
-        "canic_internal_client! must stay removed after fresh proof issuance is disabled"
-    );
-    assert!(
-        !workspace
-            .join("crates/canic-core/src/api/ic/canic/proof_cache.rs")
-            .exists(),
-        "outbound internal-invocation proof cache must not be retained after fresh issuance is disabled"
-    );
-}
-
-#[test]
-fn removed_normal_auth_one_shot_wrappers_stay_removed() {
-    let workspace = workspace_root();
-    let auth_api = read_workspace_file("crates/canic-core/src/api/auth/mod.rs");
-    let rpc_ops = read_workspace_file("crates/canic-core/src/ops/rpc/mod.rs");
-    let capability_mod =
-        read_workspace_file("crates/canic-core/src/workflow/rpc/capability/mod.rs");
-    let capability_proof =
-        read_workspace_file("crates/canic-core/src/workflow/rpc/capability/proof.rs");
-    let capability_verifier =
-        read_workspace_file("crates/canic-core/src/workflow/rpc/capability/verifier.rs");
-    let capability_grant = workspace.join("crates/canic-core/src/workflow/rpc/capability/grant.rs");
-    let delegation_root = read_workspace_file("canisters/test/delegation_root_stub/src/lib.rs");
-    let sharding_root = read_workspace_file("canisters/test/sharding_root_stub/src/lib.rs");
-
-    assert!(
-        !auth_api.contains("pub fn request_role_attestation(")
-            && !auth_api.contains("pub async fn request_role_attestation(")
-            && !auth_api.contains("pub fn request_internal_invocation_proof(")
-            && !auth_api.contains("pub async fn request_internal_invocation_proof("),
-        "normal-auth one-shot role/internal proof wrappers must stay removed after the 0.65 hard cut"
-    );
-    assert!(
-        auth_api.contains("pub async fn request_role_attestation_root(")
-            && auth_api.contains("pub async fn request_internal_invocation_proof_root("),
-        "root rejection endpoints must remain explicit compatibility-failure surfaces"
-    );
-    assert!(
-        !rpc_ops.contains("request_root_response_attestation")
-            && !rpc_ops.contains("ROOT_RESPONSE_ATTESTATION_CACHE")
-            && !rpc_ops.contains("CachedRootResponseAttestation")
-            && !rpc_ops.contains("CANIC_REQUEST_ROLE_ATTESTATION"),
-        "outbound root-response RPC must not request or cache fresh role attestations after the 0.65 hard cut"
-    );
-    assert!(
-        !capability_mod.contains("RoleAttestation(&")
-            && capability_mod.contains("role-attestation capability proofs are disabled in 0.65")
-            && !capability_proof.contains("encode_role_attestation_blob")
-            && !capability_proof.contains("decode_role_attestation_blob")
-            && !capability_proof.contains("impl TryFrom<RoleAttestationProof>")
-            && !capability_verifier.contains("RoleAttestationVerifier")
-            && !capability_verifier.contains("RootCapabilityProof::RoleAttestation"),
-        "inbound root-capability role-attestation proof verification must stay removed after the 0.65 hard cut"
-    );
-    assert!(
-        !capability_grant.exists()
-            && !capability_mod.contains("DelegatedGrant(&")
-            && capability_mod
-                .contains("standalone delegated-grant capability proofs are disabled in 0.65")
-            && !capability_proof.contains("encode_delegated_grant_blob")
-            && !capability_proof.contains("decode_delegated_grant_blob")
-            && !capability_proof.contains("impl TryFrom<DelegatedGrantProof>")
-            && !capability_verifier.contains("DelegatedGrantVerifier")
-            && !capability_verifier.contains("RootCapabilityProof::DelegatedGrant"),
-        "standalone delegated-grant capability proof verification must stay removed after the 0.65 hard cut"
-    );
-    assert!(
-        !delegation_root.contains("fn root_issue_self_attestation(")
-            && delegation_root.contains("fn root_issue_self_attestation_test("),
-        "delegation root stub must keep explicit test helpers without the stale normal-auth endpoint"
-    );
-    assert!(
-        !sharding_root.contains("fn canic_request_role_attestation(")
-            && sharding_root.contains("issue_role_attestation unsupported in sharding_root_stub"),
-        "sharding root stub must reject role attestation through capability RPC without a direct fake-signing endpoint"
     );
 }
 

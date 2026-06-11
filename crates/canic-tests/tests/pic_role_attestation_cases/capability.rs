@@ -1,54 +1,6 @@
 use crate::pic_role_attestation_support::*;
 
 #[test]
-fn capability_endpoint_rejects_role_attestation_proofs_after_hard_cut() {
-    test_progress(
-        "capability_endpoint_rejects_role_attestation_proofs_after_hard_cut",
-        "setup root",
-    );
-    let setup = install_test_root_cached();
-    let pic = setup.pic.pic();
-    let root_id = setup.root_id;
-    let signer_id = setup.signer_id;
-    let request = Request::Cycles(CyclesRequest {
-        cycles: 1,
-        metadata: None,
-    });
-
-    test_progress(
-        "capability_endpoint_rejects_role_attestation_proofs_after_hard_cut",
-        "disabled proof rejection",
-    );
-    let envelope = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: request.clone(),
-        proof: CapabilityProof::RoleAttestation(CapabilityProofBlob {
-            proof_version: 1,
-            capability_hash: root_capability_hash(root_id, &request),
-            payload: Vec::new(),
-        }),
-        metadata: capability_metadata(0, 9, 1, TEST_ROLE_ATTESTATION_TTL_NS),
-    };
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        signer_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("role-attestation capability proof must fail closed");
-    assert_eq!(err.code, ErrorCode::Forbidden);
-    assert!(
-        err.message.contains("disabled in 0.65"),
-        "expected hard-cut rejection, got: {err:?}"
-    );
-    test_progress(
-        "capability_endpoint_rejects_role_attestation_proofs_after_hard_cut",
-        "done",
-    );
-}
-
-#[test]
 fn capability_endpoint_policy_and_structural_paths() {
     test_progress(
         "capability_endpoint_policy_and_structural_paths",
@@ -87,67 +39,5 @@ fn capability_endpoint_policy_and_structural_paths() {
         Response::Cycles(res) => assert_eq!(res.cycles_transferred, 1),
         other => panic!("expected cycles response, got: {other:?}"),
     }
-
-    test_progress(
-        "capability_endpoint_policy_and_structural_paths",
-        "unsupported structural rejection",
-    );
-    let unsupported_structural_request = Request::IssueRoleAttestation(RoleAttestationRequest {
-        subject: root_id,
-        role: CanisterRole::ROOT,
-        subnet_id: None,
-        audience: root_id,
-        ttl_ns: TEST_ROLE_ATTESTATION_TTL_NS,
-        epoch: 0,
-        metadata: None,
-    });
-    let envelope = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: unsupported_structural_request,
-        proof: CapabilityProof::Structural,
-        metadata: capability_metadata(issued_at_ns, 7, 3, TEST_ROLE_ATTESTATION_TTL_NS),
-    };
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("unsupported structural capability must fail closed");
-    assert_eq!(err.code, ErrorCode::Forbidden);
-    assert!(
-        err.message.contains("only supported"),
-        "expected structural capability-scope rejection, got: {err:?}"
-    );
-
-    test_progress(
-        "capability_endpoint_policy_and_structural_paths",
-        "delegated grant disabled rejection",
-    );
-    let capability_hash = root_capability_hash(root_id, &cycles_request);
-    let envelope = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: cycles_request,
-        proof: CapabilityProof::DelegatedGrant(CapabilityProofBlob {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash,
-            payload: Vec::new(),
-        }),
-        metadata: capability_metadata(issued_at_ns, 8, 2, TEST_ROLE_ATTESTATION_TTL_NS),
-    };
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("delegated-grant capability proof must fail closed");
-    assert_eq!(err.code, ErrorCode::Forbidden);
-    assert!(
-        err.message.contains("disabled in 0.65"),
-        "expected delegated-grant hard-cut rejection, got: {err:?}"
-    );
     test_progress("capability_endpoint_policy_and_structural_paths", "done");
 }

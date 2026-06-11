@@ -84,21 +84,17 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_request_role_attestation(
+        async fn canic_prepare_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,
-        ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::request_role_attestation_root(request)
-                .await
+        ) -> Result<::canic::dto::auth::RoleAttestationPrepareResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::prepare_role_attestation_root(request)
         }
 
-        #[$crate::canic_update(internal)]
-        async fn canic_request_internal_invocation_proof(
-            request: ::canic::dto::auth::InternalInvocationProofRequest,
-        ) -> Result<::canic::dto::auth::SignedInternalInvocationProofV1, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::request_internal_invocation_proof_root(
-                request,
-            )
-            .await
+        #[$crate::canic_query(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_get_role_attestation(
+            request: ::canic::dto::auth::RoleAttestationGetRequest,
+        ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::get_role_attestation_root(request)
         }
 
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]

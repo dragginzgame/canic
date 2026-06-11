@@ -22,5 +22,5 @@ pub(super) fn validate_root_capability_envelope(
         )));
     }
 
-    RootCapabilityProof::validate(proof)
+    Ok(RootCapabilityProof::validate(proof))
 }

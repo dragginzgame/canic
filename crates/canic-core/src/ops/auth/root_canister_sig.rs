@@ -19,6 +19,7 @@ pub const IC_ROOT_PUBLIC_KEY_RAW_LENGTH: usize = 96;
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootPayloadKind {
     DelegationCert,
+    RoleAttestation,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +63,7 @@ impl PendingRootProofKey {
 pub const fn root_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
         RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
+        RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
     }
 }
 
@@ -73,6 +75,7 @@ pub const fn root_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
 pub const fn root_sig_domain(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
         RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
+        RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
     }
 }
 
@@ -421,6 +424,18 @@ mod tests {
         assert_eq!(msg[0], domain_len);
         assert_eq!(&msg[domain_start..domain_end], domain);
         assert_eq!(&msg[domain_end..], &[7; 32]);
+    }
+
+    #[test]
+    fn role_attestation_uses_distinct_seed_and_domain() {
+        assert_ne!(
+            root_sig_seed(RootPayloadKind::RoleAttestation),
+            root_sig_seed(RootPayloadKind::DelegationCert)
+        );
+        assert_ne!(
+            root_sig_domain(RootPayloadKind::RoleAttestation),
+            root_sig_domain(RootPayloadKind::DelegationCert)
+        );
     }
 
     #[test]
