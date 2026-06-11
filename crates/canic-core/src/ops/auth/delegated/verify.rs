@@ -10,6 +10,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{DelegatedToken, IssuerProof, RootProof},
     ids::CanisterRole,
+    ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
 use thiserror::Error;
 
@@ -163,7 +164,7 @@ const fn verify_cert_time(
     expires_at_ns: u64,
     now_ns: u64,
 ) -> Result<(), VerifyDelegatedTokenError> {
-    if now_ns < not_before_ns {
+    if not_before_ns > now_ns.saturating_add(AUTH_TIME_SKEW_ALLOWANCE_NS) {
         return Err(VerifyDelegatedTokenError::CertNotYetValid);
     }
     if now_ns >= expires_at_ns {
@@ -205,7 +206,7 @@ fn verify_claims(
     if claims.expires_at_ns > cert.expires_at_ns {
         return Err(VerifyDelegatedTokenError::TokenOutlivesCert);
     }
-    if input.now_ns < claims.issued_at_ns {
+    if claims.issued_at_ns > input.now_ns.saturating_add(AUTH_TIME_SKEW_ALLOWANCE_NS) {
         return Err(VerifyDelegatedTokenError::TokenNotYetValid);
     }
     if input.now_ns >= claims.expires_at_ns {
@@ -372,6 +373,30 @@ mod tests {
         }
     }
 
+    fn input_at<'a>(
+        token: &'a DelegatedToken,
+        local_role: Option<&'a CanisterRole>,
+        required_scopes: &'a [String],
+        now_ns: u64,
+    ) -> VerifyDelegatedTokenInput<'a> {
+        let mut input = input(token, local_role, required_scopes);
+        input.now_ns = now_ns;
+        input
+    }
+
+    fn future_token(now_ns: u64, offset_ns: u64) -> DelegatedToken {
+        let mut token = token();
+        let issued_at_ns = now_ns + offset_ns;
+        token.proof.cert.issued_at_ns = issued_at_ns;
+        token.proof.cert.not_before_ns = issued_at_ns;
+        token.proof.cert.expires_at_ns = issued_at_ns + 120;
+        token.claims.issued_at_ns = issued_at_ns;
+        token.claims.expires_at_ns = issued_at_ns + 60;
+        token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
+        token.issuer_proof = issuer_proof_for_claims(&token.claims);
+        token
+    }
+
     fn root_proof(byte: u8) -> RootProof {
         RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
             signature_cbor: vec![byte; 8],
@@ -466,6 +491,66 @@ mod tests {
         assert_eq!(verified.subject, p(9));
         assert_eq!(verified.issuer_pid, p(2));
         assert_eq!(verified.scopes, vec!["read".to_string()]);
+    }
+
+    #[test]
+    fn verify_delegated_token_accepts_issuer_clock_within_future_skew() {
+        let now_ns = 1_000_000_000_000;
+        let token = future_token(now_ns, 30_000_000_000);
+        let role = role();
+        let required_scopes = vec!["read".to_string()];
+
+        let verified = verify_delegated_token_without_signatures(input_at(
+            &token,
+            Some(&role),
+            &required_scopes,
+            now_ns,
+        ))
+        .expect("issuer clock within skew allowance should verify");
+
+        assert_eq!(verified.subject, p(9));
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_cert_farther_in_future_than_skew() {
+        let now_ns = 1_000_000_000_000;
+        let token = future_token(now_ns, AUTH_TIME_SKEW_ALLOWANCE_NS + 1);
+        let role = role();
+        let required_scopes = vec!["read".to_string()];
+
+        let err = verify_delegated_token_without_signatures(input_at(
+            &token,
+            Some(&role),
+            &required_scopes,
+            now_ns,
+        ))
+        .expect_err("cert beyond skew allowance must reject");
+
+        assert_eq!(err, VerifyDelegatedTokenError::CertNotYetValid);
+    }
+
+    #[test]
+    fn verify_delegated_token_rejects_claims_farther_in_future_than_skew() {
+        let now_ns = 1_000_000_000_000;
+        let mut token = token();
+        token.proof.cert.issued_at_ns = now_ns;
+        token.proof.cert.not_before_ns = now_ns;
+        token.proof.cert.expires_at_ns = now_ns + AUTH_TIME_SKEW_ALLOWANCE_NS + 500;
+        token.proof.cert.max_token_ttl_ns = 120;
+        token.claims.issued_at_ns = now_ns + AUTH_TIME_SKEW_ALLOWANCE_NS + 1;
+        token.claims.expires_at_ns = token.claims.issued_at_ns + 60;
+        token.claims.cert_hash = cert_hash(&token.proof.cert).unwrap();
+        token.issuer_proof = issuer_proof_for_claims(&token.claims);
+
+        let role = role();
+        let required_scopes = vec!["read".to_string()];
+        let mut input = input_at(&token, Some(&role), &required_scopes, now_ns);
+        input.ttl_limits.max_cert_ttl_ns = AUTH_TIME_SKEW_ALLOWANCE_NS + 1_000;
+
+        let err = verify_delegated_token_without_signatures(input)
+            .expect_err("claims beyond skew allowance must reject");
+
+        assert_eq!(err, VerifyDelegatedTokenError::TokenNotYetValid);
     }
 
     #[test]

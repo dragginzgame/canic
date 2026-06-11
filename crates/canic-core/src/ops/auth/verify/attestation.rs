@@ -1,7 +1,10 @@
 use crate::{
     cdk::types::Principal,
     dto::auth::RoleAttestation,
-    ops::auth::{AuthExpiryError, AuthOpsError, AuthScopeError, AuthValidationError},
+    ops::auth::{
+        AUTH_TIME_SKEW_ALLOWANCE_NS, AuthExpiryError, AuthOpsError, AuthScopeError,
+        AuthValidationError,
+    },
 };
 
 // Enforce role-attestation subject, timing, audience, subnet, and epoch bounds.
@@ -67,7 +70,7 @@ fn verify_attestation_time_window(
         .into());
     }
 
-    if now_ns < issued_at_ns {
+    if issued_at_ns > now_ns.saturating_add(AUTH_TIME_SKEW_ALLOWANCE_NS) {
         return Err(AuthExpiryError::AttestationNotYetValid {
             issued_at_ns,
             now_ns,
@@ -92,7 +95,9 @@ mod tests {
         cdk::types::Principal,
         dto::auth::RoleAttestation,
         ids::CanisterRole,
-        ops::auth::{AuthExpiryError, AuthOpsError, AuthValidationError},
+        ops::auth::{
+            AUTH_TIME_SKEW_ALLOWANCE_NS, AuthExpiryError, AuthOpsError, AuthValidationError,
+        },
     };
 
     fn p(id: u8) -> Principal {
@@ -112,13 +117,23 @@ mod tests {
     }
 
     #[test]
-    fn role_attestation_claims_reject_future_issued_at() {
+    fn role_attestation_claims_accept_future_issued_at_within_skew() {
         let mut payload = role_attestation();
-        payload.issued_at_ns = 16;
-        payload.expires_at_ns = 30;
+        payload.issued_at_ns = 15 + 30_000_000_000;
+        payload.expires_at_ns = payload.issued_at_ns + 10;
+
+        super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
+            .expect("future issued_at within skew allowance should verify");
+    }
+
+    #[test]
+    fn role_attestation_claims_reject_future_issued_at_beyond_skew() {
+        let mut payload = role_attestation();
+        payload.issued_at_ns = 15 + AUTH_TIME_SKEW_ALLOWANCE_NS + 1;
+        payload.expires_at_ns = payload.issued_at_ns + 10;
 
         let err = super::verify_role_attestation_claims(&payload, p(1), p(2), Some(p(3)), 15, 4)
-            .expect_err("future issued_at must reject");
+            .expect_err("future issued_at beyond skew allowance must reject");
 
         std::assert_matches!(
             err,

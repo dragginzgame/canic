@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.18` adds the explicit 60-second future-skew allowance for delegated
+  token cert/token and role-attestation verifier not-from-the-future checks
+  while preserving strict expiry boundaries.
+
 - `0.65.17` deletes remaining legacy protected-internal call, attestation
   key-set, verifier root-key cache, shard secp256k1 verification, and
   threshold-ECDSA public-key auth surfaces from active code and test canisters,

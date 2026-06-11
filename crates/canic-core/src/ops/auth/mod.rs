@@ -20,6 +20,7 @@ pub use types::{
 };
 
 const ROLE_ATTESTATION_SIGNING_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
+pub const AUTH_TIME_SKEW_ALLOWANCE_NS: u64 = 60_000_000_000;
 
 ///
 /// AuthOps

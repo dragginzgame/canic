@@ -107,11 +107,11 @@ below tracks their removal or conversion.
       proof store.
 - [x] Add pending-proof metadata and enforce `retrieval_expires_at_ns`.
 - [x] Add overflow-safe time checks.
-- [ ] Apply `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` to delegated cert
+- [x] Apply `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` to delegated cert
       `not_before_ns`, delegated token `issued_at_ns`, and role-attestation
       `issued_at_ns` not-from-the-future checks while preserving strict expiry
       with no grace.
-- [ ] Add verifier skew tests proving an issuer clock 30 seconds ahead of the
+- [x] Add verifier skew tests proving an issuer clock 30 seconds ahead of the
       verifier passes and an issuer clock 120 seconds ahead fails for delegated
       token and role-attestation verification.
 - [ ] Remove caller-provided delegated-token nonce input and derive

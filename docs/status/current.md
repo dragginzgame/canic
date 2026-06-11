@@ -361,16 +361,12 @@ inspect only the files needed for the current task.
   then hit the known `Failed to bind PocketIC server to address 127.0.0.1:0`
   infrastructure panic. The idle test process group was interrupted with
   `kill -INT`.
-  Follow-up from design review: delegated-token cert/token and
-  role-attestation not-from-the-future checks must accept up to
-  `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` forward skew while preserving
-  strict expiry with no grace. Add verifier tests proving an issuer clock 30
-  seconds ahead of the verifier passes and 120 seconds ahead fails. The active
-  0.65 design/status docs also require deterministic issuer-side token nonce
-  derivation with no `raw_rand` or management-canister call during
-  `prepare_delegated_token`, a certified-data owner source guard, and explicit
-  forwarded-user-token rejection coverage; implementation remains pending.
-- Local `0.65.17` candidate deletes the remaining legacy protected-internal
+  Follow-up from design review: the active 0.65 design/status docs require
+  deterministic issuer-side token nonce derivation with no `raw_rand` or
+  management-canister call during `prepare_delegated_token`, a certified-data
+  owner source guard, and explicit forwarded-user-token rejection coverage;
+  implementation remains pending.
+- `0.65.17` is pushed and deletes the remaining legacy protected-internal
   call envelope protocol and verifier-root-key leftovers from active code. The
   slice removes `canic_protected_endpoint!`, `ProtectedInternalEndpoint`,
   generated internal endpoint descriptors, `CanicInternalCall*` DTOs, internal
@@ -401,6 +397,21 @@ inspect only the files needed for the current task.
   cargo check --locked -p project_instance_stub -p project-protocol-stub -p sharding_root_stub
   cargo check --locked -p canic-tests
   cargo fmt --all
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.18` candidate adds the explicit
+  `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` verifier allowance for
+  not-from-the-future checks. Delegated-token verification now accepts
+  delegation cert `not_before_ns` and token `claims.issued_at_ns` values up to
+  60 seconds ahead of verifier time, role-attestation verification accepts
+  `issued_at_ns` up to 60 seconds ahead, and expiry remains strict with no
+  grace after signed `expires_at_ns`. Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::auth::delegated::verify --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::verify::attestation --lib -- --nocapture
+  cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
