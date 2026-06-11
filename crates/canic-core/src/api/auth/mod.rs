@@ -116,6 +116,7 @@ impl AuthApi {
     ) -> Result<Principal, Error> {
         AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
             token,
+            caller: IcOps::msg_caller(),
             max_cert_ttl_ns,
             max_token_ttl_ns,
             required_scopes,

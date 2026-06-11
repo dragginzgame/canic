@@ -2,7 +2,7 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-        ShardKeyBinding, ShardSignatureAlgorithm,
+        DelegationProof, RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
     },
     ids::CanisterRole,
 };
@@ -18,6 +18,7 @@ const SHARD_TOKEN_SIGNATURE_DOMAIN: &[u8] = b"canic-shard-delegated-token";
 pub enum CanonicalDomain {
     DelegationCert = 1,
     DelegatedTokenClaims = 2,
+    DelegationProof = 3,
     RoleHash = 4,
     DerivationPath = 5,
 }
@@ -48,6 +49,10 @@ pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> 
 
 pub fn claims_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
     Ok(hash_bytes(&claims_bytes(claims)?))
+}
+
+pub fn proof_hash(proof: &DelegationProof) -> Result<[u8; 32], CanonicalAuthError> {
+    Ok(hash_bytes(&proof_bytes(proof)?))
 }
 
 pub fn shard_token_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
@@ -135,6 +140,15 @@ pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalA
     Ok(out)
 }
 
+pub fn proof_bytes(proof: &DelegationProof) -> Result<Vec<u8>, CanonicalAuthError> {
+    let mut out = domain_bytes(CanonicalDomain::DelegationProof);
+
+    out.extend_from_slice(&cert_bytes(&proof.cert)?);
+    encode_root_proof(&mut out, &proof.root_proof);
+
+    Ok(out)
+}
+
 fn domain_bytes(domain: CanonicalDomain) -> Vec<u8> {
     let mut out = Vec::with_capacity(128);
     out.extend_from_slice(DOMAIN_SEPARATOR);
@@ -197,6 +211,16 @@ fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBinding) {
             out.push(1);
             encode_fixed_32(out, key_name_hash);
             encode_fixed_32(out, derivation_path_hash);
+        }
+    }
+}
+
+fn encode_root_proof(out: &mut Vec<u8>, proof: &RootProof) {
+    match proof {
+        RootProof::IcCanisterSignatureV1(proof) => {
+            out.push(1);
+            encode_bytes(out, &proof.signature_cbor);
+            encode_bytes(out, &proof.public_key_der);
         }
     }
 }

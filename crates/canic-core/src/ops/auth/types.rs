@@ -71,6 +71,7 @@ pub struct DelegatedTokenVerifierConfig {
 
 pub struct VerifyDelegatedTokenRuntimeInput<'a> {
     pub token: &'a DelegatedToken,
+    pub caller: Principal,
     pub max_cert_ttl_ns: u64,
     pub max_token_ttl_ns: u64,
     pub required_scopes: &'a [String],

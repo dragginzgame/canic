@@ -88,6 +88,40 @@ where
     R: FnMut([u8; 32], &RootProof, Principal) -> Result<(), String>,
     S: FnMut(&[u8], [u8; 32], &[u8]) -> Result<(), String>,
 {
+    let material = verify_delegated_token_material(&input)?;
+
+    verify_root_proof(
+        material.cert_hash,
+        &input.token.proof.root_proof,
+        input.token.proof.cert.root_pid,
+    )
+    .map_err(VerifyDelegatedTokenError::RootSignatureInvalid)?;
+
+    verify_shard_signature(
+        &input.token.proof.cert.shard_public_key_sec1,
+        material.shard_token_hash,
+        &input.token.shard_sig,
+    )
+    .map_err(VerifyDelegatedTokenError::ShardSignatureInvalid)?;
+
+    Ok(material.verified)
+}
+
+pub fn verify_delegated_token_without_signatures(
+    input: VerifyDelegatedTokenInput<'_>,
+) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError> {
+    verify_delegated_token_material(&input).map(|material| material.verified)
+}
+
+struct VerifiedDelegatedTokenMaterial {
+    verified: VerifiedDelegatedToken,
+    cert_hash: [u8; 32],
+    shard_token_hash: [u8; 32],
+}
+
+fn verify_delegated_token_material(
+    input: &VerifyDelegatedTokenInput<'_>,
+) -> Result<VerifiedDelegatedTokenMaterial, VerifyDelegatedTokenError> {
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
@@ -103,29 +137,19 @@ where
         return Err(VerifyDelegatedTokenError::ShardSignatureUnavailable);
     }
 
-    verify_root_proof(
-        actual_cert_hash,
-        &input.token.proof.root_proof,
-        cert.root_pid,
-    )
-    .map_err(VerifyDelegatedTokenError::RootSignatureInvalid)?;
-
-    let local_scopes = verify_claims(&input, actual_cert_hash)?;
-
+    let local_scopes = verify_claims(input, actual_cert_hash)?;
     let _actual_claims_hash = claims_hash(claims)?;
     let shard_token_hash = shard_token_hash(claims)?;
-    verify_shard_signature(
-        &cert.shard_public_key_sec1,
-        shard_token_hash,
-        &input.token.shard_sig,
-    )
-    .map_err(VerifyDelegatedTokenError::ShardSignatureInvalid)?;
 
-    Ok(VerifiedDelegatedToken {
-        subject: claims.subject,
-        issuer_shard_pid: claims.issuer_shard_pid,
-        scopes: local_scopes,
+    Ok(VerifiedDelegatedTokenMaterial {
+        verified: VerifiedDelegatedToken {
+            subject: claims.subject,
+            issuer_shard_pid: claims.issuer_shard_pid,
+            scopes: local_scopes,
+            cert_hash: actual_cert_hash,
+        },
         cert_hash: actual_cert_hash,
+        shard_token_hash,
     })
 }
 
@@ -390,6 +414,26 @@ mod tests {
         let required_scopes = vec!["read".to_string()];
 
         let verified = verify_root_and_shard(&token, Some(&role), &required_scopes).unwrap();
+
+        assert_eq!(verified.subject, p(9));
+        assert_eq!(verified.issuer_shard_pid, p(2));
+        assert_eq!(verified.scopes, vec!["read".to_string()]);
+    }
+
+    #[test]
+    fn verify_delegated_token_without_signatures_accepts_cached_exact_token_identity() {
+        let mut token = token();
+        token.proof.root_proof = RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: Vec::new(),
+            public_key_der: Vec::new(),
+        });
+        token.shard_sig = vec![99; 64];
+        let role = role();
+        let required_scopes = vec!["read".to_string()];
+
+        let verified =
+            verify_delegated_token_without_signatures(input(&token, Some(&role), &required_scopes))
+                .expect("cache-hit local checks should not re-run cryptographic verification");
 
         assert_eq!(verified.subject, p(9));
         assert_eq!(verified.issuer_shard_pid, p(2));

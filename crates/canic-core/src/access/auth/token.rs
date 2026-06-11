@@ -38,7 +38,8 @@ pub(super) fn delegated_token_verified(
     )
 }
 
-// Verify a delegated token without local proof-cache lookup.
+// Verify a delegated token; endpoint-local binding and scope checks still run
+// after any positive cryptographic verification cache hit.
 fn verify_token(
     token: DelegatedToken,
     caller: Principal,
@@ -52,6 +53,7 @@ fn verify_token(
         .unwrap_or_default();
     let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
         token: &token,
+        caller,
         max_cert_ttl_ns: max_ttl_ns,
         max_token_ttl_ns: max_ttl_ns,
         required_scopes: &required_scopes,

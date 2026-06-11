@@ -144,19 +144,36 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.5` candidate removes the standalone delegated-grant capability
-  proof success path. `CapabilityProof::DelegatedGrant` remains a legacy wire
-  shape classified for rejection metrics, but now fails before payload decode,
-  capability-hash checks, secp256k1 verification, replay, or capability
-  execution. The dedicated delegated-grant capability verifier module,
-  delegated-grant blob encode/decode helpers, and
-  `TryFrom<DelegatedGrantProof>` success conversion are removed. Token grants
-  remain untouched as `DelegatedRoleGrant` values inside delegation certs and
-  delegated-token claims. Current validation:
+- `0.65.5` is committed as the standalone delegated-grant capability proof hard
+  cut. `CapabilityProof::DelegatedGrant` remains a legacy wire shape classified
+  for rejection metrics, but now fails before payload decode, capability-hash
+  checks, secp256k1 verification, replay, or capability execution. The
+  dedicated delegated-grant capability verifier module, delegated-grant blob
+  encode/decode helpers, and `TryFrom<DelegatedGrantProof>` success conversion
+  are removed. Token grants remain untouched as `DelegatedRoleGrant` values
+  inside delegation certs and delegated-token claims. Validation:
   ```text
   cargo test --locked -p canic-core workflow::rpc::capability --lib -- --nocapture
   cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
   cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint -- --nocapture
+  cargo fmt --all -- --check
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.6` candidate adds a bounded heap-only positive delegated-token
+  verifier cache. Current tokens are still shard-signature based, so the cache
+  key binds proof hash, claims hash, current `shard_sig` hash, and caller; the
+  final issuer-proof cut must replace that signature component with
+  `issuer_proof_hash`. Cache values contain only `valid_until_ns` and
+  `verified_at_ns`, expire no later than token/cert expiry, and are bounded to
+  1024 entries with oldest-verified eviction. On cache hits, the verifier still
+  reruns canonical token checks plus local time, audience, grant, subject, and
+  endpoint scope authorization before returning. Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
   cargo fmt --all -- --check
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo check --locked -p canic-core -p canic

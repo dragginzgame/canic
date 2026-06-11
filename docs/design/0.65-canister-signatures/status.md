@@ -84,11 +84,14 @@ checklist below tracks their removal or conversion.
 - [x] Add a golden test proving verifier passes
       `domain_len || domain || cert_hash`, not raw `cert_hash`.
 - [x] Define `root_sig_seed(kind)` separately from `root_sig_domain(kind)`.
-- [ ] Add bounded positive delegated-token verification cache. Cache key must
-      include proof hash, claims hash, issuer proof hash, and caller; cache
-      values must expire no later than token expiry, cert expiry, and local
-      verifier policy cache expiry; endpoint-specific authorization must still
-      run after cache hit.
+- [x] Add bounded positive delegated-token verification cache for the current
+      delegated-token verifier. The current implementation keys by proof hash,
+      claims hash, current `shard_sig` hash, and caller; cache values contain
+      only `valid_until_ns` and `verified_at_ns`; endpoint-specific
+      authorization still runs after cache hit.
+- [ ] Replace the positive verifier cache signature component with
+      `issuer_proof_hash` when `IssuerProof::IcCanisterSignatureV1` replaces
+      `shard_sig`.
 - [x] Add pending-proof metadata and enforce `retrieval_expires_at_ns`.
 - [x] Add overflow-safe time checks.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.
