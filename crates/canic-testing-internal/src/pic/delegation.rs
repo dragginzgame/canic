@@ -13,7 +13,6 @@ use canic::{
 };
 use ic_testkit::pic::Pic;
 
-const USER_SHARD_LOCAL_PUBLIC_KEY_TEST: &str = "user_shard_local_public_key_test";
 const TOKEN_CERT_EXPIRY_MARGIN_NS: u64 = 1_000_000_000;
 
 // Create one user shard through the reference `user_hub` path.
@@ -28,7 +27,7 @@ pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal
 #[must_use]
 pub fn issue_delegated_token(
     pic: &Pic,
-    shard_pid: Principal,
+    issuer_pid: Principal,
     proof: DelegationProof,
     subject: Principal,
     aud: DelegationAudience,
@@ -36,7 +35,7 @@ pub fn issue_delegated_token(
     token_ttl_ns: u64,
 ) -> DelegatedToken {
     let installed: Result<InstallActiveDelegationProofResponse, Error> = pic.update_call_or_panic(
-        shard_pid,
+        issuer_pid,
         protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
         (InstallActiveDelegationProofRequest { proof },),
     );
@@ -44,7 +43,7 @@ pub fn issue_delegated_token(
 
     let request = DelegatedTokenPrepareRequest {
         metadata: Some(issue_token_request_metadata(
-            shard_pid,
+            issuer_pid,
             subject,
             &aud,
             &grants,
@@ -58,14 +57,14 @@ pub fn issue_delegated_token(
         ext: None,
     };
     let prepared: Result<DelegatedTokenPrepareResponse, Error> = pic.update_call_as_or_panic(
-        shard_pid,
+        issuer_pid,
         subject,
         protocol::CANIC_PREPARE_DELEGATED_TOKEN,
         (request,),
     );
     let prepared = prepared.expect("canic_prepare_delegated_token application failed");
     let issued: Result<DelegatedToken, Error> = pic.query_call_as_or_panic(
-        shard_pid,
+        issuer_pid,
         subject,
         protocol::CANIC_GET_DELEGATED_TOKEN,
         (DelegatedTokenGetRequest {
@@ -80,28 +79,26 @@ pub fn issue_delegated_token(
 pub fn obtain_root_delegation_proof(
     pic: &Pic,
     root_id: Principal,
-    shard_pid: Principal,
+    issuer_pid: Principal,
     verifier_role: CanisterRole,
 ) -> DelegationProof {
-    let _shard_public_key_sec1: Result<Vec<u8>, Error> =
-        pic.update_call_or_panic(shard_pid, USER_SHARD_LOCAL_PUBLIC_KEY_TEST, ());
     let request = DelegationProofIssueRequest {
-        metadata: Some(root_delegation_request_metadata(shard_pid, &verifier_role)),
-        shard_pid,
+        metadata: Some(root_delegation_request_metadata(issuer_pid, &verifier_role)),
+        issuer_pid,
         aud: DelegationAudience::Project("test".to_string()),
         grants: vec![role_grant(verifier_role, vec![cap::VERIFY.to_string()])],
         cert_ttl_ns: 60_000_000_000,
     };
     let prepared: Result<DelegationProofPrepareResponse, Error> = pic.update_call_as_or_panic(
         root_id,
-        shard_pid,
+        issuer_pid,
         protocol::CANIC_PREPARE_DELEGATION_PROOF,
         (request,),
     );
     let prepared = prepared.expect("canic_prepare_delegation_proof application failed");
     let response: Result<DelegationProof, Error> = pic.query_call_as_or_panic(
         root_id,
-        shard_pid,
+        issuer_pid,
         protocol::CANIC_GET_DELEGATION_PROOF,
         (DelegationProofGetRequest {
             cert_hash: prepared.cert_hash,
@@ -130,11 +127,11 @@ pub fn token_ttl_within_proof(pic: &Pic, proof: &DelegationProof) -> u64 {
 }
 
 fn root_delegation_request_metadata(
-    shard_pid: Principal,
+    issuer_pid: Principal,
     verifier_role: &CanisterRole,
 ) -> AuthRequestMetadata {
     let mut request_id = [0u8; 32];
-    for (index, byte) in shard_pid.as_slice().iter().enumerate() {
+    for (index, byte) in issuer_pid.as_slice().iter().enumerate() {
         request_id[index % request_id.len()] ^= *byte;
     }
     for (index, byte) in verifier_role.as_str().as_bytes().iter().enumerate() {
@@ -147,14 +144,14 @@ fn root_delegation_request_metadata(
 }
 
 fn issue_token_request_metadata(
-    shard_pid: Principal,
+    issuer_pid: Principal,
     subject: Principal,
     aud: &DelegationAudience,
     grants: &[DelegatedRoleGrant],
     token_ttl_ns: u64,
 ) -> AuthRequestMetadata {
     let mut request_id = [0u8; 32];
-    mix_principal(&mut request_id, 0, shard_pid);
+    mix_principal(&mut request_id, 0, issuer_pid);
     mix_principal(&mut request_id, 7, subject);
     mix_audience(&mut request_id, 13, aud);
     for (grant_index, grant) in grants.iter().enumerate() {

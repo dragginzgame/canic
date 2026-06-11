@@ -64,7 +64,7 @@ fn verify_token(
     enforce_subject_binding(verified.subject, caller)?;
     enforce_required_scope(required_scope, &verified.scopes)?;
 
-    Ok(verified.issuer_shard_pid)
+    Ok(verified.issuer_pid)
 }
 
 pub(super) fn enforce_subject_binding(
@@ -154,8 +154,8 @@ mod tests {
         },
         dto::auth::{
             DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-            DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof,
-            ShardKeyBinding, ShardSignatureAlgorithm,
+            DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof,
+            IssuerProofAlgorithm, IssuerProofBinding, RootProof,
         },
     };
 
@@ -236,10 +236,16 @@ mod tests {
 
     // Build one structurally complete delegated token for access decode tests.
     fn token_with_scopes(scopes: Vec<String>) -> DelegatedToken {
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
+            seed_hash: [10; 32],
+        };
+        let issuer_signer_generation = None;
+
         DelegatedToken {
             claims: DelegatedTokenClaims {
                 subject: p(1),
-                issuer_shard_pid: p(2),
+                issuer_pid: p(2),
                 cert_hash: [3; 32],
                 issued_at_ns: 10,
                 expires_at_ns: 20,
@@ -251,15 +257,11 @@ mod tests {
             proof: DelegationProof {
                 cert: DelegationCert {
                     root_pid: p(6),
-                    shard_pid: p(2),
-                    shard_key_id: "shard-key".to_string(),
-                    shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-                    shard_public_key_sec1: vec![8; 33],
-                    shard_key_hash: [9; 32],
-                    shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-                        key_name_hash: [10; 32],
-                        derivation_path_hash: [11; 32],
-                    },
+                    issuer_pid: p(2),
+                    issuer_proof_alg,
+                    issuer_proof_binding_hash: [11; 32],
+                    issuer_proof_binding,
+                    issuer_signer_generation,
                     issued_at_ns: 10,
                     not_before_ns: 10,
                     expires_at_ns: 20,

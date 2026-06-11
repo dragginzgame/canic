@@ -1,24 +1,23 @@
 use super::{
     audience::{AudienceError, validate_audience_shape, validate_role_grants},
-    canonical::{CanonicalAuthError, cert_hash, shard_key_hash},
+    canonical::{CanonicalAuthError, cert_hash, issuer_proof_binding_hash},
     cert_rules::{CertRuleError, DelegatedAuthTtlLimits},
 };
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof, RootProof,
-        ShardKeyBinding, ShardSignatureAlgorithm,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
+        IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
 };
 use thiserror::Error;
 
 pub struct IssueDelegationProofInput {
     pub root_pid: Principal,
-    pub shard_pid: Principal,
-    pub shard_key_id: String,
-    pub shard_sig_alg: ShardSignatureAlgorithm,
-    pub shard_public_key_sec1: Vec<u8>,
-    pub shard_key_binding: ShardKeyBinding,
+    pub issuer_pid: Principal,
+    pub issuer_proof_alg: IssuerProofAlgorithm,
+    pub issuer_proof_binding: IssuerProofBinding,
+    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub cert_ttl_ns: u64,
     pub max_token_ttl_ns: u64,
@@ -78,20 +77,20 @@ pub fn prepare_delegation_cert(
         .issued_at_ns
         .checked_add(input.cert_ttl_ns)
         .ok_or(IssueDelegationProofError::CertExpiresAtOverflow)?;
-    let shard_key_hash = shard_key_hash(
-        input.shard_sig_alg,
-        &input.shard_public_key_sec1,
-        input.shard_key_binding,
+    let issuer_proof_binding_hash = issuer_proof_binding_hash(
+        input.issuer_pid,
+        input.issuer_proof_alg,
+        input.issuer_proof_binding,
+        input.issuer_signer_generation,
     );
 
     let cert = DelegationCert {
         root_pid: input.root_pid,
-        shard_pid: input.shard_pid,
-        shard_key_id: input.shard_key_id,
-        shard_sig_alg: input.shard_sig_alg,
-        shard_public_key_sec1: input.shard_public_key_sec1,
-        shard_key_hash,
-        shard_key_binding: input.shard_key_binding,
+        issuer_pid: input.issuer_pid,
+        issuer_proof_alg: input.issuer_proof_alg,
+        issuer_proof_binding_hash,
+        issuer_proof_binding: input.issuer_proof_binding,
+        issuer_signer_generation: input.issuer_signer_generation,
         issued_at_ns: input.issued_at_ns,
         not_before_ns: input.issued_at_ns,
         expires_at_ns: expires_at,
@@ -131,7 +130,10 @@ fn validate_cert_issuance_rules_for_built_cert(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::CanisterRole;
+    use crate::{
+        ids::CanisterRole,
+        ops::auth::issuer_canister_sig::{IssuerPayloadKind, issuer_sig_seed_hash},
+    };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -145,17 +147,14 @@ mod tests {
     }
 
     fn input() -> IssueDelegationProofInput {
-        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash: [3; 32],
-            derivation_path_hash: [4; 32],
-        };
         IssueDelegationProofInput {
             root_pid: p(1),
-            shard_pid: p(2),
-            shard_key_id: "shard-key".to_string(),
-            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-            shard_public_key_sec1: vec![20; 33],
-            shard_key_binding,
+            issuer_pid: p(2),
+            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
+                seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+            },
+            issuer_signer_generation: None,
             issued_at_ns: 100,
             cert_ttl_ns: 400,
             max_token_ttl_ns: 120,
@@ -185,17 +184,18 @@ mod tests {
         let issued = issue_delegation_proof(input(), expected_root_proof.clone()).unwrap();
 
         assert_eq!(issued.proof.cert.root_pid, p(1));
+        assert_eq!(issued.proof.cert.issuer_pid, p(2));
         assert_eq!(issued.proof.cert.issued_at_ns, 100);
         assert_eq!(issued.proof.cert.expires_at_ns, 500);
         assert_eq!(
-            issued.proof.cert.shard_key_hash,
-            shard_key_hash(
-                ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-                &[20; 33],
-                ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-                    key_name_hash: [3; 32],
-                    derivation_path_hash: [4; 32],
+            issued.proof.cert.issuer_proof_binding_hash,
+            issuer_proof_binding_hash(
+                p(2),
+                IssuerProofAlgorithm::IcCanisterSignatureV1,
+                IssuerProofBinding::IcCanisterSignatureV1 {
+                    seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
                 },
+                None,
             )
         );
         assert_eq!(issued.cert_hash, cert_hash(&issued.proof.cert).unwrap());

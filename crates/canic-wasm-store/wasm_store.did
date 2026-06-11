@@ -72,14 +72,13 @@ type DelegationCert = record {
   aud : DelegationAudience;
   grants : vec DelegatedRoleGrant;
   max_token_ttl_ns : nat64;
-  shard_key_hash : blob;
-  shard_pid : principal;
-  shard_sig_alg : ShardSignatureAlgorithm;
+  issuer_proof_alg : IssuerProofAlgorithm;
+  issuer_pid : principal;
   not_before_ns : nat64;
   issued_at_ns : nat64;
-  shard_key_binding : ShardKeyBinding;
-  shard_key_id : text;
-  shard_public_key_sec1 : blob;
+  issuer_proof_binding : IssuerProofBinding;
+  issuer_proof_binding_hash : blob;
+  issuer_signer_generation : opt nat64;
   expires_at_ns : nat64;
   root_pid : principal;
 };
@@ -149,13 +148,10 @@ type Result_8 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_9 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootProof = variant { IcCanisterSignatureV1 : IcCanisterSignatureProofV1 };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
-type ShardKeyBinding = variant {
-  IcThresholdEcdsaSecp256k1 : record {
-    derivation_path_hash : blob;
-    key_name_hash : blob;
-  };
+type IssuerProofAlgorithm = variant { IcCanisterSignatureV1 };
+type IssuerProofBinding = variant {
+  IcCanisterSignatureV1 : record { seed_hash : blob };
 };
-type ShardSignatureAlgorithm = variant { IcThresholdEcdsaSecp256k1 };
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;

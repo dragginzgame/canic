@@ -1,14 +1,14 @@
 use crate::{
     dto::auth::{
         ActiveDelegationProof, AttestationKey, AttestationKeyStatus, DelegatedRoleGrant,
-        DelegationAudience, DelegationCert, DelegationProof, IcCanisterSignatureProofV1, RootProof,
-        ShardKeyBinding, ShardSignatureAlgorithm,
+        DelegationAudience, DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
+        IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
     storage::stable::auth::{
         ActiveDelegationProofRecord, AttestationKeyStatusRecord, AttestationPublicKeyRecord,
         DelegatedRoleGrantRecord, DelegationAudienceRecord, DelegationCertRecord,
-        DelegationProofRecord, IcCanisterSignatureProofRecord, RootProofRecord,
-        ShardKeyBindingRecord, ShardSignatureAlgorithmRecord,
+        DelegationProofRecord, IcCanisterSignatureProofRecord, IssuerProofAlgorithmRecord,
+        IssuerProofBindingRecord, RootProofRecord,
     },
 };
 
@@ -103,12 +103,11 @@ fn delegation_proof_record_to_dto(record: DelegationProofRecord) -> DelegationPr
 fn delegation_cert_to_record(cert: DelegationCert) -> DelegationCertRecord {
     DelegationCertRecord {
         root_pid: cert.root_pid,
-        shard_pid: cert.shard_pid,
-        shard_key_id: cert.shard_key_id,
-        shard_sig_alg: shard_sig_alg_to_record(cert.shard_sig_alg),
-        shard_public_key_sec1: cert.shard_public_key_sec1,
-        shard_key_hash: cert.shard_key_hash,
-        shard_key_binding: shard_key_binding_to_record(cert.shard_key_binding),
+        issuer_pid: cert.issuer_pid,
+        issuer_proof_alg: issuer_proof_alg_to_record(cert.issuer_proof_alg),
+        issuer_proof_binding_hash: cert.issuer_proof_binding_hash,
+        issuer_proof_binding: issuer_proof_binding_to_record(cert.issuer_proof_binding),
+        issuer_signer_generation: cert.issuer_signer_generation,
         issued_at_ns: cert.issued_at_ns,
         not_before_ns: cert.not_before_ns,
         expires_at_ns: cert.expires_at_ns,
@@ -121,12 +120,11 @@ fn delegation_cert_to_record(cert: DelegationCert) -> DelegationCertRecord {
 fn delegation_cert_record_to_dto(record: DelegationCertRecord) -> DelegationCert {
     DelegationCert {
         root_pid: record.root_pid,
-        shard_pid: record.shard_pid,
-        shard_key_id: record.shard_key_id,
-        shard_sig_alg: shard_sig_alg_record_to_dto(record.shard_sig_alg),
-        shard_public_key_sec1: record.shard_public_key_sec1,
-        shard_key_hash: record.shard_key_hash,
-        shard_key_binding: shard_key_binding_record_to_dto(record.shard_key_binding),
+        issuer_pid: record.issuer_pid,
+        issuer_proof_alg: issuer_proof_alg_record_to_dto(record.issuer_proof_alg),
+        issuer_proof_binding_hash: record.issuer_proof_binding_hash,
+        issuer_proof_binding: issuer_proof_binding_record_to_dto(record.issuer_proof_binding),
+        issuer_signer_generation: record.issuer_signer_generation,
         issued_at_ns: record.issued_at_ns,
         not_before_ns: record.not_before_ns,
         expires_at_ns: record.expires_at_ns,
@@ -188,44 +186,38 @@ fn grant_record_to_dto(record: DelegatedRoleGrantRecord) -> DelegatedRoleGrant {
     }
 }
 
-const fn shard_sig_alg_to_record(alg: ShardSignatureAlgorithm) -> ShardSignatureAlgorithmRecord {
+const fn issuer_proof_alg_to_record(alg: IssuerProofAlgorithm) -> IssuerProofAlgorithmRecord {
     match alg {
-        ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1 => {
-            ShardSignatureAlgorithmRecord::IcThresholdEcdsaSecp256k1
+        IssuerProofAlgorithm::IcCanisterSignatureV1 => {
+            IssuerProofAlgorithmRecord::IcCanisterSignatureV1
         }
     }
 }
 
-const fn shard_sig_alg_record_to_dto(
-    record: ShardSignatureAlgorithmRecord,
-) -> ShardSignatureAlgorithm {
+const fn issuer_proof_alg_record_to_dto(
+    record: IssuerProofAlgorithmRecord,
+) -> IssuerProofAlgorithm {
     match record {
-        ShardSignatureAlgorithmRecord::IcThresholdEcdsaSecp256k1 => {
-            ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1
+        IssuerProofAlgorithmRecord::IcCanisterSignatureV1 => {
+            IssuerProofAlgorithm::IcCanisterSignatureV1
         }
     }
 }
 
-const fn shard_key_binding_to_record(binding: ShardKeyBinding) -> ShardKeyBindingRecord {
+const fn issuer_proof_binding_to_record(binding: IssuerProofBinding) -> IssuerProofBindingRecord {
     match binding {
-        ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash,
-            derivation_path_hash,
-        } => ShardKeyBindingRecord::IcThresholdEcdsaSecp256k1 {
-            key_name_hash,
-            derivation_path_hash,
-        },
+        IssuerProofBinding::IcCanisterSignatureV1 { seed_hash } => {
+            IssuerProofBindingRecord::IcCanisterSignatureV1 { seed_hash }
+        }
     }
 }
 
-const fn shard_key_binding_record_to_dto(record: ShardKeyBindingRecord) -> ShardKeyBinding {
+const fn issuer_proof_binding_record_to_dto(
+    record: IssuerProofBindingRecord,
+) -> IssuerProofBinding {
     match record {
-        ShardKeyBindingRecord::IcThresholdEcdsaSecp256k1 {
-            key_name_hash,
-            derivation_path_hash,
-        } => ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash,
-            derivation_path_hash,
-        },
+        IssuerProofBindingRecord::IcCanisterSignatureV1 { seed_hash } => {
+            IssuerProofBinding::IcCanisterSignatureV1 { seed_hash }
+        }
     }
 }

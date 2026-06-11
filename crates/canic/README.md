@@ -34,11 +34,13 @@ These features can also be selected explicitly when default features are off:
 - `sharding` - enables sharding-oriented runtime support from `canic-core`
 - `auth-root-canister-sig-create` - enables root canister-signature proof creation
 - `auth-root-canister-sig-verify` - enables IC canister-signature proof verification
-- `auth-shard-secp256k1-verify` - enables shard secp256k1 token-signature verification
-- `auth-threshold-ecdsa-public-key` - enables threshold ECDSA public-key fetches
-- `auth-threshold-ecdsa-sign` - enables threshold ECDSA signing calls
+- `auth-issuer-canister-sig-create` - enables issuer canister-signature token proof creation
+- `auth-issuer-canister-sig-verify` - enables issuer canister-signature token proof verification
+- `auth-shard-secp256k1-verify` - legacy local secp256k1 verification for pre-canister-signature auth material
+- `auth-threshold-ecdsa-public-key` - legacy threshold ECDSA public-key fetch support
+- `auth-threshold-ecdsa-sign` - legacy threshold ECDSA signing support
 - `auth-delegated-token-verify` - enables delegated-token verification, including
-  root canister-signature and shard secp256k1 verification
+  root and issuer canister-signature verification
 
 ## Typical Use
 

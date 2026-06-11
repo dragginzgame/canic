@@ -23,7 +23,6 @@ pub use types::{
 
 const DERIVATION_NAMESPACE: &[u8] = b"canic";
 const ROOT_PATH_SEGMENT: &[u8] = b"root";
-const SHARD_PATH_SEGMENT: &[u8] = b"shard";
 const ATTESTATION_PATH_SEGMENT: &[u8] = b"attestation";
 const ROLE_ATTESTATION_SIGNING_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
 const INTERNAL_INVOCATION_PROOF_SIGNING_DOMAIN: &[u8] = b"CANIC_INTERNAL_INVOCATION_PROOF_V1";

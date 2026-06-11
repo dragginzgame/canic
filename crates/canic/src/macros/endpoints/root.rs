@@ -74,7 +74,6 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
             request: ::canic::dto::auth::DelegationProofIssueRequest,
         ) -> Result<::canic::dto::auth::DelegationProofPrepareResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::prepare_delegation_proof_root(request)
-                .await
         }
 
         #[$crate::canic_query(internal, requires(caller::is_registered_to_subnet()))]

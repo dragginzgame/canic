@@ -22,27 +22,6 @@ pub struct DelegatedRoleGrant {
 }
 
 //
-// ShardKeyBinding
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ShardKeyBinding {
-    IcThresholdEcdsaSecp256k1 {
-        key_name_hash: [u8; 32],
-        derivation_path_hash: [u8; 32],
-    },
-}
-
-//
-// ShardSignatureAlgorithm
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ShardSignatureAlgorithm {
-    IcThresholdEcdsaSecp256k1,
-}
-
-//
 // RootProof
 //
 
@@ -95,12 +74,11 @@ pub enum IssuerProofBinding {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationCert {
     pub root_pid: Principal,
-    pub shard_pid: Principal,
-    pub shard_key_id: String,
-    pub shard_sig_alg: ShardSignatureAlgorithm,
-    pub shard_public_key_sec1: Vec<u8>,
-    pub shard_key_hash: [u8; 32],
-    pub shard_key_binding: ShardKeyBinding,
+    pub issuer_pid: Principal,
+    pub issuer_proof_alg: IssuerProofAlgorithm,
+    pub issuer_proof_binding_hash: [u8; 32],
+    pub issuer_proof_binding: IssuerProofBinding,
+    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
@@ -159,7 +137,7 @@ pub struct InstallActiveDelegationProofResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedTokenClaims {
     pub subject: Principal,
-    pub issuer_shard_pid: Principal,
+    pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
     pub issued_at_ns: u64,
     pub expires_at_ns: u64,
@@ -199,7 +177,7 @@ pub struct AuthRequestMetadata {
 pub struct DelegationProofIssueRequest {
     #[serde(default)]
     pub metadata: Option<AuthRequestMetadata>,
-    pub shard_pid: Principal,
+    pub issuer_pid: Principal,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub cert_ttl_ns: u64,

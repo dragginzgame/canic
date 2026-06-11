@@ -389,7 +389,7 @@ fn execute_root_delegation_issue_scenario(
         .caller_pid
         .expect("auth audit scenario must resolve a shard caller");
     let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, caller, TEST);
-    assert_eq!(proof.cert.shard_pid, caller);
+    assert_eq!(proof.cert.issuer_pid, caller);
 }
 
 // Execute the verifier-side delegated token confirmation scenario.

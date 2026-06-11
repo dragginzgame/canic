@@ -73,24 +73,21 @@ pub struct DelegatedRoleGrantRecord {
 }
 
 ///
-/// ShardKeyBindingRecord
+/// IssuerProofAlgorithmRecord
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ShardKeyBindingRecord {
-    IcThresholdEcdsaSecp256k1 {
-        key_name_hash: [u8; 32],
-        derivation_path_hash: [u8; 32],
-    },
+pub enum IssuerProofAlgorithmRecord {
+    IcCanisterSignatureV1,
 }
 
 ///
-/// ShardSignatureAlgorithmRecord
+/// IssuerProofBindingRecord
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ShardSignatureAlgorithmRecord {
-    IcThresholdEcdsaSecp256k1,
+pub enum IssuerProofBindingRecord {
+    IcCanisterSignatureV1 { seed_hash: [u8; 32] },
 }
 
 ///
@@ -100,12 +97,11 @@ pub enum ShardSignatureAlgorithmRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationCertRecord {
     pub root_pid: Principal,
-    pub shard_pid: Principal,
-    pub shard_key_id: String,
-    pub shard_sig_alg: ShardSignatureAlgorithmRecord,
-    pub shard_public_key_sec1: Vec<u8>,
-    pub shard_key_hash: [u8; 32],
-    pub shard_key_binding: ShardKeyBindingRecord,
+    pub issuer_pid: Principal,
+    pub issuer_proof_alg: IssuerProofAlgorithmRecord,
+    pub issuer_proof_binding_hash: [u8; 32],
+    pub issuer_proof_binding: IssuerProofBindingRecord,
+    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
@@ -192,7 +188,7 @@ mod tests {
             }],
             delegated_session_bootstrap_bindings: Vec::new(),
             legacy_uses: vec![LegacyUseRecord {
-                issuer_shard_pid: p(3),
+                issuer_pid: p(3),
                 subject: p(4),
                 cert_hash: [5; 32],
                 nonce: [6; 16],
@@ -217,7 +213,7 @@ mod tests {
     ///
     #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
     struct LegacyUseRecord {
-        issuer_shard_pid: Principal,
+        issuer_pid: Principal,
         subject: Principal,
         cert_hash: [u8; 32],
         nonce: [u8; 16],

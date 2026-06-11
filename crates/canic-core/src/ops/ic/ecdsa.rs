@@ -110,7 +110,7 @@ impl EcdsaOps {
         record_ecdsa_call(
             PlatformCallMetricMode::Update,
             PlatformCallMetricOutcome::Failed,
-            threshold_sign_availability_reason(),
+            PlatformCallMetricReason::Unavailable,
         );
         Err(EcdsaOpsError::ThresholdEcdsaUnavailable.into())
     }
@@ -187,15 +187,6 @@ impl EcdsaOps {
         )
     }
 
-    // Report whether threshold ECDSA signing support is compiled in.
-    #[must_use]
-    pub const fn threshold_sign_enabled() -> bool {
-        matches!(
-            threshold_sign_availability_reason(),
-            PlatformCallMetricReason::Ok
-        )
-    }
-
     // Verify a pre-hashed signature locally with k256 on every canister build.
     #[cfg(feature = "auth-shard-secp256k1-verify")]
     pub fn verify_signature(
@@ -266,15 +257,6 @@ impl EcdsaOps {
 // Return the metric reason for compiled threshold ECDSA public-key availability.
 const fn threshold_public_key_availability_reason() -> PlatformCallMetricReason {
     if cfg!(feature = "auth-threshold-ecdsa-public-key") {
-        PlatformCallMetricReason::Ok
-    } else {
-        PlatformCallMetricReason::Unavailable
-    }
-}
-
-// Return the metric reason for compiled threshold ECDSA signing availability.
-const fn threshold_sign_availability_reason() -> PlatformCallMetricReason {
-    if cfg!(feature = "auth-threshold-ecdsa-sign") {
         PlatformCallMetricReason::Ok
     } else {
         PlatformCallMetricReason::Unavailable

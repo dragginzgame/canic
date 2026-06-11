@@ -79,10 +79,10 @@ impl AuthOps {
             )
         })?;
 
-        if active_proof.proof.cert.shard_pid != local {
-            return Err(AuthScopeError::ShardPidMismatch {
+        if active_proof.proof.cert.issuer_pid != local {
+            return Err(AuthScopeError::IssuerPidMismatch {
                 expected: local,
-                found: active_proof.proof.cert.shard_pid,
+                found: active_proof.proof.cert.issuer_pid,
             }
             .into());
         }
@@ -429,8 +429,8 @@ const fn delegated_auth_reason_from_verify_error(
         VerifyDelegatedTokenError::IssuerProofUnavailable => {
             DelegatedAuthMetricReason::IssuerProofUnavailable
         }
-        VerifyDelegatedTokenError::IssuerShardPidMismatch => {
-            DelegatedAuthMetricReason::IssuerShardPidMismatch
+        VerifyDelegatedTokenError::IssuerPidMismatch => {
+            DelegatedAuthMetricReason::IssuerPidMismatch
         }
         VerifyDelegatedTokenError::MissingLocalRole => DelegatedAuthMetricReason::MissingLocalRole,
         VerifyDelegatedTokenError::RootSignatureInvalid(_) => {

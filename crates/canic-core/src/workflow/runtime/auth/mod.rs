@@ -26,19 +26,6 @@ use std::future::Future;
 /// DelegatedTokenSignerPrewarmPlan
 ///
 
-struct DelegatedTokenSignerPrewarmPlan {
-    shard_pid: Principal,
-}
-
-impl DelegatedTokenSignerPrewarmPlan {
-    // Build the local signer material prewarm plan used by runtime lifecycle.
-    fn default() -> Self {
-        Self {
-            shard_pid: IcOps::canister_self(),
-        }
-    }
-}
-
 ///
 /// RuntimeAuthWorkflow
 ///
@@ -61,7 +48,7 @@ impl RuntimeAuthWorkflow {
             ));
         }
 
-        if root_requires_threshold_ecdsa_public_keys(&cfg)
+        if root_requires_role_attestation_public_keys(&cfg)
             && !EcdsaOps::threshold_public_key_fetch_enabled()
         {
             return Err(InternalError::invariant(
@@ -78,11 +65,13 @@ impl RuntimeAuthWorkflow {
         canister_role: &CanisterRole,
         canister_cfg: &crate::config::schema::CanisterConfig,
     ) -> Result<(), InternalError> {
-        if nonroot_requires_auth_crypto(canister_cfg) && !EcdsaOps::threshold_sign_enabled() {
+        if nonroot_requires_delegated_token_issuer(canister_cfg)
+            && !AuthOps::issuer_canister_sig_create_enabled()
+        {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' is configured as a delegated auth signer, but this build does not include threshold ECDSA signing support; enable the `auth-threshold-ecdsa-sign` feature for that canister build",
+                    "canister '{canister_role}' is configured as a delegated auth issuer, but this build does not include IC canister-signature creation support; enable the `auth-issuer-canister-sig-create` feature for that canister build",
                 ),
             ));
         }
@@ -115,23 +104,20 @@ impl RuntimeAuthWorkflow {
         AuthOps::delegated_token_verifier_config().map(|_| ())
     }
 
-    /// Check local signer key material when the current canister is a delegated signer.
+    /// Check local issuer support when the current canister mints delegated tokens.
     pub async fn check_signer_key_material() -> Result<(), InternalError> {
+        std::future::ready(()).await;
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
         let canister_cfg = ConfigOps::current_canister()?;
         if !delegated_tokens_cfg.enabled || !canister_cfg.auth.delegated_token_signer {
             return Ok(());
         }
 
-        let plan = DelegatedTokenSignerPrewarmPlan::default();
-        let shard_public_key_sec1 = AuthOps::local_shard_public_key_sec1(plan.shard_pid).await?;
-
         crate::log!(
             Topic::Auth,
             Info,
-            "delegation signer auth material checked shard={} shard_public_key_bytes={}",
-            plan.shard_pid,
-            shard_public_key_sec1.len()
+            "delegated-token issuer canister-signature support checked issuer={}",
+            IcOps::canister_self()
         );
 
         Ok(())
@@ -328,11 +314,6 @@ fn root_requires_delegated_token_proofs(cfg: &ConfigModel) -> bool {
     })
 }
 
-// Decide whether root must fetch threshold-ECDSA public keys.
-fn root_requires_threshold_ecdsa_public_keys(cfg: &ConfigModel) -> bool {
-    root_requires_delegated_token_proofs(cfg) || root_requires_role_attestation_public_keys(cfg)
-}
-
 fn root_requires_role_attestation_public_keys(cfg: &ConfigModel) -> bool {
     cfg.subnets.values().any(|subnet| {
         subnet
@@ -342,8 +323,8 @@ fn root_requires_role_attestation_public_keys(cfg: &ConfigModel) -> bool {
     })
 }
 
-// Decide whether one non-root runtime must carry threshold-ECDSA management support.
-const fn nonroot_requires_auth_crypto(
+// Decide whether one non-root runtime must create issuer canister signatures.
+const fn nonroot_requires_delegated_token_issuer(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {
     canister_cfg.auth.delegated_token_signer
@@ -359,9 +340,9 @@ const fn nonroot_requires_delegated_token_verifier(
 #[cfg(test)]
 mod tests {
     use super::{
-        RuntimeAuthWorkflow, nonroot_requires_auth_crypto,
+        RuntimeAuthWorkflow, nonroot_requires_delegated_token_issuer,
         nonroot_requires_delegated_token_verifier, root_requires_delegated_token_proofs,
-        root_requires_threshold_ecdsa_public_keys,
+        root_requires_role_attestation_public_keys,
     };
     use crate::{
         config::schema::{CanisterAuthConfig, CanisterKind},
@@ -386,7 +367,7 @@ mod tests {
             .build();
 
         assert!(root_requires_delegated_token_proofs(&cfg));
-        assert!(root_requires_threshold_ecdsa_public_keys(&cfg));
+        assert!(!root_requires_role_attestation_public_keys(&cfg));
     }
 
     #[test]
@@ -407,7 +388,7 @@ mod tests {
         cfg.auth.delegated_tokens.enabled = false;
 
         assert!(!root_requires_delegated_token_proofs(&cfg));
-        assert!(root_requires_threshold_ecdsa_public_keys(&cfg));
+        assert!(root_requires_role_attestation_public_keys(&cfg));
     }
 
     #[test]
@@ -428,7 +409,7 @@ mod tests {
         cfg.auth.delegated_tokens.enabled = false;
 
         assert!(!root_requires_delegated_token_proofs(&cfg));
-        assert!(!root_requires_threshold_ecdsa_public_keys(&cfg));
+        assert!(!root_requires_role_attestation_public_keys(&cfg));
     }
 
     #[test]
@@ -436,7 +417,7 @@ mod tests {
         let cfg = ConfigTestBuilder::new().build();
 
         assert!(!root_requires_delegated_token_proofs(&cfg));
-        assert!(!root_requires_threshold_ecdsa_public_keys(&cfg));
+        assert!(!root_requires_role_attestation_public_keys(&cfg));
     }
 
     #[test]
@@ -447,7 +428,7 @@ mod tests {
             role_attestation_cache: true,
         };
 
-        assert!(!nonroot_requires_auth_crypto(&verifier_cfg));
+        assert!(!nonroot_requires_delegated_token_issuer(&verifier_cfg));
     }
 
     #[test]
@@ -496,14 +477,14 @@ mod tests {
     }
 
     #[test]
-    fn signer_nonroot_requires_auth_crypto() {
+    fn signer_nonroot_requires_issuer_canister_signature_create() {
         let mut signer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         signer_cfg.auth = CanisterAuthConfig {
             delegated_token_signer: true,
             role_attestation_cache: true,
         };
 
-        assert!(nonroot_requires_auth_crypto(&signer_cfg));
+        assert!(nonroot_requires_delegated_token_issuer(&signer_cfg));
     }
 
     #[test]

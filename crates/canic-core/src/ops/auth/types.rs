@@ -25,7 +25,7 @@ pub struct SignDelegationProofInput {
     pub operation_id: [u8; 32],
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
-    pub shard_pid: Principal,
+    pub issuer_pid: Principal,
     pub cert_ttl_ns: u64,
     pub max_token_ttl_ns: u64,
     pub max_cert_ttl_ns: u64,

@@ -62,11 +62,12 @@ Expected result:
 - allowed matches only in explicit negative tests, historical docs, or non-auth
   external-chain modules that no auth code imports or calls
 
-Current local result: this release-blocking audit is not yet clean. Known
-normal-auth matches still include the public `auth-threshold-ecdsa-sign`
-features, issuer token ECDSA signing/verification DTOs and ops, replay/cost
-classes, runtime signer feature checks, and test fleet feature selections. The
-checklist below tracks their removal or conversion.
+Current local result: this release-blocking audit is not yet clean. Delegated
+token issuer certs and test fleet token issuance no longer match the shard ECDSA
+DTO/signing path. Remaining active-code matches are the public threshold-ECDSA
+feature definitions, the isolated ECDSA ops module, historical replay external
+effect records/tests, and the still-pending role-attestation public-key fetch
+compatibility path. The checklist below tracks their removal or conversion.
 
 ## Implementation Checklist
 
@@ -141,15 +142,15 @@ checklist below tracks their removal or conversion.
       root-issued internal-invocation proofs.
 - [x] Replace delegated-token issuer ECDSA signature with zero-ECDSA issuer
       proof, preferably `IssuerProof::IcCanisterSignatureV1`.
-- [ ] Remove `auth-threshold-ecdsa-sign` and threshold-ECDSA public-key fetching
+- [x] Remove `auth-threshold-ecdsa-sign` and threshold-ECDSA public-key fetching
       from the normal auth feature graph.
-- [ ] Remove `IcThresholdEcdsaSecp256k1` issuer proof algorithm/binding from
+- [x] Remove `IcThresholdEcdsaSecp256k1` issuer proof algorithm/binding from
       normal delegated-token auth DTOs.
 - [x] Add issuer prepare/get delegated-token canister-signature flow.
 - [x] Add `install_active_delegation_proof` endpoint.
 - [x] Add issuer canister-signature local verification against issuer canister
       id plus raw IC root key.
-- [ ] Extend canister-signature issuer deployment checks to token issuer canisters
+- [x] Extend canister-signature issuer deployment checks to token issuer canisters
       as well as root issuers.
 - [ ] Add required `SignedRoleAttestation = RootCertified<RoleAttestation>`
       prepare/get root proof flow using `RootProof::IcCanisterSignatureV1`.

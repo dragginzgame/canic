@@ -26,7 +26,7 @@ auth-issuer-canister-sig-verify = ["dep:ic-signature-verification"]
 auth-shard-secp256k1-verify = ["dep:k256"]
 auth-threshold-ecdsa-public-key = []
 auth-threshold-ecdsa-sign = ["auth-threshold-ecdsa-public-key"]
-auth-delegated-token-verify = ["auth-root-canister-sig-verify", "auth-shard-secp256k1-verify"]
+auth-delegated-token-verify = ["auth-root-canister-sig-verify", "auth-issuer-canister-sig-verify"]
 
 [dependencies]
 async-trait = { workspace = true }

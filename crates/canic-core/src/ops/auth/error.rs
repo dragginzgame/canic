@@ -81,9 +81,6 @@ pub enum AuthSignatureError {
 
     #[error("attestation signature invalid: {0}")]
     AttestationSignatureInvalid(String),
-
-    #[error("shard public key unavailable for shard '{shard_pid}'")]
-    ShardPublicKeyUnavailable { shard_pid: Principal },
 }
 
 #[derive(Debug, ThisError)]
@@ -103,8 +100,8 @@ pub enum AuthScopeError {
     #[error("scope '{scope}' not allowed by delegation")]
     ScopeNotAllowed { scope: String },
 
-    #[error("token shard pid mismatch (expected {expected}, found {found})")]
-    ShardPidMismatch {
+    #[error("token issuer pid mismatch (expected {expected}, found {found})")]
+    IssuerPidMismatch {
         expected: Principal,
         found: Principal,
     },

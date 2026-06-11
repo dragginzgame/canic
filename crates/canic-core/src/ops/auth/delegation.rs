@@ -5,25 +5,20 @@ use super::{
             InstallActiveDelegationProofError, InstallActiveDelegationProofInput,
             install_active_delegation_proof as build_active_delegation_proof,
         },
-        canonical::{derivation_path_hash, key_name_hash},
         cert_rules::DelegatedAuthTtlLimits,
         issue::{
             IssueDelegationProofError, IssueDelegationProofInput, finish_delegation_proof,
             prepare_delegation_cert,
         },
     },
-    keys,
+    issuer_canister_sig::{IssuerPayloadKind, issuer_sig_seed_hash},
     root_canister_sig::RootPayloadKind,
 };
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{ActiveDelegationProof, DelegationProof, ShardKeyBinding, ShardSignatureAlgorithm},
-    ops::{
-        auth::AuthValidationError,
-        ic::{IcOps, ecdsa::EcdsaOps},
-        storage::auth::AuthStateOps,
-    },
+    dto::auth::{ActiveDelegationProof, DelegationProof, IssuerProofAlgorithm, IssuerProofBinding},
+    ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -49,24 +44,20 @@ impl PendingDelegationProofKey {
 
 impl AuthOps {
     /// Prepare a canonical delegation proof certificate and certify its canister-signature path.
-    pub(crate) async fn prepare_delegation_proof(
+    pub(crate) fn prepare_delegation_proof(
         input: SignDelegationProofInput,
     ) -> Result<PreparedRootDelegationProof, InternalError> {
         let root_pid = IcOps::canister_self();
-        let key_name = keys::delegated_tokens_key_name()?;
-        let shard_derivation_path = keys::shard_derivation_path(input.shard_pid);
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
+            seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+        };
 
-        let shard_public_key_sec1 = Self::local_shard_public_key_sec1(input.shard_pid).await?;
         let prepared = prepare_delegation_cert(IssueDelegationProofInput {
             root_pid,
-            shard_pid: input.shard_pid,
-            shard_key_id: key_name.clone(),
-            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-            shard_public_key_sec1,
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-                key_name_hash: key_name_hash(&key_name),
-                derivation_path_hash: derivation_path_hash(&shard_derivation_path),
-            },
+            issuer_pid: input.issuer_pid,
+            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding,
+            issuer_signer_generation: None,
             issued_at_ns: input.issued_at_ns,
             cert_ttl_ns: input.cert_ttl_ns,
             max_token_ttl_ns: input.max_token_ttl_ns,
@@ -82,7 +73,7 @@ impl AuthOps {
             RootPayloadKind::DelegationCert,
             input.operation_id,
             prepared.cert_hash,
-            input.shard_pid,
+            input.issuer_pid,
             input.issued_at_ns,
         )?;
         let prepared = PreparedRootDelegationProof {
@@ -90,7 +81,7 @@ impl AuthOps {
             cert_hash: prepared.cert_hash,
             retrieval_expires_at_ns: prepared_root_signature.retrieval_expires_at_ns,
         };
-        cache_prepared_delegation_proof(input.shard_pid, prepared.clone());
+        cache_prepared_delegation_proof(input.issuer_pid, prepared.clone());
 
         Ok(prepared)
     }
@@ -127,15 +118,6 @@ impl AuthOps {
             root_proof,
         )
         .proof)
-    }
-
-    /// Resolve the local shard public key, fetching and caching it on demand.
-    pub(crate) async fn local_shard_public_key_sec1(
-        shard_pid: Principal,
-    ) -> Result<Vec<u8>, InternalError> {
-        let key_name = keys::delegated_tokens_key_name()?;
-        EcdsaOps::public_key_sec1(&key_name, keys::shard_derivation_path(shard_pid), shard_pid)
-            .await
     }
 
     pub(crate) fn install_active_delegation_proof(

@@ -121,13 +121,6 @@ impl AuthApi {
         .map_err(Self::map_auth_error)
     }
 
-    /// Resolve the local shard public key in SEC1 encoding.
-    pub async fn local_shard_public_key_sec1() -> Result<Vec<u8>, Error> {
-        AuthOps::local_shard_public_key_sec1(IcOps::canister_self())
-            .await
-            .map_err(Self::map_auth_error)
-    }
-
     /// Issue a delegated token from an explicit self-contained proof.
     pub async fn issue_token(
         _request: DelegatedTokenIssueRequest,
@@ -236,12 +229,12 @@ impl AuthApi {
     }
 
     /// Prepare a root-certified delegation proof from the local root update path.
-    pub async fn prepare_delegation_proof_root(
+    pub fn prepare_delegation_proof_root(
         request: DelegationProofIssueRequest,
     ) -> Result<DelegationProofPrepareResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
         let caller = IcOps::msg_caller();
-        Self::validate_delegation_request_caller(caller, request.shard_pid)?;
+        Self::validate_delegation_request_caller(caller, request.issuer_pid)?;
         let max_cert_ttl_ns = Self::delegated_token_max_ttl_ns()?;
         let metadata = Self::delegation_replay_metadata(request.metadata)?;
         let command_kind = Self::delegation_replay_command_kind();
@@ -252,7 +245,7 @@ impl AuthApi {
             Error::invalid("delegation proof replay metadata ttl_ns overflows nanoseconds")
         })?;
         let replay_input = ReplayReceiptReserveInput::new(
-            command_kind.clone(),
+            command_kind,
             OperationId::from_bytes(metadata.request_id),
             actor,
             payload_hash,
@@ -267,7 +260,7 @@ impl AuthApi {
             decision => return Self::map_delegation_replay_decision(decision),
         };
 
-        Self::prepare_fresh_delegation_proof(token, caller, request, max_cert_ttl_ns).await
+        Self::prepare_fresh_delegation_proof(token, caller, request, max_cert_ttl_ns)
     }
 
     /// Retrieve a prepared self-contained delegation proof from the local root query path.
@@ -279,7 +272,7 @@ impl AuthApi {
         AuthOps::get_delegation_proof(caller, request.cert_hash).map_err(Self::map_auth_error)
     }
 
-    async fn prepare_fresh_delegation_proof(
+    fn prepare_fresh_delegation_proof(
         token: ReplayReceiptToken,
         _caller: Principal,
         request: DelegationProofIssueRequest,
@@ -290,14 +283,12 @@ impl AuthApi {
             operation_id: token.receipt().operation_id.into_bytes(),
             audience: request.aud,
             grants: request.grants,
-            shard_pid: request.shard_pid,
+            issuer_pid: request.issuer_pid,
             cert_ttl_ns: request.cert_ttl_ns,
             max_token_ttl_ns,
             max_cert_ttl_ns,
             issued_at_ns: IcOps::now_nanos(),
-        })
-        .await
-        {
+        }) {
             Ok(prepared) => prepared,
             Err(err) => {
                 abort_reserved_receipt(&token);
@@ -485,14 +476,14 @@ impl AuthApi {
 
     fn validate_delegation_request_caller(
         caller: Principal,
-        shard_pid: Principal,
+        issuer_pid: Principal,
     ) -> Result<(), Error> {
-        if caller == shard_pid {
+        if caller == issuer_pid {
             return Ok(());
         }
 
         Err(Error::forbidden(format!(
-            "delegation request caller {caller} must match shard_pid {shard_pid}"
+            "delegation request caller {caller} must match issuer_pid {issuer_pid}"
         )))
     }
 
@@ -551,7 +542,7 @@ impl AuthApi {
         request: &DelegationProofIssueRequest,
     ) -> [u8; 32] {
         let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
-        hasher.hash_principal(&request.shard_pid);
+        hasher.hash_principal(&request.issuer_pid);
         Self::hash_delegation_audience(&mut hasher, &request.aud);
         Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.cert_ttl_ns);
@@ -855,7 +846,7 @@ mod tests {
     fn delegation_request(metadata_id: u8) -> DelegationProofIssueRequest {
         DelegationProofIssueRequest {
             metadata: Some(meta(metadata_id, 60_000_000_000)),
-            shard_pid: p(2),
+            issuer_pid: p(2),
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["canic.verify"])],
             cert_ttl_ns: 60_000_000_000,
@@ -901,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn delegation_request_caller_must_match_requested_shard() {
+    fn delegation_request_caller_must_match_requested_issuer() {
         AuthApi::validate_delegation_request_caller(p(2), p(2)).expect("matching shard");
 
         let err = AuthApi::validate_delegation_request_caller(p(1), p(2))

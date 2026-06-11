@@ -14,8 +14,8 @@ pub use records::{
     ActiveDelegationProofRecord, AttestationKeyStatusRecord, AttestationPublicKeyRecord,
     AuthStateRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
     DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
-    IcCanisterSignatureProofRecord, RootProofRecord, ShardKeyBindingRecord,
-    ShardSignatureAlgorithmRecord,
+    IcCanisterSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
+    RootProofRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 

@@ -27,7 +27,7 @@ pub struct VerifyDelegatedTokenInput<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedDelegatedToken {
     pub subject: Principal,
-    pub issuer_shard_pid: Principal,
+    pub issuer_pid: Principal,
     pub scopes: Vec<String>,
     pub cert_hash: [u8; 32],
 }
@@ -42,8 +42,8 @@ pub enum VerifyDelegatedTokenError {
     RootSignatureInvalid(String),
     #[error("delegated auth issuer proof invalid: {0}")]
     IssuerProofInvalid(String),
-    #[error("delegated auth token issuer shard pid mismatch")]
-    IssuerShardPidMismatch,
+    #[error("delegated auth token issuer pid mismatch")]
+    IssuerPidMismatch,
     #[error("delegated auth token expiry must be greater than issued_at")]
     TokenInvalidWindow,
     #[error("delegated auth token ttl {ttl_ns}ns exceeds cert max {max_ttl_ns}ns")]
@@ -103,7 +103,7 @@ where
     verify_issuer_proof(
         material.claims_hash,
         &input.token.issuer_proof,
-        input.token.proof.cert.shard_pid,
+        input.token.proof.cert.issuer_pid,
     )
     .map_err(VerifyDelegatedTokenError::IssuerProofInvalid)?;
 
@@ -149,7 +149,7 @@ fn verify_delegated_token_material(
     Ok(VerifiedDelegatedTokenMaterial {
         verified: VerifiedDelegatedToken {
             subject: claims.subject,
-            issuer_shard_pid: claims.issuer_shard_pid,
+            issuer_pid: claims.issuer_pid,
             scopes: local_scopes,
             cert_hash: actual_cert_hash,
         },
@@ -179,8 +179,8 @@ fn verify_claims(
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
-    if claims.issuer_shard_pid != cert.shard_pid {
-        return Err(VerifyDelegatedTokenError::IssuerShardPidMismatch);
+    if claims.issuer_pid != cert.issuer_pid {
+        return Err(VerifyDelegatedTokenError::IssuerPidMismatch);
     }
     if claims.cert_hash != actual_cert_hash {
         return Err(VerifyDelegatedTokenError::CertHashMismatch);
@@ -266,10 +266,10 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-            DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof, ShardKeyBinding,
-            ShardSignatureAlgorithm,
+            DelegationProof, IcCanisterSignatureProofV1, IssuerProof, IssuerProofAlgorithm,
+            IssuerProofBinding, RootProof,
         },
-        ops::auth::delegated::canonical::{claims_hash, shard_key_hash},
+        ops::auth::delegated::canonical::{claims_hash, issuer_proof_binding_hash},
     };
 
     fn p(id: u8) -> Principal {
@@ -288,23 +288,23 @@ mod tests {
     }
 
     fn cert() -> DelegationCert {
-        let shard_public_key_sec1 = vec![20; 33];
-        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash: [3; 32],
-            derivation_path_hash: [4; 32],
-        };
-        let shard_sig_alg = ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1;
-        let shard_key_hash =
-            shard_key_hash(shard_sig_alg, &shard_public_key_sec1, shard_key_binding);
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [3; 32] };
+        let issuer_signer_generation = None;
+        let issuer_proof_binding_hash = issuer_proof_binding_hash(
+            p(2),
+            issuer_proof_alg,
+            issuer_proof_binding,
+            issuer_signer_generation,
+        );
 
         DelegationCert {
             root_pid: p(1),
-            shard_pid: p(2),
-            shard_key_id: "shard-key".to_string(),
-            shard_sig_alg,
-            shard_public_key_sec1,
-            shard_key_hash,
-            shard_key_binding,
+            issuer_pid: p(2),
+            issuer_proof_alg,
+            issuer_proof_binding_hash,
+            issuer_proof_binding,
+            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 500,
@@ -330,7 +330,7 @@ mod tests {
         let cert_hash = cert_hash(&cert).unwrap();
         let claims = DelegatedTokenClaims {
             subject: p(9),
-            issuer_shard_pid: cert.shard_pid,
+            issuer_pid: cert.issuer_pid,
             cert_hash,
             issued_at_ns: 120,
             expires_at_ns: 180,
@@ -441,7 +441,7 @@ mod tests {
         let verified = verify_root_and_issuer(&token, Some(&role), &required_scopes).unwrap();
 
         assert_eq!(verified.subject, p(9));
-        assert_eq!(verified.issuer_shard_pid, p(2));
+        assert_eq!(verified.issuer_pid, p(2));
         assert_eq!(verified.scopes, vec!["read".to_string()]);
     }
 
@@ -464,7 +464,7 @@ mod tests {
                 .expect("cache-hit local checks should not re-run cryptographic verification");
 
         assert_eq!(verified.subject, p(9));
-        assert_eq!(verified.issuer_shard_pid, p(2));
+        assert_eq!(verified.issuer_pid, p(2));
         assert_eq!(verified.scopes, vec!["read".to_string()]);
     }
 

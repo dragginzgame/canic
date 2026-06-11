@@ -18,7 +18,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["auth-delegated-token-verify", "auth-threshold-ecdsa-sign"] }
+canic = { workspace = true, features = ["auth-delegated-token-verify", "auth-issuer-canister-sig-create"] }
 ic-cdk = { workspace = true }
 
 [build-dependencies]

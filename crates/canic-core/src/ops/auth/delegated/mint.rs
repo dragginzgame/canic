@@ -114,7 +114,7 @@ pub fn prepare_delegated_token(
 
     let claims = DelegatedTokenClaims {
         subject: input.subject,
-        issuer_shard_pid: cert.shard_pid,
+        issuer_pid: cert.issuer_pid,
         cert_hash: cert_hash(cert)?,
         issued_at_ns: input.now_ns,
         expires_at_ns: expires_at,
@@ -149,12 +149,12 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{
-            DelegationCert, IcCanisterSignatureProofV1, IssuerProof, RootProof, ShardKeyBinding,
-            ShardSignatureAlgorithm,
+            DelegationCert, IcCanisterSignatureProofV1, IssuerProof, IssuerProofAlgorithm,
+            IssuerProofBinding, RootProof,
         },
         ids::CanisterRole,
         ops::auth::delegated::{
-            canonical::shard_key_hash,
+            canonical::issuer_proof_binding_hash,
             verify::{VerifyDelegatedTokenInput, verify_delegated_token},
         },
     };
@@ -164,23 +164,23 @@ mod tests {
     }
 
     fn cert() -> DelegationCert {
-        let shard_public_key_sec1 = vec![1; 33];
-        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash: [3; 32],
-            derivation_path_hash: [4; 32],
-        };
-        let shard_sig_alg = ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1;
-        let shard_key_hash =
-            shard_key_hash(shard_sig_alg, &shard_public_key_sec1, shard_key_binding);
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [3; 32] };
+        let issuer_signer_generation = None;
+        let issuer_proof_binding_hash = issuer_proof_binding_hash(
+            p(2),
+            issuer_proof_alg,
+            issuer_proof_binding,
+            issuer_signer_generation,
+        );
 
         DelegationCert {
             root_pid: p(1),
-            shard_pid: p(2),
-            shard_key_id: "shard-key".to_string(),
-            shard_sig_alg,
-            shard_public_key_sec1,
-            shard_key_hash,
-            shard_key_binding,
+            issuer_pid: p(2),
+            issuer_proof_alg,
+            issuer_proof_binding_hash,
+            issuer_proof_binding,
+            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 500,
@@ -259,7 +259,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(token.claims.subject, p(9));
-        assert_eq!(token.claims.issuer_shard_pid, proof.cert.shard_pid);
+        assert_eq!(token.claims.issuer_pid, proof.cert.issuer_pid);
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 180);
         assert_eq!(token.claims.ext, None);

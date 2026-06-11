@@ -1,6 +1,6 @@
 use super::{
     audience::{AudienceError, validate_audience_shape, validate_role_grants},
-    canonical::shard_key_hash,
+    canonical::issuer_proof_binding_hash,
 };
 use crate::{cdk::types::Principal, dto::auth::DelegationCert};
 use thiserror::Error;
@@ -28,10 +28,10 @@ pub enum CertRuleError {
     TokenTtlExceeded { ttl_ns: u64, max_ttl_ns: u64 },
     #[error("delegated auth max token ttl {token_ttl_ns}ns exceeds cert ttl {cert_ttl_ns}ns")]
     TokenTtlOutlivesCert { token_ttl_ns: u64, cert_ttl_ns: u64 },
-    #[error("delegated auth shard public key must be compressed SEC1 secp256k1 encoding")]
-    ShardPublicKeyEncodingInvalid,
-    #[error("delegated auth shard public key hash mismatch")]
-    ShardPublicKeyHashMismatch,
+    #[error("delegated auth issuer proof binding hash mismatch")]
+    IssuerProofBindingHashMismatch,
+    #[error("delegated auth issuer signer generation is not supported in 0.65")]
+    IssuerSignerGenerationUnsupported,
     #[error(transparent)]
     Audience(#[from] AudienceError),
 }
@@ -89,17 +89,18 @@ pub fn validate_cert_issuance_rules(
     validate_audience_shape(&cert.aud)?;
     validate_role_grants(&cert.grants)?;
 
-    if cert.shard_public_key_sec1.len() != 33 {
-        return Err(CertRuleError::ShardPublicKeyEncodingInvalid);
+    if cert.issuer_signer_generation.is_some() {
+        return Err(CertRuleError::IssuerSignerGenerationUnsupported);
     }
 
-    if shard_key_hash(
-        cert.shard_sig_alg,
-        &cert.shard_public_key_sec1,
-        cert.shard_key_binding,
-    ) != cert.shard_key_hash
+    if issuer_proof_binding_hash(
+        cert.issuer_pid,
+        cert.issuer_proof_alg,
+        cert.issuer_proof_binding,
+        cert.issuer_signer_generation,
+    ) != cert.issuer_proof_binding_hash
     {
-        return Err(CertRuleError::ShardPublicKeyHashMismatch);
+        return Err(CertRuleError::IssuerProofBindingHashMismatch);
     }
 
     Ok(())
@@ -110,7 +111,7 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{
-            DelegatedRoleGrant, DelegationAudience, ShardKeyBinding, ShardSignatureAlgorithm,
+            DelegatedRoleGrant, DelegationAudience, IssuerProofAlgorithm, IssuerProofBinding,
         },
         ids::CanisterRole,
     };
@@ -128,23 +129,23 @@ mod tests {
 
     fn sample_cert() -> DelegationCert {
         let role = CanisterRole::new("project_instance");
-        let shard_public_key_sec1 = vec![2; 33];
-        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash: [5; 32],
-            derivation_path_hash: [6; 32],
-        };
-        let shard_sig_alg = ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1;
-        let shard_key_hash =
-            shard_key_hash(shard_sig_alg, &shard_public_key_sec1, shard_key_binding);
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] };
+        let issuer_signer_generation = None;
+        let issuer_proof_binding_hash = issuer_proof_binding_hash(
+            p(2),
+            issuer_proof_alg,
+            issuer_proof_binding,
+            issuer_signer_generation,
+        );
 
         DelegationCert {
             root_pid: p(1),
-            shard_pid: p(2),
-            shard_key_id: "shard-key".to_string(),
-            shard_sig_alg,
-            shard_public_key_sec1,
-            shard_key_hash,
-            shard_key_binding,
+            issuer_pid: p(2),
+            issuer_proof_alg,
+            issuer_proof_binding_hash,
+            issuer_proof_binding,
+            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 500,
@@ -231,24 +232,30 @@ mod tests {
     }
 
     #[test]
-    fn cert_rules_enforce_shard_public_key_hash_binding() {
+    fn cert_rules_enforce_issuer_proof_binding_hash() {
         let mut cert = sample_cert();
-        cert.shard_public_key_sec1 = vec![7; 33];
+        cert.issuer_proof_binding_hash = [7; 32];
 
         assert_eq!(
             validate_cert_issuance_rules(&cert, limits(), p(1)),
-            Err(CertRuleError::ShardPublicKeyHashMismatch)
+            Err(CertRuleError::IssuerProofBindingHashMismatch)
         );
     }
 
     #[test]
-    fn cert_rules_enforce_compressed_shard_public_key_encoding() {
+    fn cert_rules_rejects_issuer_signer_generation() {
         let mut cert = sample_cert();
-        cert.shard_public_key_sec1 = vec![7; 65];
+        cert.issuer_signer_generation = Some(1);
+        cert.issuer_proof_binding_hash = issuer_proof_binding_hash(
+            cert.issuer_pid,
+            cert.issuer_proof_alg,
+            cert.issuer_proof_binding,
+            cert.issuer_signer_generation,
+        );
 
         assert_eq!(
             validate_cert_issuance_rules(&cert, limits(), p(1)),
-            Err(CertRuleError::ShardPublicKeyEncodingInvalid)
+            Err(CertRuleError::IssuerSignerGenerationUnsupported)
         );
     }
 }

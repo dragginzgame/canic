@@ -34,7 +34,7 @@ where
     V: FnMut([u8; 32], &RootProof, Principal) -> Result<(), String>,
 {
     let cert = &input.proof.cert;
-    if cert.shard_pid != input.this_canister {
+    if cert.issuer_pid != input.this_canister {
         return Err(InstallActiveDelegationProofError::IssuerMismatch);
     }
     if input.now_ns < cert.not_before_ns {
@@ -74,10 +74,10 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, IcCanisterSignatureProofV1,
-            RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
+            IssuerProofAlgorithm, IssuerProofBinding, RootProof,
         },
         ids::CanisterRole,
-        ops::auth::delegated::canonical::shard_key_hash,
+        ops::auth::delegated::canonical::issuer_proof_binding_hash,
     };
 
     fn p(id: u8) -> Principal {
@@ -85,25 +85,23 @@ mod tests {
     }
 
     fn cert() -> DelegationCert {
-        let shard_sig_alg = ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1;
-        let shard_public_key_sec1 = vec![1; 33];
-        let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash: [2; 32],
-            derivation_path_hash: [3; 32],
-        };
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [2; 32] };
+        let issuer_signer_generation = None;
+        let issuer_proof_binding_hash = issuer_proof_binding_hash(
+            p(2),
+            issuer_proof_alg,
+            issuer_proof_binding,
+            issuer_signer_generation,
+        );
 
         DelegationCert {
             root_pid: p(1),
-            shard_pid: p(2),
-            shard_key_id: "issuer-key".to_string(),
-            shard_sig_alg,
-            shard_public_key_sec1: shard_public_key_sec1.clone(),
-            shard_key_hash: shard_key_hash(
-                shard_sig_alg,
-                &shard_public_key_sec1,
-                shard_key_binding,
-            ),
-            shard_key_binding,
+            issuer_pid: p(2),
+            issuer_proof_alg,
+            issuer_proof_binding_hash,
+            issuer_proof_binding,
+            issuer_signer_generation,
             issued_at_ns: 10,
             not_before_ns: 20,
             expires_at_ns: 120,
@@ -139,7 +137,7 @@ mod tests {
     fn install_active_delegation_proof_builds_active_state_after_root_verify() {
         let active = install_active_delegation_proof(input(proof()), |_, _, _| Ok(())).unwrap();
 
-        assert_eq!(active.proof.cert.shard_pid, p(2));
+        assert_eq!(active.proof.cert.issuer_pid, p(2));
         assert_eq!(active.not_before_ns, 20);
         assert_eq!(active.expires_at_ns, 120);
         assert_eq!(active.refresh_after_ns, 100);

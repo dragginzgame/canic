@@ -314,6 +314,29 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
+- Local `0.65.15` candidate removes the active shard ECDSA key/signature
+  authority fields from delegated-token `DelegationCert`. Certs now bind
+  `issuer_pid`, `issuer_proof_alg`, `issuer_proof_binding`,
+  `issuer_proof_binding_hash`, and `issuer_signer_generation`; basic 0.65
+  certs require `issuer_signer_generation == None`. `DelegatedTokenClaims` and
+  verifier output use `issuer_pid`, root proof preparation no longer fetches a
+  threshold-ECDSA public key, the `auth-delegated-token-verify` feature now
+  pulls root plus issuer canister-signature verification, test issuers use
+  `auth-issuer-canister-sig-create`, runtime startup checks require issuer
+  canister-signature creation for delegated-token issuers, and the checked-in
+  wasm-store Candid surface reflects the issuer-bound cert shape. Remaining
+  ECDSA scan matches are isolated to the standalone ECDSA ops feature
+  definitions, historical replay effect tests/records, and the pending
+  role-attestation ECDSA compatibility path. Current validation:
+  ```text
+  cargo check --locked -p canic-core -p canic
+  cargo check --locked -p canic-core --features auth-root-canister-sig-create,auth-issuer-canister-sig-create,auth-delegated-token-verify
+  cargo check --locked -p delegation_root_stub -p delegation_signer_stub -p canister_root -p canister_user_shard
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
+  ```
 - Local `0.65.14` candidate flips delegated tokens from shard ECDSA signatures
   to issuer canister-signature proofs. `DelegatedToken` now carries
   `issuer_proof`, runtime verification validates the issuer proof over the

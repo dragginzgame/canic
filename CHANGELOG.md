@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.15` removes active shard ECDSA key material from delegated-token
+  delegation certs, renames the token authority fields to issuer terminology,
+  binds certs to issuer canister-signature authority, removes threshold
+  public-key fetching from root proof preparation, and updates issuer startup
+  checks, test canister features, and the wasm-store Candid surface.
+
 - `0.65.14` flips delegated tokens from shard ECDSA signatures to issuer
   canister-signature proofs, adds issuer-local token prepare/get endpoints,
   replay-protects token prepare, removes test fleet one-shot issue wrappers,

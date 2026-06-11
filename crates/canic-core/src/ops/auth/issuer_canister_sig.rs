@@ -14,6 +14,7 @@ use crate::{
 };
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 use crate::{dto::auth::IcCanisterSignatureProofV1, ops::auth::AuthValidationError};
+use sha2::{Digest, Sha256};
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -67,6 +68,10 @@ pub const fn issuer_sig_domain(kind: IssuerPayloadKind) -> &'static [u8] {
     match kind {
         IssuerPayloadKind::DelegatedTokenClaims => b"canic-issuer-delegated-token",
     }
+}
+
+pub fn issuer_sig_seed_hash(kind: IssuerPayloadKind) -> [u8; 32] {
+    Sha256::digest(issuer_sig_seed(kind)).into()
 }
 
 pub fn issuer_canister_sig_verification_message(
@@ -369,7 +374,6 @@ fn parse_canister_sig_public_key_der(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sha2::{Digest, Sha256};
 
     #[test]
     fn issuer_canister_sig_verification_message_prefixes_domain_len() {
@@ -387,8 +391,7 @@ mod tests {
 
     #[test]
     fn issuer_seed_hash_matches_binding_seed_hash_input() {
-        let seed = issuer_sig_seed(IssuerPayloadKind::DelegatedTokenClaims);
-        let seed_hash: [u8; 32] = Sha256::digest(seed).into();
+        let seed_hash = issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims);
         let expected: [u8; 32] = Sha256::digest(b"canic-issuer-delegated-token").into();
 
         assert_eq!(seed_hash, expected);

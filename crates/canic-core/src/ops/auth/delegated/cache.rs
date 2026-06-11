@@ -123,11 +123,11 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-            DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof, ShardKeyBinding,
-            ShardSignatureAlgorithm,
+            DelegationProof, IcCanisterSignatureProofV1, IssuerProof, IssuerProofAlgorithm,
+            IssuerProofBinding, RootProof,
         },
         ids::CanisterRole,
-        ops::auth::delegated::canonical::cert_hash,
+        ops::auth::delegated::canonical::{cert_hash, issuer_proof_binding_hash},
     };
 
     fn p(id: u8) -> Principal {
@@ -135,17 +135,24 @@ mod tests {
     }
 
     fn token() -> DelegatedToken {
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
+            seed_hash: [10; 32],
+        };
+        let issuer_signer_generation = None;
+        let issuer_proof_binding_hash = issuer_proof_binding_hash(
+            p(2),
+            issuer_proof_alg,
+            issuer_proof_binding,
+            issuer_signer_generation,
+        );
         let cert = DelegationCert {
             root_pid: p(1),
-            shard_pid: p(2),
-            shard_key_id: "shard-key".to_string(),
-            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-            shard_public_key_sec1: vec![8; 33],
-            shard_key_hash: [9; 32],
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-                key_name_hash: [10; 32],
-                derivation_path_hash: [11; 32],
-            },
+            issuer_pid: p(2),
+            issuer_proof_alg,
+            issuer_proof_binding_hash,
+            issuer_proof_binding,
+            issuer_signer_generation,
             issued_at_ns: 10,
             not_before_ns: 10,
             expires_at_ns: 200,
@@ -160,7 +167,7 @@ mod tests {
         DelegatedToken {
             claims: DelegatedTokenClaims {
                 subject: p(9),
-                issuer_shard_pid: p(2),
+                issuer_pid: p(2),
                 cert_hash,
                 issued_at_ns: 100,
                 expires_at_ns: 150,

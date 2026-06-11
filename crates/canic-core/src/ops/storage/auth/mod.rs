@@ -227,7 +227,7 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
-            IcCanisterSignatureProofV1, RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
+            IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
         },
         ids::CanisterRole,
     };
@@ -237,19 +237,19 @@ mod tests {
     }
 
     fn active_proof() -> ActiveDelegationProof {
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] };
+        let issuer_signer_generation = None;
+
         ActiveDelegationProof {
             proof: DelegationProof {
                 cert: DelegationCert {
                     root_pid: p(1),
-                    shard_pid: p(2),
-                    shard_key_id: "issuer-key".to_string(),
-                    shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-                    shard_public_key_sec1: vec![3; 33],
-                    shard_key_hash: [4; 32],
-                    shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-                        key_name_hash: [5; 32],
-                        derivation_path_hash: [6; 32],
-                    },
+                    issuer_pid: p(2),
+                    issuer_proof_alg,
+                    issuer_proof_binding_hash: [6; 32],
+                    issuer_proof_binding,
+                    issuer_signer_generation,
                     issued_at_ns: 10,
                     not_before_ns: 20,
                     expires_at_ns: 100,

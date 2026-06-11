@@ -2,8 +2,8 @@ use canic_core::{
     cdk::{candid, types::Principal},
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof,
-        ShardKeyBinding, ShardSignatureAlgorithm,
+        DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof,
+        IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
     ids::CanisterRole,
 };
@@ -101,7 +101,7 @@ fn sample_delegated_token() -> DelegatedToken {
     let cert = sample_cert();
     let claims = DelegatedTokenClaims {
         subject: p(9),
-        issuer_shard_pid: cert.shard_pid,
+        issuer_pid: cert.issuer_pid,
         cert_hash: [8; 32],
         issued_at_ns: 120_000_000_000,
         expires_at_ns: 180_000_000_000,
@@ -132,19 +132,13 @@ fn sample_delegated_token() -> DelegatedToken {
 }
 
 fn sample_cert() -> DelegationCert {
-    let shard_key_binding = ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-        key_name_hash: [4; 32],
-        derivation_path_hash: [5; 32],
-    };
-
     DelegationCert {
         root_pid: p(1),
-        shard_pid: p(2),
-        shard_key_id: "key_1".to_string(),
-        shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-        shard_public_key_sec1: vec![6; 33],
-        shard_key_hash: [7; 32],
-        shard_key_binding,
+        issuer_pid: p(2),
+        issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+        issuer_proof_binding_hash: [7; 32],
+        issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [4; 32] },
+        issuer_signer_generation: None,
         issued_at_ns: 100_000_000_000,
         not_before_ns: 100_000_000_000,
         expires_at_ns: 700_000_000_000,

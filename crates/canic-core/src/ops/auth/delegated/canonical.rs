@@ -3,7 +3,6 @@ use crate::{
     dto::auth::{
         DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
         DelegationProof, IssuerProof, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
-        ShardKeyBinding, ShardSignatureAlgorithm,
     },
     ids::CanisterRole,
 };
@@ -11,7 +10,6 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
-const SHARD_KEY_HASH_DOMAIN: &[u8] = b"canic-shard-key-v1";
 const ISSUER_PROOF_BINDING_HASH_DOMAIN: &[u8] = b"canic-issuer-proof-binding-v1";
 pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
 
@@ -22,7 +20,6 @@ pub enum CanonicalDomain {
     DelegatedTokenClaims = 2,
     DelegationProof = 3,
     RoleHash = 4,
-    DerivationPath = 5,
     IssuerProof = 6,
 }
 
@@ -64,13 +61,6 @@ pub fn issuer_proof_hash(proof: &IssuerProof) -> [u8; 32] {
     hash_bytes(&issuer_proof_bytes(proof))
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "issuer-proof binding hash is used when DelegationCert carries issuer authority"
-    )
-)]
 pub fn issuer_proof_binding_hash(
     issuer_pid: Principal,
     issuer_proof_alg: IssuerProofAlgorithm,
@@ -90,32 +80,6 @@ pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
     hash_bytes(public_key_sec1)
 }
 
-pub fn shard_key_hash(
-    alg: ShardSignatureAlgorithm,
-    public_key_sec1: &[u8],
-    binding: ShardKeyBinding,
-) -> [u8; 32] {
-    let mut out = Vec::with_capacity(128);
-    out.extend_from_slice(SHARD_KEY_HASH_DOMAIN);
-    encode_shard_signature_algorithm(&mut out, alg);
-    encode_bytes(&mut out, public_key_sec1);
-    encode_shard_key_binding(&mut out, binding);
-    hash_bytes(&out)
-}
-
-pub fn key_name_hash(key_name: &str) -> [u8; 32] {
-    hash_bytes(key_name.as_bytes())
-}
-
-pub fn derivation_path_hash(path: &[Vec<u8>]) -> [u8; 32] {
-    let mut out = domain_bytes(CanonicalDomain::DerivationPath);
-    encode_len(&mut out, path.len());
-    for segment in path {
-        encode_bytes(&mut out, segment);
-    }
-    hash_bytes(&out)
-}
-
 pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthError> {
     validate_role(role)?;
 
@@ -128,12 +92,11 @@ pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> 
     let mut out = domain_bytes(CanonicalDomain::DelegationCert);
 
     encode_principal(&mut out, cert.root_pid);
-    encode_principal(&mut out, cert.shard_pid);
-    encode_string(&mut out, &cert.shard_key_id);
-    encode_shard_signature_algorithm(&mut out, cert.shard_sig_alg);
-    encode_bytes(&mut out, &cert.shard_public_key_sec1);
-    encode_fixed_32(&mut out, cert.shard_key_hash);
-    encode_shard_key_binding(&mut out, cert.shard_key_binding);
+    encode_principal(&mut out, cert.issuer_pid);
+    encode_issuer_proof_algorithm(&mut out, cert.issuer_proof_alg);
+    encode_fixed_32(&mut out, cert.issuer_proof_binding_hash);
+    encode_issuer_proof_binding(&mut out, cert.issuer_proof_binding);
+    encode_optional_u64(&mut out, cert.issuer_signer_generation);
     encode_u64(&mut out, cert.issued_at_ns);
     encode_u64(&mut out, cert.not_before_ns);
     encode_u64(&mut out, cert.expires_at_ns);
@@ -148,7 +111,7 @@ pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalA
     let mut out = domain_bytes(CanonicalDomain::DelegatedTokenClaims);
 
     encode_principal(&mut out, claims.subject);
-    encode_principal(&mut out, claims.issuer_shard_pid);
+    encode_principal(&mut out, claims.issuer_pid);
     encode_fixed_32(&mut out, claims.cert_hash);
     encode_u64(&mut out, claims.issued_at_ns);
     encode_u64(&mut out, claims.expires_at_ns);
@@ -184,13 +147,6 @@ fn domain_bytes(domain: CanonicalDomain) -> Vec<u8> {
 
 fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
-}
-
-fn encode_shard_signature_algorithm(out: &mut Vec<u8>, alg: ShardSignatureAlgorithm) {
-    let tag = match alg {
-        ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1 => 1,
-    };
-    out.push(tag);
 }
 
 fn encode_issuer_proof_algorithm(out: &mut Vec<u8>, alg: IssuerProofAlgorithm) {
@@ -238,19 +194,6 @@ fn encode_role_grants(
         encode_scopes(out, &grant.scopes)?;
     }
     Ok(())
-}
-
-fn encode_shard_key_binding(out: &mut Vec<u8>, binding: ShardKeyBinding) {
-    match binding {
-        ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-            key_name_hash,
-            derivation_path_hash,
-        } => {
-            out.push(1);
-            encode_fixed_32(out, key_name_hash);
-            encode_fixed_32(out, derivation_path_hash);
-        }
-    }
 }
 
 fn encode_root_proof(out: &mut Vec<u8>, proof: &RootProof) {
@@ -421,17 +364,23 @@ mod tests {
     }
 
     fn sample_cert() -> DelegationCert {
+        let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
+        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [8; 32] };
+        let issuer_signer_generation = None;
+        let issuer_proof_binding_hash = issuer_proof_binding_hash(
+            p(3),
+            issuer_proof_alg,
+            issuer_proof_binding,
+            issuer_signer_generation,
+        );
+
         DelegationCert {
             root_pid: p(1),
-            shard_pid: p(3),
-            shard_key_id: "shard-key".to_string(),
-            shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
-            shard_public_key_sec1: vec![4, 5, 6],
-            shard_key_hash: [7; 32],
-            shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
-                key_name_hash: [8; 32],
-                derivation_path_hash: [9; 32],
-            },
+            issuer_pid: p(3),
+            issuer_proof_alg,
+            issuer_proof_binding_hash,
+            issuer_proof_binding,
+            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 200,
@@ -479,7 +428,7 @@ mod tests {
     fn claims_hash_rejects_noncanonical_scopes() {
         let claims = DelegatedTokenClaims {
             subject: p(10),
-            issuer_shard_pid: p(11),
+            issuer_pid: p(11),
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
@@ -504,7 +453,7 @@ mod tests {
     fn claims_hash_rejects_noncanonical_scope_order() {
         let left = DelegatedTokenClaims {
             subject: p(10),
-            issuer_shard_pid: p(11),
+            issuer_pid: p(11),
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
@@ -532,7 +481,7 @@ mod tests {
     fn claims_hash_binds_ext_bytes() {
         let mut left = DelegatedTokenClaims {
             subject: p(10),
-            issuer_shard_pid: p(11),
+            issuer_pid: p(11),
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
@@ -553,7 +502,7 @@ mod tests {
     fn claims_hash_rejects_oversized_ext() {
         let claims = DelegatedTokenClaims {
             subject: p(10),
-            issuer_shard_pid: p(11),
+            issuer_pid: p(11),
             cert_hash: [12; 32],
             issued_at_ns: 100,
             expires_at_ns: 120,
@@ -570,15 +519,6 @@ mod tests {
                 max: MAX_TOKEN_EXT_BYTES,
             })
         );
-    }
-
-    #[test]
-    fn derivation_path_hash_preserves_segment_boundaries() {
-        let left = vec![b"ab".to_vec(), b"c".to_vec()];
-        let right = vec![b"a".to_vec(), b"bc".to_vec()];
-
-        assert_ne!(derivation_path_hash(&left), derivation_path_hash(&right));
-        assert_eq!(key_name_hash("icp_test_key"), key_name_hash("icp_test_key"));
     }
 
     #[test]
