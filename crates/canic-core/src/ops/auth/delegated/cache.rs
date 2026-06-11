@@ -1,8 +1,5 @@
 use super::canonical::{CanonicalAuthError, claims_hash, issuer_proof_hash, proof_hash};
-use crate::{
-    cdk::types::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenClaims, DelegationProof, IssuerProof},
-};
+use crate::{cdk::types::Principal, dto::auth::DelegatedToken};
 use sha2::{Digest, Sha256};
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -29,32 +26,7 @@ pub fn delegated_token_cache_key(
 ) -> Result<[u8; 32], CanonicalAuthError> {
     let proof_hash = proof_hash(&token.proof)?;
     let claims_hash = claims_hash(&token.claims)?;
-    let signature_hash = hash_bytes(&token.shard_sig);
-
-    Ok(delegated_token_cache_key_from_hashes(
-        proof_hash,
-        claims_hash,
-        signature_hash,
-        caller,
-    ))
-}
-
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "issuer-proof cache key is used when DelegatedToken carries issuer_proof"
-    )
-)]
-pub fn delegated_token_issuer_proof_cache_key(
-    proof: &DelegationProof,
-    claims: &DelegatedTokenClaims,
-    issuer_proof: &IssuerProof,
-    caller: Principal,
-) -> Result<[u8; 32], CanonicalAuthError> {
-    let proof_hash = proof_hash(proof)?;
-    let claims_hash = claims_hash(claims)?;
-    let signature_hash = issuer_proof_hash(issuer_proof);
+    let signature_hash = issuer_proof_hash(&token.issuer_proof);
 
     Ok(delegated_token_cache_key_from_hashes(
         proof_hash,
@@ -207,59 +179,28 @@ mod tests {
                     public_key_der: vec![13; 32],
                 }),
             },
-            shard_sig: vec![14; 64],
+            issuer_proof: sample_issuer_proof(14),
         }
     }
 
     #[test]
-    fn delegated_token_cache_key_binds_signature_and_caller() {
+    fn delegated_token_cache_key_binds_issuer_proof_claims_ext_and_caller() {
         let token = token();
         let key = delegated_token_cache_key(&token, p(9)).expect("key");
 
-        let mut changed_signature = token.clone();
-        changed_signature.shard_sig[0] ^= 1;
-        let signature_key =
-            delegated_token_cache_key(&changed_signature, p(9)).expect("signature key");
+        let mut changed_proof = token.clone();
+        changed_proof.issuer_proof = sample_issuer_proof(15);
+        let proof_key = delegated_token_cache_key(&changed_proof, p(9)).expect("proof key");
+
+        let mut changed_claims = token.clone();
+        changed_claims.claims.ext = Some(b"different".to_vec());
+        let claims_key = delegated_token_cache_key(&changed_claims, p(9)).expect("claims key");
 
         let caller_key = delegated_token_cache_key(&token, p(10)).expect("caller key");
 
-        assert_ne!(key, signature_key);
-        assert_ne!(key, caller_key);
-    }
-
-    #[test]
-    fn issuer_proof_cache_key_binds_issuer_proof_and_ext() {
-        let token = token();
-        let issuer_proof = sample_issuer_proof(1);
-        let key = delegated_token_issuer_proof_cache_key(
-            &token.proof,
-            &token.claims,
-            &issuer_proof,
-            p(9),
-        )
-        .expect("issuer proof key");
-
-        let changed_proof = sample_issuer_proof(2);
-        let proof_key = delegated_token_issuer_proof_cache_key(
-            &token.proof,
-            &token.claims,
-            &changed_proof,
-            p(9),
-        )
-        .expect("changed issuer proof key");
-
-        let mut changed_claims = token.claims.clone();
-        changed_claims.ext = Some(b"different".to_vec());
-        let claims_key = delegated_token_issuer_proof_cache_key(
-            &token.proof,
-            &changed_claims,
-            &issuer_proof,
-            p(9),
-        )
-        .expect("changed claims key");
-
         assert_ne!(key, proof_key);
         assert_ne!(key, claims_key);
+        assert_ne!(key, caller_key);
     }
 
     #[test]

@@ -2,9 +2,11 @@ use candid::Principal;
 use canic::{
     Error,
     dto::auth::{
-        AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken, DelegatedTokenIssueRequest,
-        DelegationAudience, DelegationProof, DelegationProofGetRequest,
-        DelegationProofIssueRequest, DelegationProofPrepareResponse,
+        AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken, DelegatedTokenGetRequest,
+        DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
+        DelegationProof, DelegationProofGetRequest, DelegationProofIssueRequest,
+        DelegationProofPrepareResponse, InstallActiveDelegationProofRequest,
+        InstallActiveDelegationProofResponse,
     },
     ids::{CanisterRole, cap},
     protocol,
@@ -33,7 +35,14 @@ pub fn issue_delegated_token(
     grants: Vec<DelegatedRoleGrant>,
     token_ttl_ns: u64,
 ) -> DelegatedToken {
-    let request = DelegatedTokenIssueRequest {
+    let installed: Result<InstallActiveDelegationProofResponse, Error> = pic.update_call_or_panic(
+        shard_pid,
+        protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
+        (InstallActiveDelegationProofRequest { proof },),
+    );
+    installed.expect("canic_install_active_delegation_proof application failed");
+
+    let request = DelegatedTokenPrepareRequest {
         metadata: Some(issue_token_request_metadata(
             shard_pid,
             subject,
@@ -41,7 +50,6 @@ pub fn issue_delegated_token(
             &grants,
             token_ttl_ns,
         )),
-        proof,
         subject,
         aud,
         grants,
@@ -49,9 +57,22 @@ pub fn issue_delegated_token(
         nonce: [0; 16],
         ext: None,
     };
-    let issued: Result<DelegatedToken, Error> =
-        pic.update_call_or_panic(shard_pid, "user_shard_issue_token", (request,));
-    issued.expect("user_shard_issue_token application failed")
+    let prepared: Result<DelegatedTokenPrepareResponse, Error> = pic.update_call_as_or_panic(
+        shard_pid,
+        subject,
+        protocol::CANIC_PREPARE_DELEGATED_TOKEN,
+        (request,),
+    );
+    let prepared = prepared.expect("canic_prepare_delegated_token application failed");
+    let issued: Result<DelegatedToken, Error> = pic.query_call_as_or_panic(
+        shard_pid,
+        subject,
+        protocol::CANIC_GET_DELEGATED_TOKEN,
+        (DelegatedTokenGetRequest {
+            claims_hash: prepared.claims_hash,
+        },),
+    );
+    issued.expect("canic_get_delegated_token application failed")
 }
 
 // Obtain one canonical root-issued proof through the prepare/update + get/query flow.

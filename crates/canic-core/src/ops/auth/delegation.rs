@@ -175,10 +175,6 @@ impl AuthOps {
         Ok(active_proof)
     }
 
-    #[expect(
-        dead_code,
-        reason = "active delegation proof storage is consumed by the issuer prepare/get flow"
-    )]
     #[must_use]
     pub(crate) fn active_delegation_proof(now_ns: u64) -> Option<ActiveDelegationProof> {
         AuthStateOps::active_delegation_proof(now_ns)

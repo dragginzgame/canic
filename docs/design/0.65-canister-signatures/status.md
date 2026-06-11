@@ -84,14 +84,10 @@ checklist below tracks their removal or conversion.
 - [x] Add a golden test proving verifier passes
       `domain_len || domain || cert_hash`, not raw `cert_hash`.
 - [x] Define `root_sig_seed(kind)` separately from `root_sig_domain(kind)`.
-- [x] Add bounded positive delegated-token verification cache for the current
-      delegated-token verifier. The current implementation keys by proof hash,
-      claims hash, current `shard_sig` hash, and caller; cache values contain
+- [x] Add bounded positive delegated-token verification cache keyed by proof
+      hash, claims hash, `issuer_proof_hash`, and caller; cache values contain
       only `valid_until_ns` and `verified_at_ns`; endpoint-specific
       authorization still runs after cache hit.
-- [ ] Replace the positive verifier cache signature component with
-      `issuer_proof_hash` when `IssuerProof::IcCanisterSignatureV1` replaces
-      `shard_sig`.
 - [x] Add opaque issuer-signed `ext: Option<Vec<u8>>` to delegated-token issue
       requests and claims, include it in canonical claims hashing, and bound it
       to 4096 bytes.
@@ -143,13 +139,13 @@ checklist below tracks their removal or conversion.
       `CreateCanisterParent::ThisCanister`.
 - [x] Remove the stale protected-internal client PIC case that required fresh
       root-issued internal-invocation proofs.
-- [ ] Replace delegated-token issuer ECDSA signature with zero-ECDSA issuer
+- [x] Replace delegated-token issuer ECDSA signature with zero-ECDSA issuer
       proof, preferably `IssuerProof::IcCanisterSignatureV1`.
 - [ ] Remove `auth-threshold-ecdsa-sign` and threshold-ECDSA public-key fetching
       from the normal auth feature graph.
 - [ ] Remove `IcThresholdEcdsaSecp256k1` issuer proof algorithm/binding from
       normal delegated-token auth DTOs.
-- [ ] Add issuer prepare/get delegated-token canister-signature flow.
+- [x] Add issuer prepare/get delegated-token canister-signature flow.
 - [x] Add `install_active_delegation_proof` endpoint.
 - [x] Add issuer canister-signature local verification against issuer canister
       id plus raw IC root key.
@@ -165,7 +161,7 @@ checklist below tracks their removal or conversion.
       path reaches `sign_with_ecdsa`.
 - [ ] Add verifier-module CI gate proving verification code has no `.await`,
       issuer client imports, or management-canister imports.
-- [ ] Update metrics/cost classes so normal auth has no `ThresholdEcdsaSign`
+- [x] Update metrics/cost classes so normal auth has no `ThresholdEcdsaSign`
       class.
 - [ ] Update Candid, endpoint macros, architecture/auth docs, and
       getting-started docs for zero-ECDSA auth.

@@ -2,8 +2,8 @@ use canic_core::{
     cdk::{candid, types::Principal},
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        DelegationCert, DelegationProof, IcCanisterSignatureProofV1, RootProof, ShardKeyBinding,
-        ShardSignatureAlgorithm,
+        DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof,
+        ShardKeyBinding, ShardSignatureAlgorithm,
     },
     ids::CanisterRole,
 };
@@ -124,7 +124,10 @@ fn sample_delegated_token() -> DelegatedToken {
                 public_key_der: vec![2; 96],
             }),
         },
-        shard_sig: vec![3; 64],
+        issuer_proof: IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![3; 256],
+            public_key_der: vec![4; 96],
+        }),
     }
 }
 

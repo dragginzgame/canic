@@ -220,10 +220,8 @@ fn cost_key<const N: usize>(segments: [&str; N]) -> Result<IntentResourceKey, In
 const fn cost_class_label(cost_class: CostClass) -> &'static str {
     match cost_class {
         CostClass::None => "none",
-        CostClass::ThresholdEcdsaSign => "ecdsa",
         CostClass::RootCanisterSignaturePrepare => "root_canister_signature_prepare",
         CostClass::IssuerCanisterSignaturePrepare => "issuer_canister_signature_prepare",
-        CostClass::ShardTokenSign => "shard_token_sign",
         CostClass::ManagementDeployment => "deploy",
         CostClass::ValueTransfer => "transfer",
         CostClass::DurablePublish => "publish",
@@ -263,7 +261,7 @@ mod tests {
 
     fn request(now_secs: u64) -> CostGuardRequest {
         CostGuardRequest {
-            cost_class: CostClass::ThresholdEcdsaSign,
+            cost_class: CostClass::ManagementDeployment,
             command_kind: CommandKind::new("auth.issue_delegation_proof.v1").expect("command"),
             quota_subject: p(1),
             payer: p(2),

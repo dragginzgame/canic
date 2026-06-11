@@ -1,8 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{
-        DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert, DelegationProof,
-    },
+    dto::auth::{DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert},
     ops::auth::delegated::mint::PreparedDelegatedToken,
 };
 
@@ -11,7 +9,6 @@ use crate::{
 //
 
 pub struct SignDelegatedTokenInput {
-    pub proof: DelegationProof,
     pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
@@ -47,14 +44,13 @@ pub struct PreparedRootDelegationProof {
 }
 
 //
-// PreparedDelegatedTokenSignature
+// PreparedDelegatedTokenIssuerProof
 //
 
-pub struct PreparedDelegatedTokenSignature {
+pub struct PreparedDelegatedTokenIssuerProof {
     pub prepared: PreparedDelegatedToken,
-    pub message_hash: [u8; 32],
-    pub key_name: String,
-    pub derivation_path: Vec<Vec<u8>>,
+    pub claims_hash: [u8; 32],
+    pub retrieval_expires_at_ns: u64,
 }
 
 //

@@ -49,10 +49,8 @@ pub enum ReplayPolicy {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CostClass {
     None,
-    ThresholdEcdsaSign,
     RootCanisterSignaturePrepare,
     IssuerCanisterSignaturePrepare,
-    ShardTokenSign,
     ManagementDeployment,
     ValueTransfer,
     DurablePublish,
@@ -108,8 +106,8 @@ pub struct RootCapabilityCommandReplayPolicy {
 }
 
 const ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: &str = "root_canister_signature_prepare.quota.v1";
-const SHARD_TOKEN_SIGN_QUOTA_V1: &str = "shard_token_sign.quota.v1";
-const SHARD_TOKEN_SIGN_RESERVE_V1: &str = "shard_token_sign.cycle_reserve.v1";
+const ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: &str =
+    "issuer_canister_signature_prepare.quota.v1";
 const DEPLOYMENT_QUOTA_V1: &str = "deployment.quota.v1";
 const DEPLOYMENT_RESERVE_V1: &str = "deployment.cycle_reserve.v1";
 const VALUE_TRANSFER_QUOTA_V1: &str = "value_transfer.quota.v1";
@@ -186,13 +184,14 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "controller maintenance endpoint replaces issuer-local active proof metadata",
     ),
     update_replay_protected(
-        "signer_issue_token",
-        "auth.issue_token.v1",
+        "canic_prepare_delegated_token",
+        "auth.prepare_delegated_token.v1",
         ReplayImplementationStatus::Implemented,
-        CostClass::ShardTokenSign,
-        Some(SHARD_TOKEN_SIGN_QUOTA_V1),
-        Some(SHARD_TOKEN_SIGN_RESERVE_V1),
+        CostClass::IssuerCanisterSignaturePrepare,
+        Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
+        None,
     ),
+    query_read_only("canic_get_delegated_token"),
     update_monotonic_publish(
         "canic_template_prepare_admin",
         "wasm_store.template_prepare_admin.v1",
@@ -223,14 +222,6 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_monotonic_publish(
         "canic_wasm_store_stage_manifest",
         "wasm_store.stage_manifest.v1",
-    ),
-    update_replay_protected(
-        "user_shard_issue_token",
-        "auth.issue_token.v1",
-        ReplayImplementationStatus::Implemented,
-        CostClass::ShardTokenSign,
-        Some(SHARD_TOKEN_SIGN_QUOTA_V1),
-        Some(SHARD_TOKEN_SIGN_RESERVE_V1),
     ),
 ];
 
@@ -374,6 +365,18 @@ const fn update_read_only(endpoint: &'static str) -> EndpointReplayPolicy {
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::QueryOrReadOnly,
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::None,
+        quota_policy: None,
+        cycle_reserve_policy: None,
+    }
+}
+
+const fn query_read_only(endpoint: &'static str) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Query,
         replay_policy: ReplayPolicy::QueryOrReadOnly,
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class: CostClass::None,
@@ -561,11 +564,7 @@ mod tests {
         CANIC_TEMPLATE_PREPARE_ADMIN, CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
         CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN, CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
     };
-    use std::{
-        collections::BTreeSet,
-        fs,
-        path::{Path, PathBuf},
-    };
+    use std::collections::BTreeSet;
 
     #[test]
     fn endpoint_manifest_entries_are_unique() {
@@ -609,6 +608,7 @@ mod tests {
             );
             assert!(
                 entry.cost_class == CostClass::RootCanisterSignaturePrepare
+                    || entry.cost_class == CostClass::IssuerCanisterSignaturePrepare
                     || entry.cycle_reserve_policy.is_some(),
                 "costed entry {} missing cycle-reserve policy",
                 entry.endpoint
@@ -785,53 +785,41 @@ mod tests {
     }
 
     #[test]
-    fn fleet_delegated_token_issue_wrappers_are_manifested_as_implemented() {
-        let wrappers = fleet_delegated_token_issue_wrapper_names();
-        assert!(
-            !wrappers.is_empty(),
-            "expected at least one fleet delegated-token issue wrapper"
-        );
-
-        let manifest = ENDPOINT_REPLAY_POLICY_MANIFEST
+    fn delegated_token_prepare_get_endpoints_are_manifested() {
+        let prepare = ENDPOINT_REPLAY_POLICY_MANIFEST
             .iter()
-            .filter(|entry| entry.endpoint_kind == EndpointKind::Update)
-            .map(|entry| entry.endpoint)
-            .collect::<BTreeSet<_>>();
+            .find(|entry| entry.endpoint == "canic_prepare_delegated_token")
+            .expect("delegated-token prepare policy entry");
 
-        let missing = wrappers
-            .iter()
-            .map(String::as_str)
-            .filter(|wrapper| !manifest.contains(wrapper))
-            .collect::<Vec<_>>();
-        assert!(
-            missing.is_empty(),
-            "missing replay policy entries for delegated-token issue wrappers: {missing:?}"
+        assert_eq!(
+            prepare.implementation_status,
+            ReplayImplementationStatus::Implemented
         );
+        assert_eq!(
+            prepare.replay_policy,
+            ReplayPolicy::ReplayProtected {
+                command_kind: "auth.prepare_delegated_token.v1",
+                requires_operation_id: true,
+            }
+        );
+        assert_eq!(
+            prepare.cost_class,
+            CostClass::IssuerCanisterSignaturePrepare
+        );
+        assert_eq!(
+            prepare.quota_policy,
+            Some(ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
+        );
+        assert_eq!(prepare.cycle_reserve_policy, None);
 
-        for wrapper in wrappers {
-            let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-                .iter()
-                .find(|entry| entry.endpoint == wrapper)
-                .expect("delegated-token issue wrapper policy entry");
+        let get = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_get_delegated_token")
+            .expect("delegated-token get policy entry");
 
-            assert_eq!(
-                entry.implementation_status,
-                ReplayImplementationStatus::Implemented
-            );
-            assert_eq!(
-                entry.replay_policy,
-                ReplayPolicy::ReplayProtected {
-                    command_kind: "auth.issue_token.v1",
-                    requires_operation_id: true,
-                }
-            );
-            assert_eq!(entry.cost_class, CostClass::ShardTokenSign);
-            assert_eq!(entry.quota_policy, Some(SHARD_TOKEN_SIGN_QUOTA_V1));
-            assert_eq!(
-                entry.cycle_reserve_policy,
-                Some(SHARD_TOKEN_SIGN_RESERVE_V1)
-            );
-        }
+        assert_eq!(get.endpoint_kind, EndpointKind::Query);
+        assert_eq!(get.replay_policy, ReplayPolicy::QueryOrReadOnly);
+        assert_eq!(get.cost_class, CostClass::None);
     }
 
     #[test]
@@ -1270,85 +1258,6 @@ mod tests {
         .into_iter()
         .flat_map(update_endpoint_names_from_source)
         .collect()
-    }
-
-    fn fleet_delegated_token_issue_wrapper_names() -> BTreeSet<String> {
-        let mut names = BTreeSet::new();
-        for root in [
-            workspace_root().join("canisters"),
-            workspace_root().join("fleets"),
-        ] {
-            for path in rust_files_under(&root) {
-                let source = fs::read_to_string(&path)
-                    .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
-                names.extend(delegated_token_issue_wrapper_names_from_source(&source));
-            }
-        }
-        names
-    }
-
-    fn workspace_root() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .expect("canic-core lives under crates/")
-            .to_path_buf()
-    }
-
-    fn rust_files_under(root: &Path) -> Vec<PathBuf> {
-        let mut files = Vec::new();
-        collect_rust_files(root, &mut files);
-        files
-    }
-
-    fn collect_rust_files(path: &Path, files: &mut Vec<PathBuf>) {
-        let entries = fs::read_dir(path)
-            .unwrap_or_else(|err| panic!("failed to read directory {}: {err}", path.display()));
-        for entry in entries {
-            let entry = entry.unwrap_or_else(|err| {
-                panic!(
-                    "failed to read directory entry under {}: {err}",
-                    path.display()
-                )
-            });
-            let path = entry.path();
-            if path.is_dir() {
-                collect_rust_files(&path, files);
-            } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
-                files.push(path);
-            }
-        }
-    }
-
-    fn delegated_token_issue_wrapper_names_from_source(source: &str) -> Vec<String> {
-        let mut names = Vec::new();
-        let mut offset = 0;
-        while let Some(relative_call) = source[offset..].find("AuthApi::issue_token") {
-            let call = offset + relative_call;
-            let Some(fn_start) = source[..call].rfind("fn ") else {
-                offset = call + "AuthApi::issue_token".len();
-                continue;
-            };
-            let attribute_window_start = source[..fn_start]
-                .rfind("\n\n")
-                .map_or(0, |index| index + 2);
-            let attribute_window = &source[attribute_window_start..fn_start];
-            if !attribute_window.contains("#[canic_update") {
-                offset = call + "AuthApi::issue_token".len();
-                continue;
-            }
-            let name_start = fn_start + "fn ".len();
-            let Some(name_end) = source[name_start..]
-                .find('(')
-                .map(|index| name_start + index)
-            else {
-                offset = call + "AuthApi::issue_token".len();
-                continue;
-            };
-            names.push(source[name_start..name_end].trim().to_string());
-            offset = call + "AuthApi::issue_token".len();
-        }
-        names
     }
 
     fn update_endpoint_names_from_source(source: &'static str) -> Vec<&'static str> {

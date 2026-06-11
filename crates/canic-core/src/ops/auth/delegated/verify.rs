@@ -3,12 +3,12 @@ use super::{
         AudienceAcceptanceContext, AudienceError, audience_accepted, audience_subset,
         role_grants_subset, scopes_for_role,
     },
-    canonical::{CanonicalAuthError, cert_hash, claims_hash, shard_token_hash},
+    canonical::{CanonicalAuthError, cert_hash, claims_hash},
     cert_rules::{CertRuleError, DelegatedAuthTtlLimits, validate_cert_issuance_rules},
 };
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedToken, RootProof},
+    dto::auth::{DelegatedToken, IssuerProof, RootProof},
     ids::CanisterRole,
 };
 use thiserror::Error;
@@ -36,12 +36,12 @@ pub struct VerifiedDelegatedToken {
 pub enum VerifyDelegatedTokenError {
     #[error("delegated auth cert hash mismatch")]
     CertHashMismatch,
-    #[error("delegated auth shard signature unavailable")]
-    ShardSignatureUnavailable,
+    #[error("delegated auth issuer proof unavailable")]
+    IssuerProofUnavailable,
     #[error("delegated auth root signature invalid: {0}")]
     RootSignatureInvalid(String),
-    #[error("delegated auth shard signature invalid: {0}")]
-    ShardSignatureInvalid(String),
+    #[error("delegated auth issuer proof invalid: {0}")]
+    IssuerProofInvalid(String),
     #[error("delegated auth token issuer shard pid mismatch")]
     IssuerShardPidMismatch,
     #[error("delegated auth token expiry must be greater than issued_at")]
@@ -85,13 +85,13 @@ pub enum VerifyDelegatedTokenError {
 pub fn verify_delegated_token<R, S>(
     input: VerifyDelegatedTokenInput<'_>,
     mut verify_root_proof: R,
-    mut verify_shard_signature: S,
+    mut verify_issuer_proof: S,
 ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError>
 where
     R: FnMut([u8; 32], &RootProof, Principal) -> Result<(), String>,
-    S: FnMut(&[u8], [u8; 32], &[u8]) -> Result<(), String>,
+    S: FnMut([u8; 32], &IssuerProof, Principal) -> Result<(), String>,
 {
-    let material = verify_delegated_token_material(&input)?;
+    let material = verify_delegated_token_material(&input, true)?;
 
     verify_root_proof(
         material.cert_hash,
@@ -100,12 +100,12 @@ where
     )
     .map_err(VerifyDelegatedTokenError::RootSignatureInvalid)?;
 
-    verify_shard_signature(
-        &input.token.proof.cert.shard_public_key_sec1,
-        material.shard_token_hash,
-        &input.token.shard_sig,
+    verify_issuer_proof(
+        material.claims_hash,
+        &input.token.issuer_proof,
+        input.token.proof.cert.shard_pid,
     )
-    .map_err(VerifyDelegatedTokenError::ShardSignatureInvalid)?;
+    .map_err(VerifyDelegatedTokenError::IssuerProofInvalid)?;
 
     Ok(material.verified)
 }
@@ -113,17 +113,18 @@ where
 pub fn verify_delegated_token_without_signatures(
     input: VerifyDelegatedTokenInput<'_>,
 ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError> {
-    verify_delegated_token_material(&input).map(|material| material.verified)
+    verify_delegated_token_material(&input, false).map(|material| material.verified)
 }
 
 struct VerifiedDelegatedTokenMaterial {
     verified: VerifiedDelegatedToken,
     cert_hash: [u8; 32],
-    shard_token_hash: [u8; 32],
+    claims_hash: [u8; 32],
 }
 
 fn verify_delegated_token_material(
     input: &VerifyDelegatedTokenInput<'_>,
+    require_issuer_proof_bytes: bool,
 ) -> Result<VerifiedDelegatedTokenMaterial, VerifyDelegatedTokenError> {
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
@@ -136,13 +137,14 @@ fn verify_delegated_token_material(
         return Err(VerifyDelegatedTokenError::CertHashMismatch);
     }
 
-    if input.token.shard_sig.is_empty() {
-        return Err(VerifyDelegatedTokenError::ShardSignatureUnavailable);
-    }
-
     let local_scopes = verify_claims(input, actual_cert_hash)?;
-    let _actual_claims_hash = claims_hash(claims)?;
-    let shard_token_hash = shard_token_hash(claims)?;
+    let actual_claims_hash = claims_hash(claims)?;
+    let IssuerProof::IcCanisterSignatureV1(issuer_proof) = &input.token.issuer_proof;
+    if require_issuer_proof_bytes
+        && (issuer_proof.signature_cbor.is_empty() || issuer_proof.public_key_der.is_empty())
+    {
+        return Err(VerifyDelegatedTokenError::IssuerProofUnavailable);
+    }
 
     Ok(VerifiedDelegatedTokenMaterial {
         verified: VerifiedDelegatedToken {
@@ -152,7 +154,7 @@ fn verify_delegated_token_material(
             cert_hash: actual_cert_hash,
         },
         cert_hash: actual_cert_hash,
-        shard_token_hash,
+        claims_hash: actual_claims_hash,
     })
 }
 
@@ -264,10 +266,10 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
-            DelegationProof, IcCanisterSignatureProofV1, RootProof, ShardKeyBinding,
+            DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof, ShardKeyBinding,
             ShardSignatureAlgorithm,
         },
-        ops::auth::delegated::canonical::{shard_key_hash, shard_token_hash},
+        ops::auth::delegated::canonical::{claims_hash, shard_key_hash},
     };
 
     fn p(id: u8) -> Principal {
@@ -341,7 +343,7 @@ mod tests {
             nonce: [7; 16],
             ext: None,
         };
-        let shard_sig = shard_token_hash(&claims).unwrap().to_vec();
+        let issuer_proof = issuer_proof_for_claims(&claims);
 
         DelegatedToken {
             claims,
@@ -349,7 +351,7 @@ mod tests {
                 cert,
                 root_proof: root_proof(1),
             },
-            shard_sig,
+            issuer_proof,
         }
     }
 
@@ -398,15 +400,27 @@ mod tests {
         }
     }
 
-    fn verify_shard_ok(public_key: &[u8], hash: [u8; 32], sig: &[u8]) -> Result<(), String> {
-        if public_key.len() == 33 && sig == hash.as_slice() {
+    fn issuer_proof_for_claims(claims: &DelegatedTokenClaims) -> IssuerProof {
+        IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: claims_hash(claims).unwrap().to_vec(),
+            public_key_der: vec![9; 4],
+        })
+    }
+
+    fn verify_issuer_ok(
+        hash: [u8; 32],
+        proof: &IssuerProof,
+        issuer_pid: Principal,
+    ) -> Result<(), String> {
+        let IssuerProof::IcCanisterSignatureV1(proof) = proof;
+        if issuer_pid == p(2) && proof.signature_cbor == hash {
             Ok(())
         } else {
             Err("hash mismatch".to_string())
         }
     }
 
-    fn verify_root_and_shard(
+    fn verify_root_and_issuer(
         token: &DelegatedToken,
         local_role: Option<&CanisterRole>,
         required_scopes: &[String],
@@ -414,7 +428,7 @@ mod tests {
         verify_delegated_token(
             input(token, local_role, required_scopes),
             verify_root_ok(cert_hash(&token.proof.cert).unwrap()),
-            verify_shard_ok,
+            verify_issuer_ok,
         )
     }
 
@@ -424,7 +438,7 @@ mod tests {
         let role = role();
         let required_scopes = vec!["read".to_string()];
 
-        let verified = verify_root_and_shard(&token, Some(&role), &required_scopes).unwrap();
+        let verified = verify_root_and_issuer(&token, Some(&role), &required_scopes).unwrap();
 
         assert_eq!(verified.subject, p(9));
         assert_eq!(verified.issuer_shard_pid, p(2));
@@ -438,7 +452,10 @@ mod tests {
             signature_cbor: Vec::new(),
             public_key_der: Vec::new(),
         });
-        token.shard_sig = vec![99; 64];
+        token.issuer_proof = IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: Vec::new(),
+            public_key_der: Vec::new(),
+        });
         let role = role();
         let required_scopes = vec!["read".to_string()];
 
@@ -460,7 +477,7 @@ mod tests {
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
                 |_, _, _| Err("bad root sig".to_string()),
-                verify_shard_ok,
+                verify_issuer_ok,
             ),
             Err(VerifyDelegatedTokenError::RootSignatureInvalid(
                 "bad root sig".to_string(),
@@ -469,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_rejects_shard_signature_failure() {
+    fn verify_delegated_token_rejects_issuer_proof_failure() {
         let token = token();
         let role = role();
 
@@ -477,10 +494,10 @@ mod tests {
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
                 verify_root_ok(cert_hash(&token.proof.cert).unwrap()),
-                |_, _, _| Err("bad shard sig".to_string()),
+                |_, _, _| Err("bad issuer proof".to_string()),
             ),
-            Err(VerifyDelegatedTokenError::ShardSignatureInvalid(
-                "bad shard sig".to_string(),
+            Err(VerifyDelegatedTokenError::IssuerProofInvalid(
+                "bad issuer proof".to_string(),
             ))
         );
     }
@@ -492,7 +509,7 @@ mod tests {
         let role = role();
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &[]),
+            verify_root_and_issuer(&token, Some(&role), &[]),
             Err(VerifyDelegatedTokenError::CertHashMismatch)
         );
     }
@@ -510,7 +527,7 @@ mod tests {
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
                 |_, _, _| Ok(()),
-                verify_shard_ok
+                verify_issuer_ok
             ),
             Err(VerifyDelegatedTokenError::CertRules(
                 CertRuleError::Audience(AudienceError::NonCanonicalGrants)
@@ -528,7 +545,7 @@ mod tests {
         let role = role();
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &[]),
+            verify_root_and_issuer(&token, Some(&role), &[]),
             Err(VerifyDelegatedTokenError::Canonical(
                 CanonicalAuthError::NonCanonicalRoles
             ))
@@ -542,7 +559,7 @@ mod tests {
         let role = role();
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &[]),
+            verify_root_and_issuer(&token, Some(&role), &[]),
             Err(VerifyDelegatedTokenError::AudienceNotSubset)
         );
     }
@@ -556,7 +573,7 @@ mod tests {
         let role = role();
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &[]),
+            verify_root_and_issuer(&token, Some(&role), &[]),
             Err(VerifyDelegatedTokenError::TokenAudienceRejected)
         );
     }
@@ -566,7 +583,7 @@ mod tests {
         let token = token();
 
         assert_eq!(
-            verify_root_and_shard(&token, None, &[]),
+            verify_root_and_issuer(&token, None, &[]),
             Err(VerifyDelegatedTokenError::MissingLocalRole)
         );
     }
@@ -577,7 +594,7 @@ mod tests {
         let role = CanisterRole::new("admin");
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &[]),
+            verify_root_and_issuer(&token, Some(&role), &[]),
             Err(VerifyDelegatedTokenError::TokenGrantRejected)
         );
     }
@@ -589,7 +606,7 @@ mod tests {
         let role = role();
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &[]),
+            verify_root_and_issuer(&token, Some(&role), &[]),
             Err(VerifyDelegatedTokenError::GrantsNotSubset)
         );
     }
@@ -601,7 +618,7 @@ mod tests {
         let required_scopes = vec!["admin".to_string()];
 
         assert_eq!(
-            verify_root_and_shard(&token, Some(&role), &required_scopes),
+            verify_root_and_issuer(&token, Some(&role), &required_scopes),
             Err(VerifyDelegatedTokenError::ScopeRejected {
                 scope: "admin".to_string(),
             })
@@ -619,7 +636,7 @@ mod tests {
             verify_delegated_token(
                 input,
                 verify_root_ok(cert_hash(&token.proof.cert).unwrap()),
-                verify_shard_ok,
+                verify_issuer_ok,
             ),
             Err(VerifyDelegatedTokenError::TokenExpired)
         );

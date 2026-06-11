@@ -154,7 +154,7 @@ mod tests {
         },
         dto::auth::{
             DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-            DelegationCert, DelegationProof, IcCanisterSignatureProofV1, RootProof,
+            DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof, RootProof,
             ShardKeyBinding, ShardSignatureAlgorithm,
         },
     };
@@ -272,7 +272,10 @@ mod tests {
                     public_key_der: vec![13; 32],
                 }),
             },
-            shard_sig: vec![13; 64],
+            issuer_proof: IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                signature_cbor: vec![13; 64],
+                public_key_der: vec![14; 32],
+            }),
         }
     }
 

@@ -285,7 +285,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.13` candidate adds the issuer canister-signature primitive for
+- `0.65.13` is committed as the issuer canister-signature primitive for
   the next token-issuer hard cut. `canic-core` and facade `canic` now expose
   `auth-issuer-canister-sig-create` and
   `auth-issuer-canister-sig-verify`; the issuer auth module now mirrors the
@@ -314,6 +314,48 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
+- Local `0.65.14` candidate flips delegated tokens from shard ECDSA signatures
+  to issuer canister-signature proofs. `DelegatedToken` now carries
+  `issuer_proof`, runtime verification validates the issuer proof over the
+  canonical claims hash, and the positive verifier cache key binds
+  `issuer_proof_hash`. The non-root auth bundle exposes
+  `canic_prepare_delegated_token` update plus `canic_get_delegated_token`
+  query; prepare uses the installed `ActiveDelegationProof`, enforces
+  `subject == msg.caller()`, is replay-protected under
+  `auth.prepare_delegated_token.v1`, and stores caller-bound pending token
+  metadata for query retrieval. The old `AuthApi::issue_token` remains only as
+  a legacy hard-fail API, test fleet one-shot issue wrappers are removed, and
+  the PIC helper now installs active proof material before prepare/get. The old
+  shard-token replay entries plus stale shard/threshold ECDSA signing cost
+  classes are removed from normal auth. Current validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core -p canic
+  cargo check --locked -p canic-testing-internal
+  cargo check --locked -p canister_user_shard
+  cargo check --locked -p delegation_signer_stub
+  cargo test --locked -p canic-core ops::auth --lib -- --nocapture
+  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo test --locked -p canic-core ops::cost_guard --lib -- --nocapture
+  cargo test --locked -p canic --test endpoint_macro -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo check --locked -p canic-core --features auth-issuer-canister-sig-create,auth-issuer-canister-sig-verify
+  cargo check --locked -p canic --features auth-issuer-canister-sig-create,auth-issuer-canister-sig-verify
+  cargo check --locked -p canic-core --features auth-threshold-ecdsa-sign
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+  Attempted targeted PocketIC validation:
+  ```text
+  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test root_suite delegated_token_verification_uses_self_contained_root_proof -- --test-threads=1 --nocapture
+  ```
+  That run rebuilt local wasm artifacts successfully, then hit the known
+  `Failed to bind PocketIC server to address 127.0.0.1:0` infrastructure panic
+  and was interrupted after only a defunct `pocket-ic` child plus idle
+  `root_suite` parent remained.
 - Local `0.64.3` closeout candidate after pushed `0.64.2` finishes the 0.64
   topology line with no required deferred implementation work. The 0.64 design
   note is marked implemented/closed, old open questions are recorded as closed

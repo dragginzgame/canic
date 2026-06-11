@@ -6,7 +6,7 @@ use canic::{
     Error,
     api::auth::AuthApi,
     cdk::candid::Principal,
-    dto::auth::{DelegatedToken, DelegatedTokenIssueRequest, SignedRoleAttestation},
+    dto::auth::{DelegatedToken, SignedRoleAttestation},
     ids::cap,
     prelude::*,
 };
@@ -21,11 +21,6 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 
 /// Run no-op upgrade handling for the delegation signer stub.
 async fn canic_upgrade() {}
-
-#[canic_update]
-async fn signer_issue_token(request: DelegatedTokenIssueRequest) -> Result<DelegatedToken, Error> {
-    AuthApi::issue_token(request).await
-}
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
 async fn signer_verify_token(token: DelegatedToken) -> Result<(), Error> {

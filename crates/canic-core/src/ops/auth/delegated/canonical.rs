@@ -12,7 +12,6 @@ use thiserror::Error;
 
 const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
 const SHARD_KEY_HASH_DOMAIN: &[u8] = b"canic-shard-key-v1";
-const SHARD_TOKEN_SIGNATURE_DOMAIN: &[u8] = b"canic-shard-delegated-token";
 const ISSUER_PROOF_BINDING_HASH_DOMAIN: &[u8] = b"canic-issuer-proof-binding-v1";
 pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
 
@@ -85,18 +84,6 @@ pub fn issuer_proof_binding_hash(
     encode_issuer_proof_binding(&mut out, issuer_proof_binding);
     encode_optional_u64(&mut out, issuer_signer_generation);
     hash_bytes(&out)
-}
-
-pub fn shard_token_hash(claims: &DelegatedTokenClaims) -> Result<[u8; 32], CanonicalAuthError> {
-    let claims_bytes = claims_bytes(claims)?;
-    let mut out = Vec::with_capacity(1 + SHARD_TOKEN_SIGNATURE_DOMAIN.len() + claims_bytes.len());
-    out.push(
-        u8::try_from(SHARD_TOKEN_SIGNATURE_DOMAIN.len())
-            .expect("shard token signature domain length fits in u8"),
-    );
-    out.extend_from_slice(SHARD_TOKEN_SIGNATURE_DOMAIN);
-    out.extend_from_slice(&claims_bytes);
-    Ok(hash_bytes(&out))
 }
 
 pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {

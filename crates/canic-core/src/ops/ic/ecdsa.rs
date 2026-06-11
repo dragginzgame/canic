@@ -54,6 +54,7 @@ pub struct EcdsaOps;
 #[cfg(feature = "auth-threshold-ecdsa-sign")]
 impl EcdsaOps {
     // Sign a pre-hashed payload using the configured threshold ECDSA key.
+    #[allow(dead_code)]
     pub async fn sign_bytes(
         _permit: &CostGuardPermit,
         key_name: &str,
@@ -98,6 +99,7 @@ impl EcdsaOps {
 #[cfg(not(feature = "auth-threshold-ecdsa-sign"))]
 impl EcdsaOps {
     // Fail closed when threshold ECDSA signing support is not compiled in.
+    #[allow(dead_code)]
     #[expect(clippy::unused_async)]
     pub async fn sign_bytes(
         _permit: &CostGuardPermit,

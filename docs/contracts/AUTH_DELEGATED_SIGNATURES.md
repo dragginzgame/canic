@@ -98,7 +98,11 @@ pub struct DelegatedTokenClaims {
 pub struct DelegatedToken {
     pub claims: DelegatedTokenClaims,
     pub proof: DelegationProof,
-    pub shard_sig: Vec<u8>,
+    pub issuer_proof: IssuerProof,
+}
+
+pub enum IssuerProof {
+    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
 }
 ```
 
@@ -174,8 +178,10 @@ execution.
 ```text
 1. shard/client -> root canic_prepare_delegation_proof update
 2. shard/client -> root canic_get_delegation_proof query
-3. caller       -> shard issue_token update with DelegationProof
-4. caller       -> endpoint with DelegatedToken
+3. controller   -> issuer canic_install_active_delegation_proof update
+4. caller       -> issuer canic_prepare_delegated_token update
+5. caller       -> issuer canic_get_delegated_token query
+6. caller       -> endpoint with DelegatedToken
 ```
 
 `canic_prepare_delegation_proof` is replay-protected. The same caller,
@@ -290,16 +296,12 @@ The auth architecture must not introduce:
 - single-call fresh-proof `mint_token` on the normal auth surface
 - relay envelope auth modes that skip delegated subject binding
 
-Allowed ECDSA use remains:
-
-- shard token signing
-- shard token signature verification
-- role-attestation and internal-invocation proof signing/verification
+Normal delegated-token auth must not call management-canister threshold ECDSA.
+Legacy shard-token ECDSA proof inputs are rejected before protected endpoint
+execution.
 
 ## Test-Only Paths
 
 The following are explicitly test-only or demo-local:
 
-- `user_shard_issue_token` in `fleets/test/user_shard/src/lib.rs`
-- `signer_issue_token` in `canisters/test/delegation_signer_stub/src/lib.rs`
 - `create_account` and `plan_create_account` in fleet demo canisters

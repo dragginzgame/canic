@@ -178,7 +178,7 @@ pub struct DelegatedTokenClaims {
 pub struct DelegatedToken {
     pub claims: DelegatedTokenClaims,
     pub proof: DelegationProof,
-    pub shard_sig: Vec<u8>,
+    pub issuer_proof: IssuerProof,
 }
 
 //
@@ -241,6 +241,43 @@ pub struct DelegatedTokenIssueRequest {
     pub nonce: [u8; 16],
     #[serde(default)]
     pub ext: Option<Vec<u8>>,
+}
+
+//
+// DelegatedTokenPrepareRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedTokenPrepareRequest {
+    #[serde(default)]
+    pub metadata: Option<AuthRequestMetadata>,
+    pub subject: Principal,
+    pub aud: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
+    pub ttl_ns: u64,
+    pub nonce: [u8; 16],
+    #[serde(default)]
+    pub ext: Option<Vec<u8>>,
+}
+
+//
+// DelegatedTokenPrepareResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedTokenPrepareResponse {
+    pub claims: DelegatedTokenClaims,
+    pub claims_hash: [u8; 32],
+    pub retrieval_expires_at_ns: u64,
+}
+
+//
+// DelegatedTokenGetRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedTokenGetRequest {
+    pub claims_hash: [u8; 32],
 }
 
 //

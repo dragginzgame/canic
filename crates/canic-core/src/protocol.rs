@@ -5,6 +5,8 @@
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_PREPARE_DELEGATION_PROOF: &str = "canic_prepare_delegation_proof";
 pub const CANIC_GET_DELEGATION_PROOF: &str = "canic_get_delegation_proof";
+pub const CANIC_PREPARE_DELEGATED_TOKEN: &str = "canic_prepare_delegated_token";
+pub const CANIC_GET_DELEGATED_TOKEN: &str = "canic_get_delegated_token";
 pub const CANIC_REQUEST_ROLE_ATTESTATION: &str = "canic_request_role_attestation";
 pub const CANIC_REQUEST_INTERNAL_INVOCATION_PROOF: &str = "canic_request_internal_invocation_proof";
 pub const CANIC_ATTESTATION_KEY_SET: &str = "canic_attestation_key_set";

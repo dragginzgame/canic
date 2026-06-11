@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.14` flips delegated tokens from shard ECDSA signatures to issuer
+  canister-signature proofs, adds issuer-local token prepare/get endpoints,
+  replay-protects token prepare, removes test fleet one-shot issue wrappers,
+  updates the PIC helper to install active proof material before minting, and
+  removes stale shard/threshold ECDSA signing cost classes from normal auth.
+
 - `0.65.13` adds issuer canister-signature create/verify feature gates,
   issuer SignatureMap prepare/get/verify primitives, issuer-proof prepare
   metrics, and an issuer canister-signature replay cost class for the upcoming

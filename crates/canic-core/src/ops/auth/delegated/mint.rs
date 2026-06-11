@@ -3,13 +3,13 @@ use super::{
         AudienceError, audience_subset, role_grants_subset, validate_audience_shape,
         validate_role_grants,
     },
-    canonical::{CanonicalAuthError, cert_hash, claims_hash, shard_token_hash},
+    canonical::{CanonicalAuthError, cert_hash, claims_hash},
 };
 use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        DelegationProof,
+        DelegationProof, IssuerProof,
     },
 };
 use thiserror::Error;
@@ -29,7 +29,6 @@ pub struct MintDelegatedTokenInput<'a> {
 pub struct PreparedDelegatedToken {
     pub claims: DelegatedTokenClaims,
     pub claims_hash: [u8; 32],
-    pub shard_token_hash: [u8; 32],
     pub proof: DelegationProof,
 }
 
@@ -52,8 +51,8 @@ pub enum MintDelegatedTokenError {
     #[error("delegated auth token grants are not a subset of cert grants")]
     GrantsNotSubset,
     #[cfg(test)]
-    #[error("delegated auth shard signature failed: {0}")]
-    SignFailed(String),
+    #[error("delegated auth issuer proof failed: {0}")]
+    IssuerProofFailed(String),
     #[error(transparent)]
     Audience(#[from] AudienceError),
     #[error(transparent)]
@@ -63,18 +62,18 @@ pub enum MintDelegatedTokenError {
 #[cfg(test)]
 pub fn mint_delegated_token<F>(
     input: MintDelegatedTokenInput<'_>,
-    sign_claims_hash: F,
+    issue_proof: F,
 ) -> Result<DelegatedToken, MintDelegatedTokenError>
 where
-    F: FnOnce([u8; 32]) -> Result<Vec<u8>, String>,
+    F: FnOnce([u8; 32]) -> Result<IssuerProof, String>,
 {
     let prepared = prepare_delegated_token(input)?;
-    let shard_sig =
-        sign_claims_hash(prepared.shard_token_hash).map_err(MintDelegatedTokenError::SignFailed)?;
-    Ok(finish_delegated_token(prepared, shard_sig))
+    let issuer_proof =
+        issue_proof(prepared.claims_hash).map_err(MintDelegatedTokenError::IssuerProofFailed)?;
+    Ok(finish_delegated_token(prepared, issuer_proof))
 }
 
-/// Prepare one canonical delegated-token claims payload before shard signing.
+/// Prepare one canonical delegated-token claims payload before issuer proof creation.
 pub fn prepare_delegated_token(
     input: MintDelegatedTokenInput<'_>,
 ) -> Result<PreparedDelegatedToken, MintDelegatedTokenError> {
@@ -125,25 +124,23 @@ pub fn prepare_delegated_token(
         ext: input.ext,
     };
     let claims_hash = claims_hash(&claims)?;
-    let shard_token_hash = shard_token_hash(&claims)?;
 
     Ok(PreparedDelegatedToken {
         claims,
         claims_hash,
-        shard_token_hash,
         proof: input.proof.clone(),
     })
 }
 
-/// Combine prepared token claims with their shard signature.
+/// Combine prepared token claims with their issuer canister-signature proof.
 pub fn finish_delegated_token(
     prepared: PreparedDelegatedToken,
-    shard_sig: Vec<u8>,
+    issuer_proof: IssuerProof,
 ) -> DelegatedToken {
     DelegatedToken {
         claims: prepared.claims,
         proof: prepared.proof,
-        shard_sig,
+        issuer_proof,
     }
 }
 
@@ -152,7 +149,7 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{
-            DelegationCert, IcCanisterSignatureProofV1, RootProof, ShardKeyBinding,
+            DelegationCert, IcCanisterSignatureProofV1, IssuerProof, RootProof, ShardKeyBinding,
             ShardSignatureAlgorithm,
         },
         ids::CanisterRole,
@@ -230,8 +227,20 @@ mod tests {
         }
     }
 
-    fn verify_hash_signature(_: &[u8], hash: [u8; 32], sig: &[u8]) -> Result<(), String> {
-        if sig == hash.as_slice() {
+    fn issuer_proof_for_hash(hash: [u8; 32]) -> IssuerProof {
+        IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: hash.to_vec(),
+            public_key_der: vec![20; 4],
+        })
+    }
+
+    fn verify_hash_signature(
+        hash: [u8; 32],
+        proof: &IssuerProof,
+        issuer_pid: Principal,
+    ) -> Result<(), String> {
+        let IssuerProof::IcCanisterSignatureV1(proof) = proof;
+        if issuer_pid == p(2) && proof.signature_cbor == hash {
             Ok(())
         } else {
             Err("hash mismatch".to_string())
@@ -245,7 +254,7 @@ mod tests {
 
         let token = mint_delegated_token(input(&proof), |hash| {
             observed_hash = Some(hash);
-            Ok(vec![20, 21, 22])
+            Ok(issuer_proof_for_hash(hash))
         })
         .unwrap();
 
@@ -255,11 +264,12 @@ mod tests {
         assert_eq!(token.claims.expires_at_ns, 180);
         assert_eq!(token.claims.ext, None);
         assert_eq!(token.proof, proof);
-        assert_eq!(token.shard_sig, vec![20, 21, 22]);
+        let IssuerProof::IcCanisterSignatureV1(issuer_proof) = &token.issuer_proof;
         assert_eq!(
-            observed_hash,
-            Some(shard_token_hash(&token.claims).unwrap())
+            issuer_proof.signature_cbor,
+            claims_hash(&token.claims).unwrap()
         );
+        assert_eq!(observed_hash, Some(claims_hash(&token.claims).unwrap()));
     }
 
     #[test]
@@ -268,16 +278,21 @@ mod tests {
         let mut input = input(&proof);
         input.ext = Some(b"opaque-app-context".to_vec());
 
-        let token = mint_delegated_token(input, |hash| Ok(hash.to_vec())).unwrap();
+        let token = mint_delegated_token(input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
 
         assert_eq!(token.claims.ext, Some(b"opaque-app-context".to_vec()));
-        assert_eq!(token.shard_sig, shard_token_hash(&token.claims).unwrap());
+        let IssuerProof::IcCanisterSignatureV1(issuer_proof) = &token.issuer_proof;
+        assert_eq!(
+            issuer_proof.signature_cbor,
+            claims_hash(&token.claims).unwrap()
+        );
     }
 
     #[test]
     fn minted_token_feeds_the_pure_verifier() {
         let proof = proof();
-        let token = mint_delegated_token(input(&proof), |_| Ok(vec![20, 21, 22])).unwrap();
+        let token =
+            mint_delegated_token(input(&proof), |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
         let role = CanisterRole::new("project_instance");
         let required_scopes = vec!["read".to_string()];
 
@@ -309,8 +324,10 @@ mod tests {
         left_input.nonce = [1; 16];
         let mut right_input = input(&proof);
         right_input.nonce = [2; 16];
-        let left = mint_delegated_token(left_input, |hash| Ok(hash.to_vec())).unwrap();
-        let right = mint_delegated_token(right_input, |hash| Ok(hash.to_vec())).unwrap();
+        let left =
+            mint_delegated_token(left_input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let right =
+            mint_delegated_token(right_input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
 
         for token in [&left, &right] {
             verify_delegated_token(
@@ -338,7 +355,8 @@ mod tests {
     fn mutating_signed_grants_fails_verifier_signature() {
         let proof = proof();
         let role = CanisterRole::new("project_instance");
-        let mut token = mint_delegated_token(input(&proof), |hash| Ok(hash.to_vec())).unwrap();
+        let mut token =
+            mint_delegated_token(input(&proof), |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
         token.claims.grants = vec![grant("project_instance", &["write"])];
 
         assert_eq!(
@@ -360,7 +378,7 @@ mod tests {
                 verify_hash_signature,
             ),
             Err(
-                crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::ShardSignatureInvalid(
+                crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::IssuerProofInvalid(
                     "hash mismatch".to_string(),
                 )
             )
@@ -373,7 +391,8 @@ mod tests {
         let role = CanisterRole::new("project_instance");
         let mut input = input(&proof);
         input.ext = Some(b"left".to_vec());
-        let mut token = mint_delegated_token(input, |hash| Ok(hash.to_vec())).unwrap();
+        let mut token =
+            mint_delegated_token(input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
         token.claims.ext = Some(b"right".to_vec());
 
         assert_eq!(
@@ -395,7 +414,7 @@ mod tests {
                 verify_hash_signature,
             ),
             Err(
-                crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::ShardSignatureInvalid(
+                crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::IssuerProofInvalid(
                     "hash mismatch".to_string(),
                 )
             )
@@ -413,7 +432,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(vec![])),
+            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
             Err(MintDelegatedTokenError::Canonical(
                 CanonicalAuthError::TokenExtTooLarge {
                     len: crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES + 1,
@@ -430,7 +449,7 @@ mod tests {
         input.audience = DelegationAudience::Project("other".to_string());
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(vec![])),
+            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
             Err(MintDelegatedTokenError::AudienceNotSubset)
         );
     }
@@ -442,7 +461,7 @@ mod tests {
         input.grants = vec![grant("project_instance", &["admin"])];
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(vec![])),
+            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
             Err(MintDelegatedTokenError::GrantsNotSubset)
         );
     }
@@ -453,7 +472,7 @@ mod tests {
         let mut input = input(&proof);
         input.ttl_ns = 120;
 
-        let token = mint_delegated_token(input, |hash| Ok(hash.to_vec())).unwrap();
+        let token = mint_delegated_token(input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
 
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 240);
@@ -466,7 +485,7 @@ mod tests {
         input.ttl_ns = 121;
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(vec![])),
+            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
             Err(MintDelegatedTokenError::TokenTtlExceeded {
                 ttl_ns: 121,
                 max_ttl_ns: 120,
@@ -482,18 +501,18 @@ mod tests {
         input.ttl_ns = 20;
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(vec![])),
+            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
             Err(MintDelegatedTokenError::TokenOutlivesCert)
         );
     }
 
     #[test]
-    fn mint_delegated_token_rejects_signing_failure() {
+    fn mint_delegated_token_rejects_issuer_proof_failure() {
         let proof = proof();
 
         assert_eq!(
             mint_delegated_token(input(&proof), |_| Err("sign failed".to_string())),
-            Err(MintDelegatedTokenError::SignFailed(
+            Err(MintDelegatedTokenError::IssuerProofFailed(
                 "sign failed".to_string(),
             ))
         );
