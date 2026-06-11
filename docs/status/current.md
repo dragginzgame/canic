@@ -194,7 +194,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
   cargo check --locked -p canic-testing-internal
   ```
-- Local `0.65.8` candidate starts the issuer-proof hard cut without flipping
+- `0.65.8` is committed as the issuer-proof hard cut foundation without flipping
   endpoint behavior yet. It adds `IssuerProof`,
   `IssuerProofAlgorithm`, and `IssuerProofBinding` DTOs; canonical
   `IssuerProof` bytes/hash; `issuer_proof_binding_hash` over issuer principal,
@@ -210,6 +210,22 @@ inspect only the files needed for the current task.
   cargo fmt --all -- --check
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.9` candidate replaces the legacy global delegated-token audience
+  with explicit `Canister`, `CanicSubnet`, and `Project` audiences. Token
+  verification now receives local canister and optional local Canic subnet
+  context, canonical/replay/PIC audience hashing binds the concrete audience
+  value, and token-issue replay payload hashes also bind signed `ext` bytes.
+  Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic -p canic-testing-internal
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```

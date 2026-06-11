@@ -95,6 +95,10 @@ checklist below tracks their removal or conversion.
 - [x] Add opaque issuer-signed `ext: Option<Vec<u8>>` to delegated-token issue
       requests and claims, include it in canonical claims hashing, and bound it
       to 4096 bytes.
+- [x] Replace the legacy global `DelegationAudience::Canic` token audience with
+      explicit canister, Canic-subnet, and project audiences, and require
+      verifier-local audience context for token audience acceptance.
+- [x] Bind signed token `ext` bytes into token-issue replay payload hashes.
 - [x] Add issuer-proof DTOs, canonical `IssuerProof` hashing,
       `issuer_proof_binding_hash`, issuer canister-signature
       seed/domain/message helpers, and the future issuer-proof verifier cache

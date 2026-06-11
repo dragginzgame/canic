@@ -1,5 +1,6 @@
 use super::canonical::{CanonicalAuthError, role_hash, validate_scope_label};
 use crate::{
+    cdk::types::Principal,
     dto::auth::{DelegatedRoleGrant, DelegationAudience},
     ids::CanisterRole,
 };
@@ -7,6 +8,13 @@ use thiserror::Error;
 
 pub const MAX_DELEGATED_ROLE_GRANTS: usize = 16;
 pub const MAX_SCOPES_PER_ROLE_GRANT: usize = 32;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AudienceAcceptanceContext<'a> {
+    pub local_canister: Principal,
+    pub local_canic_subnet: Option<Principal>,
+    pub local_project: Option<&'a str>,
+}
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum AudienceError {
@@ -36,7 +44,7 @@ pub enum AudienceError {
 
 pub fn validate_audience_shape(audience: &DelegationAudience) -> Result<(), AudienceError> {
     match audience {
-        DelegationAudience::Canic => Ok(()),
+        DelegationAudience::Canister(_) | DelegationAudience::CanicSubnet(_) => Ok(()),
         DelegationAudience::Project(project) => validate_project(project),
     }
 }
@@ -81,20 +89,25 @@ pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), Audienc
 
 pub fn audience_subset(child: &DelegationAudience, parent: &DelegationAudience) -> bool {
     match (child, parent) {
-        (DelegationAudience::Canic | DelegationAudience::Project(_), DelegationAudience::Canic) => {
-            true
+        (DelegationAudience::Canister(child), DelegationAudience::Canister(parent))
+        | (DelegationAudience::CanicSubnet(child), DelegationAudience::CanicSubnet(parent)) => {
+            child == parent
         }
         (DelegationAudience::Project(child), DelegationAudience::Project(parent)) => {
             child == parent
         }
-        (DelegationAudience::Canic, DelegationAudience::Project(_)) => false,
+        _ => false,
     }
 }
 
-pub fn audience_accepted(local_project: Option<&str>, audience: &DelegationAudience) -> bool {
+pub fn audience_accepted(
+    ctx: AudienceAcceptanceContext<'_>,
+    audience: &DelegationAudience,
+) -> bool {
     match audience {
-        DelegationAudience::Canic => true,
-        DelegationAudience::Project(project) => local_project == Some(project.as_str()),
+        DelegationAudience::Canister(canister) => *canister == ctx.local_canister,
+        DelegationAudience::CanicSubnet(subnet) => ctx.local_canic_subnet == Some(*subnet),
+        DelegationAudience::Project(project) => ctx.local_project == Some(project.as_str()),
     }
 }
 
@@ -168,26 +181,62 @@ mod tests {
         }
     }
 
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
     #[test]
-    fn project_audience_is_subset_of_global_canic_audience() {
+    fn audience_subset_requires_matching_kind_and_value() {
         assert!(audience_subset(
             &DelegationAudience::Project("demo".to_string()),
-            &DelegationAudience::Canic
+            &DelegationAudience::Project("demo".to_string())
+        ));
+        assert!(audience_subset(
+            &DelegationAudience::Canister(p(1)),
+            &DelegationAudience::Canister(p(1))
+        ));
+        assert!(audience_subset(
+            &DelegationAudience::CanicSubnet(p(2)),
+            &DelegationAudience::CanicSubnet(p(2))
         ));
         assert!(!audience_subset(
-            &DelegationAudience::Canic,
+            &DelegationAudience::Project("demo".to_string()),
+            &DelegationAudience::CanicSubnet(p(2))
+        ));
+        assert!(!audience_subset(
+            &DelegationAudience::Canister(p(1)),
             &DelegationAudience::Project("demo".to_string())
         ));
     }
 
     #[test]
-    fn project_audience_requires_matching_local_project() {
+    fn audience_acceptance_requires_matching_local_context() {
+        let ctx = AudienceAcceptanceContext {
+            local_canister: p(1),
+            local_canic_subnet: Some(p(2)),
+            local_project: Some("demo"),
+        };
+
+        assert!(audience_accepted(ctx, &DelegationAudience::Canister(p(1))));
         assert!(audience_accepted(
-            Some("demo"),
+            ctx,
+            &DelegationAudience::CanicSubnet(p(2))
+        ));
+        assert!(audience_accepted(
+            ctx,
             &DelegationAudience::Project("demo".to_string())
         ));
+        assert!(!audience_accepted(ctx, &DelegationAudience::Canister(p(9))));
         assert!(!audience_accepted(
-            Some("other"),
+            ctx,
+            &DelegationAudience::CanicSubnet(p(9))
+        ));
+        let wrong_project = AudienceAcceptanceContext {
+            local_project: Some("other"),
+            ..ctx
+        };
+        assert!(!audience_accepted(
+            wrong_project,
             &DelegationAudience::Project("demo".to_string())
         ));
     }

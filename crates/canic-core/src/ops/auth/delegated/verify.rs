@@ -1,6 +1,7 @@
 use super::{
     audience::{
-        AudienceError, audience_accepted, audience_subset, role_grants_subset, scopes_for_role,
+        AudienceAcceptanceContext, AudienceError, audience_accepted, audience_subset,
+        role_grants_subset, scopes_for_role,
     },
     canonical::{CanonicalAuthError, cert_hash, claims_hash, shard_token_hash},
     cert_rules::{CertRuleError, DelegatedAuthTtlLimits, validate_cert_issuance_rules},
@@ -14,6 +15,8 @@ use thiserror::Error;
 
 pub struct VerifyDelegatedTokenInput<'a> {
     pub token: &'a DelegatedToken,
+    pub local_canister: Principal,
+    pub local_canic_subnet: Option<Principal>,
     pub local_role: Option<&'a CanisterRole>,
     pub local_project: Option<&'a str>,
     pub ttl_limits: DelegatedAuthTtlLimits,
@@ -224,10 +227,15 @@ fn verify_audience_and_grants(
     if !audience_subset(claims_aud, cert_aud) {
         return Err(VerifyDelegatedTokenError::AudienceNotSubset);
     }
-    if !audience_accepted(input.local_project, claims_aud) {
+    let audience_ctx = AudienceAcceptanceContext {
+        local_canister: input.local_canister,
+        local_canic_subnet: input.local_canic_subnet,
+        local_project: input.local_project,
+    };
+    if !audience_accepted(audience_ctx, claims_aud) {
         return Err(VerifyDelegatedTokenError::TokenAudienceRejected);
     }
-    if !audience_accepted(input.local_project, cert_aud) {
+    if !audience_accepted(audience_ctx, cert_aud) {
         return Err(VerifyDelegatedTokenError::CertAudienceRejected);
     }
 
@@ -352,6 +360,8 @@ mod tests {
     ) -> VerifyDelegatedTokenInput<'a> {
         VerifyDelegatedTokenInput {
             token,
+            local_canister: p(20),
+            local_canic_subnet: Some(p(21)),
             local_role,
             local_project: Some("test"),
             ttl_limits: ttl_limits(),
@@ -528,7 +538,7 @@ mod tests {
     #[test]
     fn verify_delegated_token_rejects_audience_subset_drift() {
         let mut token = token();
-        token.claims.aud = DelegationAudience::Canic;
+        token.claims.aud = DelegationAudience::Canister(p(20));
         let role = role();
 
         assert_eq!(

@@ -32,7 +32,8 @@ Source: `crates/canic-core/src/dto/auth.rs`.
 
 ```rust
 pub enum DelegationAudience {
-    Canic,
+    Canister(Principal),
+    CanicSubnet(Principal),
     Project(String),
 }
 

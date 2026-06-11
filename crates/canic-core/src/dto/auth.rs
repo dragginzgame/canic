@@ -6,7 +6,8 @@ use crate::dto::{prelude::*, rpc::RootRequestMetadata};
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationAudience {
-    Canic,
+    Canister(Principal),
+    CanicSubnet(Principal),
     Project(String),
 }
 

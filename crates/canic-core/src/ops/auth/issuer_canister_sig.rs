@@ -1,6 +1,9 @@
-#![expect(
-    dead_code,
-    reason = "issuer-proof token runtime lands after DTO foundation"
+#![cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "issuer-proof token runtime lands after DTO foundation"
+    )
 )]
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]

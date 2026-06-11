@@ -625,18 +625,31 @@ impl AuthApi {
         Self::hash_delegated_role_grants(&mut hasher, &request.grants);
         hasher.hash_u64(request.ttl_ns);
         hasher.hash_bytes(&request.nonce);
+        Self::hash_optional_bytes(&mut hasher, request.ext.as_deref());
         hasher.finish()
     }
 
     fn hash_delegation_audience(hasher: &mut ReplayPayloadHasher, aud: &DelegationAudience) {
         match aud {
-            DelegationAudience::Canic => {
-                hasher.hash_str("canic");
+            DelegationAudience::Canister(canister) => {
+                hasher.hash_str("canister");
+                hasher.hash_principal(canister);
+            }
+            DelegationAudience::CanicSubnet(subnet) => {
+                hasher.hash_str("canic_subnet");
+                hasher.hash_principal(subnet);
             }
             DelegationAudience::Project(project) => {
                 hasher.hash_str("project");
                 hasher.hash_str(project);
             }
+        }
+    }
+
+    fn hash_optional_bytes(hasher: &mut ReplayPayloadHasher, bytes: Option<&[u8]>) {
+        hasher.hash_bool(bytes.is_some());
+        if let Some(bytes) = bytes {
+            hasher.hash_bytes(bytes);
         }
     }
 
@@ -1362,6 +1375,20 @@ mod tests {
         let a = issue_request(1);
         let mut b = a.clone();
         b.nonce = [10; 16];
+
+        assert_ne!(
+            AuthApi::token_issue_replay_payload_hash(&command_kind, &actor, &a),
+            AuthApi::token_issue_replay_payload_hash(&command_kind, &actor, &b)
+        );
+    }
+
+    #[test]
+    fn delegated_token_issue_payload_hash_binds_ext() {
+        let command_kind = AuthApi::token_issue_replay_command_kind();
+        let actor = crate::ops::replay::model::ReplayActor::direct_caller(p(2));
+        let a = issue_request(1);
+        let mut b = a.clone();
+        b.ext = Some(b"app-context".to_vec());
 
         assert_ne!(
             AuthApi::token_issue_replay_payload_hash(&command_kind, &actor, &a),

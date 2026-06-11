@@ -65,9 +65,12 @@ pub fn issuer_proof_hash(proof: &IssuerProof) -> [u8; 32] {
     hash_bytes(&issuer_proof_bytes(proof))
 }
 
-#[expect(
-    dead_code,
-    reason = "issuer-proof binding hash is used when DelegationCert carries issuer authority"
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "issuer-proof binding hash is used when DelegationCert carries issuer authority"
+    )
 )]
 pub fn issuer_proof_binding_hash(
     issuer_pid: Principal,
@@ -215,11 +218,16 @@ fn encode_audience(
     audience: &DelegationAudience,
 ) -> Result<(), CanonicalAuthError> {
     match audience {
-        DelegationAudience::Canic => {
+        DelegationAudience::Canister(canister) => {
             out.push(1);
+            encode_principal(out, *canister);
+        }
+        DelegationAudience::CanicSubnet(subnet) => {
+            out.push(2);
+            encode_principal(out, *subnet);
         }
         DelegationAudience::Project(project) => {
-            out.push(2);
+            out.push(3);
             encode_project(out, project)?;
         }
     }

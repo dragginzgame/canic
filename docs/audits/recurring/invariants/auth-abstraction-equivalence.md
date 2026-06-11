@@ -13,7 +13,9 @@ Current Canic auth surface:
 - generated endpoint access dispatch routes through
   `access::auth::delegated_token_verified(...)`
 - delegated-token audience is a stable acceptor boundary:
-  `DelegationAudience::Canic` or `DelegationAudience::Project(project_id)`
+  `DelegationAudience::Canister(canister_id)`,
+  `DelegationAudience::CanicSubnet(subnet_id)`, or
+  `DelegationAudience::Project(project_id)`
 - there are no verifier-role, verifier-principal, plural-role, or mixed
   role/principal public audience shapes
 - signed role grants carry the local canister-role scopes authorized by the
@@ -224,7 +226,7 @@ rg -l 'DelegationProof' crates canisters fleets -g '*.rs'
 rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters fleets -g '*.rs'
 rg -n 'RolesOrPrincipals|RoleAudienceMustBeSingular|DelegatedTokenAudience|Roles\\(|Principals\\(' crates docs canisters fleets -g '*.rs' -g '*.md'
 rg -n 'caller::has_role|caller::has_any_role|DelegationAudience::Role|DelegationAudience::Principal|verifier_role_hash' crates canisters fleets docs -g '*.rs' -g '*.md'
-rg -n 'DelegationAudience::Canic|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
+rg -n 'DelegationAudience::Canister|DelegationAudience::CanicSubnet|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
 git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth.rs
 ```
 

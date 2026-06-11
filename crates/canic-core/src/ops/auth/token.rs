@@ -189,6 +189,8 @@ impl AuthOps {
 
 struct DelegatedTokenRuntimeContext {
     verifier_cfg: DelegatedTokenVerifierConfig,
+    local_canister: Principal,
+    local_canic_subnet: Option<Principal>,
     local_role: CanisterRole,
     local_project: Option<String>,
 }
@@ -235,6 +237,8 @@ fn delegated_token_runtime_context(
 
     Ok(DelegatedTokenRuntimeContext {
         verifier_cfg,
+        local_canister: IcOps::canister_self(),
+        local_canic_subnet: EnvOps::subnet_pid().ok(),
         local_role,
         local_project,
     })
@@ -246,6 +250,8 @@ fn delegated_token_verify_input<'a>(
 ) -> VerifyDelegatedTokenInput<'a> {
     VerifyDelegatedTokenInput {
         token: input.token,
+        local_canister: ctx.local_canister,
+        local_canic_subnet: ctx.local_canic_subnet,
         local_role: Some(&ctx.local_role),
         local_project: ctx.local_project.as_deref(),
         ttl_limits: DelegatedAuthTtlLimits {

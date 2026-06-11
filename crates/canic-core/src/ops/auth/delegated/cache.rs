@@ -39,9 +39,12 @@ pub fn delegated_token_cache_key(
     ))
 }
 
-#[expect(
-    dead_code,
-    reason = "issuer-proof cache key is used when DelegatedToken carries issuer_proof"
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "issuer-proof cache key is used when DelegatedToken carries issuer_proof"
+    )
 )]
 pub fn delegated_token_issuer_proof_cache_key(
     proof: &DelegationProof,

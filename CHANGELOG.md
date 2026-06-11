@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.9` replaces the legacy global delegated-token audience with explicit
+  canister, Canic-subnet, and project audiences, wires local verifier audience
+  context through token checks, and binds signed token `ext` into token-issue
+  replay identity.
+
 - `0.65.8` adds the issuer-proof DTO, canonical hashing, binding-hash, verifier
   message, and future cache-key foundations for the zero-ECDSA token leg.
 

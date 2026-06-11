@@ -284,6 +284,8 @@ mod tests {
         verify_delegated_token(
             VerifyDelegatedTokenInput {
                 token: &token,
+                local_canister: p(20),
+                local_canic_subnet: Some(p(21)),
                 local_role: Some(&role),
                 local_project: Some("test"),
                 ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
@@ -314,6 +316,8 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token,
+                    local_canister: p(20),
+                    local_canic_subnet: Some(p(21)),
                     local_role: Some(&role),
                     local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
@@ -341,6 +345,8 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
+                    local_canister: p(20),
+                    local_canic_subnet: Some(p(21)),
                     local_role: Some(&role),
                     local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
@@ -374,6 +380,8 @@ mod tests {
             verify_delegated_token(
                 VerifyDelegatedTokenInput {
                     token: &token,
+                    local_canister: p(20),
+                    local_canic_subnet: Some(p(21)),
                     local_role: Some(&role),
                     local_project: Some("test"),
                     ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
