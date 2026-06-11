@@ -21,6 +21,7 @@ pub struct MintDelegatedTokenInput<'a> {
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
     pub nonce: [u8; 16],
+    pub ext: Option<Vec<u8>>,
     pub now_ns: u64,
 }
 
@@ -121,6 +122,7 @@ pub fn prepare_delegated_token(
         aud: input.audience,
         grants: input.grants,
         nonce: input.nonce,
+        ext: input.ext,
     };
     let claims_hash = claims_hash(&claims)?;
     let shard_token_hash = shard_token_hash(&claims)?;
@@ -216,6 +218,7 @@ mod tests {
             grants: vec![grant("project_instance", &["read"])],
             ttl_ns: 60,
             nonce: [7; 16],
+            ext: None,
             now_ns: 120,
         }
     }
@@ -250,12 +253,25 @@ mod tests {
         assert_eq!(token.claims.issuer_shard_pid, proof.cert.shard_pid);
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 180);
+        assert_eq!(token.claims.ext, None);
         assert_eq!(token.proof, proof);
         assert_eq!(token.shard_sig, vec![20, 21, 22]);
         assert_eq!(
             observed_hash,
             Some(shard_token_hash(&token.claims).unwrap())
         );
+    }
+
+    #[test]
+    fn mint_delegated_token_signs_ext_inside_claims() {
+        let proof = proof();
+        let mut input = input(&proof);
+        input.ext = Some(b"opaque-app-context".to_vec());
+
+        let token = mint_delegated_token(input, |hash| Ok(hash.to_vec())).unwrap();
+
+        assert_eq!(token.claims.ext, Some(b"opaque-app-context".to_vec()));
+        assert_eq!(token.shard_sig, shard_token_hash(&token.claims).unwrap());
     }
 
     #[test]
@@ -342,6 +358,60 @@ mod tests {
                     "hash mismatch".to_string(),
                 )
             )
+        );
+    }
+
+    #[test]
+    fn mutating_signed_ext_fails_verifier_signature() {
+        let proof = proof();
+        let role = CanisterRole::new("project_instance");
+        let mut input = input(&proof);
+        input.ext = Some(b"left".to_vec());
+        let mut token = mint_delegated_token(input, |hash| Ok(hash.to_vec())).unwrap();
+        token.claims.ext = Some(b"right".to_vec());
+
+        assert_eq!(
+            verify_delegated_token(
+                VerifyDelegatedTokenInput {
+                    token: &token,
+                    local_role: Some(&role),
+                    local_project: Some("test"),
+                    ttl_limits: crate::ops::auth::delegated::cert_rules::DelegatedAuthTtlLimits {
+                        max_cert_ttl_ns: 600,
+                        max_token_ttl_ns: 120,
+                    },
+                    required_scopes: &[],
+                    now_ns: 130,
+                },
+                |_, _, _| Ok(()),
+                verify_hash_signature,
+            ),
+            Err(
+                crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::ShardSignatureInvalid(
+                    "hash mismatch".to_string(),
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn mint_delegated_token_rejects_oversized_ext() {
+        let proof = proof();
+        let mut input = input(&proof);
+        input.ext = Some(vec![
+            1;
+            crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES
+                + 1
+        ]);
+
+        assert_eq!(
+            mint_delegated_token(input, |_| Ok(vec![])),
+            Err(MintDelegatedTokenError::Canonical(
+                CanonicalAuthError::TokenExtTooLarge {
+                    len: crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES + 1,
+                    max: crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES,
+                }
+            ))
         );
     }
 

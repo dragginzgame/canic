@@ -156,6 +156,7 @@ mod tests {
                     scopes: vec!["read".to_string()],
                 }],
                 nonce: [5; 16],
+                ext: None,
             },
             proof: DelegationProof {
                 cert,

@@ -246,6 +246,7 @@ mod tests {
                 aud: DelegationAudience::Project("test".to_string()),
                 grants: vec![grant("project_instance", &scopes)],
                 nonce: [5; 16],
+                ext: None,
             },
             proof: DelegationProof {
                 cert: DelegationCert {

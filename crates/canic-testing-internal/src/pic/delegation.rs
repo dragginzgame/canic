@@ -47,6 +47,7 @@ pub fn issue_delegated_token(
         grants,
         ttl_ns: token_ttl_ns,
         nonce: [0; 16],
+        ext: None,
     };
     let issued: Result<DelegatedToken, Error> =
         pic.update_call_or_panic(shard_pid, "user_shard_issue_token", (request,));

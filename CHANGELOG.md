@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.7` adds opaque issuer-signed delegated-token `ext` bytes to the
+  current token claims and request shape, with canonical hash coverage and a
+  bounded payload size.
+
 - `0.65.6` adds a bounded positive delegated-token verifier cache that binds
   the exact proof, claims, current token signature, and caller while still
   rerunning endpoint-local authorization checks after cache hits.

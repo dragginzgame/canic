@@ -91,6 +91,7 @@ pub struct DelegatedTokenClaims {
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
+    pub ext: Option<Vec<u8>>,
 }
 
 pub struct DelegatedToken {
@@ -121,6 +122,10 @@ shard_key_hash =
 Grant vectors must be strictly sorted by role and duplicate-free. Scope vectors
 inside each grant must be strictly sorted and duplicate-free. Verifiers reject
 noncanonical payloads instead of normalizing them.
+
+`DelegatedTokenClaims.ext` is optional opaque application data. It is included
+in canonical claims bytes, bounded to 4096 bytes, and interpreted only by
+application endpoints after core delegated-token verification succeeds.
 
 ## Root Canister Signature
 

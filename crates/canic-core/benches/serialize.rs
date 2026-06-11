@@ -112,6 +112,7 @@ fn sample_delegated_token() -> DelegatedToken {
             grant("user_shard", &["session"]),
         ],
         nonce: [7; 16],
+        ext: Some(b"user_id=42;session=primary".to_vec()),
     };
 
     DelegatedToken {

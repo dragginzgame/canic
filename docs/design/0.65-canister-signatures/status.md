@@ -92,6 +92,9 @@ checklist below tracks their removal or conversion.
 - [ ] Replace the positive verifier cache signature component with
       `issuer_proof_hash` when `IssuerProof::IcCanisterSignatureV1` replaces
       `shard_sig`.
+- [x] Add opaque issuer-signed `ext: Option<Vec<u8>>` to delegated-token issue
+      requests and claims, include it in canonical claims hashing, and bound it
+      to 4096 bytes.
 - [x] Add pending-proof metadata and enforce `retrieval_expires_at_ns`.
 - [x] Add overflow-safe time checks.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.

@@ -331,6 +331,7 @@ mod tests {
                 grant("user_shard", &["session"]),
             ],
             nonce: [7; 16],
+            ext: None,
         };
         let shard_sig = shard_token_hash(&claims).unwrap().to_vec();
 

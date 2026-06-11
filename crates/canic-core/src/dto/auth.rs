@@ -105,6 +105,8 @@ pub struct DelegatedTokenClaims {
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
+    #[serde(default)]
+    pub ext: Option<Vec<u8>>,
 }
 
 //
@@ -176,6 +178,8 @@ pub struct DelegatedTokenIssueRequest {
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
     pub nonce: [u8; 16],
+    #[serde(default)]
+    pub ext: Option<Vec<u8>>,
 }
 
 //

@@ -12,6 +12,7 @@ use thiserror::Error;
 const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
 const SHARD_KEY_HASH_DOMAIN: &[u8] = b"canic-shard-key-v1";
 const SHARD_TOKEN_SIGNATURE_DOMAIN: &[u8] = b"canic-shard-delegated-token";
+pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,6 +42,8 @@ pub enum CanonicalAuthError {
     EmptyProject,
     #[error("delegated auth project audience contains invalid characters: {project}")]
     InvalidProject { project: String },
+    #[error("delegated auth token ext is {len} bytes and exceeds max {max} bytes")]
+    TokenExtTooLarge { len: usize, max: usize },
 }
 
 pub fn cert_hash(cert: &DelegationCert) -> Result<[u8; 32], CanonicalAuthError> {
@@ -136,6 +139,7 @@ pub fn claims_bytes(claims: &DelegatedTokenClaims) -> Result<Vec<u8>, CanonicalA
     encode_audience(&mut out, &claims.aud)?;
     encode_role_grants(&mut out, &claims.grants)?;
     out.extend_from_slice(&claims.nonce);
+    encode_token_ext(&mut out, claims.ext.as_deref())?;
 
     Ok(out)
 }
@@ -223,6 +227,23 @@ fn encode_root_proof(out: &mut Vec<u8>, proof: &RootProof) {
             encode_bytes(out, &proof.public_key_der);
         }
     }
+}
+
+fn encode_token_ext(out: &mut Vec<u8>, ext: Option<&[u8]>) -> Result<(), CanonicalAuthError> {
+    match ext {
+        Some(ext) => {
+            if ext.len() > MAX_TOKEN_EXT_BYTES {
+                return Err(CanonicalAuthError::TokenExtTooLarge {
+                    len: ext.len(),
+                    max: MAX_TOKEN_EXT_BYTES,
+                });
+            }
+            out.push(1);
+            encode_bytes(out, ext);
+        }
+        None => out.push(0),
+    }
+    Ok(())
 }
 
 fn encode_role(out: &mut Vec<u8>, role: &CanisterRole) -> Result<(), CanonicalAuthError> {
@@ -404,6 +425,7 @@ mod tests {
                 scopes: vec!["Read".to_string()],
             }],
             nonce: [14; 16],
+            ext: None,
         };
 
         assert_eq!(
@@ -425,6 +447,7 @@ mod tests {
             aud: DelegationAudience::Project("test".to_string()),
             grants: vec![grant("project_instance", &["write", "read"])],
             nonce: [14; 16],
+            ext: None,
         };
 
         assert_eq!(
@@ -439,6 +462,50 @@ mod tests {
         let cert = sample_cert();
 
         assert_ne!(role_hash(&role).unwrap(), cert_hash(&cert).unwrap());
+    }
+
+    #[test]
+    fn claims_hash_binds_ext_bytes() {
+        let mut left = DelegatedTokenClaims {
+            subject: p(10),
+            issuer_shard_pid: p(11),
+            cert_hash: [12; 32],
+            issued_at_ns: 100,
+            expires_at_ns: 120,
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["read"])],
+            nonce: [14; 16],
+            ext: Some(b"user=1".to_vec()),
+        };
+        let mut right = left.clone();
+        right.ext = Some(b"user=2".to_vec());
+
+        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
+        left.ext = None;
+        assert_ne!(claims_hash(&left).unwrap(), claims_hash(&right).unwrap());
+    }
+
+    #[test]
+    fn claims_hash_rejects_oversized_ext() {
+        let claims = DelegatedTokenClaims {
+            subject: p(10),
+            issuer_shard_pid: p(11),
+            cert_hash: [12; 32],
+            issued_at_ns: 100,
+            expires_at_ns: 120,
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant("project_instance", &["read"])],
+            nonce: [14; 16],
+            ext: Some(vec![1; MAX_TOKEN_EXT_BYTES + 1]),
+        };
+
+        assert_eq!(
+            claims_hash(&claims),
+            Err(CanonicalAuthError::TokenExtTooLarge {
+                len: MAX_TOKEN_EXT_BYTES + 1,
+                max: MAX_TOKEN_EXT_BYTES,
+            })
+        );
     }
 
     #[test]

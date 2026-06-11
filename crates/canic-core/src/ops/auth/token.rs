@@ -60,6 +60,7 @@ impl AuthOps {
             grants: input.grants,
             ttl_ns: input.ttl_ns,
             nonce: input.nonce,
+            ext: input.ext,
             now_ns: IcOps::now_nanos(),
         })
         .map_err(map_mint_delegated_token_error)?;

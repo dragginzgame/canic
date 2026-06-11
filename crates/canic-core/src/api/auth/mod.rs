@@ -295,6 +295,7 @@ impl AuthApi {
             grants: request.grants,
             ttl_ns: request.ttl_ns,
             nonce: request.nonce,
+            ext: request.ext,
         }) {
             Ok(prepared) => prepared,
             Err(err) => {
@@ -1250,6 +1251,7 @@ mod tests {
             grants: vec![grant("project_instance", &["canic.verify"])],
             ttl_ns: 30_000_000_000,
             nonce: [9; 16],
+            ext: None,
         }
     }
 

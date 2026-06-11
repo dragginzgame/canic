@@ -145,6 +145,7 @@ pub struct DelegatedTokenClaims {
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
+    pub ext: Option<Vec<u8>>,
 }
 
 pub struct DelegatedToken {
@@ -167,6 +168,8 @@ may use seconds; protocol DTOs and canonical encodings use `_ns` fields.
   root and certified by the root proof.
 - `claims.subject`, `claims.aud`, `claims.grants`, token time fields, and
   `nonce`: set by shard and signed by shard.
+- `claims.ext`: opaque application data set by the issuer, signed as part of
+  `DelegatedTokenClaims`, and interpreted only by application endpoints.
 - `claims.cert_hash`: hash of canonical `DelegationCert`; set by shard and
   verified by every verifier.
 - `claims.issuer_shard_pid`: must equal `cert.shard_pid`.
@@ -208,6 +211,7 @@ Strict canonical rules:
 - scopes inside each grant must already be strictly sorted and duplicate-free
 - role and scope strings must be non-empty ASCII strings using only `[a-z0-9_:-]`
 - project audience strings must be non-empty ASCII strings using only `[a-z0-9_:-.]`
+- token `ext` payloads are optional opaque bytes and must not exceed 4096 bytes
 - no verifier-role or verifier-principal audience exists
 - verifier rejects noncanonical vectors rather than normalizing them
 
