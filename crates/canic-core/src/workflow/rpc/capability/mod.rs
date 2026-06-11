@@ -3,9 +3,8 @@ use crate::{
     cdk::types::Principal,
     dto::{
         capability::{
-            CapabilityProof, CapabilityProofBlob, CapabilityRequestMetadata, CapabilityService,
-            DelegatedGrantProof, NonrootCyclesCapabilityEnvelopeV1,
-            NonrootCyclesCapabilityResponseV1, PROOF_VERSION_V1,
+            CapabilityProof, CapabilityRequestMetadata, CapabilityService,
+            NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
         },
         error::Error,
         rpc::{Request, RequestFamily, RootRequestMetadata},
@@ -16,7 +15,6 @@ use crate::{
 };
 
 mod envelope;
-mod grant;
 mod hash;
 mod nonroot;
 mod proof;
@@ -28,10 +26,10 @@ mod verifier;
 mod tests;
 
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
-const DELEGATED_GRANT_SIGNING_DOMAIN_V1: &[u8] = b"CANIC_DELEGATED_GRANT_V1";
 const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
-const DELEGATED_GRANT_KEY_ID_V1: u32 = 1;
+const ROLE_ATTESTATION_CAPABILITY_PROOF_DISABLED: &str = "role-attestation capability proofs are disabled in 0.65; use structural capability proofs or delegated-token endpoints";
+const DELEGATED_GRANT_CAPABILITY_PROOF_DISABLED: &str = "standalone delegated-grant capability proofs are disabled in 0.65; use delegated-token endpoints";
 
 /// RootCapabilityProofMode
 ///
@@ -76,27 +74,20 @@ impl RootCapabilityProofMode {
 ///
 /// Validated proof view used after envelope checks and before verification.
 #[derive(Clone, Copy, Debug)]
-pub(super) enum RootCapabilityProof<'a> {
+pub(super) enum RootCapabilityProof {
     Structural,
-    DelegatedGrant(&'a CapabilityProofBlob),
 }
 
-impl<'a> RootCapabilityProof<'a> {
+impl RootCapabilityProof {
     /// Validate the proof wire header and expose the typed proof view.
-    fn validate(proof: &'a CapabilityProof) -> Result<Self, Error> {
+    fn validate(proof: &CapabilityProof) -> Result<Self, Error> {
         match proof {
             CapabilityProof::Structural => Ok(Self::Structural),
-            CapabilityProof::RoleAttestation(_) => Err(Error::forbidden(
-                "role-attestation capability proofs are disabled in 0.65; use structural capability proofs or delegated-token endpoints",
-            )),
-            CapabilityProof::DelegatedGrant(proof) => {
-                if proof.proof_version != PROOF_VERSION_V1 {
-                    return Err(Error::invalid(format!(
-                        "unsupported delegated grant proof_version: {}",
-                        proof.proof_version
-                    )));
-                }
-                Ok(Self::DelegatedGrant(proof))
+            CapabilityProof::RoleAttestation(_) => {
+                Err(Error::forbidden(ROLE_ATTESTATION_CAPABILITY_PROOF_DISABLED))
+            }
+            CapabilityProof::DelegatedGrant(_) => {
+                Err(Error::forbidden(DELEGATED_GRANT_CAPABILITY_PROOF_DISABLED))
             }
         }
     }
@@ -105,7 +96,6 @@ impl<'a> RootCapabilityProof<'a> {
     const fn mode(self) -> RootCapabilityProofMode {
         match self {
             Self::Structural => RootCapabilityProofMode::Structural,
-            Self::DelegatedGrant(_) => RootCapabilityProofMode::DelegatedGrant,
         }
     }
 }
@@ -130,7 +120,7 @@ fn validate_root_capability_envelope(
     service: CapabilityService,
     capability_version: u16,
     proof: &CapabilityProof,
-) -> Result<RootCapabilityProof<'_>, Error> {
+) -> Result<RootCapabilityProof, Error> {
     envelope::validate_root_capability_envelope(service, capability_version, proof)
 }
 
@@ -138,7 +128,7 @@ fn validate_nonroot_cycles_envelope(
     service: CapabilityService,
     capability_version: u16,
     proof: &CapabilityProof,
-) -> Result<RootCapabilityProof<'_>, Error> {
+) -> Result<RootCapabilityProof, Error> {
     let proof = envelope::validate_root_capability_envelope(service, capability_version, proof)?;
 
     if proof.mode() != RootCapabilityProofMode::Structural {
@@ -153,7 +143,7 @@ fn validate_nonroot_cycles_envelope(
 async fn verify_root_capability_proof(
     capability: &Request,
     capability_version: u16,
-    proof: RootCapabilityProof<'_>,
+    proof: RootCapabilityProof,
 ) -> Result<(), Error> {
     verifier::verify_root_capability_proof(capability, capability_version, proof)
         .await
@@ -192,46 +182,8 @@ const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetri
     }
 }
 
-fn verify_delegated_grant_hash_binding(proof: &DelegatedGrantProof) -> Result<(), Error> {
-    grant::verify_delegated_grant_hash_binding(proof)
-}
-
-fn verify_root_delegated_grant_proof(
-    capability: &Request,
-    proof: &DelegatedGrantProof,
-    caller: Principal,
-    target_canister: Principal,
-    now_ns: u64,
-) -> Result<(), Error> {
-    grant::verify_root_delegated_grant_proof(capability, proof, caller, target_canister, now_ns)
-}
-
-#[cfg(test)]
-fn verify_root_delegated_grant_claims(
-    capability: &Request,
-    proof: &DelegatedGrantProof,
-    caller: Principal,
-    target_canister: Principal,
-    now_ns: u64,
-) -> Result<(), Error> {
-    grant::verify_root_delegated_grant_claims(capability, proof, caller, target_canister, now_ns)
-}
-
-#[cfg(test)]
-fn verify_root_delegated_grant_signature(
-    grant: &crate::dto::capability::DelegatedGrant,
-    signature: &[u8],
-) -> Result<(), Error> {
-    grant::verify_root_delegated_grant_signature(grant, signature)
-}
-
 const fn root_capability_family(capability: &Request) -> &'static str {
-    grant::root_capability_family(capability)
-}
-
-#[cfg(test)]
-fn delegated_grant_hash(grant: &crate::dto::capability::DelegatedGrant) -> Result<[u8; 32], Error> {
-    grant::delegated_grant_hash(grant)
+    capability.family().label()
 }
 
 pub fn root_capability_hash(

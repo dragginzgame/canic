@@ -124,33 +124,17 @@ fn capability_endpoint_policy_and_structural_paths() {
 
     test_progress(
         "capability_endpoint_policy_and_structural_paths",
-        "delegated grant scope rejection",
+        "delegated grant disabled rejection",
     );
-    // Delegated grants must name the correct capability family.
     let capability_hash = root_capability_hash(root_id, &cycles_request);
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: cycles_request,
-        proof: encode_delegated_grant_capability_proof(DelegatedGrantProof {
+        proof: CapabilityProof::DelegatedGrant(CapabilityProofBlob {
             proof_version: PROOF_VERSION_V1,
             capability_hash,
-            grant: DelegatedGrant {
-                issuer: root_id,
-                subject: root_id,
-                audience: vec![root_id],
-                scope: DelegatedGrantScope {
-                    service: CapabilityService::Root,
-                    capability_family: "root".to_string(),
-                },
-                capability_hash,
-                quota: 1,
-                issued_at_ns,
-                expires_at_ns: issued_at_ns.saturating_add(TEST_ROLE_ATTESTATION_TTL_NS),
-                epoch: 0,
-            },
-            grant_sig: vec![1, 2, 3],
-            key_id: 1,
+            payload: Vec::new(),
         }),
         metadata: capability_metadata(issued_at_ns, 8, 2, TEST_ROLE_ATTESTATION_TTL_NS),
     };
@@ -160,11 +144,11 @@ fn capability_endpoint_policy_and_structural_paths() {
         "canic_response_capability_v1",
         (envelope,),
     );
-    let err = response.expect_err("delegated grant scope mismatch must fail closed");
+    let err = response.expect_err("delegated-grant capability proof must fail closed");
     assert_eq!(err.code, ErrorCode::Forbidden);
     assert!(
-        err.message.contains("capability_family"),
-        "expected delegated-grant scope rejection, got: {err:?}"
+        err.message.contains("disabled in 0.65"),
+        "expected delegated-grant hard-cut rejection, got: {err:?}"
     );
     test_progress("capability_endpoint_policy_and_structural_paths", "done");
 }

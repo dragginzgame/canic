@@ -1,7 +1,6 @@
 use crate::{
     cdk::types::Principal,
     dto::{
-        capability::{CapabilityProof, CapabilityProofBlob, DelegatedGrantProof},
         error::Error,
         rpc::{CreateCanisterParent, Request},
     },
@@ -10,8 +9,6 @@ use crate::{
         storage::registry::subnet::SubnetRegistryOps,
     },
 };
-use candid::{decode_one, encode_one};
-use std::convert::TryFrom;
 
 /// verify_root_structural_proof
 ///
@@ -90,6 +87,7 @@ pub(super) fn verify_nonroot_structural_cycles_proof() -> Result<(), Error> {
 /// verify_capability_hash_binding
 ///
 /// Ensure the proof hash matches canonical capability payload bytes.
+#[cfg(test)]
 pub(super) fn verify_capability_hash_binding(
     target_canister: Principal,
     capability_version: u16,
@@ -104,48 +102,4 @@ pub(super) fn verify_capability_hash_binding(
     }
 
     Ok(())
-}
-
-// --- Wire Encoding ------------------------------------------------------
-
-// Encode the full delegated-grant proof into the compact shared wire blob.
-pub(super) fn encode_delegated_grant_blob(
-    proof: &DelegatedGrantProof,
-) -> Result<CapabilityProofBlob, Error> {
-    Ok(CapabilityProofBlob {
-        proof_version: proof.proof_version,
-        capability_hash: proof.capability_hash,
-        payload: encode_one(proof).map_err(|err| {
-            Error::internal(format!("failed to encode delegated grant proof: {err}"))
-        })?,
-    })
-}
-
-// Decode a delegated-grant wire blob back into its concrete proof payload.
-pub(super) fn decode_delegated_grant_blob(
-    blob: &CapabilityProofBlob,
-) -> Result<DelegatedGrantProof, Error> {
-    let proof: DelegatedGrantProof = decode_one(&blob.payload)
-        .map_err(|err| Error::invalid(format!("failed to decode delegated grant proof: {err}")))?;
-
-    if proof.proof_version != blob.proof_version {
-        return Err(Error::invalid(
-            "delegated grant proof_version does not match wire header",
-        ));
-    }
-    if proof.capability_hash != blob.capability_hash {
-        return Err(Error::invalid(
-            "delegated grant capability_hash does not match wire header",
-        ));
-    }
-
-    Ok(proof)
-}
-
-impl TryFrom<DelegatedGrantProof> for CapabilityProof {
-    type Error = Error;
-
-    fn try_from(value: DelegatedGrantProof) -> Result<Self, Self::Error> {
-        Ok(Self::DelegatedGrant(encode_delegated_grant_blob(&value)?))
-    }
 }

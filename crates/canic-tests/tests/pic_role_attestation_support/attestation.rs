@@ -4,12 +4,6 @@ pub const NS_PER_SEC: u64 = 1_000_000_000;
 pub const TEST_ROLE_ATTESTATION_TTL_NS: u64 = 60 * NS_PER_SEC;
 pub const TEST_SHORT_ROLE_ATTESTATION_TTL_NS: u64 = NS_PER_SEC;
 
-pub fn encode_delegated_grant_capability_proof(proof: DelegatedGrantProof) -> CapabilityProof {
-    proof
-        .try_into()
-        .expect("delegated grant proof should encode")
-}
-
 // Issue one self-attestation from the root test hook for the requested audience.
 pub fn issue_self_attestation(
     pic: &Pic,

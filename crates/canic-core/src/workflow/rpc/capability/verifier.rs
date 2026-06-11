@@ -1,4 +1,4 @@
-use crate::{cdk::types::Principal, dto::error::Error, dto::rpc::Request};
+use crate::{dto::error::Error, dto::rpc::Request};
 use async_trait::async_trait;
 
 use super::RootCapabilityProof;
@@ -13,10 +13,6 @@ pub(super) struct VerifiedCapability;
 /// Immutable verification context shared by all proof verifiers.
 pub(super) struct VerificationInput<'a> {
     pub(super) capability: &'a Request,
-    pub(super) capability_version: u16,
-    pub(super) caller: Principal,
-    pub(super) target_canister: Principal,
-    pub(super) now_ns: u64,
 }
 
 /// CapabilityProofVerifier
@@ -42,58 +38,17 @@ impl CapabilityProofVerifier for StructuralVerifier {
     }
 }
 
-/// DelegatedGrantVerifier
-///
-/// Verifies grant hash binding, claims, and signature for delegated grants.
-struct DelegatedGrantVerifier<'a> {
-    blob: &'a crate::dto::capability::CapabilityProofBlob,
-}
-
-#[async_trait]
-impl CapabilityProofVerifier for DelegatedGrantVerifier<'_> {
-    /// Keep existing delegated-grant verification ordering unchanged.
-    async fn verify(&self, input: &VerificationInput<'_>) -> Result<VerifiedCapability, Error> {
-        let proof = super::proof::decode_delegated_grant_blob(self.blob)?;
-
-        super::proof::verify_capability_hash_binding(
-            input.target_canister,
-            input.capability_version,
-            input.capability,
-            proof.capability_hash,
-        )?;
-        super::verify_delegated_grant_hash_binding(&proof)?;
-        super::verify_root_delegated_grant_proof(
-            input.capability,
-            &proof,
-            input.caller,
-            input.target_canister,
-            input.now_ns,
-        )?;
-
-        Ok(VerifiedCapability)
-    }
-}
-
 /// verify_root_capability_proof
 ///
 /// Route proof verification through the mode-specific verifier implementation.
 pub(super) async fn verify_root_capability_proof(
     capability: &Request,
-    capability_version: u16,
-    proof: RootCapabilityProof<'_>,
+    _capability_version: u16,
+    proof: RootCapabilityProof,
 ) -> Result<VerifiedCapability, Error> {
-    let input = VerificationInput {
-        capability,
-        capability_version,
-        caller: crate::ops::ic::IcOps::msg_caller(),
-        target_canister: crate::ops::ic::IcOps::canister_self(),
-        now_ns: crate::ops::ic::IcOps::now_nanos(),
-    };
+    let input = VerificationInput { capability };
 
     match proof {
         RootCapabilityProof::Structural => StructuralVerifier.verify(&input).await,
-        RootCapabilityProof::DelegatedGrant(blob) => {
-            DelegatedGrantVerifier { blob }.verify(&input).await
-        }
     }
 }

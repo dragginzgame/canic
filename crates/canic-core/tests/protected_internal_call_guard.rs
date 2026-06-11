@@ -438,6 +438,7 @@ fn removed_protected_internal_client_surface_stays_removed() {
 
 #[test]
 fn removed_normal_auth_one_shot_wrappers_stay_removed() {
+    let workspace = workspace_root();
     let auth_api = read_workspace_file("crates/canic-core/src/api/auth/mod.rs");
     let rpc_ops = read_workspace_file("crates/canic-core/src/ops/rpc/mod.rs");
     let capability_mod =
@@ -446,6 +447,7 @@ fn removed_normal_auth_one_shot_wrappers_stay_removed() {
         read_workspace_file("crates/canic-core/src/workflow/rpc/capability/proof.rs");
     let capability_verifier =
         read_workspace_file("crates/canic-core/src/workflow/rpc/capability/verifier.rs");
+    let capability_grant = workspace.join("crates/canic-core/src/workflow/rpc/capability/grant.rs");
     let delegation_root = read_workspace_file("canisters/test/delegation_root_stub/src/lib.rs");
     let sharding_root = read_workspace_file("canisters/test/sharding_root_stub/src/lib.rs");
 
@@ -477,6 +479,18 @@ fn removed_normal_auth_one_shot_wrappers_stay_removed() {
             && !capability_verifier.contains("RoleAttestationVerifier")
             && !capability_verifier.contains("RootCapabilityProof::RoleAttestation"),
         "inbound root-capability role-attestation proof verification must stay removed after the 0.65 hard cut"
+    );
+    assert!(
+        !capability_grant.exists()
+            && !capability_mod.contains("DelegatedGrant(&")
+            && capability_mod
+                .contains("standalone delegated-grant capability proofs are disabled in 0.65")
+            && !capability_proof.contains("encode_delegated_grant_blob")
+            && !capability_proof.contains("decode_delegated_grant_blob")
+            && !capability_proof.contains("impl TryFrom<DelegatedGrantProof>")
+            && !capability_verifier.contains("DelegatedGrantVerifier")
+            && !capability_verifier.contains("RootCapabilityProof::DelegatedGrant"),
+        "standalone delegated-grant capability proof verification must stay removed after the 0.65 hard cut"
     );
     assert!(
         !delegation_root.contains("fn root_issue_self_attestation(")

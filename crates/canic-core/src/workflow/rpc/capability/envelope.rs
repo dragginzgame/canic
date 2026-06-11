@@ -9,7 +9,7 @@ pub(super) fn validate_root_capability_envelope(
     service: CapabilityService,
     capability_version: u16,
     proof: &CapabilityProof,
-) -> Result<RootCapabilityProof<'_>, Error> {
+) -> Result<RootCapabilityProof, Error> {
     if service != CapabilityService::Root {
         return Err(Error::invalid(
             "capability envelope service must be Root for root dispatch",

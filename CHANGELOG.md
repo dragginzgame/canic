@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.5` removes the standalone delegated-grant capability proof success path:
+  legacy `CapabilityProof::DelegatedGrant` envelopes now fail before payload
+  decode, hash checks, secp256k1 verification, replay, or execution.
+
 - `0.65.4` tightens the closeout target to zero-management-ECDSA normal auth,
   records the remaining issuer/role-attestation/delegated-grant blockers, and
   rejects inbound root-capability role-attestation proof envelopes as retired

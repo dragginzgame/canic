@@ -4,8 +4,7 @@ pub use canic_core::dto::{
     auth::{AttestationKeyStatus, RoleAttestationRequest, SignedRoleAttestation},
     capability::{
         CAPABILITY_VERSION_V1, CapabilityProof, CapabilityProofBlob, CapabilityRequestMetadata,
-        CapabilityService, DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope,
-        PROOF_VERSION_V1, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+        CapabilityService, PROOF_VERSION_V1, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
     metrics::{MetricEntry, MetricValue, MetricsKind},
@@ -23,8 +22,7 @@ mod metrics;
 
 pub use attestation::{
     NS_PER_SEC, TEST_ROLE_ATTESTATION_TTL_NS, TEST_SHORT_ROLE_ATTESTATION_TTL_NS,
-    capability_metadata, encode_delegated_grant_capability_proof, issue_self_attestation,
-    root_capability_hash,
+    capability_metadata, issue_self_attestation, root_capability_hash,
 };
 pub use calls::test_progress;
 pub use metrics::{metric_count_for_labels, query_metric_entries};

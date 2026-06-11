@@ -23,9 +23,10 @@ threshold-ECDSA-backed.
 plus local verification.
 
 Delegated-grant capability proofs are no longer an acceptable retained normal
-auth ECDSA surface. The 0.65 decision is to remove or hard-fail them from
-normal auth rather than adding a new delegated-grant canister-signature proof
-family in this release.
+auth ECDSA surface. Standalone `CapabilityProof::DelegatedGrant` envelopes now
+hard-fail before payload decode, hash checks, signature verification, replay,
+or capability execution. Token grants remain `DelegatedRoleGrant` values inside
+delegation certs and delegated-token claims.
 
 ## Audit Status
 
@@ -36,9 +37,10 @@ sufficient for 0.65 closeout:
   instruct users to enable `auth-crypto`
 - no active code contains `DelegationProof.root_sig`,
   `EcdsaP256Sha256`, or `sign_prepared_delegation_proof`
-- residual `RootPublicKeyRecord` / `delegated_root_public_key` code is confined
-  to the delegated-grant capability path and stable state shape; it is not read
-  by delegated-token root proof verification
+- residual `RootPublicKeyRecord` / `delegated_root_public_key` code remains in
+  stable state and auth key publication helpers; it is not read by
+  delegated-token root proof verification or root capability delegated-grant
+  verification
 - the only active root `certified_data_set` call is the root
   canister-signature certified-data owner helper for the exact `"sig"` tree
   shape
@@ -136,7 +138,7 @@ checklist below tracks their removal or conversion.
 - [ ] Add local `SignedRoleAttestation` verification against configured root
       canister id plus raw IC root key, with no root or management-canister call
       on the protected endpoint hot path.
-- [ ] Hard-fail/remove delegated-grant capability proofs from normal auth.
+- [x] Hard-fail/remove delegated-grant capability proofs from normal auth.
 - [ ] Add zero-ECDSA normal-auth audit scan and tests proving no normal auth
       path reaches `sign_with_ecdsa`.
 - [ ] Add verifier-module CI gate proving verification code has no `.await`,
