@@ -45,20 +45,17 @@ then
     reject "delegated endpoint guard ordering changed"
 fi
 
-# Role-attestation verification may refresh key material only for unknown key
-# IDs. Broad refresh-on-any-failure can hide real verifier failures.
-if ! awk '
-    /AttestationUnknownKeyId/ && !unknown { unknown = NR }
-    /refresh\(\)/ && !refresh { refresh = NR }
-    /Err\(err\) => Err\(RoleAttestationVerifyFlowError::Initial\(err\)\)/ && !fallback { fallback = NR }
-    END {
-        if (!(unknown && refresh && fallback && unknown < refresh && refresh < fallback)) {
-            exit 1
-        }
-    }
-' crates/canic-core/src/api/auth/verify_flow.rs
+# Role-attestation verification uses embedded root canister-signature proofs.
+# It must not reintroduce verifier-local ECDSA key refresh or the retired
+# verify-flow wrapper.
+if [[ -e crates/canic-core/src/api/auth/verify_flow.rs ]]; then
+    reject "retired role-attestation verify_flow module detected"
+fi
+
+if rg -n "AttestationUnknownKeyId|RoleAttestationVerifyFlow|verify_keyed_proof_with_single_refresh|attestation_public_key|canic_attestation_key_set" \
+    crates/canic-core/src crates/canic/src canisters/test fleets/test --glob '*.rs'
 then
-    reject "role-attestation refresh path is no longer narrowed to unknown key IDs"
+    reject "role-attestation key refresh or key-cache surface detected"
 fi
 
 exit "$fail"

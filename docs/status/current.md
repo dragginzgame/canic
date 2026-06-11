@@ -379,9 +379,13 @@ inspect only the files needed for the current task.
   key cache/storage, delegated-root-public-key subnet state, shard secp256k1
   verification features, and the threshold-ECDSA public-key auth feature. Test
   canisters now model service calls through delegated-token endpoints, while
-  active role attestations remain on root canister-signature prepare/get.
+  active role attestations remain on root canister-signature prepare/get. The
+  auth trust-chain CI guard now checks that the retired key-refresh verifier
+  flow stays absent instead of reading the deleted `verify_flow.rs` module.
   Current validation:
   ```text
+  bash scripts/ci/run-auth-trust-chain-guards.sh
+  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local bash scripts/ci/run-workspace-tests.sh fast
   cargo test --locked -p canic-core api::auth --lib -- --nocapture
   cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
   cargo test --locked -p canic-core replay_policy --lib -- --nocapture
