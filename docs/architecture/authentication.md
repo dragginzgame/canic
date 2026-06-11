@@ -463,6 +463,8 @@ Current issuance rule:
 
 - `canic_request_role_attestation` hard-fails in normal 0.65 auth
 - `canic_request_internal_invocation_proof` hard-fails in normal 0.65 auth
+- root capability endpoints reject role-attestation capability proofs; the DTO
+  remains only as wire-decodable rejected input
 - delegated tokens are the supported reusable endpoint-auth path
 - do not retag root-provided key bytes with verifier-local config
 - enforce subject, role, audience, subnet, time window, and minimum accepted epoch

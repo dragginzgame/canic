@@ -12,24 +12,28 @@ present.
 
 ## Unreleased
 
-- Removes dead normal-auth `AuthApi` one-shot role-attestation and
-  internal-invocation proof wrappers plus stale test-stub one-shot attestation
-  endpoints after the `0.65` hard cut. Outbound root-capability RPC now rejects
-  non-structural proof paths locally instead of fetching or caching fresh root
-  response attestations, while root rejection endpoints remain as the explicit
-  compatibility-failure surface.
-
 ## [0.65.x] - 2026-06-10 - Canister-signature delegated auth
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
+
+- `0.65.4` tightens the closeout target to zero-management-ECDSA normal auth,
+  records the remaining issuer/role-attestation/delegated-grant blockers, and
+  rejects inbound root-capability role-attestation proof envelopes as retired
+  ECDSA input.
+
+- `0.65.3` removes remaining normal-auth one-shot role-attestation wrappers,
+  stale test-stub attestation endpoints, and the outbound root-capability
+  role-attestation fetch/cache fallback.
 
 - `0.65.2` removes obsolete one-shot root ECDSA client routing and the dead
   outbound protected-internal fresh-proof client/cache surface, while retaining
   root rejection endpoints and protected descriptors as hard-cut metadata.
 
-- `0.65.1` splits threshold-ECDSA public-key fetch support from threshold-ECDSA
-  signing so root delegated-token proof issuers no longer need the signing
-  feature while shard token issuers still do.
+- `0.65.1` split threshold-ECDSA public-key fetch support from
+  threshold-ECDSA signing during the earlier root-proof-only transition. The
+  0.65 closeout target supersedes that state: normal auth removes
+  threshold-ECDSA signing/public-key features and issuer token proofs use IC
+  canister signatures.
 
 - `0.65.0` hard-cuts delegated-token root proofs from root threshold ECDSA to
   IC canister signatures with an update/query prepare-get flow, reusable

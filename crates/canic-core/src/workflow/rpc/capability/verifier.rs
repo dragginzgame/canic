@@ -42,36 +42,6 @@ impl CapabilityProofVerifier for StructuralVerifier {
     }
 }
 
-/// RoleAttestationVerifier
-///
-/// Verifies attestation proof with capability hash binding.
-struct RoleAttestationVerifier<'a> {
-    blob: &'a crate::dto::capability::CapabilityProofBlob,
-}
-
-#[async_trait]
-impl CapabilityProofVerifier for RoleAttestationVerifier<'_> {
-    /// Verify hash binding first, then run delegated attestation verification.
-    async fn verify(&self, input: &VerificationInput<'_>) -> Result<VerifiedCapability, Error> {
-        let proof = super::proof::decode_role_attestation_blob(self.blob)?;
-
-        super::proof::verify_capability_hash_binding(
-            input.target_canister,
-            input.capability_version,
-            input.capability,
-            proof.capability_hash,
-        )?;
-
-        crate::workflow::runtime::auth::RuntimeAuthWorkflow::verify_role_attestation(
-            &proof.attestation,
-            0,
-        )
-        .await
-        .map_err(Error::from)?;
-        Ok(VerifiedCapability)
-    }
-}
-
 /// DelegatedGrantVerifier
 ///
 /// Verifies grant hash binding, claims, and signature for delegated grants.
@@ -122,9 +92,6 @@ pub(super) async fn verify_root_capability_proof(
 
     match proof {
         RootCapabilityProof::Structural => StructuralVerifier.verify(&input).await,
-        RootCapabilityProof::RoleAttestation(blob) => {
-            RoleAttestationVerifier { blob }.verify(&input).await
-        }
         RootCapabilityProof::DelegatedGrant(blob) => {
             DelegatedGrantVerifier { blob }.verify(&input).await
         }

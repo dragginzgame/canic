@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-10
+Last updated: 2026-06-11
 
 ## Purpose
 
@@ -95,7 +95,7 @@ inspect only the files needed for the current task.
   cargo clippy --locked -p canic-core --lib -- -D warnings
   git diff --check
   ```
-- Local `0.65.3` candidate continues the hard-cut cleanup by deleting the dead
+- `0.65.3` is pushed as the hard-cut cleanup that deleted the dead
   normal-auth `AuthApi::request_role_attestation` and
   `AuthApi::request_internal_invocation_proof` wrappers instead of retaining
   public methods that only return the hard-cut error. The root
@@ -109,7 +109,7 @@ inspect only the files needed for the current task.
   to reject role-attestation issuance. Outbound root-capability RPC now rejects
   non-structural proof paths locally instead of fetching or caching a fresh
   root response attestation from the removed one-shot issuer.
-  Current validation:
+  The root and detailed `0.65.3` changelogs are finalized. Validation:
   ```text
   cargo test --locked -p canic-core api::auth --lib -- --nocapture
   cargo test --locked -p canic-core ops::rpc --lib -- --nocapture
@@ -119,6 +119,66 @@ inspect only the files needed for the current task.
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo check --locked -p canic-core -p canic
   cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.4` changelog candidate is drafted as the zero-management-ECDSA
+  normal-auth closeout scope. The root and detailed 0.65 changelogs now record
+  the remaining issuer-proof, role-attestation, delegated-grant, feature,
+  Candid, and verifier-purity blockers. The design-line status plus
+  zero-ECDSA cleanup report mark closeout as not clean yet. The morning design
+  review moved positive delegated-token verifier cache into required 0.65
+  production scope, made issuer/role pending-proof retrieval caller-bound,
+  required normal token issuance to bind `subject == caller`, made subnet-wide
+  role attestations the default service-to-service proof, made delegated grants
+  remove/hard-fail scope for 0.65, and marked unused proof kinds as design-only
+  reservations. A follow-up simplification pass rewrote
+  `docs/design/0.65-canister-signatures/0.65-design.md` as a focused Canic
+  0.65 protocol doc: active success paths are root out-of-band
+  `DelegationProof` refresh, issuer `ActiveDelegationProof` install, issuer
+  prepare/get token issuance, local delegated-token verification with positive
+  cache, and minimal `SignedRoleAttestation` service-role proofs. The doc now
+  explicitly preserves `DelegatedRoleGrant` inside certs/tokens while excluding
+  standalone delegated-grant capability proofs from Canic 0.65. It also
+  preserves issuer-signed opaque application `ext: Option<Vec<u8>>` data inside
+  `DelegatedTokenClaims`, so token `ext` is included in the canonical claims
+  hash and issuer proof. A follow-up tightening pass made issuer proof
+  verification message construction symmetric with root proof verification,
+  defined the certified issuer proof binding hash, pinned the active `ext` byte
+  limit, added pending-ticket shapes for root/token/role prepare-get flows,
+  made role-attestation normal issuance caller-bound in the spec, added active
+  request/prepared/get DTO sketches for root, token, and role prepare-get APIs,
+  and made delegated-token audience ceilings explicit at issuer prepare and
+  verifier time. A certified-data clarification now pins
+  `ic_certification::hash_tree::labeled_hash` for the `"sig"` root, warns that
+  `hash_with_domain` is not the certified-data hash-tree helper, and states
+  that heap-only `SignatureMap` must be rebuilt/reset before post-upgrade
+  signature queries. Rollout is now specified as a two-phase operational state
+  machine: Phase A deploys capability and valid `ActiveDelegationProof` to every
+  issuer while old verification remains deployed; Phase B switches clients,
+  waits old TTL or accepts invalidation, upgrades verifiers to reject old proof
+  shapes, removes old ECDSA config/features, and runs zero-ECDSA/root-call-zero
+  checks. The delegated-token positive verifier cache value is now explicitly
+  limited to `valid_until_ns` and `verified_at_ns`; parsed proof material,
+  claims data, `ext`, and endpoint authorization decisions are not cached. The
+  doc now also pins startup network/root-key pairing checks, treats
+  `issuer_signer_generation` as `None` for basic active Canic 0.65 payloads, and
+  sets production TTL guidance of 15 minutes for user/session tokens and 5
+  minutes or less for signup/bootstrap tokens. The implemented code cleanup in
+  this candidate rejects inbound
+  root-capability
+  `CapabilityProof::RoleAttestation` envelopes before attestation signature
+  verification or replay dispatch; the `RoleAttestationProof` DTO remains as
+  wire-decodable rejected input rather than an accepted verifier path. Current
+  validation:
+  ```text
+  cargo test --locked -p canic-core workflow::rpc::capability --lib -- --nocapture
+  cargo test --locked -p canic-core --features auth-shard-secp256k1-verify verify_root_delegated_grant_signature --lib -- --nocapture
+  cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
+  cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint -- --nocapture
+  cargo fmt --all -- --check
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo check --locked -p canic-core -p canic
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```

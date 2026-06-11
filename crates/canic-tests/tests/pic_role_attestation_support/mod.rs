@@ -3,9 +3,9 @@ pub use canic_core::api::rpc::RpcApi;
 pub use canic_core::dto::{
     auth::{AttestationKeyStatus, RoleAttestationRequest, SignedRoleAttestation},
     capability::{
-        CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
-        DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope, PROOF_VERSION_V1,
-        RoleAttestationProof, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
+        CAPABILITY_VERSION_V1, CapabilityProof, CapabilityProofBlob, CapabilityRequestMetadata,
+        CapabilityService, DelegatedGrant, DelegatedGrantProof, DelegatedGrantScope,
+        PROOF_VERSION_V1, RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
     },
     error::{Error, ErrorCode},
     metrics::{MetricEntry, MetricValue, MetricsKind},
@@ -23,8 +23,7 @@ mod metrics;
 
 pub use attestation::{
     NS_PER_SEC, TEST_ROLE_ATTESTATION_TTL_NS, TEST_SHORT_ROLE_ATTESTATION_TTL_NS,
-    capability_metadata, cycles_role_attestation_envelope, encode_delegated_grant_capability_proof,
-    encode_role_attestation_capability_proof, issue_self_attestation, issue_self_attestation_as,
+    capability_metadata, encode_delegated_grant_capability_proof, issue_self_attestation,
     root_capability_hash,
 };
 pub use calls::test_progress;

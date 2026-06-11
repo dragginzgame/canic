@@ -1,16 +1,17 @@
 use super::*;
 use crate::{
     dto::{
-        auth::{RoleAttestation, RoleAttestationRequest, SignedRoleAttestation},
+        auth::RoleAttestationRequest,
         capability::{
-            CAPABILITY_VERSION_V1, CapabilityProof, DelegatedGrant, DelegatedGrantProof,
-            DelegatedGrantScope, PROOF_VERSION_V1, RoleAttestationProof,
+            CAPABILITY_VERSION_V1, CapabilityProof, CapabilityProofBlob, DelegatedGrant,
+            DelegatedGrantProof, DelegatedGrantScope, PROOF_VERSION_V1,
         },
         error::ErrorCode,
         rpc::{CyclesRequest, RootRequestMetadata},
     },
     ops::storage::state::subnet::SubnetStateOps,
 };
+#[cfg(feature = "auth-shard-secp256k1-verify")]
 use k256::ecdsa::{Signature, SigningKey, signature::hazmat::PrehashSigner};
 
 const NS_PER_SEC: u64 = 1_000_000_000;
@@ -179,22 +180,6 @@ fn with_root_request_metadata_overrides_existing_metadata() {
     }
 }
 
-fn sample_signed_attestation() -> SignedRoleAttestation {
-    SignedRoleAttestation {
-        payload: RoleAttestation {
-            subject: p(1),
-            role: crate::ids::CanisterRole::ROOT,
-            subnet_id: None,
-            audience: p(2),
-            issued_at_ns: 1_000 * NS_PER_SEC,
-            expires_at_ns: 2_000 * NS_PER_SEC,
-            epoch: 1,
-        },
-        signature: vec![],
-        key_id: 1,
-    }
-}
-
 fn sample_delegated_grant_proof(
     capability: &Request,
     caller: Principal,
@@ -226,13 +211,11 @@ fn sample_delegated_grant_proof(
 }
 
 fn role_attestation_capability_proof(proof_version: u16) -> CapabilityProof {
-    RoleAttestationProof {
+    CapabilityProof::RoleAttestation(CapabilityProofBlob {
         proof_version,
         capability_hash: [0u8; 32],
-        attestation: sample_signed_attestation(),
-    }
-    .try_into()
-    .expect("role attestation proof should encode")
+        payload: Vec::new(),
+    })
 }
 
 fn delegated_grant_capability_proof(proof: DelegatedGrantProof) -> CapabilityProof {
@@ -241,6 +224,7 @@ fn delegated_grant_capability_proof(proof: DelegatedGrantProof) -> CapabilityPro
         .expect("delegated grant proof should encode")
 }
 
+#[cfg(feature = "auth-shard-secp256k1-verify")]
 fn sign_delegated_grant(seed: u8, grant: &DelegatedGrant) -> (Vec<u8>, Vec<u8>) {
     let signing_key = SigningKey::from_bytes((&[seed; 32]).into()).expect("signing key");
     let signature: Signature = signing_key
@@ -252,20 +236,6 @@ fn sign_delegated_grant(seed: u8, grant: &DelegatedGrant) -> (Vec<u8>, Vec<u8>) 
         .as_bytes()
         .to_vec();
     (public_key, signature.to_bytes().to_vec())
-}
-
-#[test]
-fn role_attestation_blob_round_trips() {
-    let proof = RoleAttestationProof {
-        proof_version: PROOF_VERSION_V1,
-        capability_hash: [7u8; 32],
-        attestation: sample_signed_attestation(),
-    };
-
-    let blob = super::proof::encode_role_attestation_blob(&proof).expect("encode blob");
-    let decoded = super::proof::decode_role_attestation_blob(&blob).expect("decode blob");
-
-    assert_eq!(decoded, proof);
 }
 
 #[test]
@@ -352,14 +322,18 @@ fn validate_nonroot_cycles_envelope_returns_structural_mode() {
 }
 
 #[test]
-fn validate_root_capability_envelope_rejects_role_attestation_proof_version_mismatch() {
+fn validate_root_capability_envelope_rejects_role_attestation_proof_after_hard_cut() {
     let err = validate_root_capability_envelope(
         CapabilityService::Root,
         CAPABILITY_VERSION_V1,
-        &role_attestation_capability_proof(PROOF_VERSION_V1 + 1),
+        &role_attestation_capability_proof(PROOF_VERSION_V1),
     )
-    .expect_err("unsupported role proof version must fail");
-    assert_eq!(err.code, ErrorCode::InvalidInput);
+    .expect_err("role-attestation capability proofs must fail after the hard cut");
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("disabled in 0.65"),
+        "expected hard-cut rejection, got: {err:?}"
+    );
 }
 
 #[test]
@@ -596,6 +570,7 @@ fn verify_root_delegated_grant_claims_rejects_key_id_mismatch() {
 }
 
 #[test]
+#[cfg(feature = "auth-shard-secp256k1-verify")]
 fn verify_root_delegated_grant_signature_accepts_valid_signature() {
     let capability = sample_request(10);
     let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100 * NS_PER_SEC);
@@ -607,6 +582,7 @@ fn verify_root_delegated_grant_signature_accepts_valid_signature() {
 }
 
 #[test]
+#[cfg(feature = "auth-shard-secp256k1-verify")]
 fn verify_root_delegated_grant_signature_rejects_invalid_signature() {
     let capability = sample_request(10);
     let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100 * NS_PER_SEC);
@@ -617,4 +593,21 @@ fn verify_root_delegated_grant_signature_rejects_invalid_signature() {
     let err = verify_root_delegated_grant_signature(&proof.grant, &wrong_signature)
         .expect_err("invalid signature must fail");
     assert_eq!(err.code, ErrorCode::Forbidden);
+}
+
+#[test]
+#[cfg(not(feature = "auth-shard-secp256k1-verify"))]
+fn verify_root_delegated_grant_signature_reports_unavailable_without_verify_feature() {
+    let capability = sample_request(10);
+    let proof = sample_delegated_grant_proof(&capability, p(2), p(1), 100 * NS_PER_SEC);
+    SubnetStateOps::set_delegated_root_public_key("key_1".to_string(), vec![2; 33]);
+
+    let err = verify_root_delegated_grant_signature(&proof.grant, &[1])
+        .expect_err("missing secp256k1 verifier feature must fail closed");
+
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert!(
+        err.message.contains("not enabled") || err.message.contains("unavailable"),
+        "expected unavailable verifier error, got: {err:?}"
+    );
 }

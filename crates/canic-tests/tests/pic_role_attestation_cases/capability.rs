@@ -1,10 +1,9 @@
 use crate::pic_role_attestation_support::*;
 
 #[test]
-#[expect(clippy::too_many_lines)]
-fn capability_endpoint_role_attestation_proof_paths() {
+fn capability_endpoint_rejects_role_attestation_proofs_after_hard_cut() {
     test_progress(
-        "capability_endpoint_role_attestation_proof_paths",
+        "capability_endpoint_rejects_role_attestation_proofs_after_hard_cut",
         "setup root",
     );
     let setup = install_test_root_cached();
@@ -17,86 +16,19 @@ fn capability_endpoint_role_attestation_proof_paths() {
     });
 
     test_progress(
-        "capability_endpoint_role_attestation_proof_paths",
-        "valid cycles proof",
+        "capability_endpoint_rejects_role_attestation_proofs_after_hard_cut",
+        "disabled proof rejection",
     );
-    // A valid child caller with a root-audience attestation should authorize the cycles request.
-    let issued = issue_self_attestation_as(
-        pic,
-        root_id,
-        signer_id,
-        TEST_ROLE_ATTESTATION_TTL_NS,
-        root_id,
-    );
-    let issued_at_ns = issued.payload.issued_at_ns;
-    let envelope =
-        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at_ns, 1, 9);
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        signer_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let response = response.expect("capability endpoint call failed");
-    match response.response {
-        Response::Cycles(res) => assert_eq!(res.cycles_transferred, 1),
-        other => panic!("expected cycles response, got: {other:?}"),
-    }
-
-    test_progress(
-        "capability_endpoint_role_attestation_proof_paths",
-        "tampered signature rejection",
-    );
-    // Tampering with the signature must fail during attestation verification.
-    let mut issued = issue_self_attestation_as(
-        pic,
-        root_id,
-        signer_id,
-        TEST_ROLE_ATTESTATION_TTL_NS,
-        root_id,
-    );
-    let issued_at_ns = issued.payload.issued_at_ns;
-    if let Some(first) = issued.signature.first_mut() {
-        *first ^= 0x01;
-    }
-    let envelope =
-        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at_ns, 6, 4);
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        signer_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("tampered attestation signature must fail");
-    assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("signature"),
-        "expected signature error, got: {err:?}"
-    );
-
-    test_progress(
-        "capability_endpoint_role_attestation_proof_paths",
-        "capability hash mismatch rejection",
-    );
-    // Capability hashes must match the request exactly.
-    let issued = issue_self_attestation_as(
-        pic,
-        root_id,
-        signer_id,
-        TEST_ROLE_ATTESTATION_TTL_NS,
-        root_id,
-    );
-    let issued_at_ns = issued.payload.issued_at_ns;
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
         capability: request.clone(),
-        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: [0u8; 32],
-            attestation: issued,
+        proof: CapabilityProof::RoleAttestation(CapabilityProofBlob {
+            proof_version: 1,
+            capability_hash: root_capability_hash(root_id, &request),
+            payload: Vec::new(),
         }),
-        metadata: capability_metadata(issued_at_ns, 9, 1, TEST_ROLE_ATTESTATION_TTL_NS),
+        metadata: capability_metadata(0, 9, 1, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
@@ -104,71 +36,16 @@ fn capability_endpoint_role_attestation_proof_paths() {
         "canic_response_capability_v1",
         (envelope,),
     );
-    let err = response.expect_err("hash mismatch must fail closed");
-    assert_eq!(err.code, ErrorCode::InvalidInput);
+    let err = response.expect_err("role-attestation capability proof must fail closed");
+    assert_eq!(err.code, ErrorCode::Forbidden);
     assert!(
-        err.message.contains("capability_hash"),
-        "expected capability_hash mismatch error, got: {err:?}"
+        err.message.contains("disabled in 0.65"),
+        "expected hard-cut rejection, got: {err:?}"
     );
-
     test_progress(
-        "capability_endpoint_role_attestation_proof_paths",
-        "audience mismatch rejection",
+        "capability_endpoint_rejects_role_attestation_proofs_after_hard_cut",
+        "done",
     );
-    // Audience mismatches must be enforced by the capability verifier.
-    let wrong_audience = Principal::from_slice(&[9; 29]);
-    let issued = issue_self_attestation_as(
-        pic,
-        root_id,
-        signer_id,
-        TEST_ROLE_ATTESTATION_TTL_NS,
-        wrong_audience,
-    );
-    let issued_at_ns = issued.payload.issued_at_ns;
-    let envelope =
-        cycles_role_attestation_envelope(root_id, request.clone(), issued, issued_at_ns, 3, 7);
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        signer_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("audience mismatch must fail");
-    assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("audience mismatch"),
-        "expected audience mismatch error, got: {err:?}"
-    );
-
-    test_progress(
-        "capability_endpoint_role_attestation_proof_paths",
-        "expiry rejection",
-    );
-    // Expiry is time-sensitive, so keep it last after advancing the clock.
-    let issued = issue_self_attestation_as(
-        pic,
-        root_id,
-        signer_id,
-        TEST_SHORT_ROLE_ATTESTATION_TTL_NS,
-        root_id,
-    );
-    let issued_at_ns = issued.payload.issued_at_ns;
-    pic.advance_time(Duration::from_secs(2));
-    pic.tick();
-    let envelope = cycles_role_attestation_envelope(root_id, request, issued, issued_at_ns, 2, 8);
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        signer_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("expired attestation must fail");
-    assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("expired"),
-        "expected expired attestation error, got: {err:?}"
-    );
-    test_progress("capability_endpoint_role_attestation_proof_paths", "done");
 }
 
 #[test]
@@ -182,103 +59,7 @@ fn capability_endpoint_policy_and_structural_paths() {
     let pic = setup.pic.pic();
     let root_id = setup.root_id;
     let signer_id = setup.signer_id;
-    let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, root_id);
-    let issued_at_ns = issued.payload.issued_at_ns;
-
-    test_progress(
-        "capability_endpoint_policy_and_structural_paths",
-        "subject mismatch policy rejection",
-    );
-    // Policy must reject subject-mismatch requests even with a valid proof.
-    let subject_mismatch_request = Request::IssueRoleAttestation(RoleAttestationRequest {
-        subject: Principal::anonymous(),
-        role: CanisterRole::ROOT,
-        subnet_id: None,
-        audience: root_id,
-        ttl_ns: TEST_ROLE_ATTESTATION_TTL_NS,
-        epoch: 0,
-        metadata: None,
-    });
-    let subject_mismatch_hash = root_capability_hash(root_id, &subject_mismatch_request);
-    let envelope = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: subject_mismatch_request.clone(),
-        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: subject_mismatch_hash,
-            attestation: issued.clone(),
-        }),
-        metadata: capability_metadata(issued_at_ns, 4, 6, TEST_ROLE_ATTESTATION_TTL_NS),
-    };
-    let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (envelope,),
-    );
-    let err = response.expect_err("policy subject mismatch must fail");
-    assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("must match caller"),
-        "expected subject mismatch policy error, got: {err:?}"
-    );
-
-    test_progress(
-        "capability_endpoint_policy_and_structural_paths",
-        "policy denial replay behavior",
-    );
-    // Policy denials must not poison replay detection for the same request id.
-    let envelope_a = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: subject_mismatch_request.clone(),
-        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: subject_mismatch_hash,
-            attestation: issued.clone(),
-        }),
-        metadata: capability_metadata(issued_at_ns, 4, 66, TEST_ROLE_ATTESTATION_TTL_NS),
-    };
-    let envelope_b = RootCapabilityEnvelopeV1 {
-        service: CapabilityService::Root,
-        capability_version: CAPABILITY_VERSION_V1,
-        capability: subject_mismatch_request,
-        proof: encode_role_attestation_capability_proof(RoleAttestationProof {
-            proof_version: PROOF_VERSION_V1,
-            capability_hash: subject_mismatch_hash,
-            attestation: issued,
-        }),
-        metadata: capability_metadata(issued_at_ns, 4, 66, TEST_ROLE_ATTESTATION_TTL_NS),
-    };
-    let first: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (envelope_a,),
-    );
-    let second: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
-        root_id,
-        root_id,
-        "canic_response_capability_v1",
-        (envelope_b,),
-    );
-    let first_err = first.expect_err("first policy denial must fail");
-    let second_err = second.expect_err("second policy denial must fail");
-    assert_eq!(first_err.code, ErrorCode::Internal);
-    assert_eq!(second_err.code, ErrorCode::Internal);
-    assert!(
-        first_err.message.contains("must match caller"),
-        "expected policy denial on first request, got: {first_err:?}"
-    );
-    assert!(
-        second_err.message.contains("must match caller"),
-        "expected policy denial on second request, got: {second_err:?}"
-    );
-    assert!(
-        !second_err.message.contains("duplicate replay request"),
-        "policy denial should not be replay-cached, got: {second_err:?}"
-    );
+    let issued_at_ns = pic.current_time_nanos();
 
     test_progress(
         "capability_endpoint_policy_and_structural_paths",

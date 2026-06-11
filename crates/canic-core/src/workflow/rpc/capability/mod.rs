@@ -78,7 +78,6 @@ impl RootCapabilityProofMode {
 #[derive(Clone, Copy, Debug)]
 pub(super) enum RootCapabilityProof<'a> {
     Structural,
-    RoleAttestation(&'a CapabilityProofBlob),
     DelegatedGrant(&'a CapabilityProofBlob),
 }
 
@@ -87,15 +86,9 @@ impl<'a> RootCapabilityProof<'a> {
     fn validate(proof: &'a CapabilityProof) -> Result<Self, Error> {
         match proof {
             CapabilityProof::Structural => Ok(Self::Structural),
-            CapabilityProof::RoleAttestation(proof) => {
-                if proof.proof_version != PROOF_VERSION_V1 {
-                    return Err(Error::invalid(format!(
-                        "unsupported role attestation proof_version: {}",
-                        proof.proof_version
-                    )));
-                }
-                Ok(Self::RoleAttestation(proof))
-            }
+            CapabilityProof::RoleAttestation(_) => Err(Error::forbidden(
+                "role-attestation capability proofs are disabled in 0.65; use structural capability proofs or delegated-token endpoints",
+            )),
             CapabilityProof::DelegatedGrant(proof) => {
                 if proof.proof_version != PROOF_VERSION_V1 {
                     return Err(Error::invalid(format!(
@@ -112,7 +105,6 @@ impl<'a> RootCapabilityProof<'a> {
     const fn mode(self) -> RootCapabilityProofMode {
         match self {
             Self::Structural => RootCapabilityProofMode::Structural,
-            Self::RoleAttestation(_) => RootCapabilityProofMode::RoleAttestation,
             Self::DelegatedGrant(_) => RootCapabilityProofMode::DelegatedGrant,
         }
     }

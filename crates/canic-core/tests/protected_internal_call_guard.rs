@@ -440,6 +440,12 @@ fn removed_protected_internal_client_surface_stays_removed() {
 fn removed_normal_auth_one_shot_wrappers_stay_removed() {
     let auth_api = read_workspace_file("crates/canic-core/src/api/auth/mod.rs");
     let rpc_ops = read_workspace_file("crates/canic-core/src/ops/rpc/mod.rs");
+    let capability_mod =
+        read_workspace_file("crates/canic-core/src/workflow/rpc/capability/mod.rs");
+    let capability_proof =
+        read_workspace_file("crates/canic-core/src/workflow/rpc/capability/proof.rs");
+    let capability_verifier =
+        read_workspace_file("crates/canic-core/src/workflow/rpc/capability/verifier.rs");
     let delegation_root = read_workspace_file("canisters/test/delegation_root_stub/src/lib.rs");
     let sharding_root = read_workspace_file("canisters/test/sharding_root_stub/src/lib.rs");
 
@@ -461,6 +467,16 @@ fn removed_normal_auth_one_shot_wrappers_stay_removed() {
             && !rpc_ops.contains("CachedRootResponseAttestation")
             && !rpc_ops.contains("CANIC_REQUEST_ROLE_ATTESTATION"),
         "outbound root-response RPC must not request or cache fresh role attestations after the 0.65 hard cut"
+    );
+    assert!(
+        !capability_mod.contains("RoleAttestation(&")
+            && capability_mod.contains("role-attestation capability proofs are disabled in 0.65")
+            && !capability_proof.contains("encode_role_attestation_blob")
+            && !capability_proof.contains("decode_role_attestation_blob")
+            && !capability_proof.contains("impl TryFrom<RoleAttestationProof>")
+            && !capability_verifier.contains("RoleAttestationVerifier")
+            && !capability_verifier.contains("RootCapabilityProof::RoleAttestation"),
+        "inbound root-capability role-attestation proof verification must stay removed after the 0.65 hard cut"
     );
     assert!(
         !delegation_root.contains("fn root_issue_self_attestation(")
