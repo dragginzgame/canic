@@ -246,7 +246,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.11` candidate adds active-delegation-proof install validation
+- `0.65.11` is committed as active-delegation-proof install validation
   for issuer-local root-certified authority. It adds passive install
   request/response DTOs and a pure validation helper that requires the
   delegation cert to target the current issuer canister, rejects not-yet-valid
@@ -258,6 +258,27 @@ inspect only the files needed for the current task.
   ```text
   cargo test --locked -p canic-core ops::auth::delegated::active_proof --lib -- --nocapture
   cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic -p canic-testing-internal
+  cargo fmt --all -- --check
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.12` candidate exposes the controller-gated non-root
+  `canic_install_active_delegation_proof` endpoint. `AuthApi` now has a public
+  install wrapper over the `.11` validation/store path, the non-root auth
+  provisioning endpoint bundle emits the installer, protocol constants include
+  `CANIC_INSTALL_ACTIVE_DELEGATION_PROOF`, the replay manifest classifies the
+  endpoint as intentionally non-idempotent controller maintenance, and the
+  canonical `wasm_store.did` was refreshed to include the install DTOs and
+  method. The issuer prepare/get token canister-signature flow remains pending.
+  Current validation:
+  ```text
+  CANIC_CONFIG_PATH=fleets/test/canic.toml CANIC_REFRESH_WASM_STORE_DID=1 cargo run -q -p canic-host --example build_artifact -- wasm_store
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic --test endpoint_macro -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
   cargo check --locked -p canic-core -p canic -p canic-testing-internal
   cargo fmt --all -- --check
   cargo clippy --locked -p canic-core --lib -- -D warnings

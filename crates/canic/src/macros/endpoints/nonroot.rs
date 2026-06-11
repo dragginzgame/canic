@@ -25,5 +25,12 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
 // Leaf emitter for the non-root auth/attestation provisioning surface.
 #[macro_export]
 macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
-    () => {};
+    () => {
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_install_active_delegation_proof(
+            request: ::canic::dto::auth::InstallActiveDelegationProofRequest,
+        ) -> Result<::canic::dto::auth::InstallActiveDelegationProofResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(request)
+        }
+    };
 }

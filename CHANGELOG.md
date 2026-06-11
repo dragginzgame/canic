@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.12` exposes the controller-gated
+  `canic_install_active_delegation_proof` non-root issuer endpoint, pins its
+  replay-policy classification, and refreshes the canonical wasm-store Candid
+  surface for the active proof install DTOs.
+
 - `0.65.11` adds active-delegation-proof install validation and request/response
   DTOs, verifying issuer binding, cert validity time bounds, canonical cert
   hash, and root canister-signature proof before persisting issuer authority.

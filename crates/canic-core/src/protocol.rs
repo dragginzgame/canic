@@ -8,6 +8,7 @@ pub const CANIC_GET_DELEGATION_PROOF: &str = "canic_get_delegation_proof";
 pub const CANIC_REQUEST_ROLE_ATTESTATION: &str = "canic_request_role_attestation";
 pub const CANIC_REQUEST_INTERNAL_INVOCATION_PROOF: &str = "canic_request_internal_invocation_proof";
 pub const CANIC_ATTESTATION_KEY_SET: &str = "canic_attestation_key_set";
+pub const CANIC_INSTALL_ACTIVE_DELEGATION_PROOF: &str = "canic_install_active_delegation_proof";
 pub const CANIC_BOOTSTRAP_STATUS: &str = "canic_bootstrap_status";
 pub const CANIC_CYCLE_BALANCE: &str = "canic_cycle_balance";
 pub const CANIC_CYCLE_TRACKER: &str = "canic_cycle_tracker";

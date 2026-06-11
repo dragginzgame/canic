@@ -5,6 +5,7 @@ use crate::{
             AttestationKeySet, AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken,
             DelegatedTokenIssueRequest, DelegationAudience, DelegationCert, DelegationProof,
             DelegationProofGetRequest, DelegationProofIssueRequest, DelegationProofPrepareResponse,
+            InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             InternalInvocationProofRequest, RoleAttestationRequest, ShardKeyBinding,
             SignedInternalInvocationProofV1, SignedRoleAttestation,
         },
@@ -173,6 +174,17 @@ impl AuthApi {
             request,
         )
         .await
+    }
+
+    /// Install validated root-certified delegation material for issuer-local token issuance.
+    pub fn install_active_delegation_proof(
+        request: InstallActiveDelegationProofRequest,
+    ) -> Result<InstallActiveDelegationProofResponse, Error> {
+        let active_proof =
+            AuthOps::install_active_delegation_proof(request.proof, IcOps::msg_caller())
+                .map_err(Self::map_auth_error)?;
+
+        Ok(InstallActiveDelegationProofResponse { active_proof })
     }
 
     /// Prepare a root delegation proof from root over RPC.

@@ -120,6 +120,55 @@ fn public_protocol_reexports_wasm_store_root_update_manifest() {
 }
 
 #[test]
+fn active_delegation_proof_installer_surface_is_pinned() {
+    assert_eq!(
+        canic::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
+        canic_core::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF
+    );
+    assert_eq!(
+        canic::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
+        "canic_install_active_delegation_proof"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
+    let source = read_text(&macro_path);
+    let endpoint = source
+        .split("fn canic_install_active_delegation_proof(")
+        .nth(1)
+        .expect("non-root auth endpoint should emit active proof installer");
+    let prefix = source
+        .split("fn canic_install_active_delegation_proof(")
+        .next()
+        .expect("source should have endpoint prefix");
+    let preceding_attribute = prefix
+        .lines()
+        .rev()
+        .find(|line| line.trim_start().starts_with("#["))
+        .expect("active proof installer endpoint should have an attribute");
+
+    assert!(
+        preceding_attribute.contains("canic_update")
+            && preceding_attribute.contains("caller::is_controller()"),
+        "active proof installer must be a controller-gated update endpoint"
+    );
+    assert!(
+        endpoint.contains("InstallActiveDelegationProofRequest")
+            && endpoint.contains("InstallActiveDelegationProofResponse")
+            && endpoint.contains("AuthApi::install_active_delegation_proof"),
+        "active proof installer must call the auth API with the install DTOs"
+    );
+
+    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did = read_text(&did_path);
+    assert!(
+        did.contains("type InstallActiveDelegationProofRequest = record")
+            && did.contains("type InstallActiveDelegationProofResponse = record")
+            && did.contains("  canic_install_active_delegation_proof : ("),
+        "canonical wasm_store DID must expose the active proof installer"
+    );
+}
+
+#[test]
 fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
     let source = read_text(&macro_path);

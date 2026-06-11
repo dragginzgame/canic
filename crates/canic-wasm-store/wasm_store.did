@@ -1,3 +1,12 @@
+type ActiveDelegationProof = record {
+  cert_hash : blob;
+  installed_by : principal;
+  not_before_ns : nat64;
+  refresh_after_ns : nat64;
+  installed_at_ns : nat64;
+  proof : DelegationProof;
+  expires_at_ns : nat64;
+};
 type AppMode = variant { Enabled; Disabled; Readonly };
 type AppStateInput = record { mode : AppMode; cycles_funding_enabled : bool };
 type BootstrapStatusResponse = record {
@@ -29,8 +38,8 @@ type CapabilityProofBlob = record {
 };
 type CapabilityRequestMetadata = record {
   request_id : blob;
-  issued_at : nat64;
-  ttl_seconds : nat32;
+  ttl_ns : nat64;
+  issued_at_ns : nat64;
   nonce : blob;
 };
 type CapabilityService = variant { Root };
@@ -53,6 +62,28 @@ type CyclesRequest = record {
   cycles : nat;
 };
 type CyclesResponse = record { cycles_transferred : nat };
+type DelegatedRoleGrant = record { scopes : vec text; target : text };
+type DelegationAudience = variant {
+  Canister : principal;
+  CanicSubnet : principal;
+  Project : text;
+};
+type DelegationCert = record {
+  aud : DelegationAudience;
+  grants : vec DelegatedRoleGrant;
+  max_token_ttl_ns : nat64;
+  shard_key_hash : blob;
+  shard_pid : principal;
+  shard_sig_alg : ShardSignatureAlgorithm;
+  not_before_ns : nat64;
+  issued_at_ns : nat64;
+  shard_key_binding : ShardKeyBinding;
+  shard_key_id : text;
+  shard_public_key_sec1 : blob;
+  expires_at_ns : nat64;
+  root_pid : principal;
+};
+type DelegationProof = record { cert : DelegationCert; root_proof : RootProof };
 type EnvBootstrapArgs = record {
   prime_root_pid : opt principal;
   canister_role : opt text;
@@ -80,9 +111,18 @@ type ErrorCode = variant {
   ResourceExhausted;
   Unavailable;
   Forbidden;
+  OperationIdRequired;
   Conflict;
 };
+type IcCanisterSignatureProofV1 = record {
+  signature_cbor : blob;
+  public_key_der : blob;
+};
 type IndexEntryInput = record { pid : principal; role : text };
+type InstallActiveDelegationProofRequest = record { proof : DelegationProof };
+type InstallActiveDelegationProofResponse = record {
+  active_proof : ActiveDelegationProof;
+};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -97,13 +137,25 @@ type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
 type Result = variant { Ok : nat; Err : Error };
 type Result_1 = variant { Ok : Page; Err : Error };
 type Result_2 = variant { Ok : Page_1; Err : Error };
+type Result_3 = variant {
+  Ok : InstallActiveDelegationProofResponse;
+  Err : Error;
+};
 type Result_4 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
 type Result_5 = variant { Ok; Err : Error };
 type Result_6 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
 type Result_7 = variant { Ok : TemplateChunkResponse; Err : Error };
 type Result_8 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_9 = variant { Ok : WasmStoreStatusResponse; Err : Error };
-type RootRequestMetadata = record { request_id : blob; ttl_seconds : nat64 };
+type RootProof = variant { IcCanisterSignatureV1 : IcCanisterSignatureProofV1 };
+type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
+type ShardKeyBinding = variant {
+  IcThresholdEcdsaSecp256k1 : record {
+    derivation_path_hash : blob;
+    key_name_hash : blob;
+  };
+};
+type ShardSignatureAlgorithm = variant { IcThresholdEcdsaSecp256k1 };
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
@@ -119,40 +171,41 @@ type SubnetRootPublicKeyInput = record {
   public_key_sec1 : blob;
 };
 type SubnetStateInput = record { auth : SubnetAuthStateInput };
-type TemplateChunkingMode = variant { Inline; Chunked };
 type TemplateChunkInput = record {
-  bytes : blob;
   chunk_index : nat32;
   template_id : text;
   version : text;
+  bytes : blob;
 };
 type TemplateChunkResponse = record { bytes : blob };
-type TemplateChunkSetPrepareInput = record {
-  chunk_hashes : vec blob;
-  payload_hash : blob;
-  payload_size_bytes : nat64;
-  template_id : text;
-  version : text;
-};
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
-type TemplateManifestInput = record {
-  approved_at : opt nat64;
-  chunking_mode : TemplateChunkingMode;
-  created_at : nat64;
-  manifest_state : TemplateManifestState;
-  payload_hash : blob;
+type TemplateChunkSetPrepareInput = record {
   payload_size_bytes : nat64;
-  role : text;
-  store_binding : text;
+  chunk_hashes : vec blob;
   template_id : text;
   version : text;
+  payload_hash : blob;
 };
-type TemplateManifestState = variant {
-  Staged;
-  Approved;
-  Blocked;
-  Deprecated;
+//
+// TemplateChunkingMode
+//
+type TemplateChunkingMode = variant { Chunked; Inline };
+type TemplateManifestInput = record {
+  role : text;
+  payload_size_bytes : nat64;
+  manifest_state : TemplateManifestState;
+  approved_at : opt nat64;
+  created_at : nat64;
+  template_id : text;
+  version : text;
+  store_binding : text;
+  chunking_mode : TemplateChunkingMode;
+  payload_hash : blob;
 };
+//
+// TemplateManifestState
+//
+type TemplateManifestState = variant { Blocked; Staged; Approved; Deprecated };
 type TopologyChildren = record {
   children : vec IndexEntryInput;
   parent_pid : principal;
@@ -211,6 +264,9 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_cycle_balance : () -> (Result) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
+  canic_install_active_delegation_proof : (
+      InstallActiveDelegationProofRequest,
+    ) -> (Result_3);
   canic_metadata : () -> (CanicMetadataResponse) query;
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (

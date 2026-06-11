@@ -179,6 +179,11 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     ),
     update_snapshot_convergent("canic_sync_state", "cascade.sync_state.v1"),
     update_snapshot_convergent("canic_sync_topology", "cascade.sync_topology.v1"),
+    update_intentionally_non_idempotent(
+        "canic_install_active_delegation_proof",
+        "auth.install_active_delegation_proof.v1",
+        "controller maintenance endpoint replaces issuer-local active proof metadata",
+    ),
     update_replay_protected(
         "signer_issue_token",
         "auth.issue_token.v1",
@@ -421,6 +426,25 @@ const fn update_snapshot_convergent(
         endpoint,
         endpoint_kind: EndpointKind::Update,
         replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::None,
+        quota_policy: None,
+        cycle_reserve_policy: None,
+    }
+}
+
+const fn update_intentionally_non_idempotent(
+    endpoint: &'static str,
+    command_kind: &'static str,
+    reason: &'static str,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::IntentionallyNonIdempotent {
+            command_kind,
+            reason,
+        },
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class: CostClass::None,
         quota_policy: None,
@@ -734,6 +758,29 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn active_delegation_proof_install_is_controller_maintenance() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == "canic_install_active_delegation_proof")
+            .expect("active delegation proof install policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::IntentionallyNonIdempotent {
+                command_kind: "auth.install_active_delegation_proof.v1",
+                reason: "controller maintenance endpoint replaces issuer-local active proof metadata",
+            }
+        );
     }
 
     #[test]

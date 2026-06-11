@@ -138,10 +138,6 @@ impl AuthOps {
             .await
     }
 
-    #[expect(
-        dead_code,
-        reason = "install endpoint macro lands after core active-proof validation"
-    )]
     pub(crate) fn install_active_delegation_proof(
         proof: DelegationProof,
         installed_by: Principal,
