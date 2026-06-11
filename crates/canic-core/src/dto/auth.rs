@@ -120,6 +120,21 @@ pub struct DelegationProof {
 }
 
 //
+// ActiveDelegationProof
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ActiveDelegationProof {
+    pub proof: DelegationProof,
+    pub cert_hash: [u8; 32],
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub refresh_after_ns: u64,
+    pub installed_at_ns: u64,
+    pub installed_by: Principal,
+}
+
+//
 // DelegatedTokenClaims
 //
 

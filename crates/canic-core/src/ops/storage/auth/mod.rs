@@ -2,12 +2,12 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
-    dto::auth::{AttestationKey, AttestationKeySet},
+    dto::auth::{ActiveDelegationProof, AttestationKey, AttestationKeySet},
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
     },
 };
-use mapper::AttestationPublicKeyRecordMapper;
+use mapper::{ActiveDelegationProofRecordMapper, AttestationPublicKeyRecordMapper};
 
 pub use crate::storage::stable::auth::DelegatedSessionUpsertResult;
 
@@ -155,6 +155,26 @@ impl AuthStateOps {
             key,
         ));
     }
+
+    #[must_use]
+    pub fn active_delegation_proof(now_ns: u64) -> Option<ActiveDelegationProof> {
+        let proof = AuthState::get_active_delegation_proof()
+            .map(ActiveDelegationProofRecordMapper::record_to_dto)?;
+        if now_ns < proof.not_before_ns || now_ns >= proof.expires_at_ns {
+            return None;
+        }
+        Some(proof)
+    }
+
+    pub fn set_active_delegation_proof(proof: ActiveDelegationProof) {
+        AuthState::set_active_delegation_proof(ActiveDelegationProofRecordMapper::dto_to_record(
+            proof,
+        ));
+    }
+
+    pub fn clear_active_delegation_proof() {
+        AuthState::clear_active_delegation_proof();
+    }
 }
 
 const fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
@@ -198,5 +218,75 @@ const fn delegated_session_bootstrap_binding_view_to_record(
         token_fingerprint: view.token_fingerprint,
         bound_at: view.bound_at,
         expires_at: view.expires_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        dto::auth::{
+            DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
+            IcCanisterSignatureProofV1, RootProof, ShardKeyBinding, ShardSignatureAlgorithm,
+        },
+        ids::CanisterRole,
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn active_proof() -> ActiveDelegationProof {
+        ActiveDelegationProof {
+            proof: DelegationProof {
+                cert: DelegationCert {
+                    root_pid: p(1),
+                    shard_pid: p(2),
+                    shard_key_id: "issuer-key".to_string(),
+                    shard_sig_alg: ShardSignatureAlgorithm::IcThresholdEcdsaSecp256k1,
+                    shard_public_key_sec1: vec![3; 33],
+                    shard_key_hash: [4; 32],
+                    shard_key_binding: ShardKeyBinding::IcThresholdEcdsaSecp256k1 {
+                        key_name_hash: [5; 32],
+                        derivation_path_hash: [6; 32],
+                    },
+                    issued_at_ns: 10,
+                    not_before_ns: 20,
+                    expires_at_ns: 100,
+                    max_token_ttl_ns: 30,
+                    aud: DelegationAudience::CanicSubnet(p(7)),
+                    grants: vec![DelegatedRoleGrant {
+                        target: CanisterRole::owned("project_instance".to_string()),
+                        scopes: vec!["read".to_string(), "write".to_string()],
+                    }],
+                },
+                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                    signature_cbor: vec![8; 64],
+                    public_key_der: vec![9; 32],
+                }),
+            },
+            cert_hash: [10; 32],
+            not_before_ns: 20,
+            expires_at_ns: 100,
+            refresh_after_ns: 80,
+            installed_at_ns: 15,
+            installed_by: p(11),
+        }
+    }
+
+    #[test]
+    fn active_delegation_proof_round_trips_and_filters_by_time() {
+        AuthStateOps::clear_active_delegation_proof();
+        let proof = active_proof();
+
+        AuthStateOps::set_active_delegation_proof(proof.clone());
+
+        assert_eq!(AuthStateOps::active_delegation_proof(19), None);
+        assert_eq!(AuthStateOps::active_delegation_proof(20), Some(proof));
+        assert!(AuthStateOps::active_delegation_proof(99).is_some());
+        assert_eq!(AuthStateOps::active_delegation_proof(100), None);
+
+        AuthStateOps::clear_active_delegation_proof();
+        assert_eq!(AuthStateOps::active_delegation_proof(20), None);
     }
 }

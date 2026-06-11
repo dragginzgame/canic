@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.10` adds the persisted `ActiveDelegationProof` foundation for issuer
+  token issuance, with explicit stable auth records and auth-state accessors
+  that fail closed outside the proof validity window.
+
 - `0.65.9` replaces the legacy global delegated-token audience with explicit
   canister, Canic-subnet, and project audiences, wires local verifier audience
   context through token checks, and binds signed token `ext` into token-issue

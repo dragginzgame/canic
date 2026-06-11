@@ -103,6 +103,9 @@ checklist below tracks their removal or conversion.
       `issuer_proof_binding_hash`, issuer canister-signature
       seed/domain/message helpers, and the future issuer-proof verifier cache
       key helper.
+- [x] Add persisted `ActiveDelegationProof` DTO/storage foundation with stable
+      auth records and fail-closed active proof lookup outside the proof
+      validity window.
 - [x] Add pending-proof metadata and enforce `retrieval_expires_at_ns`.
 - [x] Add overflow-safe time checks.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.
@@ -143,6 +146,8 @@ checklist below tracks their removal or conversion.
 - [ ] Remove `IcThresholdEcdsaSecp256k1` issuer proof algorithm/binding from
       normal delegated-token auth DTOs.
 - [ ] Add issuer prepare/get delegated-token canister-signature flow.
+- [ ] Add `install_active_delegation_proof` endpoint and validation around the
+      persisted active proof store.
 - [ ] Add issuer canister-signature local verification against issuer canister id
       plus raw IC root key.
 - [ ] Extend canister-signature issuer deployment checks to token issuer canisters

@@ -52,6 +52,113 @@ pub struct AttestationPublicKeyRecord {
 }
 
 ///
+/// DelegationAudienceRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum DelegationAudienceRecord {
+    Canister(Principal),
+    CanicSubnet(Principal),
+    Project(String),
+}
+
+///
+/// DelegatedRoleGrantRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedRoleGrantRecord {
+    pub target: CanisterRole,
+    pub scopes: Vec<String>,
+}
+
+///
+/// ShardKeyBindingRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ShardKeyBindingRecord {
+    IcThresholdEcdsaSecp256k1 {
+        key_name_hash: [u8; 32],
+        derivation_path_hash: [u8; 32],
+    },
+}
+
+///
+/// ShardSignatureAlgorithmRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ShardSignatureAlgorithmRecord {
+    IcThresholdEcdsaSecp256k1,
+}
+
+///
+/// DelegationCertRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationCertRecord {
+    pub root_pid: Principal,
+    pub shard_pid: Principal,
+    pub shard_key_id: String,
+    pub shard_sig_alg: ShardSignatureAlgorithmRecord,
+    pub shard_public_key_sec1: Vec<u8>,
+    pub shard_key_hash: [u8; 32],
+    pub shard_key_binding: ShardKeyBindingRecord,
+    pub issued_at_ns: u64,
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub max_token_ttl_ns: u64,
+    pub aud: DelegationAudienceRecord,
+    pub grants: Vec<DelegatedRoleGrantRecord>,
+}
+
+///
+/// IcCanisterSignatureProofRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcCanisterSignatureProofRecord {
+    pub signature_cbor: Vec<u8>,
+    pub public_key_der: Vec<u8>,
+}
+
+///
+/// RootProofRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootProofRecord {
+    IcCanisterSignatureV1(IcCanisterSignatureProofRecord),
+}
+
+///
+/// DelegationProofRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegationProofRecord {
+    pub cert: DelegationCertRecord,
+    pub root_proof: RootProofRecord,
+}
+
+///
+/// ActiveDelegationProofRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ActiveDelegationProofRecord {
+    pub proof: DelegationProofRecord,
+    pub cert_hash: [u8; 32],
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub refresh_after_ns: u64,
+    pub installed_at_ns: u64,
+    pub installed_by: Principal,
+}
+
+///
 /// AuthStateRecord
 ///
 
@@ -62,6 +169,9 @@ pub struct AuthStateRecord {
     pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
 
     pub attestation_public_keys: Vec<AttestationPublicKeyRecord>,
+
+    #[serde(default)]
+    pub active_delegation_proof: Option<ActiveDelegationProofRecord>,
 }
 
 #[cfg(test)]
@@ -99,6 +209,7 @@ mod tests {
         assert_eq!(decoded.delegated_sessions, legacy.delegated_sessions);
         assert!(decoded.delegated_session_bootstrap_bindings.is_empty());
         assert!(decoded.attestation_public_keys.is_empty());
+        assert!(decoded.active_delegation_proof.is_none());
     }
 
     ///

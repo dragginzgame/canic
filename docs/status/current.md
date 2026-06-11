@@ -213,16 +213,33 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.9` candidate replaces the legacy global delegated-token audience
+- `0.65.9` is committed as the explicit delegated-token audience hardening. It
+  replaces the legacy global delegated-token audience
   with explicit `Canister`, `CanicSubnet`, and `Project` audiences. Token
   verification now receives local canister and optional local Canic subnet
   context, canonical/replay/PIC audience hashing binds the concrete audience
   value, and token-issue replay payload hashes also bind signed `ext` bytes.
-  Current validation:
+  Validation:
   ```text
   cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
   cargo test --locked -p canic-core api::auth --lib -- --nocapture
   cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic -p canic-testing-internal
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.10` candidate adds the persisted active-delegation-proof
+  foundation for issuer-local token issuance. `ActiveDelegationProof` is now a
+  passive DTO, stable auth state has explicit active-proof records with
+  backward-compatible default decode, `AuthStateOps` exposes set/get/clear
+  accessors, and active proof lookup fails closed when the installed proof is
+  not yet valid or expired. The install endpoint and issuer prepare/get
+  canister-signature flow remain pending. Current validation:
+  ```text
+  cargo test --locked -p canic-core ops::storage::auth --lib -- --nocapture
+  cargo test --locked -p canic-core storage::stable::auth --lib -- --nocapture
   cargo check --locked -p canic-core -p canic -p canic-testing-internal
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo fmt --all -- --check

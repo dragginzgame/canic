@@ -14,10 +14,11 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{DelegationProof, ShardKeyBinding, ShardSignatureAlgorithm},
+    dto::auth::{ActiveDelegationProof, DelegationProof, ShardKeyBinding, ShardSignatureAlgorithm},
     ops::{
         auth::AuthValidationError,
         ic::{IcOps, ecdsa::EcdsaOps},
+        storage::auth::AuthStateOps,
     },
 };
 use std::{cell::RefCell, collections::BTreeMap};
@@ -131,6 +132,31 @@ impl AuthOps {
         let key_name = keys::delegated_tokens_key_name()?;
         EcdsaOps::public_key_sec1(&key_name, keys::shard_derivation_path(shard_pid), shard_pid)
             .await
+    }
+
+    #[expect(
+        dead_code,
+        reason = "active delegation proof storage is consumed by the issuer prepare/get flow"
+    )]
+    #[must_use]
+    pub(crate) fn active_delegation_proof(now_ns: u64) -> Option<ActiveDelegationProof> {
+        AuthStateOps::active_delegation_proof(now_ns)
+    }
+
+    #[expect(
+        dead_code,
+        reason = "active delegation proof install endpoint lands with issuer prepare/get flow"
+    )]
+    pub(crate) fn set_active_delegation_proof(proof: ActiveDelegationProof) {
+        AuthStateOps::set_active_delegation_proof(proof);
+    }
+
+    #[expect(
+        dead_code,
+        reason = "active delegation proof install endpoint lands with issuer prepare/get flow"
+    )]
+    pub(crate) fn clear_active_delegation_proof() {
+        AuthStateOps::clear_active_delegation_proof();
     }
 }
 

@@ -11,8 +11,11 @@ mod records;
 mod sessions;
 
 pub use records::{
-    AttestationKeyStatusRecord, AttestationPublicKeyRecord, AuthStateRecord,
-    DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
+    ActiveDelegationProofRecord, AttestationKeyStatusRecord, AttestationPublicKeyRecord,
+    AuthStateRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
+    DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
+    IcCanisterSignatureProofRecord, RootProofRecord, ShardKeyBindingRecord,
+    ShardSignatureAlgorithmRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -194,6 +197,30 @@ impl AuthState {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             key_state::upsert_attestation_public_key(&mut data, key);
+            cell.set(data);
+        });
+    }
+
+    // Resolve the issuer's installed active delegation proof.
+    #[must_use]
+    pub(crate) fn get_active_delegation_proof() -> Option<ActiveDelegationProofRecord> {
+        AUTH_STATE.with_borrow(|cell| cell.get().active_delegation_proof.clone())
+    }
+
+    // Replace the issuer's installed active delegation proof.
+    pub(crate) fn set_active_delegation_proof(proof: ActiveDelegationProofRecord) {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.active_delegation_proof = Some(proof);
+            cell.set(data);
+        });
+    }
+
+    // Clear the issuer's installed active delegation proof.
+    pub(crate) fn clear_active_delegation_proof() {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.active_delegation_proof = None;
             cell.set(data);
         });
     }
