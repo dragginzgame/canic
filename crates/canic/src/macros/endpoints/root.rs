@@ -96,12 +96,6 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
         ) -> Result<::canic::dto::auth::SignedRoleAttestation, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::get_role_attestation_root(request)
         }
-
-        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_attestation_key_set()
-        -> Result<::canic::dto::auth::AttestationKeySet, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::attestation_key_set().await
-        }
     };
 }
 

@@ -38,12 +38,6 @@ pub enum AuthValidationError {
     #[error("ecdsa key name missing in configuration")]
     EcdsaKeyNameMissing,
 
-    #[error("attestation signing key name missing in configuration")]
-    AttestationKeyNameMissing,
-
-    #[error("attestation key_id {key_id} not found in local key cache")]
-    AttestationUnknownKeyId { key_id: u32 },
-
     #[error("attestation subnet was set but verifier subnet is unavailable")]
     AttestationSubnetUnavailable,
 
@@ -171,22 +165,6 @@ pub enum AuthExpiryError {
 
     #[error("attestation not yet valid (issued_at_ns {issued_at_ns}, now {now_ns})")]
     AttestationNotYetValid { issued_at_ns: u64, now_ns: u64 },
-
-    #[error(
-        "attestation key_id {key_id} is not valid yet (valid_from {valid_from}, now {now_secs})"
-    )]
-    AttestationKeyNotYetValid {
-        key_id: u32,
-        valid_from: u64,
-        now_secs: u64,
-    },
-
-    #[error("attestation key_id {key_id} expired at {valid_until} (now {now_secs})")]
-    AttestationKeyExpired {
-        key_id: u32,
-        valid_until: u64,
-        now_secs: u64,
-    },
 
     #[error("attestation epoch {epoch} below minimum accepted epoch {min_accepted_epoch}")]
     AttestationEpochRejected { epoch: u64, min_accepted_epoch: u64 },

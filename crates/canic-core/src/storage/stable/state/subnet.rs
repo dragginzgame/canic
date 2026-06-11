@@ -17,24 +17,11 @@ eager_static! {
 }
 
 ///
-/// RootPublicKeyRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootPublicKeyRecord {
-    pub public_key_sec1: Vec<u8>,
-    pub key_name: String,
-    pub key_hash: [u8; 32],
-}
-
-///
 /// SubnetAuthStateRecord
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SubnetAuthStateRecord {
-    pub delegated_root_public_key: Option<RootPublicKeyRecord>,
-}
+pub struct SubnetAuthStateRecord {}
 
 ///
 /// SubnetStateRecord
@@ -75,13 +62,7 @@ mod tests {
     #[test]
     fn subnet_state_round_trip() {
         let record = SubnetStateRecord {
-            auth: SubnetAuthStateRecord {
-                delegated_root_public_key: Some(RootPublicKeyRecord {
-                    public_key_sec1: vec![1, 2, 3],
-                    key_name: "key_1".to_string(),
-                    key_hash: [7; 32],
-                }),
-            },
+            auth: SubnetAuthStateRecord {},
         };
 
         SubnetState::import(record.clone());

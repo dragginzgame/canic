@@ -4,10 +4,7 @@ mod sessions;
 
 use std::{cell::RefCell, collections::HashMap};
 
-pub use attestation::{
-    record_attestation_epoch_rejected, record_attestation_refresh_failed,
-    record_attestation_unknown_key_id, record_attestation_verify_failed,
-};
+pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
 pub use sessions::{
     record_session_bootstrap_rejected_capacity, record_session_bootstrap_rejected_disabled,
     record_session_bootstrap_rejected_replay_conflict,
@@ -22,8 +19,7 @@ pub use sessions::{
 };
 
 use labels::{
-    attestation_epoch_rejected_predicate, attestation_refresh_failed_predicate,
-    attestation_unknown_key_id_predicate, attestation_verify_failed_predicate,
+    attestation_epoch_rejected_predicate, attestation_verify_failed_predicate,
     auth_attestation_verifier_endpoint, auth_session_endpoint,
     session_bootstrap_rejected_capacity_predicate, session_bootstrap_rejected_disabled_predicate,
     session_bootstrap_rejected_replay_conflict_predicate,
@@ -73,7 +69,6 @@ impl AuthMetricSurface {
 pub enum AuthMetricOperation {
     Bootstrap,
     IdentityFallback,
-    Refresh,
     Session,
     Verify,
 }
@@ -85,7 +80,6 @@ impl AuthMetricOperation {
         match self {
             Self::Bootstrap => "bootstrap",
             Self::IdentityFallback => "identity_fallback",
-            Self::Refresh => "refresh",
             Self::Session => "session",
             Self::Verify => "verify",
         }
@@ -133,7 +127,6 @@ pub enum AuthMetricReason {
     InvalidSubject,
     Pruned,
     RawCaller,
-    RefreshFailed,
     Replaced,
     Replay,
     ReplayConflict,
@@ -142,7 +135,6 @@ pub enum AuthMetricReason {
     SubjectRejected,
     TokenInvalid,
     TtlInvalid,
-    UnknownKeyId,
     VerifyFailed,
     WalletCallerRejected,
 }
@@ -160,7 +152,6 @@ impl AuthMetricReason {
             Self::InvalidSubject => "invalid_subject",
             Self::Pruned => "pruned",
             Self::RawCaller => "raw_caller",
-            Self::RefreshFailed => "refresh_failed",
             Self::Replaced => "replaced",
             Self::Replay => "replay",
             Self::ReplayConflict => "replay_conflict",
@@ -169,7 +160,6 @@ impl AuthMetricReason {
             Self::SubjectRejected => "subject_rejected",
             Self::TokenInvalid => "token_invalid",
             Self::TtlInvalid => "ttl_invalid",
-            Self::UnknownKeyId => "unknown_key_id",
             Self::VerifyFailed => "verify_failed",
             Self::WalletCallerRejected => "wallet_caller_rejected",
         }
@@ -384,15 +374,11 @@ mod tests {
         AuthMetrics::reset();
 
         record_attestation_verify_failed();
-        record_attestation_unknown_key_id();
         record_attestation_epoch_rejected();
-        record_attestation_refresh_failed();
 
         for predicate in [
             attestation_verify_failed_predicate(),
-            attestation_unknown_key_id_predicate(),
             attestation_epoch_rejected_predicate(),
-            attestation_refresh_failed_predicate(),
         ] {
             assert_auth_metric_count(auth_attestation_verifier_endpoint(), predicate, 1);
         }
@@ -402,20 +388,6 @@ mod tests {
             AuthMetricOperation::Verify,
             AuthMetricOutcome::Failed,
             AuthMetricReason::VerifyFailed,
-            1,
-        );
-        assert_metric_count(
-            AuthMetricSurface::Attestation,
-            AuthMetricOperation::Verify,
-            AuthMetricOutcome::Failed,
-            AuthMetricReason::UnknownKeyId,
-            1,
-        );
-        assert_metric_count(
-            AuthMetricSurface::Attestation,
-            AuthMetricOperation::Refresh,
-            AuthMetricOutcome::Failed,
-            AuthMetricReason::RefreshFailed,
             1,
         );
     }

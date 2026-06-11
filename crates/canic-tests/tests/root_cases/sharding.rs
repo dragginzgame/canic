@@ -14,7 +14,7 @@ use canic_tests::root::{
 };
 
 #[test]
-fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
+fn user_hub_sharding_profile_prewarms_first_user_shard() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     assert!(
@@ -45,18 +45,6 @@ fn user_hub_sharding_profile_prewarms_first_shard_signing_key() {
         .find(|entry| entry.entry.pool == "user_shards")
         .map(|entry| entry.pid)
         .expect("startup user shard must exist before first account create");
-
-    let shard_public_key: Result<Result<Vec<u8>, Error>, _> =
-        setup
-            .pic
-            .update_call(startup_shard_pid, "user_shard_local_public_key_test", ());
-    assert!(
-        !shard_public_key
-            .expect("signing key update transport failed")
-            .expect("signing key update application failed")
-            .is_empty(),
-        "startup user shard must have local signer key material before first account create",
-    );
 
     let created: Result<Result<Principal, Error>, _> = setup.pic.update_call(
         user_hub_pid,

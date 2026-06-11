@@ -1,4 +1,3 @@
-pub mod attestation;
 pub mod auth;
 pub mod cycles;
 pub mod install;
@@ -33,7 +32,6 @@ impl RuntimeWorkflow {
 
     /// Start timers that should run on role-attestation-refreshing non-root canisters.
     pub fn start_all_with_role_attestation_refresh() {
-        workflow::runtime::attestation::RoleAttestationKeyRefreshWorkflow::start();
         Self::start_all();
     }
 

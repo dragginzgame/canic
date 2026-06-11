@@ -1,14 +1,7 @@
 mod access;
 
-use crate::endpoint::{
-    EndpointKind,
-    parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, CanisterRoleArg, QueryMode},
-    validate::ValidatedArgs,
-};
-use access::{
-    AccessPlan, access_stage, build_access_plan, exprs_have_attested_role_predicate,
-    requires_authenticated,
-};
+use crate::endpoint::{EndpointKind, parse::QueryMode, validate::ValidatedArgs};
+use access::{AccessPlan, access_stage, build_access_plan, requires_authenticated};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{ItemFn, Signature};
@@ -29,11 +22,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let output = orig_sig.output.clone();
     let impl_async = orig_sig.asyncness.is_some();
     let returns_fallible = returns_fallible(&orig_sig);
-    let protected_roles = match protected_internal_roles(&args.requires) {
-        Ok(roles) => roles,
-        Err(err) => return err.to_compile_error(),
-    };
-    let is_protected_internal = !protected_roles.is_empty();
 
     let access_plan = match build_access_plan(kind, &args, &orig_sig) {
         Ok(plan) => plan,
@@ -44,7 +32,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         return syn::Error::new_spanned(&orig_sig.ident, message).to_compile_error();
     }
 
-    let wrapper_async = is_protected_internal || impl_async || access_plan.requires_async();
+    let wrapper_async = impl_async || access_plan.requires_async();
 
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
@@ -61,12 +49,6 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let payload_registration = payload_registration(kind, &args, &orig_name);
     let dispatch_fn = dispatch(kind, wrapper_async);
 
-    let wrapper_inputs = if is_protected_internal {
-        Default::default()
-    } else {
-        inputs
-    };
-
     let wrapper_sig = syn::Signature {
         ident: orig_name.clone(),
         asyncness: if wrapper_async {
@@ -74,7 +56,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         } else {
             None
         },
-        inputs: wrapper_inputs,
+        inputs,
         output,
         ..orig_sig.clone()
     };
@@ -83,28 +65,11 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     let exported_method = exported_method(&args, &orig_name);
     let call_decl = call_decl(kind, args.query_mode, &call_ident, &exported_method);
 
-    let access_stage = if is_protected_internal {
-        quote!()
-    } else {
-        access_stage(&access_plan, &call_ident)
-    };
+    let access_stage = access_stage(&access_plan, &call_ident);
 
     let call_args = match extract_args(&orig_sig) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error(),
-    };
-    let protected_stage = if is_protected_internal {
-        match protected_internal_stage(&orig_sig, &exported_method, &protected_roles) {
-            Ok(stage) => stage,
-            Err(err) => return err.to_compile_error(),
-        }
-    } else {
-        quote!()
-    };
-    let protected_endpoint_descriptor = if is_protected_internal {
-        protected_internal_endpoint_descriptor(&vis, &orig_name, &exported_method, &protected_roles)
-    } else {
-        quote!()
     };
 
     let dispatch_call = dispatch_call(
@@ -118,14 +83,12 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
     quote! {
         #payload_registration
-        #protected_endpoint_descriptor
 
         #(#attrs)*
         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
-            #protected_stage
             #access_stage
             #dispatch_call
         }
@@ -247,59 +210,6 @@ fn call_decl(
     }
 }
 
-fn protected_internal_roles(requires: &[AccessExprAst]) -> syn::Result<Vec<TokenStream2>> {
-    if !exprs_have_attested_role_predicate(requires) {
-        return Ok(Vec::new());
-    }
-
-    let mut roles = Vec::new();
-    for expr in requires {
-        collect_protected_role_expr(expr, &mut roles)?;
-    }
-    Ok(roles)
-}
-
-fn collect_protected_role_expr(
-    expr: &AccessExprAst,
-    roles: &mut Vec<TokenStream2>,
-) -> syn::Result<()> {
-    match expr {
-        AccessExprAst::All(exprs) => {
-            for expr in exprs {
-                collect_protected_role_expr(expr, roles)?;
-            }
-            Ok(())
-        }
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole {
-            role,
-        })) => {
-            roles.push(role_to_tokens(role));
-            Ok(())
-        }
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAnyRole {
-            roles: any_roles,
-        })) => {
-            roles.extend(any_roles.iter().map(role_to_tokens));
-            Ok(())
-        }
-        AccessExprAst::Any(_) | AccessExprAst::Not(_) | AccessExprAst::Pred(_) => {
-            Err(syn::Error::new(
-                proc_macro2::Span::call_site(),
-                "caller::has_role(...) protected endpoints may only combine attested role predicates",
-            ))
-        }
-    }
-}
-
-fn role_to_tokens(role: &CanisterRoleArg) -> TokenStream2 {
-    match role {
-        CanisterRoleArg::Literal(role) => {
-            quote!(::canic::__internal::core::ids::CanisterRole::new(#role))
-        }
-        CanisterRoleArg::Expr(role) => quote!(#role),
-    }
-}
-
 fn first_typed_arg_ident(sig: &Signature) -> Option<syn::Ident> {
     let first = sig.inputs.first()?;
     let syn::FnArg::Typed(pat) = first else {
@@ -348,123 +258,12 @@ fn dispatch_call(
     }
 }
 
-fn protected_internal_stage(
-    sig: &syn::Signature,
-    exported_method: &TokenStream2,
-    roles: &[TokenStream2],
-) -> syn::Result<TokenStream2> {
-    let typed_args = extract_typed_args(sig)?;
-    let arg_idents: Vec<_> = typed_args.iter().map(|(ident, _)| ident).collect();
-    let arg_types: Vec<_> = typed_args.iter().map(|(_, ty)| ty).collect();
-
-    let decode_stage = if typed_args.is_empty() {
-        quote! {
-            if let Err(_err) = ::canic::cdk::candid::decode_args::<()>(&__canic_envelope.args) {
-                return Err(::canic::Error::new(
-                    ::canic::dto::error::ErrorCode::InternalRpcMalformed,
-                    "malformed Canic internal call envelope".to_string(),
-                ).into());
-            }
-        }
-    } else {
-        quote! {
-            let (#(#arg_idents,)*): (#(#arg_types,)*) =
-                match ::canic::cdk::candid::decode_args::<(#(#arg_types,)*)>(&__canic_envelope.args) {
-                    Ok(args) => args,
-                    Err(_err) => {
-                        return Err(::canic::Error::new(
-                            ::canic::dto::error::ErrorCode::InternalRpcMalformed,
-                            "malformed Canic internal call envelope".to_string(),
-                        ).into());
-                    }
-                };
-        }
-    };
-
-    Ok(quote! {
-        let __canic_raw_args = ::canic::cdk::api::msg_arg_data();
-        let __canic_envelope: ::canic::dto::auth::CanicInternalCallEnvelopeV1 =
-            match ::canic::cdk::candid::decode_one(&__canic_raw_args) {
-                Ok(envelope) => envelope,
-                Err(_err) => {
-                    return Err(::canic::Error::new(
-                        ::canic::dto::error::ErrorCode::InternalRpcMalformed,
-                        "malformed Canic internal call envelope".to_string(),
-                    ).into());
-                }
-            };
-
-        let __canic_method = #exported_method;
-        if __canic_envelope.version != 1
-            || __canic_envelope.header.target_canister != ::canic::cdk::api::canister_self()
-            || __canic_envelope.header.target_method != __canic_method
-        {
-            return Err(::canic::Error::new(
-                ::canic::dto::error::ErrorCode::InternalRpcMalformed,
-                "invalid Canic internal call envelope".to_string(),
-            ).into());
-        }
-
-        let __canic_accepted_roles = [#(#roles),*];
-        if let Err(err) = ::canic::__internal::core::api::auth::AuthApi::verify_internal_invocation_proof(
-            &__canic_envelope.proof,
-            __canic_method,
-            &__canic_accepted_roles,
-        ).await {
-            return Err(err.into());
-        }
-
-        #decode_stage
-    })
-}
-
-fn protected_internal_endpoint_descriptor(
-    vis: &syn::Visibility,
-    name: &syn::Ident,
-    exported_method: &TokenStream2,
-    roles: &[TokenStream2],
-) -> TokenStream2 {
-    let descriptor_name = format_ident!("canic_internal_endpoint_{}", name);
-    quote! {
-        #vis fn #descriptor_name() -> ::canic::api::ic::ProtectedInternalEndpoint {
-            ::canic::api::ic::ProtectedInternalEndpoint::new(
-                #exported_method,
-                [#(#roles),*],
-            )
-        }
-    }
-}
-
 fn extract_args(sig: &syn::Signature) -> syn::Result<Vec<TokenStream2>> {
     let mut out = Vec::new();
     for input in &sig.inputs {
         match input {
             syn::FnArg::Typed(pat) => match &*pat.pat {
                 syn::Pat::Ident(id) => out.push(quote!(#id)),
-                _ => {
-                    return Err(syn::Error::new_spanned(
-                        &pat.pat,
-                        "destructuring parameters not supported",
-                    ));
-                }
-            },
-            syn::FnArg::Receiver(r) => {
-                return Err(syn::Error::new_spanned(
-                    r,
-                    "`self` not supported in canic endpoints",
-                ));
-            }
-        }
-    }
-    Ok(out)
-}
-
-fn extract_typed_args(sig: &syn::Signature) -> syn::Result<Vec<(syn::Ident, Box<syn::Type>)>> {
-    let mut out = Vec::new();
-    for input in &sig.inputs {
-        match input {
-            syn::FnArg::Typed(pat) => match &*pat.pat {
-                syn::Pat::Ident(id) => out.push((id.ident.clone(), pat.ty.clone())),
                 _ => {
                     return Err(syn::Error::new_spanned(
                         &pat.pat,

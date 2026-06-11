@@ -86,7 +86,7 @@ fn auth_metrics_are_exposed_with_stable_labels() {
         AuthMetricSurface::Attestation,
         AuthMetricOperation::Verify,
         AuthMetricOutcome::Failed,
-        AuthMetricReason::UnknownKeyId,
+        AuthMetricReason::VerifyFailed,
     );
 
     let entries = entries(MetricsKind::Security);
@@ -103,7 +103,7 @@ fn auth_metrics_are_exposed_with_stable_labels() {
     );
     assert_metric_count(
         &entries,
-        &["auth", "attestation", "verify", "failed", "unknown_key_id"],
+        &["auth", "attestation", "verify", "failed", "verify_failed"],
         1,
     );
 }

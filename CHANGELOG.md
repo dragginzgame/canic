@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.17` deletes remaining legacy protected-internal call, attestation
+  key-set, verifier root-key cache, shard secp256k1 verification, and
+  threshold-ECDSA public-key auth surfaces from active code and test canisters,
+  leaving normal auth on delegated-token and role-attestation canister
+  signatures.
+
 - `0.65.16` moves `SignedRoleAttestation` onto root canister signatures with
   explicit prepare/get endpoints, local embedded-proof verification, no
   verifier-side root key refresh, and no ECDSA key rotation semantics for role

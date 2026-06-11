@@ -6,16 +6,14 @@ use crate::{
 };
 use std::cell::RefCell;
 
-mod key_state;
 mod records;
 mod sessions;
 
 pub use records::{
-    ActiveDelegationProofRecord, AttestationKeyStatusRecord, AttestationPublicKeyRecord,
-    AuthStateRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
-    DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
-    IcCanisterSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-    RootProofRecord,
+    ActiveDelegationProofRecord, AuthStateRecord, DelegatedRoleGrantRecord,
+    DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationAudienceRecord,
+    DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
+    IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootProofRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -165,40 +163,6 @@ impl AuthState {
             }
             removed
         })
-    }
-
-    // Resolve one attestation public key by key id.
-    #[must_use]
-    pub(crate) fn get_attestation_public_key(
-        key_id: u32,
-        key_name: &str,
-    ) -> Option<AttestationPublicKeyRecord> {
-        AUTH_STATE
-            .with_borrow(|cell| key_state::get_attestation_public_key(cell.get(), key_id, key_name))
-    }
-
-    // Resolve the full attestation public key set.
-    #[must_use]
-    pub(crate) fn get_attestation_public_keys(key_name: &str) -> Vec<AttestationPublicKeyRecord> {
-        AUTH_STATE.with_borrow(|cell| key_state::get_attestation_public_keys(cell.get(), key_name))
-    }
-
-    // Replace the attestation public key set.
-    pub(crate) fn set_attestation_public_keys(keys: Vec<AttestationPublicKeyRecord>) {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            key_state::set_attestation_public_keys(&mut data, keys);
-            cell.set(data);
-        });
-    }
-
-    // Upsert one attestation public key by key id.
-    pub(crate) fn upsert_attestation_public_key(key: AttestationPublicKeyRecord) {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            key_state::upsert_attestation_public_key(&mut data, key);
-            cell.set(data);
-        });
     }
 
     // Resolve the issuer's installed active delegation proof.

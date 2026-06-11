@@ -272,7 +272,6 @@ pub enum EcdsaPurpose {
     DelegationProof,
     DelegatedToken,
     RoleAttestation,
-    InternalInvocationProof,
     Other(CommandKind),
 }
 

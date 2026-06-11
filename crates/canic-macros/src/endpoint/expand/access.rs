@@ -145,7 +145,6 @@ pub(super) fn build_access_plan(
     let is_app_command = is_app_command_endpoint(sig);
     let is_internal = args.internal || is_app_command;
     let has_app_state = exprs_have_app_state_predicate(&args.requires);
-    let has_attested_role = exprs_have_attested_role_predicate(&args.requires);
 
     if is_internal && has_app_state {
         let message = if is_app_command {
@@ -175,10 +174,6 @@ pub(super) fn build_access_plan(
     }
 
     if exprs.is_empty() {
-        return Ok(AccessPlan::None);
-    }
-
-    if has_attested_role {
         return Ok(AccessPlan::None);
     }
 
@@ -245,11 +240,6 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
         BuiltinPredicate::CallerIsSameCanister => {
             quote!(::canic::__internal::core::access::expr::caller::is_same_canister())
         }
-        BuiltinPredicate::CallerHasRole { .. } | BuiltinPredicate::CallerHasAnyRole { .. } => {
-            quote!(compile_error!(
-                "caller::has_role(...) and caller::has_any_role(...) are protected internal-call predicates and must be lowered through the envelope wrapper"
-            ))
-        }
         BuiltinPredicate::CallerIsRegisteredToSubnet => {
             quote!(::canic::__internal::core::access::expr::caller::is_registered_to_subnet())
         }
@@ -284,25 +274,6 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
 
 fn exprs_have_app_state_predicate(exprs: &[AccessExprAst]) -> bool {
     exprs.iter().any(expr_has_app_state_predicate)
-}
-
-pub(super) fn exprs_have_attested_role_predicate(exprs: &[AccessExprAst]) -> bool {
-    exprs.iter().any(expr_has_attested_role_predicate)
-}
-
-fn expr_has_attested_role_predicate(expr: &AccessExprAst) -> bool {
-    match expr {
-        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
-            exprs.iter().any(expr_has_attested_role_predicate)
-        }
-        AccessExprAst::Not(expr) => expr_has_attested_role_predicate(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(
-            BuiltinPredicate::CallerHasRole { .. } | BuiltinPredicate::CallerHasAnyRole { .. },
-        )) => true,
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
-            false
-        }
-    }
 }
 
 pub(super) fn requires_authenticated(exprs: &[AccessExprAst]) -> bool {

@@ -30,16 +30,6 @@ pub enum AuthScopeArg {
 }
 
 ///
-/// CanisterRoleArg
-///
-
-#[derive(Clone, Debug)]
-pub enum CanisterRoleArg {
-    Literal(String),
-    Expr(TokenStream2),
-}
-
-///
 /// BuiltinPredicate
 ///
 
@@ -54,12 +44,6 @@ pub enum BuiltinPredicate {
     CallerIsChild,
     CallerIsRoot,
     CallerIsSameCanister,
-    CallerHasRole {
-        role: CanisterRoleArg,
-    },
-    CallerHasAnyRole {
-        roles: Vec<CanisterRoleArg>,
-    },
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
     Authenticated {
@@ -474,24 +458,10 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 )));
             }
 
-            if let Some(label) = caller_role_predicate_label(&path) {
-                let predicate = if label == "caller::has_any_role" {
-                    BuiltinPredicate::CallerHasAnyRole {
-                        roles: parse_canister_role_list_arg(&path, args, label)?,
-                    }
-                } else if label == "caller::has_role" {
-                    let role = parse_canister_role_arg(&path, args, label)?;
-                    BuiltinPredicate::CallerHasRole { role }
-                } else {
-                    unreachable!("caller role predicate label must be exhaustive")
-                };
-                return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(predicate)));
-            }
-
             if is_removed_has_app_role_path(&path) {
                 return Err(syn::Error::new_spanned(
                     &path,
-                    "caller::has_app_role(...) was removed; use root-signed caller::has_role(...) for protected internal endpoints",
+                    "caller::has_app_role(...) was removed; use explicit SignedRoleAttestation verification",
                 ));
             }
 
@@ -518,104 +488,6 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
             })?;
             Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)))
         }
-    }
-}
-
-fn parse_canister_role_arg<I>(
-    path: &Path,
-    mut args: I,
-    predicate_label: &'static str,
-) -> syn::Result<CanisterRoleArg>
-where
-    I: Iterator<Item = Expr>,
-{
-    let role_expr = args.next().ok_or_else(|| {
-        syn::Error::new_spanned(
-            path,
-            format!("{predicate_label}(...) requires one canister role argument"),
-        )
-    })?;
-    if args.next().is_some() {
-        return Err(syn::Error::new_spanned(
-            path,
-            format!("{predicate_label}(...) accepts exactly one canister role argument"),
-        ));
-    }
-
-    parse_canister_role_expr(path, role_expr, predicate_label)
-}
-
-fn parse_canister_role_list_arg<I>(
-    path: &Path,
-    mut args: I,
-    predicate_label: &'static str,
-) -> syn::Result<Vec<CanisterRoleArg>>
-where
-    I: Iterator<Item = Expr>,
-{
-    let roles_expr = args.next().ok_or_else(|| {
-        syn::Error::new_spanned(
-            path,
-            format!("{predicate_label}(...) requires one non-empty role array argument"),
-        )
-    })?;
-    if args.next().is_some() {
-        return Err(syn::Error::new_spanned(
-            path,
-            format!("{predicate_label}(...) accepts exactly one role array argument"),
-        ));
-    }
-
-    let Expr::Array(array) = roles_expr else {
-        return Err(syn::Error::new_spanned(
-            roles_expr,
-            format!("{predicate_label}(...) role list must be an array"),
-        ));
-    };
-
-    if array.elems.is_empty() {
-        return Err(syn::Error::new_spanned(
-            array,
-            format!("{predicate_label}(...) role list must not be empty"),
-        ));
-    }
-
-    array
-        .elems
-        .into_iter()
-        .map(|expr| parse_canister_role_expr(path, expr, predicate_label))
-        .collect()
-}
-
-fn parse_canister_role_expr(
-    path: &Path,
-    role_expr: Expr,
-    predicate_label: &'static str,
-) -> syn::Result<CanisterRoleArg> {
-    match role_expr {
-        Expr::Lit(expr_lit) => match &expr_lit.lit {
-            syn::Lit::Str(role_lit) => {
-                let value = role_lit.value();
-                if value.trim().is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        path,
-                        format!("{predicate_label}(...) role must not be empty"),
-                    ));
-                }
-                Ok(CanisterRoleArg::Literal(value))
-            }
-            _ => Err(syn::Error::new_spanned(
-                expr_lit,
-                format!(
-                    "{predicate_label}(...) role must be a string literal or canister role path"
-                ),
-            )),
-        },
-        Expr::Path(expr_path) => Ok(CanisterRoleArg::Expr(quote::quote!(#expr_path))),
-        other => Err(syn::Error::new_spanned(
-            other,
-            format!("{predicate_label}(...) role must be a string literal or canister role path"),
-        )),
     }
 }
 
@@ -672,20 +544,6 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
 
 fn is_authenticated_path(path: &Path) -> bool {
     short_path_is(path, "auth", "authenticated")
-}
-
-fn caller_role_predicate_label(path: &Path) -> Option<&'static str> {
-    let (module, last) = short_path_tail(path)?;
-    if module != "caller" {
-        return None;
-    }
-    if last == "has_role" {
-        Some("caller::has_role")
-    } else if last == "has_any_role" {
-        Some("caller::has_any_role")
-    } else {
-        None
-    }
 }
 
 fn is_removed_has_app_role_path(path: &Path) -> bool {

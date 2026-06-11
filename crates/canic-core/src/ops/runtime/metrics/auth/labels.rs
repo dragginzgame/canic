@@ -24,9 +24,7 @@ const PRED_SESSION_FALLBACK_RAW_CALLER: &str = "session_fallback_raw_caller";
 const PRED_SESSION_PRUNED: &str = "session_pruned";
 const PRED_SESSION_REPLACED: &str = "session_replaced";
 const PRED_ATTESTATION_VERIFY_FAILED: &str = "attestation_verify_failed";
-const PRED_ATTESTATION_UNKNOWN_KEY_ID: &str = "attestation_unknown_key_id";
 const PRED_ATTESTATION_EPOCH_REJECTED: &str = "attestation_epoch_rejected";
-const PRED_ATTESTATION_REFRESH_FAILED: &str = "attestation_refresh_failed";
 
 pub(super) const fn auth_session_endpoint() -> &'static str {
     AUTH_SESSION_ENDPOINT
@@ -104,14 +102,6 @@ pub(super) const fn attestation_verify_failed_predicate() -> &'static str {
     PRED_ATTESTATION_VERIFY_FAILED
 }
 
-pub(super) const fn attestation_unknown_key_id_predicate() -> &'static str {
-    PRED_ATTESTATION_UNKNOWN_KEY_ID
-}
-
 pub(super) const fn attestation_epoch_rejected_predicate() -> &'static str {
     PRED_ATTESTATION_EPOCH_REJECTED
-}
-
-pub(super) const fn attestation_refresh_failed_predicate() -> &'static str {
-    PRED_ATTESTATION_REFRESH_FAILED
 }

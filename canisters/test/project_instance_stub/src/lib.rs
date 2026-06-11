@@ -28,14 +28,13 @@ async fn instance_verify_token(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-/// Protected app-style instance call accepted only from the project hub role.
+/// Verify one self-contained delegated token for the project visit path.
 #[canic_update(
-    internal,
     name = "project_instance_record_visit",
-    requires(caller::has_role("project_hub"))
+    requires(auth::authenticated(cap::VERIFY))
 )]
-async fn record_visit(project_key: String) -> Result<(), Error> {
-    let _ = project_key;
+async fn record_visit(token: DelegatedToken, project_key: String) -> Result<(), Error> {
+    let _ = (token, project_key);
     Ok(())
 }
 

@@ -150,10 +150,8 @@ example `../../canic.toml`.
 
 The root crate needs Canic's `control-plane` feature. Add
 `auth-root-canister-sig-create` when the fleet enables delegated-token root
-proof issuance, and `auth-threshold-ecdsa-public-key` while root still
-certifies threshold-ECDSA shard public keys. Add `auth-threshold-ecdsa-sign` to
-canisters that sign shard tokens, and `auth-delegated-token-verify` to endpoint
-verifiers.
+proof issuance. Add `auth-issuer-canister-sig-create` to canisters that issue
+delegated tokens, and `auth-delegated-token-verify` to endpoint verifiers.
 
 ```toml
 [package.metadata.canic]
@@ -162,7 +160,7 @@ role = "root"
 
 [dependencies]
 candid = "<version>"
-canic = { version = "<same-version-as-canic-cli>", features = ["auth-root-canister-sig-create", "auth-threshold-ecdsa-public-key", "control-plane"] }
+canic = { version = "<same-version-as-canic-cli>", features = ["auth-root-canister-sig-create", "control-plane"] }
 ic-cdk = "0.20"
 
 [build-dependencies]

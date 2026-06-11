@@ -168,16 +168,17 @@ may use seconds; protocol DTOs and canonical encodings use `_ns` fields.
 - `cert.aud`, `cert.grants`, cert time fields, and `max_token_ttl_ns`: set by
   root and certified by the root proof.
 - `claims.subject`, `claims.aud`, `claims.grants`, token time fields, and
-  `nonce`: set by shard and signed by shard.
+  `nonce`: set by the issuer and signed by the issuer.
 - `claims.ext`: opaque application data set by the issuer, signed as part of
   `DelegatedTokenClaims`, and interpreted only by application endpoints.
 - `claims.cert_hash`: hash of canonical `DelegationCert`; set by shard and
   verified by every verifier.
 - `claims.issuer_shard_pid`: must equal `cert.shard_pid`.
 
-`nonce` is informational entropy only. Core delegated auth is a bearer-token
-system and does not track nonce reuse. Replay protection is bounded by token TTL
-unless an application builds a separate replay store.
+`nonce` is deterministic issuer-generated uniqueness material. It is not
+secret, not a replay key, and not an authorization input. The issuer derives it
+from caller, prepare operation id, subject, issuer, and selected cert hash
+without `raw_rand` or any management-canister call.
 
 ## 4. Canonical Encoding
 
@@ -321,7 +322,8 @@ Issuer issuance steps:
 3. Reject the same operation id with a different actor or payload.
 4. Require an installed `ActiveDelegationProof` whose cert issuer is this
    canister.
-5. Prepare `DelegatedTokenClaims`.
+5. Prepare `DelegatedTokenClaims`, including deterministic issuer-generated
+   nonce material.
 6. Enforce:
    - root proof verifies
    - cert is currently valid
@@ -338,7 +340,8 @@ Issuer issuance steps:
 
 The normal auth surface has no single-call token issuance path. Fleet, CLI, and
 test helpers choreograph prepare/get from off-canister code. Normal delegated
-auth does not call `management_canister.sign_with_ecdsa`.
+auth does not call `management_canister.sign_with_ecdsa`, `raw_rand`, or any
+management-canister method during `prepare_delegated_token`.
 
 ## 7. Verifier Algorithm
 
@@ -387,6 +390,12 @@ claims.subject == ic_cdk::caller()
 
 If all checks pass, the endpoint receives a delegated subject identity.
 
+`DelegatedToken` is not an on-behalf-of delegation mechanism. A user token is
+valid only when presented by `claims.subject` as `msg.caller()`.
+Canister-to-canister forwarding intentionally fails because the downstream
+verifier sees the forwarding canister as `msg.caller()`. Service-to-service
+calls use `SignedRoleAttestation` or a future explicit on-behalf-of protocol.
+
 Plain query, composite-query, and update guards share this same verification
 path. No step checks local proof presence, fetches root key material, or calls
 root.
@@ -413,6 +422,10 @@ Rules:
   - configured delegated-token max TTL
   - optional requested session TTL
 - expiry boundary is strict: `now_ns >= expires_at_ns` means expired
+- verifier future-skew allowance is allowed only for not-from-the-future checks:
+  `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000`
+- no expiry grace is added for delegated tokens, delegation certs, sessions, or
+  role attestations
 - bootstrap token fingerprint is stored to reject replay conflicts and allow
   idempotent same-session replay
 
@@ -462,7 +475,9 @@ Verifier behavior:
 - verify the embedded root canister-signature proof against the configured root
   canister id and raw IC root public key
 - enforce subject, role, audience, subnet, time window, and minimum accepted
-  epoch locally
+  epoch locally; `issued_at_ns` may be at most
+  `AUTH_TIME_SKEW_ALLOWANCE_NS` ahead of verifier time, while
+  `expires_at_ns` remains strict
 - make no root, issuer, or management-canister call on the protected path
 
 Current issuance rule:
@@ -502,18 +517,14 @@ Security boundaries:
   delegated-token root identity trust boundary.
 - `auth.delegated_tokens.ic_root_public_key_raw_hex` or the runtime IC root-key
   provider is the root canister-signature trust anchor.
-- `auth.delegated_tokens.ecdsa_key_name` defines the shard delegated-token ECDSA
-  key family.
 - verifier `local_role` config is trusted; a canister configured with the wrong
   role is compromised for delegated-auth purposes.
 
 Feature requirements:
 
-- root proof issuer: `control-plane`, `auth-root-canister-sig-create`,
-  `auth-threshold-ecdsa-public-key` while shard keys still come from threshold
-  ECDSA
+- root proof issuer: `control-plane`, `auth-root-canister-sig-create`
 - endpoint verifier: `auth-delegated-token-verify`
-- shard token issuer using threshold ECDSA: `auth-threshold-ecdsa-sign`
+- issuer token signer: `auth-issuer-canister-sig-create`
 - role attestation issuer: `control-plane`, `auth-root-canister-sig-create`
 - role attestation verifier: `auth-root-canister-sig-verify` with configured
   root canister id and raw IC root public key
@@ -592,6 +603,8 @@ When changing auth code:
 - use one canonical encoding implementation for mint and verify
 - reject noncanonical vectors instead of sorting during verification
 - preserve `now_ns >= expires_at_ns` as the expiry boundary everywhere
+- apply `AUTH_TIME_SKEW_ALLOWANCE_NS` only to not-from-the-future checks, never
+  to expiry
 - do not add verifier-local proof lookup
 - do not add proof distribution as a correctness requirement
 - do not retag root-provided attestation keys

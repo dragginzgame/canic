@@ -303,111 +303,6 @@ pub struct SignedRoleAttestation {
     pub root_proof: RootProof,
 }
 
-//
-// InternalInvocationProofRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct InternalInvocationProofRequest {
-    pub subject: Principal,
-    pub role: CanisterRole,
-    #[serde(default)]
-    pub subnet_id: Option<Principal>,
-    pub audience: Principal,
-    pub audience_method: String,
-    pub ttl_ns: u64,
-    #[serde(default)]
-    pub metadata: Option<RootRequestMetadata>,
-}
-
-//
-// InternalInvocationProofPayloadV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct InternalInvocationProofPayloadV1 {
-    pub subject: Principal,
-    pub role: CanisterRole,
-    #[serde(default)]
-    pub subnet_id: Option<Principal>,
-    pub audience: Principal,
-    pub audience_method: String,
-    pub issued_at_ns: u64,
-    pub expires_at_ns: u64,
-    pub epoch: u64,
-}
-
-//
-// SignedInternalInvocationProofV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SignedInternalInvocationProofV1 {
-    pub payload: InternalInvocationProofPayloadV1,
-    pub signature: Vec<u8>,
-    pub key_id: u32,
-}
-
-//
-// CanicInternalCallHeaderV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanicInternalCallHeaderV1 {
-    pub target_canister: Principal,
-    pub target_method: String,
-}
-
-//
-// CanicInternalCallEnvelopeV1
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanicInternalCallEnvelopeV1 {
-    pub version: u16,
-    pub header: CanicInternalCallHeaderV1,
-    pub proof: SignedInternalInvocationProofV1,
-    pub args: Vec<u8>,
-}
-
-//
-// AttestationKeyStatus
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum AttestationKeyStatus {
-    Current,
-    Previous,
-}
-
-//
-// AttestationKey
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct AttestationKey {
-    pub key_id: u32,
-    pub public_key: Vec<u8>,
-    pub key_name: String,
-    pub key_hash: [u8; 32],
-    pub status: AttestationKeyStatus,
-    #[serde(default)]
-    pub valid_from: Option<u64>,
-    #[serde(default)]
-    pub valid_until: Option<u64>,
-}
-
-//
-// AttestationKeySet
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct AttestationKeySet {
-    pub root_pid: Principal,
-    pub generated_at: u64,
-    pub keys: Vec<AttestationKey>,
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -423,9 +318,6 @@ mod tests {
             "impl DelegatedTokenClaims",
             "impl RoleAttestation",
             "impl SignedRoleAttestation",
-            "impl InternalInvocationProofPayloadV1",
-            "impl SignedInternalInvocationProofV1",
-            "impl CanicInternalCallEnvelopeV1",
             "fn verify",
             "fn sign",
             "fn resolve",

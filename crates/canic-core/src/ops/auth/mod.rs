@@ -1,5 +1,3 @@
-use crate::{InternalError, cdk::types::Principal, ids::CanisterRole, ops::ic::IcOps};
-
 mod attestation;
 mod boundary;
 mod crypto;
@@ -7,7 +5,6 @@ mod delegated;
 mod delegation;
 mod error;
 mod issuer_canister_sig;
-mod keys;
 mod root_canister_sig;
 mod token;
 mod types;
@@ -22,52 +19,10 @@ pub use types::{
     SignRoleAttestationInput, VerifyDelegatedTokenRuntimeInput,
 };
 
-const DERIVATION_NAMESPACE: &[u8] = b"canic";
-const ROOT_PATH_SEGMENT: &[u8] = b"root";
-const ATTESTATION_PATH_SEGMENT: &[u8] = b"attestation";
 const ROLE_ATTESTATION_SIGNING_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";
-const INTERNAL_INVOCATION_PROOF_SIGNING_DOMAIN: &[u8] = b"CANIC_INTERNAL_INVOCATION_PROOF_V1";
-const ROLE_ATTESTATION_KEY_ID_V1: u32 = 1;
 
 ///
 /// AuthOps
 ///
 
 pub struct AuthOps;
-
-///
-/// InternalInvocationProofVerificationInput
-///
-
-#[derive(Clone, Copy)]
-pub struct InternalInvocationProofVerificationInput<'a> {
-    pub caller: Principal,
-    pub self_pid: Principal,
-    pub target_method: &'a str,
-    pub accepted_roles: &'a [CanisterRole],
-    pub verifier_subnet: Option<Principal>,
-    pub now_ns: u64,
-    pub min_accepted_epoch: u64,
-}
-
-impl AuthOps {
-    // Publish the legacy delegated-grant root public key into cascaded subnet state.
-    pub async fn publish_delegated_grant_root_key_material() -> Result<(), InternalError> {
-        let root_pid = IcOps::canister_self();
-        let delegated_key_name = keys::delegated_tokens_key_name()?;
-        keys::ensure_root_public_key_published(&delegated_key_name, root_pid).await
-    }
-
-    // Publish root auth material and warm local root-owned auth keys once.
-    pub async fn publish_root_auth_material() -> Result<(), InternalError> {
-        let root_pid = IcOps::canister_self();
-        let now_secs = IcOps::now_secs();
-
-        Self::publish_delegated_grant_root_key_material().await?;
-
-        let attestation_key_name = keys::attestation_key_name()?;
-        keys::ensure_attestation_key_cached(&attestation_key_name, root_pid, now_secs).await?;
-
-        Ok(())
-    }
-}

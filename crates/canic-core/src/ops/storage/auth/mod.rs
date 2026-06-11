@@ -2,12 +2,12 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
-    dto::auth::{ActiveDelegationProof, AttestationKey, AttestationKeySet},
+    dto::auth::ActiveDelegationProof,
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
     },
 };
-use mapper::{ActiveDelegationProofRecordMapper, AttestationPublicKeyRecordMapper};
+use mapper::ActiveDelegationProofRecordMapper;
 
 pub use crate::storage::stable::auth::DelegatedSessionUpsertResult;
 
@@ -120,40 +120,6 @@ impl AuthStateOps {
     #[must_use]
     pub fn prune_expired_delegated_session_bootstrap_bindings(now_secs: u64) -> usize {
         AuthState::prune_expired_delegated_session_bootstrap_bindings(now_secs)
-    }
-
-    #[must_use]
-    pub fn attestation_public_key(key_id: u32, key_name: &str) -> Option<AttestationKey> {
-        AuthState::get_attestation_public_key(key_id, key_name)
-            .map(AttestationPublicKeyRecordMapper::record_to_dto)
-    }
-
-    #[must_use]
-    pub fn attestation_public_key_sec1(key_id: u32, key_name: &str) -> Option<Vec<u8>> {
-        Self::attestation_public_key(key_id, key_name).map(|entry| entry.public_key)
-    }
-
-    #[must_use]
-    pub fn attestation_keys(key_name: &str) -> Vec<AttestationKey> {
-        AuthState::get_attestation_public_keys(key_name)
-            .into_iter()
-            .map(AttestationPublicKeyRecordMapper::record_to_dto)
-            .collect()
-    }
-
-    pub fn set_attestation_key_set(key_set: AttestationKeySet) {
-        let keys = key_set
-            .keys
-            .into_iter()
-            .map(AttestationPublicKeyRecordMapper::dto_to_record)
-            .collect();
-        AuthState::set_attestation_public_keys(keys);
-    }
-
-    pub fn upsert_attestation_key(key: AttestationKey) {
-        AuthState::upsert_attestation_public_key(AttestationPublicKeyRecordMapper::dto_to_record(
-            key,
-        ));
     }
 
     #[must_use]

@@ -501,7 +501,6 @@ dependencies = [
  "ic-memory",
  "ic-signature-verification",
  "icrc-ledger-types",
- "k256",
  "proc-macro2",
  "quote",
  "remain",

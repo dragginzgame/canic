@@ -1,7 +1,5 @@
 use super::*;
-use crate::endpoint::parse::{
-    AccessExprAst, AccessPredicateAst, BuiltinPredicate, CanisterRoleArg, ParsedArgs,
-};
+use crate::endpoint::parse::{AccessExprAst, AccessPredicateAst, BuiltinPredicate, ParsedArgs};
 
 fn parsed_authenticated() -> ParsedArgs {
     ParsedArgs {
@@ -33,23 +31,6 @@ fn parsed_registered_to_subnet(internal: bool) -> ParsedArgs {
                 BuiltinPredicate::CallerIsRegisteredToSubnet,
             )))),
         ])],
-        requires_async: true,
-        requires_fallible: true,
-        internal,
-        query_mode: QueryMode::Plain,
-    }
-}
-
-fn parsed_attested_role(internal: bool) -> ParsedArgs {
-    ParsedArgs {
-        forwarded: Vec::new(),
-        export_name: None,
-        payload_max_bytes: None,
-        requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-            BuiltinPredicate::CallerHasRole {
-                role: CanisterRoleArg::Literal("project_hub".to_string()),
-            },
-        ))],
         requires_async: true,
         requires_fallible: true,
         internal,
@@ -114,36 +95,6 @@ fn registered_to_subnet_is_allowed_for_internal_endpoint() {
         true,
     )
     .expect("internal predicate ok");
-}
-
-#[test]
-fn attested_role_requires_internal_update_endpoint() {
-    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-    let err = validate(
-        EndpointKind::Update,
-        parsed_attested_role(false),
-        &sig,
-        true,
-    )
-    .expect_err("attested role must be internal");
-    assert!(
-        err.to_string()
-            .contains("caller topology predicates are internal-only")
-    );
-
-    let err = validate(EndpointKind::Query, parsed_attested_role(true), &sig, true)
-        .expect_err("attested query must fail");
-    assert!(
-        err.to_string()
-            .contains("protected internal endpoints are update-only")
-    );
-}
-
-#[test]
-fn attested_role_is_allowed_for_internal_update_endpoint() {
-    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
-    validate(EndpointKind::Update, parsed_attested_role(true), &sig, true)
-        .expect("internal update attested role predicate ok");
 }
 
 #[test]

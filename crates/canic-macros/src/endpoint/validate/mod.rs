@@ -67,15 +67,6 @@ pub fn validate(
         validate_authenticated_args(sig)?;
     }
 
-    if contains_attested_caller_role_predicate(&parsed.requires)
-        && !matches!(kind, EndpointKind::Update)
-    {
-        return Err(syn::Error::new_spanned(
-            &sig.ident,
-            "caller::has_role(...) and caller::has_any_role(...) protected internal endpoints are update-only",
-        ));
-    }
-
     if !parsed.internal && contains_internal_only_caller_predicate(&parsed.requires) {
         return Err(syn::Error::new_spanned(
             &sig.ident,
@@ -127,27 +118,6 @@ fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
     }
 }
 
-fn contains_attested_caller_role_predicate(requires: &[AccessExprAst]) -> bool {
-    requires
-        .iter()
-        .any(access_expr_contains_attested_caller_role_predicate)
-}
-
-fn access_expr_contains_attested_caller_role_predicate(expr: &AccessExprAst) -> bool {
-    match expr {
-        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => exprs
-            .iter()
-            .any(access_expr_contains_attested_caller_role_predicate),
-        AccessExprAst::Not(expr) => access_expr_contains_attested_caller_role_predicate(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(
-            BuiltinPredicate::CallerHasRole { .. } | BuiltinPredicate::CallerHasAnyRole { .. },
-        )) => true,
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
-            false
-        }
-    }
-}
-
 fn contains_internal_only_caller_predicate(requires: &[AccessExprAst]) -> bool {
     requires
         .iter()
@@ -160,12 +130,9 @@ fn access_expr_contains_internal_only_caller_predicate(expr: &AccessExprAst) -> 
             .iter()
             .any(access_expr_contains_internal_only_caller_predicate),
         AccessExprAst::Not(expr) => access_expr_contains_internal_only_caller_predicate(expr),
-        AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => matches!(
-            builtin,
-            BuiltinPredicate::CallerHasRole { .. }
-                | BuiltinPredicate::CallerHasAnyRole { .. }
-                | BuiltinPredicate::CallerIsRegisteredToSubnet
-        ),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => {
+            matches!(builtin, BuiltinPredicate::CallerIsRegisteredToSubnet)
+        }
         AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
     }
 }

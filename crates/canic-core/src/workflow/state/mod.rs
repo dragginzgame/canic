@@ -4,10 +4,7 @@ use crate::{
     InternalError,
     dto::state::{AppCommand, AppCommandResponse},
     ops::{runtime::env::EnvOps, storage::state::app::AppStateOps},
-    workflow::{
-        cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
-        runtime::auth::RuntimeAuthWorkflow,
-    },
+    workflow::cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
 };
 
 ///
@@ -35,8 +32,6 @@ impl AppStateWorkflow {
         if !app_command_response_changed(response) {
             return Ok(response);
         }
-
-        RuntimeAuthWorkflow::publish_root_delegated_grant_key_to_subnet_state().await?;
 
         let snapshot = StateSnapshotBuilder::new()?
             .with_app_state()

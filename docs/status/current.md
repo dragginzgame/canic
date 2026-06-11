@@ -314,7 +314,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.16` candidate moves `SignedRoleAttestation` from root ECDSA
+- `0.65.16` is pushed and moves `SignedRoleAttestation` from root ECDSA
   signatures to root canister-signature proofs. The root auth bundle now emits
   `canic_prepare_role_attestation` update plus `canic_get_role_attestation`
   query; prepare validates caller/subject/role/subnet/TTL, replay-protects the
@@ -361,6 +361,46 @@ inspect only the files needed for the current task.
   then hit the known `Failed to bind PocketIC server to address 127.0.0.1:0`
   infrastructure panic. The idle test process group was interrupted with
   `kill -INT`.
+  Follow-up from design review: delegated-token cert/token and
+  role-attestation not-from-the-future checks must accept up to
+  `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` forward skew while preserving
+  strict expiry with no grace. Add verifier tests proving an issuer clock 30
+  seconds ahead of the verifier passes and 120 seconds ahead fails. The active
+  0.65 design/status docs also require deterministic issuer-side token nonce
+  derivation with no `raw_rand` or management-canister call during
+  `prepare_delegated_token`, a certified-data owner source guard, and explicit
+  forwarded-user-token rejection coverage; implementation remains pending.
+- Local `0.65.17` candidate deletes the remaining legacy protected-internal
+  call envelope protocol and verifier-root-key leftovers from active code. The
+  slice removes `canic_protected_endpoint!`, `ProtectedInternalEndpoint`,
+  generated internal endpoint descriptors, `CanicInternalCall*` DTOs, internal
+  invocation proof verification, app-role caller predicates, protected internal
+  tests, the `canic_attestation_key_set` endpoint, verifier-local attestation
+  key cache/storage, delegated-root-public-key subnet state, shard secp256k1
+  verification features, and the threshold-ECDSA public-key auth feature. Test
+  canisters now model service calls through delegated-token endpoints, while
+  active role attestations remain on root canister-signature prepare/get.
+  Current validation:
+  ```text
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core replay_policy --lib -- --nocapture
+  cargo test --locked -p canic-core ops::runtime::metrics::auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::metrics::query --lib -- --nocapture
+  cargo test --locked -p canic-core ops::storage::state --lib -- --nocapture
+  cargo test --locked -p canic-core storage::stable::state --lib -- --nocapture
+  cargo test --locked -p canic-macros --lib -- --nocapture
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo clippy --locked -p canic-macros --lib -- -D warnings
+  cargo check --locked -p canic-core --features auth-root-canister-sig-create,auth-root-canister-sig-verify,auth-issuer-canister-sig-create,auth-issuer-canister-sig-verify
+  cargo check --locked -p canic --features auth-root-canister-sig-create,auth-root-canister-sig-verify,auth-issuer-canister-sig-create,auth-issuer-canister-sig-verify
+  cargo check --locked -p project_instance_stub -p project-protocol-stub -p sharding_root_stub
+  cargo check --locked -p canic-tests
+  cargo fmt --all
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
   `issuer_pid`, `issuer_proof_alg`, `issuer_proof_binding`,

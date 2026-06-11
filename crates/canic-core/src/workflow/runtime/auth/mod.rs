@@ -5,15 +5,13 @@ use crate::{
     dto::auth::SignedRoleAttestation,
     format::display_optional,
     ids::CanisterRole,
-    log,
     ops::{
-        auth::{AuthExpiryError, AuthOps, AuthOpsError, AuthValidationError},
+        auth::{AuthExpiryError, AuthOps, AuthOpsError},
         config::ConfigOps,
-        ic::{IcOps, ecdsa::EcdsaOps},
+        ic::IcOps,
         runtime::env::EnvOps,
         runtime::metrics::auth::{
-            record_attestation_epoch_rejected, record_attestation_unknown_key_id,
-            record_attestation_verify_failed,
+            record_attestation_epoch_rejected, record_attestation_verify_failed,
         },
     },
     workflow::prelude::*,
@@ -123,26 +121,6 @@ impl RuntimeAuthWorkflow {
         Ok(())
     }
 
-    /// Ensure legacy delegated-grant root trust material is published in subnet state.
-    pub async fn publish_root_delegated_grant_key_to_subnet_state() -> Result<(), InternalError> {
-        EnvOps::require_root()?;
-
-        let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
-        if !delegated_tokens_cfg.enabled {
-            return Ok(());
-        }
-        if !EcdsaOps::threshold_public_key_fetch_enabled() {
-            log!(
-                Topic::Auth,
-                Debug,
-                "skipping legacy delegated-grant root public-key publication because threshold ECDSA public-key fetch support is not compiled in"
-            );
-            return Ok(());
-        }
-
-        AuthOps::publish_delegated_grant_root_key_material().await
-    }
-
     /// Verify a role attestation locally from its embedded root proof.
     pub async fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
@@ -189,14 +167,8 @@ fn resolve_min_accepted_epoch(explicit: u64, configured: Option<u64>) -> u64 {
 
 fn record_attestation_verifier_rejection(err: &AuthOpsError) {
     record_attestation_verify_failed();
-    match err {
-        AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }) => {
-            record_attestation_unknown_key_id();
-        }
-        AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) => {
-            record_attestation_epoch_rejected();
-        }
-        _ => {}
+    if let AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) = err {
+        record_attestation_epoch_rejected();
     }
 }
 

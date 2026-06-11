@@ -25,7 +25,7 @@ pub mod env {
 /// IC primitives (calls, HTTP, crypto, network, system APIs)
 pub mod ic {
     pub use crate::__internal::core::api::ic::{
-        Call, CallBuilder, CallResult, IntentKey, IntentReservation, ProtectedInternalEndpoint,
+        Call, CallBuilder, CallResult, IntentKey, IntentReservation,
     };
 
     pub mod http {

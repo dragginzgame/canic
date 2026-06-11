@@ -1,56 +1,15 @@
 use crate::{
     dto::auth::{
-        ActiveDelegationProof, AttestationKey, AttestationKeyStatus, DelegatedRoleGrant,
-        DelegationAudience, DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
-        IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+        ActiveDelegationProof, DelegatedRoleGrant, DelegationAudience, DelegationCert,
+        DelegationProof, IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
+        RootProof,
     },
     storage::stable::auth::{
-        ActiveDelegationProofRecord, AttestationKeyStatusRecord, AttestationPublicKeyRecord,
-        DelegatedRoleGrantRecord, DelegationAudienceRecord, DelegationCertRecord,
-        DelegationProofRecord, IcCanisterSignatureProofRecord, IssuerProofAlgorithmRecord,
-        IssuerProofBindingRecord, RootProofRecord,
+        ActiveDelegationProofRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
+        DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
+        IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootProofRecord,
     },
 };
-
-///
-/// AttestationPublicKeyRecordMapper
-///
-
-pub struct AttestationPublicKeyRecordMapper;
-
-impl AttestationPublicKeyRecordMapper {
-    #[must_use]
-    pub fn dto_to_record(key: AttestationKey) -> AttestationPublicKeyRecord {
-        AttestationPublicKeyRecord {
-            key_id: key.key_id,
-            key_hash: key.key_hash,
-            key_name: key.key_name,
-            public_key_sec1: key.public_key,
-            status: match key.status {
-                AttestationKeyStatus::Current => AttestationKeyStatusRecord::Current,
-                AttestationKeyStatus::Previous => AttestationKeyStatusRecord::Previous,
-            },
-            valid_from: key.valid_from,
-            valid_until: key.valid_until,
-        }
-    }
-
-    #[must_use]
-    pub fn record_to_dto(record: AttestationPublicKeyRecord) -> AttestationKey {
-        AttestationKey {
-            key_id: record.key_id,
-            public_key: record.public_key_sec1,
-            key_name: record.key_name,
-            key_hash: record.key_hash,
-            status: match record.status {
-                AttestationKeyStatusRecord::Current => AttestationKeyStatus::Current,
-                AttestationKeyStatusRecord::Previous => AttestationKeyStatus::Previous,
-            },
-            valid_from: record.valid_from,
-            valid_until: record.valid_until,
-        }
-    }
-}
 
 ///
 /// ActiveDelegationProofRecordMapper

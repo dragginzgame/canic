@@ -36,10 +36,8 @@ sufficient for 0.65 closeout:
   instruct users to enable `auth-crypto`
 - no active code contains `DelegationProof.root_sig`,
   `EcdsaP256Sha256`, or `sign_prepared_delegation_proof`
-- residual `RootPublicKeyRecord` / `delegated_root_public_key` code remains in
-  stable state and auth key publication helpers; it is not read by
-  delegated-token root proof verification or root capability delegated-grant
-  verification
+- residual `RootPublicKeyRecord` / `delegated_root_public_key` stable state and
+  auth key publication helpers are removed from the active codebase
 - the only active root `certified_data_set` call is the root
   canister-signature certified-data owner helper for the exact `"sig"` tree
   shape
@@ -109,12 +107,30 @@ below tracks their removal or conversion.
       proof store.
 - [x] Add pending-proof metadata and enforce `retrieval_expires_at_ns`.
 - [x] Add overflow-safe time checks.
+- [ ] Apply `AUTH_TIME_SKEW_ALLOWANCE_NS = 60_000_000_000` to delegated cert
+      `not_before_ns`, delegated token `issued_at_ns`, and role-attestation
+      `issued_at_ns` not-from-the-future checks while preserving strict expiry
+      with no grace.
+- [ ] Add verifier skew tests proving an issuer clock 30 seconds ahead of the
+      verifier passes and an issuer clock 120 seconds ahead fails for delegated
+      token and role-attestation verification.
+- [ ] Remove caller-provided delegated-token nonce input and derive
+      `DelegatedTokenClaims.nonce` issuer-side from caller, prepare operation
+      id, subject, issuer, and selected cert hash without `raw_rand`.
+- [ ] Add a source guard proving `prepare_delegated_token` contains no
+      `raw_rand`, management-canister call, or `.await`.
+- [ ] Add a source guard proving no root or token issuer module outside the auth
+      certified-data owner calls `set_certified_data`.
+- [ ] Add a negative verifier test proving a user token presented by a
+      forwarding canister is rejected with `SubjectCallerMismatch`.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.
 - [x] Add `RootProof::IcCanisterSignatureV1`.
 - [x] Remove legacy threshold-ECDSA root-proof verification.
 - [x] Remove root ECDSA key fields from `DelegationCert`.
 - [x] Ensure delegated-token root proof verification does not read
       `SubnetState::delegated_root_public_key`.
+- [x] Remove residual `RootPublicKeyRecord` / `delegated_root_public_key`
+      stable state and publication helpers.
 - [x] Rename auth/replay protocol timestamps and TTLs with `_ns` suffixes.
 - [x] Specify `ic_root_public_key_raw`, not DER.
 - [x] Add explicit `cert_id == cert_hash` naming in the spec; log/metric naming

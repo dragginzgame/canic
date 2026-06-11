@@ -117,7 +117,6 @@ const DURABLE_PUBLISH_RESERVE_V1: &str = "durable_publish.cycle_reserve.v1";
 
 pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_response_idempotent("canic_app", "app.command.v1"),
-    update_snapshot_convergent("canic_attestation_key_set", "auth.attestation_key_set.v1"),
     update_read_only("canic_canister_status"),
     update_costed_response_idempotent(
         "canic_canister_upgrade",
@@ -812,28 +811,6 @@ mod tests {
             ReplayImplementationStatus::Implemented
         );
         assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
-        assert_eq!(entry.cost_class, CostClass::None);
-        assert_eq!(entry.quota_policy, None);
-        assert_eq!(entry.cycle_reserve_policy, None);
-    }
-
-    #[test]
-    fn attestation_key_set_is_manifested_as_snapshot_convergent() {
-        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-            .iter()
-            .find(|entry| entry.endpoint == "canic_attestation_key_set")
-            .expect("attestation key set policy entry");
-
-        assert_eq!(
-            entry.implementation_status,
-            ReplayImplementationStatus::Implemented
-        );
-        assert_eq!(
-            entry.replay_policy,
-            ReplayPolicy::SnapshotConvergent {
-                command_kind: "auth.attestation_key_set.v1",
-            }
-        );
         assert_eq!(entry.cost_class, CostClass::None);
         assert_eq!(entry.quota_policy, None);
         assert_eq!(entry.cycle_reserve_policy, None);

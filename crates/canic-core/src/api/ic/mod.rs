@@ -6,4 +6,3 @@ pub mod mgmt;
 pub mod network;
 
 pub use call::{Call, CallBuilder, CallResult, IntentKey, IntentReservation};
-pub use canic::ProtectedInternalEndpoint;

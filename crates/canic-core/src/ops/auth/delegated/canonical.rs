@@ -76,10 +76,6 @@ pub fn issuer_proof_binding_hash(
     hash_bytes(&out)
 }
 
-pub fn public_key_hash(public_key_sec1: &[u8]) -> [u8; 32] {
-    hash_bytes(public_key_sec1)
-}
-
 pub fn role_hash(role: &CanisterRole) -> Result<[u8; 32], CanonicalAuthError> {
     validate_role(role)?;
 

@@ -22,9 +22,11 @@ token root proof. A verifier validates locally from the token, configured root
 principal, configured or runtime IC root public key, local project/role config,
 and current IC time.
 
-Delegated tokens are bearer tokens. A valid token is not consumed by
-verification and may authorize multiple update or query calls until
-`claims.expires_at_ns`.
+Delegated tokens are bearer tokens for the presenting principal. A valid token
+is not consumed by verification and may authorize multiple update or query
+calls by `claims.subject` until `claims.expires_at_ns`. A user token is not an
+on-behalf-of credential and intentionally fails if a forwarding canister
+presents it downstream.
 
 ## Canonical Payloads
 
@@ -109,6 +111,22 @@ pub enum IssuerProof {
 All protocol timestamps are nanoseconds since Unix epoch. Human-facing config
 may use seconds, but conversion happens at the boundary. Protocol structs must
 not contain `*_secs` fields.
+
+Verifier future-skew allowance is bounded and applies only to
+not-from-the-future checks:
+
+```rust
+pub const AUTH_TIME_SKEW_ALLOWANCE_NS: u64 = 60_000_000_000;
+```
+
+Expiry remains strict. Verifiers must not add grace after `expires_at_ns`.
+
+`DelegatedTokenClaims.nonce` is deterministic issuer-generated uniqueness
+material. It is not secret, not a replay key, and not an authorization input.
+`prepare_delegated_token` must not call the management canister, including
+`raw_rand`, to produce it. The recommended nonce derivation hashes caller,
+prepare operation id, subject, issuer, and selected cert hash under
+`"canic-token-nonce-v1"` and takes the first 16 bytes.
 
 ## Canonical Hashes
 
@@ -240,16 +258,20 @@ Checks before authorization:
 - shard token signature verifies under `cert.shard_public_key_sec1`
 - certificate and token time windows are valid using strict expiry:
   `now_ns >= expires_at_ns` means expired
+- certificate `not_before_ns` and token `issued_at_ns` may be at most
+  `AUTH_TIME_SKEW_ALLOWANCE_NS` ahead of verifier time
 - token does not outlive certificate or `cert.max_token_ttl_ns`
 - `claims.aud` is a subset of `cert.aud`
 - local project accepts both token and cert audiences
 - `claims.grants` is a subset of `cert.grants`
+- `claims.subject` equals the transport caller
 - configured local role is present in `claims.grants`
 - endpoint-required scopes are present in the grant for the local role
 - delegated session subject binding is enforced before replacing caller identity
 
 No verification step checks for local proof presence, fetches root key material,
-or calls root.
+or calls root. Forwarded user tokens fail with subject/caller mismatch because
+the downstream verifier sees the forwarding canister as caller.
 
 ## Configuration Contract
 

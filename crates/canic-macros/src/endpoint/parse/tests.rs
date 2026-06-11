@@ -172,56 +172,6 @@ fn authenticated_allows_path_scope_argument() {
 }
 
 #[test]
-fn attested_role_allows_path_role_argument() {
-    let parsed = parse_args(quote!(
-        internal,
-        requires(caller::has_role(canister::PROJECT_HUB))
-    ))
-    .expect("parse args");
-    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-        panic!("expected requires(all)");
-    };
-    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasRole { role })) =
-        &exprs[0]
-    else {
-        panic!("expected attested caller role predicate");
-    };
-    let CanisterRoleArg::Expr(role) = role else {
-        panic!("expected path role");
-    };
-    assert_eq!(role.to_string(), "canister :: PROJECT_HUB");
-}
-
-#[test]
-fn attested_any_role_allows_role_array_argument() {
-    let parsed = parse_args(quote!(
-        internal,
-        requires(caller::has_any_role([canister::PROJECT_HUB, "admin_hub"]))
-    ))
-    .expect("parse args");
-    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
-        panic!("expected requires(all)");
-    };
-    let AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerHasAnyRole {
-        roles,
-    })) = &exprs[0]
-    else {
-        panic!("expected attested any-role predicate");
-    };
-    assert_eq!(roles.len(), 2);
-}
-
-#[test]
-fn attested_any_role_rejects_empty_role_array() {
-    let err = parse_args(quote!(internal, requires(caller::has_any_role([]))))
-        .expect_err("empty role array must fail");
-    assert!(
-        err.to_string()
-            .contains("caller::has_any_role(...) role list must not be empty")
-    );
-}
-
-#[test]
 fn app_role_predicate_is_removed() {
     let err = parse_args(quote!(
         internal,

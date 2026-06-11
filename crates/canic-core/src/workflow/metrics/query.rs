@@ -178,12 +178,12 @@ mod tests {
             AuthMetricSurface::Attestation,
             AuthMetricOperation::Verify,
             AuthMetricOutcome::Failed,
-            AuthMetricReason::UnknownKeyId,
+            AuthMetricReason::VerifyFailed,
         );
 
         assert_first_metric_labels(
             MetricsKind::Security,
-            ["auth", "attestation", "verify", "failed", "unknown_key_id"],
+            ["auth", "attestation", "verify", "failed", "verify_failed"],
         );
     }
 

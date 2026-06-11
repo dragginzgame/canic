@@ -2,24 +2,20 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            AttestationKeySet, AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken,
-            DelegatedTokenGetRequest, DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse,
-            DelegationAudience, DelegationProof, DelegationProofGetRequest,
-            DelegationProofIssueRequest, DelegationProofPrepareResponse,
-            InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
-            RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
-            SignedInternalInvocationProofV1, SignedRoleAttestation,
+            AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken, DelegatedTokenGetRequest,
+            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
+            DelegationProof, DelegationProofGetRequest, DelegationProofIssueRequest,
+            DelegationProofPrepareResponse, InstallActiveDelegationProofRequest,
+            InstallActiveDelegationProofResponse, RoleAttestationGetRequest,
+            RoleAttestationPrepareResponse, RoleAttestationRequest, SignedRoleAttestation,
         },
-        error::{Error, ErrorCode},
+        error::Error,
     },
     error::InternalErrorClass,
-    ids::CanisterRole,
-    log,
-    log::Topic,
     ops::{
         auth::{
-            AuthExpiryError, AuthOps, AuthOpsError, AuthValidationError, SignDelegatedTokenInput,
-            SignDelegationProofInput, SignRoleAttestationInput, VerifyDelegatedTokenRuntimeInput,
+            AuthOps, SignDelegatedTokenInput, SignDelegationProofInput, SignRoleAttestationInput,
+            VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
         ic::IcOps,
@@ -33,7 +29,6 @@ use crate::{
             },
         },
         runtime::env::EnvOps,
-        runtime::metrics::auth::record_attestation_refresh_failed,
         storage::registry::subnet::SubnetRegistryOps,
     },
 };
@@ -43,11 +38,9 @@ use root_client::RootAuthMaterialClient;
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
 // - `metadata` owns root request metadata construction.
-// - `verify_flow` owns verifier-side attestation refresh behavior.
 mod metadata;
 mod root_client;
 mod session;
-mod verify_flow;
 
 ///
 /// AuthApi
@@ -80,22 +73,6 @@ impl AuthApi {
                 Error::internal(err.to_string())
             }
             _ => Error::from(err),
-        }
-    }
-
-    fn map_internal_invocation_verify_error(err: AuthOpsError) -> Error {
-        match err {
-            AuthOpsError::Validation(AuthValidationError::AttestationUnknownKeyId { .. }) => {
-                Error::new(ErrorCode::AuthKeyUnknown, err.to_string())
-            }
-            AuthOpsError::Expiry(AuthExpiryError::AttestationEpochRejected { .. }) => {
-                Error::new(ErrorCode::AuthMaterialStale, err.to_string())
-            }
-            AuthOpsError::Expiry(
-                AuthExpiryError::AttestationExpired { .. }
-                | AuthExpiryError::AttestationNotYetValid { .. },
-            ) => Error::new(ErrorCode::AuthProofExpired, err.to_string()),
-            _ => Error::unauthorized(err.to_string()),
         }
     }
 
@@ -401,31 +378,6 @@ impl AuthApi {
         Ok(response)
     }
 
-    /// Return the legacy root attestation key set used by keyed internal proofs.
-    pub async fn attestation_key_set() -> Result<AttestationKeySet, Error> {
-        AuthOps::attestation_key_set()
-            .await
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Publish root auth material into subnet state and warm root-owned keys once.
-    pub async fn publish_root_auth_material() -> Result<(), Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        AuthOps::publish_root_auth_material().await.map_err(|err| {
-            log!(
-                Topic::Auth,
-                Warn,
-                "root auth material publish failed: {err}"
-            );
-            Self::map_auth_error(err)
-        })
-    }
-
-    /// Replace the verifier-local legacy attestation key set.
-    pub fn replace_attestation_key_set(key_set: AttestationKeySet) {
-        AuthOps::replace_attestation_key_set(key_set);
-    }
-
     /// Verify a role attestation locally from its embedded root proof.
     pub async fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
@@ -437,104 +389,6 @@ impl AuthApi {
         )
         .await
         .map_err(Self::map_auth_error)
-    }
-
-    /// Verify a root-signed, method-scoped internal invocation proof for this endpoint.
-    pub async fn verify_internal_invocation_proof(
-        proof: &SignedInternalInvocationProofV1,
-        target_method: &str,
-        accepted_roles: &[CanisterRole],
-    ) -> Result<(), Error> {
-        let configured_min_accepted_epoch = ConfigOps::role_attestation_config()
-            .map_err(Error::from)?
-            .min_accepted_epoch_by_role
-            .get(proof.payload.role.as_str())
-            .copied();
-        let min_accepted_epoch =
-            verify_flow::resolve_min_accepted_epoch(0, configured_min_accepted_epoch);
-
-        let caller = IcOps::msg_caller();
-        let self_pid = IcOps::canister_self();
-        let now_ns = IcOps::now_nanos();
-        let verifier_subnet = Some(EnvOps::subnet_pid().map_err(Error::from)?);
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-
-        let verify = || {
-            AuthOps::verify_internal_invocation_proof_cached(
-                proof,
-                crate::ops::auth::InternalInvocationProofVerificationInput {
-                    caller,
-                    self_pid,
-                    target_method,
-                    accepted_roles,
-                    verifier_subnet,
-                    now_ns,
-                    min_accepted_epoch,
-                },
-            )
-            .map(|_| ())
-        };
-        let refresh = || async {
-            let key_set = RootAuthMaterialClient::new(root_pid)
-                .attestation_key_set()
-                .await?;
-            AuthOps::replace_attestation_key_set(key_set);
-            Ok(())
-        };
-
-        match verify_flow::verify_keyed_proof_with_single_refresh(verify, refresh).await {
-            Ok(()) => Ok(()),
-            Err(verify_flow::KeyedProofVerifyFlowError::Initial(err)) => {
-                verify_flow::record_attestation_verifier_rejection(&err);
-                log!(
-                    Topic::Auth,
-                    Warn,
-                    "internal invocation proof rejected phase=cached local={} caller={} subject={} role={} key_id={} audience={} method={} epoch={} error={}",
-                    self_pid,
-                    caller,
-                    proof.payload.subject,
-                    proof.payload.role,
-                    proof.key_id,
-                    proof.payload.audience,
-                    proof.payload.audience_method,
-                    proof.payload.epoch,
-                    err
-                );
-                Err(Self::map_internal_invocation_verify_error(err))
-            }
-            Err(verify_flow::KeyedProofVerifyFlowError::Refresh { trigger, source }) => {
-                verify_flow::record_attestation_verifier_rejection(&trigger);
-                record_attestation_refresh_failed();
-                log!(
-                    Topic::Auth,
-                    Warn,
-                    "internal invocation proof refresh failed local={} caller={} key_id={} error={}",
-                    self_pid,
-                    caller,
-                    proof.key_id,
-                    source
-                );
-                Err(Self::map_auth_error(source))
-            }
-            Err(verify_flow::KeyedProofVerifyFlowError::PostRefresh(err)) => {
-                verify_flow::record_attestation_verifier_rejection(&err);
-                log!(
-                    Topic::Auth,
-                    Warn,
-                    "internal invocation proof rejected phase=post_refresh local={} caller={} subject={} role={} key_id={} audience={} method={} epoch={} error={}",
-                    self_pid,
-                    caller,
-                    proof.payload.subject,
-                    proof.payload.role,
-                    proof.key_id,
-                    proof.payload.audience,
-                    proof.payload.audience_method,
-                    proof.payload.epoch,
-                    err
-                );
-                Err(Self::map_internal_invocation_verify_error(err))
-            }
-        }
     }
 
     // Resolve the root-owned TTL ceiling from delegated-token config.
@@ -1060,7 +914,6 @@ mod tests {
             },
             error::ErrorCode,
         },
-        ops::auth::{AuthExpiryError, AuthOpsError},
     };
 
     fn p(id: u8) -> Principal {
@@ -1101,18 +954,6 @@ mod tests {
             nonce: [9; 16],
             ext: None,
         }
-    }
-
-    #[test]
-    fn internal_invocation_not_yet_valid_maps_to_non_retryable_proof_expiry() {
-        let err = AuthApi::map_internal_invocation_verify_error(AuthOpsError::Expiry(
-            AuthExpiryError::AttestationNotYetValid {
-                issued_at_ns: 20,
-                now_ns: 10,
-            },
-        ));
-
-        assert_eq!(err.code, ErrorCode::AuthProofExpired);
     }
 
     #[test]

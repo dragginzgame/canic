@@ -153,12 +153,6 @@ pub enum RpcWorkflowError {
 
     #[error("role attestation ttl_ns must satisfy 0 < ttl_ns <= {max_ttl_ns} (got {ttl_ns})")]
     RoleAttestationInvalidTtl { ttl_ns: u64, max_ttl_ns: u64 },
-
-    #[error("internal invocation proof audience {audience} is not known to root")]
-    InternalInvocationProofAudienceUnknown { audience: Principal },
-
-    #[error("internal invocation proof audience_method must not be empty")]
-    InternalInvocationProofMethodEmpty,
 }
 
 impl From<RpcWorkflowError> for InternalError {

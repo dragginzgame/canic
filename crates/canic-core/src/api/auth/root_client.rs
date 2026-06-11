@@ -1,6 +1,6 @@
 use crate::{
     cdk::types::Principal,
-    dto::auth::{AttestationKeySet, DelegationProofIssueRequest, DelegationProofPrepareResponse},
+    dto::auth::{DelegationProofIssueRequest, DelegationProofPrepareResponse},
     error::InternalError,
     ops::rpc::RpcOps,
     protocol,
@@ -16,13 +16,10 @@ pub(super) struct RootAuthMaterialClient {
 }
 
 impl RootAuthMaterialClient {
-    const ATTESTATION_KEY_SET: RootAuthMaterialEndpoint =
-        RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_ATTESTATION_KEY_SET);
     const DELEGATION_PREPARE: RootAuthMaterialEndpoint =
         RootAuthMaterialEndpoint::structural_bootstrap(protocol::CANIC_PREPARE_DELEGATION_PROOF);
     #[cfg(test)]
-    const ENDPOINTS: &[RootAuthMaterialEndpoint] =
-        &[Self::ATTESTATION_KEY_SET, Self::DELEGATION_PREPARE];
+    const ENDPOINTS: &[RootAuthMaterialEndpoint] = &[Self::DELEGATION_PREPARE];
 
     pub(super) const fn new(root_pid: Principal) -> Self {
         Self { root_pid }
@@ -34,10 +31,6 @@ impl RootAuthMaterialClient {
     ) -> Result<DelegationProofPrepareResponse, InternalError> {
         self.call_rpc_result(Self::DELEGATION_PREPARE, request)
             .await
-    }
-
-    pub(super) async fn attestation_key_set(&self) -> Result<AttestationKeySet, InternalError> {
-        self.call_rpc_result(Self::ATTESTATION_KEY_SET, ()).await
     }
 
     async fn call_rpc_result<T, A>(
@@ -95,10 +88,7 @@ mod tests {
 
     #[test]
     fn root_auth_material_client_endpoint_table_is_structural_bootstrap_only() {
-        let expected = BTreeSet::from([
-            protocol::CANIC_ATTESTATION_KEY_SET,
-            protocol::CANIC_PREPARE_DELEGATION_PROOF,
-        ]);
+        let expected = BTreeSet::from([protocol::CANIC_PREPARE_DELEGATION_PROOF]);
         let actual = RootAuthMaterialClient::ENDPOINTS
             .iter()
             .inspect(|endpoint| {

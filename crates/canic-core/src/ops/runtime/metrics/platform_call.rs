@@ -43,8 +43,6 @@ impl PlatformCallMetricSurface {
 #[remain::sorted]
 pub enum PlatformCallMetricMode {
     BoundedWait,
-    LocalVerify,
-    Query,
     UnboundedWait,
     Update,
 }
@@ -55,8 +53,6 @@ impl PlatformCallMetricMode {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::BoundedWait => "bounded_wait",
-            Self::LocalVerify => "local_verify",
-            Self::Query => "query",
             Self::UnboundedWait => "unbounded_wait",
             Self::Update => "update",
         }
@@ -99,8 +95,6 @@ pub enum PlatformCallMetricReason {
     CandidEncode,
     HttpStatus,
     Infra,
-    InvalidPublicKey,
-    InvalidSignature,
     LedgerRejected,
     Ok,
     Rejected,
@@ -116,8 +110,6 @@ impl PlatformCallMetricReason {
             Self::CandidEncode => "candid_encode",
             Self::HttpStatus => "http_status",
             Self::Infra => "infra",
-            Self::InvalidPublicKey => "invalid_public_key",
-            Self::InvalidSignature => "invalid_signature",
             Self::LedgerRejected => "ledger_rejected",
             Self::Ok => "ok",
             Self::Rejected => "rejected",
