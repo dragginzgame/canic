@@ -22,6 +22,7 @@ package = "../project_instance_stub"
 
 [auth.delegated_tokens]
 enabled = true
+network = "local"
 
 [subnets.prime]
 

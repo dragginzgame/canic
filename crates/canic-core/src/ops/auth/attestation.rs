@@ -135,3 +135,52 @@ impl AuthOps {
         Ok(attestation.payload.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::Config,
+        dto::auth::{IcCanisterSignatureProofV1, RootProof},
+        test::config::ConfigTestBuilder,
+    };
+
+    fn p(byte: u8) -> Principal {
+        Principal::from_slice(&[byte; 29])
+    }
+
+    #[test]
+    fn role_attestation_verifier_uses_same_mainnet_root_key_requirement() {
+        let mut cfg = ConfigTestBuilder::new().build();
+        cfg.auth.delegated_tokens.network = "mainnet".to_string();
+        cfg.auth.delegated_tokens.root_canister_id = Some(p(1).to_string());
+        cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = None;
+        Config::reset_for_tests();
+        Config::init_from_model_for_tests(cfg).expect("test config should install");
+
+        let attestation = SignedRoleAttestation {
+            payload: RoleAttestation {
+                subject: p(2),
+                role: crate::ids::CanisterRole::new("project_hub"),
+                subnet_id: None,
+                audience: p(3),
+                issued_at_ns: 10,
+                expires_at_ns: 20,
+                epoch: 0,
+            },
+            root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                signature_cbor: vec![1, 2, 3],
+                public_key_der: vec![4, 5, 6],
+            }),
+        };
+
+        let err = AuthOps::verify_role_attestation_cached(&attestation, p(2), p(3), None, 15, 0)
+            .expect_err("missing mainnet root key must fail before proof acceptance");
+
+        assert!(
+            err.to_string()
+                .contains("ic_root_public_key_raw_hex is required"),
+            "unexpected error: {err}"
+        );
+    }
+}

@@ -57,7 +57,7 @@ type CyclesResponse = record { cycles_transferred : nat };
 type DelegatedRoleGrant = record { scopes : vec text; target : text };
 type DelegatedToken = record {
   claims : DelegatedTokenClaims;
-  issuer_proof : RootProof;
+  issuer_proof : IssuerProof;
   proof : DelegationProof;
 };
 type DelegatedTokenClaims = record {
@@ -142,6 +142,7 @@ type InstallActiveDelegationProofRequest = record { proof : DelegationProof };
 type InstallActiveDelegationProofResponse = record {
   active_proof : ActiveDelegationProof;
 };
+type IssuerProof = variant { IcCanisterSignatureV1 : IcCanisterSignatureProofV1 };
 type IssuerProofAlgorithm = variant { IcCanisterSignatureV1 };
 type IssuerProofBinding = variant {
   IcCanisterSignatureV1 : record { seed_hash : blob };

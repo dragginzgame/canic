@@ -18,9 +18,9 @@ hard-cuts delegated root proofs to IC canister signatures.
 Current delegated-token verification uses:
 
 - configured root canister id
-- configured or runtime raw IC root public key
+- configured network label paired with the effective raw IC root public key
 - embedded `RootProof::IcCanisterSignatureV1`
-- shard public key certified inside `DelegationCert`
+- embedded `IssuerProof::IcCanisterSignatureV1`
 
 It does not read `SubnetState.auth.delegated_root_public_key` for delegated-token
 root proof verification.

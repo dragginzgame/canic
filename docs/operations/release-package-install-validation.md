@@ -40,6 +40,7 @@ not add new release behavior.
 
 | Gate | Command | Release question | When to run |
 | --- | --- | --- | --- |
+| Locked publish preflight | `make release-publish-preflight` | Does the publish-critical host dependency graph compile with the committed lockfile before git push or cargo publish? | Release push, package, publish, and RC/final release. |
 | Publishable crate package | `make package` | Can the workspace produce publishable package archives through `cargo package` from a clean worktree? | RC/final release. |
 | Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
 | Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
@@ -64,6 +65,9 @@ RC and final release reports should account for these artifact expectations:
 
 - `make package` must run from a clean worktree because the target depends on
   `ensure-clean`.
+- `make release-push`, `make package`, and `scripts/ci/publish-workspace.sh`
+  must run the locked publish preflight before pushing a release commit,
+  packaging crates, or publishing crates.
 - Package validation must not leave committed package artifacts, generated
   files, fixtures, snapshots, or lockfile churn.
 - Packaged downstream proofs must resolve through temporary package roots, not
@@ -85,6 +89,7 @@ Package/install gates may be expensive or environment-specific.
 
 | Gate family | Environment notes | Owner |
 | --- | --- | --- |
+| Locked publish preflight | Uses `cargo check --locked -p canic-host` to catch publish-critical lockfile drift before release push/package/publish. | Release owner or CI environment with Cargo cache support. |
 | `make package` | Requires a clean worktree and may write under `target/package`. | RC/final release owner. |
 | Installed CLI smoke | Installs into a temporary root and isolates `HOME`, `CARGO_HOME`, `CARGO_TARGET_DIR`, and `TMPDIR` under the proof root. | RC/final release owner or CI environment with local install support. |
 | Packaged downstream probes | Use package archives and temporary downstream roots; they intentionally reuse caller Cargo/Rust caches for offline package execution. | RC/final release owner or CI environment with package cache support. |
@@ -127,6 +132,7 @@ or final release, assigning environment-specific gates when needed:
 
 ```text
 bash scripts/ci/check-release-package-install-validation.sh
+make release-publish-preflight
 make package
 make test-installed-canic-cli
 make test-packaged-downstream-cli

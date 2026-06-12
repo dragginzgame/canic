@@ -1,6 +1,6 @@
 .PHONY: help version tags patch minor major \
         release-patch release-minor release-major \
-        release-stage release-commit release-push package publish \
+        release-stage release-commit release-push release-publish-preflight package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
@@ -49,6 +49,7 @@ help:
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
 	@echo "  release-push     Push the release commit and tags"
+	@echo "  release-publish-preflight  Check locked publish-critical dependency graph"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
@@ -155,10 +156,13 @@ release-commit:
 	git commit -m "Release $$version"; \
 	git tag -a "v$$version" -m "Release $$version"
 
-release-push:
+release-push: release-publish-preflight
 	git push --follow-tags
 
-package: ensure-clean
+release-publish-preflight:
+	$(CARGO_ENV) cargo check --locked -p canic-host
+
+package: ensure-clean release-publish-preflight
 	$(CARGO_ENV) cargo package
 
 publish: ensure-clean

@@ -1,6 +1,16 @@
 use super::*;
-use crate::cdk::types::Cycles;
+use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    let bytes = bytes.as_ref();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut out, "{byte:02x}").expect("hex write should not fail");
+    }
+    out
+}
 
 fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
     CanisterConfig {
@@ -376,6 +386,41 @@ fn delegated_tokens_network_must_be_known() {
 
     cfg.validate()
         .expect_err("expected invalid network to fail");
+}
+
+#[test]
+fn delegated_tokens_mainnet_requires_known_mainnet_root_key_when_key_is_configured() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.network = "mainnet".to_string();
+    cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some("07".repeat(96));
+
+    let err = cfg
+        .validate()
+        .expect_err("expected wrong mainnet root key to fail");
+
+    assert!(
+        err.to_string()
+            .contains("requires the known mainnet raw IC root public key"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delegated_tokens_local_rejects_configured_mainnet_root_key() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.network = "local".to_string();
+    cfg.auth.delegated_tokens.ic_root_public_key_raw_hex =
+        Some(hex(MAINNET_IC_ROOT_PUBLIC_KEY_RAW));
+
+    let err = cfg
+        .validate()
+        .expect_err("expected local config with mainnet root key to fail");
+
+    assert!(
+        err.to_string()
+            .contains("network=\"local\" must not use the mainnet IC root public key"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]

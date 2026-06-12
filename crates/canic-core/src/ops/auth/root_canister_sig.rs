@@ -4,6 +4,8 @@ use super::AuthOps;
     feature = "auth-root-canister-sig-verify"
 ))]
 use crate::cdk;
+#[cfg(any(feature = "auth-root-canister-sig-verify", test))]
+use crate::domain::auth::IC_ROOT_PUBLIC_KEY_RAW_LENGTH;
 use crate::{
     InternalError, cdk::types::Principal, dto::auth::RootProof, ops::auth::AuthSignatureError,
 };
@@ -14,7 +16,6 @@ use std::{cell::RefCell, collections::BTreeMap};
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 pub const ROOT_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
-pub const IC_ROOT_PUBLIC_KEY_RAW_LENGTH: usize = 96;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootPayloadKind {

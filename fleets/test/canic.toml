@@ -46,6 +46,7 @@ init_mode = "enabled"
 [auth.delegated_tokens]
 # Root-signed delegated token auth (cert -> proof -> token).
 enabled = true
+network = "local"
 
 
 # ----------------------------------------------------------------

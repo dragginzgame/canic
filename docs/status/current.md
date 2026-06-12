@@ -9,6 +9,26 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.66.1` is prepared as the first closeout fix on the 0.66 audit line.
+  It patches the 0.65 verifier trust-anchor gap without adding auth protocol
+  features: delegated-token and role-attestation canister-signature verification
+  now pairs the configured network label with the effective raw IC root key,
+  requires the known mainnet raw key for `network = "mainnet"`, allows runtime
+  root-key fallback only for explicit non-mainnet labels, and rejects accidental
+  mainnet keys in local/PocketIC/test modes. The patch also updates the
+  checked-in wasm-store Candid sidecar so `DelegatedToken.issuer_proof` uses the
+  `IssuerProof` type name, records that both root and issuer auth
+  certified-data owner helpers commit the exact `"sig"` tree, and keeps no-op
+  async verifier wrappers documented as endpoint/runtime shape only.
+  Focused validation for this patch:
+  ```text
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core -p canic
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo test --locked -p canic-core auth --lib
+  cargo test --locked -p canic --test protocol_surface
+  git diff --check
+  ```
 - `0.65.30` is committed and the 0.65 line is now a zero-management-ECDSA
   normal-auth hard cut. Delegated-token root proofs, delegated-token issuer
   proofs, and `SignedRoleAttestation` proofs use IC canister signatures with

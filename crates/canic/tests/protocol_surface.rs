@@ -78,6 +78,23 @@ fn wasm_store_canonical_did_parses() {
 }
 
 #[test]
+fn wasm_store_delegated_token_uses_issuer_proof_type_name() {
+    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
+    let did = read_text(&did_path);
+
+    assert!(
+        did.contains(
+            "type IssuerProof = variant { IcCanisterSignatureV1 : IcCanisterSignatureProofV1 };"
+        ),
+        "canonical wasm_store DID must expose a distinct IssuerProof type"
+    );
+    assert!(
+        did.contains("  issuer_proof : IssuerProof;"),
+        "DelegatedToken.issuer_proof must not be rendered as RootProof"
+    );
+}
+
+#[test]
 fn public_protocol_reexports_wasm_store_root_update_manifest() {
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS,

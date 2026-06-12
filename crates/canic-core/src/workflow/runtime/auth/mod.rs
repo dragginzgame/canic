@@ -91,6 +91,15 @@ impl RuntimeAuthWorkflow {
             ));
         }
 
+        if !AuthOps::issuer_canister_sig_verify_enabled() {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!(
+                    "canister '{canister_role}' has delegated-token verification enabled, but this build does not include issuer IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-issuer-canister-sig-verify` feature",
+                ),
+            ));
+        }
+
         if delegated_tokens_cfg.enabled || canister_cfg.auth.role_attestation_cache {
             AuthOps::delegated_token_verifier_config().map(|_| ())
         } else {
@@ -100,6 +109,7 @@ impl RuntimeAuthWorkflow {
 
     /// Check local canister-signature support when the current canister mints delegated tokens.
     pub async fn check_issuer_canister_signature_support() -> Result<(), InternalError> {
+        // Keep the public runtime hook async without adding hot-path outbound work.
         std::future::ready(()).await;
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
         let canister_cfg = ConfigOps::current_canister()?;
@@ -122,6 +132,8 @@ impl RuntimeAuthWorkflow {
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
     ) -> Result<(), InternalError> {
+        // This verifier is intentionally local. The await preserves the async
+        // endpoint shape; do not add root, issuer, or management-canister calls here.
         std::future::ready(()).await;
         let configured_min_accepted_epoch = ConfigOps::role_attestation_config()?
             .min_accepted_epoch_by_role

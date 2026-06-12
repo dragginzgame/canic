@@ -18,6 +18,7 @@ package = "."
 
 [auth.delegated_tokens]
 enabled = true
+network = "local"
 
 [subnets.prime]
 

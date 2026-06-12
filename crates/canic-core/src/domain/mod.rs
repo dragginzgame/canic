@@ -3,6 +3,7 @@
 //! `domain` owns deterministic computation and error composition, but it does
 //! not perform storage access or orchestration.
 
+pub mod auth;
 pub mod icrc;
 pub mod policy;
 

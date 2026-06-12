@@ -57,7 +57,7 @@ A verifier validates a delegated token using only:
 - the token
 - the embedded `DelegationProof`
 - configured root identity
-- configured or runtime raw IC root public key
+- configured network label paired with the effective raw IC root public key
 - issuer proof embedded in the token
 - local project id and configured role
 - IC canister time
@@ -340,7 +340,10 @@ Verifier steps:
 1. Decode the first ingress argument as `DelegatedToken`.
 2. Resolve verifier trust config:
    - `auth.delegated_tokens.root_canister_id`, or initialized root env
-   - `auth.delegated_tokens.ic_root_public_key_raw_hex`, or runtime/test root-key provider
+   - parsed `auth.delegated_tokens.network`
+   - `network = "mainnet"` requires the configured known mainnet raw IC root key
+   - `network = "local"`, `"pocketic"`, or `"testnet"` may use the runtime
+     root-key provider and must not use the mainnet root key
    - issuer canister-signature proof embedded in the token
 3. Verify certificate policy:
    - configured root principal
@@ -504,8 +507,10 @@ Security boundaries:
 
 - `auth.delegated_tokens.root_canister_id` or `EnvOps::root_pid()` is the
   delegated-token root identity trust boundary.
-- `auth.delegated_tokens.ic_root_public_key_raw_hex` or the runtime IC root-key
-  provider is the root canister-signature trust anchor.
+- `auth.delegated_tokens.network` and the effective raw IC root key are paired:
+  mainnet requires the known mainnet raw key, while local/PocketIC/test
+  verification may use the local runtime root-key provider and rejects the
+  mainnet key.
 - verifier `local_role` config is trusted; a canister configured with the wrong
   role is compromised for delegated-auth purposes.
 

@@ -1,9 +1,12 @@
-use crate::cdk::{types::Principal, utils::hash::decode_hex};
 use crate::config::schema::{
     AuthConfig, ConfigSchemaError, DelegatedTokenConfig, RoleAttestationConfig, Validate,
 };
-
-const IC_ROOT_PUBLIC_KEY_RAW_BYTES: usize = 96;
+use crate::{
+    cdk::{types::Principal, utils::hash::decode_hex},
+    domain::auth::{
+        DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
+    },
+};
 
 impl Validate for AuthConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
@@ -35,6 +38,13 @@ impl Validate for DelegatedTokenConfig {
             })?;
         }
 
+        let network = DelegatedAuthNetwork::parse(self.network.trim()).ok_or_else(|| {
+            ConfigSchemaError::ValidationError(
+                "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet"
+                    .into(),
+            )
+        })?;
+
         if let Some(root_key_hex) = self.ic_root_public_key_raw_hex.as_deref() {
             if root_key_hex.trim().is_empty() {
                 return Err(ConfigSchemaError::ValidationError(
@@ -47,20 +57,24 @@ impl Validate for DelegatedTokenConfig {
                     "auth.delegated_tokens.ic_root_public_key_raw_hex is not valid hex: {err}"
                 ))
             })?;
-            if root_key.len() != IC_ROOT_PUBLIC_KEY_RAW_BYTES {
+            if root_key.len() != IC_ROOT_PUBLIC_KEY_RAW_LENGTH {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "auth.delegated_tokens.ic_root_public_key_raw_hex must decode to {IC_ROOT_PUBLIC_KEY_RAW_BYTES} bytes"
+                    "auth.delegated_tokens.ic_root_public_key_raw_hex must decode to {IC_ROOT_PUBLIC_KEY_RAW_LENGTH} bytes"
                 )));
             }
-        }
 
-        match self.network.as_str() {
-            "mainnet" | "local" | "pocketic" | "testnet" => {}
-            _ => {
+            let is_mainnet_key = is_mainnet_ic_root_public_key_raw(&root_key);
+            if network.is_mainnet() && !is_mainnet_key {
                 return Err(ConfigSchemaError::ValidationError(
-                    "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet"
+                    "auth.delegated_tokens.network=\"mainnet\" requires the known mainnet raw IC root public key"
                         .into(),
                 ));
+            }
+            if !network.is_mainnet() && is_mainnet_key {
+                return Err(ConfigSchemaError::ValidationError(format!(
+                    "auth.delegated_tokens.network=\"{}\" must not use the mainnet IC root public key",
+                    network.label()
+                )));
             }
         }
 

@@ -23,6 +23,7 @@ init_mode = "enabled"
 
 [auth.delegated_tokens]
 enabled = true
+network = "local"
 
 [standards]
 icrc21 = true

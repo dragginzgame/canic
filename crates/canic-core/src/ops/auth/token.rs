@@ -17,12 +17,15 @@ use super::{
         },
     },
     issuer_canister_sig::IssuerPayloadKind,
-    root_canister_sig::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, RootPayloadKind},
+    root_canister_sig::RootPayloadKind,
 };
 use crate::{
     InternalError,
     cdk::{types::Principal, utils::hash::decode_hex},
     config::schema::DelegatedTokenConfig,
+    domain::auth::{
+        DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
+    },
     dto::auth::DelegatedToken,
     ids::CanisterRole,
     ops::{
@@ -187,9 +190,11 @@ impl AuthOps {
     fn delegated_token_verifier_config_from(
         cfg: &DelegatedTokenConfig,
     ) -> Result<DelegatedTokenVerifierConfig, InternalError> {
+        let network = configured_delegated_auth_network(cfg)?;
         Ok(DelegatedTokenVerifierConfig {
+            network,
             root_canister_id: configured_root_canister_id(cfg)?,
-            ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg)?,
+            ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, network)?,
         })
     }
 }
@@ -294,6 +299,10 @@ fn verify_with_embedded_proofs<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenRuntimeContext,
 ) -> Result<VerifiedDelegatedToken, InternalError> {
+    validate_network_root_key_pair(
+        ctx.verifier_cfg.network,
+        &ctx.verifier_cfg.ic_root_public_key_raw,
+    )?;
     verify_delegated_token(
         delegated_token_verify_input(input, ctx),
         |cert_hash, root_proof, root_pid| {
@@ -368,7 +377,33 @@ fn configured_root_canister_id(cfg: &DelegatedTokenConfig) -> Result<Principal, 
     })
 }
 
-fn configured_ic_root_public_key_raw(cfg: &DelegatedTokenConfig) -> Result<Vec<u8>, InternalError> {
+fn configured_delegated_auth_network(
+    cfg: &DelegatedTokenConfig,
+) -> Result<DelegatedAuthNetwork, InternalError> {
+    DelegatedAuthNetwork::parse(cfg.network.trim()).ok_or_else(|| {
+        AuthValidationError::Auth(
+            "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet"
+                .to_string(),
+        )
+        .into()
+    })
+}
+
+fn configured_ic_root_public_key_raw(
+    cfg: &DelegatedTokenConfig,
+    network: DelegatedAuthNetwork,
+) -> Result<Vec<u8>, InternalError> {
+    configured_ic_root_public_key_raw_with_provider(cfg, network, AuthOps::ic_root_public_key_raw)
+}
+
+fn configured_ic_root_public_key_raw_with_provider<F>(
+    cfg: &DelegatedTokenConfig,
+    network: DelegatedAuthNetwork,
+    runtime_root_key: F,
+) -> Result<Vec<u8>, InternalError>
+where
+    F: FnOnce() -> Result<Vec<u8>, InternalError>,
+{
     let ic_root_public_key_raw = match cfg.ic_root_public_key_raw_hex.as_deref() {
         Some(root_key_hex) => {
             let root_key_hex = root_key_hex.trim();
@@ -385,7 +420,13 @@ fn configured_ic_root_public_key_raw(cfg: &DelegatedTokenConfig) -> Result<Vec<u
                 ))
             })?
         }
-        None => AuthOps::ic_root_public_key_raw()?,
+        None if network.is_mainnet() => {
+            return Err(AuthValidationError::Auth(
+                "auth.delegated_tokens.ic_root_public_key_raw_hex is required when auth.delegated_tokens.network=\"mainnet\"".to_string(),
+            )
+            .into());
+        }
+        None => runtime_root_key()?,
     };
 
     if ic_root_public_key_raw.len() != IC_ROOT_PUBLIC_KEY_RAW_LENGTH {
@@ -395,7 +436,34 @@ fn configured_ic_root_public_key_raw(cfg: &DelegatedTokenConfig) -> Result<Vec<u
         .into());
     }
 
+    validate_network_root_key_pair(network, &ic_root_public_key_raw)?;
     Ok(ic_root_public_key_raw)
+}
+
+fn validate_network_root_key_pair(
+    network: DelegatedAuthNetwork,
+    ic_root_public_key_raw: &[u8],
+) -> Result<(), InternalError> {
+    let is_mainnet_key = is_mainnet_ic_root_public_key_raw(ic_root_public_key_raw);
+    if network.is_mainnet() {
+        if is_mainnet_key {
+            return Ok(());
+        }
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.network=\"mainnet\" requires the known mainnet raw IC root public key".to_string(),
+        )
+        .into());
+    }
+
+    if is_mainnet_key {
+        return Err(AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.network=\"{}\" must not use the mainnet IC root public key",
+            network.label()
+        ))
+        .into());
+    }
+
+    Ok(())
 }
 
 fn map_mint_delegated_token_error(err: MintDelegatedTokenError) -> InternalError {
@@ -458,5 +526,132 @@ const fn delegated_auth_reason_from_verify_error(
         VerifyDelegatedTokenError::TokenTtlExceeded { .. } => {
             DelegatedAuthMetricReason::TokenTtlExceeded
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW;
+    use std::fmt::Write as _;
+
+    fn root_pid() -> Principal {
+        Principal::from_slice(&[1; 29])
+    }
+
+    fn cfg(network: &str, root_key: Option<Vec<u8>>) -> DelegatedTokenConfig {
+        DelegatedTokenConfig {
+            enabled: true,
+            root_canister_id: Some(root_pid().to_string()),
+            ic_root_public_key_raw_hex: root_key.map(hex),
+            network: network.to_string(),
+            max_ttl_secs: None,
+        }
+    }
+
+    fn hex(bytes: Vec<u8>) -> String {
+        let mut out = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            write!(&mut out, "{byte:02x}").expect("hex write should not fail");
+        }
+        out
+    }
+
+    fn local_key() -> Vec<u8> {
+        vec![7; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]
+    }
+
+    fn mainnet_key() -> Vec<u8> {
+        MAINNET_IC_ROOT_PUBLIC_KEY_RAW.to_vec()
+    }
+
+    fn supplied_key(key: Vec<u8>) -> impl FnOnce() -> Result<Vec<u8>, InternalError> {
+        || Ok(key)
+    }
+
+    #[test]
+    fn delegated_token_verifier_config_accepts_mainnet_with_known_mainnet_root_key() {
+        let cfg = cfg("mainnet", Some(mainnet_key()));
+
+        let verifier =
+            AuthOps::delegated_token_verifier_config_from(&cfg).expect("mainnet key should pass");
+
+        assert_eq!(verifier.network, DelegatedAuthNetwork::Mainnet);
+        assert_eq!(verifier.root_canister_id, root_pid());
+        assert_eq!(verifier.ic_root_public_key_raw, mainnet_key());
+    }
+
+    #[test]
+    fn delegated_token_verifier_config_rejects_mainnet_without_root_key() {
+        let cfg = cfg("mainnet", None);
+
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("mainnet requires explicit root key");
+
+        assert!(
+            err.to_string()
+                .contains("ic_root_public_key_raw_hex is required"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn delegated_token_verifier_config_rejects_mainnet_with_local_root_key() {
+        let cfg = cfg("mainnet", Some(local_key()));
+
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("mainnet must reject local root key");
+
+        assert!(
+            err.to_string()
+                .contains("requires the known mainnet raw IC root public key"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn local_verifier_config_can_use_runtime_root_key_provider() {
+        let cfg = cfg("local", None);
+
+        let root_key = configured_ic_root_public_key_raw_with_provider(
+            &cfg,
+            DelegatedAuthNetwork::Local,
+            supplied_key(local_key()),
+        )
+        .expect("local runtime provider key should pass");
+
+        assert_eq!(root_key, local_key());
+    }
+
+    #[test]
+    fn pocketic_verifier_config_rejects_runtime_mainnet_root_key() {
+        let cfg = cfg("pocketic", None);
+
+        let err = configured_ic_root_public_key_raw_with_provider(
+            &cfg,
+            DelegatedAuthNetwork::PocketIc,
+            supplied_key(mainnet_key()),
+        )
+        .expect_err("pocketic must not accept mainnet root key");
+
+        assert!(
+            err.to_string()
+                .contains("network=\"pocketic\" must not use the mainnet IC root public key"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn local_verifier_config_rejects_explicit_mainnet_root_key() {
+        let cfg = cfg("local", Some(mainnet_key()));
+
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("local must reject explicit mainnet root key");
+
+        assert!(
+            err.to_string()
+                .contains("network=\"local\" must not use the mainnet IC root public key"),
+            "unexpected error: {err}"
+        );
     }
 }

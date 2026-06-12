@@ -1,11 +1,3 @@
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "issuer-proof token runtime is being landed in bounded slices"
-    )
-)]
-
 use super::AuthOps;
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 use crate::cdk;
@@ -64,6 +56,11 @@ pub const fn issuer_sig_seed(kind: IssuerPayloadKind) -> &'static [u8] {
     }
 }
 
+#[cfg(any(
+    feature = "auth-issuer-canister-sig-create",
+    feature = "auth-issuer-canister-sig-verify",
+    test
+))]
 pub const fn issuer_sig_domain(kind: IssuerPayloadKind) -> &'static [u8] {
     match kind {
         IssuerPayloadKind::DelegatedTokenClaims => b"canic-issuer-delegated-token",
@@ -74,6 +71,7 @@ pub fn issuer_sig_seed_hash(kind: IssuerPayloadKind) -> [u8; 32] {
     Sha256::digest(issuer_sig_seed(kind)).into()
 }
 
+#[cfg(any(feature = "auth-issuer-canister-sig-verify", test))]
 pub fn issuer_canister_sig_verification_message(
     kind: IssuerPayloadKind,
     payload_hash: [u8; 32],

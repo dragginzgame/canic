@@ -39,9 +39,10 @@ Current zero-ECDSA closeout audit status:
 - residual `RootPublicKeyRecord` / `delegated_root_public_key` stable state and
   auth key publication helpers are removed from the active codebase and checked
   in wasm-store Candid sidecar
-- the only active root `certified_data_set` call is the root
-  canister-signature certified-data owner helper for the exact `"sig"` tree
-  shape
+- the only active auth `certified_data_set` calls are the root and issuer
+  canister-signature certified-data owner helpers; both commit the exact
+  labeled `"sig"` tree shape, and no unrelated module owns or clobbers auth
+  certified data
 - runtime sharding, scaling, and directory child-management RPCs no longer
   request one-shot role attestations; registered non-root parents use
   structural root capability proofs for `ThisCanister` child provisioning and

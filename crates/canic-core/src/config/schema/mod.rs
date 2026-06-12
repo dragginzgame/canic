@@ -346,7 +346,9 @@ pub struct AuthConfig {
 /// Semantics:
 /// - enabled = false => delegated token auth disabled entirely
 /// - root_canister_id = None => use the initialized Canic root env
-/// - ic_root_public_key_raw_hex = None => use the runtime IC root-key provider
+/// - ic_root_public_key_raw_hex = None => allowed only for explicit
+///   local/pocketic/testnet verifier configs that use the runtime root-key
+///   provider
 /// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
 ///

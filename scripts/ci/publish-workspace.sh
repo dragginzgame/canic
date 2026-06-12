@@ -30,6 +30,12 @@ validate_publish_manifest_boundary() {
     cargo test -p canic --test workspace_manifest publishable_members_do_not_depend_on_unpublished_workspace_members
 }
 
+# Fails before any publish attempt if the locked dependency graph used by
+# host-side publish verification has drifted to an incompatible transitive set.
+validate_locked_publish_graph() {
+    cargo check --locked -p canic-host
+}
+
 # Extracts the current workspace version from the root manifest.
 workspace_version() {
     awk '
@@ -88,6 +94,7 @@ if [ -z "$version" ]; then
 fi
 
 validate_publish_manifest_boundary
+validate_locked_publish_graph
 
 started=0
 matched_from=0

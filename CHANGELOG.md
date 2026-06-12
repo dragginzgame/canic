@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.1` enforces delegated-auth verifier trust anchors by pairing network
+  labels with raw IC root keys, fixes issuer-proof Candid terminology, and
+  cleans closeout docs around certified-data ownership and local verifier
+  purity.
+
 - `0.66.0` opens the post-0.65 stabilization line: existing endpoint
   perf-observability planning moves to 0.67, while 0.66 is reserved for audit,
   testing, and fixes that prove the zero-management-ECDSA 0.65 auth epoch
