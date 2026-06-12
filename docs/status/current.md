@@ -618,17 +618,16 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.28` status/design closeout after committed `0.65.27` reconciles
-  `docs/design/0.65-canister-signatures/status.md` with the current hard-cut
+- `0.65.28` is committed as the status/design closeout after `0.65.27`. It
+  reconciles the 0.65 design status document with the current hard-cut
   state. The status file no longer describes 0.65 as design-correction pending,
   treats verifier purity and zero-ECDSA source shape as manual closeout audits
   rather than permanent source-shape guards, records forwarded
   user-token rejection as covered by delegated-token subject/caller binding,
   marks Candid/endpoint/docs reconciliation complete, and leaves only final
   release validation plus maintainer-owned release-note preparation as
-  closeout work. This slice intentionally does not touch the unrelated local
-  `canic-host` metadata visibility edit currently in the worktree.
-- Local `0.65.29` generated-surface closeout after committed `0.65.28`
+  closeout work.
+- `0.65.29` is committed as the generated-surface closeout after `0.65.28`. It
   refreshes the checked-in wasm-store Candid sidecar against the current
   zero-ECDSA auth DTOs and endpoints. The sidecar no longer exposes
   `SubnetAuthStateInput.delegated_root_public_key` or
@@ -636,8 +635,24 @@ inspect only the files needed for the current task.
   prepare/get DTOs and methods plus the structural-only capability proof
   shape. The slice also restores the `Cargo.lock` `time` dependency line to
   `0.3.41`, because the newer `0.3.48` line fails to compile with
-  `ic-agent 0.47.3`. This slice intentionally does not touch the unrelated
-  local `canic-host` visibility edits currently in the worktree.
+  `ic-agent 0.47.3`.
+- Local `0.65.30` changelog catch-up after committed `0.65.29` adds root and
+  detailed 0.65 changelog entries for `.28` and `.29`, then normalizes current
+  release-note wording away from the old source-shape guard phrase. Follow-up
+  focused validation passed for core/facade compilation, auth unit tests,
+  protocol-surface tests, formatting, changelog governance, and active-source
+  scans for removed ECDSA/shard-token/delegated-root-key/proof surfaces.
+  Current validation:
+  ```text
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic-core ops::auth --lib -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  rg -n 'shard_sig|sign_with_ecdsa|EcdsaOps::sign_bytes|auth-threshold-ecdsa-sign|auth-threshold-ecdsa-public-key|auth-shard-secp256k1-verify|ThresholdEcdsaSign|IcThresholdEcdsaSecp256k1|EcdsaP256Sha256|shard_public_key_sec1|key_name_hash|derivation_path_hash|RootPublicKeyRecord|RootTrustAnchor|DelegationProof.*root_sig|sign_prepared_delegation_proof|DelegatedTokenMintRequest|mint_token|request_internal_invocation_proof|InternalInvocationProof|SignedDelegatedGrant|DelegatedGrantProof' crates canisters fleets scripts Cargo.toml Makefile -g '*.rs' -g '*.toml' -g '*.did' -g '*.sh' -g 'Cargo.toml' -g 'Makefile'
+  rg -n 'delegated_root_public_key|SubnetRootPublicKeyInput|RootPublicKeyRecord' crates canisters fleets scripts Cargo.toml Makefile -g '*.rs' -g '*.toml' -g '*.did' -g '*.sh' -g 'Cargo.toml' -g 'Makefile'
+  git diff --check
+  ```
 - `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
   issuer canister-signature authority instead of shard ECDSA key material.

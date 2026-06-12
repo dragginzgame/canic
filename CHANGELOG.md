@@ -16,6 +16,19 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.30` catches up release notes for `.28` and `.29`, normalizes current
+  release wording away from deleted source-shape guard language, and records a
+  focused auth/protocol validation pass for the zero-ECDSA closeout line.
+
+- `0.65.29` refreshes the checked-in wasm-store Candid sidecar for the current
+  zero-ECDSA auth surface, removing stale delegated root-key snapshot fields,
+  exposing delegated-token prepare/get methods, and restoring the compatible
+  `time 0.3.41` lockfile line for `ic-agent 0.47.3`.
+
+- `0.65.28` reconciles the 0.65 implementation status with the landed hard-cut
+  design, closing stale pending checklist language and recording the remaining
+  work as release validation rather than further protocol design.
+
 - `0.65.27` continues the proof terminology cleanup by renaming internal
   cache-hit delegated-token verification helpers, role-attestation hash domain
   constants, and root startup messages away from stale signing/signature names.
@@ -56,9 +69,9 @@ Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
   replay external-effect variant, and ECDSA platform metric surface from active
   code, removes dead ECDSA config knobs and absence-only legacy tests, and
   updates active auth docs away from shard/ECDSA token language while removing
-  anti-resurrection guard scripts/tests, removed-design macro/parser/CLI tests,
-  and stale replay actor metadata in favor of current behavior tests and the
-  documented audit result.
+  deleted-design source-shape guard scripts/tests, removed-design
+  macro/parser/CLI tests, and stale replay actor metadata in favor of current
+  behavior tests and the documented audit result.
 
 - `0.65.20` pins the auth certified-data ownership boundary in CI so only the
   root and issuer canister-signature helpers may call `certified_data_set`, and

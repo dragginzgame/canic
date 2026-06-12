@@ -104,7 +104,7 @@ pub fn resolve_installed_deployment(
 ) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
     let state = read_installed_deployment_state(&request.network, &request.deployment)?;
     let (source, registry_json) = query_registry(request, &state.root_canister_id)?;
-    installed_deployment_resolution(request, state, source, registry_json)
+    installed_deployment_resolution(state, source, registry_json)
 }
 
 pub fn resolve_installed_deployment_from_root(
@@ -115,11 +115,10 @@ pub fn resolve_installed_deployment_from_root(
         read_installed_deployment_state_from_root(&request.network, &request.deployment, icp_root)?;
     let (source, registry_json) =
         query_registry_from_root(request, &state.root_canister_id, icp_root)?;
-    installed_deployment_resolution(request, state, source, registry_json)
+    installed_deployment_resolution(state, source, registry_json)
 }
 
 fn installed_deployment_resolution(
-    _request: &InstalledDeploymentRequest,
     state: InstallState,
     source: InstalledDeploymentSource,
     registry_json: String,
