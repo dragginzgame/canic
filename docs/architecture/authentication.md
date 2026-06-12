@@ -280,7 +280,7 @@ the requested `cert_hash` must match a pending proof, and
 `now_ns < retrieval_expires_at_ns`.
 
 The pending retrieval window is one minute, matching the upstream
-`SignatureMap` retention period used by the root signature map.
+`SignatureMap` retention period used by the root canister-signature map.
 
 Root certifies only `"sig"` in this hard cut.
 

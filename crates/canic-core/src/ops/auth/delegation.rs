@@ -11,7 +11,7 @@ use super::{
             prepare_delegation_cert,
         },
     },
-    issuer_canister_sig::{IssuerPayloadKind, issuer_sig_seed_hash},
+    issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
     root_canister_sig::RootPayloadKind,
 };
 use crate::{
@@ -49,7 +49,7 @@ impl AuthOps {
     ) -> Result<PreparedRootDelegationProof, InternalError> {
         let root_pid = IcOps::canister_self();
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
-            seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+            seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
         };
 
         let prepared = prepare_delegation_cert(IssueDelegationProofInput {

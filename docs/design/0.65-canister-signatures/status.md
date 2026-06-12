@@ -90,7 +90,7 @@ guard is retained for this removed design.
 - [x] Define `root_canister_sig_verification_message(kind, payload_hash)`.
 - [x] Add a golden test proving verifier passes
       `domain_len || domain || cert_hash`, not raw `cert_hash`.
-- [x] Define `root_sig_seed(kind)` separately from `root_sig_domain(kind)`.
+- [x] Define `root_canister_sig_seed(kind)` separately from `root_canister_sig_domain(kind)`.
 - [x] Add bounded positive delegated-token verification cache keyed by proof
       hash, claims hash, `issuer_proof_hash`, and caller; cache values contain
       only `valid_until_ns` and `verified_at_ns`; endpoint-specific
@@ -147,7 +147,7 @@ guard is retained for this removed design.
 - [x] Add explicit `cert_id == cert_hash` naming in the spec; log/metric naming
       can be expanded after the release-critical hard cut.
 - [x] Extend existing canonical auth encoding for the hard-cut DTOs.
-- [x] Add root signature-map module.
+- [x] Add root canister-signature map module.
 - [x] Add certified-data owner helper.
 - [x] Keep 0.65 root canister-signature certified data to exact `"sig"` shape.
 - [x] Add prepare/get root proof endpoints.

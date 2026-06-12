@@ -9,23 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.66.5` is published as the current post-0.65 closeout baseline; maintainer
-  validation reported `make test` passing. `0.66.6` is prepared in the
-  worktree as a narrow auth cleanup. It removes the unused
-  `canic_delegated_token_verifier` build cfg declaration/emission and renames
-  the internal delegated-token issuer preparation module plus typed input/error
-  names away from stale `mint` terminology. Delegated-token verifier behavior
-  remains a runtime `delegated_token_verifier = true` execution gate, not a
-  compile-time endpoint-bundle cfg.
+- `0.66.6` is published as the current post-0.65 closeout baseline. `0.66.7`
+  is prepared in the worktree as a canister-signature helper naming cleanup. It
+  renames root helper APIs from `root_sig_*` to `root_canister_sig_*`, issuer
+  helper APIs from `issuer_sig_*` to `issuer_canister_sig_*`, and private
+  signature-map owner helpers/statics so active auth code no longer resembles
+  the removed `root_sig` token field.
   Current validation for this cleanup slice:
   ```text
   cargo fmt --all -- --check
   cargo check --locked -p canic-core -p canic
-  cargo test --locked -p canic-core ops::auth::delegated::prepare --lib -- --nocapture
-  cargo test --locked -p canic build_support --lib -- --nocapture
-  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic-core ops::auth::root_canister_sig --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::issuer_canister_sig --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::delegated::issue --lib -- --nocapture
+  cargo test --locked -p canic-core auth --lib -- --nocapture
   cargo clippy --locked -p canic-core --lib -- -D warnings
-  cargo clippy --locked -p canic --lib -- -D warnings
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```

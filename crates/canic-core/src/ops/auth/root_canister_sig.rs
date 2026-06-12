@@ -59,7 +59,7 @@ impl PendingRootProofKey {
     feature = "auth-root-canister-sig-verify",
     test
 ))]
-pub const fn root_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
+pub const fn root_canister_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
         RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
         RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
@@ -71,7 +71,7 @@ pub const fn root_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
     feature = "auth-root-canister-sig-verify",
     test
 ))]
-pub const fn root_sig_domain(kind: RootPayloadKind) -> &'static [u8] {
+pub const fn root_canister_sig_domain(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
         RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
         RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
@@ -83,7 +83,7 @@ pub fn root_canister_sig_verification_message(
     kind: RootPayloadKind,
     payload_hash: [u8; 32],
 ) -> Vec<u8> {
-    let domain = root_sig_domain(kind);
+    let domain = root_canister_sig_domain(kind);
     let domain_len =
         u8::try_from(domain.len()).expect("root canister signature domain exceeds 255 bytes");
 
@@ -104,7 +104,7 @@ impl AuthOps {
     ) -> Result<PreparedRootCanisterSignature, InternalError> {
         #[cfg(feature = "auth-root-canister-sig-create")]
         {
-            validate_root_sig_domain_len(kind)?;
+            validate_root_canister_sig_domain_len(kind)?;
             Ok(prepare_root_canister_signature(
                 kind,
                 operation_id,
@@ -155,8 +155,8 @@ impl AuthOps {
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
-fn validate_root_sig_domain_len(kind: RootPayloadKind) -> Result<(), InternalError> {
-    u8::try_from(root_sig_domain(kind).len())
+fn validate_root_canister_sig_domain_len(kind: RootPayloadKind) -> Result<(), InternalError> {
+    u8::try_from(root_canister_sig_domain(kind).len())
         .map(|_| ())
         .map_err(|_| {
             AuthSignatureError::ProofInvalid(
@@ -168,7 +168,7 @@ fn validate_root_sig_domain_len(kind: RootPayloadKind) -> Result<(), InternalErr
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 thread_local! {
-    static ROOT_SIGNATURES: RefCell<ic_canister_sig_creation::signature_map::SignatureMap> =
+    static ROOT_CANISTER_SIGNATURES: RefCell<ic_canister_sig_creation::signature_map::SignatureMap> =
         RefCell::new(ic_canister_sig_creation::signature_map::SignatureMap::default());
     static PENDING_ROOT_PROOFS: RefCell<BTreeMap<PendingRootProofKey, PendingRootProof>> =
         const { RefCell::new(BTreeMap::new()) };
@@ -187,14 +187,14 @@ fn prepare_root_canister_signature(
     crate::ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_root_proof_prepare_started();
 
     let inputs = CanisterSigInputs {
-        domain: root_sig_domain(kind),
-        seed: root_sig_seed(kind),
+        domain: root_canister_sig_domain(kind),
+        seed: root_canister_sig_seed(kind),
         message: &payload_hash,
     };
-    ROOT_SIGNATURES.with(|signatures| {
+    ROOT_CANISTER_SIGNATURES.with(|signatures| {
         let mut signatures = signatures.borrow_mut();
         signatures.add_signature(&inputs);
-        refresh_root_signature_certified_data(&signatures.root_hash());
+        refresh_root_canister_sig_certified_data(&signatures.root_hash());
     });
 
     let retrieval_expires_at_ns = now_ns.saturating_add(ROOT_PROOF_RETRIEVAL_TTL_NS);
@@ -216,7 +216,7 @@ fn prepare_root_canister_signature(
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
-fn refresh_root_signature_certified_data(signature_root_hash: &[u8; 32]) {
+fn refresh_root_canister_sig_certified_data(signature_root_hash: &[u8; 32]) {
     use ic_canister_sig_creation::signature_map::LABEL_SIG;
     use ic_certification::labeled_hash;
 
@@ -266,17 +266,18 @@ fn get_root_canister_signature_proof(
         .into());
     }
     let inputs = CanisterSigInputs {
-        domain: root_sig_domain(kind),
-        seed: root_sig_seed(kind),
+        domain: root_canister_sig_domain(kind),
+        seed: root_canister_sig_seed(kind),
         message: &payload_hash,
     };
-    let signature_cbor = ROOT_SIGNATURES.with(|signatures| {
+    let signature_cbor = ROOT_CANISTER_SIGNATURES.with(|signatures| {
         signatures
             .borrow()
             .get_signature_as_cbor(&inputs, None)
             .map_err(|err| AuthSignatureError::ProofInvalid(err.to_string()))
     })?;
-    let public_key_der = CanisterSigPublicKey::new(root_pid, root_sig_seed(kind).to_vec()).to_der();
+    let public_key_der =
+        CanisterSigPublicKey::new(root_pid, root_canister_sig_seed(kind).to_vec()).to_der();
 
     Ok(RootProof::IcCanisterSignatureV1(
         IcCanisterSignatureProofV1 {
@@ -314,7 +315,7 @@ fn verify_root_canister_signature_proof(
         )
         .into());
     }
-    if seed != root_sig_seed(kind) {
+    if seed != root_canister_sig_seed(kind) {
         return Err(AuthSignatureError::ProofInvalid(
             "root canister signature seed mismatch".to_string(),
         )
@@ -351,7 +352,7 @@ mod tests {
     #[test]
     fn verification_message_prefixes_domain_length_and_domain() {
         let msg = root_canister_sig_verification_message(RootPayloadKind::DelegationCert, [7; 32]);
-        let domain = root_sig_domain(RootPayloadKind::DelegationCert);
+        let domain = root_canister_sig_domain(RootPayloadKind::DelegationCert);
         let domain_len = u8::try_from(domain.len()).unwrap();
         let domain_start = 1;
         let domain_end = domain_start + domain.len();
@@ -364,12 +365,12 @@ mod tests {
     #[test]
     fn role_attestation_uses_distinct_seed_and_domain() {
         assert_ne!(
-            root_sig_seed(RootPayloadKind::RoleAttestation),
-            root_sig_seed(RootPayloadKind::DelegationCert)
+            root_canister_sig_seed(RootPayloadKind::RoleAttestation),
+            root_canister_sig_seed(RootPayloadKind::DelegationCert)
         );
         assert_ne!(
-            root_sig_domain(RootPayloadKind::RoleAttestation),
-            root_sig_domain(RootPayloadKind::DelegationCert)
+            root_canister_sig_domain(RootPayloadKind::RoleAttestation),
+            root_canister_sig_domain(RootPayloadKind::DelegationCert)
         );
     }
 

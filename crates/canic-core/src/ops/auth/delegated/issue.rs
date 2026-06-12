@@ -129,7 +129,7 @@ mod tests {
     use super::*;
     use crate::{
         ids::CanisterRole,
-        ops::auth::issuer_canister_sig::{IssuerPayloadKind, issuer_sig_seed_hash},
+        ops::auth::issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
     };
 
     fn p(id: u8) -> Principal {
@@ -149,7 +149,7 @@ mod tests {
             issuer_pid: p(2),
             issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
             issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
-                seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+                seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
             },
             issued_at_ns: 100,
             cert_ttl_ns: 400,
@@ -189,7 +189,9 @@ mod tests {
                 p(2),
                 IssuerProofAlgorithm::IcCanisterSignatureV1,
                 IssuerProofBinding::IcCanisterSignatureV1 {
-                    seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+                    seed_hash: issuer_canister_sig_seed_hash(
+                        IssuerPayloadKind::DelegatedTokenClaims
+                    ),
                 },
             )
         );

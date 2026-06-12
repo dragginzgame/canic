@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.7` renames root and issuer canister-signature helper APIs away from
+  abbreviated `*_sig_*` wording so active auth code no longer resembles the
+  removed `root_sig` token field.
+
 - `0.66.6` removes the unused delegated-token verifier build cfg, renames
   internal delegated-token preparation code away from stale mint terminology,
   and normalizes active auth docs around issuer token issuance.
