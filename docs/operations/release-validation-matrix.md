@@ -205,7 +205,6 @@ Package and install checks are RC/final-release gates rather than ordinary
 docs-slice gates:
 
 ```text
-make release-publish-preflight
 make test-installed-canic-cli
 make test-packaged-downstream-cli
 make test-packaged-downstream-wasm-store

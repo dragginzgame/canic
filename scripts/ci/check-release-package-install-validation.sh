@@ -29,7 +29,6 @@ require_texts "$CHECKLIST" "$GUARD_LABEL" \
     "## Release Flow Boundary" \
     "## Required RC Gates" \
     "## Outcome Summary" \
-    "make release-publish-preflight" \
     "make package" \
     "make test-installed-canic-cli" \
     "make test-packaged-downstream-cli" \

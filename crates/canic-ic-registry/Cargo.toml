@@ -13,6 +13,9 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[package.metadata.cargo-machete]
+ignored = ["time"]
+
 [dependencies]
 candid = { workspace = true }
 canic-subnet-catalog = { workspace = true }
@@ -22,6 +25,9 @@ prost = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+# Temporary resolver guard for ic-agent 0.47.3 under rustc 1.96. A plain
+# `cargo update` otherwise selects time 0.3.48 and trips E0119 in ic-agent.
+time = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time"] }
 
 [lints]
