@@ -607,7 +607,8 @@ is no "delegation proof miss" correctness failure in current Canic auth.
 When changing auth code:
 
 - keep auth checks at endpoint/access/API auth boundaries
-- use one canonical encoding implementation for mint and verify
+- use one canonical encoding implementation for delegated-token prepare and
+  verify
 - reject noncanonical vectors instead of sorting during verification
 - preserve `now_ns >= expires_at_ns` as the expiry boundary everywhere
 - apply `AUTH_TIME_SKEW_ALLOWANCE_NS` only to not-from-the-future checks, never

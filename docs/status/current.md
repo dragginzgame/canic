@@ -9,25 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.66.4` is published as the current post-0.65 closeout baseline.
-  `0.66.5` is prepared in the worktree for maintainer validation. It makes
-  `canic::build!` honor the `canic` facade `metrics` feature when emitting
-  endpoint-bundle cfgs, keeps `canisters/audit/minimal` as the
-  no-default-features audit floor, adds `canisters/audit/minimal_metrics` as
-  the explicit metrics-on comparison target, and renames the manual local
-  sandbox from `sandbox_minimal` to `sandbox_blank`.
+- `0.66.5` is published as the current post-0.65 closeout baseline; maintainer
+  validation reported `make test` passing. `0.66.6` is prepared in the
+  worktree as a narrow auth cleanup. It removes the unused
+  `canic_delegated_token_verifier` build cfg declaration/emission and renames
+  the internal delegated-token issuer preparation module plus typed input/error
+  names away from stale `mint` terminology. Delegated-token verifier behavior
+  remains a runtime `delegated_token_verifier = true` execution gate, not a
+  compile-time endpoint-bundle cfg.
   Current validation for this cleanup slice:
   ```text
-  cargo check --locked -p canister_minimal -p canister_minimal_metrics -p canister_sandbox_blank
-  cargo check --locked -p canic -p canic-host
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core -p canic
+  cargo test --locked -p canic-core ops::auth::delegated::prepare --lib -- --nocapture
   cargo test --locked -p canic build_support --lib -- --nocapture
-  cargo test --locked -p canic-host release_set --lib -- --nocapture
-  cargo test --locked -p canic-tests --test root_wasm_store_reconcile -- --test-threads=1 --nocapture
-  make fmt-check
-  cargo test --locked -p canic --test workspace_manifest -- --nocapture
-  cargo clippy --workspace --all-targets --all-features -- -D warnings
-  cargo test --locked -p canic --test changelog_governance -- --nocapture
   cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo clippy --locked -p canic --lib -- -D warnings
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
 - `0.65.30` is committed and the 0.65 line is now a zero-management-ECDSA
@@ -208,11 +207,12 @@ inspect only the files needed for the current task.
   the current token leg. `DelegatedTokenIssueRequest` and
   `DelegatedTokenClaims` now carry `ext: Option<Vec<u8>>`; canonical claims
   encoding includes a distinct ext presence marker plus ext bytes; the current
-  shard-token signature covers ext through the canonical claims hash; and mint
-  plus verification reject ext payloads above 4096 bytes. This is still the
-  current shard-signature token shape; the issuer-proof hard cut must preserve
-  the same signed claims field when `IssuerProof::IcCanisterSignatureV1`
-  replaces `shard_sig`. Current validation:
+  shard-token signature covers ext through the canonical claims hash; and
+  preparation plus verification reject ext payloads above 4096 bytes. This is
+  still the current shard-signature token shape; the issuer-proof hard cut must
+  preserve the same signed claims field when
+  `IssuerProof::IcCanisterSignatureV1` replaces `shard_sig`. Current
+  validation:
   ```text
   cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
   cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
@@ -438,8 +438,8 @@ inspect only the files needed for the current task.
   ```
 - `0.65.19` is pushed and removes caller-provided delegated-token nonce
   input. `DelegatedTokenPrepareRequest`, `SignDelegatedTokenInput`, and the
-  internal mint input no longer accept nonce bytes; issuer token preparation
-  derives `DelegatedTokenClaims.nonce` from `"canic-token-nonce-v1"`,
+  internal token-preparation input no longer accept nonce bytes; issuer token
+  preparation derives `DelegatedTokenClaims.nonce` from `"canic-token-nonce-v1"`,
   `prepared_by`, prepare `operation_id`, `subject`, `issuer_pid`, and selected
   `cert_hash`. Delegated-token prepare replay payload hashing no longer binds a
   request nonce field, while replay identity still binds the operation id
@@ -448,7 +448,7 @@ inspect only the files needed for the current task.
   `raw_rand`, management-canister calls, `.await`, and direct call sites in the
   token preparation modules. Current validation:
   ```text
-  cargo test --locked -p canic-core ops::auth::delegated::mint --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::delegated::prepare --lib -- --nocapture
   cargo test --locked -p canic-core api::auth --lib -- --nocapture
   cargo check --locked -p canic-testing-internal
   cargo test --locked -p canic --test protocol_surface -- --nocapture
@@ -4974,7 +4974,7 @@ inspect only the files needed for the current task.
 - `cargo test -p canic-core --lib verify_root_delegated_grant_claims_rejects_audience_mismatch -- --nocapture`
 - `cargo test -p canic-core --lib verify_delegated_token_rejects_audience_subset_drift -- --nocapture`
 - `cargo test -p canic-core --lib verify_delegated_token_rejects_missing_local_role_for_role_audience -- --nocapture`
-- `cargo test -p canic-core --lib mint_delegated_token_rejects_audience_expansion -- --nocapture`
+- `cargo test -p canic-core --lib prepare_delegated_token_rejects_audience_expansion -- --nocapture`
 - `cargo test -p canic-core config::schema::subnet::tests::canister_config_rejects_legacy_delegated_auth_table -- --nocapture`
 - `cargo test -p canic-core config::schema -- --nocapture`
 - `cargo check -p canic-control-plane -p canic -p canic-tests --tests`

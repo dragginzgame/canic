@@ -1,8 +1,8 @@
 use super::{
     AuthOps, DelegatedTokenVerifierConfig, PreparedDelegatedTokenIssuerProof,
     SignDelegatedTokenInput, VerifyDelegatedTokenRuntimeInput,
-    delegated::mint::{
-        MintDelegatedTokenError, MintDelegatedTokenInput, finish_delegated_token,
+    delegated::prepare::{
+        PrepareDelegatedTokenError, PrepareDelegatedTokenInput, finish_delegated_token,
         prepare_delegated_token,
     },
     delegated::{
@@ -56,7 +56,7 @@ impl PendingDelegatedTokenKey {
 }
 
 thread_local! {
-    static PENDING_DELEGATED_TOKENS: RefCell<BTreeMap<PendingDelegatedTokenKey, crate::ops::auth::delegated::mint::PreparedDelegatedToken>> =
+    static PENDING_DELEGATED_TOKENS: RefCell<BTreeMap<PendingDelegatedTokenKey, crate::ops::auth::delegated::prepare::PreparedDelegatedToken>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -90,7 +90,7 @@ impl AuthOps {
             .into());
         }
 
-        let prepared = prepare_delegated_token(MintDelegatedTokenInput {
+        let prepared = prepare_delegated_token(PrepareDelegatedTokenInput {
             proof: &active_proof.proof,
             operation_id,
             prepared_by,
@@ -101,7 +101,7 @@ impl AuthOps {
             ext: input.ext,
             now_ns,
         })
-        .map_err(map_mint_delegated_token_error)?;
+        .map_err(map_prepare_delegated_token_error)?;
 
         let claims_hash = prepared.claims_hash;
         let issuer_proof_prepare = Self::prepare_issuer_canister_signature(
@@ -477,7 +477,7 @@ fn validate_network_root_key_pair(
     Ok(())
 }
 
-fn map_mint_delegated_token_error(err: MintDelegatedTokenError) -> InternalError {
+fn map_prepare_delegated_token_error(err: PrepareDelegatedTokenError) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()
 }
 

@@ -17,7 +17,7 @@ use thiserror::Error;
 
 const TOKEN_NONCE_DOMAIN: &[u8] = b"canic-token-nonce-v1";
 
-pub struct MintDelegatedTokenInput<'a> {
+pub struct PrepareDelegatedTokenInput<'a> {
     pub proof: &'a DelegationProof,
     pub operation_id: [u8; 32],
     pub prepared_by: Principal,
@@ -37,7 +37,7 @@ pub struct PreparedDelegatedToken {
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum MintDelegatedTokenError {
+pub enum PrepareDelegatedTokenError {
     #[error("delegated auth cert is not yet valid")]
     CertNotYetValid,
     #[error("delegated auth cert expired")]
@@ -65,35 +65,35 @@ pub enum MintDelegatedTokenError {
 
 #[cfg(test)]
 pub fn prepare_and_finish_delegated_token_for_tests<F>(
-    input: MintDelegatedTokenInput<'_>,
+    input: PrepareDelegatedTokenInput<'_>,
     create_issuer_proof: F,
-) -> Result<DelegatedToken, MintDelegatedTokenError>
+) -> Result<DelegatedToken, PrepareDelegatedTokenError>
 where
     F: FnOnce([u8; 32]) -> Result<IssuerProof, String>,
 {
     let prepared = prepare_delegated_token(input)?;
     let issuer_proof = create_issuer_proof(prepared.claims_hash)
-        .map_err(MintDelegatedTokenError::IssuerProofFailed)?;
+        .map_err(PrepareDelegatedTokenError::IssuerProofFailed)?;
     Ok(finish_delegated_token(prepared, issuer_proof))
 }
 
 /// Prepare one canonical delegated-token claims payload before issuer proof creation.
 pub fn prepare_delegated_token(
-    input: MintDelegatedTokenInput<'_>,
-) -> Result<PreparedDelegatedToken, MintDelegatedTokenError> {
+    input: PrepareDelegatedTokenInput<'_>,
+) -> Result<PreparedDelegatedToken, PrepareDelegatedTokenError> {
     let cert = &input.proof.cert;
 
     if input.now_ns < cert.not_before_ns {
-        return Err(MintDelegatedTokenError::CertNotYetValid);
+        return Err(PrepareDelegatedTokenError::CertNotYetValid);
     }
     if input.now_ns >= cert.expires_at_ns {
-        return Err(MintDelegatedTokenError::CertExpired);
+        return Err(PrepareDelegatedTokenError::CertExpired);
     }
     if input.ttl_ns == 0 {
-        return Err(MintDelegatedTokenError::TokenTtlZero);
+        return Err(PrepareDelegatedTokenError::TokenTtlZero);
     }
     if input.ttl_ns > cert.max_token_ttl_ns {
-        return Err(MintDelegatedTokenError::TokenTtlExceeded {
+        return Err(PrepareDelegatedTokenError::TokenTtlExceeded {
             ttl_ns: input.ttl_ns,
             max_ttl_ns: cert.max_token_ttl_ns,
         });
@@ -102,18 +102,18 @@ pub fn prepare_delegated_token(
     let expires_at = input
         .now_ns
         .checked_add(input.ttl_ns)
-        .ok_or(MintDelegatedTokenError::TokenExpiresAtOverflow)?;
+        .ok_or(PrepareDelegatedTokenError::TokenExpiresAtOverflow)?;
     if expires_at > cert.expires_at_ns {
-        return Err(MintDelegatedTokenError::TokenOutlivesCert);
+        return Err(PrepareDelegatedTokenError::TokenOutlivesCert);
     }
 
     validate_audience_shape(&input.audience)?;
     validate_role_grants(&input.grants)?;
     if !audience_subset(&input.audience, &cert.aud) {
-        return Err(MintDelegatedTokenError::AudienceNotSubset);
+        return Err(PrepareDelegatedTokenError::AudienceNotSubset);
     }
     if !role_grants_subset(&input.grants, &cert.grants) {
-        return Err(MintDelegatedTokenError::GrantsNotSubset);
+        return Err(PrepareDelegatedTokenError::GrantsNotSubset);
     }
 
     let cert_hash = cert_hash(cert)?;
@@ -234,8 +234,8 @@ mod tests {
         })
     }
 
-    fn input(proof: &DelegationProof) -> MintDelegatedTokenInput<'_> {
-        MintDelegatedTokenInput {
+    fn input(proof: &DelegationProof) -> PrepareDelegatedTokenInput<'_> {
+        PrepareDelegatedTokenInput {
             proof,
             operation_id: [4; 32],
             prepared_by: p(9),
@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_signs_claims_hash_and_embeds_proof() {
+    fn prepare_delegated_token_signs_claims_hash_and_embeds_proof() {
         let proof = proof();
         let mut observed_hash = None;
 
@@ -311,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_signs_ext_inside_claims() {
+    fn prepare_delegated_token_signs_ext_inside_claims() {
         let proof = proof();
         let mut input = input(&proof);
         input.ext = Some(b"opaque-app-context".to_vec());
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn minted_token_feeds_the_pure_verifier() {
+    fn prepared_token_feeds_the_pure_verifier() {
         let proof = proof();
         let token = prepare_and_finish_delegated_token_for_tests(input(&proof), |hash| {
             Ok(issuer_proof_for_hash(hash))
@@ -360,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn minted_tokens_with_different_operation_ids_derive_different_nonces() {
+    fn prepared_tokens_with_different_operation_ids_derive_different_nonces() {
         let proof = proof();
         let role = CanisterRole::new("project_instance");
         let mut left_input = input(&proof);
@@ -475,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_rejects_oversized_ext() {
+    fn prepare_delegated_token_rejects_oversized_ext() {
         let proof = proof();
         let mut input = input(&proof);
         input.ext = Some(vec![
@@ -488,7 +488,7 @@ mod tests {
             prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
                 [0; 32]
             ))),
-            Err(MintDelegatedTokenError::Canonical(
+            Err(PrepareDelegatedTokenError::Canonical(
                 CanonicalAuthError::TokenExtTooLarge {
                     len: crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES + 1,
                     max: crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES,
@@ -498,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_rejects_audience_expansion() {
+    fn prepare_delegated_token_rejects_audience_expansion() {
         let proof = proof();
         let mut input = input(&proof);
         input.audience = DelegationAudience::Project("other".to_string());
@@ -507,12 +507,12 @@ mod tests {
             prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
                 [0; 32]
             ))),
-            Err(MintDelegatedTokenError::AudienceNotSubset)
+            Err(PrepareDelegatedTokenError::AudienceNotSubset)
         );
     }
 
     #[test]
-    fn mint_delegated_token_rejects_grant_expansion() {
+    fn prepare_delegated_token_rejects_grant_expansion() {
         let proof = proof();
         let mut input = input(&proof);
         input.grants = vec![grant("project_instance", &["admin"])];
@@ -521,12 +521,12 @@ mod tests {
             prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
                 [0; 32]
             ))),
-            Err(MintDelegatedTokenError::GrantsNotSubset)
+            Err(PrepareDelegatedTokenError::GrantsNotSubset)
         );
     }
 
     #[test]
-    fn mint_delegated_token_accepts_ttl_equal_to_cert_limit() {
+    fn prepare_delegated_token_accepts_ttl_equal_to_cert_limit() {
         let proof = proof();
         let mut input = input(&proof);
         input.ttl_ns = 120;
@@ -541,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_rejects_token_ttl_above_cert_limit() {
+    fn prepare_delegated_token_rejects_token_ttl_above_cert_limit() {
         let proof = proof();
         let mut input = input(&proof);
         input.ttl_ns = 121;
@@ -550,7 +550,7 @@ mod tests {
             prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
                 [0; 32]
             ))),
-            Err(MintDelegatedTokenError::TokenTtlExceeded {
+            Err(PrepareDelegatedTokenError::TokenTtlExceeded {
                 ttl_ns: 121,
                 max_ttl_ns: 120,
             })
@@ -558,7 +558,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_delegated_token_rejects_token_outliving_cert() {
+    fn prepare_delegated_token_rejects_token_outliving_cert() {
         let proof = proof();
         let mut input = input(&proof);
         input.now_ns = 490;
@@ -568,19 +568,19 @@ mod tests {
             prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
                 [0; 32]
             ))),
-            Err(MintDelegatedTokenError::TokenOutlivesCert)
+            Err(PrepareDelegatedTokenError::TokenOutlivesCert)
         );
     }
 
     #[test]
-    fn mint_delegated_token_rejects_issuer_proof_failure() {
+    fn prepare_delegated_token_rejects_issuer_proof_failure() {
         let proof = proof();
 
         assert_eq!(
             prepare_and_finish_delegated_token_for_tests(input(&proof), |_| Err(
                 "sign failed".to_string()
             )),
-            Err(MintDelegatedTokenError::IssuerProofFailed(
+            Err(PrepareDelegatedTokenError::IssuerProofFailed(
                 "sign failed".to_string(),
             ))
         );

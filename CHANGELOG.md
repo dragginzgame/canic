@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.6` removes the unused delegated-token verifier build cfg, renames
+  internal delegated-token preparation code away from stale mint terminology,
+  and normalizes active auth docs around issuer token issuance.
+
 - `0.66.5` separates the no-default-features minimal audit baseline from the
   metrics-enabled baseline, makes build-script endpoint cfgs honor the `canic`
   metrics feature, and renames the manual sandbox away from the minimal audit

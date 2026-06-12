@@ -5,7 +5,7 @@ use crate::{
         DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert, RoleAttestation,
     },
     ids::CanisterRole,
-    ops::auth::delegated::mint::PreparedDelegatedToken,
+    ops::auth::delegated::prepare::PreparedDelegatedToken,
 };
 
 //
