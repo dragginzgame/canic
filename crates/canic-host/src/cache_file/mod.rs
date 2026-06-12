@@ -9,7 +9,7 @@ use std::{
 /// CacheFileError
 ///
 #[derive(Debug)]
-pub(crate) enum CacheFileError {
+pub enum CacheFileError {
     CreateDirectory {
         path: PathBuf,
         source: io::Error,
@@ -69,15 +69,15 @@ pub(crate) enum CacheFileError {
 /// CachedJsonReport
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct CachedJsonReport<T> {
-    pub(crate) path: PathBuf,
-    pub(crate) report: T,
+pub struct CachedJsonReport<T> {
+    pub path: PathBuf,
+    pub report: T,
 }
 
 ///
 /// JsonCacheReport
 ///
-pub(crate) trait JsonCacheReport {
+pub trait JsonCacheReport {
     fn schema_version(&self) -> u32;
     fn network(&self) -> &str;
 }
@@ -86,60 +86,60 @@ pub(crate) trait JsonCacheReport {
 /// LoadJsonCacheRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct LoadJsonCacheRequest<'a> {
-    pub(crate) path: PathBuf,
-    pub(crate) network: &'a str,
-    pub(crate) expected_schema_version: u32,
+pub struct LoadJsonCacheRequest<'a> {
+    pub path: PathBuf,
+    pub network: &'a str,
+    pub expected_schema_version: u32,
 }
 
 ///
 /// LoadJsonCacheErrorHandlers
 ///
-pub(crate) struct LoadJsonCacheErrorHandlers<Missing, Read, Parse, Unsupported, Mismatch> {
-    pub(crate) missing_cache: Missing,
-    pub(crate) read_cache: Read,
-    pub(crate) parse_cache: Parse,
-    pub(crate) unsupported_schema: Unsupported,
-    pub(crate) network_mismatch: Mismatch,
+pub struct LoadJsonCacheErrorHandlers<Missing, Read, Parse, Unsupported, Mismatch> {
+    pub missing_cache: Missing,
+    pub read_cache: Read,
+    pub parse_cache: Parse,
+    pub unsupported_schema: Unsupported,
+    pub network_mismatch: Mismatch,
 }
 
 ///
 /// RefreshCacheWriteRequest
 ///
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct RefreshCacheWriteRequest<'a, T> {
-    pub(crate) cache_path: &'a Path,
-    pub(crate) lock_path: &'a Path,
-    pub(crate) network: &'a str,
-    pub(crate) now_unix_secs: u64,
-    pub(crate) lock_stale_after_seconds: u64,
-    pub(crate) dry_run: bool,
-    pub(crate) output_path: Option<&'a Path>,
-    pub(crate) report: &'a T,
+pub struct RefreshCacheWriteRequest<'a, T> {
+    pub cache_path: &'a Path,
+    pub lock_path: &'a Path,
+    pub network: &'a str,
+    pub now_unix_secs: u64,
+    pub lock_stale_after_seconds: u64,
+    pub dry_run: bool,
+    pub output_path: Option<&'a Path>,
+    pub report: &'a T,
 }
 
 ///
 /// RefreshCacheWriteResult
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct RefreshCacheWriteResult {
-    pub(crate) cache_path: String,
-    pub(crate) refresh_lock_path: String,
-    pub(crate) output_path: Option<String>,
-    pub(crate) replaced_existing_cache: bool,
-    pub(crate) wrote_cache: bool,
+pub struct RefreshCacheWriteResult {
+    pub cache_path: String,
+    pub refresh_lock_path: String,
+    pub output_path: Option<String>,
+    pub replaced_existing_cache: bool,
+    pub wrote_cache: bool,
 }
 
 ///
 /// RefreshLockRequest
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct RefreshLockRequest<'a> {
-    pub(crate) lock_path: &'a Path,
-    pub(crate) target_path: &'a Path,
-    pub(crate) network: &'a str,
-    pub(crate) now_unix_secs: u64,
-    pub(crate) lock_stale_after_seconds: u64,
+pub struct RefreshLockRequest<'a> {
+    pub lock_path: &'a Path,
+    pub target_path: &'a Path,
+    pub network: &'a str,
+    pub now_unix_secs: u64,
+    pub lock_stale_after_seconds: u64,
 }
 
 ///
@@ -159,13 +159,13 @@ struct RefreshLockFile {
 /// RefreshLockGuard
 ///
 #[derive(Debug)]
-pub(crate) struct RefreshLockGuard {
+pub struct RefreshLockGuard {
     path: PathBuf,
     active: bool,
 }
 
 impl RefreshLockGuard {
-    pub(crate) fn release(mut self) -> Result<(), CacheFileError> {
+    pub fn release(mut self) -> Result<(), CacheFileError> {
         fs::remove_file(&self.path).map_err(|source| CacheFileError::RemoveRefreshLock {
             path: self.path.clone(),
             source,
@@ -183,14 +183,14 @@ impl Drop for RefreshLockGuard {
     }
 }
 
-pub(crate) fn create_directory(path: &Path) -> Result<(), CacheFileError> {
+pub fn create_directory(path: &Path) -> Result<(), CacheFileError> {
     fs::create_dir_all(path).map_err(|source| CacheFileError::CreateDirectory {
         path: path.to_path_buf(),
         source,
     })
 }
 
-pub(crate) fn load_json_cache<T, E, Missing, Read, Parse, Unsupported, Mismatch>(
+pub fn load_json_cache<T, E, Missing, Read, Parse, Unsupported, Mismatch>(
     request: LoadJsonCacheRequest<'_>,
     errors: LoadJsonCacheErrorHandlers<Missing, Read, Parse, Unsupported, Mismatch>,
 ) -> Result<CachedJsonReport<T>, E>
@@ -227,7 +227,7 @@ where
     Ok(CachedJsonReport { path, report })
 }
 
-pub(crate) fn acquire_refresh_lock(
+pub fn acquire_refresh_lock(
     request: RefreshLockRequest<'_>,
 ) -> Result<RefreshLockGuard, CacheFileError> {
     let now_unix_ms = request.now_unix_secs.saturating_mul(1_000);
@@ -301,10 +301,7 @@ pub(crate) fn acquire_refresh_lock(
     })
 }
 
-pub(crate) fn write_text_atomically(
-    target_path: &Path,
-    contents: &str,
-) -> Result<(), CacheFileError> {
+pub fn write_text_atomically(target_path: &Path, contents: &str) -> Result<(), CacheFileError> {
     let target_dir = target_path
         .parent()
         .expect("cache target path always has parent");
@@ -340,7 +337,7 @@ pub(crate) fn write_text_atomically(
     sync_directory(target_dir)
 }
 
-pub(crate) fn write_text_output(output_path: &Path, contents: &str) -> Result<(), CacheFileError> {
+pub fn write_text_output(output_path: &Path, contents: &str) -> Result<(), CacheFileError> {
     if let Some(parent) = output_path.parent() {
         create_directory(parent)?;
     }
@@ -363,7 +360,7 @@ pub(crate) fn write_text_output(output_path: &Path, contents: &str) -> Result<()
         })
 }
 
-pub(crate) fn write_json_refresh_cache<T, E>(
+pub fn write_json_refresh_cache<T, E>(
     request: RefreshCacheWriteRequest<'_, T>,
     cache_error: impl Fn(CacheFileError) -> E,
     serialize_cache: impl Fn(PathBuf, serde_json::Error) -> E,
