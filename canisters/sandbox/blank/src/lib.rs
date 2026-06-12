@@ -1,5 +1,5 @@
 //!
-//! Manual local sandbox canister for temporary endpoint experiments.
+//! Manual local blank sandbox canister for temporary endpoint experiments.
 //!
 //! This canister is intentionally excluded from the reference release set and
 //! test fixtures. Keep throwaway experiments here instead of changing
@@ -10,13 +10,13 @@
 
 use canic::{Error, prelude::*};
 
-/// Run no-op setup for the local sandbox shell.
+/// Run no-op setup for the local blank sandbox shell.
 async fn canic_setup() {}
 
-/// Accept no install payload for the local sandbox shell.
+/// Accept no install payload for the local blank sandbox shell.
 async fn canic_install(_: Option<Vec<u8>>) {}
 
-/// Run no-op upgrade handling for the local sandbox shell.
+/// Run no-op upgrade handling for the local blank sandbox shell.
 async fn canic_upgrade() {}
 
 //
@@ -27,13 +27,13 @@ canic::start_local!();
 
 /// Return a small liveness response for quick manual calls.
 #[canic_query]
-fn sandbox_minimal_ping() -> Result<String, Error> {
-    Ok("sandbox_minimal:ok".to_string())
+fn sandbox_blank_ping() -> Result<String, Error> {
+    Ok("sandbox_blank:ok".to_string())
 }
 
 /// Echo one string under an explicit sandbox payload limit.
 #[canic_update(payload(max_bytes = 32))]
-fn sandbox_minimal_echo(payload: String) -> Result<String, Error> {
+fn sandbox_blank_echo(payload: String) -> Result<String, Error> {
     Ok(payload)
 }
 

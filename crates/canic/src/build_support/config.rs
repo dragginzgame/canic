@@ -171,14 +171,14 @@ mod tests {
 
     #[test]
     fn standalone_config_source_parses_for_plain_role() {
-        let source = standalone_config_source("sandbox_minimal");
+        let source = standalone_config_source("sandbox_blank");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
 
         assert_eq!(cfg.fleet_name(), Some("standalone"));
-        assert!(cfg.roles.contains_key("sandbox_minimal"));
+        assert!(cfg.roles.contains_key("sandbox_blank"));
         assert!(!cfg.roles.contains_key("root"));
         assert!(cfg.subnets.is_empty());
-        assert!(!config_attaches_role(&cfg, "standalone", "sandbox_minimal"));
+        assert!(!config_attaches_role(&cfg, "standalone", "sandbox_blank"));
     }
 
     #[test]

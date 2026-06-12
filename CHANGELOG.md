@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.5` separates the no-default-features minimal audit baseline from the
+  metrics-enabled baseline, makes build-script endpoint cfgs honor the `canic`
+  metrics feature, and renames the manual sandbox away from the minimal audit
+  role.
+
 - `0.66.4` restores full workspace all-features validation by exposing the
   public runtime memory bootstrap helper and bootstrapping direct metrics facade
   tests before stable-memory-backed metric families are queried.

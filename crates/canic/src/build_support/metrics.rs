@@ -8,6 +8,11 @@ pub const METRICS_TIER_SECURITY: u8 = 1 << 4;
 pub const METRICS_TIER_STORAGE: u8 = 1 << 5;
 
 #[must_use]
+pub const fn metrics_feature_enabled() -> bool {
+    cfg!(feature = "metrics")
+}
+
+#[must_use]
 pub const fn metrics_profile_tier_mask(profile: MetricsProfile) -> u8 {
     match profile {
         MetricsProfile::Leaf => METRICS_TIER_CORE | METRICS_TIER_RUNTIME | METRICS_TIER_SECURITY,

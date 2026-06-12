@@ -1,5 +1,5 @@
 [package]
-name = "canister_sandbox_minimal"
+name = "canister_sandbox_blank"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -10,18 +10,18 @@ ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
 fleet = "standalone"
-role = "sandbox_minimal"
+role = "sandbox_blank"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true }
+canic = { path = "../../../crates/canic", default-features = false }
 ic-cdk = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true }
+canic = { path = "../../../crates/canic", default-features = false }
 
 [lints]
 workspace = true

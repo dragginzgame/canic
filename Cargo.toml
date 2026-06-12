@@ -3,9 +3,10 @@
 members = [
     "canisters/audit/leaf_probe",
     "canisters/audit/minimal",
+    "canisters/audit/minimal_metrics",
     "canisters/audit/root_probe",
     "canisters/audit/scaling_probe",
-    "canisters/sandbox/minimal",
+    "canisters/sandbox/blank",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
     "canisters/test/intent_authority",

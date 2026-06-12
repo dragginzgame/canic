@@ -1,0 +1,32 @@
+controllers = []
+app_index = []
+
+[fleet]
+name = "standalone"
+
+[roles.root]
+kind = "root"
+package = "../../../fleets/test/root"
+
+[roles.minimal_metrics]
+kind = "canister"
+package = "."
+
+[app]
+init_mode = "enabled"
+
+[app.whitelist]
+
+[auth.delegated_tokens]
+enabled = false
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.minimal_metrics]
+kind = "service"
+
+[subnets.prime.canisters.minimal_metrics.metrics]
+profile = "leaf"

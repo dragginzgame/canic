@@ -1,5 +1,5 @@
 [package]
-name = "canister_minimal"
+name = "canister_minimal_metrics"
 edition = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
@@ -10,18 +10,18 @@ ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
 fleet = "standalone"
-role = "minimal"
+role = "minimal_metrics"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { path = "../../../crates/canic", default-features = false }
+canic = { path = "../../../crates/canic", default-features = false, features = ["metrics"] }
 ic-cdk = { workspace = true }
 
 [build-dependencies]
-canic = { path = "../../../crates/canic", default-features = false }
+canic = { path = "../../../crates/canic", default-features = false, features = ["metrics"] }
 
 [lints]
 workspace = true

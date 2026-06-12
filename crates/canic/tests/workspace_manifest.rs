@@ -258,9 +258,21 @@ fn allow_local_path_dependency(
     section_path: &str,
     name: &str,
 ) -> bool {
-    relative_display(root, manifest_path) == "crates/canic-core/Cargo.toml"
+    let manifest = relative_display(root, manifest_path);
+    if manifest == "crates/canic-core/Cargo.toml"
         && section_path == "dev-dependencies"
         && name == "canic-testing-internal"
+    {
+        return true;
+    }
+
+    matches!(
+        manifest.as_str(),
+        "canisters/audit/minimal/Cargo.toml"
+            | "canisters/audit/minimal_metrics/Cargo.toml"
+            | "canisters/sandbox/blank/Cargo.toml"
+    ) && matches!(section_path, "dependencies" | "build-dependencies")
+        && name == "canic"
 }
 
 // Records dependency tables that pin versions or local paths in member manifests.

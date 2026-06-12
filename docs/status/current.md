@@ -9,16 +9,26 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.66.3` is published as the current post-0.65 closeout baseline.
-  `0.66.4` is prepared in the worktree for maintainer validation. It exposes
-  the existing runtime memory bootstrap helper through the public
-  `canic::api::runtime::MemoryRuntimeApi` facade and bootstraps direct metrics
-  facade integration tests before querying stable-memory-backed metric families.
-  This closes the broad all-features validation gap left by `.3`.
-  Validation for this cleanup slice passed:
+- `0.66.4` is published as the current post-0.65 closeout baseline.
+  `0.66.5` is prepared in the worktree for maintainer validation. It makes
+  `canic::build!` honor the `canic` facade `metrics` feature when emitting
+  endpoint-bundle cfgs, keeps `canisters/audit/minimal` as the
+  no-default-features audit floor, adds `canisters/audit/minimal_metrics` as
+  the explicit metrics-on comparison target, and renames the manual local
+  sandbox from `sandbox_minimal` to `sandbox_blank`.
+  Current validation for this cleanup slice:
   ```text
-  cargo test --locked -p canic --test metrics_facade
-  cargo test --workspace --all-features
+  cargo check --locked -p canister_minimal -p canister_minimal_metrics -p canister_sandbox_blank
+  cargo check --locked -p canic -p canic-host
+  cargo test --locked -p canic build_support --lib -- --nocapture
+  cargo test --locked -p canic-host release_set --lib -- --nocapture
+  cargo test --locked -p canic-tests --test root_wasm_store_reconcile -- --test-threads=1 --nocapture
+  make fmt-check
+  cargo test --locked -p canic --test workspace_manifest -- --nocapture
+  cargo clippy --workspace --all-targets --all-features -- -D warnings
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  git diff --check
   ```
 - `0.65.30` is committed and the 0.65 line is now a zero-management-ECDSA
   normal-auth hard cut. Delegated-token root proofs, delegated-token issuer

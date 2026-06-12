@@ -621,6 +621,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "canister_minimal_metrics"
+version = "0.66.4"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+]
+
+[[package]]
 name = "canister_root"
 version = "0.66.4"
 dependencies = [
@@ -631,7 +640,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "canister_sandbox_minimal"
+name = "canister_sandbox_blank"
 version = "0.66.4"
 dependencies = [
  "candid",

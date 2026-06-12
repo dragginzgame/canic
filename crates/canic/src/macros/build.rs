@@ -116,6 +116,9 @@ macro_rules! __canic_build_internal {
             println!("cargo:rustc-cfg=canic_disable_bundle_observability_env");
             println!("cargo:rustc-cfg=canic_disable_bundle_topology_index");
         }
+        if !$crate::__build::metrics_feature_enabled() {
+            println!("cargo:rustc-cfg=canic_disable_bundle_metrics");
+        }
         if $cfg.auth.delegated_tokens.enabled {
             println!("cargo:rustc-cfg=canic_delegated_tokens_enabled");
         }
