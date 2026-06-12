@@ -446,7 +446,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.21` cleanup candidate after pushed `0.65.20` deletes the
+- `0.65.21` is pushed and deletes the
   isolated threshold-ECDSA signing adapter, removes the
   `auth-threshold-ecdsa-sign` feature from `canic-core` and the `canic`
   facade, drops stale threshold-ECDSA replay external-effect and platform-call
@@ -492,7 +492,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.22` CLI integration candidate adds optional local Candid sidecar
+- `0.65.22` is pushed and adds optional local Candid sidecar
   support to shared ICP CLI canister call/query helpers. Host and CLI paths now
   pass `--candid .icp/<network>/canisters/<role>/<role>.did` when Canic can
   resolve an existing generated sidecar from the project root and registry role,
@@ -510,6 +510,35 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-cli
   cargo test --locked -p canic-cli --lib -- --nocapture
   cargo clippy --locked -p canic-host -p canic-cli --lib --tests -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.23` active-auth cleanup candidate after pushed `0.65.22` removes
+  unused internal-invocation proof scope error variants from active auth errors
+  and renames non-root delegated-token startup checks/logging around issuer
+  canister-signature support instead of stale signer-key material wording.
+  The active canister auth config key is renamed from
+  `delegated_token_signer` to `delegated_token_issuer` across schema,
+  checked-in configs, bootstrap rendering, and release-set details.
+  Active config documentation no longer lists delegated-token or
+  role-attestation ECDSA key settings in the current 0.65 auth config surface.
+  It also renames local root proof preparation variables away from generic root
+  signature wording in delegation-proof and role-attestation preparation, and
+  renames delegated-token root verification failure reporting from
+  root-signature invalid to root-proof invalid. Active source/test scans now
+  find no removed internal-invocation proof names or removed ECDSA token-leg
+  names. Current validation:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth --lib -- --nocapture
+  cargo test --locked -p canic-core config::schema::subnet --lib -- --nocapture
+  cargo test --locked -p canic-host release_set --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo check --locked -p canic-host
+  cargo check --locked -p canic-tests
+  cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check

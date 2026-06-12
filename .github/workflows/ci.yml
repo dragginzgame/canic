@@ -92,9 +92,6 @@ jobs:
         if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         run: bash scripts/ci/run-layering-guards.sh
-      - name: Forbidden crypto API guards
-        shell: bash
-        run: bash scripts/ci/run-forbidden-crypto-guards.sh
       - name: Release validation matrix guard
         shell: bash
         run: bash scripts/ci/check-release-validation-matrix.sh

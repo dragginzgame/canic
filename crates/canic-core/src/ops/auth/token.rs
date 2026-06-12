@@ -434,8 +434,8 @@ const fn delegated_auth_reason_from_verify_error(
             DelegatedAuthMetricReason::IssuerPidMismatch
         }
         VerifyDelegatedTokenError::MissingLocalRole => DelegatedAuthMetricReason::MissingLocalRole,
-        VerifyDelegatedTokenError::RootSignatureInvalid(_) => {
-            DelegatedAuthMetricReason::RootSignatureInvalid
+        VerifyDelegatedTokenError::RootProofInvalid(_) => {
+            DelegatedAuthMetricReason::RootProofInvalid
         }
         VerifyDelegatedTokenError::ScopeRejected { .. } => DelegatedAuthMetricReason::ScopeRejected,
         VerifyDelegatedTokenError::TokenAudienceRejected => {

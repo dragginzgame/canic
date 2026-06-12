@@ -69,7 +69,7 @@ impl AuthOps {
             },
         })
         .map_err(map_issue_delegation_proof_error)?;
-        let prepared_root_signature = Self::prepare_root_canister_signature(
+        let prepared_root_proof = Self::prepare_root_canister_signature(
             RootPayloadKind::DelegationCert,
             input.operation_id,
             prepared.cert_hash,
@@ -79,7 +79,7 @@ impl AuthOps {
         let prepared = PreparedRootDelegationProof {
             cert: prepared.cert,
             cert_hash: prepared.cert_hash,
-            retrieval_expires_at_ns: prepared_root_signature.retrieval_expires_at_ns,
+            retrieval_expires_at_ns: prepared_root_proof.retrieval_expires_at_ns,
         };
         cache_prepared_delegation_proof(input.issuer_pid, prepared.clone());
 

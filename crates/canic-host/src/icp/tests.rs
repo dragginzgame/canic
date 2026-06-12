@@ -3,11 +3,11 @@ use super::*;
 #[test]
 fn parses_icp_cli_versions_from_common_output() {
     assert_eq!(
-        parse_icp_cli_version("icp 0.3.0"),
+        parse_icp_cli_version("icp 0.3.2"),
         Some(IcpCliVersion {
             major: 0,
             minor: 3,
-            patch: 0
+            patch: 2
         })
     );
     assert_eq!(
@@ -22,11 +22,21 @@ fn parses_icp_cli_versions_from_common_output() {
 }
 
 #[test]
-fn icp_cli_version_range_allows_only_current_minor_line() {
-    assert!(is_supported_icp_cli_version(IcpCliVersion {
+fn icp_cli_version_range_requires_current_minimum() {
+    assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 0,
         minor: 3,
         patch: 0
+    }));
+    assert!(!is_supported_icp_cli_version(IcpCliVersion {
+        major: 0,
+        minor: 3,
+        patch: 1
+    }));
+    assert!(is_supported_icp_cli_version(IcpCliVersion {
+        major: 0,
+        minor: 3,
+        patch: 2
     }));
     assert!(is_supported_icp_cli_version(IcpCliVersion {
         major: 0,
@@ -72,7 +82,7 @@ fn command_runner_rejects_old_icp_cli_before_running_command() {
     ));
     assert!(
         err.to_string()
-            .contains("required: icp-cli >=0.3.0, <0.4.0")
+            .contains("required: icp-cli >=0.3.2, <0.4.0")
     );
 
     fs::remove_dir_all(root).expect("remove temp dir");

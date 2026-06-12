@@ -16,6 +16,15 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.23` removes the remaining internal-invocation proof error variants from
+  active auth scope errors and renames non-root delegated-token bootstrap
+  checks/logging around issuer canister-signature support instead of stale
+  signer-key material wording, while reporting delegated-token root verifier
+  failures as root-proof failures instead of root-signature failures. It also
+  renames the active canister auth config key from `delegated_token_signer` to
+  `delegated_token_issuer` and removes ECDSA key settings from the current auth
+  config documentation.
+
 - `0.65.22` uses ICP CLI 0.3.2 local Candid support for Canic CLI and host
   canister calls when a generated `.icp/<network>/canisters/<role>/<role>.did`
   sidecar is available, covering registry, list, medic, metrics, cycles,

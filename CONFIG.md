@@ -87,10 +87,10 @@ Configure log retention for every canister.
 
 ### `[auth.delegated_tokens]`
 
-Root-signed delegated token authentication (cert -> proof -> token).
+Root/issuer canister-signature delegated token authentication
+(cert -> root proof -> issuer proof -> token).
 
 - `enabled: bool` – enable delegated token auth (default `true`).
-- `ecdsa_key_name: string` – threshold ECDSA key name for shard token signatures (default `"key_1"`). Delegated-token root proof verification does not use this key.
 - `root_canister_id: string` – optional verifier trust anchor for root canister-signature proofs. If omitted, runtime verification uses the initialized Canic root env.
 - `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider.
 - `network: "mainnet" | "local" | "pocketic" | "testnet"` – operator label for the configured verifier trust anchor (default `"mainnet"`).
@@ -103,9 +103,8 @@ root canister id plus raw IC root public key. The verifier does not read
 
 ### `[auth.role_attestation]`
 
-Root-signed role-attestation settings for root capability RPC proofs.
+Root canister-signature role-attestation settings.
 
-- `ecdsa_key_name: string` – signing key name for role-attestation proofs (default `"key_1"`).
 - `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be > 0).
 - `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations.
 
@@ -177,7 +176,7 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
   - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
-- `auth.delegated_token_signer = true` – mark this role as a delegated-token signer; Canic prewarms local shard signing key material.
+- `auth.delegated_token_issuer = true` – mark this role as a delegated-token issuer; Canic requires local issuer canister-signature support for token issuance.
 - `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and local `SubnetState`, not this flag.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
 

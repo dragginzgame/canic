@@ -106,12 +106,12 @@ fn validate_kind(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), Co
             if cfg.scaling.is_some()
                 || cfg.sharding.is_some()
                 || cfg.directory.is_some()
-                || cfg.auth.delegated_token_signer
+                || cfg.auth.delegated_token_issuer
                 || cfg.auth.role_attestation_cache
                 || cfg.standards.icrc21
             {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, auth signer/cache roles, or canister-local standards",
+                    "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, auth issuer/cache roles, or canister-local standards",
                 )));
             }
         }

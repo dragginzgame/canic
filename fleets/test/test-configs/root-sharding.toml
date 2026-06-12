@@ -51,7 +51,7 @@ kind = "shard"
 topup = {}
 
 [subnets.prime.canisters.user_shard.auth]
-delegated_token_signer = true
+delegated_token_issuer = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.test]

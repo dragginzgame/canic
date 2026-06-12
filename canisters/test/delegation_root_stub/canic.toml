@@ -33,7 +33,7 @@ kind = "service"
 initial_cycles = "1T"
 
 [subnets.prime.canisters.signer.auth]
-delegated_token_signer = true
+delegated_token_issuer = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.project_hub]

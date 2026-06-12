@@ -39,8 +39,8 @@ pub enum VerifyDelegatedTokenError {
     CertHashMismatch,
     #[error("delegated auth issuer proof unavailable")]
     IssuerProofUnavailable,
-    #[error("delegated auth root signature invalid: {0}")]
-    RootSignatureInvalid(String),
+    #[error("delegated auth root proof invalid: {0}")]
+    RootProofInvalid(String),
     #[error("delegated auth issuer proof invalid: {0}")]
     IssuerProofInvalid(String),
     #[error("delegated auth token issuer pid mismatch")]
@@ -99,7 +99,7 @@ where
         &input.token.proof.root_proof,
         input.token.proof.cert.root_pid,
     )
-    .map_err(VerifyDelegatedTokenError::RootSignatureInvalid)?;
+    .map_err(VerifyDelegatedTokenError::RootProofInvalid)?;
 
     verify_issuer_proof(
         material.claims_hash,
@@ -554,18 +554,18 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_rejects_root_signature_failure() {
+    fn verify_delegated_token_rejects_root_proof_failure() {
         let token = token();
         let role = role();
 
         assert_eq!(
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
-                |_, _, _| Err("bad root sig".to_string()),
+                |_, _, _| Err("bad root proof".to_string()),
                 verify_issuer_ok,
             ),
-            Err(VerifyDelegatedTokenError::RootSignatureInvalid(
-                "bad root sig".to_string(),
+            Err(VerifyDelegatedTokenError::RootProofInvalid(
+                "bad root proof".to_string(),
             ))
         );
     }

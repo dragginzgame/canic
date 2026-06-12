@@ -235,7 +235,7 @@ memory_ledger = true
 fn root_canister_rejects_configured_auth_roles() {
     let mut cfg = base_canister_config(CanisterKind::Root);
     cfg.auth = CanisterAuthConfig {
-        delegated_token_signer: true,
+        delegated_token_issuer: true,
         role_attestation_cache: true,
     };
 
@@ -243,11 +243,11 @@ fn root_canister_rejects_configured_auth_roles() {
     subnet.canisters.insert(CanisterRole::ROOT, cfg);
 
     let err = subnet.validate().expect_err(
-        "root delegated auth signer/cache roles must be implicit services, not config toggles",
+        "root delegated auth issuer/cache roles must be implicit services, not config toggles",
     );
 
     assert!(
-        err.to_string().contains("auth signer/cache roles"),
+        err.to_string().contains("auth issuer/cache roles"),
         "expected root auth role validation error, got: {err}"
     );
 }

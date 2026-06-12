@@ -140,7 +140,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
 #[serde(deny_unknown_fields)]
 pub struct CanisterAuthConfig {
     #[serde(default)]
-    pub delegated_token_signer: bool,
+    pub delegated_token_issuer: bool,
 
     #[serde(default)]
     pub role_attestation_cache: bool,

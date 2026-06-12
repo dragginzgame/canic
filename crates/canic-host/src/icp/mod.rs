@@ -11,8 +11,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 const LOCAL_NETWORK: &str = "local";
-pub const REQUIRED_ICP_CLI_VERSION: &str = "0.3.0";
-pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=0.3.0, <0.4.0";
+pub const REQUIRED_ICP_CLI_VERSION: &str = "0.3.2";
+pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=0.3.2, <0.4.0";
 pub(crate) const CANIC_ICP_LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
 pub(crate) const CANIC_ICP_LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
 
@@ -1119,7 +1119,7 @@ pub fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
 /// Return whether an ICP CLI version is supported by this Canic release.
 #[must_use]
 pub const fn is_supported_icp_cli_version(version: IcpCliVersion) -> bool {
-    version.major == 0 && version.minor == 3
+    version.major == 0 && version.minor == 3 && version.patch >= 2
 }
 
 fn compatible_version_output(

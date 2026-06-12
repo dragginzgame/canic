@@ -114,7 +114,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             cache_state: "cold",
             topology_state: "root_bootstrapped+fresh-user-shard",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Root delegation provisioning request from a freshly created shard to exercise delegated auth issuance and signer key checkpoints.",
+            notes: "Root delegation provisioning request from a freshly created shard to exercise delegated auth issuance and issuer canister-signature checkpoints.",
         },
         AuditScenario {
             key: "test:test:minimal-valid",

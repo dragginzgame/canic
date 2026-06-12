@@ -55,7 +55,7 @@ impl AuthOps {
             epoch: input.epoch,
         };
         let payload_hash = crypto::role_attestation_hash(&payload)?;
-        let prepared_root_signature = Self::prepare_root_canister_signature(
+        let prepared_root_proof = Self::prepare_root_canister_signature(
             RootPayloadKind::RoleAttestation,
             input.operation_id,
             payload_hash,
@@ -65,7 +65,7 @@ impl AuthOps {
         let prepared = PreparedRootRoleAttestation {
             payload,
             payload_hash,
-            retrieval_expires_at_ns: prepared_root_signature.retrieval_expires_at_ns,
+            retrieval_expires_at_ns: prepared_root_proof.retrieval_expires_at_ns,
         };
         PENDING_ROLE_ATTESTATIONS.with_borrow_mut(|pending| {
             pending.insert(

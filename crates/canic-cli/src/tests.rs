@@ -225,7 +225,7 @@ fn icp_backed_command_rejects_old_icp_cli_before_running_subcommand() {
 
     assert!(text.contains("unsupported icp-cli version"));
     assert!(text.contains("found: icp 0.2.0"));
-    assert!(text.contains("required: icp-cli >=0.3.0, <0.4.0"));
+    assert!(text.contains("required: icp-cli >=0.3.2, <0.4.0"));
     assert!(!text.contains("old replica command ran"));
 
     fs::remove_dir_all(root).expect("remove temp dir");

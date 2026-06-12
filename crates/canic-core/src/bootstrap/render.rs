@@ -560,12 +560,12 @@ fn render_randomness_source(source: RandomnessSource) -> TokenStream {
 
 // Render the delegated-auth role config.
 fn render_canister_auth_config(config: &CanisterAuthConfig) -> TokenStream {
-    let signer = config.delegated_token_signer;
+    let issuer = config.delegated_token_issuer;
     let role_attestation_cache = config.role_attestation_cache;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::CanisterAuthConfig {
-            delegated_token_signer: #signer,
+            delegated_token_issuer: #issuer,
             role_attestation_cache: #role_attestation_cache,
         }
     }

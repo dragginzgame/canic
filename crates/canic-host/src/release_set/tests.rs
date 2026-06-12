@@ -709,7 +709,7 @@ policy.max_shards = 4
 kind = "shard"
 
 [subnets.prime.canisters.user_shard.auth]
-delegated_token_signer = true
+delegated_token_issuer = true
 
 [subnets.prime.canisters.scale_hub]
 kind = "service"
@@ -965,7 +965,7 @@ kind = "shard"
 randomness.enabled = false
 
 [subnets.prime.canisters.user_shard.auth]
-delegated_token_signer = true
+delegated_token_issuer = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.scale_hub]
@@ -997,7 +997,7 @@ profile = "full"
     assert!(
         details
             .get("user_shard")
-            .is_some_and(|details| details.contains(&"auth delegated-token-signer".to_string()))
+            .is_some_and(|details| details.contains(&"auth delegated-token-issuer".to_string()))
     );
     assert!(details.get("scale_hub").is_some_and(|details| {
         details.contains(&"scaling scales->scale_replica initial=2 min=2 max=32".to_string())
