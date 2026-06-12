@@ -9,35 +9,17 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.66.2` is published as the current post-0.65 closeout baseline.
-  `0.66.3` is prepared in the worktree for maintainer validation. It separates
-  per-canister delegated-token verifier config from role-attestation cache
-  state, gates delegated-token issuer provisioning endpoints to configured
-  issuers, requires an effective raw IC root key for every delegated-auth
-  verifier network, allows local/PocketIC/test startup injection before
-  protected endpoint verification, enforces `delegated_token_verifier = true`
-  before delegated-token proof verification, keeps wasm-store free of issuer
-  provisioning Candid, and pins `time` at `0.3.47`. Ignored `.icp/local/**`
-  Candid sidecars are local build artifacts and are excluded from release
-  closeout evidence unless regenerated from current checked-in exports.
-  Focused validation for this cleanup slice passed:
+- `0.66.3` is published as the current post-0.65 closeout baseline.
+  `0.66.4` is prepared in the worktree for maintainer validation. It exposes
+  the existing runtime memory bootstrap helper through the public
+  `canic::api::runtime::MemoryRuntimeApi` facade and bootstraps direct metrics
+  facade integration tests before querying stable-memory-backed metric families.
+  This closes the broad all-features validation gap left by `.3`.
+  Validation for this cleanup slice passed:
   ```text
-  cargo tree -i time --locked
-  cargo fmt --all -- --check
-  cargo check --locked -p canic-core -p canic
-  cargo clippy --locked -p canic-core --lib -- -D warnings
-  cargo test --locked -p canic-core auth --lib
-  cargo test --locked -p canic --test protocol_surface
-  cargo test --locked -p canic --test changelog_governance
-  cargo build --locked -p canic-wasm-store --target wasm32-unknown-unknown
-  cargo check --locked -p canic-host
-  cargo test --locked -p canic-host release_set
-  cargo test --locked -p canic-tests --test root_suite delegated_token_verification_uses_self_contained_root_proof -- --nocapture
-  cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --nocapture
-  git diff --check
+  cargo test --locked -p canic --test metrics_facade
+  cargo test --workspace --all-features
   ```
-  `cargo test --workspace --all-features` still fails in the unrelated
-  `canic --test metrics_facade` stable-memory bootstrap path.
 - `0.65.30` is committed and the 0.65 line is now a zero-management-ECDSA
   normal-auth hard cut. Delegated-token root proofs, delegated-token issuer
   proofs, and `SignedRoleAttestation` proofs use IC canister signatures with

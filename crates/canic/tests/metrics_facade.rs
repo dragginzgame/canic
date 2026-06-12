@@ -1,8 +1,17 @@
 use canic::{
-    api::metrics::MetricsQuery,
+    api::{metrics::MetricsQuery, runtime::MemoryRuntimeApi},
     dto::metrics::{MetricEntry, MetricsKind, QueryPerfSample},
     dto::page::PageRequest,
 };
+use std::sync::Once;
+
+static METRICS_MEMORY_BOOTSTRAP: Once = Once::new();
+
+fn bootstrap_metrics_memory() {
+    METRICS_MEMORY_BOOTSTRAP.call_once(|| {
+        MemoryRuntimeApi::bootstrap_registry().expect("metrics facade memory bootstrap");
+    });
+}
 
 // Verify the public facade exposes query perf sampling without internal paths.
 #[test]
@@ -16,6 +25,8 @@ fn metrics_query_sample_query_is_public_facade_usable() {
 // Verify the public facade can still page metric rows through re-exported DTOs.
 #[test]
 fn metrics_query_page_is_public_facade_usable() {
+    bootstrap_metrics_memory();
+
     let page = MetricsQuery::page(
         MetricsKind::Security,
         PageRequest {
@@ -31,6 +42,8 @@ fn metrics_query_page_is_public_facade_usable() {
 // Verify all metric families are reachable through the public facade.
 #[test]
 fn all_metric_families_are_public_facade_usable() {
+    bootstrap_metrics_memory();
+
     for kind in [
         MetricsKind::Core,
         MetricsKind::Placement,

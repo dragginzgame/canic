@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.4` restores full workspace all-features validation by exposing the
+  public runtime memory bootstrap helper and bootstrapping direct metrics facade
+  tests before stable-memory-backed metric families are queried.
+
 - `0.66.3` closes the strict delegated-auth verifier gap by requiring effective
   raw IC root-key material before protected endpoints run, gating delegated-token
   verification on explicit verifier config, keeping wasm-store free of issuer
