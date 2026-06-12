@@ -164,14 +164,6 @@ impl AuthOps {
     pub(crate) fn set_active_delegation_proof(proof: ActiveDelegationProof) {
         AuthStateOps::set_active_delegation_proof(proof);
     }
-
-    #[expect(
-        dead_code,
-        reason = "active delegation proof install endpoint lands with issuer prepare/get flow"
-    )]
-    pub(crate) fn clear_active_delegation_proof() {
-        AuthStateOps::clear_active_delegation_proof();
-    }
 }
 
 fn cache_prepared_delegation_proof(caller: Principal, prepared: PreparedRootDelegationProof) {

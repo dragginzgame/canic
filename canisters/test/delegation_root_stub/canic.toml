@@ -35,6 +35,7 @@ initial_cycles = "1T"
 
 [subnets.prime.canisters.issuer.auth]
 delegated_token_issuer = true
+delegated_token_verifier = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.project_hub]
@@ -46,6 +47,7 @@ canister_role = "project_instance"
 key_name = "project"
 
 [subnets.prime.canisters.project_hub.auth]
+delegated_token_verifier = true
 role_attestation_cache = true
 
 [subnets.prime.canisters.project_instance]
@@ -53,4 +55,5 @@ kind = "instance"
 initial_cycles = "1T"
 
 [subnets.prime.canisters.project_instance.auth]
+delegated_token_verifier = true
 role_attestation_cache = true

@@ -138,6 +138,7 @@ impl AuthStateOps {
         ));
     }
 
+    #[cfg(test)]
     pub fn clear_active_delegation_proof() {
         AuthState::clear_active_delegation_proof();
     }

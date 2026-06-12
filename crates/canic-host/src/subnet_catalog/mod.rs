@@ -4,6 +4,7 @@ use crate::{
         write_text_atomically, write_text_output,
     },
     duration::parse_duration_seconds,
+    nns_render::yes_no,
     table::{ColumnAlign, render_table},
 };
 use canic_ic_registry::{
@@ -1052,10 +1053,6 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
     era.checked_mul(146_097)?
         .checked_add(day_of_era)?
         .checked_sub(719_468)
-}
-
-const fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 #[cfg(test)]

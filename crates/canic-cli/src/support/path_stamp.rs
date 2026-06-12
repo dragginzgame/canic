@@ -8,7 +8,7 @@ pub fn current_backup_directory_stamp() -> String {
     backup_directory_stamp_from_unix(seconds)
 }
 
-pub fn backup_directory_stamp_from_unix(seconds: u64) -> String {
+fn backup_directory_stamp_from_unix(seconds: u64) -> String {
     let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
     let seconds_of_day = seconds % 86_400;
     let (year, month, day) = civil_from_days(days);
@@ -106,4 +106,24 @@ const fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let year = year + (month <= 2) as i64;
 
     (year, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{backup_directory_stamp_from_unix, backup_directory_stamp_to_unix};
+
+    // Keep backup directory timestamps as compact UTC calendar labels.
+    #[test]
+    fn backup_directory_stamp_uses_calendar_time() {
+        assert_eq!(backup_directory_stamp_from_unix(0), "19700101-000000");
+        assert_eq!(
+            backup_directory_stamp_from_unix(1_715_090_400),
+            "20240507-140000"
+        );
+        assert_eq!(
+            backup_directory_stamp_to_unix("20240507-140000"),
+            Some(1_715_090_400)
+        );
+        assert_eq!(backup_directory_stamp_to_unix("20240532-140000"), None);
+    }
 }

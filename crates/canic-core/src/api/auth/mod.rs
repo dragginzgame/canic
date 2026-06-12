@@ -53,6 +53,7 @@ pub struct AuthApi;
 impl AuthApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
+    const DELEGATED_TOKEN_ISSUER_DISABLED: &str = "delegated token issuer disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_issuer=true in canic.toml";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const DELEGATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_delegation_proof.v1";
     const DELEGATION_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
@@ -74,6 +75,21 @@ impl AuthApi {
             }
             _ => Error::from(err),
         }
+    }
+
+    fn require_delegated_token_issuer_enabled() -> Result<(), Error> {
+        let delegated_tokens_cfg =
+            ConfigOps::delegated_tokens_config().map_err(Self::map_auth_error)?;
+        if !delegated_tokens_cfg.enabled {
+            return Err(Error::invalid(Self::DELEGATED_TOKENS_DISABLED));
+        }
+
+        let canister_cfg = ConfigOps::current_canister().map_err(Self::map_auth_error)?;
+        if !canister_cfg.auth.delegated_token_issuer {
+            return Err(Error::forbidden(Self::DELEGATED_TOKEN_ISSUER_DISABLED));
+        }
+
+        Ok(())
     }
 
     // Verify delegated-token material and return the token subject.
@@ -103,6 +119,8 @@ impl AuthApi {
     pub fn prepare_delegated_token(
         request: DelegatedTokenPrepareRequest,
     ) -> Result<DelegatedTokenPrepareResponse, Error> {
+        Self::require_delegated_token_issuer_enabled()?;
+
         let label = "delegated token prepare";
         let metadata = Self::token_replay_metadata(request.metadata, label)?;
         let caller = IcOps::msg_caller();
@@ -174,6 +192,8 @@ impl AuthApi {
 
     /// Retrieve a prepared delegated token with its issuer canister-signature proof.
     pub fn get_delegated_token(request: DelegatedTokenGetRequest) -> Result<DelegatedToken, Error> {
+        Self::require_delegated_token_issuer_enabled()?;
+
         AuthOps::get_delegated_token_issuer_proof(request.claims_hash, IcOps::msg_caller())
             .map_err(Self::map_auth_error)
     }
@@ -182,6 +202,8 @@ impl AuthApi {
     pub fn install_active_delegation_proof(
         request: InstallActiveDelegationProofRequest,
     ) -> Result<InstallActiveDelegationProofResponse, Error> {
+        Self::require_delegated_token_issuer_enabled()?;
+
         let active_proof =
             AuthOps::install_active_delegation_proof(request.proof, IcOps::msg_caller())
                 .map_err(Self::map_auth_error)?;
@@ -955,7 +977,7 @@ mod tests {
 
     #[test]
     fn delegation_request_caller_must_match_requested_issuer() {
-        AuthApi::validate_delegation_request_caller(p(2), p(2)).expect("matching shard");
+        AuthApi::validate_delegation_request_caller(p(2), p(2)).expect("matching issuer");
 
         let err = AuthApi::validate_delegation_request_caller(p(1), p(2))
             .expect_err("mismatched caller must fail");

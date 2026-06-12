@@ -78,23 +78,6 @@ fn wasm_store_canonical_did_parses() {
 }
 
 #[test]
-fn wasm_store_delegated_token_uses_issuer_proof_type_name() {
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
-    let did = read_text(&did_path);
-
-    assert!(
-        did.contains(
-            "type IssuerProof = variant { IcCanisterSignatureV1 : IcCanisterSignatureProofV1 };"
-        ),
-        "canonical wasm_store DID must expose a distinct IssuerProof type"
-    );
-    assert!(
-        did.contains("  issuer_proof : IssuerProof;"),
-        "DelegatedToken.issuer_proof must not be rendered as RootProof"
-    );
-}
-
-#[test]
 fn public_protocol_reexports_wasm_store_root_update_manifest() {
     assert_eq!(
         canic::protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS,
@@ -114,7 +97,7 @@ fn public_protocol_reexports_wasm_store_root_update_manifest() {
 }
 
 #[test]
-fn active_delegation_proof_installer_surface_is_pinned() {
+fn active_delegation_proof_installer_surface_is_issuer_gated() {
     assert_eq!(
         canic::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
         canic_core::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF
@@ -124,13 +107,20 @@ fn active_delegation_proof_installer_surface_is_pinned() {
         "canic_install_active_delegation_proof"
     );
 
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
-    let source = read_text(&macro_path);
-    let endpoint = source
+    let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
+    let bundle = read_text(&bundle_path);
+    assert!(
+        bundle.contains("#[cfg(canic_delegated_token_issuer)]\n        $crate::canic_emit_nonroot_auth_attestation_endpoints!();"),
+        "non-root issuer provisioning endpoints must be gated by canic_delegated_token_issuer"
+    );
+
+    let endpoint_path = workspace_root().join("crates/canic/src/macros/endpoints/nonroot.rs");
+    let endpoint_source = read_text(&endpoint_path);
+    let endpoint = endpoint_source
         .split("fn canic_install_active_delegation_proof(")
         .nth(1)
         .expect("non-root auth endpoint should emit active proof installer");
-    let prefix = source
+    let prefix = endpoint_source
         .split("fn canic_install_active_delegation_proof(")
         .next()
         .expect("source should have endpoint prefix");
@@ -155,10 +145,12 @@ fn active_delegation_proof_installer_surface_is_pinned() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
     assert!(
-        did.contains("type InstallActiveDelegationProofRequest = record")
-            && did.contains("type InstallActiveDelegationProofResponse = record")
-            && did.contains("  canic_install_active_delegation_proof : ("),
-        "canonical wasm_store DID must expose the active proof installer"
+        !did.contains("canic_install_active_delegation_proof")
+            && !did.contains("canic_prepare_delegated_token")
+            && !did.contains("canic_get_delegated_token")
+            && !did.contains("type InstallActiveDelegationProofRequest = record")
+            && !did.contains("type DelegatedTokenPrepareRequest = record"),
+        "canonical wasm_store DID must not expose delegated-token issuer provisioning"
     );
 }
 

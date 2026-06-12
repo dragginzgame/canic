@@ -815,7 +815,10 @@ pub(super) fn configured_role_capabilities_from_source(
     for subnet in config.subnets.values() {
         for (role, canister) in &subnet.canisters {
             let mut role_capabilities = BTreeSet::new();
-            if canister.auth.delegated_token_issuer || canister.auth.role_attestation_cache {
+            if canister.auth.delegated_token_issuer
+                || canister.auth.delegated_token_verifier
+                || canister.auth.role_attestation_cache
+            {
                 role_capabilities.insert("auth".to_string());
             }
             if canister.sharding.is_some() {
@@ -1012,6 +1015,9 @@ pub(super) fn configured_role_details_from_source(
             }
             if canister.auth.delegated_token_issuer {
                 role_details.insert("auth delegated-token-issuer".to_string());
+            }
+            if canister.auth.delegated_token_verifier {
+                role_details.insert("auth delegated-token-verifier".to_string());
             }
             if canister.auth.role_attestation_cache {
                 role_details.insert("auth role-attestation-cache".to_string());

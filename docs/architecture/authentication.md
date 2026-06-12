@@ -342,8 +342,8 @@ Verifier steps:
    - `auth.delegated_tokens.root_canister_id`, or initialized root env
    - parsed `auth.delegated_tokens.network`
    - `network = "mainnet"` requires the configured known mainnet raw IC root key
-   - `network = "local"`, `"pocketic"`, or `"testnet"` may use the runtime
-     root-key provider and must not use the mainnet root key
+   - `network = "local"`, `"pocketic"`, or `"testnet"` uses a configured or
+     startup-injected non-mainnet raw IC root key
    - issuer canister-signature proof embedded in the token
 3. Verify certificate policy:
    - configured root principal
@@ -503,14 +503,30 @@ max_ttl_secs = 300
 project_instance = 1
 ```
 
+Per-canister auth roles:
+
+```toml
+[subnets.prime.canisters.user_shard.auth]
+delegated_token_issuer = true
+delegated_token_verifier = true
+
+[subnets.prime.canisters.project_instance.auth]
+delegated_token_verifier = true
+```
+
 Security boundaries:
 
 - `auth.delegated_tokens.root_canister_id` or `EnvOps::root_pid()` is the
   delegated-token root identity trust boundary.
 - `auth.delegated_tokens.network` and the effective raw IC root key are paired:
   mainnet requires the known mainnet raw key, while local/PocketIC/test
-  verification may use the local runtime root-key provider and rejects the
-  mainnet key.
+  verification requires a non-mainnet root key that is either configured as
+  `ic_root_public_key_raw_hex` or injected once during canister startup.
+- token issuers must set `delegated_token_issuer = true`; only those canisters
+  expose delegated-token prepare/get/install provisioning endpoints.
+- protected endpoint verifiers must set `delegated_token_verifier = true`; the
+  runtime delegated-token verifier rejects before proof verification when the
+  current canister is not explicitly configured as a delegated-token verifier.
 - verifier `local_role` config is trusted; a canister configured with the wrong
   role is compromised for delegated-auth purposes.
 

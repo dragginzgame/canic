@@ -121,12 +121,12 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
 ];
 
-pub fn is_help_arg(arg: &OsString) -> bool {
+fn is_help_arg(arg: &OsString) -> bool {
     arg.to_str()
         .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
 }
 
-pub fn is_version_arg(arg: &OsString) -> bool {
+fn is_version_arg(arg: &OsString) -> bool {
     arg.to_str()
         .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
 }
@@ -135,7 +135,7 @@ pub fn first_arg_is_help(args: &[OsString]) -> bool {
     args.first().is_some_and(is_help_arg)
 }
 
-pub fn first_arg_is_version(args: &[OsString]) -> bool {
+fn first_arg_is_version(args: &[OsString]) -> bool {
     args.first().is_some_and(is_version_arg)
 }
 

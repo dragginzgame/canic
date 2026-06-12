@@ -1,11 +1,10 @@
 use super::AuthOps;
-#[cfg(any(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify"
-))]
+#[cfg(feature = "auth-root-canister-sig-verify")]
+use super::canister_sig_key::parse_canister_sig_public_key_der;
+#[cfg(feature = "auth-root-canister-sig-create")]
 use crate::cdk;
-#[cfg(any(feature = "auth-root-canister-sig-verify", test))]
-use crate::domain::auth::IC_ROOT_PUBLIC_KEY_RAW_LENGTH;
+#[cfg(test)]
+use crate::domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, ic_root_public_key_raw_from_der_or_raw};
 use crate::{
     InternalError, cdk::types::Principal, dto::auth::RootProof, ops::auth::AuthSignatureError,
 };
@@ -60,7 +59,6 @@ impl PendingRootProofKey {
     feature = "auth-root-canister-sig-verify",
     test
 ))]
-#[allow(dead_code)]
 pub const fn root_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
         RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
@@ -145,10 +143,6 @@ impl AuthOps {
             expected_root_pid,
             ic_root_public_key_raw,
         )
-    }
-
-    pub(crate) fn ic_root_public_key_raw() -> Result<Vec<u8>, InternalError> {
-        ic_root_public_key_raw()
     }
 
     pub(crate) const fn root_canister_sig_verify_enabled() -> bool {
@@ -350,66 +344,6 @@ fn verify_root_canister_signature_proof(
     Err(AuthSignatureError::ProofUnavailable.into())
 }
 
-#[cfg(feature = "auth-root-canister-sig-verify")]
-fn ic_root_public_key_raw() -> Result<Vec<u8>, InternalError> {
-    let root_key = cdk::api::root_key();
-    extract_ic_root_public_key_raw(&root_key)
-        .map_err(|err| AuthSignatureError::ProofInvalid(err).into())
-}
-
-#[cfg(not(feature = "auth-root-canister-sig-verify"))]
-fn ic_root_public_key_raw() -> Result<Vec<u8>, InternalError> {
-    Err(AuthSignatureError::ProofUnavailable.into())
-}
-
-#[cfg(any(feature = "auth-root-canister-sig-verify", test))]
-const IC_ROOT_PK_DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
-#[cfg(feature = "auth-root-canister-sig-verify")]
-const CANISTER_SIG_PK_DER_PREFIX_LENGTH: usize = 19;
-#[cfg(feature = "auth-root-canister-sig-verify")]
-const CANISTER_SIG_PK_DER_OID: &[u8; 14] =
-    b"\x30\x0C\x06\x0A\x2B\x06\x01\x04\x01\x83\xB8\x43\x01\x02";
-
-#[cfg(any(feature = "auth-root-canister-sig-verify", test))]
-fn extract_ic_root_public_key_raw(root_key: &[u8]) -> Result<Vec<u8>, String> {
-    if root_key.len() == IC_ROOT_PUBLIC_KEY_RAW_LENGTH {
-        return Ok(root_key.to_vec());
-    }
-
-    let expected_length = IC_ROOT_PK_DER_PREFIX.len() + IC_ROOT_PUBLIC_KEY_RAW_LENGTH;
-    if root_key.len() != expected_length {
-        return Err("invalid IC root public key length".to_string());
-    }
-    if &root_key[..IC_ROOT_PK_DER_PREFIX.len()] != IC_ROOT_PK_DER_PREFIX {
-        return Err("invalid IC root public key DER prefix".to_string());
-    }
-    Ok(root_key[IC_ROOT_PK_DER_PREFIX.len()..].to_vec())
-}
-
-#[cfg(feature = "auth-root-canister-sig-verify")]
-fn parse_canister_sig_public_key_der(
-    public_key_der: &[u8],
-) -> Result<(Principal, Vec<u8>), String> {
-    if public_key_der.len() < CANISTER_SIG_PK_DER_PREFIX_LENGTH + 1 {
-        return Err("canister signature public key DER too short".to_string());
-    }
-    let oid_end = 2 + CANISTER_SIG_PK_DER_OID.len();
-    if public_key_der.len() < oid_end || &public_key_der[2..oid_end] != CANISTER_SIG_PK_DER_OID {
-        return Err("invalid canister signature public key OID".to_string());
-    }
-
-    let raw = &public_key_der[CANISTER_SIG_PK_DER_PREFIX_LENGTH..];
-    let canister_id_len = usize::from(raw[0]);
-    if raw.len() < 1 + canister_id_len {
-        return Err("canister signature public key raw bytes too short".to_string());
-    }
-    let canister_id_end = 1 + canister_id_len;
-    let canister_id = Principal::try_from_slice(&raw[1..canister_id_end])
-        .map_err(|err| format!("invalid canister id in canister signature public key: {err}"))?;
-    let seed = raw[canister_id_end..].to_vec();
-    Ok((canister_id, seed))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,15 +375,16 @@ mod tests {
 
     #[test]
     fn extracts_raw_ic_root_key_from_der_or_raw() {
+        const IC_ROOT_PK_DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
         let mut der = IC_ROOT_PK_DER_PREFIX.to_vec();
         der.extend_from_slice(&[9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]);
 
         assert_eq!(
-            extract_ic_root_public_key_raw(&der).unwrap(),
+            ic_root_public_key_raw_from_der_or_raw(&der).unwrap(),
             vec![9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]
         );
         assert_eq!(
-            extract_ic_root_public_key_raw(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]).unwrap(),
+            ic_root_public_key_raw_from_der_or_raw(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]).unwrap(),
             vec![8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]
         );
     }

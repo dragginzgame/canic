@@ -1,7 +1,4 @@
 use super::*;
-use crate::support::path_stamp::{
-    backup_directory_stamp_from_unix, backup_directory_stamp_to_unix,
-};
 
 const ROOT: &str = "aaaaa-aa";
 
@@ -103,19 +100,4 @@ fn deployment_membership_entries_accept_known_canister() {
 #[test]
 fn snapshot_default_path_sanitizes_labels() {
     assert_eq!(file_safe_component("demo fleet/root"), "demo-fleet-root");
-}
-
-// Ensure default backup directory timestamps are compact calendar labels.
-#[test]
-fn backup_directory_stamp_uses_calendar_time() {
-    assert_eq!(backup_directory_stamp_from_unix(0), "19700101-000000");
-    assert_eq!(
-        backup_directory_stamp_from_unix(1_715_090_400),
-        "20240507-140000"
-    );
-    assert_eq!(
-        backup_directory_stamp_to_unix("20240507-140000"),
-        Some(1_715_090_400)
-    );
-    assert_eq!(backup_directory_stamp_to_unix("20240532-140000"), None);
 }

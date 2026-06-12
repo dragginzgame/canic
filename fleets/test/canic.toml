@@ -96,6 +96,7 @@ topup = {}
 
 [subnets.prime.canisters.user_shard.auth]
 delegated_token_issuer = true
+delegated_token_verifier = true
 role_attestation_cache = true
 
 # --- Scale Hub ---

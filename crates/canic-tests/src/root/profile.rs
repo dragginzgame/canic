@@ -29,6 +29,7 @@ const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "canisters",
+    "fleets/test",
     "icp.yaml",
     "crates",
 ];

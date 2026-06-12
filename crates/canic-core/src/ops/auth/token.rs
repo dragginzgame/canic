@@ -163,7 +163,8 @@ impl AuthOps {
         DelegatedAuthMetrics::record_verify_started();
 
         let cfg = delegated_tokens_config_for_verification()?;
-        let ctx = delegated_token_runtime_context(&cfg)?;
+        require_current_canister_delegated_token_verifier()?;
+        let ctx = delegated_token_local_context()?;
 
         let cache_key = match delegated_token_cache_key(input.token, input.caller) {
             Ok(key) => key,
@@ -181,7 +182,8 @@ impl AuthOps {
             return Ok(verified);
         }
 
-        let verified = verify_with_embedded_proofs(&input, &ctx)?;
+        let verifier_cfg = delegated_token_verifier_config_for_verification(&cfg)?;
+        let verified = verify_with_embedded_proofs(&input, &ctx, &verifier_cfg)?;
         insert_positive_verification_cache(&input, cache_key);
         DelegatedAuthMetrics::record_verify_completed();
         Ok(verified)
@@ -199,8 +201,7 @@ impl AuthOps {
     }
 }
 
-struct DelegatedTokenRuntimeContext {
-    verifier_cfg: DelegatedTokenVerifierConfig,
+struct DelegatedTokenLocalContext {
     local_canister: Principal,
     local_canic_subnet: Option<Principal>,
     local_role: CanisterRole,
@@ -222,16 +223,40 @@ fn delegated_tokens_config_for_verification() -> Result<DelegatedTokenConfig, In
     Ok(cfg)
 }
 
-fn delegated_token_runtime_context(
-    cfg: &DelegatedTokenConfig,
-) -> Result<DelegatedTokenRuntimeContext, InternalError> {
-    let verifier_cfg = match AuthOps::delegated_token_verifier_config_from(cfg) {
-        Ok(verifier_cfg) => verifier_cfg,
+fn require_current_canister_delegated_token_verifier() -> Result<(), InternalError> {
+    let canister_cfg = match ConfigOps::current_canister() {
+        Ok(canister_cfg) => canister_cfg,
         Err(err) => {
-            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::RootKey);
+            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
             return Err(err);
         }
     };
+
+    if canister_cfg.auth.delegated_token_verifier {
+        return Ok(());
+    }
+
+    DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
+    Err(AuthValidationError::Auth(
+        "delegated token verifier disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_verifier=true in canic.toml"
+            .to_string(),
+    )
+    .into())
+}
+
+fn delegated_token_verifier_config_for_verification(
+    cfg: &DelegatedTokenConfig,
+) -> Result<DelegatedTokenVerifierConfig, InternalError> {
+    match AuthOps::delegated_token_verifier_config_from(cfg) {
+        Ok(verifier_cfg) => Ok(verifier_cfg),
+        Err(err) => {
+            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::RootKey);
+            Err(err)
+        }
+    }
+}
+
+fn delegated_token_local_context() -> Result<DelegatedTokenLocalContext, InternalError> {
     let local_role = match EnvOps::canister_role() {
         Ok(local_role) => local_role,
         Err(err) => {
@@ -247,8 +272,7 @@ fn delegated_token_runtime_context(
         }
     };
 
-    Ok(DelegatedTokenRuntimeContext {
-        verifier_cfg,
+    Ok(DelegatedTokenLocalContext {
         local_canister: IcOps::canister_self(),
         local_canic_subnet: EnvOps::subnet_pid().ok(),
         local_role,
@@ -258,7 +282,7 @@ fn delegated_token_runtime_context(
 
 fn delegated_token_verify_input<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
-    ctx: &'a DelegatedTokenRuntimeContext,
+    ctx: &'a DelegatedTokenLocalContext,
 ) -> VerifyDelegatedTokenInput<'a> {
     VerifyDelegatedTokenInput {
         token: input.token,
@@ -277,7 +301,7 @@ fn delegated_token_verify_input<'a>(
 
 fn verify_from_positive_cache<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
-    ctx: &'a DelegatedTokenRuntimeContext,
+    ctx: &'a DelegatedTokenLocalContext,
     cache_key: [u8; 32],
 ) -> Result<Option<VerifiedDelegatedToken>, InternalError> {
     if positive_cache_get(cache_key, input.now_ns).is_none() {
@@ -297,18 +321,16 @@ fn verify_from_positive_cache<'a>(
 
 fn verify_with_embedded_proofs<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
-    ctx: &'a DelegatedTokenRuntimeContext,
+    ctx: &'a DelegatedTokenLocalContext,
+    verifier_cfg: &'a DelegatedTokenVerifierConfig,
 ) -> Result<VerifiedDelegatedToken, InternalError> {
-    validate_network_root_key_pair(
-        ctx.verifier_cfg.network,
-        &ctx.verifier_cfg.ic_root_public_key_raw,
-    )?;
+    validate_network_root_key_pair(verifier_cfg.network, &verifier_cfg.ic_root_public_key_raw)?;
     verify_delegated_token(
         delegated_token_verify_input(input, ctx),
         |cert_hash, root_proof, root_pid| {
-            if root_pid != ctx.verifier_cfg.root_canister_id {
+            if root_pid != verifier_cfg.root_canister_id {
                 return Err(AuthValidationError::InvalidRootAuthority {
-                    expected: ctx.verifier_cfg.root_canister_id,
+                    expected: verifier_cfg.root_canister_id,
                     found: root_pid,
                 }
                 .to_string());
@@ -317,8 +339,8 @@ fn verify_with_embedded_proofs<'a>(
                 RootPayloadKind::DelegationCert,
                 cert_hash,
                 root_proof,
-                ctx.verifier_cfg.root_canister_id,
-                &ctx.verifier_cfg.ic_root_public_key_raw,
+                verifier_cfg.root_canister_id,
+                &verifier_cfg.ic_root_public_key_raw,
             )
             .map_err(|err| err.to_string())
         },
@@ -328,7 +350,7 @@ fn verify_with_embedded_proofs<'a>(
                 claims_hash,
                 issuer_proof,
                 issuer_pid,
-                &ctx.verifier_cfg.ic_root_public_key_raw,
+                &verifier_cfg.ic_root_public_key_raw,
             )
             .map_err(|err| err.to_string())
         },
@@ -393,17 +415,6 @@ fn configured_ic_root_public_key_raw(
     cfg: &DelegatedTokenConfig,
     network: DelegatedAuthNetwork,
 ) -> Result<Vec<u8>, InternalError> {
-    configured_ic_root_public_key_raw_with_provider(cfg, network, AuthOps::ic_root_public_key_raw)
-}
-
-fn configured_ic_root_public_key_raw_with_provider<F>(
-    cfg: &DelegatedTokenConfig,
-    network: DelegatedAuthNetwork,
-    runtime_root_key: F,
-) -> Result<Vec<u8>, InternalError>
-where
-    F: FnOnce() -> Result<Vec<u8>, InternalError>,
-{
     let ic_root_public_key_raw = match cfg.ic_root_public_key_raw_hex.as_deref() {
         Some(root_key_hex) => {
             let root_key_hex = root_key_hex.trim();
@@ -420,13 +431,13 @@ where
                 ))
             })?
         }
-        None if network.is_mainnet() => {
-            return Err(AuthValidationError::Auth(
-                "auth.delegated_tokens.ic_root_public_key_raw_hex is required when auth.delegated_tokens.network=\"mainnet\"".to_string(),
-            )
+        None => {
+            return Err(AuthValidationError::Auth(format!(
+                "auth.delegated_tokens.ic_root_public_key_raw_hex is required when delegated-token verification is enabled for network=\"{}\"",
+                network.label()
+            ))
             .into());
         }
-        None => runtime_root_key()?,
     };
 
     if ic_root_public_key_raw.len() != IC_ROOT_PUBLIC_KEY_RAW_LENGTH {
@@ -532,7 +543,16 @@ const fn delegated_auth_reason_from_verify_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW;
+    use crate::{
+        config::{
+            Config,
+            schema::{CanisterAuthConfig, CanisterKind},
+        },
+        domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
+        ids::SubnetRole,
+        storage::stable::env::{Env, EnvRecord},
+        test::config::ConfigTestBuilder,
+    };
     use std::fmt::Write as _;
 
     fn root_pid() -> Principal {
@@ -565,8 +585,8 @@ mod tests {
         MAINNET_IC_ROOT_PUBLIC_KEY_RAW.to_vec()
     }
 
-    fn supplied_key(key: Vec<u8>) -> impl FnOnce() -> Result<Vec<u8>, InternalError> {
-        || Ok(key)
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
     }
 
     #[test]
@@ -610,35 +630,67 @@ mod tests {
     }
 
     #[test]
-    fn local_verifier_config_can_use_runtime_root_key_provider() {
+    fn local_verifier_config_requires_explicit_root_key() {
         let cfg = cfg("local", None);
 
-        let root_key = configured_ic_root_public_key_raw_with_provider(
-            &cfg,
-            DelegatedAuthNetwork::Local,
-            supplied_key(local_key()),
-        )
-        .expect("local runtime provider key should pass");
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("local verifier requires explicit root key");
 
-        assert_eq!(root_key, local_key());
+        assert!(
+            err.to_string()
+                .contains("ic_root_public_key_raw_hex is required"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
-    fn pocketic_verifier_config_rejects_runtime_mainnet_root_key() {
+    fn local_verifier_config_accepts_explicit_local_root_key() {
+        let cfg = cfg("local", Some(local_key()));
+
+        let verifier =
+            AuthOps::delegated_token_verifier_config_from(&cfg).expect("local key should pass");
+
+        assert_eq!(verifier.network, DelegatedAuthNetwork::Local);
+        assert_eq!(verifier.ic_root_public_key_raw, local_key());
+    }
+
+    #[test]
+    fn pocketic_verifier_config_requires_explicit_root_key() {
         let cfg = cfg("pocketic", None);
 
-        let err = configured_ic_root_public_key_raw_with_provider(
-            &cfg,
-            DelegatedAuthNetwork::PocketIc,
-            supplied_key(mainnet_key()),
-        )
-        .expect_err("pocketic must not accept mainnet root key");
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("pocketic verifier requires explicit root key");
+
+        assert!(
+            err.to_string()
+                .contains("ic_root_public_key_raw_hex is required"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn pocketic_verifier_config_rejects_explicit_mainnet_root_key() {
+        let cfg = cfg("pocketic", Some(mainnet_key()));
+
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("pocketic must not accept mainnet root key");
 
         assert!(
             err.to_string()
                 .contains("network=\"pocketic\" must not use the mainnet IC root public key"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn pocketic_verifier_config_accepts_explicit_pocketic_root_key() {
+        let cfg = cfg("pocketic", Some(local_key()));
+
+        let verifier =
+            AuthOps::delegated_token_verifier_config_from(&cfg).expect("pocketic key should pass");
+
+        assert_eq!(verifier.network, DelegatedAuthNetwork::PocketIc);
+        assert_eq!(verifier.ic_root_public_key_raw, local_key());
     }
 
     #[test]
@@ -653,5 +705,97 @@ mod tests {
                 .contains("network=\"local\" must not use the mainnet IC root public key"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn testnet_verifier_config_requires_explicit_root_key() {
+        let cfg = cfg("testnet", None);
+
+        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+            .expect_err("testnet verifier requires explicit root key");
+
+        assert!(
+            err.to_string()
+                .contains("ic_root_public_key_raw_hex is required"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn testnet_verifier_config_accepts_explicit_test_root_key() {
+        let cfg = cfg("testnet", Some(local_key()));
+
+        let verifier =
+            AuthOps::delegated_token_verifier_config_from(&cfg).expect("testnet key should pass");
+
+        assert_eq!(verifier.network, DelegatedAuthNetwork::Testnet);
+        assert_eq!(verifier.ic_root_public_key_raw, local_key());
+    }
+
+    #[test]
+    fn delegated_token_verifier_gate_rejects_issuer_only_canister() {
+        install_verifier_test_config(false, true, false);
+
+        let err = require_current_canister_delegated_token_verifier()
+            .expect_err("issuer-only canister must not verify delegated tokens");
+
+        assert!(
+            err.to_string()
+                .contains("delegated token verifier disabled for this canister"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn delegated_token_verifier_gate_rejects_role_attestation_cache_without_verifier_flag() {
+        install_verifier_test_config(false, false, true);
+
+        let err = require_current_canister_delegated_token_verifier()
+            .expect_err("role-attestation cache must not enable delegated-token verification");
+
+        assert!(
+            err.to_string()
+                .contains("delegated token verifier disabled for this canister"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn delegated_token_verifier_gate_accepts_current_canister_verifier() {
+        install_verifier_test_config(true, false, false);
+
+        require_current_canister_delegated_token_verifier()
+            .expect("explicit verifier canister should pass the execution gate");
+    }
+
+    fn install_verifier_test_config(
+        delegated_token_verifier: bool,
+        delegated_token_issuer: bool,
+        role_attestation_cache: bool,
+    ) {
+        let mut canister_cfg = ConfigTestBuilder::canister_config(CanisterKind::Service);
+        canister_cfg.auth = CanisterAuthConfig {
+            delegated_token_issuer,
+            delegated_token_verifier,
+            role_attestation_cache,
+        };
+
+        let mut cfg = ConfigTestBuilder::new()
+            .with_prime_canister("project_instance", canister_cfg)
+            .build();
+        cfg.auth.delegated_tokens.network = "local".to_string();
+        cfg.auth.delegated_tokens.root_canister_id = Some(root_pid().to_string());
+        cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex(local_key()));
+        Config::reset_for_tests();
+        Config::init_from_model_for_tests(cfg).expect("test config should install");
+
+        Env::import(EnvRecord {
+            prime_root_pid: Some(root_pid()),
+            subnet_role: Some(SubnetRole::PRIME),
+            subnet_pid: Some(p(9)),
+            root_pid: Some(root_pid()),
+            canister_role: Some(CanisterRole::new("project_instance")),
+            parent_pid: Some(root_pid()),
+        });
     }
 }

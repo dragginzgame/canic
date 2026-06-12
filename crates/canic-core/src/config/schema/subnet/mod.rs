@@ -143,6 +143,9 @@ pub struct CanisterAuthConfig {
     pub delegated_token_issuer: bool,
 
     #[serde(default)]
+    pub delegated_token_verifier: bool,
+
+    #[serde(default)]
     pub role_attestation_cache: bool,
 }
 

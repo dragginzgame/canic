@@ -33,4 +33,5 @@ kind = "root"
 kind = "service"
 
 [subnets.prime.canisters.test.auth]
+delegated_token_verifier = true
 role_attestation_cache = true

@@ -291,10 +291,13 @@ max_ttl_secs = 3600
 
 `root_canister_id` may fall back to initialized Canic root env. The raw IC root
 key is paired with `network`: mainnet requires the configured known mainnet raw
-key, while local/PocketIC/test verification may use that environment's runtime
-root-key provider and rejects the mainnet key. If delegated-token verification
-is enabled, startup must have root and issuer canister-signature verification
-features and an effective root principal plus raw IC root key.
+key, while local/PocketIC/test verification requires a non-mainnet raw root key
+from `ic_root_public_key_raw_hex` or startup injection and rejects the mainnet
+key. If delegated-token verification is enabled, startup must have root and
+issuer canister-signature verification features, an effective root principal
+plus raw IC root key, and the current canister must set
+`delegated_token_verifier = true` before endpoint token verification can
+proceed.
 
 ## Revocation and TTL
 

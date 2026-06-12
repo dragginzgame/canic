@@ -81,6 +81,8 @@ macro_rules! __canic_build_internal {
         // Emit compile-time endpoint surface flags from validated config.
         println!("cargo:rustc-check-cfg=cfg(canic_role_attestation_refresh)");
         println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
+        println!("cargo:rustc-check-cfg=cfg(canic_delegated_token_issuer)");
+        println!("cargo:rustc-check-cfg=cfg(canic_delegated_token_verifier)");
         println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
         println!("cargo:rustc-check-cfg=cfg(canic_is_root)");
         println!("cargo:rustc-check-cfg=cfg(canic_role_declared)");
@@ -120,6 +122,8 @@ macro_rules! __canic_build_internal {
 
         let role_name = __canic_role_name.as_str();
         let mut role_attestation_refresh = false;
+        let mut delegated_token_issuer = false;
+        let mut delegated_token_verifier = false;
         let mut has_icrc21 = false;
         let mut has_scaling = false;
         let mut has_sharding = false;
@@ -161,6 +165,10 @@ macro_rules! __canic_build_internal {
         for subnet in $cfg.subnets.values() {
             if let Some(canister_cfg) = subnet.get_canister(&role_id) {
                 role_attestation_refresh |= canister_cfg.auth.role_attestation_cache;
+                delegated_token_issuer |= canister_cfg.auth.delegated_token_issuer;
+                delegated_token_verifier |= canister_cfg.auth.delegated_token_issuer
+                    || canister_cfg.auth.delegated_token_verifier
+                    || canister_cfg.auth.role_attestation_cache;
                 has_icrc21 |= canister_cfg.standards.icrc21;
                 has_scaling |= canister_cfg.scaling.is_some();
                 has_sharding |= canister_cfg.sharding.is_some();
@@ -189,6 +197,14 @@ macro_rules! __canic_build_internal {
 
         if role_attestation_refresh {
             println!("cargo:rustc-cfg=canic_role_attestation_refresh");
+        }
+
+        if delegated_token_issuer {
+            println!("cargo:rustc-cfg=canic_delegated_token_issuer");
+        }
+
+        if delegated_token_verifier {
+            println!("cargo:rustc-cfg=canic_delegated_token_verifier");
         }
 
         if memory_ledger {

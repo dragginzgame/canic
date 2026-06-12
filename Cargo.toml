@@ -101,7 +101,7 @@ serde_json = "1.0"
 sha2 = "0.10.9"
 syn = "2.0"
 thiserror = "2.0"
-time = { version = "=0.3.41", default-features = false }
+time = { version = "=0.3.47", default-features = false }
 tokio = "1.52.3"
 toml = "1.0"
 

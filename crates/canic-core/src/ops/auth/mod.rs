@@ -1,5 +1,10 @@
 mod attestation;
 mod boundary;
+#[cfg(any(
+    feature = "auth-root-canister-sig-verify",
+    feature = "auth-issuer-canister-sig-verify"
+))]
+mod canister_sig_key;
 mod crypto;
 mod delegated;
 mod delegation;

@@ -64,7 +64,7 @@ pub enum MintDelegatedTokenError {
 }
 
 #[cfg(test)]
-pub fn mint_delegated_token<F>(
+pub fn prepare_and_finish_delegated_token_for_tests<F>(
     input: MintDelegatedTokenInput<'_>,
     create_issuer_proof: F,
 ) -> Result<DelegatedToken, MintDelegatedTokenError>
@@ -280,7 +280,7 @@ mod tests {
         let proof = proof();
         let mut observed_hash = None;
 
-        let token = mint_delegated_token(input(&proof), |hash| {
+        let token = prepare_and_finish_delegated_token_for_tests(input(&proof), |hash| {
             observed_hash = Some(hash);
             Ok(issuer_proof_for_hash(hash))
         })
@@ -316,7 +316,10 @@ mod tests {
         let mut input = input(&proof);
         input.ext = Some(b"opaque-app-context".to_vec());
 
-        let token = mint_delegated_token(input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let token = prepare_and_finish_delegated_token_for_tests(input, |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
 
         assert_eq!(token.claims.ext, Some(b"opaque-app-context".to_vec()));
         let IssuerProof::IcCanisterSignatureV1(issuer_proof) = &token.issuer_proof;
@@ -329,8 +332,10 @@ mod tests {
     #[test]
     fn minted_token_feeds_the_pure_verifier() {
         let proof = proof();
-        let token =
-            mint_delegated_token(input(&proof), |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let token = prepare_and_finish_delegated_token_for_tests(input(&proof), |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
         let role = CanisterRole::new("project_instance");
         let required_scopes = vec!["read".to_string()];
 
@@ -362,10 +367,14 @@ mod tests {
         left_input.operation_id = [1; 32];
         let mut right_input = input(&proof);
         right_input.operation_id = [2; 32];
-        let left =
-            mint_delegated_token(left_input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
-        let right =
-            mint_delegated_token(right_input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let left = prepare_and_finish_delegated_token_for_tests(left_input, |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
+        let right = prepare_and_finish_delegated_token_for_tests(right_input, |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
 
         assert_ne!(left.claims.nonce, right.claims.nonce);
 
@@ -395,8 +404,10 @@ mod tests {
     fn mutating_signed_grants_fails_verifier_signature() {
         let proof = proof();
         let role = CanisterRole::new("project_instance");
-        let mut token =
-            mint_delegated_token(input(&proof), |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let mut token = prepare_and_finish_delegated_token_for_tests(input(&proof), |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
         token.claims.grants = vec![grant("project_instance", &["write"])];
 
         assert_eq!(
@@ -431,8 +442,10 @@ mod tests {
         let role = CanisterRole::new("project_instance");
         let mut input = input(&proof);
         input.ext = Some(b"left".to_vec());
-        let mut token =
-            mint_delegated_token(input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let mut token = prepare_and_finish_delegated_token_for_tests(input, |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
         token.claims.ext = Some(b"right".to_vec());
 
         assert_eq!(
@@ -472,7 +485,9 @@ mod tests {
         ]);
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
+            prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
+                [0; 32]
+            ))),
             Err(MintDelegatedTokenError::Canonical(
                 CanonicalAuthError::TokenExtTooLarge {
                     len: crate::ops::auth::delegated::canonical::MAX_TOKEN_EXT_BYTES + 1,
@@ -489,7 +504,9 @@ mod tests {
         input.audience = DelegationAudience::Project("other".to_string());
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
+            prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
+                [0; 32]
+            ))),
             Err(MintDelegatedTokenError::AudienceNotSubset)
         );
     }
@@ -501,7 +518,9 @@ mod tests {
         input.grants = vec![grant("project_instance", &["admin"])];
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
+            prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
+                [0; 32]
+            ))),
             Err(MintDelegatedTokenError::GrantsNotSubset)
         );
     }
@@ -512,7 +531,10 @@ mod tests {
         let mut input = input(&proof);
         input.ttl_ns = 120;
 
-        let token = mint_delegated_token(input, |hash| Ok(issuer_proof_for_hash(hash))).unwrap();
+        let token = prepare_and_finish_delegated_token_for_tests(input, |hash| {
+            Ok(issuer_proof_for_hash(hash))
+        })
+        .unwrap();
 
         assert_eq!(token.claims.issued_at_ns, 120);
         assert_eq!(token.claims.expires_at_ns, 240);
@@ -525,7 +547,9 @@ mod tests {
         input.ttl_ns = 121;
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
+            prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
+                [0; 32]
+            ))),
             Err(MintDelegatedTokenError::TokenTtlExceeded {
                 ttl_ns: 121,
                 max_ttl_ns: 120,
@@ -541,7 +565,9 @@ mod tests {
         input.ttl_ns = 20;
 
         assert_eq!(
-            mint_delegated_token(input, |_| Ok(issuer_proof_for_hash([0; 32]))),
+            prepare_and_finish_delegated_token_for_tests(input, |_| Ok(issuer_proof_for_hash(
+                [0; 32]
+            ))),
             Err(MintDelegatedTokenError::TokenOutlivesCert)
         );
     }
@@ -551,7 +577,9 @@ mod tests {
         let proof = proof();
 
         assert_eq!(
-            mint_delegated_token(input(&proof), |_| Err("sign failed".to_string())),
+            prepare_and_finish_delegated_token_for_tests(input(&proof), |_| Err(
+                "sign failed".to_string()
+            )),
             Err(MintDelegatedTokenError::IssuerProofFailed(
                 "sign failed".to_string(),
             ))

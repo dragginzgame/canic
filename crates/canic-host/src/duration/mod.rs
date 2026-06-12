@@ -16,7 +16,11 @@ pub fn parse_duration_seconds(value: &str) -> Result<u64, DurationParseError> {
         Some(b'h') => (&value[..value.len() - 1], 60 * 60),
         Some(b'd') => (&value[..value.len() - 1], 24 * 60 * 60),
         Some(b'0'..=b'9') => (value, 1),
-        _ => return invalid_duration(value),
+        _ => {
+            return Err(DurationParseError::Invalid {
+                value: value.to_string(),
+            });
+        }
     };
     number
         .parse::<u64>()
@@ -26,12 +30,6 @@ pub fn parse_duration_seconds(value: &str) -> Result<u64, DurationParseError> {
         .ok_or_else(|| DurationParseError::Invalid {
             value: value.to_string(),
         })
-}
-
-fn invalid_duration(value: &str) -> Result<u64, DurationParseError> {
-    Err(DurationParseError::Invalid {
-        value: value.to_string(),
-    })
 }
 
 #[cfg(test)]

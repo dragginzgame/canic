@@ -181,6 +181,7 @@ impl AuthState {
     }
 
     // Clear the issuer's installed active delegation proof.
+    #[cfg(test)]
     pub(crate) fn clear_active_delegation_proof() {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();

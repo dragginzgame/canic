@@ -102,7 +102,7 @@ pub fn parse_u128_digits(text: &str) -> Option<u128> {
 }
 
 #[must_use]
-pub fn parse_leading_u128_digits(text: &str) -> Option<u128> {
+fn parse_leading_u128_digits(text: &str) -> Option<u128> {
     leading_number_digits(text).parse().ok()
 }
 

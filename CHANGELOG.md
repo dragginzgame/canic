@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.3` closes the strict delegated-auth verifier gap by requiring effective
+  raw IC root-key material before protected endpoints run, gating delegated-token
+  verification on explicit verifier config, keeping wasm-store free of issuer
+  provisioning endpoints, and pinning `time` at `0.3.47`.
+
+- `0.66.2` publishes the 0.65 closeout audit line against the 0.66 package
+  surface so follow-up cleanup can proceed from a versioned baseline.
+
 - `0.66.1` enforces delegated-auth verifier trust anchors by pairing network
   labels with raw IC root keys, fixes issuer-proof Candid terminology, and
   cleans closeout docs around certified-data ownership and local verifier

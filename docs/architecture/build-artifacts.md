@@ -91,3 +91,8 @@ Wasm is not the supported path; use the local/debug extraction path instead.
 Recurring audits should use this vocabulary instead of restating tool-specific
 paths inline. When an audit needs a concrete local environment path, use
 `local` unless the report preamble names another environment.
+
+Ignored `.icp/local/**` Candid sidecars are local build artifacts, not release
+evidence. Before release closeout, either regenerate them from the current
+checked-in exports or exclude them explicitly and rely on tracked sidecars,
+protocol-surface tests, and release-set builds.

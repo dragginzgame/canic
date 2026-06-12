@@ -77,8 +77,16 @@ guard is retained for this removed design.
       feature-owned.
 - [x] Add delegated-token verifier config for root canister id, raw IC root key,
       and network label.
+- [x] Add explicit per-canister `delegated_token_verifier` config so token-only
+      verifiers do not rely on role-attestation cache state for startup
+      trust-anchor validation.
 - [x] Add startup trap when a delegated-token verifier lacks
       `auth-root-canister-sig-verify` or effective verifier trust anchors.
+- [x] Require an effective raw IC root key for every verifier network; local,
+      PocketIC, and testnet keys may be configured or injected during startup,
+      while endpoint verification never discovers the IC root key dynamically.
+- [x] Enforce `delegated_token_verifier = true` at delegated-token verification
+      execution time, before proof verification work.
 - [x] Define `root_canister_sig_verification_message(kind, payload_hash)`.
 - [x] Add a golden test proving verifier passes
       `domain_len || domain || cert_hash`, not raw `cert_hash`.

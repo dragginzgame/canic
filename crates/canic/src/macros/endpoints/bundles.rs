@@ -43,6 +43,7 @@ macro_rules! canic_bundle_nonroot_only_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_nonroot_sync_topology))]
         $crate::canic_emit_nonroot_sync_topology_endpoints!();
+        #[cfg(canic_delegated_token_issuer)]
         $crate::canic_emit_nonroot_auth_attestation_endpoints!();
     };
 }
@@ -61,6 +62,7 @@ macro_rules! canic_bundle_wasm_store_runtime_endpoints {
         $crate::canic_emit_auth_attestation_endpoints!();
         #[cfg(not(canic_disable_bundle_nonroot_sync_topology))]
         $crate::canic_emit_nonroot_sync_topology_endpoints!();
+        #[cfg(canic_delegated_token_issuer)]
         $crate::canic_emit_nonroot_auth_attestation_endpoints!();
         $crate::canic_emit_local_wasm_store_endpoints!();
     };

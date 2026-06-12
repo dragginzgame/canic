@@ -48,6 +48,10 @@ pub enum ConfigError {
     /// Wrapper for data schema-level errors.
     #[error(transparent)]
     ConfigSchema(#[from] ConfigSchemaError),
+
+    /// Runtime root-key injection failed during local/test bootstrap.
+    #[error("runtime IC root key error: {0}")]
+    RuntimeRootKey(String),
 }
 
 impl From<ConfigError> for InternalError {

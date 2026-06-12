@@ -232,7 +232,9 @@ const fn nonroot_requires_delegated_token_issuer(
 const fn nonroot_requires_delegated_token_verifier(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {
-    canister_cfg.auth.delegated_token_issuer || canister_cfg.auth.role_attestation_cache
+    canister_cfg.auth.delegated_token_issuer
+        || canister_cfg.auth.delegated_token_verifier
+        || canister_cfg.auth.role_attestation_cache
 }
 
 #[cfg(test)]
@@ -253,6 +255,7 @@ mod tests {
         let mut issuer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
+            delegated_token_verifier: false,
             role_attestation_cache: false,
         };
 
@@ -274,6 +277,7 @@ mod tests {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
+            delegated_token_verifier: false,
             role_attestation_cache: true,
         };
 
@@ -295,6 +299,7 @@ mod tests {
         let mut issuer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
+            delegated_token_verifier: false,
             role_attestation_cache: false,
         };
 
@@ -324,10 +329,25 @@ mod tests {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
+            delegated_token_verifier: true,
+            role_attestation_cache: false,
+        };
+
+        assert!(!nonroot_requires_delegated_token_issuer(&verifier_cfg));
+        assert!(nonroot_requires_delegated_token_verifier(&verifier_cfg));
+    }
+
+    #[test]
+    fn role_attestation_cache_nonroot_also_requires_delegated_token_verifier() {
+        let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+        verifier_cfg.auth = CanisterAuthConfig {
+            delegated_token_issuer: false,
+            delegated_token_verifier: false,
             role_attestation_cache: true,
         };
 
         assert!(!nonroot_requires_delegated_token_issuer(&verifier_cfg));
+        assert!(nonroot_requires_delegated_token_verifier(&verifier_cfg));
     }
 
     #[test]
@@ -342,12 +362,14 @@ mod tests {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
+            delegated_token_verifier: true,
             role_attestation_cache: true,
         };
 
         let mut issuer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
+            delegated_token_verifier: false,
             role_attestation_cache: false,
         };
 
@@ -362,6 +384,7 @@ mod tests {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
+            delegated_token_verifier: true,
             role_attestation_cache: true,
         };
         let role = CanisterRole::new("app");
@@ -380,6 +403,7 @@ mod tests {
         let mut issuer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
+            delegated_token_verifier: false,
             role_attestation_cache: true,
         };
 
