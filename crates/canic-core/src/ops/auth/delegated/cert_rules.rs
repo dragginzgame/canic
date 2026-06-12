@@ -30,8 +30,6 @@ pub enum CertRuleError {
     TokenTtlOutlivesCert { token_ttl_ns: u64, cert_ttl_ns: u64 },
     #[error("delegated auth issuer proof binding hash mismatch")]
     IssuerProofBindingHashMismatch,
-    #[error("delegated auth issuer signer generation is not supported in 0.65")]
-    IssuerSignerGenerationUnsupported,
     #[error(transparent)]
     Audience(#[from] AudienceError),
 }
@@ -89,15 +87,10 @@ pub fn validate_cert_issuance_rules(
     validate_audience_shape(&cert.aud)?;
     validate_role_grants(&cert.grants)?;
 
-    if cert.issuer_signer_generation.is_some() {
-        return Err(CertRuleError::IssuerSignerGenerationUnsupported);
-    }
-
     if issuer_proof_binding_hash(
         cert.issuer_pid,
         cert.issuer_proof_alg,
         cert.issuer_proof_binding,
-        cert.issuer_signer_generation,
     ) != cert.issuer_proof_binding_hash
     {
         return Err(CertRuleError::IssuerProofBindingHashMismatch);
@@ -131,13 +124,8 @@ mod tests {
         let role = CanisterRole::new("project_instance");
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] };
-        let issuer_signer_generation = None;
-        let issuer_proof_binding_hash = issuer_proof_binding_hash(
-            p(2),
-            issuer_proof_alg,
-            issuer_proof_binding,
-            issuer_signer_generation,
-        );
+        let issuer_proof_binding_hash =
+            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding);
 
         DelegationCert {
             root_pid: p(1),
@@ -145,7 +133,6 @@ mod tests {
             issuer_proof_alg,
             issuer_proof_binding_hash,
             issuer_proof_binding,
-            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 500,
@@ -239,23 +226,6 @@ mod tests {
         assert_eq!(
             validate_cert_issuance_rules(&cert, limits(), p(1)),
             Err(CertRuleError::IssuerProofBindingHashMismatch)
-        );
-    }
-
-    #[test]
-    fn cert_rules_rejects_issuer_signer_generation() {
-        let mut cert = sample_cert();
-        cert.issuer_signer_generation = Some(1);
-        cert.issuer_proof_binding_hash = issuer_proof_binding_hash(
-            cert.issuer_pid,
-            cert.issuer_proof_alg,
-            cert.issuer_proof_binding,
-            cert.issuer_signer_generation,
-        );
-
-        assert_eq!(
-            validate_cert_issuance_rules(&cert, limits(), p(1)),
-            Err(CertRuleError::IssuerSignerGenerationUnsupported)
         );
     }
 }

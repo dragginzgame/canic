@@ -138,7 +138,6 @@ fn sample_cert() -> DelegationCert {
         issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
         issuer_proof_binding_hash: [7; 32],
         issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [4; 32] },
-        issuer_signer_generation: None,
         issued_at_ns: 100_000_000_000,
         not_before_ns: 100_000_000_000,
         expires_at_ns: 700_000_000_000,

@@ -205,7 +205,6 @@ mod tests {
     fn active_proof() -> ActiveDelegationProof {
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] };
-        let issuer_signer_generation = None;
 
         ActiveDelegationProof {
             proof: DelegationProof {
@@ -215,7 +214,6 @@ mod tests {
                     issuer_proof_alg,
                     issuer_proof_binding_hash: [6; 32],
                     issuer_proof_binding,
-                    issuer_signer_generation,
                     issued_at_ns: 10,
                     not_before_ns: 20,
                     expires_at_ns: 100,

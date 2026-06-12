@@ -67,7 +67,6 @@ pub struct DelegationCert {
     pub issuer_proof_alg: IssuerProofAlgorithm,
     pub issuer_proof_binding_hash: [u8; 32],
     pub issuer_proof_binding: IssuerProofBinding,
-    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
@@ -136,8 +135,7 @@ issuer_proof_binding_hash =
   sha256("canic-issuer-proof-binding-v1" ||
          issuer_pid ||
          issuer_proof_alg ||
-         canonical_bytes(issuer_proof_binding) ||
-         canonical_optional_u64(issuer_signer_generation))
+         canonical_bytes(issuer_proof_binding))
 ```
 
 Grant vectors must be strictly sorted by role and duplicate-free. Scope vectors

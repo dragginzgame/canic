@@ -65,14 +65,12 @@ pub fn issuer_proof_binding_hash(
     issuer_pid: Principal,
     issuer_proof_alg: IssuerProofAlgorithm,
     issuer_proof_binding: IssuerProofBinding,
-    issuer_signer_generation: Option<u64>,
 ) -> [u8; 32] {
     let mut out = Vec::with_capacity(128);
     out.extend_from_slice(ISSUER_PROOF_BINDING_HASH_DOMAIN);
     encode_principal(&mut out, issuer_pid);
     encode_issuer_proof_algorithm(&mut out, issuer_proof_alg);
     encode_issuer_proof_binding(&mut out, issuer_proof_binding);
-    encode_optional_u64(&mut out, issuer_signer_generation);
     hash_bytes(&out)
 }
 
@@ -92,7 +90,6 @@ pub fn cert_bytes(cert: &DelegationCert) -> Result<Vec<u8>, CanonicalAuthError> 
     encode_issuer_proof_algorithm(&mut out, cert.issuer_proof_alg);
     encode_fixed_32(&mut out, cert.issuer_proof_binding_hash);
     encode_issuer_proof_binding(&mut out, cert.issuer_proof_binding);
-    encode_optional_u64(&mut out, cert.issuer_signer_generation);
     encode_u64(&mut out, cert.issued_at_ns);
     encode_u64(&mut out, cert.not_before_ns);
     encode_u64(&mut out, cert.expires_at_ns);
@@ -335,16 +332,6 @@ fn encode_u64(out: &mut Vec<u8>, value: u64) {
     out.extend_from_slice(&value.to_be_bytes());
 }
 
-fn encode_optional_u64(out: &mut Vec<u8>, value: Option<u64>) {
-    match value {
-        Some(value) => {
-            out.push(1);
-            encode_u64(out, value);
-        }
-        None => out.push(0),
-    }
-}
-
 fn encode_len(out: &mut Vec<u8>, len: usize) {
     let len = u32::try_from(len).expect("delegated auth canonical vector length exceeds u32");
     out.extend_from_slice(&len.to_be_bytes());
@@ -362,13 +349,8 @@ mod tests {
     fn sample_cert() -> DelegationCert {
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [8; 32] };
-        let issuer_signer_generation = None;
-        let issuer_proof_binding_hash = issuer_proof_binding_hash(
-            p(3),
-            issuer_proof_alg,
-            issuer_proof_binding,
-            issuer_signer_generation,
-        );
+        let issuer_proof_binding_hash =
+            issuer_proof_binding_hash(p(3), issuer_proof_alg, issuer_proof_binding);
 
         DelegationCert {
             root_pid: p(1),
@@ -376,7 +358,6 @@ mod tests {
             issuer_proof_alg,
             issuer_proof_binding_hash,
             issuer_proof_binding,
-            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 200,
@@ -543,21 +524,12 @@ mod tests {
     #[test]
     fn issuer_proof_binding_hash_binds_authority_context() {
         let binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [7; 32] };
-        let base = issuer_proof_binding_hash(
-            p(1),
-            IssuerProofAlgorithm::IcCanisterSignatureV1,
-            binding,
-            None,
-        );
+        let base =
+            issuer_proof_binding_hash(p(1), IssuerProofAlgorithm::IcCanisterSignatureV1, binding);
 
         assert_ne!(
             base,
-            issuer_proof_binding_hash(
-                p(2),
-                IssuerProofAlgorithm::IcCanisterSignatureV1,
-                binding,
-                None,
-            )
+            issuer_proof_binding_hash(p(2), IssuerProofAlgorithm::IcCanisterSignatureV1, binding)
         );
         assert_ne!(
             base,
@@ -565,16 +537,6 @@ mod tests {
                 p(1),
                 IssuerProofAlgorithm::IcCanisterSignatureV1,
                 IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [8; 32] },
-                None,
-            )
-        );
-        assert_ne!(
-            base,
-            issuer_proof_binding_hash(
-                p(1),
-                IssuerProofAlgorithm::IcCanisterSignatureV1,
-                binding,
-                Some(1),
             )
         );
     }

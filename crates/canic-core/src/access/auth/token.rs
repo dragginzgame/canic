@@ -240,7 +240,6 @@ mod tests {
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
             seed_hash: [10; 32],
         };
-        let issuer_signer_generation = None;
 
         DelegatedToken {
             claims: DelegatedTokenClaims {
@@ -261,7 +260,6 @@ mod tests {
                     issuer_proof_alg,
                     issuer_proof_binding_hash: [11; 32],
                     issuer_proof_binding,
-                    issuer_signer_generation,
                     issued_at_ns: 10,
                     not_before_ns: 10,
                     expires_at_ns: 20,

@@ -78,7 +78,6 @@ type DelegationCert = record {
   issued_at_ns : nat64;
   issuer_proof_binding : IssuerProofBinding;
   issuer_proof_binding_hash : blob;
-  issuer_signer_generation : opt nat64;
   expires_at_ns : nat64;
   root_pid : principal;
 };

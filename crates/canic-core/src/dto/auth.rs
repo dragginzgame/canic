@@ -78,7 +78,6 @@ pub struct DelegationCert {
     pub issuer_proof_alg: IssuerProofAlgorithm,
     pub issuer_proof_binding_hash: [u8; 32],
     pub issuer_proof_binding: IssuerProofBinding,
-    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,

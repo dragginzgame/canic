@@ -199,13 +199,8 @@ mod tests {
     fn cert() -> DelegationCert {
         let issuer_proof_alg = IssuerProofAlgorithm::IcCanisterSignatureV1;
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [3; 32] };
-        let issuer_signer_generation = None;
-        let issuer_proof_binding_hash = issuer_proof_binding_hash(
-            p(2),
-            issuer_proof_alg,
-            issuer_proof_binding,
-            issuer_signer_generation,
-        );
+        let issuer_proof_binding_hash =
+            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding);
 
         DelegationCert {
             root_pid: p(1),
@@ -213,7 +208,6 @@ mod tests {
             issuer_proof_alg,
             issuer_proof_binding_hash,
             issuer_proof_binding,
-            issuer_signer_generation,
             issued_at_ns: 100,
             not_before_ns: 100,
             expires_at_ns: 500,

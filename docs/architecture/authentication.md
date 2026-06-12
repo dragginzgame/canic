@@ -118,7 +118,6 @@ pub struct DelegationCert {
     pub issuer_proof_alg: IssuerProofAlgorithm,
     pub issuer_proof_binding_hash: [u8; 32],
     pub issuer_proof_binding: IssuerProofBinding,
-    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
@@ -162,9 +161,9 @@ may use seconds; protocol DTOs and canonical encodings use `_ns` fields.
 
 - `root_pid`: set by root and checked against verifier config.
 - `issuer_pid`, `issuer_proof_alg`, `issuer_proof_binding_hash`,
-  `issuer_proof_binding`, and `issuer_signer_generation`: set by root after
-  binding the issuer canister-signature authority, then certified by the root
-  canister-signature proof.
+  and `issuer_proof_binding`: set by root after binding the issuer
+  canister-signature authority, then certified by the root canister-signature
+  proof.
 - `cert.aud`, `cert.grants`, cert time fields, and `max_token_ttl_ns`: set by
   root and certified by the root proof.
 - `claims.subject`, `claims.aud`, `claims.grants`, token time fields, and
@@ -195,8 +194,7 @@ issuer_proof_binding_hash =
     sha256("canic-issuer-proof-binding-v1" ||
            issuer_pid ||
            issuer_proof_alg ||
-           canonical_bytes(issuer_proof_binding) ||
-           canonical_optional_u64(issuer_signer_generation))
+           canonical_bytes(issuer_proof_binding))
 ```
 
 Strict canonical rules:
@@ -247,7 +245,6 @@ Root issuance steps:
    - `cert.issuer_pid` equals the requested issuer
    - `cert.issuer_proof_binding_hash` matches the issuer proof authority
      fields
-   - `cert.issuer_signer_generation == None` for the basic 0.65 path
 6. Add a canister-signature map entry for `cert_hash`.
 7. Commit certified data for the `"sig"` tree.
 8. Return `DelegationProofPrepareResponse`.

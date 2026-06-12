@@ -547,8 +547,8 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.24` delegation-issuer test-surface rename candidate after pushed
-  `0.65.23` renames the active test canister package from
+- `0.65.24` is committed as the delegation-issuer test-surface rename. It
+  renames the active test canister package from
   `delegation_signer_stub` to `delegation_issuer_stub`; renames the root-managed
   test role from `signer` to `issuer`; updates the embedded root-stub build
   inputs, wasm include name, and checked-in test configs; renames PIC
@@ -567,12 +567,30 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
+- Local `0.65.25` issuer signer generation removal candidate after committed
+  `0.65.24` removes the unsupported issuer signer generation hook from active
+  delegation certificates, stable auth records, canonical cert bytes, issuer
+  proof binding hashes, wasm-store Candid, fixtures, and active auth docs.
+  Issuer proof binding now covers only the active authority context: issuer
+  canister id, issuer proof algorithm, and issuer proof binding. Current
+  validation:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo test --locked -p canic-core ops::storage::auth --lib -- --nocapture
+  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
 - `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
-  `issuer_pid`, `issuer_proof_alg`, `issuer_proof_binding`,
-  `issuer_proof_binding_hash`, and `issuer_signer_generation`; basic 0.65
-  certs require `issuer_signer_generation == None`. `DelegatedTokenClaims` and
-  verifier output use `issuer_pid`, root proof preparation no longer fetches a
+  issuer canister-signature authority instead of shard ECDSA key material.
+  `DelegatedTokenClaims` and verifier output use `issuer_pid`, root proof
+  preparation no longer fetches a
   threshold-ECDSA public key, the `auth-delegated-token-verify` feature now
   pulls root plus issuer canister-signature verification, test issuers use
   `auth-issuer-canister-sig-create`, runtime startup checks require issuer

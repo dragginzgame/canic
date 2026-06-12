@@ -57,7 +57,6 @@ impl AuthOps {
             issuer_pid: input.issuer_pid,
             issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
             issuer_proof_binding,
-            issuer_signer_generation: None,
             issued_at_ns: input.issued_at_ns,
             cert_ttl_ns: input.cert_ttl_ns,
             max_token_ttl_ns: input.max_token_ttl_ns,

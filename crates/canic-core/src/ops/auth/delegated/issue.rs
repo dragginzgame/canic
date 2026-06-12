@@ -17,7 +17,6 @@ pub struct IssueDelegationProofInput {
     pub issuer_pid: Principal,
     pub issuer_proof_alg: IssuerProofAlgorithm,
     pub issuer_proof_binding: IssuerProofBinding,
-    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub cert_ttl_ns: u64,
     pub max_token_ttl_ns: u64,
@@ -81,7 +80,6 @@ pub fn prepare_delegation_cert(
         input.issuer_pid,
         input.issuer_proof_alg,
         input.issuer_proof_binding,
-        input.issuer_signer_generation,
     );
 
     let cert = DelegationCert {
@@ -90,7 +88,6 @@ pub fn prepare_delegation_cert(
         issuer_proof_alg: input.issuer_proof_alg,
         issuer_proof_binding_hash,
         issuer_proof_binding: input.issuer_proof_binding,
-        issuer_signer_generation: input.issuer_signer_generation,
         issued_at_ns: input.issued_at_ns,
         not_before_ns: input.issued_at_ns,
         expires_at_ns: expires_at,
@@ -154,7 +151,6 @@ mod tests {
             issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
                 seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
             },
-            issuer_signer_generation: None,
             issued_at_ns: 100,
             cert_ttl_ns: 400,
             max_token_ttl_ns: 120,
@@ -195,7 +191,6 @@ mod tests {
                 IssuerProofBinding::IcCanisterSignatureV1 {
                     seed_hash: issuer_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
                 },
-                None,
             )
         );
         assert_eq!(issued.cert_hash, cert_hash(&issued.proof.cert).unwrap());

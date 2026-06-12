@@ -139,20 +139,14 @@ mod tests {
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
             seed_hash: [10; 32],
         };
-        let issuer_signer_generation = None;
-        let issuer_proof_binding_hash = issuer_proof_binding_hash(
-            p(2),
-            issuer_proof_alg,
-            issuer_proof_binding,
-            issuer_signer_generation,
-        );
+        let issuer_proof_binding_hash =
+            issuer_proof_binding_hash(p(2), issuer_proof_alg, issuer_proof_binding);
         let cert = DelegationCert {
             root_pid: p(1),
             issuer_pid: p(2),
             issuer_proof_alg,
             issuer_proof_binding_hash,
             issuer_proof_binding,
-            issuer_signer_generation,
             issued_at_ns: 10,
             not_before_ns: 10,
             expires_at_ns: 200,
