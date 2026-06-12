@@ -8,9 +8,9 @@ name = "delegation_root_stub"
 kind = "root"
 package = "."
 
-[roles.signer]
+[roles.issuer]
 kind = "canister"
-package = "../delegation_signer_stub"
+package = "../delegation_issuer_stub"
 
 [roles.project_hub]
 kind = "canister"
@@ -28,11 +28,11 @@ enabled = true
 [subnets.prime.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.signer]
+[subnets.prime.canisters.issuer]
 kind = "service"
 initial_cycles = "1T"
 
-[subnets.prime.canisters.signer.auth]
+[subnets.prime.canisters.issuer.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
 

@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.24` renames the active delegation test issuer surface from
+  signer terminology to issuer terminology, including
+  `delegation_issuer_stub`, the managed test role `issuer`, issuer/verifier
+  endpoint names, PIC role-attestation fixture metadata, and release-set
+  build inputs.
+
 - `0.65.23` removes the remaining internal-invocation proof error variants from
   active auth scope errors and renames non-root delegated-token bootstrap
   checks/logging around issuer canister-signature support instead of stale

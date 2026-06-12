@@ -1,5 +1,5 @@
 [package]
-name = "delegation_signer_stub"
+name = "delegation_issuer_stub"
 edition = { workspace = true }
 version = { workspace = true }
 publish = false
@@ -8,8 +8,8 @@ publish = false
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
-fleet = "delegation_signer_stub"
-role = "user_shard"
+fleet = "delegation_issuer_stub"
+role = "issuer"
 
 [lib]
 crate-type = ["cdylib"]

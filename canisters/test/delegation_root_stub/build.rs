@@ -84,7 +84,7 @@ fn build_embedded_test_canisters(
         "--target",
         "wasm32-unknown-unknown",
         "-p",
-        "delegation_signer_stub",
+        "delegation_issuer_stub",
         "-p",
         "project_hub_stub",
         "-p",
@@ -98,7 +98,7 @@ fn build_embedded_test_canisters(
         String::from_utf8_lossy(&output.stderr)
     );
 
-    copy_embedded_wasm(&target_dir, out_dir, "delegation_signer_stub");
+    copy_embedded_wasm(&target_dir, out_dir, "delegation_issuer_stub");
     copy_embedded_wasm(&target_dir, out_dir, "project_hub_stub");
     copy_embedded_wasm(&target_dir, out_dir, "project_instance_stub");
 }
@@ -121,14 +121,14 @@ fn copy_embedded_wasm(target_dir: &std::path::Path, out_dir: &std::path::Path, c
 // Emit rerun markers for the nested test canister sources that feed this release set.
 fn emit_rerun_inputs(workspace_root: &std::path::Path) {
     println!("cargo:rerun-if-changed=build.rs");
-    emit_canister_rerun_inputs(workspace_root, "delegation_signer_stub");
+    emit_canister_rerun_inputs(workspace_root, "delegation_issuer_stub");
     emit_canister_rerun_inputs(workspace_root, "project_hub_stub");
     emit_canister_rerun_inputs(workspace_root, "project_instance_stub");
 }
 
 // Emit rerun markers for one nested test canister package.
 fn emit_canister_rerun_inputs(workspace_root: &std::path::Path, package: &str) {
-    let package_root = workspace_root.join("fleets/test").join(package);
+    let package_root = workspace_root.join("canisters/test").join(package);
 
     for relative in ["Cargo.toml", "src/lib.rs", "canic.toml"] {
         println!(

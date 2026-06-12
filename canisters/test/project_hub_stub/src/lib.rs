@@ -29,30 +29,30 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn signer_verify_token(token: DelegatedToken) -> Result<(), Error> {
+async fn verifier_verify_token(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     Ok(())
 }
 
 #[canic_update(requires(auth::authenticated()))]
-async fn signer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
+async fn verifier_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     Ok(())
 }
 
 #[canic_update]
-async fn signer_clear_delegated_session() -> Result<(), Error> {
+async fn verifier_clear_delegated_session() -> Result<(), Error> {
     AuthApi::clear_delegated_session();
     Ok(())
 }
 
 #[canic_query]
-async fn signer_delegated_session_subject() -> Result<Option<Principal>, Error> {
+async fn verifier_delegated_session_subject() -> Result<Option<Principal>, Error> {
     Ok(AuthApi::delegated_session_subject())
 }
 
 #[canic_update]
-async fn signer_verify_role_attestation(
+async fn verifier_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {

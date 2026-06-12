@@ -116,15 +116,15 @@ fn seed_chunked_bootstrap_release_set(releases: &'static [(CanisterRole, &[u8])]
 
 // Staged non-root releases used by the root stub after the built-in bootstrap
 // wasm_store comes up.
-const SIGNER_ROLE: CanisterRole = CanisterRole::new("signer");
+const ISSUER_ROLE: CanisterRole = CanisterRole::new("issuer");
 const PROJECT_HUB_ROLE: CanisterRole = CanisterRole::new("project_hub");
 const PROJECT_INSTANCE_ROLE: CanisterRole = CanisterRole::new("project_instance");
-const SIGNER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_signer_stub.wasm"));
+const ISSUER_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/delegation_issuer_stub.wasm"));
 const PROJECT_HUB_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/project_hub_stub.wasm"));
 const PROJECT_INSTANCE_WASM: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/project_instance_stub.wasm"));
 const CHUNKED_BOOTSTRAP_RELEASE_SET: &[(CanisterRole, &[u8])] = &[
-    (SIGNER_ROLE, SIGNER_WASM),
+    (ISSUER_ROLE, ISSUER_WASM),
     (PROJECT_HUB_ROLE, PROJECT_HUB_WASM),
     (PROJECT_INSTANCE_ROLE, PROJECT_INSTANCE_WASM),
 ];

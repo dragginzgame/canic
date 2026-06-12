@@ -13,40 +13,40 @@ use canic::{
 
 canic::start!();
 
-/// Run no-op setup for the delegation signer stub.
+/// Run no-op setup for the delegation issuer stub.
 async fn canic_setup() {}
 
-/// Accept no install payload for the delegation signer stub.
+/// Accept no install payload for the delegation issuer stub.
 async fn canic_install(_args: Option<Vec<u8>>) {}
 
-/// Run no-op upgrade handling for the delegation signer stub.
+/// Run no-op upgrade handling for the delegation issuer stub.
 async fn canic_upgrade() {}
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]
-async fn signer_verify_token(token: DelegatedToken) -> Result<(), Error> {
+async fn issuer_verify_token(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     Ok(())
 }
 
 #[canic_update(requires(auth::authenticated()))]
-async fn signer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
+async fn issuer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
     let _ = token;
     Ok(())
 }
 
 #[canic_update]
-async fn signer_clear_delegated_session() -> Result<(), Error> {
+async fn issuer_clear_delegated_session() -> Result<(), Error> {
     AuthApi::clear_delegated_session();
     Ok(())
 }
 
 #[canic_query]
-async fn signer_delegated_session_subject() -> Result<Option<Principal>, Error> {
+async fn issuer_delegated_session_subject() -> Result<Option<Principal>, Error> {
     Ok(AuthApi::delegated_session_subject())
 }
 
 #[canic_update]
-async fn signer_verify_role_attestation(
+async fn issuer_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
 ) -> Result<(), Error> {
@@ -54,22 +54,22 @@ async fn signer_verify_role_attestation(
 }
 
 #[canic_update(requires(caller::is_root()))]
-async fn signer_guard_is_root() -> Result<(), Error> {
+async fn issuer_guard_is_root() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(caller::is_controller()))]
-async fn signer_guard_is_controller() -> Result<(), Error> {
+async fn issuer_guard_is_controller() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(requires(caller::is_parent()))]
-async fn signer_guard_is_parent() -> Result<(), Error> {
+async fn issuer_guard_is_parent() -> Result<(), Error> {
     Ok(())
 }
 
 #[canic_update(internal, requires(caller::is_registered_to_subnet()))]
-async fn signer_guard_is_registered_to_subnet() -> Result<(), Error> {
+async fn issuer_guard_is_registered_to_subnet() -> Result<(), Error> {
     Ok(())
 }
 

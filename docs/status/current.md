@@ -514,7 +514,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.23` active-auth cleanup candidate after pushed `0.65.22` removes
+- `0.65.23` is pushed and removes
   unused internal-invocation proof scope error variants from active auth errors
   and renames non-root delegated-token startup checks/logging around issuer
   canister-signature support instead of stale signer-key material wording.
@@ -543,6 +543,26 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-tests
   cargo tree -i time --locked
   cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.24` delegation-issuer test-surface rename candidate after pushed
+  `0.65.23` renames the active test canister package from
+  `delegation_signer_stub` to `delegation_issuer_stub`; renames the root-managed
+  test role from `signer` to `issuer`; updates the embedded root-stub build
+  inputs, wasm include name, and checked-in test configs; renames PIC
+  role-attestation fixture metadata/helpers from signer-oriented names to
+  issuer-oriented names; renames the delegation issuer stub endpoints from
+  `signer_*` to `issuer_*`; renames copied project-hub verifier helper
+  endpoints to `verifier_*`; and corrects root-stub build-script rerun markers
+  for embedded test canister packages to point at `canisters/test`. Current
+  validation:
+  ```text
+  cargo fmt --all
+  cargo check --locked -p delegation_issuer_stub -p delegation_root_stub -p project_hub_stub
+  cargo check --locked -p canic-testing-internal -p canic-tests
+  cargo tree -i time --locked
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check

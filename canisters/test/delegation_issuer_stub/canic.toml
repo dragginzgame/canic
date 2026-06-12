@@ -2,13 +2,13 @@ controllers = []
 app_index = []
 
 [fleet]
-name = "delegation_signer_stub"
+name = "delegation_issuer_stub"
 
 [roles.root]
 kind = "root"
 package = "../delegation_root_stub"
 
-[roles.user_shard]
+[roles.issuer]
 kind = "canister"
 package = "."
 
@@ -20,9 +20,9 @@ enabled = true
 [subnets.prime.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_shard]
-kind = "shard"
+[subnets.prime.canisters.issuer]
+kind = "service"
 
-[subnets.prime.canisters.user_shard.auth]
+[subnets.prime.canisters.issuer.auth]
 delegated_token_issuer = true
 role_attestation_cache = true

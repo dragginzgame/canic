@@ -9,7 +9,7 @@ fn capability_endpoint_policy_and_structural_paths() {
     let setup = install_test_root_cached();
     let pic = setup.pic.pic();
     let root_id = setup.root_id;
-    let signer_id = setup.signer_id;
+    let issuer_id = setup.issuer_id;
     let issued_at_ns = pic.current_time_nanos();
 
     test_progress(
@@ -30,7 +30,7 @@ fn capability_endpoint_policy_and_structural_paths() {
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,
-        signer_id,
+        issuer_id,
         "canic_response_capability_v1",
         (envelope,),
     );

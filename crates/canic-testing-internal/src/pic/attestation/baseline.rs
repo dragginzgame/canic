@@ -15,28 +15,28 @@ use super::{
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
 const VERIFIER_ROLE: &str = "project_hub";
-static ROOT_SIGNER_BASELINE: OnceLock<
+static ROOT_ISSUER_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
-static ROOT_SIGNER_VERIFIER_BASELINE: OnceLock<
+static ROOT_ISSUER_VERIFIER_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
-static ROOT_SIGNER_NO_TEST_HOOK_BASELINE: OnceLock<
+static ROOT_ISSUER_NO_TEST_HOOK_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
 
 pub struct AttestationBaselineMetadata {
     root_id: Principal,
     wasm_store_id: Principal,
-    signer_id: Principal,
+    issuer_id: Principal,
     verifier_id: Option<Principal>,
 }
 
 #[derive(Clone, Copy)]
 enum RoleAttestationBaselineKind {
-    SignerOnly,
-    SignerAndVerifier,
-    SignerOnlyWithoutTestMaterial,
+    IssuerOnly,
+    IssuerAndVerifier,
+    IssuerOnlyWithoutTestMaterial,
 }
 
 struct InstalledRoot {
@@ -44,29 +44,29 @@ struct InstalledRoot {
     root_id: Principal,
 }
 
-// Restore or create the cached `root + signer` baseline.
+// Restore or create the cached `root + issuer` baseline.
 #[must_use]
-pub(super) fn install_signer_only_cached_root_fixture() -> CachedInstalledRoot {
-    install_cached_root_fixture(RoleAttestationBaselineKind::SignerOnly)
+pub(super) fn install_issuer_only_cached_root_fixture() -> CachedInstalledRoot {
+    install_cached_root_fixture(RoleAttestationBaselineKind::IssuerOnly)
 }
 
-// Restore or create the cached `root + signer + verifier` baseline.
+// Restore or create the cached `root + issuer + verifier` baseline.
 #[must_use]
-pub(super) fn install_signer_and_verifier_cached_root_fixture() -> CachedInstalledRoot {
-    install_cached_root_fixture(RoleAttestationBaselineKind::SignerAndVerifier)
+pub(super) fn install_issuer_and_verifier_cached_root_fixture() -> CachedInstalledRoot {
+    install_cached_root_fixture(RoleAttestationBaselineKind::IssuerAndVerifier)
 }
 
-// Restore or create the cached normal-build `root + signer` baseline.
+// Restore or create the cached normal-build `root + issuer` baseline.
 #[must_use]
-pub(super) fn install_signer_only_without_test_material_cached_root_fixture() -> CachedInstalledRoot
+pub(super) fn install_issuer_only_without_test_material_cached_root_fixture() -> CachedInstalledRoot
 {
-    install_cached_root_fixture(RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial)
+    install_cached_root_fixture(RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial)
 }
 
-// Resolve the signer canister from the root-managed subnet registry.
+// Resolve the issuer canister from the root-managed subnet registry.
 #[must_use]
-pub(super) fn signer_pid(pic: &Pic, root_id: Principal) -> Principal {
-    lookup_role_pid(pic, root_id, "signer", 120)
+pub(super) fn issuer_pid(pic: &Pic, root_id: Principal) -> Principal {
+    lookup_role_pid(pic, root_id, "issuer", 120)
 }
 
 // Resolve the managed wasm_store canister from the root-managed subnet registry.
@@ -78,12 +78,12 @@ pub(super) fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
 // Restore or create the requested cached baseline and keep it alive until test drop.
 fn install_cached_root_fixture(cache_kind: RoleAttestationBaselineKind) -> CachedInstalledRoot {
     progress(match cache_kind {
-        RoleAttestationBaselineKind::SignerOnly => "request cached root+signer baseline",
-        RoleAttestationBaselineKind::SignerAndVerifier => {
-            "request cached root+signer+verifier baseline"
+        RoleAttestationBaselineKind::IssuerOnly => "request cached root+issuer baseline",
+        RoleAttestationBaselineKind::IssuerAndVerifier => {
+            "request cached root+issuer+verifier baseline"
         }
-        RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial => {
-            "request cached root+signer normal-build baseline"
+        RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial => {
+            "request cached root+issuer normal-build baseline"
         }
     });
     let baseline_slot = baseline_slot(cache_kind).get_or_init(|| Mutex::new(None));
@@ -95,7 +95,7 @@ fn install_cached_root_fixture(cache_kind: RoleAttestationBaselineKind) -> Cache
 
     CachedInstalledRoot {
         root_id: baseline.metadata().root_id,
-        signer_id: baseline.metadata().signer_id,
+        issuer_id: baseline.metadata().issuer_id,
         verifier_id: baseline.metadata().verifier_id,
         pic: baseline,
     }
@@ -123,20 +123,20 @@ fn build_cached_baseline(
 ) -> CachedPicBaseline<AttestationBaselineMetadata> {
     progress("cache miss, building fresh baseline");
     let InstalledRoot { pic, root_id } = match cache_kind {
-        RoleAttestationBaselineKind::SignerOnly
-        | RoleAttestationBaselineKind::SignerAndVerifier => install_test_root(),
-        RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial => {
+        RoleAttestationBaselineKind::IssuerOnly
+        | RoleAttestationBaselineKind::IssuerAndVerifier => install_test_root(),
+        RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial => {
             install_test_root_without_test_material()
         }
     };
-    progress("waiting for signer registration");
-    let signer_id = signer_pid(&pic, root_id);
-    wait_for_ready_canister(&pic, signer_id, 240);
+    progress("waiting for issuer registration");
+    let issuer_id = issuer_pid(&pic, root_id);
+    wait_for_ready_canister(&pic, issuer_id, 240);
     let wasm_store_id = wasm_store_pid(&pic, root_id);
     wait_for_ready_canister(&pic, wasm_store_id, 240);
-    progress("signer ready");
+    progress("issuer ready");
     let verifier_id =
-        matches!(cache_kind, RoleAttestationBaselineKind::SignerAndVerifier).then(|| {
+        matches!(cache_kind, RoleAttestationBaselineKind::IssuerAndVerifier).then(|| {
             progress("resolving verifier baseline canister");
             let verifier_id = lookup_role_pid(&pic, root_id, VERIFIER_ROLE, 120);
             wait_for_ready_canister(&pic, verifier_id, 240);
@@ -149,7 +149,7 @@ fn build_cached_baseline(
     progress("capturing baseline snapshots");
     let controller_ids = std::iter::once(root_id)
         .chain(std::iter::once(wasm_store_id))
-        .chain(std::iter::once(signer_id))
+        .chain(std::iter::once(issuer_id))
         .chain(verifier_id)
         .collect::<Vec<_>>();
     let baseline = CachedPicBaseline::capture(
@@ -159,7 +159,7 @@ fn build_cached_baseline(
         AttestationBaselineMetadata {
             root_id,
             wasm_store_id,
-            signer_id,
+            issuer_id,
             verifier_id,
         },
     )
@@ -175,9 +175,9 @@ fn restore_cached_baseline(baseline: &CachedPicBaseline<AttestationBaselineMetad
 
     baseline.pic().tick();
 
-    progress("waiting for restored root and signer readiness");
+    progress("waiting for restored root and issuer readiness");
     wait_for_ready_canister(baseline.pic(), baseline.metadata().wasm_store_id, 240);
-    wait_for_ready_canister(baseline.pic(), baseline.metadata().signer_id, 240);
+    wait_for_ready_canister(baseline.pic(), baseline.metadata().issuer_id, 240);
     if let Some(verifier_id) = baseline.metadata().verifier_id {
         progress("waiting for restored verifier readiness");
         wait_for_ready_canister(baseline.pic(), verifier_id, 240);
@@ -208,10 +208,10 @@ const fn baseline_slot(
     cache_kind: RoleAttestationBaselineKind,
 ) -> &'static OnceLock<Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>> {
     match cache_kind {
-        RoleAttestationBaselineKind::SignerOnly => &ROOT_SIGNER_BASELINE,
-        RoleAttestationBaselineKind::SignerAndVerifier => &ROOT_SIGNER_VERIFIER_BASELINE,
-        RoleAttestationBaselineKind::SignerOnlyWithoutTestMaterial => {
-            &ROOT_SIGNER_NO_TEST_HOOK_BASELINE
+        RoleAttestationBaselineKind::IssuerOnly => &ROOT_ISSUER_BASELINE,
+        RoleAttestationBaselineKind::IssuerAndVerifier => &ROOT_ISSUER_VERIFIER_BASELINE,
+        RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial => {
+            &ROOT_ISSUER_NO_TEST_HOOK_BASELINE
         }
     }
 }
