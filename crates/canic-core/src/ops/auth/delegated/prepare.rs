@@ -262,7 +262,7 @@ mod tests {
         })
     }
 
-    fn verify_hash_signature(
+    fn verify_issuer_proof_hash(
         hash: [u8; 32],
         proof: &IssuerProof,
         issuer_pid: Principal,
@@ -394,14 +394,14 @@ mod tests {
                     now_ns: 130,
                 },
                 |_, _, _| Ok(()),
-                verify_hash_signature,
+                verify_issuer_proof_hash,
             )
             .unwrap();
         }
     }
 
     #[test]
-    fn mutating_signed_grants_fails_verifier_signature() {
+    fn mutating_signed_grants_fails_issuer_proof_verification() {
         let proof = proof();
         let role = CanisterRole::new("project_instance");
         let mut token = prepare_and_finish_delegated_token_for_tests(input(&proof), |hash| {
@@ -426,7 +426,7 @@ mod tests {
                     now_ns: 130,
                 },
                 |_, _, _| Ok(()),
-                verify_hash_signature,
+                verify_issuer_proof_hash,
             ),
             Err(
                 crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::IssuerProofInvalid(
@@ -437,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn mutating_signed_ext_fails_verifier_signature() {
+    fn mutating_signed_ext_fails_issuer_proof_verification() {
         let proof = proof();
         let role = CanisterRole::new("project_instance");
         let mut input = input(&proof);
@@ -464,7 +464,7 @@ mod tests {
                     now_ns: 130,
                 },
                 |_, _, _| Ok(()),
-                verify_hash_signature,
+                verify_issuer_proof_hash,
             ),
             Err(
                 crate::ops::auth::delegated::verify::VerifyDelegatedTokenError::IssuerProofInvalid(

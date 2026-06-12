@@ -19,9 +19,10 @@ pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
 pub use types::{
-    DelegatedTokenVerifierConfig, PreparedDelegatedTokenIssuerProof, PreparedRootDelegationProof,
-    PreparedRootRoleAttestation, SignDelegatedTokenInput, SignDelegationProofInput,
-    SignRoleAttestationInput, VerifyDelegatedTokenRuntimeInput,
+    AuthProofVerifierConfig, PrepareDelegatedTokenIssuerProofInput,
+    PrepareRootDelegationProofInput, PrepareRootRoleAttestationInput,
+    PreparedDelegatedTokenIssuerProof, PreparedRootDelegationProof, PreparedRootRoleAttestation,
+    VerifyDelegatedTokenRuntimeInput,
 };
 
 const ROLE_ATTESTATION_PROOF_HASH_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";

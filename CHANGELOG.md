@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.8` separates shared auth-proof trust-anchor support from delegated-token
+  endpoint verification, renames the private root delegation proof client, and
+  cleans active delegated-auth ops and docs away from stale shard/mint/signing
+  wording.
+
 - `0.66.7` renames root and issuer canister-signature helper APIs away from
   abbreviated `*_sig_*` wording so active auth code no longer resembles the
   removed `root_sig` token field.

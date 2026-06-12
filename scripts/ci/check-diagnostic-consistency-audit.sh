@@ -34,9 +34,9 @@ require_texts "$AUDIT" "$GUARD_LABEL" \
     "Invalid operation ID" \
     "Expired replay metadata or receipt" \
     "Wrong caller or actor mismatch" \
-    "Wrong shard or delegated-auth shard mismatch" \
+    "Wrong issuer or delegated-auth issuer mismatch" \
     "Delegation-proof replay" \
-    "Delegated-token mint or issue replay" \
+    "Delegated-token prepare or issue replay" \
     "Pending operation already exists" \
     "Recovery-required operation state" \
     "Value-transfer cost refusal" \

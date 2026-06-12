@@ -190,12 +190,12 @@ during update execution and the data certificate is available during query
 execution.
 
 ```text
-1. shard/client -> root canic_prepare_delegation_proof update
-2. shard/client -> root canic_get_delegation_proof query
-3. controller   -> issuer canic_install_active_delegation_proof update
-4. caller       -> issuer canic_prepare_delegated_token update
-5. caller       -> issuer canic_get_delegated_token query
-6. caller       -> endpoint with DelegatedToken
+1. maintenance client -> root canic_prepare_delegation_proof update
+2. maintenance client -> root canic_get_delegation_proof query
+3. controller         -> issuer canic_install_active_delegation_proof update
+4. caller/session     -> issuer canic_prepare_delegated_token update
+5. caller/session     -> issuer canic_get_delegated_token query
+6. caller/session     -> endpoint with DelegatedToken
 ```
 
 `canic_prepare_delegation_proof` is replay-protected. The same caller,
@@ -292,8 +292,8 @@ max_ttl_secs = 3600
 `root_canister_id` may fall back to initialized Canic root env. The raw IC root
 key is paired with `network`: mainnet requires the configured known mainnet raw
 key, while local/PocketIC/test verification requires a non-mainnet raw root key
-from `ic_root_public_key_raw_hex` or startup injection and rejects the mainnet
-key. If delegated-token verification is enabled, startup must have root and
+from `ic_root_public_key_raw_hex` and rejects the mainnet key. If delegated-token
+verification is enabled, startup must have root and
 issuer canister-signature verification features, an effective root principal
 plus raw IC root key, and the current canister must set
 `delegated_token_verifier = true` before endpoint token verification can

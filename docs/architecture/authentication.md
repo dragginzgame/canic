@@ -342,8 +342,8 @@ Verifier steps:
    - `auth.delegated_tokens.root_canister_id`, or initialized root env
    - parsed `auth.delegated_tokens.network`
    - `network = "mainnet"` requires the configured known mainnet raw IC root key
-   - `network = "local"`, `"pocketic"`, or `"testnet"` uses a configured or
-     startup-injected non-mainnet raw IC root key
+   - `network = "local"`, `"pocketic"`, or `"testnet"` requires a configured
+     non-mainnet raw IC root key
    - issuer canister-signature proof embedded in the token
 3. Verify certificate policy:
    - configured root principal
@@ -520,8 +520,8 @@ Security boundaries:
   delegated-token root identity trust boundary.
 - `auth.delegated_tokens.network` and the effective raw IC root key are paired:
   mainnet requires the known mainnet raw key, while local/PocketIC/test
-  verification requires a non-mainnet root key that is either configured as
-  `ic_root_public_key_raw_hex` or injected once during canister startup.
+  verification requires a non-mainnet root key configured as
+  `ic_root_public_key_raw_hex`.
 - token issuers must set `delegated_token_issuer = true`; only those canisters
   expose delegated-token prepare/get/install provisioning endpoints.
 - protected endpoint verifiers must set `delegated_token_verifier = true`; the

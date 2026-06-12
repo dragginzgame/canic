@@ -1,6 +1,6 @@
 use super::{
-    AuthOps, DelegatedTokenVerifierConfig, PreparedDelegatedTokenIssuerProof,
-    SignDelegatedTokenInput, VerifyDelegatedTokenRuntimeInput,
+    AuthOps, AuthProofVerifierConfig, PrepareDelegatedTokenIssuerProofInput,
+    PreparedDelegatedTokenIssuerProof, VerifyDelegatedTokenRuntimeInput,
     delegated::prepare::{
         PrepareDelegatedTokenError, PrepareDelegatedTokenInput, finish_delegated_token,
         prepare_delegated_token,
@@ -63,7 +63,7 @@ thread_local! {
 impl AuthOps {
     /// Prepare delegated-token claims before issuer canister-signature retrieval.
     pub(crate) fn prepare_delegated_token_issuer_proof(
-        input: SignDelegatedTokenInput,
+        input: PrepareDelegatedTokenIssuerProofInput,
         operation_id: [u8; 32],
         prepared_by: Principal,
     ) -> Result<PreparedDelegatedTokenIssuerProof, InternalError> {
@@ -149,11 +149,10 @@ impl AuthOps {
         Ok(finish_delegated_token(prepared, issuer_proof))
     }
 
-    /// Resolve verifier-local trust anchors for delegated-token verification.
-    pub(crate) fn delegated_token_verifier_config()
-    -> Result<DelegatedTokenVerifierConfig, InternalError> {
+    /// Resolve verifier-local trust anchors for canister-signature auth proofs.
+    pub(crate) fn auth_proof_verifier_config() -> Result<AuthProofVerifierConfig, InternalError> {
         let cfg = ConfigOps::delegated_tokens_config()?;
-        Self::delegated_token_verifier_config_from(&cfg)
+        Self::auth_proof_verifier_config_from(&cfg)
     }
 
     /// Verify a self-contained delegated token without local proof lookup.
@@ -182,18 +181,18 @@ impl AuthOps {
             return Ok(verified);
         }
 
-        let verifier_cfg = delegated_token_verifier_config_for_verification(&cfg)?;
+        let verifier_cfg = auth_proof_verifier_config_for_verification(&cfg)?;
         let verified = verify_with_embedded_proofs(&input, &ctx, &verifier_cfg)?;
         insert_positive_verification_cache(&input, cache_key);
         DelegatedAuthMetrics::record_verify_completed();
         Ok(verified)
     }
 
-    fn delegated_token_verifier_config_from(
+    fn auth_proof_verifier_config_from(
         cfg: &DelegatedTokenConfig,
-    ) -> Result<DelegatedTokenVerifierConfig, InternalError> {
+    ) -> Result<AuthProofVerifierConfig, InternalError> {
         let network = configured_delegated_auth_network(cfg)?;
-        Ok(DelegatedTokenVerifierConfig {
+        Ok(AuthProofVerifierConfig {
             network,
             root_canister_id: configured_root_canister_id(cfg)?,
             ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, network)?,
@@ -244,10 +243,10 @@ fn require_current_canister_delegated_token_verifier() -> Result<(), InternalErr
     .into())
 }
 
-fn delegated_token_verifier_config_for_verification(
+fn auth_proof_verifier_config_for_verification(
     cfg: &DelegatedTokenConfig,
-) -> Result<DelegatedTokenVerifierConfig, InternalError> {
-    match AuthOps::delegated_token_verifier_config_from(cfg) {
+) -> Result<AuthProofVerifierConfig, InternalError> {
+    match AuthOps::auth_proof_verifier_config_from(cfg) {
         Ok(verifier_cfg) => Ok(verifier_cfg),
         Err(err) => {
             DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::RootKey);
@@ -322,7 +321,7 @@ fn verify_from_positive_cache<'a>(
 fn verify_with_embedded_proofs<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenLocalContext,
-    verifier_cfg: &'a DelegatedTokenVerifierConfig,
+    verifier_cfg: &'a AuthProofVerifierConfig,
 ) -> Result<VerifiedDelegatedToken, InternalError> {
     validate_network_root_key_pair(verifier_cfg.network, &verifier_cfg.ic_root_public_key_raw)?;
     verify_delegated_token(
@@ -590,11 +589,11 @@ mod tests {
     }
 
     #[test]
-    fn delegated_token_verifier_config_accepts_mainnet_with_known_mainnet_root_key() {
+    fn auth_proof_verifier_config_accepts_mainnet_with_known_mainnet_root_key() {
         let cfg = cfg("mainnet", Some(mainnet_key()));
 
         let verifier =
-            AuthOps::delegated_token_verifier_config_from(&cfg).expect("mainnet key should pass");
+            AuthOps::auth_proof_verifier_config_from(&cfg).expect("mainnet key should pass");
 
         assert_eq!(verifier.network, DelegatedAuthNetwork::Mainnet);
         assert_eq!(verifier.root_canister_id, root_pid());
@@ -602,10 +601,10 @@ mod tests {
     }
 
     #[test]
-    fn delegated_token_verifier_config_rejects_mainnet_without_root_key() {
+    fn auth_proof_verifier_config_rejects_mainnet_without_root_key() {
         let cfg = cfg("mainnet", None);
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("mainnet requires explicit root key");
 
         assert!(
@@ -616,10 +615,10 @@ mod tests {
     }
 
     #[test]
-    fn delegated_token_verifier_config_rejects_mainnet_with_local_root_key() {
+    fn auth_proof_verifier_config_rejects_mainnet_with_local_root_key() {
         let cfg = cfg("mainnet", Some(local_key()));
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("mainnet must reject local root key");
 
         assert!(
@@ -630,10 +629,10 @@ mod tests {
     }
 
     #[test]
-    fn local_verifier_config_requires_explicit_root_key() {
+    fn auth_proof_verifier_config_local_requires_explicit_root_key() {
         let cfg = cfg("local", None);
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("local verifier requires explicit root key");
 
         assert!(
@@ -644,21 +643,21 @@ mod tests {
     }
 
     #[test]
-    fn local_verifier_config_accepts_explicit_local_root_key() {
+    fn auth_proof_verifier_config_local_accepts_explicit_local_root_key() {
         let cfg = cfg("local", Some(local_key()));
 
         let verifier =
-            AuthOps::delegated_token_verifier_config_from(&cfg).expect("local key should pass");
+            AuthOps::auth_proof_verifier_config_from(&cfg).expect("local key should pass");
 
         assert_eq!(verifier.network, DelegatedAuthNetwork::Local);
         assert_eq!(verifier.ic_root_public_key_raw, local_key());
     }
 
     #[test]
-    fn pocketic_verifier_config_requires_explicit_root_key() {
+    fn auth_proof_verifier_config_pocketic_requires_explicit_root_key() {
         let cfg = cfg("pocketic", None);
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("pocketic verifier requires explicit root key");
 
         assert!(
@@ -669,10 +668,10 @@ mod tests {
     }
 
     #[test]
-    fn pocketic_verifier_config_rejects_explicit_mainnet_root_key() {
+    fn auth_proof_verifier_config_pocketic_rejects_explicit_mainnet_root_key() {
         let cfg = cfg("pocketic", Some(mainnet_key()));
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("pocketic must not accept mainnet root key");
 
         assert!(
@@ -683,21 +682,21 @@ mod tests {
     }
 
     #[test]
-    fn pocketic_verifier_config_accepts_explicit_pocketic_root_key() {
+    fn auth_proof_verifier_config_pocketic_accepts_explicit_pocketic_root_key() {
         let cfg = cfg("pocketic", Some(local_key()));
 
         let verifier =
-            AuthOps::delegated_token_verifier_config_from(&cfg).expect("pocketic key should pass");
+            AuthOps::auth_proof_verifier_config_from(&cfg).expect("pocketic key should pass");
 
         assert_eq!(verifier.network, DelegatedAuthNetwork::PocketIc);
         assert_eq!(verifier.ic_root_public_key_raw, local_key());
     }
 
     #[test]
-    fn local_verifier_config_rejects_explicit_mainnet_root_key() {
+    fn auth_proof_verifier_config_local_rejects_explicit_mainnet_root_key() {
         let cfg = cfg("local", Some(mainnet_key()));
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("local must reject explicit mainnet root key");
 
         assert!(
@@ -708,10 +707,10 @@ mod tests {
     }
 
     #[test]
-    fn testnet_verifier_config_requires_explicit_root_key() {
+    fn auth_proof_verifier_config_testnet_requires_explicit_root_key() {
         let cfg = cfg("testnet", None);
 
-        let err = AuthOps::delegated_token_verifier_config_from(&cfg)
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("testnet verifier requires explicit root key");
 
         assert!(
@@ -722,11 +721,11 @@ mod tests {
     }
 
     #[test]
-    fn testnet_verifier_config_accepts_explicit_test_root_key() {
+    fn auth_proof_verifier_config_testnet_accepts_explicit_test_root_key() {
         let cfg = cfg("testnet", Some(local_key()));
 
         let verifier =
-            AuthOps::delegated_token_verifier_config_from(&cfg).expect("testnet key should pass");
+            AuthOps::auth_proof_verifier_config_from(&cfg).expect("testnet key should pass");
 
         assert_eq!(verifier.network, DelegatedAuthNetwork::Testnet);
         assert_eq!(verifier.ic_root_public_key_raw, local_key());

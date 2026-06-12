@@ -213,7 +213,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             cache_state: "cold",
             topology_state: "root_bootstrapped+fresh-user-shard+verifier-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Verifier-side delegated token confirmation on the shared test canister using a freshly minted token from a newly created user shard.",
+            notes: "Verifier-side delegated token confirmation on the shared test canister using a freshly issued token from a newly created user shard.",
         });
     }
 

@@ -86,9 +86,6 @@ pub enum RpcWorkflowError {
     #[error("delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml")]
     DelegatedTokensDisabled,
 
-    #[error("delegation request caller {0} must match shard_pid {1}")]
-    DelegationCallerShardMismatch(Principal, Principal),
-
     #[error("delegation ttl_ns must be greater than zero (got {0})")]
     DelegationInvalidTtl(u64),
 
@@ -120,9 +117,6 @@ pub enum RpcWorkflowError {
 
     #[error("delegation root pid mismatch: cert={0}, expected={1}")]
     DelegationRootPidMismatch(Principal, Principal),
-
-    #[error("delegation shard_pid must not equal root pid")]
-    DelegationShardCannotBeRoot,
 
     #[error("role attestation subject {subject} must match caller {caller}")]
     RoleAttestationSubjectMismatch {

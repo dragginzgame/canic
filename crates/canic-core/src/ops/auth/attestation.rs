@@ -1,5 +1,5 @@
 use super::{
-    AuthOps, PreparedRootRoleAttestation, SignRoleAttestationInput, crypto,
+    AuthOps, PrepareRootRoleAttestationInput, PreparedRootRoleAttestation, crypto,
     root_canister_sig::RootPayloadKind, verify,
 };
 use crate::{
@@ -35,7 +35,7 @@ impl PendingRoleAttestationKey {
 
 impl AuthOps {
     pub(crate) fn prepare_role_attestation(
-        input: SignRoleAttestationInput,
+        input: PrepareRootRoleAttestationInput,
     ) -> Result<PreparedRootRoleAttestation, InternalError> {
         let expires_at_ns = input
             .issued_at_ns
@@ -112,7 +112,7 @@ impl AuthOps {
     ) -> Result<RoleAttestation, AuthOpsError> {
         let payload_hash = crypto::role_attestation_hash(&attestation.payload)
             .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
-        let verifier_cfg = Self::delegated_token_verifier_config()
+        let verifier_cfg = Self::auth_proof_verifier_config()
             .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
         Self::verify_root_canister_signature_proof(
             RootPayloadKind::RoleAttestation,

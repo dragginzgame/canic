@@ -18,8 +18,8 @@ These runbooks cover manual retry and recovery decisions for:
 - replay receipt pending and recovery-required states;
 - operation-ID reuse;
 - project-local pending ICP refill operations;
-- delegated-auth caller and shard binding failures;
-- delegated-token mint and issue replay;
+- delegated-auth caller and issuer binding failures;
+- delegated-token prepare and issue replay;
 - ICP refill and value-transfer replay;
 - cost-boundary refusals;
 - durable-publication ambiguity;
@@ -158,19 +158,19 @@ Each runbook uses the same fields:
 | Relevant validation command | `cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture` |
 | Escalation criteria | Escalate if an expired replay-sensitive operation may already have crossed an external-effect boundary. |
 
-### Delegation Caller Or Shard Mismatch
+### Delegation Caller Or Issuer Mismatch
 
 | Field | Guidance |
 | --- | --- |
-| Symptom | Delegation proof or token issue fails with caller mismatch, shard mismatch, subject/caller mismatch, or proof replay conflict. |
-| Likely cause | The requested shard, issuer shard, authenticated subject, or transport caller does not match the replay-bound actor. |
-| Safety invariant | Delegated-auth replay identity is bound to the verified caller/subject and shard, not caller-provided fields alone. |
-| Safe operator action | Verify the caller identity, target shard principal, issuer shard, and operation ID. Retry only from the same authenticated context with the same payload. |
-| Unsafe operator action | Reusing a proof or token request ID from a different caller, shard, or subject. |
-| Diagnostic, log, or public error to check | Public caller/shard mismatch text, auth replay logs, and delegated-auth hard-cut guard coverage. |
-| Retry/idempotency rule | Same caller/shard/payload may retry. Different caller or shard requires a new, authorized logical operation. |
+| Symptom | Delegation proof or token issue fails with caller mismatch, issuer mismatch, subject/caller mismatch, or proof replay conflict. |
+| Likely cause | The requested issuer, authenticated subject, or transport caller does not match the replay-bound actor. |
+| Safety invariant | Delegated-auth replay identity is bound to the verified caller/subject and issuer, not caller-provided fields alone. |
+| Safe operator action | Verify the caller identity, issuer principal, subject, and operation ID. Retry only from the same authenticated context with the same payload. |
+| Unsafe operator action | Reusing a proof or token request ID from a different caller, issuer, or subject. |
+| Diagnostic, log, or public error to check | Public caller/issuer mismatch text, auth replay logs, and delegated-auth hard-cut guard coverage. |
+| Retry/idempotency rule | Same caller/issuer/payload may retry. Different caller or issuer requires a new, authorized logical operation. |
 | Relevant validation command | `cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture` |
-| Escalation criteria | Escalate if the verified caller/shard binding cannot be reconstructed from available logs or request records. |
+| Escalation criteria | Escalate if the verified caller/issuer binding cannot be reconstructed from available logs or request records. |
 
 ### Project-Local Pending ICP Refill
 

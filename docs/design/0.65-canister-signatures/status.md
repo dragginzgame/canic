@@ -82,9 +82,10 @@ guard is retained for this removed design.
       trust-anchor validation.
 - [x] Add startup trap when a delegated-token verifier lacks
       `auth-root-canister-sig-verify` or effective verifier trust anchors.
-- [x] Require an effective raw IC root key for every verifier network; local,
-      PocketIC, and testnet keys may be configured or injected during startup,
-      while endpoint verification never discovers the IC root key dynamically.
+- [x] Require an explicit raw IC root key for every verifier network; local,
+      PocketIC, and testnet verifiers must configure their environment root
+      key, and endpoint verification never discovers the IC root key
+      dynamically.
 - [x] Enforce `delegated_token_verifier = true` at delegated-token verification
       execution time, before proof verification work.
 - [x] Define `root_canister_sig_verification_message(kind, payload_hash)`.

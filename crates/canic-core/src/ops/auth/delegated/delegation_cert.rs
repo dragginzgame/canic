@@ -12,7 +12,7 @@ use crate::{
 };
 use thiserror::Error;
 
-pub struct IssueDelegationProofInput {
+pub struct PrepareDelegationCertInput {
     pub root_pid: Principal,
     pub issuer_pid: Principal,
     pub issuer_proof_alg: IssuerProofAlgorithm,
@@ -26,7 +26,7 @@ pub struct IssueDelegationProofInput {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IssuedDelegationProof {
+pub struct FinalizedDelegationProof {
     pub proof: DelegationProof,
     pub cert_hash: [u8; 32],
 }
@@ -38,7 +38,7 @@ pub struct PreparedDelegationCert {
 }
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum IssueDelegationProofError {
+pub enum PrepareDelegationCertError {
     #[error("delegated auth cert ttl must be greater than zero")]
     CertTtlZero,
     #[error("delegated auth cert expires_at overflow")]
@@ -53,20 +53,20 @@ pub enum IssueDelegationProofError {
 
 /// Build one self-validating delegation proof from an already-created root proof.
 #[cfg(test)]
-pub fn issue_delegation_proof(
-    input: IssueDelegationProofInput,
+pub fn assemble_delegation_proof_for_tests(
+    input: PrepareDelegationCertInput,
     root_proof: RootProof,
-) -> Result<IssuedDelegationProof, IssueDelegationProofError> {
+) -> Result<FinalizedDelegationProof, PrepareDelegationCertError> {
     let prepared = prepare_delegation_cert(input)?;
     Ok(finish_delegation_proof(prepared, root_proof))
 }
 
 /// Prepare one canonical delegation certificate before root proof creation.
 pub fn prepare_delegation_cert(
-    input: IssueDelegationProofInput,
-) -> Result<PreparedDelegationCert, IssueDelegationProofError> {
+    input: PrepareDelegationCertInput,
+) -> Result<PreparedDelegationCert, PrepareDelegationCertError> {
     if input.cert_ttl_ns == 0 {
-        return Err(IssueDelegationProofError::CertTtlZero);
+        return Err(PrepareDelegationCertError::CertTtlZero);
     }
 
     validate_audience_shape(&input.audience)?;
@@ -75,7 +75,7 @@ pub fn prepare_delegation_cert(
     let expires_at = input
         .issued_at_ns
         .checked_add(input.cert_ttl_ns)
-        .ok_or(IssueDelegationProofError::CertExpiresAtOverflow)?;
+        .ok_or(PrepareDelegationCertError::CertExpiresAtOverflow)?;
     let issuer_proof_binding_hash = issuer_proof_binding_hash(
         input.issuer_pid,
         input.issuer_proof_alg,
@@ -107,8 +107,8 @@ pub fn prepare_delegation_cert(
 pub fn finish_delegation_proof(
     prepared: PreparedDelegationCert,
     root_proof: RootProof,
-) -> IssuedDelegationProof {
-    IssuedDelegationProof {
+) -> FinalizedDelegationProof {
+    FinalizedDelegationProof {
         proof: DelegationProof {
             cert: prepared.cert,
             root_proof,
@@ -143,8 +143,8 @@ mod tests {
         }
     }
 
-    fn input() -> IssueDelegationProofInput {
-        IssueDelegationProofInput {
+    fn input() -> PrepareDelegationCertInput {
+        PrepareDelegationCertInput {
             root_pid: p(1),
             issuer_pid: p(2),
             issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
@@ -175,9 +175,10 @@ mod tests {
     }
 
     #[test]
-    fn issue_delegation_proof_embeds_exact_root_proof() {
+    fn assemble_delegation_proof_for_tests_embeds_exact_root_proof() {
         let expected_root_proof = root_proof(9);
-        let issued = issue_delegation_proof(input(), expected_root_proof.clone()).unwrap();
+        let issued =
+            assemble_delegation_proof_for_tests(input(), expected_root_proof.clone()).unwrap();
 
         assert_eq!(issued.proof.cert.root_pid, p(1));
         assert_eq!(issued.proof.cert.issuer_pid, p(2));
@@ -200,26 +201,26 @@ mod tests {
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_empty_grants() {
+    fn assemble_delegation_proof_for_tests_rejects_empty_grants() {
         let mut input = input();
         input.grants = vec![];
 
         assert_eq!(
-            issue_delegation_proof(input, root_proof(1)),
-            Err(IssueDelegationProofError::Audience(
+            assemble_delegation_proof_for_tests(input, root_proof(1)),
+            Err(PrepareDelegationCertError::Audience(
                 AudienceError::GrantsEmpty
             ))
         );
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_cert_ttl_above_limits() {
+    fn assemble_delegation_proof_for_tests_rejects_cert_ttl_above_limits() {
         let mut input = input();
         input.cert_ttl_ns = 601;
 
         assert_eq!(
-            issue_delegation_proof(input, root_proof(1)),
-            Err(IssueDelegationProofError::CertRules(
+            assemble_delegation_proof_for_tests(input, root_proof(1)),
+            Err(PrepareDelegationCertError::CertRules(
                 CertRuleError::CertTtlExceeded {
                     ttl_ns: 601,
                     max_ttl_ns: 600,
@@ -229,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn issue_delegation_proof_rejects_invalid_grant_role() {
+    fn assemble_delegation_proof_for_tests_rejects_invalid_grant_role() {
         let mut input = input();
         input.grants = vec![DelegatedRoleGrant {
             target: CanisterRole::owned("ProjectInstance".to_string()),
@@ -237,8 +238,8 @@ mod tests {
         }];
 
         assert_eq!(
-            issue_delegation_proof(input, root_proof(1)),
-            Err(IssueDelegationProofError::Audience(
+            assemble_delegation_proof_for_tests(input, root_proof(1)),
+            Err(PrepareDelegationCertError::Audience(
                 AudienceError::Canonical(super::CanonicalAuthError::InvalidRole {
                     role: "ProjectInstance".to_string(),
                 })

@@ -9,10 +9,10 @@ use crate::{
 };
 
 //
-// SignDelegatedTokenInput
+// PrepareDelegatedTokenIssuerProofInput
 //
 
-pub struct SignDelegatedTokenInput {
+pub struct PrepareDelegatedTokenIssuerProofInput {
     pub subject: Principal,
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
@@ -21,10 +21,10 @@ pub struct SignDelegatedTokenInput {
 }
 
 //
-// SignDelegationProofInput
+// PrepareRootDelegationProofInput
 //
 
-pub struct SignDelegationProofInput {
+pub struct PrepareRootDelegationProofInput {
     pub operation_id: [u8; 32],
     pub audience: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
@@ -36,10 +36,10 @@ pub struct SignDelegationProofInput {
 }
 
 //
-// SignRoleAttestationInput
+// PrepareRootRoleAttestationInput
 //
 
-pub struct SignRoleAttestationInput {
+pub struct PrepareRootRoleAttestationInput {
     pub operation_id: [u8; 32],
     pub subject: Principal,
     pub role: CanisterRole,
@@ -83,11 +83,11 @@ pub struct PreparedDelegatedTokenIssuerProof {
 }
 
 //
-// DelegatedTokenVerifierConfig
+// AuthProofVerifierConfig
 //
 
 #[derive(Debug)]
-pub struct DelegatedTokenVerifierConfig {
+pub struct AuthProofVerifierConfig {
     pub network: DelegatedAuthNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,

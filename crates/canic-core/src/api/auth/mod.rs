@@ -14,8 +14,8 @@ use crate::{
     error::InternalErrorClass,
     ops::{
         auth::{
-            AuthOps, SignDelegatedTokenInput, SignDelegationProofInput, SignRoleAttestationInput,
-            VerifyDelegatedTokenRuntimeInput,
+            AuthOps, PrepareDelegatedTokenIssuerProofInput, PrepareRootDelegationProofInput,
+            PrepareRootRoleAttestationInput, VerifyDelegatedTokenRuntimeInput,
         },
         config::ConfigOps,
         ic::IcOps,
@@ -33,13 +33,13 @@ use crate::{
     },
 };
 use candid::{decode_one, encode_one};
-use root_client::RootAuthMaterialClient;
+use root_delegation_client::RootDelegationProofClient;
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
 // - `metadata` owns root request metadata construction.
 mod metadata;
-mod root_client;
+mod root_delegation_client;
 mod session;
 
 ///
@@ -148,7 +148,7 @@ impl AuthApi {
         };
 
         let prepared = AuthOps::prepare_delegated_token_issuer_proof(
-            SignDelegatedTokenInput {
+            PrepareDelegatedTokenIssuerProofInput {
                 subject: request.subject,
                 audience: request.aud,
                 grants: request.grants,
@@ -295,7 +295,7 @@ impl AuthApi {
             decision => return Self::map_role_attestation_replay_decision(decision),
         };
 
-        let prepared = match AuthOps::prepare_role_attestation(SignRoleAttestationInput {
+        let prepared = match AuthOps::prepare_role_attestation(PrepareRootRoleAttestationInput {
             operation_id: token.receipt().operation_id.into_bytes(),
             subject: request.subject,
             role: request.role,
@@ -355,7 +355,7 @@ impl AuthApi {
         max_cert_ttl_ns: u64,
     ) -> Result<DelegationProofPrepareResponse, Error> {
         let max_token_ttl_ns = request.cert_ttl_ns.min(max_cert_ttl_ns);
-        let prepared = match AuthOps::prepare_delegation_proof(SignDelegationProofInput {
+        let prepared = match AuthOps::prepare_delegation_proof(PrepareRootDelegationProofInput {
             operation_id: token.receipt().operation_id.into_bytes(),
             audience: request.aud,
             grants: request.grants,
@@ -915,7 +915,7 @@ impl AuthApi {
         request: DelegationProofIssueRequest,
     ) -> Result<DelegationProofPrepareResponse, Error> {
         let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RootAuthMaterialClient::new(root_pid)
+        RootDelegationProofClient::new(root_pid)
             .prepare_delegation_proof(request)
             .await
             .map_err(Self::map_auth_error)
@@ -1021,16 +1021,16 @@ mod tests {
     #[test]
     fn delegated_token_replay_metadata_rejects_missing_or_invalid_ttl() {
         let missing =
-            AuthApi::token_replay_metadata(None, "delegated token mint").expect_err("required");
+            AuthApi::token_replay_metadata(None, "delegated token prepare").expect_err("required");
         assert_eq!(missing.code, ErrorCode::OperationIdRequired);
 
-        let zero = AuthApi::token_replay_metadata(Some(meta(1, 0)), "delegated token mint")
+        let zero = AuthApi::token_replay_metadata(Some(meta(1, 0)), "delegated token prepare")
             .expect_err("zero ttl is invalid");
         assert_eq!(zero.code, ErrorCode::InvalidInput);
 
         let too_large = AuthApi::token_replay_metadata(
             Some(meta(1, AuthApi::MAX_TOKEN_REPLAY_TTL_NS + 1)),
-            "delegated token mint",
+            "delegated token prepare",
         )
         .expect_err("oversized ttl is invalid");
         assert_eq!(too_large.code, ErrorCode::InvalidInput);

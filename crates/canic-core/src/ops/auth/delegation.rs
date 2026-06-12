@@ -1,13 +1,13 @@
 use super::{
-    AuthOps, PreparedRootDelegationProof, SignDelegationProofInput,
+    AuthOps, PrepareRootDelegationProofInput, PreparedRootDelegationProof,
     delegated::{
         active_proof::{
             InstallActiveDelegationProofError, InstallActiveDelegationProofInput,
             install_active_delegation_proof as build_active_delegation_proof,
         },
         cert_rules::DelegatedAuthTtlLimits,
-        issue::{
-            IssueDelegationProofError, IssueDelegationProofInput, finish_delegation_proof,
+        delegation_cert::{
+            PrepareDelegationCertError, PrepareDelegationCertInput, finish_delegation_proof,
             prepare_delegation_cert,
         },
     },
@@ -45,14 +45,14 @@ impl PendingDelegationProofKey {
 impl AuthOps {
     /// Prepare a canonical delegation proof certificate and certify its canister-signature path.
     pub(crate) fn prepare_delegation_proof(
-        input: SignDelegationProofInput,
+        input: PrepareRootDelegationProofInput,
     ) -> Result<PreparedRootDelegationProof, InternalError> {
         let root_pid = IcOps::canister_self();
         let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
             seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
         };
 
-        let prepared = prepare_delegation_cert(IssueDelegationProofInput {
+        let prepared = prepare_delegation_cert(PrepareDelegationCertInput {
             root_pid,
             issuer_pid: input.issuer_pid,
             issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
@@ -67,7 +67,7 @@ impl AuthOps {
                 max_token_ttl_ns: input.max_token_ttl_ns,
             },
         })
-        .map_err(map_issue_delegation_proof_error)?;
+        .map_err(map_prepare_delegation_cert_error)?;
         let prepared_root_proof = Self::prepare_root_canister_signature(
             RootPayloadKind::DelegationCert,
             input.operation_id,
@@ -110,7 +110,7 @@ impl AuthOps {
             IcOps::now_nanos(),
         )?;
         Ok(finish_delegation_proof(
-            super::delegated::issue::PreparedDelegationCert {
+            super::delegated::delegation_cert::PreparedDelegationCert {
                 cert: prepared.cert,
                 cert_hash: prepared.cert_hash,
             },
@@ -123,7 +123,7 @@ impl AuthOps {
         proof: DelegationProof,
         installed_by: Principal,
     ) -> Result<ActiveDelegationProof, InternalError> {
-        let cfg = Self::delegated_token_verifier_config()?;
+        let cfg = Self::auth_proof_verifier_config()?;
         let now_ns = IcOps::now_nanos();
         let active_proof = build_active_delegation_proof(
             InstallActiveDelegationProofInput {
@@ -175,7 +175,7 @@ fn cache_prepared_delegation_proof(caller: Principal, prepared: PreparedRootDele
     });
 }
 
-fn map_issue_delegation_proof_error(err: IssueDelegationProofError) -> InternalError {
+fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()
 }
 

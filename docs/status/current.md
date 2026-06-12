@@ -9,20 +9,30 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.66.6` is published as the current post-0.65 closeout baseline. `0.66.7`
-  is prepared in the worktree as a canister-signature helper naming cleanup. It
-  renames root helper APIs from `root_sig_*` to `root_canister_sig_*`, issuer
-  helper APIs from `issuer_sig_*` to `issuer_canister_sig_*`, and private
-  signature-map owner helpers/statics so active auth code no longer resembles
-  the removed `root_sig` token field.
+- `0.66.7` is published as the current post-0.65 closeout baseline. `0.66.8`
+  is prepared in the worktree as an auth-proof support cleanup. It renames the
+  shared root-key/root-canister trust-anchor config from delegated-token-only
+  wording to `AuthProofVerifierConfig`, splits non-root startup predicates so
+  role-attestation caches and token issuers require root proof verification
+  support while endpoint delegated-token verifiers additionally require issuer
+  proof verification support, renames the private root delegation proof client,
+  renames the internal delegated root certificate builder away from issue
+  terminology, renames internal auth operation inputs away from one-shot
+  signing terminology, removes unused RPC workflow error variants that still
+  used `shard_pid` auth wording, and cleans active docs/runbooks/audit
+  references away from stale shard/mint wording.
   Current validation for this cleanup slice:
   ```text
   cargo fmt --all -- --check
   cargo check --locked -p canic-core -p canic
-  cargo test --locked -p canic-core ops::auth::root_canister_sig --lib -- --nocapture
-  cargo test --locked -p canic-core ops::auth::issuer_canister_sig --lib -- --nocapture
-  cargo test --locked -p canic-core ops::auth::delegated::issue --lib -- --nocapture
-  cargo test --locked -p canic-core auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core root_delegation_proof_client_endpoint_table_is_prepare_only --lib -- --nocapture
+  cargo test --locked -p canic-core auth_proof_verifier_config --lib -- --nocapture
+  cargo test --locked -p canic-core api::auth --lib -- --nocapture
+  cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::rpc --lib -- --nocapture
+  cargo check --locked -p canic-tests
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
@@ -435,7 +445,7 @@ inspect only the files needed for the current task.
   git diff --check
   ```
 - `0.65.19` is pushed and removes caller-provided delegated-token nonce
-  input. `DelegatedTokenPrepareRequest`, `SignDelegatedTokenInput`, and the
+  input. `DelegatedTokenPrepareRequest`, `PrepareDelegatedTokenIssuerProofInput`, and the
   internal token-preparation input no longer accept nonce bytes; issuer token
   preparation derives `DelegatedTokenClaims.nonce` from `"canic-token-nonce-v1"`,
   `prepared_by`, prepare `operation_id`, `subject`, `issuer_pid`, and selected
@@ -1761,7 +1771,7 @@ inspect only the files needed for the current task.
   `docs/design/0.61-replay-protection/0.61-design.md`. Root
   delegation-proof issuance now uses shared replay receipts: shard-side
   requests attach root replay metadata, root rejects missing/invalid replay
-  metadata, the endpoint reserves `auth.issue_delegation_proof.v1` receipts
+  metadata, the endpoint reserves `auth.assemble_delegation_proof_for_tests.v1` receipts
   before threshold ECDSA signing, marks the signing effect in flight, commits
   Candid-encoded proof bytes for duplicate replay, and reports conflict or
   recovery states for non-fresh receipts. The auth signing ops are split into

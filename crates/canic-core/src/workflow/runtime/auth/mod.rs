@@ -67,18 +67,18 @@ impl RuntimeAuthWorkflow {
             ));
         }
 
-        Self::ensure_delegated_token_verifier_contract(canister_role, canister_cfg)?;
+        Self::ensure_auth_proof_verifier_support_contract(canister_role, canister_cfg)?;
 
         Ok(())
     }
 
-    /// Fail fast when a non-root delegated-token verifier lacks hard-cut trust anchors.
-    fn ensure_delegated_token_verifier_contract(
+    /// Fail fast when a non-root auth verifier lacks hard-cut trust anchors.
+    fn ensure_auth_proof_verifier_support_contract(
         canister_role: &CanisterRole,
         canister_cfg: &crate::config::schema::CanisterConfig,
     ) -> Result<(), InternalError> {
         let delegated_tokens_cfg = ConfigOps::delegated_tokens_config()?;
-        if !nonroot_requires_delegated_token_verifier(canister_cfg) {
+        if !nonroot_requires_root_proof_verifier_support(canister_cfg) {
             return Ok(());
         }
 
@@ -86,12 +86,14 @@ impl RuntimeAuthWorkflow {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' has auth proof verification enabled, but this build does not include IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
+                    "canister '{canister_role}' has auth proof verification enabled, but this build does not include root IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
                 ),
             ));
         }
 
-        if !AuthOps::issuer_canister_sig_verify_enabled() {
+        if nonroot_requires_issuer_proof_verifier_support(canister_cfg)
+            && !AuthOps::issuer_canister_sig_verify_enabled()
+        {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
@@ -101,13 +103,13 @@ impl RuntimeAuthWorkflow {
         }
 
         if delegated_tokens_cfg.enabled || canister_cfg.auth.role_attestation_cache {
-            AuthOps::delegated_token_verifier_config().map(|_| ())
+            AuthOps::auth_proof_verifier_config().map(|_| ())
         } else {
             Ok(())
         }
     }
 
-    /// Check local canister-signature support when the current canister mints delegated tokens.
+    /// Check local canister-signature support when the current canister issues delegated tokens.
     pub async fn check_issuer_canister_signature_support() -> Result<(), InternalError> {
         // Keep the public runtime hook async without adding hot-path outbound work.
         std::future::ready(()).await;
@@ -228,8 +230,8 @@ const fn nonroot_requires_delegated_token_issuer(
     canister_cfg.auth.delegated_token_issuer
 }
 
-// Decide whether one non-root runtime must carry delegated-token verifier support.
-const fn nonroot_requires_delegated_token_verifier(
+// Decide whether one non-root runtime must verify root canister-signature proofs.
+const fn nonroot_requires_root_proof_verifier_support(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {
     canister_cfg.auth.delegated_token_issuer
@@ -237,11 +239,19 @@ const fn nonroot_requires_delegated_token_verifier(
         || canister_cfg.auth.role_attestation_cache
 }
 
+// Decide whether one non-root runtime must verify issuer canister-signature proofs.
+const fn nonroot_requires_issuer_proof_verifier_support(
+    canister_cfg: &crate::config::schema::CanisterConfig,
+) -> bool {
+    canister_cfg.auth.delegated_token_verifier
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         RuntimeAuthWorkflow, nonroot_requires_delegated_token_issuer,
-        nonroot_requires_delegated_token_verifier, root_requires_delegated_token_proofs,
+        nonroot_requires_issuer_proof_verifier_support,
+        nonroot_requires_root_proof_verifier_support, root_requires_delegated_token_proofs,
         root_requires_role_attestation_proofs,
     };
     use crate::{
@@ -334,11 +344,14 @@ mod tests {
         };
 
         assert!(!nonroot_requires_delegated_token_issuer(&verifier_cfg));
-        assert!(nonroot_requires_delegated_token_verifier(&verifier_cfg));
+        assert!(nonroot_requires_root_proof_verifier_support(&verifier_cfg));
+        assert!(nonroot_requires_issuer_proof_verifier_support(
+            &verifier_cfg
+        ));
     }
 
     #[test]
-    fn role_attestation_cache_nonroot_also_requires_delegated_token_verifier() {
+    fn role_attestation_cache_nonroot_requires_only_root_proof_verifier_support() {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
@@ -347,18 +360,22 @@ mod tests {
         };
 
         assert!(!nonroot_requires_delegated_token_issuer(&verifier_cfg));
-        assert!(nonroot_requires_delegated_token_verifier(&verifier_cfg));
+        assert!(nonroot_requires_root_proof_verifier_support(&verifier_cfg));
+        assert!(!nonroot_requires_issuer_proof_verifier_support(
+            &verifier_cfg
+        ));
     }
 
     #[test]
-    fn default_nonroot_does_not_require_delegated_token_verifier() {
+    fn default_nonroot_does_not_require_auth_proof_verifier_support() {
         let cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
 
-        assert!(!nonroot_requires_delegated_token_verifier(&cfg));
+        assert!(!nonroot_requires_root_proof_verifier_support(&cfg));
+        assert!(!nonroot_requires_issuer_proof_verifier_support(&cfg));
     }
 
     #[test]
-    fn auth_material_nonroot_requires_delegated_token_verifier() {
+    fn auth_material_nonroot_requires_the_matching_verifier_support() {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
@@ -373,8 +390,12 @@ mod tests {
             role_attestation_cache: false,
         };
 
-        assert!(nonroot_requires_delegated_token_verifier(&verifier_cfg));
-        assert!(nonroot_requires_delegated_token_verifier(&issuer_cfg));
+        assert!(nonroot_requires_root_proof_verifier_support(&verifier_cfg));
+        assert!(nonroot_requires_issuer_proof_verifier_support(
+            &verifier_cfg
+        ));
+        assert!(nonroot_requires_root_proof_verifier_support(&issuer_cfg));
+        assert!(!nonroot_requires_issuer_proof_verifier_support(&issuer_cfg));
     }
 
     #[cfg(not(feature = "auth-root-canister-sig-verify"))]

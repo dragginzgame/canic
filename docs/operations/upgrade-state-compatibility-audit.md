@@ -19,8 +19,8 @@ This audit covers the state surfaces that intersect replay-sensitive behavior:
 - operation-ID durability;
 - project-local pending operation logs;
 - delegated-auth and delegation-proof replay state;
-- caller/shard binding assumptions;
-- delegated-token mint/issue replay state;
+- caller/issuer binding assumptions;
+- delegated-token prepare/issue replay state;
 - ICP refill and value-transfer replay state;
 - cost-guard accounting and permit boundaries;
 - response-idempotent canister upgrade requests;
@@ -72,8 +72,8 @@ Each area below uses one of these outcomes:
 | Operation-ID durability | Runtime replay receipts persist `[u8; 32]` operation IDs. Root upgrade RPC tests prove upgrade requests carry replay metadata into the request. CLI ICP refill generated IDs are written before send in the pending operation log. | Covered by existing tests/docs | Operation IDs remain caller/client-owned for replay-sensitive commands. Server correctness does not depend on the CLI pending log. |
 | Project-local pending operation log | `crates/canic-cli/src/cycles/convert/pending.rs` writes `.canic/operations/pending.json` with log and entry schema versions, atomic temp-file replace, directory sync, `pending_send`, and `completed` states. Tests cover project-local path, write-before-send, matching pending reuse, and completed entries not being reused. | Covered by existing tests/docs | This is host/operator durability, not canister stable state. Recovery wording is documented in [Recovery and retry runbooks](recovery-retry-runbooks.md). |
 | Delegated-auth replay identity | Delegated-token issuance and verification use shared replay receipts plus issuer canister-signature proofs. Unit tests cover auth replay payload stability, caller/subject binding, and stable replay receipt round trips. | Covered by existing tests/docs | The post-upgrade runtime has one replay model. |
-| Delegation proof caller/shard binding | `AuthApi::validate_delegation_request_caller` requires caller and `shard_pid` to match before proof issuance; unit tests assert mismatched callers fail. Replay payload hashing binds authoritative proof payload and excludes metadata. | Covered by existing tests/docs | This prevents replay/cost guards from minting proof material for a foreign shard request. |
-| Delegated-token mint and issue replay state | `crates/canic-core/src/api/auth/mod.rs` tests metadata validation, payload-hash stability, committed replay returning the cached token, actor mismatch, payload mismatch, and in-progress duplicate blocking. | Covered by existing tests/docs | Shared replay receipts own token mint replay behavior after the hard cut. |
+| Delegation proof caller/issuer binding | `AuthApi::validate_delegation_request_caller` requires caller and `issuer_pid` to match before proof issuance; unit tests assert mismatched callers fail. Replay payload hashing binds authoritative proof payload and excludes metadata. | Covered by existing tests/docs | This prevents replay/cost guards from preparing proof material for a foreign issuer request. |
+| Delegated-token prepare and issue replay state | `crates/canic-core/src/api/auth/mod.rs` tests metadata validation, payload-hash stability, committed replay returning the cached token, actor mismatch, payload mismatch, and in-progress duplicate blocking. | Covered by existing tests/docs | Shared replay receipts own delegated-token prepare replay behavior after the hard cut. |
 | ICP refill and value-transfer replay state | `crates/canic-core/src/workflow/ic/icp_refill/tests.rs` covers exact operation ID use, shared replay reserve input, payload hash behavior, terminal committed response replay, resumable response aborts, payload mismatch, value-transfer cost guard, effect marking, in-flight abort, and recovery-required preservation. | Covered by existing tests/docs | Dedicated `IcpRefillRecord` state remains the refill workflow record; shared replay receipts gate replay decisions. |
 | Cost-guard accounting and permit boundaries | `CostGuardOps` reserves quota and cycle intents before effects, completes or recovers permits, and uses intent-store totals. Unit tests cover quota exhaustion, low cycle reserve rejection, abort release, and outstanding reservation accounting. Source guards pin private permit construction and permit-required ECDSA, value-transfer, and deployment boundaries. | Covered by existing tests/docs | Cost guard state is intent-store accounting, not a new public schema. |
 | Response-idempotent canister upgrade requests | Root replay tests cover upgrade request routing, cached identical replay response, conflict rejection, and cross-variant request ID rejection. `CanisterLifecycleEvent::Upgrade` uses management deployment cost context for actual upgrade installs. | Covered by existing tests/docs | Already-current upgrade skips remain outside deployment quota/cycle reservation. |
@@ -92,8 +92,8 @@ Each area below uses one of these outcomes:
 - Operation IDs remain 32 bytes in runtime replay state.
 - CLI-generated high-value operation IDs are written before live send.
 - Old delegated-token use markers are not live replay state.
-- Delegation proof replay is caller/shard bound.
-- Delegated-token mint replay returns committed material without reminting.
+- Delegation proof replay is caller/issuer bound.
+- Delegated-token prepare replay returns committed material without reissuing.
 - ICP refill replay marks external effects before value-transfer boundaries.
 - Costed signing, deployment, value-transfer, and durable-publication paths
   require explicit replay/cost context.

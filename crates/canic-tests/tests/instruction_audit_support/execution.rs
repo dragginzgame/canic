@@ -298,11 +298,11 @@ fn prepare_scenario(
                 .subnet_index
                 .get(&USER_HUB)
                 .expect("user_hub must exist for auth audit scenario");
-            let shard_pid =
+            let issuer_pid =
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[43; 29]));
             PreparedScenario {
                 target_pid,
-                caller_pid: Some(shard_pid),
+                caller_pid: Some(issuer_pid),
                 delegated_token: None,
             }
         }
@@ -311,14 +311,14 @@ fn prepare_scenario(
                 .subnet_index
                 .get(&USER_HUB)
                 .expect("user_hub must exist for verifier auth audit scenario");
-            let shard_pid =
+            let issuer_pid =
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
             let subject = Principal::from_slice(&[45; 29]);
-            let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, shard_pid, TEST);
+            let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, issuer_pid, TEST);
             let token_ttl_ns = token_ttl_within_proof(&setup.pic, &proof);
             let token = issue_delegated_token(
                 &setup.pic,
-                shard_pid,
+                issuer_pid,
                 proof,
                 subject,
                 DelegationAudience::Project("test".to_string()),
@@ -404,7 +404,7 @@ fn execute_verifier_auth_scenario(
     let token = prepared
         .delegated_token
         .clone()
-        .expect("verifier auth audit scenario must mint a delegated token");
+        .expect("verifier auth audit scenario must issue a delegated token");
     let response: Result<Result<(), Error>, _> =
         setup
             .pic
