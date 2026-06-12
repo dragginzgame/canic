@@ -1,4 +1,4 @@
-use super::ROLE_ATTESTATION_SIGNING_DOMAIN;
+use super::ROLE_ATTESTATION_PROOF_HASH_DOMAIN;
 use crate::{
     InternalError,
     dto::auth::RoleAttestation,
@@ -25,7 +25,7 @@ pub(super) fn role_attestation_hash(
 ) -> Result<[u8; 32], InternalError> {
     let payload = encode_candid("role attestation", attestation)?;
     Ok(domain_separated_hash(
-        ROLE_ATTESTATION_SIGNING_DOMAIN,
+        ROLE_ATTESTATION_PROOF_HASH_DOMAIN,
         payload,
     ))
 }

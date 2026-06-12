@@ -586,13 +586,29 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.26` active auth proof terminology cleanup after committed
-  `0.65.25` removes unused token-signature auth error variants, reports
+- `0.65.26` is committed as the active auth proof terminology cleanup. It
+  removes unused token-signature auth error variants, reports
   root/issuer canister-signature failures as proof failures, renames
   role-attestation verifier errors to attestation proof wording, and updates the
   positive delegated-token cache/comments/docs away from stale
   signer/signature terminology, including the stale design reservation for
   issuer signer generation rotation. Current validation:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-core ops::auth --lib -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.27` internal auth proof naming cleanup after committed `0.65.26`
+  renames cache-hit delegated-token verification helpers, full embedded-proof
+  verification helpers, issuer token proof preparation locals, and
+  role-attestation hash domain constants away from stale signing/signature
+  names. It also updates root startup errors and delegated-cert comments from
+  signing wording to proof issuance/proof creation wording and removes the stale
+  `DelegatedTokenSignerPrewarmPlan` section marker. Current validation:
   ```text
   cargo fmt --all
   cargo test --locked -p canic-core ops::auth --lib -- --nocapture

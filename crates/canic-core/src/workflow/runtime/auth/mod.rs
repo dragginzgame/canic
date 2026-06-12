@@ -18,10 +18,6 @@ use crate::{
 };
 
 ///
-/// DelegatedTokenSignerPrewarmPlan
-///
-
-///
 /// RuntimeAuthWorkflow
 ///
 /// Owns delegated-auth runtime startup checks and auth-specific runtime boot
@@ -39,7 +35,7 @@ impl RuntimeAuthWorkflow {
         {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "delegated token signing is configured in canic.toml, but this root build does not include IC canister-signature creation support; enable the `auth-root-canister-sig-create` feature for the root canister build".to_string(),
+                "delegated token proof issuance is configured in canic.toml, but this root build does not include IC canister-signature creation support; enable the `auth-root-canister-sig-create` feature for the root canister build".to_string(),
             ));
         }
 

@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.27` continues the proof terminology cleanup by renaming internal
+  cache-hit delegated-token verification helpers, role-attestation hash domain
+  constants, and root startup messages away from stale signing/signature names.
+
 - `0.65.26` cleans active auth proof terminology by removing unused
   token-signature error variants, reporting root/issuer canister-signature
   failures as proof failures, and renaming remaining issuer-proof cache/comment

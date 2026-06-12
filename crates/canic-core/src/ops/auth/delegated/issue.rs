@@ -61,7 +61,7 @@ pub fn issue_delegation_proof(
     Ok(finish_delegation_proof(prepared, root_proof))
 }
 
-/// Prepare one canonical delegation certificate before root signing.
+/// Prepare one canonical delegation certificate before root proof creation.
 pub fn prepare_delegation_cert(
     input: IssueDelegationProofInput,
 ) -> Result<PreparedDelegationCert, IssueDelegationProofError> {

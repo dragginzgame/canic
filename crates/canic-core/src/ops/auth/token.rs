@@ -13,7 +13,7 @@ use super::{
         cert_rules::DelegatedAuthTtlLimits,
         verify::{
             VerifiedDelegatedToken, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
-            verify_delegated_token, verify_delegated_token_without_signatures,
+            verify_delegated_token, verify_delegated_token_cached_proof_identity,
         },
     },
     issuer_canister_sig::IssuerPayloadKind,
@@ -101,7 +101,7 @@ impl AuthOps {
         .map_err(map_mint_delegated_token_error)?;
 
         let claims_hash = prepared.claims_hash;
-        let issuer_signature = Self::prepare_issuer_canister_signature(
+        let issuer_proof_prepare = Self::prepare_issuer_canister_signature(
             IssuerPayloadKind::DelegatedTokenClaims,
             operation_id,
             claims_hash,
@@ -119,7 +119,7 @@ impl AuthOps {
         Ok(PreparedDelegatedTokenIssuerProof {
             prepared,
             claims_hash,
-            retrieval_expires_at_ns: issuer_signature.retrieval_expires_at_ns,
+            retrieval_expires_at_ns: issuer_proof_prepare.retrieval_expires_at_ns,
         })
     }
 
@@ -178,7 +178,7 @@ impl AuthOps {
             return Ok(verified);
         }
 
-        let verified = verify_with_signatures(&input, &ctx)?;
+        let verified = verify_with_embedded_proofs(&input, &ctx)?;
         insert_positive_verification_cache(&input, cache_key);
         DelegatedAuthMetrics::record_verify_completed();
         Ok(verified)
@@ -279,7 +279,7 @@ fn verify_from_positive_cache<'a>(
         return Ok(None);
     }
 
-    verify_delegated_token_without_signatures(delegated_token_verify_input(input, ctx))
+    verify_delegated_token_cached_proof_identity(delegated_token_verify_input(input, ctx))
         .map(Some)
         .map_err(|err| {
             positive_cache_remove(cache_key);
@@ -290,7 +290,7 @@ fn verify_from_positive_cache<'a>(
         })
 }
 
-fn verify_with_signatures<'a>(
+fn verify_with_embedded_proofs<'a>(
     input: &'a VerifyDelegatedTokenRuntimeInput<'a>,
     ctx: &'a DelegatedTokenRuntimeContext,
 ) -> Result<VerifiedDelegatedToken, InternalError> {

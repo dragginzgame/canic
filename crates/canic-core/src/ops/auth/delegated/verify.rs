@@ -111,7 +111,7 @@ where
     Ok(material.verified)
 }
 
-pub fn verify_delegated_token_without_signatures(
+pub fn verify_delegated_token_cached_proof_identity(
     input: VerifyDelegatedTokenInput<'_>,
 ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError> {
     verify_delegated_token_material(&input, false).map(|material| material.verified)
@@ -465,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_delegated_token_without_signatures_accepts_cached_exact_token_identity() {
+    fn verify_delegated_token_cached_proof_identity_accepts_cached_exact_token_identity() {
         let mut token = token();
         token.proof.root_proof = RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
             signature_cbor: Vec::new(),
@@ -478,9 +478,12 @@ mod tests {
         let role = role();
         let required_scopes = vec!["read".to_string()];
 
-        let verified =
-            verify_delegated_token_without_signatures(input(&token, Some(&role), &required_scopes))
-                .expect("cache-hit local checks should not re-run cryptographic verification");
+        let verified = verify_delegated_token_cached_proof_identity(input(
+            &token,
+            Some(&role),
+            &required_scopes,
+        ))
+        .expect("cache-hit local checks should not re-run cryptographic verification");
 
         assert_eq!(verified.subject, p(9));
         assert_eq!(verified.issuer_pid, p(2));
@@ -494,7 +497,7 @@ mod tests {
         let role = role();
         let required_scopes = vec!["read".to_string()];
 
-        let verified = verify_delegated_token_without_signatures(input_at(
+        let verified = verify_delegated_token_cached_proof_identity(input_at(
             &token,
             Some(&role),
             &required_scopes,
@@ -512,7 +515,7 @@ mod tests {
         let role = role();
         let required_scopes = vec!["read".to_string()];
 
-        let err = verify_delegated_token_without_signatures(input_at(
+        let err = verify_delegated_token_cached_proof_identity(input_at(
             &token,
             Some(&role),
             &required_scopes,
@@ -541,7 +544,7 @@ mod tests {
         let mut input = input_at(&token, Some(&role), &required_scopes, now_ns);
         input.ttl_limits.max_cert_ttl_ns = AUTH_TIME_SKEW_ALLOWANCE_NS + 1_000;
 
-        let err = verify_delegated_token_without_signatures(input)
+        let err = verify_delegated_token_cached_proof_identity(input)
             .expect_err("claims beyond skew allowance must reject");
 
         assert_eq!(err, VerifyDelegatedTokenError::TokenNotYetValid);
