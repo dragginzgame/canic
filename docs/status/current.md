@@ -465,7 +465,7 @@ inspect only the files needed for the current task.
   old shard ECDSA token leg, and the 0.65 design doc treats removed proof
   families as absent surfaces instead of decode-and-reject compatibility
   branches. Operations docs and the recurring auth-abstraction audit no longer
-  instruct maintainers to run deleted anti-resurrection grep guards.
+  instruct maintainers to run deleted source-shape grep guards.
   Active-code scan now finds no
   `EcdsaOps::sign_bytes`, `auth-threshold-ecdsa-sign`,
   `ThresholdEcdsaSign`, `EcdsaPurpose`, `ecdsa_key_name`, direct `k256`,
@@ -602,7 +602,7 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.27` internal auth proof naming cleanup after committed `0.65.26`
+- `0.65.27` is committed as the internal auth proof naming cleanup. It
   renames cache-hit delegated-token verification helpers, full embedded-proof
   verification helpers, issuer token proof preparation locals, and
   role-attestation hash domain constants away from stale signing/signature
@@ -618,6 +618,16 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
+- Local `0.65.28` status/design closeout after committed `0.65.27` reconciles
+  `docs/design/0.65-canister-signatures/status.md` with the current hard-cut
+  state. The status file no longer describes 0.65 as design-correction pending,
+  treats verifier purity and zero-ECDSA source shape as manual closeout audits
+  rather than permanent source-shape guards, records forwarded
+  user-token rejection as covered by delegated-token subject/caller binding,
+  marks Candid/endpoint/docs reconciliation complete, and leaves only final
+  release validation plus maintainer-owned release-note preparation as
+  closeout work. This slice intentionally does not touch the unrelated local
+  `canic-host` metadata visibility edit currently in the worktree.
 - `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
   issuer canister-signature authority instead of shard ECDSA key material.

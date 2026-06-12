@@ -13,8 +13,8 @@ use crate::cargo_command;
 ///
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct CargoMetadata {
-    pub packages: Vec<CargoMetadataPackage>,
+pub(crate) struct CargoMetadata {
+    pub(crate) packages: Vec<CargoMetadataPackage>,
 }
 
 ///
@@ -22,19 +22,19 @@ pub struct CargoMetadata {
 ///
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct CargoMetadataPackage {
-    pub name: String,
+pub(crate) struct CargoMetadataPackage {
+    pub(crate) name: String,
     #[serde(default)]
-    pub version: String,
-    pub manifest_path: PathBuf,
-    pub metadata: Option<JsonValue>,
+    pub(crate) version: String,
+    pub(crate) manifest_path: PathBuf,
+    pub(crate) metadata: Option<JsonValue>,
 }
 
 static CARGO_METADATA_NO_DEPS_CACHE: OnceLock<Mutex<HashMap<PathBuf, CargoMetadata>>> =
     OnceLock::new();
 
 // Query cargo metadata for the selected workspace root.
-pub fn cargo_metadata(
+pub(crate) fn cargo_metadata(
     workspace_root: &Path,
     include_deps: bool,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
@@ -62,7 +62,7 @@ pub fn cargo_metadata(
 }
 
 // Reuse one per-process no-deps Cargo metadata snapshot for manifest discovery.
-pub fn cargo_metadata_no_deps_cached(
+pub(crate) fn cargo_metadata_no_deps_cached(
     workspace_root: &Path,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
     let cache_key = workspace_root

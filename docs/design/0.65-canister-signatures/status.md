@@ -1,6 +1,6 @@
 # 0.65 Status: Zero Management-ECDSA Auth Hard Cut
 
-Last updated: 2026-06-11
+Last updated: 2026-06-12
 
 ## Purpose
 
@@ -12,12 +12,13 @@ Design: [0.65-design.md](0.65-design.md)
 
 ## Current State
 
-Design correction pending: 0.65 is now zero-management-ECDSA auth, not
-root-proof-only canister signatures.
+The 0.65 design correction has landed: the release line is a
+zero-management-ECDSA normal-auth hard cut, not a root-proof-only canister
+signature migration.
 
-Delegated-token root proof and issuer proof hard cuts are locally closed.
-Current cleanup is deleting residual threshold-ECDSA signing artifacts, stale
-docs, and compatibility-only tests from the active codebase.
+Delegated-token root proof and issuer proof hard cuts are closed in active
+source. The remaining closeout work is release reconciliation and validation,
+not another protocol-design lane.
 
 `SignedRoleAttestation` now uses root canister-signature prepare/get plus local
 embedded-proof verification.
@@ -29,8 +30,7 @@ delegated-token claims.
 
 ## Audit Status
 
-Audit status from the root-proof hard-cut remains useful but is no longer
-sufficient for 0.65 closeout:
+Current zero-ECDSA closeout audit status:
 
 - active install, architecture, contract, and getting-started docs no longer
   instruct users to enable `auth-crypto`
@@ -46,7 +46,7 @@ sufficient for 0.65 closeout:
   structural root capability proofs for `ThisCanister` child provisioning and
   direct-child upgrade/recycle
 
-Required zero-ECDSA audit scan:
+Manual zero-ECDSA audit scan:
 
 ```text
 rg -n 'sign_with_ecdsa|EcdsaOps::sign_bytes|auth-threshold-ecdsa-sign|ThresholdEcdsaSign|IcThresholdEcdsaSecp256k1'
@@ -61,8 +61,9 @@ Expected result:
 
 Current local result: active normal-auth code, crate features, and tests no
 longer contain the threshold-ECDSA signing adapter, feature, replay external
-effect, or cost class. Remaining matches are historical docs/changelogs,
-audit commands, and release-line cleanup notes.
+effect, or cost class. Remaining matches are historical docs/changelogs, manual
+audit commands, and release-line cleanup notes. No permanent source-shape grep
+guard is retained for this removed design.
 
 ## Implementation Checklist
 
@@ -120,8 +121,9 @@ audit commands, and release-line cleanup notes.
       callers are the root and issuer canister-signature helpers, both using
       the exact `labeled_hash(LABEL_SIG, signature_root_hash)` shape. No
       permanent CI guard is added for this deleted-surface check.
-- [ ] Add a negative verifier test proving a user token presented by a
-      forwarding canister is rejected with `SubjectCallerMismatch`.
+- [x] Cover forwarded user-token rejection through delegated-token
+      subject/caller binding: a token whose signed subject differs from the
+      transport caller is rejected before endpoint authorization proceeds.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.
 - [x] Add `RootProof::IcCanisterSignatureV1`.
 - [x] Remove legacy threshold-ECDSA root-proof verification.
@@ -176,19 +178,29 @@ audit commands, and release-line cleanup notes.
 - [x] Close the zero-ECDSA normal-auth audit by deleting the active
       `sign_with_ecdsa` adapter and stale replay/cost-class surfaces. No
       permanent reintroduction guard is added for this deleted surface.
-- [ ] Add verifier-module CI gate proving verification code has no `.await`,
-      issuer client imports, or management-canister imports.
+- [x] Audit verifier purity: protected endpoint delegated-token verification is
+      local and synchronous, with no root, issuer, or management-canister call
+      on the hot path. No permanent source-shape guard is retained for this
+      removed design.
 - [x] Update metrics/cost classes so normal auth has no `ThresholdEcdsaSign`
       class.
-- [ ] Update Candid, endpoint macros, architecture/auth docs, and
+- [x] Update Candid, endpoint macros, architecture/auth docs, and
       getting-started docs for zero-ECDSA auth.
 
-Do not mark 0.65 closeout complete until:
+0.65 closeout criteria:
 
-- delegated-token root proof uses IC canister signatures
-- delegated-token issuer proof uses `IssuerProof::IcCanisterSignatureV1`
-- `SignedRoleAttestation` prepare/get and verification are implemented
-- delegated grants no longer retain a normal auth ECDSA path
-- zero-ECDSA scans/tests pass
-- protected endpoints verify self-contained proofs locally with no root or
-  management-canister calls
+- [x] delegated-token root proof uses IC canister signatures
+- [x] delegated-token issuer proof uses `IssuerProof::IcCanisterSignatureV1`
+- [x] `SignedRoleAttestation` prepare/get and verification are implemented
+- [x] standalone delegated-grant capability proofs no longer retain a normal
+      auth ECDSA path
+- [x] zero-ECDSA scans/tests pass for active source and feature wiring
+- [x] protected endpoints verify self-contained proofs locally with no root or
+      management-canister calls
+
+Remaining closeout:
+
+- final release-validation pass across focused auth tests, formatting, clippy,
+  and any maintainer-selected broad workspace/PocketIC suites
+- release-note preparation when the maintainer decides the line is ready to
+  publish

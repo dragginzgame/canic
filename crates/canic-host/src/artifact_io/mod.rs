@@ -8,7 +8,9 @@ use std::{
 
 // Apply `ic-wasm shrink` when available; absence of the optional tool is not
 // fatal, but execution failures are surfaced because they usually mean bad IO.
-pub fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn maybe_shrink_wasm_artifact(
+    wasm_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
     match Command::new("ic-wasm")
         .arg(wasm_path)
@@ -33,7 +35,7 @@ pub fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::e
 }
 
 // Copy one `.wasm` artifact atomically into the local ICP artifact tree.
-pub fn write_wasm_artifact(
+pub(crate) fn write_wasm_artifact(
     source_path: &Path,
     target_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -43,7 +45,7 @@ pub fn write_wasm_artifact(
 }
 
 // Write one deterministic `.wasm.gz` artifact with a zeroed gzip timestamp.
-pub fn write_gzip_artifact(
+pub(crate) fn write_gzip_artifact(
     wasm_path: &Path,
     wasm_gz_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -62,7 +64,7 @@ pub fn write_gzip_artifact(
 // Embed the extracted service interface for local artifacts so
 // `icp canister metadata <canister> candid:service` introspection works during
 // development. Production `ic` builds skip this path.
-pub fn embed_candid_metadata(
+pub(crate) fn embed_candid_metadata(
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -108,7 +110,7 @@ fn embed_candid_metadata_with_command(
 }
 
 // Persist one file through a sibling temp path so readers never observe a partial write.
-pub fn write_bytes_atomically(
+pub(crate) fn write_bytes_atomically(
     target_path: &Path,
     bytes: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
