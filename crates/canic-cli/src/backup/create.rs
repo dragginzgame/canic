@@ -1,6 +1,7 @@
 use super::{BackupCommandError, BackupCreateOptions, BackupCreateReport};
 use crate::{
     backup::{labels::backup_scope_label, layout::ensure_execution_journal_exists},
+    support::candid::role_candid_path,
     support::path_stamp::{current_backup_directory_stamp, file_safe_component},
 };
 use candid::Principal;
@@ -535,7 +536,12 @@ fn call_subnet_registry(
 
     IcpCli::new(&options.icp, None, Some(options.network.clone()))
         .with_cwd(icp_root)
-        .canister_query_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output_with_candid(
+            root,
+            "canic_subnet_registry",
+            Some("json"),
+            role_candid_path(Some(icp_root), &options.network, "root").as_deref(),
+        )
         .map_err(backup_icp_error)
 }
 

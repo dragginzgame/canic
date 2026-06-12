@@ -199,6 +199,22 @@ fn renders_no_argument_query_call() {
     );
 }
 
+// Ensure ICP CLI 0.3.2 local Candid support is available to query helpers.
+#[test]
+fn renders_no_argument_query_call_with_local_candid() {
+    let icp = IcpCli::new("icp", None, Some("local".to_string()));
+
+    assert_eq!(
+        icp.canister_query_output_display_with_candid(
+            "root",
+            "canic_ready",
+            Some("json"),
+            Some(Path::new(".icp/local/canisters/root/root.did"))
+        ),
+        "icp canister call root canic_ready () --query --candid .icp/local/canisters/root/root.did --json -n local"
+    );
+}
+
 // Ensure update-call previews preserve the explicit Candid argument.
 #[test]
 fn renders_argument_update_call() {
@@ -213,6 +229,44 @@ fn renders_argument_update_call() {
         ),
         "icp canister call root canic_icp_refill (record { dry_run = true }) --json -n ic"
     );
+}
+
+// Ensure ICP CLI 0.3.2 local Candid support is available to update-call helpers.
+#[test]
+fn renders_argument_update_call_with_local_candid() {
+    let icp = IcpCli::new("icp", None, Some("local".to_string()));
+
+    assert_eq!(
+        icp.canister_call_arg_output_display_with_candid(
+            "root",
+            "canic_icp_refill",
+            "(record { dry_run = true })",
+            Some("json"),
+            Some(Path::new(".icp/local/canisters/root/root.did"))
+        ),
+        "icp canister call root canic_icp_refill (record { dry_run = true }) --candid .icp/local/canisters/root/root.did --json -n local"
+    );
+}
+
+// Ensure local Candid sidecar resolution matches Canic's ICP CLI artifact layout.
+#[test]
+fn resolves_existing_local_canister_candid_path() {
+    let root = unique_temp_dir("canic-icp-candid-sidecar");
+    let did_path = root.join(".icp/local/canisters/root/root.did");
+    std::fs::create_dir_all(did_path.parent().expect("did parent")).expect("create did parent");
+    std::fs::write(&did_path, "service : {}").expect("write did");
+
+    assert_eq!(local_canister_candid_path(&root, "local", "root"), did_path);
+    assert_eq!(
+        existing_local_canister_candid_path(&root, "local", "root").as_deref(),
+        Some(did_path.as_path())
+    );
+    assert_eq!(
+        existing_local_canister_candid_path(&root, "ic", "root"),
+        None
+    );
+
+    std::fs::remove_dir_all(root).expect("remove temp root");
 }
 
 // Ensure manual top-ups use the ICP CLI top-up command and selected network.

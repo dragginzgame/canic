@@ -13,6 +13,7 @@ use crate::{
         globals::{internal_icp_arg, internal_network_arg},
     },
     cycles::CyclesCommandError,
+    support::candid::role_candid_path,
 };
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_bytes};
 use canic_host::{format::cycles_tc, icp::IcpCli, icp_config::resolve_current_canic_icp_root};
@@ -24,7 +25,7 @@ use pending::{
 use std::{
     ffi::OsString,
     fmt::Write as _,
-    path::Path,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -173,11 +174,13 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         amount_e8s,
         options.dry_run,
     );
-    let command = icp.canister_call_arg_output_display(
+    let source_candid_path = canister_target_candid_path(&root, &options.target.network, &source);
+    let command = icp.canister_call_arg_output_display_with_candid(
         &source.canister_id,
         ICP_REFILL_METHOD,
         &request_arg,
         json_output_arg(options.json),
+        source_candid_path.as_deref(),
     );
 
     if options.dry_run {
@@ -195,11 +198,12 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
     write_generated_operation_id_notice(options.json, operation_id, operation_id_source);
 
     let output = icp
-        .canister_call_arg_output(
+        .canister_call_arg_output_with_candid(
             &source.canister_id,
             ICP_REFILL_METHOD,
             &request_arg,
             json_output_arg(options.json),
+            source_candid_path.as_deref(),
         )
         .map_err(cycles_icp_error)?;
     mark_pending_operation_completed(&root, pending_operation_key.as_deref(), operation_id);
@@ -247,6 +251,14 @@ fn pending_operation_input<'a>(
         amount_e8s,
         created_at_unix_nanos: now_nanos,
     }
+}
+
+fn canister_target_candid_path(
+    root: &Path,
+    network: &str,
+    target: &ResolvedCanisterTarget,
+) -> Option<PathBuf> {
+    role_candid_path(Some(root), network, target.role.as_deref()?)
 }
 
 fn mark_pending_operation_completed(

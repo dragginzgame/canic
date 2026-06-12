@@ -4,6 +4,7 @@ use crate::metrics::{
     options::MetricsOptions,
     parse::parse_metrics_page,
 };
+use crate::support::candid::registry_entry_candid_path;
 use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
@@ -80,7 +81,7 @@ fn metrics_canister_report(
     options: &MetricsOptions,
     entry: &RegistryEntry,
 ) -> MetricsCanisterReport {
-    match query_metrics(options, &entry.pid) {
+    match query_metrics(options, entry) {
         Ok(mut entries) => {
             if options.nonzero {
                 entries.retain(|entry| !metric_value_is_zero(&entry.value));
@@ -152,18 +153,29 @@ const fn metrics_kind_candid_variant(kind: MetricsKind) -> &'static str {
     }
 }
 
-fn query_metrics(options: &MetricsOptions, canister_id: &str) -> Result<Vec<MetricEntry>, String> {
+fn query_metrics(
+    options: &MetricsOptions,
+    entry: &RegistryEntry,
+) -> Result<Vec<MetricEntry>, String> {
     let arg = format!(
         "(variant {{ {} }}, record {{ offset = 0 : nat64; limit = {} : nat64 }})",
         metrics_kind_candid_variant(options.kind),
         options.limit
     );
     let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
-    if let Some(root) = resolve_metrics_icp_root() {
+    let root = resolve_metrics_icp_root();
+    let candid_path = registry_entry_candid_path(root.as_deref(), &options.network, entry);
+    if let Some(root) = root {
         icp = icp.with_cwd(root);
     }
     let output = icp
-        .canister_query_arg_output(canister_id, CANIC_METRICS_METHOD, &arg, Some("json"))
+        .canister_query_arg_output_with_candid(
+            &entry.pid,
+            CANIC_METRICS_METHOD,
+            &arg,
+            Some("json"),
+            candid_path.as_deref(),
+        )
         .map_err(|err| err.to_string())?;
 
     parse_metrics_page(&output).ok_or_else(|| "could not parse canic_metrics response".to_string())

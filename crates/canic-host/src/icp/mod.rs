@@ -426,9 +426,21 @@ impl IcpCli {
         method: &str,
         output: Option<&str>,
     ) -> Result<String, IcpCommandError> {
+        self.canister_call_output_with_candid(canister, method, output, None)
+    }
+
+    /// Call one canister method with optional local Candid and JSON output.
+    pub fn canister_call_output_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> Result<String, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg("()");
+        add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
@@ -444,9 +456,22 @@ impl IcpCli {
         arg: &str,
         output: Option<&str>,
     ) -> Result<String, IcpCommandError> {
+        self.canister_call_arg_output_with_candid(canister, method, arg, output, None)
+    }
+
+    /// Call one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
+    pub fn canister_call_arg_output_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> Result<String, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg(arg);
+        add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
@@ -461,10 +486,22 @@ impl IcpCli {
         method: &str,
         output: Option<&str>,
     ) -> Result<String, IcpCommandError> {
+        self.canister_query_output_with_candid(canister, method, output, None)
+    }
+
+    /// Query one canister method with no arguments, optional local Candid, and optional JSON output.
+    pub fn canister_query_output_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> Result<String, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg("()");
         command.arg("--query");
+        add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
@@ -480,10 +517,23 @@ impl IcpCli {
         arg: &str,
         output: Option<&str>,
     ) -> Result<String, IcpCommandError> {
+        self.canister_query_arg_output_with_candid(canister, method, arg, output, None)
+    }
+
+    /// Query one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
+    pub fn canister_query_arg_output_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> Result<String, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg(arg);
         command.arg("--query");
+        add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
@@ -705,10 +755,23 @@ impl IcpCli {
         method: &str,
         output: Option<&str>,
     ) -> String {
+        self.canister_query_output_display_with_candid(canister, method, output, None)
+    }
+
+    /// Render a dry-run no-argument query call with optional local Candid.
+    #[must_use]
+    pub fn canister_query_output_display_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> String {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg("()");
         command.arg("--query");
+        add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
@@ -725,9 +788,23 @@ impl IcpCli {
         arg: &str,
         output: Option<&str>,
     ) -> String {
+        self.canister_call_arg_output_display_with_candid(canister, method, arg, output, None)
+    }
+
+    /// Render a dry-run update call with an explicit Candid argument and optional local Candid.
+    #[must_use]
+    pub fn canister_call_arg_output_display_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> String {
         let mut command = self.canister_command();
         command.args(["call", canister, method]);
         command.arg(arg);
+        add_candid_arg(&mut command, candid_path);
         if let Some(output) = output {
             add_output_arg(&mut command, output);
         }
@@ -788,6 +865,35 @@ pub fn add_output_arg(command: &mut Command, output: &str) {
     } else {
         command.args(["--output", output]);
     }
+}
+
+/// Add an ICP CLI local Candid interface path when one is available.
+pub fn add_candid_arg(command: &mut Command, candid_path: Option<&Path>) {
+    if let Some(candid_path) = candid_path {
+        command.arg("--candid").arg(candid_path);
+    }
+}
+
+/// Return Canic's local ICP CLI Candid sidecar path for one role.
+#[must_use]
+pub fn local_canister_candid_path(icp_root: &Path, environment: &str, role: &str) -> PathBuf {
+    icp_root
+        .join(".icp")
+        .join(environment)
+        .join("canisters")
+        .join(role)
+        .join(format!("{role}.did"))
+}
+
+/// Return the local Candid sidecar path only when it exists on disk.
+#[must_use]
+pub fn existing_local_canister_candid_path(
+    icp_root: &Path,
+    environment: &str,
+    role: &str,
+) -> Option<PathBuf> {
+    let path = local_canister_candid_path(icp_root, environment, role);
+    path.is_file().then_some(path)
 }
 
 /// Add ICP CLI debug logging when requested.

@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.22` uses ICP CLI 0.3.2 local Candid support for Canic CLI and host
+  canister calls when a generated `.icp/<network>/canisters/<role>/<role>.did`
+  sidecar is available, covering registry, list, medic, metrics, cycles,
+  backup, snapshot, and ICP-refill call paths, centralizing CLI sidecar
+  resolution and preserving the existing no-sidecar fallback.
+
 - `0.65.21` deletes the isolated threshold-ECDSA signing adapter, feature flag,
   replay external-effect variant, and ECDSA platform metric surface from active
   code, removes dead ECDSA config knobs and absence-only legacy tests, and

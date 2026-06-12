@@ -1,5 +1,5 @@
 use crate::{
-    icp::{IcpCli, IcpCommandError},
+    icp::{IcpCli, IcpCommandError, existing_local_canister_candid_path},
     install_root::{
         InstallState, read_named_deployment_install_state,
         read_named_deployment_install_state_from_root,
@@ -220,7 +220,12 @@ fn query_registry_from_root(
 
     IcpCli::new(&request.icp, None, Some(request.network.clone()))
         .with_cwd(icp_root)
-        .canister_query_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output_with_candid(
+            root,
+            "canic_subnet_registry",
+            Some("json"),
+            existing_local_canister_candid_path(icp_root, &request.network, "root").as_deref(),
+        )
         .map(|registry| (InstalledDeploymentSource::IcpCli, registry))
         .map_err(installed_deployment_icp_error)
 }

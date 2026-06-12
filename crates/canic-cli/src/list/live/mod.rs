@@ -2,6 +2,8 @@ use super::{
     ListCommandError, options::ListOptions, parse::parse_canic_metadata_version_response,
     render::ReadyStatus, state_network,
 };
+use crate::cli::defaults::local_network;
+use crate::support::candid::registry_entry_candid_path;
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
     format::{cycles_tc, wasm_size_label},
@@ -52,7 +54,7 @@ pub(super) fn list_ready_statuses(
     for entry in visible_entries(registry, canister)? {
         statuses.insert(
             entry.pid.clone(),
-            check_ready_status(options, icp_root.as_deref(), &entry.pid)?,
+            check_ready_status(options, icp_root.as_deref(), entry)?,
         );
     }
     Ok(statuses)
@@ -66,8 +68,8 @@ pub(super) fn list_cycle_balances(
     let icp = options.icp.clone();
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
-    collect_visible_optional_values(registry, canister, move |pid| {
-        query_cycle_balance_endpoint(&icp, network.clone(), icp_root.as_deref(), &pid)
+    collect_visible_entry_optional_values(registry, canister, move |entry| {
+        query_cycle_balance_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
             .map(cycles_tc)
     })
 }
@@ -80,8 +82,8 @@ pub(super) fn list_canic_versions(
     let icp = options.icp.clone();
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
-    collect_visible_optional_values(registry, canister, move |pid| {
-        query_canic_metadata_version(&icp, network.clone(), icp_root.as_deref(), &pid)
+    collect_visible_entry_optional_values(registry, canister, move |entry| {
+        query_canic_metadata_version(&icp, network.clone(), icp_root.as_deref(), &entry)
     })
 }
 
@@ -137,10 +139,16 @@ pub(super) fn resolve_wasm_sizes(
 fn check_ready_status(
     options: &ListOptions,
     icp_root: Option<&Path>,
-    canister: &str,
+    entry: &RegistryEntry,
 ) -> Result<ReadyStatus, ListCommandError> {
     let icp = live_icp(&options.icp, options.network.clone(), icp_root);
-    let Ok(output) = icp.canister_query_output(canister, "canic_ready", Some("json")) else {
+    let candid_path = registry_entry_candid_path(icp_root, &state_network(options), entry);
+    let Ok(output) = icp.canister_query_output_with_candid(
+        &entry.pid,
+        "canic_ready",
+        Some("json"),
+        candid_path.as_deref(),
+    ) else {
         return Ok(ReadyStatus::Error);
     };
     let data = serde_json::from_str::<serde_json::Value>(&output)?;
@@ -170,18 +178,29 @@ fn local_ready_statuses(
     })
 }
 
-fn collect_visible_optional_values<T, F>(
+fn collect_visible_entry_optional_values<T, F>(
     registry: &[RegistryEntry],
     canister: Option<&str>,
     query: F,
 ) -> Result<BTreeMap<String, T>, ListCommandError>
 where
     T: Send + 'static,
-    F: Fn(String) -> Option<T> + Send + Sync + 'static,
+    F: Fn(RegistryEntry) -> Option<T> + Send + Sync + 'static,
 {
-    let values = collect_visible_values(registry, canister, query)?;
+    let query = Arc::new(query);
+    let mut handles = Vec::new();
+    for entry in visible_entries(registry, canister)? {
+        let entry = entry.clone();
+        let pid = entry.pid.clone();
+        let query = Arc::clone(&query);
+        handles.push(thread::spawn(move || {
+            let value = query(entry);
+            (pid, value)
+        }));
+    }
+
+    let values = handles.into_iter().filter_map(|handle| handle.join().ok());
     Ok(values
-        .into_iter()
         .filter_map(|(pid, value)| value.map(|value| (pid, value)))
         .collect())
 }
@@ -216,13 +235,16 @@ fn query_cycle_balance_endpoint(
     icp: &str,
     network: Option<String>,
     icp_root: Option<&Path>,
-    canister: &str,
+    entry: &RegistryEntry,
 ) -> Option<u128> {
-    let icp = live_icp(icp, network, icp_root);
-    icp.canister_query_output(
-        canister,
+    let network = network.unwrap_or_else(local_network);
+    let candid_path = registry_entry_candid_path(icp_root, &network, entry);
+    let icp = live_icp(icp, Some(network), icp_root);
+    icp.canister_query_output_with_candid(
+        &entry.pid,
         canic_core::protocol::CANIC_CYCLE_BALANCE,
         Some("json"),
+        candid_path.as_deref(),
     )
     .ok()
     .and_then(|output| parse_cycle_balance_response(&output))
@@ -232,12 +254,19 @@ fn query_canic_metadata_version(
     icp: &str,
     network: Option<String>,
     icp_root: Option<&Path>,
-    canister: &str,
+    entry: &RegistryEntry,
 ) -> Option<String> {
-    let icp = live_icp(icp, network, icp_root);
-    icp.canister_query_output(canister, canic_core::protocol::CANIC_METADATA, Some("json"))
-        .ok()
-        .and_then(|output| parse_canic_metadata_version_response(&output))
+    let network = network.unwrap_or_else(local_network);
+    let candid_path = registry_entry_candid_path(icp_root, &network, entry);
+    let icp = live_icp(icp, Some(network), icp_root);
+    icp.canister_query_output_with_candid(
+        &entry.pid,
+        canic_core::protocol::CANIC_METADATA,
+        Some("json"),
+        candid_path.as_deref(),
+    )
+    .ok()
+    .and_then(|output| parse_canic_metadata_version_response(&output))
 }
 
 fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {

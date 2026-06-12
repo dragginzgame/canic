@@ -3,6 +3,7 @@ use crate::{
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
     cli::help::print_help_or_version,
+    support::candid::role_candid_path,
     version_text,
 };
 use canic_host::{
@@ -239,8 +240,14 @@ fn query_ready_with_icp(
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
+    let candid_path = role_candid_path(icp_root, &options.network, "root");
     let output = icp
-        .canister_query_output(canister, "canic_ready", Some("json"))
+        .canister_query_output_with_candid(
+            canister,
+            "canic_ready",
+            Some("json"),
+            candid_path.as_deref(),
+        )
         .map_err(|err| err.to_string())?;
     let data = serde_json::from_str::<serde_json::Value>(&output).map_err(|err| err.to_string())?;
     Ok(replica_query::parse_ready_json_value(&data))

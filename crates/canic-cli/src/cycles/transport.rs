@@ -11,7 +11,10 @@ use crate::{
             parse_topup_event_page_text,
         },
     },
-    support::registry_tree::{RegistryRow, visible_rows},
+    support::{
+        candid::registry_entry_candid_path,
+        registry_tree::{RegistryRow, visible_rows},
+    },
 };
 use canic_host::{
     icp::IcpCli,
@@ -24,7 +27,7 @@ use canic_host::{
     response_parse::parse_cycle_balance_response,
 };
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     thread,
     time::{SystemTime, UNIX_EPOCH},
@@ -32,6 +35,16 @@ use std::{
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
 const ICP_JSON_OUTPUT: &str = "json";
+
+///
+/// CycleQueryTarget
+///
+
+struct CycleQueryTarget {
+    icp: IcpCli,
+    canister_id: String,
+    candid_path: Option<PathBuf>,
+}
 
 pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
     let registry = load_registry(options)?;
@@ -90,8 +103,9 @@ fn cycle_tracker_report(
     requested_since_secs: u64,
     generated_at_secs: u64,
 ) -> CyclesCanisterReport {
-    let live_cycles = query_live_cycle_balance(options, &entry.pid);
-    let result = query_cycle_tracker(options, &entry.pid);
+    let target = cycle_query_target(options, entry);
+    let live_cycles = query_live_cycle_balance(&target);
+    let result = query_cycle_tracker(&target, options.limit);
     match result {
         Ok(page) => summarize_cycle_tracker(
             entry,
@@ -100,7 +114,7 @@ fn cycle_tracker_report(
             requested_since_secs,
             generated_at_secs,
             live_cycles,
-            query_topup_events(options, &entry.pid).ok(),
+            query_topup_events(&target).ok(),
         ),
         Err(error) => CyclesCanisterReport {
             role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
@@ -218,25 +232,24 @@ pub(super) fn summarize_cycle_tracker(
     }
 }
 
-fn query_live_cycle_balance(options: &CyclesOptions, canister_id: &str) -> Option<u128> {
-    let icp = cycles_icp(options);
-    icp.canister_query_output(
-        canister_id,
-        canic_core::protocol::CANIC_CYCLE_BALANCE,
-        Some(ICP_JSON_OUTPUT),
-    )
-    .ok()
-    .and_then(|output| parse_cycle_balance_response(&output))
+fn query_live_cycle_balance(target: &CycleQueryTarget) -> Option<u128> {
+    target
+        .icp
+        .canister_query_output_with_candid(
+            &target.canister_id,
+            canic_core::protocol::CANIC_CYCLE_BALANCE,
+            Some(ICP_JSON_OUTPUT),
+            target.candid_path.as_deref(),
+        )
+        .ok()
+        .and_then(|output| parse_cycle_balance_response(&output))
 }
 
-fn query_topup_events(
-    options: &CyclesOptions,
-    canister_id: &str,
-) -> Result<Vec<CycleTopupEventSample>, String> {
-    let mut page = query_topup_event_page(options, canister_id, 0, TOPUP_EVENTS_LIMIT)?;
+fn query_topup_events(target: &CycleQueryTarget) -> Result<Vec<CycleTopupEventSample>, String> {
+    let mut page = query_topup_event_page(target, 0, TOPUP_EVENTS_LIMIT)?;
     if page.total > TOPUP_EVENTS_LIMIT {
         let offset = page.total.saturating_sub(TOPUP_EVENTS_LIMIT);
-        page = query_topup_event_page(options, canister_id, offset, TOPUP_EVENTS_LIMIT)?;
+        page = query_topup_event_page(target, offset, TOPUP_EVENTS_LIMIT)?;
     }
     Ok(page.entries)
 }
@@ -274,19 +287,19 @@ const fn topup_summary_is_empty(summary: &CyclesTopupSummary) -> bool {
 }
 
 fn query_topup_event_page(
-    options: &CyclesOptions,
-    canister_id: &str,
+    target: &CycleQueryTarget,
     offset: u64,
     limit: u64,
 ) -> Result<crate::cycles::model::CycleTopupEventPage, String> {
     let arg = page_request_arg(offset, limit);
-    let icp = cycles_icp(options);
-    let output = icp
-        .canister_query_arg_output(
-            canister_id,
+    let output = target
+        .icp
+        .canister_query_arg_output_with_candid(
+            &target.canister_id,
             canic_core::protocol::CANIC_CYCLE_TOPUPS,
             &arg,
             Some(ICP_JSON_OUTPUT),
+            target.candid_path.as_deref(),
         )
         .map_err(|err| err.to_string())?;
 
@@ -295,32 +308,29 @@ fn query_topup_event_page(
         .ok_or_else(|| "could not parse canic_cycle_topups response".to_string())
 }
 
-fn query_cycle_tracker(
-    options: &CyclesOptions,
-    canister_id: &str,
-) -> Result<CycleTrackerPage, String> {
-    let mut page = query_cycle_tracker_page(options, canister_id, 0, options.limit)?;
-    if page.total > options.limit {
-        let offset = page.total.saturating_sub(options.limit);
-        page = query_cycle_tracker_page(options, canister_id, offset, options.limit)?;
+fn query_cycle_tracker(target: &CycleQueryTarget, limit: u64) -> Result<CycleTrackerPage, String> {
+    let mut page = query_cycle_tracker_page(target, 0, limit)?;
+    if page.total > limit {
+        let offset = page.total.saturating_sub(limit);
+        page = query_cycle_tracker_page(target, offset, limit)?;
     }
     Ok(page)
 }
 
 fn query_cycle_tracker_page(
-    options: &CyclesOptions,
-    canister_id: &str,
+    target: &CycleQueryTarget,
     offset: u64,
     limit: u64,
 ) -> Result<CycleTrackerPage, String> {
     let arg = page_request_arg(offset, limit);
-    let icp = cycles_icp(options);
-    let output = icp
-        .canister_query_arg_output(
-            canister_id,
+    let output = target
+        .icp
+        .canister_query_arg_output_with_candid(
+            &target.canister_id,
             canic_core::protocol::CANIC_CYCLE_TRACKER,
             &arg,
             Some(ICP_JSON_OUTPUT),
+            target.candid_path.as_deref(),
         )
         .map_err(|err| err.to_string())?;
 
@@ -329,9 +339,18 @@ fn query_cycle_tracker_page(
         .ok_or_else(|| "could not parse canic_cycle_tracker response".to_string())
 }
 
-fn cycles_icp(options: &CyclesOptions) -> IcpCli {
+fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQueryTarget {
+    let root = resolve_cycles_icp_root();
+    CycleQueryTarget {
+        icp: cycles_icp(options, root.as_deref()),
+        canister_id: entry.pid.clone(),
+        candid_path: registry_entry_candid_path(root.as_deref(), &options.network, entry),
+    }
+}
+
+fn cycles_icp(options: &CyclesOptions, root: Option<&Path>) -> IcpCli {
     let icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
-    if let Some(root) = resolve_cycles_icp_root() {
+    if let Some(root) = root {
         return icp.with_cwd(root);
     }
     icp

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-11
+Last updated: 2026-06-12
 
 ## Purpose
 
@@ -488,6 +488,28 @@ inspect only the files needed for the current task.
   bash scripts/ci/check-recovery-runbooks.sh
   bash scripts/ci/check-diagnostic-consistency-audit.sh
   cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.22` CLI integration candidate adds optional local Candid sidecar
+  support to shared ICP CLI canister call/query helpers. Host and CLI paths now
+  pass `--candid .icp/<network>/canisters/<role>/<role>.did` when Canic can
+  resolve an existing generated sidecar from the project root and registry role,
+  covering root registry reads, `info list` live probes, `info medic` root
+  readiness, metrics queries, cycles reports, backup/snapshot registry
+  preflights, and canister-mode `cycles convert` refill calls. Calls without a
+  sidecar keep the previous ICP CLI behavior, and management-canister fabricate
+  calls remain unchanged. Follow-up CLI audit centralizes role/registry-entry
+  sidecar lookup in `support::candid` and resolves cycles report ICP
+  root/Candid context once per canister worker instead of repeating it for every
+  endpoint probe. Current validation:
+  ```text
+  cargo test --locked -p canic-host icp --lib -- --nocapture
+  cargo check --locked -p canic-host
+  cargo check --locked -p canic-cli
+  cargo test --locked -p canic-cli --lib -- --nocapture
+  cargo clippy --locked -p canic-host -p canic-cli --lib --tests -- -D warnings
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check

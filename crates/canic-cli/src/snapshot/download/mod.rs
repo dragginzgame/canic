@@ -7,6 +7,7 @@ use crate::{
     },
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
+    support::candid::role_candid_path,
 };
 use canic_backup::{
     registry::RegistryEntry as BackupRegistryEntry,
@@ -435,7 +436,17 @@ fn call_subnet_registry(
     }
 
     icp(request)
-        .canister_query_output(root, "canic_subnet_registry", Some("json"))
+        .canister_query_output_with_candid(
+            root,
+            "canic_subnet_registry",
+            Some("json"),
+            role_candid_path(
+                Some(&request.icp_root),
+                &state_network(request.network.as_deref()),
+                "root",
+            )
+            .as_deref(),
+        )
         .map_err(snapshot_icp_error)
 }
 
