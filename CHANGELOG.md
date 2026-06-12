@@ -12,9 +12,23 @@ present.
 
 ## Unreleased
 
+## [0.66.x] - 2026-06-12 - 0.65 audit, testing, and fixing
+
+Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
+
+- `0.66.0` opens the post-0.65 stabilization line: existing endpoint
+  perf-observability planning moves to 0.67, while 0.66 is reserved for audit,
+  testing, and fixes that prove the zero-management-ECDSA 0.65 auth epoch
+  without adding new auth protocol features.
+
 ## [0.65.x] - 2026-06-10 - Canister-signature delegated auth
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
+
+- `0.65.31` refreshes the compact handoff and 0.65 design status so new
+  sessions start from the current zero-ECDSA auth state, and restores the
+  compatible `time 0.3.41` lockfile line after broader test and host
+  compilation exposed the drift back to `0.3.48`.
 
 - `0.65.30` catches up release notes for `.28` and `.29`, normalizes current
   release wording away from deleted source-shape guard language, and records a

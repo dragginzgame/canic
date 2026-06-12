@@ -220,7 +220,7 @@ fn local_query(
     canister: &str,
     method: &str,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
-    local_query_with_endpoint(network, canister, method, local_replica_endpoint(network))
+    local_query_with_endpoint(canister, method, local_replica_endpoint(network))
 }
 
 fn local_query_from_root(
@@ -230,7 +230,6 @@ fn local_query_from_root(
     icp_root: &Path,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
     local_query_with_endpoint(
-        network,
         canister,
         method,
         local_replica_endpoint_from_root(network, icp_root),
@@ -238,7 +237,6 @@ fn local_query_from_root(
 }
 
 fn local_query_with_endpoint(
-    _network: Option<&str>,
     canister: &str,
     method: &str,
     endpoint: String,

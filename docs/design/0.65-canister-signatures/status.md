@@ -203,5 +203,4 @@ Remaining closeout:
 
 - final release-validation pass across focused auth tests, formatting, clippy,
   and any maintainer-selected broad workspace/PocketIC suites
-- release-note preparation when the maintainer decides the line is ready to
-  publish
+- maintainer-owned release preparation when the line is ready to publish

@@ -9,37 +9,40 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.65.0` hard-cut implementation has been published, and the release
-  changelog has been finalized in `CHANGELOG.md` plus
-  `docs/changelog/0.65.md`.
-  Delegated-token root proofs now use `RootProof::IcCanisterSignatureV1`,
-  issued through `canic_prepare_delegation_proof` update plus
-  `canic_get_delegation_proof` query. Delegated-token verification uses
-  configured root canister id plus raw IC root key instead of
-  `SubnetState.auth.delegated_root_public_key`; auth/replay protocol DTO times
-  use `_ns`; one-shot fresh-proof `mint_token` is removed from the normal auth
-  surface; fresh one-shot root ECDSA role-attestation and internal-invocation
-  proof issuance hard-fails before signing-cycle reservation; public auth
-  features are split into canister-signature, shard secp256k1 verification, and
-  threshold ECDSA signing capabilities. Root auth certified data has a single
-  owner around the exact `"sig"` tree shape, root-proof preparation and shard
-  token signing have separate metrics/cost classes, canister-signature
-  verification and delegated-token size/decode benchmarks compile, and mainnet
-  deployment truth blocks root auth signing canisters on `cloud_engine` subnets.
-  Active architecture/contract/install docs describe the hard-cut
-  canister-signature trust model; the old SubnetState root-key addendum is
-  marked superseded. `docs/design/0.65-canister-signatures/0.65-design.md` has
-  no unchecked rollout items. Late validation fixes now keep delegated-token
-  verification on exact nanosecond IC time, keep test shard token TTLs inside
-  the root cert expiry, refresh the root test artifact stamp after local ICP
-  prebuilds, and align the wasm-store direct-call test with the current
-  root-only direct update contract. Current validation:
+- `0.65.30` is committed and the 0.65 line is now a zero-management-ECDSA
+  normal-auth hard cut. Delegated-token root proofs, delegated-token issuer
+  proofs, and `SignedRoleAttestation` proofs use IC canister signatures with
+  update/query prepare-get flows. Delegated tokens are self-contained,
+  issuer-signed, reusable until TTL/audience/grant/subject checks fail, and
+  may carry opaque signed `ext: Option<Vec<u8>>` claims bytes. Issuers use
+  controller-installed `ActiveDelegationProof` state for token preparation;
+  protected endpoint verification is local and synchronous with no root,
+  issuer, or management-canister call on the hot path. Normal auth no longer
+  exposes the shard ECDSA token leg, threshold-ECDSA auth features, one-shot
+  `mint_token`, standalone delegated-grant capability proofs, protected
+  internal-invocation proofs, or `SubnetState` delegated root-key trust. The
+  checked-in wasm-store Candid sidecar, active auth docs, 0.65 design status,
+  and root/detailed changelogs are aligned through `.31`. Remaining closeout is
+  broad release validation and maintainer-owned release preparation.
+  Planning note: the former 0.66 endpoint perf-observability design is now
+  `docs/design/0.67-perf-observability/0.67-design.md`. The 0.66 line is
+  reserved for auditing, testing, and fixing the 0.65 auth epoch, with no new
+  auth protocol features. The `0.66.0` changelog is prepared in
+  `CHANGELOG.md` and `docs/changelog/0.66.md` for dev handoff/testing.
+  Current focused validation:
   ```text
-  cargo test --locked -p canic-core access::auth::token --lib -- --nocapture
-  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test root_suite -- --test-threads=1 --nocapture
-  TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local cargo test --locked -p canic-tests --test root_wasm_store_reconcile -- --test-threads=1 --nocapture
-  make test
-  make fmt-check
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core -p canic
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo tree -i time --locked
+  cargo check --locked -p canic-tests
+  cargo clean -p ic-agent
+  cargo check --locked -p canic-host
+  cargo test --locked -p canic-core ops::auth --lib -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  rg -n 'shard_sig|sign_with_ecdsa|EcdsaOps::sign_bytes|auth-threshold-ecdsa-sign|auth-threshold-ecdsa-public-key|auth-shard-secp256k1-verify|ThresholdEcdsaSign|IcThresholdEcdsaSecp256k1|EcdsaP256Sha256|shard_public_key_sec1|key_name_hash|derivation_path_hash|RootPublicKeyRecord|RootTrustAnchor|DelegationProof.*root_sig|sign_prepared_delegation_proof|DelegatedTokenMintRequest|mint_token|request_internal_invocation_proof|InternalInvocationProof|SignedDelegatedGrant|DelegatedGrantProof' crates canisters fleets scripts Cargo.toml Makefile -g '*.rs' -g '*.toml' -g '*.did' -g '*.sh' -g 'Cargo.toml' -g 'Makefile'
+  rg -n 'delegated_root_public_key|SubnetRootPublicKeyInput|RootPublicKeyRecord' crates canisters fleets scripts Cargo.toml Makefile -g '*.rs' -g '*.toml' -g '*.did' -g '*.sh' -g 'Cargo.toml' -g 'Makefile'
   git diff --check
   ```
 - `0.65.1` is pushed as the threshold-ECDSA public-key feature split. The
@@ -636,12 +639,13 @@ inspect only the files needed for the current task.
   shape. The slice also restores the `Cargo.lock` `time` dependency line to
   `0.3.41`, because the newer `0.3.48` line fails to compile with
   `ic-agent 0.47.3`.
-- Local `0.65.30` changelog catch-up after committed `0.65.29` adds root and
-  detailed 0.65 changelog entries for `.28` and `.29`, then normalizes current
-  release-note wording away from the old source-shape guard phrase. Follow-up
-  focused validation passed for core/facade compilation, auth unit tests,
-  protocol-surface tests, formatting, changelog governance, and active-source
-  scans for removed ECDSA/shard-token/delegated-root-key/proof surfaces.
+- `0.65.30` is committed as the changelog catch-up after `0.65.29`. It adds
+  root and detailed 0.65 changelog entries for `.28` and `.29`, then
+  normalizes current release-note wording away from the old source-shape guard
+  phrase. Follow-up focused validation passed for core/facade compilation, auth
+  unit tests, protocol-surface tests, formatting, changelog governance, and
+  active-source scans for removed ECDSA/shard-token/delegated-root-key/proof
+  surfaces.
   Current validation:
   ```text
   cargo fmt --all -- --check
@@ -653,6 +657,18 @@ inspect only the files needed for the current task.
   rg -n 'delegated_root_public_key|SubnetRootPublicKeyInput|RootPublicKeyRecord' crates canisters fleets scripts Cargo.toml Makefile -g '*.rs' -g '*.toml' -g '*.did' -g '*.sh' -g 'Cargo.toml' -g 'Makefile'
   git diff --check
   ```
+- Local `0.65.31` handoff/status refresh after committed `0.65.30` updates the
+  top `docs/status/current.md` current-line summary from the early
+  root-proof-only hard-cut state to the actual zero-management-ECDSA
+  normal-auth state: canister-signature root proofs, issuer proofs, and role
+  attestations; self-contained reusable delegated tokens with signed opaque
+  `ext`; issuer `ActiveDelegationProof`; local protected verification; removed
+  shard/threshold-ECDSA/one-shot/internal-proof/delegated-root-key surfaces; and
+  release validation as the remaining closeout. It also narrows the 0.65 design
+  status remaining work to final validation plus maintainer-owned release
+  preparation, restores the `Cargo.lock` `time` dependency line to `0.3.41`
+  after broader test compilation exposed drift back to `0.3.48`, and validates
+  `cargo check --locked -p canic-tests`.
 - `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
   issuer canister-signature authority instead of shard ECDSA key material.

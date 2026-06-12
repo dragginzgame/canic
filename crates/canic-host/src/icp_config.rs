@@ -108,7 +108,7 @@ impl IcpProjectConfigReport {
 }
 
 /// Return the configured local ICP gateway port, falling back to ICP's default.
-pub fn configured_local_gateway_port() -> Result<u16, IcpConfigError> {
+pub(crate) fn configured_local_gateway_port() -> Result<u16, IcpConfigError> {
     let root = current_icp_root()?;
     configured_local_gateway_port_from_root(&root)
 }
