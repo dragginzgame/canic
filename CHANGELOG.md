@@ -23,7 +23,8 @@ Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
   failures as root-proof failures instead of root-signature failures. It also
   renames the active canister auth config key from `delegated_token_signer` to
   `delegated_token_issuer` and removes ECDSA key settings from the current auth
-  config documentation.
+  config documentation, while locking `time` to `0.3.41` so the IC/PocketIC
+  build path does not pick up the incompatible `0.3.48` transitive update.
 
 - `0.65.22` uses ICP CLI 0.3.2 local Candid support for Canic CLI and host
   canister calls when a generated `.icp/<network>/canisters/<role>/<role>.did`

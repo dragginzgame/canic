@@ -523,6 +523,9 @@ inspect only the files needed for the current task.
   checked-in configs, bootstrap rendering, and release-set details.
   Active config documentation no longer lists delegated-token or
   role-attestation ECDSA key settings in the current 0.65 auth config surface.
+  `Cargo.lock` now pins the transitive `time` crate line to `0.3.41` so the
+  IC/PocketIC build path does not pick up the incompatible `0.3.48` update
+  through `tracing-subscriber 0.3.23`.
   It also renames local root proof preparation variables away from generic root
   signature wording in delegation-proof and role-attestation preparation, and
   renames delegated-token root verification failure reporting from
@@ -538,6 +541,7 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-core -p canic
   cargo check --locked -p canic-host
   cargo check --locked -p canic-tests
+  cargo tree -i time --locked
   cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
