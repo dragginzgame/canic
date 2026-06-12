@@ -26,12 +26,12 @@ pub fn delegated_token_cache_key(
 ) -> Result<[u8; 32], CanonicalAuthError> {
     let proof_hash = proof_hash(&token.proof)?;
     let claims_hash = claims_hash(&token.claims)?;
-    let signature_hash = issuer_proof_hash(&token.issuer_proof);
+    let issuer_proof_digest = issuer_proof_hash(&token.issuer_proof);
 
     Ok(delegated_token_cache_key_from_hashes(
         proof_hash,
         claims_hash,
-        signature_hash,
+        issuer_proof_digest,
         caller,
     ))
 }
@@ -39,20 +39,20 @@ pub fn delegated_token_cache_key(
 fn delegated_token_cache_key_from_hashes(
     proof_hash: [u8; 32],
     claims_hash: [u8; 32],
-    signature_hash: [u8; 32],
+    issuer_proof_digest: [u8; 32],
     caller: Principal,
 ) -> [u8; 32] {
     let mut bytes = Vec::with_capacity(
         DELEGATED_TOKEN_CACHE_KEY_DOMAIN.len()
             + proof_hash.len()
             + claims_hash.len()
-            + signature_hash.len()
+            + issuer_proof_digest.len()
             + caller.as_slice().len(),
     );
     bytes.extend_from_slice(DELEGATED_TOKEN_CACHE_KEY_DOMAIN);
     bytes.extend_from_slice(&proof_hash);
     bytes.extend_from_slice(&claims_hash);
-    bytes.extend_from_slice(&signature_hash);
+    bytes.extend_from_slice(&issuer_proof_digest);
     bytes.extend_from_slice(caller.as_slice());
     hash_bytes(&bytes)
 }

@@ -146,8 +146,8 @@ pub struct DelegatedAuthMetricKey {
 
 ///
 /// DelegatedAuthMetrics
-/// Records verified delegation authorities by signer principal.
-/// Cardinality is bounded by configured signer authorities, not request callers.
+/// Records verified delegation authorities by issuer/root authority principal.
+/// Cardinality is bounded by configured auth authorities, not request callers.
 ///
 
 pub struct DelegatedAuthMetrics;

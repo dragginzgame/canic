@@ -103,7 +103,7 @@ pub fn prepare_delegation_cert(
     Ok(PreparedDelegationCert { cert, cert_hash })
 }
 
-/// Combine a prepared certificate with its root signature.
+/// Combine a prepared certificate with its root proof.
 pub fn finish_delegation_proof(
     prepared: PreparedDelegationCert,
     root_proof: RootProof,

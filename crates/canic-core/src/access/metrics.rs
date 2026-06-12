@@ -65,7 +65,7 @@ impl AccessMetrics {
 ///
 /// Delegated authorization authority metrics.
 ///
-/// Records which delegated-auth authority (cert signer) was used to
+/// Records which delegated-auth authority principal was used to
 /// successfully validate a delegated token.
 ///
 /// WHY THIS LIVES HERE:

@@ -164,7 +164,7 @@ fn validate_root_sig_domain_len(kind: RootPayloadKind) -> Result<(), InternalErr
     u8::try_from(root_sig_domain(kind).len())
         .map(|_| ())
         .map_err(|_| {
-            AuthSignatureError::CertSignatureInvalid(
+            AuthSignatureError::ProofInvalid(
                 "root canister signature domain exceeds 255 bytes".to_string(),
             )
             .into()
@@ -237,7 +237,7 @@ fn prepare_root_canister_signature(
     _now_ns: u64,
 ) -> Result<PreparedRootCanisterSignature, InternalError> {
     crate::ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_root_proof_prepare_failed();
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
@@ -279,7 +279,7 @@ fn get_root_canister_signature_proof(
         signatures
             .borrow()
             .get_signature_as_cbor(&inputs, None)
-            .map_err(|err| AuthSignatureError::CertSignatureInvalid(err.to_string()))
+            .map_err(|err| AuthSignatureError::ProofInvalid(err.to_string()))
     })?;
     let public_key_der = CanisterSigPublicKey::new(root_pid, root_sig_seed(kind).to_vec()).to_der();
 
@@ -299,7 +299,7 @@ fn get_root_canister_signature_proof(
     _root_pid: Principal,
     _now_ns: u64,
 ) -> Result<RootProof, InternalError> {
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(feature = "auth-root-canister-sig-verify")]
@@ -312,15 +312,15 @@ fn verify_root_canister_signature_proof(
 ) -> Result<(), InternalError> {
     let RootProof::IcCanisterSignatureV1(proof) = proof;
     let (canister_id, seed) = parse_canister_sig_public_key_der(&proof.public_key_der)
-        .map_err(AuthSignatureError::CertSignatureInvalid)?;
+        .map_err(AuthSignatureError::ProofInvalid)?;
     if canister_id != expected_root_pid {
-        return Err(AuthSignatureError::CertSignatureInvalid(
+        return Err(AuthSignatureError::ProofInvalid(
             "root canister signature public key canister id mismatch".to_string(),
         )
         .into());
     }
     if seed != root_sig_seed(kind) {
-        return Err(AuthSignatureError::CertSignatureInvalid(
+        return Err(AuthSignatureError::ProofInvalid(
             "root canister signature seed mismatch".to_string(),
         )
         .into());
@@ -333,7 +333,7 @@ fn verify_root_canister_signature_proof(
         &proof.public_key_der,
         ic_root_public_key_raw,
     )
-    .map_err(AuthSignatureError::CertSignatureInvalid)?;
+    .map_err(AuthSignatureError::ProofInvalid)?;
 
     Ok(())
 }
@@ -346,19 +346,19 @@ fn verify_root_canister_signature_proof(
     _expected_root_pid: Principal,
     _ic_root_public_key_raw: &[u8],
 ) -> Result<(), InternalError> {
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(feature = "auth-root-canister-sig-verify")]
 fn ic_root_public_key_raw() -> Result<Vec<u8>, InternalError> {
     let root_key = cdk::api::root_key();
     extract_ic_root_public_key_raw(&root_key)
-        .map_err(|err| AuthSignatureError::CertSignatureInvalid(err).into())
+        .map_err(|err| AuthSignatureError::ProofInvalid(err).into())
 }
 
 #[cfg(not(feature = "auth-root-canister-sig-verify"))]
 fn ic_root_public_key_raw() -> Result<Vec<u8>, InternalError> {
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(any(feature = "auth-root-canister-sig-verify", test))]

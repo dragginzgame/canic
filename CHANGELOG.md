@@ -16,6 +16,12 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.26` cleans active auth proof terminology by removing unused
+  token-signature error variants, reporting root/issuer canister-signature
+  failures as proof failures, and renaming remaining issuer-proof cache/comment
+  wording away from stale signer/signature language, including the stale design
+  reservation for issuer signer generation rotation.
+
 - `0.65.25` removes the unsupported issuer signer generation hook from active
   delegation certificates, stable auth records, canonical cert bytes, issuer
   proof binding hashes, Candid, fixtures, and active auth documentation.

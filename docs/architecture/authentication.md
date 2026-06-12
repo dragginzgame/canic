@@ -513,7 +513,7 @@ Feature requirements:
 
 - root proof issuer: `control-plane`, `auth-root-canister-sig-create`
 - endpoint verifier: `auth-delegated-token-verify`
-- issuer token signer: `auth-issuer-canister-sig-create`
+- issuer token proof creator: `auth-issuer-canister-sig-create`
 - role attestation issuer: `control-plane`, `auth-root-canister-sig-create`
 - role attestation verifier: `auth-root-canister-sig-verify` with configured
   root canister id and raw IC root public key

@@ -213,9 +213,9 @@ The normal auth surface does not expose a one-shot fresh-proof `mint_token`
 path. Client/test helpers may choreograph the calls above, but they must not
 hide query certificate retrieval inside one update.
 
-## Issuer Token Signature
+## Issuer Token Proof
 
-Issuer token signatures use the same canister-signature update-then-query
+Issuer token proofs use the same canister-signature update-then-query
 mechanics as root proofs. The issuer signs the canonical claims hash, not a
 secp256k1 payload.
 

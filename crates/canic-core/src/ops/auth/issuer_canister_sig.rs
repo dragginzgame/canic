@@ -154,7 +154,7 @@ fn validate_issuer_sig_domain_len(kind: IssuerPayloadKind) -> Result<(), Interna
     u8::try_from(issuer_sig_domain(kind).len())
         .map(|_| ())
         .map_err(|_| {
-            AuthSignatureError::CertSignatureInvalid(
+            AuthSignatureError::ProofInvalid(
                 "issuer canister signature domain exceeds 255 bytes".to_string(),
             )
             .into()
@@ -227,7 +227,7 @@ fn prepare_issuer_canister_signature(
     _now_ns: u64,
 ) -> Result<PreparedIssuerCanisterSignature, InternalError> {
     crate::ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_issuer_proof_prepare_failed();
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(feature = "auth-issuer-canister-sig-create")]
@@ -270,7 +270,7 @@ fn get_issuer_canister_signature_proof(
         signatures
             .borrow()
             .get_signature_as_cbor(&inputs, None)
-            .map_err(|err| AuthSignatureError::CertSignatureInvalid(err.to_string()))
+            .map_err(|err| AuthSignatureError::ProofInvalid(err.to_string()))
     })?;
     let public_key_der =
         CanisterSigPublicKey::new(issuer_pid, issuer_sig_seed(kind).to_vec()).to_der();
@@ -291,7 +291,7 @@ fn get_issuer_canister_signature_proof(
     _issuer_pid: Principal,
     _now_ns: u64,
 ) -> Result<IssuerProof, InternalError> {
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(feature = "auth-issuer-canister-sig-verify")]
@@ -304,15 +304,15 @@ fn verify_issuer_canister_signature_proof(
 ) -> Result<(), InternalError> {
     let IssuerProof::IcCanisterSignatureV1(proof) = proof;
     let (canister_id, seed) = parse_canister_sig_public_key_der(&proof.public_key_der)
-        .map_err(AuthSignatureError::CertSignatureInvalid)?;
+        .map_err(AuthSignatureError::ProofInvalid)?;
     if canister_id != expected_issuer_pid {
-        return Err(AuthSignatureError::CertSignatureInvalid(
+        return Err(AuthSignatureError::ProofInvalid(
             "issuer canister signature public key canister id mismatch".to_string(),
         )
         .into());
     }
     if seed != issuer_sig_seed(kind) {
-        return Err(AuthSignatureError::CertSignatureInvalid(
+        return Err(AuthSignatureError::ProofInvalid(
             "issuer canister signature seed mismatch".to_string(),
         )
         .into());
@@ -325,7 +325,7 @@ fn verify_issuer_canister_signature_proof(
         &proof.public_key_der,
         ic_root_public_key_raw,
     )
-    .map_err(AuthSignatureError::CertSignatureInvalid)?;
+    .map_err(AuthSignatureError::ProofInvalid)?;
 
     Ok(())
 }
@@ -338,7 +338,7 @@ fn verify_issuer_canister_signature_proof(
     _expected_issuer_pid: Principal,
     _ic_root_public_key_raw: &[u8],
 ) -> Result<(), InternalError> {
-    Err(AuthSignatureError::CertSignatureUnavailable.into())
+    Err(AuthSignatureError::ProofUnavailable.into())
 }
 
 #[cfg(feature = "auth-issuer-canister-sig-verify")]

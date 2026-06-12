@@ -55,23 +55,14 @@ pub enum AuthValidationError {
 
 #[derive(Debug, ThisError)]
 pub enum AuthSignatureError {
-    #[error("delegation cert signature unavailable")]
-    CertSignatureUnavailable,
+    #[error("auth proof unavailable")]
+    ProofUnavailable,
 
-    #[error("delegation cert signature invalid: {0}")]
-    CertSignatureInvalid(String),
+    #[error("auth proof invalid: {0}")]
+    ProofInvalid(String),
 
-    #[error("token signature unavailable")]
-    TokenSignatureUnavailable,
-
-    #[error("token signature invalid: {0}")]
-    TokenSignatureInvalid(String),
-
-    #[error("attestation signature unavailable")]
-    AttestationSignatureUnavailable,
-
-    #[error("attestation signature invalid: {0}")]
-    AttestationSignatureInvalid(String),
+    #[error("attestation proof invalid: {0}")]
+    AttestationProofInvalid(String),
 }
 
 #[derive(Debug, ThisError)]

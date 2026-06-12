@@ -111,7 +111,7 @@ impl AuthOps {
         min_accepted_epoch: u64,
     ) -> Result<RoleAttestation, AuthOpsError> {
         let payload_hash = crypto::role_attestation_hash(&attestation.payload)
-            .map_err(|err| AuthSignatureError::AttestationSignatureInvalid(err.to_string()))?;
+            .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
         let verifier_cfg = Self::delegated_token_verifier_config()
             .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
         Self::verify_root_canister_signature_proof(
@@ -121,7 +121,7 @@ impl AuthOps {
             verifier_cfg.root_canister_id,
             &verifier_cfg.ic_root_public_key_raw,
         )
-        .map_err(|err| AuthSignatureError::AttestationSignatureInvalid(err.to_string()))?;
+        .map_err(|err| AuthSignatureError::AttestationProofInvalid(err.to_string()))?;
 
         verify::verify_role_attestation_claims(
             &attestation.payload,
