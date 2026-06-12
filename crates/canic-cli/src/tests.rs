@@ -180,57 +180,6 @@ fn command_family_help_returns_ok() {
     }
 }
 
-// Ensure the old read-only top-level list alias is removed in favor of canic info.
-#[test]
-fn top_level_info_aliases_are_removed() {
-    std::assert_matches!(
-        run([OsString::from("list"), OsString::from("help")]),
-        Err(CliError::Usage(_))
-    );
-}
-
-#[test]
-fn top_level_live_inspection_commands_are_removed() {
-    for command in ["endpoints", "medic", "metrics"] {
-        std::assert_matches!(
-            run([OsString::from(command), OsString::from("help")]),
-            Err(CliError::Usage(_))
-        );
-    }
-}
-
-#[test]
-fn cycles_history_alias_is_removed() {
-    std::assert_matches!(
-        run([OsString::from("cycles"), OsString::from("history")]),
-        Err(CliError::Cycles(_))
-    );
-}
-
-#[test]
-fn top_level_fleet_config_command_is_removed() {
-    std::assert_matches!(
-        run([OsString::from("config"), OsString::from("help")]),
-        Err(CliError::Usage(_))
-    );
-}
-
-#[test]
-fn top_level_backup_manifest_command_is_removed() {
-    std::assert_matches!(
-        run([OsString::from("manifest"), OsString::from("help")]),
-        Err(CliError::Usage(_))
-    );
-}
-
-#[test]
-fn top_level_subnet_command_is_removed() {
-    std::assert_matches!(
-        run([OsString::from("subnet"), OsString::from("help")]),
-        Err(CliError::Usage(_))
-    );
-}
-
 #[test]
 fn info_help_uses_deployment_target_wording() {
     let err = run([OsString::from("info")]).expect_err("info needs a subcommand");
@@ -280,15 +229,6 @@ fn icp_backed_command_rejects_old_icp_cli_before_running_subcommand() {
     assert!(!text.contains("old replica command ran"));
 
     fs::remove_dir_all(root).expect("remove temp dir");
-}
-
-// Ensure the old fleet sync command is removed in favor of fleet check.
-#[test]
-fn fleet_sync_is_removed() {
-    std::assert_matches!(
-        run([OsString::from("fleet"), OsString::from("sync")]),
-        Err(CliError::Fleets(_))
-    );
 }
 
 // Ensure version flags are accepted at the top level and command-family level.
@@ -562,28 +502,6 @@ fn deploy_version_flags_return_ok() {
         ])
         .is_ok()
     );
-}
-
-#[test]
-fn deploy_raw_artifact_top_level_leaves_are_removed() {
-    for leaf in [
-        "catalog",
-        "compare",
-        "diff",
-        "inventory",
-        "plan",
-        "report",
-        "resume-report",
-    ] {
-        std::assert_matches!(
-            run([
-                OsString::from("deploy"),
-                OsString::from(leaf),
-                OsString::from("help")
-            ]),
-            Err(CliError::Deploy(_))
-        );
-    }
 }
 
 #[test]

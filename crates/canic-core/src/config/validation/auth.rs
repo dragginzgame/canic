@@ -14,12 +14,6 @@ impl Validate for AuthConfig {
 
 impl Validate for DelegatedTokenConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if self.ecdsa_key_name.trim().is_empty() {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.delegated_tokens.ecdsa_key_name must not be empty".into(),
-            ));
-        }
-
         if let Some(max_ttl_secs) = self.max_ttl_secs
             && max_ttl_secs == 0
         {
@@ -76,12 +70,6 @@ impl Validate for DelegatedTokenConfig {
 
 impl Validate for RoleAttestationConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
-        if self.ecdsa_key_name.trim().is_empty() {
-            return Err(ConfigSchemaError::ValidationError(
-                "auth.role_attestation.ecdsa_key_name must not be empty".into(),
-            ));
-        }
-
         if self.max_ttl_secs == 0 {
             return Err(ConfigSchemaError::ValidationError(
                 "auth.role_attestation.max_ttl_secs must be greater than zero".into(),

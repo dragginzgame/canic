@@ -155,7 +155,7 @@ Each runbook uses the same fields:
 | Unsafe operator action | Reusing expired metadata, changing the request under the old operation ID, or bypassing authorization checks. |
 | Diagnostic, log, or public error to check | Public expired receipt or authorization text, delegated-auth validation errors, and replay receipt timestamps where available. |
 | Retry/idempotency rule | Expired metadata generally requires a new logical operation after the original outcome is understood. |
-| Relevant validation command | `cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture` |
+| Relevant validation command | `cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture` |
 | Escalation criteria | Escalate if an expired replay-sensitive operation may already have crossed an external-effect boundary. |
 
 ### Delegation Caller Or Shard Mismatch
@@ -169,7 +169,7 @@ Each runbook uses the same fields:
 | Unsafe operator action | Reusing a proof or token request ID from a different caller, shard, or subject. |
 | Diagnostic, log, or public error to check | Public caller/shard mismatch text, auth replay logs, and delegated-auth hard-cut guard coverage. |
 | Retry/idempotency rule | Same caller/shard/payload may retry. Different caller or shard requires a new, authorized logical operation. |
-| Relevant validation command | `cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture` |
+| Relevant validation command | `cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture` |
 | Escalation criteria | Escalate if the verified caller/shard binding cannot be reconstructed from available logs or request records. |
 
 ### Project-Local Pending ICP Refill
@@ -270,7 +270,7 @@ the runbooks:
 ```text
 cargo test --locked -p canic-core replay_policy --lib -- --nocapture
 cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
-cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
 cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 cargo test --locked -p canic-cli cycles::convert --lib -- --nocapture
 cargo test --locked -p canic-core workflow::ic::icp_refill --lib -- --nocapture

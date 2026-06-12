@@ -102,10 +102,9 @@ git diff --check
 Focused replay/auth/cost validation for implementation close-out:
 
 ```text
-bash scripts/ci/run-auth-trust-chain-guards.sh
 cargo test --locked -p canic-core replay_policy --lib -- --nocapture
 cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
-cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
 cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 ```
 

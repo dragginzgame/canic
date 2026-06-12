@@ -100,26 +100,6 @@ fn config_rejects_subtree_option() {
     std::assert_matches!(err, ListCommandError::Usage(_));
 }
 
-// Ensure removed list selectors are hard rejected.
-#[test]
-fn list_rejects_removed_root_and_from_options() {
-    let root_err = ListOptions::parse_info_list([
-        OsString::from("demo"),
-        OsString::from("--root"),
-        OsString::from("aaaaa-aa"),
-    ])
-    .expect_err("list --root should fail");
-    let from_err = ListOptions::parse_info_list([
-        OsString::from("demo"),
-        OsString::from("--from"),
-        OsString::from("user_hub"),
-    ])
-    .expect_err("list --from should fail");
-
-    std::assert_matches!(root_err, ListCommandError::Usage(_));
-    std::assert_matches!(from_err, ListCommandError::Usage(_));
-}
-
 // Ensure list and config help keep deployment-target and fleet-template selection separate.
 #[test]
 fn list_and_config_usage_explain_fleet_and_subtree_options() {

@@ -14,7 +14,6 @@ package = "."
 
 [auth.delegated_tokens]
 enabled = true
-ecdsa_key_name = "key_1"
 
 [subnets.prime]
 

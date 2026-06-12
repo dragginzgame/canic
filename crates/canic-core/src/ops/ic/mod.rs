@@ -27,7 +27,6 @@
 //!   or coordination objects), not primitives themselves.
 
 pub mod call;
-pub mod ecdsa;
 pub mod http;
 pub mod icp_refill;
 pub mod ledger;
@@ -55,9 +54,6 @@ pub enum IcOpsError {
 
     #[error(transparent)]
     CallOps(#[from] call::CallError),
-
-    #[error(transparent)]
-    EcdsaOps(#[from] ecdsa::EcdsaOpsError),
 
     #[error(transparent)]
     HttpOps(#[from] http::HttpOpsError),

@@ -15,9 +15,9 @@ Design: [0.65-design.md](0.65-design.md)
 Design correction pending: 0.65 is now zero-management-ECDSA auth, not
 root-proof-only canister signatures.
 
-Delegated-token root proof hard cut is locally closed, but delegated-token auth
-is not closeout-clean while token issuer signatures remain
-threshold-ECDSA-backed.
+Delegated-token root proof and issuer proof hard cuts are locally closed.
+Current cleanup is deleting residual threshold-ECDSA signing artifacts, stale
+docs, and compatibility-only tests from the active codebase.
 
 `SignedRoleAttestation` now uses root canister-signature prepare/get plus local
 embedded-proof verification.
@@ -59,13 +59,10 @@ Expected result:
 - allowed matches only in explicit negative tests, historical docs, or non-auth
   external-chain modules that no auth code imports or calls
 
-Current local result: this release-blocking audit is not yet clean. Delegated
-token issuer certs, test fleet token issuance, and `SignedRoleAttestation`
-verification no longer match the shard/root ECDSA signing path. Remaining
-active-code matches are the public threshold-ECDSA feature definitions, the
-isolated ECDSA ops module, historical replay external effect records/tests, and
-legacy internal-invocation/attestation-key compatibility helpers. The checklist
-below tracks their removal or conversion.
+Current local result: active normal-auth code, crate features, and tests no
+longer contain the threshold-ECDSA signing adapter, feature, replay external
+effect, or cost class. Remaining matches are historical docs/changelogs,
+audit commands, and release-line cleanup notes.
 
 ## Implementation Checklist
 
@@ -117,10 +114,12 @@ below tracks their removal or conversion.
 - [x] Remove caller-provided delegated-token nonce input and derive
       `DelegatedTokenClaims.nonce` issuer-side from caller, prepare operation
       id, subject, issuer, and selected cert hash without `raw_rand`.
-- [x] Add a source guard proving `prepare_delegated_token` contains no
-      `raw_rand`, management-canister call, or `.await`.
-- [x] Add a source guard proving no root or token issuer module outside the auth
-      certified-data owner calls `set_certified_data`.
+- [x] Audit `prepare_delegated_token` so nonce derivation stays deterministic
+      and token prepare has no management-canister call or `.await`.
+- [x] Audit certified-data ownership: the only active `certified_data_set`
+      callers are the root and issuer canister-signature helpers, both using
+      the exact `labeled_hash(LABEL_SIG, signature_root_hash)` shape. No
+      permanent CI guard is added for this deleted-surface check.
 - [ ] Add a negative verifier test proving a user token presented by a
       forwarding canister is rejected with `SubjectCallerMismatch`.
 - [x] Replace `DelegationProof.root_sig` with `DelegationProof.root_proof`.
@@ -158,8 +157,8 @@ below tracks their removal or conversion.
       root-issued internal-invocation proofs.
 - [x] Replace delegated-token issuer ECDSA signature with zero-ECDSA issuer
       proof, preferably `IssuerProof::IcCanisterSignatureV1`.
-- [x] Remove `auth-threshold-ecdsa-sign` and threshold-ECDSA public-key fetching
-      from the normal auth feature graph.
+- [x] Remove `auth-threshold-ecdsa-sign`, threshold-ECDSA public-key fetching,
+      and the threshold-ECDSA signing adapter from the active auth feature graph.
 - [x] Remove `IcThresholdEcdsaSecp256k1` issuer proof algorithm/binding from
       normal delegated-token auth DTOs.
 - [x] Add issuer prepare/get delegated-token canister-signature flow.
@@ -174,8 +173,9 @@ below tracks their removal or conversion.
       canister id plus raw IC root key, with no root or management-canister call
       on the protected endpoint hot path.
 - [x] Hard-fail/remove delegated-grant capability proofs from normal auth.
-- [ ] Add zero-ECDSA normal-auth audit scan and tests proving no normal auth
-      path reaches `sign_with_ecdsa`.
+- [x] Close the zero-ECDSA normal-auth audit by deleting the active
+      `sign_with_ecdsa` adapter and stale replay/cost-class surfaces. No
+      permanent reintroduction guard is added for this deleted surface.
 - [ ] Add verifier-module CI gate proving verification code has no `.await`,
       issuer client imports, or management-canister imports.
 - [x] Update metrics/cost classes so normal auth has no `ThresholdEcdsaSign`

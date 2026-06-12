@@ -65,7 +65,6 @@ init_mode = "enabled"
 
 [auth.delegated_tokens]
 enabled = true
-ecdsa_key_name = "key_1"
 
 [standards]
 icrc21 = true

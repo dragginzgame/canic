@@ -343,7 +343,6 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
   cargo test --locked -p canic-core workflow::rpc --lib -- --nocapture
   cargo test --locked -p canic-core replay_policy --lib -- --nocapture
-  cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
   cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
   cargo test --locked -p canic --test protocol_surface -- --nocapture
   cargo test --locked -p canic --test changelog_governance -- --nocapture
@@ -378,7 +377,6 @@ inspect only the files needed for the current task.
   flow stays absent instead of reading the deleted `verify_flow.rs` module.
   Current validation:
   ```text
-  bash scripts/ci/run-auth-trust-chain-guards.sh
   TMPDIR="$(pwd)/.tmp/test-runtime" ICP_ENVIRONMENT=local bash scripts/ci/run-workspace-tests.sh fast
   cargo test --locked -p canic-core api::auth --lib -- --nocapture
   cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
@@ -433,19 +431,63 @@ inspect only the files needed for the current task.
   cargo check --locked -p canic-tests
   cargo check --locked -p canic-core -p canic
   cargo clippy --locked -p canic-core --lib -- -D warnings
-  bash scripts/ci/run-auth-trust-chain-guards.sh
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
   ```
-- Local `0.65.20` candidate pins the auth certified-data ownership boundary in
-  CI. The auth trust-chain guard now requires the only active Rust
+- `0.65.20` is pushed and pins the auth certified-data ownership boundary in
+  CI. The auth trust-chain guard requires the only active Rust
   `certified_data_set` callers to be the root and issuer canister-signature
-  helpers, and it requires both owners to commit
+  helpers, and requires both owners to commit
   `labeled_hash(LABEL_SIG, signature_root_hash)` so the canister-signature
-  `"sig"` tree shape cannot drift. Current validation:
+  `"sig"` tree shape cannot drift. Validation:
   ```text
-  bash scripts/ci/run-auth-trust-chain-guards.sh
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+- Local `0.65.21` cleanup candidate after pushed `0.65.20` deletes the
+  isolated threshold-ECDSA signing adapter, removes the
+  `auth-threshold-ecdsa-sign` feature from `canic-core` and the `canic`
+  facade, drops stale threshold-ECDSA replay external-effect and platform-call
+  metric variants, removes dead `ecdsa_key_name` config knobs plus checked-in
+  test config values, removes the unused direct workspace `k256` dependency,
+  removes absence-only legacy surface tests, deletes the auth trust-chain and
+  forbidden-crypto grep scripts plus the delegated-auth hard-cut guard test,
+  removes stale replay actor issuer shard metadata, and removes the short-lived
+  certified-data owner grep guard in favor of the design-status audit note.
+  It also removes removed-design macro/parser/config/CLI tests and the special
+  `caller::has_app_role` parser rejection branch, leaving unknown predicates to
+  fail through the normal parser path. The legacy Canic memory-ledger probe is
+  removed too; non-native ledger payloads now use the ordinary corrupt-ledger
+  error.
+  Active auth docs now describe issuer canister-signature tokens instead of the
+  old shard ECDSA token leg, and the 0.65 design doc treats removed proof
+  families as absent surfaces instead of decode-and-reject compatibility
+  branches. Operations docs and the recurring auth-abstraction audit no longer
+  instruct maintainers to run deleted anti-resurrection grep guards.
+  Active-code scan now finds no
+  `EcdsaOps::sign_bytes`, `auth-threshold-ecdsa-sign`,
+  `ThresholdEcdsaSign`, `EcdsaPurpose`, `ecdsa_key_name`, direct `k256`,
+  `secp256k1`, or ECDSA platform metric surface in active auth/source/test
+  feature wiring. Current validation:
+  ```text
+  cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
+  cargo test --locked -p canic-core ops::replay --lib -- --nocapture
+  cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
+  cargo test --locked -p canic-core config::schema --lib -- --nocapture
+  cargo test --locked -p canic-core config::schema::subnet --lib -- --nocapture
+  cargo test --locked -p canic-core memory::ledger --lib -- --nocapture
+  cargo test --locked -p canic-macros --lib -- --nocapture
+  cargo test --locked -p canic-cli --lib -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo check --locked -p canic-core -p canic
+  cargo check --locked -p canic-host
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
+  cargo clippy --locked -p canic-core --lib -- -D warnings
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   git diff --check
@@ -729,10 +771,8 @@ inspect only the files needed for the current task.
   bash scripts/ci/check-rc-readiness-audit.sh
   cargo fmt --all -- --check
   cargo test --locked -p canic --test changelog_governance -- --nocapture
-  bash scripts/ci/run-auth-trust-chain-guards.sh
   cargo test --locked -p canic-core replay_policy --lib -- --nocapture
   cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
-  cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
   cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
   git diff --check
   ```
@@ -819,7 +859,6 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   cargo test --locked -p canic-core --test stable_memory_abi_guard -- --nocapture
   cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
-  cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
   git diff --check
   ```
 - `0.62.1` adds the non-versioned release-validation matrix at
@@ -1065,7 +1104,6 @@ inspect only the files needed for the current task.
   reports are intentionally outside the scan. No CLI commands changed in this
   patch. Validation:
   ```text
-  cargo test -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
   ```
 - `0.61.27` added delegated-token mint replay decision coverage from
   `docs/design/0.61-replay-protection/0.61-design.md`. Auth API tests now prove
@@ -1119,7 +1157,6 @@ inspect only the files needed for the current task.
   cargo test -p canic-testing-internal --lib -- --nocapture
   cargo check -p canister_user_shard -p delegation_signer_stub -p delegation_root_stub -p sharding_root_stub
   cargo clippy -p canic-core --all-targets --all-features -- -D warnings
-  bash scripts/ci/run-auth-trust-chain-guards.sh
   cargo fmt --all -- --check
   cargo test -p canic --test changelog_governance -- --nocapture
   git diff --check

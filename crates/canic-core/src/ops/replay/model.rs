@@ -160,7 +160,6 @@ pub enum AuthKind {
 pub struct ReplayActor {
     pub effective_principal: Principal,
     pub auth_kind: AuthKind,
-    pub issuer_shard: Option<Principal>,
 }
 
 impl ReplayActor {
@@ -169,7 +168,6 @@ impl ReplayActor {
         Self {
             effective_principal: caller,
             auth_kind: AuthKind::DirectCaller,
-            issuer_shard: None,
         }
     }
 }
@@ -247,32 +245,9 @@ pub enum RecoveryReason {
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ExternalEffectDescriptor {
-    ThresholdEcdsaSign {
-        key_id_hash: [u8; 32],
-        purpose: EcdsaPurpose,
-        message_hash: [u8; 32],
-    },
-    ManagementCreateCanister {
-        command_kind: CommandKind,
-    },
-    ManagementCall {
-        canister: Principal,
-        method: String,
-    },
-    IcpTransfer {
-        operation_id: OperationId,
-    },
-}
-
-///
-/// EcdsaPurpose
-///
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum EcdsaPurpose {
-    DelegationProof,
-    DelegatedToken,
-    RoleAttestation,
-    Other(CommandKind),
+    ManagementCreateCanister { command_kind: CommandKind },
+    ManagementCall { canister: Principal, method: String },
+    IcpTransfer { operation_id: OperationId },
 }
 
 ///
@@ -392,10 +367,8 @@ fn hash_replay_actor(hasher: &mut Sha256, actor: &ReplayActor) {
             AuthKind::RoleAttestation => "RoleAttestation",
         },
     );
-    hash_bool(hasher, actor.issuer_shard.is_some());
-    if let Some(issuer_shard) = actor.issuer_shard {
-        hash_principal(hasher, &issuer_shard);
-    }
+    // Preserve the retired actor-extension marker in the payload-hash layout.
+    hash_bool(hasher, false);
 }
 
 fn hash_bool(hasher: &mut Sha256, value: bool) {

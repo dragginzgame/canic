@@ -12,7 +12,6 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum PlatformCallMetricSurface {
-    Ecdsa,
     Generic,
     Http,
     Ledger,
@@ -25,7 +24,6 @@ impl PlatformCallMetricSurface {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Ecdsa => "ecdsa",
             Self::Generic => "generic",
             Self::Http => "http",
             Self::Ledger => "ledger",

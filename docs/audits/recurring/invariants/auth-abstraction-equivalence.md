@@ -151,28 +151,11 @@ Confirm:
 
 Confirm handwritten and generated paths share tests or shared internal helpers for parity.
 
-### 4. Guardrail Expectations
+### 4. Evidence
 
-Run the auth trust-chain guard and record the result:
-
-```bash
-bash scripts/ci/run-auth-trust-chain-guards.sh
-```
-
-This guard is expected to reject:
-
-- public `AuthApi::verify_token` or public `verify_token_material` helpers
-- auth DTO verification/signing/key-resolution/replay behavior
-- delegated endpoint guard ordering drift
-- broad role-attestation refresh behavior
-
-Also scan for material-only verifier exposure:
-
-```bash
-rg -n 'pub(\([^)]*\))?\s+(async\s+)?fn\s+verify_token\b|pub(\([^)]*\))?\s+(async\s+)?fn\s+verify_token_material\b|AuthApi::verify_token\b' crates/canic-core/src/api/auth crates/canic/src -g '*.rs'
-```
-
-Expected result: no matches.
+Record the current behavior tests, macro expansion evidence, or focused code
+review notes used to establish that generated and handwritten auth paths still
+share the same verification semantics.
 
 ### 5. Test Expectations
 

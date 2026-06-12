@@ -35,9 +35,6 @@ pub enum AuthValidationError {
         source: candid::Error,
     },
 
-    #[error("ecdsa key name missing in configuration")]
-    EcdsaKeyNameMissing,
-
     #[error("attestation subnet was set but verifier subnet is unavailable")]
     AttestationSubnetUnavailable,
 

@@ -87,7 +87,6 @@ ic-memory = "0.7.0"
 ic-signature-verification = "0.3.0"
 ic-testkit = "0.1.11"
 icrc-ledger-types = { version = "0.2", default-features = false }
-k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 prost = "0.14.3"
 quote = "1.0"
@@ -97,8 +96,8 @@ serde = { version = "1.0", default-features = false }
 serde_bytes = "0.11"
 serde_cbor = "0.11"
 serde_json = "1.0"
-# Keep `sha2` pinned to the existing 0.10 line used by `k256` and the IC/runtime
-# stack so canister builds do not pull in a second `sha2` version.
+# Keep `sha2` pinned to the existing 0.10 line used by the IC/runtime stack so
+# canister builds do not pull in a second `sha2` version.
 sha2 = "0.10.9"
 syn = "2.0"
 thiserror = "2.0"

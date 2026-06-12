@@ -13,21 +13,6 @@ fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
 }
 
 #[test]
-fn endpoint_expansion_omits_removed_endpoint_metric_hooks() {
-    let args = make_args(Vec::new());
-    let func: ItemFn = syn::parse_quote!(
-        fn ping() -> Result<(), ::canic::Error> {
-            Ok(())
-        }
-    );
-
-    let expanded = expand(EndpointKind::Query, args, func).to_string();
-
-    assert!(!expanded.contains("EndpointAttemptMetrics"));
-    assert!(!expanded.contains("EndpointResultMetrics"));
-}
-
-#[test]
 fn update_expansion_registers_payload_limit_for_exported_name() {
     let mut args = make_args(Vec::new());
     args.export_name = Some(syn::LitStr::new(

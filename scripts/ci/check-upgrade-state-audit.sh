@@ -28,7 +28,7 @@ require_texts "$AUDIT" "$GUARD_LABEL" \
     "## Outcome Summary" \
     "Replay receipt persistence and shape stability" \
     "Project-local pending operation log" \
-    "Delegated-auth hard cut" \
+    "Delegated-auth replay identity" \
     "ICP refill and value-transfer replay state" \
     "Lifecycle post-upgrade ordering" \
     "Durable-publication and wasm-store state" \

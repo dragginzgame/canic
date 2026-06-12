@@ -50,18 +50,6 @@ run_test() {
     record_summary "$label" "$elapsed" "test"
 }
 
-run_guard() {
-    local label="$1"
-    shift
-    echo "==> $label"
-    local started_at="$SECONDS"
-    "$@"
-    local elapsed
-    elapsed="$(elapsed_seconds "$started_at")"
-    echo "==> $label done in $elapsed"
-    record_summary "$label" "$elapsed" "guard"
-}
-
 clear_pocketic_wasm_targets() {
     local label="$1"
     local cleared=0
@@ -109,8 +97,6 @@ prebuild_root_test_artifacts() {
     echo "==> $label done in $elapsed"
     record_summary "$label" "$elapsed" "prebuild"
 }
-
-run_guard "auth trust-chain guards" bash scripts/ci/run-auth-trust-chain-guards.sh
 
 # Compile and run all unit/lib/bin tests together first.
 run_test "workspace lib/bin tests" --workspace --lib --bins

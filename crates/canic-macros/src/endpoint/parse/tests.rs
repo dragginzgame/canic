@@ -172,19 +172,6 @@ fn authenticated_allows_path_scope_argument() {
 }
 
 #[test]
-fn app_role_predicate_is_removed() {
-    let err = parse_args(quote!(
-        internal,
-        requires(caller::has_app_role("project_hub"))
-    ))
-    .expect_err("removed app role predicate must fail");
-    assert!(
-        err.to_string()
-            .contains("caller::has_app_role(...) was removed")
-    );
-}
-
-#[test]
 fn authenticated_rejects_multiple_arguments() {
     let err = parse_args(quote!(requires(auth::authenticated("a", "b"))))
         .expect_err("authenticated with two args must fail");

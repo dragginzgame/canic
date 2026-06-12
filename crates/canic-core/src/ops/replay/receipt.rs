@@ -578,10 +578,9 @@ mod tests {
             ReplayReceiptDecision::Fresh(token) => token,
             other => panic!("expected fresh, got {other:?}"),
         };
-        let effect = ExternalEffectDescriptor::ThresholdEcdsaSign {
-            key_id_hash: [1; 32],
-            purpose: super::super::model::EcdsaPurpose::DelegationProof,
-            message_hash: [2; 32],
+        let effect = ExternalEffectDescriptor::ManagementCall {
+            canister: Principal::from_slice(&[8; 29]),
+            method: "deposit_cycles".to_string(),
         };
         mark_external_effect_in_flight(&token, effect.clone(), 150);
         commit_receipt_response(&token, 1, vec![1, 2, 3], 200);

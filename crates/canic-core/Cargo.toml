@@ -23,7 +23,6 @@ auth-root-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certifi
 auth-root-canister-sig-verify = ["dep:ic-signature-verification"]
 auth-issuer-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
 auth-issuer-canister-sig-verify = ["dep:ic-signature-verification"]
-auth-threshold-ecdsa-sign = []
 auth-delegated-token-verify = ["auth-root-canister-sig-verify", "auth-issuer-canister-sig-verify"]
 
 [dependencies]

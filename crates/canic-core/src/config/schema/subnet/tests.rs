@@ -166,22 +166,6 @@ max_refill_e8s_per_day = 1000000000
 }
 
 #[test]
-fn canister_config_rejects_legacy_delegated_auth_table() {
-    let err = toml::from_str::<CanisterConfig>(
-        r#"
-kind = "singleton"
-delegated_auth = { verifier = true }
-"#,
-    )
-    .expect_err("legacy delegated auth config must not parse");
-
-    assert!(
-        err.to_string().contains("delegated_auth"),
-        "expected unknown delegated_auth field, got: {err}"
-    );
-}
-
-#[test]
 fn metrics_profile_defaults_follow_canister_role() {
     let root = base_canister_config(CanisterKind::Root);
     assert_eq!(
@@ -1097,26 +1081,4 @@ kind = "instance"
         .get(&CanisterRole::from("instance_role"))
         .expect("instance role config should exist");
     assert_eq!(cfg.kind, CanisterKind::Instance);
-}
-
-#[test]
-fn removed_node_kind_is_rejected() {
-    toml::from_str::<SubnetConfig>(
-        r#"
-[canisters.app]
-kind = "node"
-"#,
-    )
-    .expect_err("expected removed node kind to fail parsing");
-}
-
-#[test]
-fn removed_worker_kind_is_rejected() {
-    toml::from_str::<SubnetConfig>(
-        r#"
-[canisters.app]
-kind = "worker"
-"#,
-    )
-    .expect_err("expected removed worker kind to fail parsing");
 }

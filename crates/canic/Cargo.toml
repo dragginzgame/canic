@@ -23,7 +23,6 @@ auth-root-canister-sig-create = ["canic-core/auth-root-canister-sig-create"]
 auth-root-canister-sig-verify = ["canic-core/auth-root-canister-sig-verify"]
 auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
 auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
-auth-threshold-ecdsa-sign = ["canic-core/auth-threshold-ecdsa-sign"]
 auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
 
 [dependencies]

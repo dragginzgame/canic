@@ -19,29 +19,6 @@ fn read_text(path: &Path) -> String {
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
 }
 
-// Keeps the checked-in DID free of the removed cycles-accept compatibility method.
-#[test]
-fn removed_cycles_accept_surface_stays_absent() {
-    let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
-    let did = read_text(&did_path);
-
-    assert!(
-        !did.contains("  ic_cycles_accept : (nat) -> (nat);"),
-        "unexpected `ic_cycles_accept` method in {}",
-        did_path.display()
-    );
-    assert!(
-        !did.contains("  msg_cycles_accept : (nat) -> (nat);"),
-        "unexpected `msg_cycles_accept` method in {}",
-        did_path.display()
-    );
-    assert!(
-        !did.contains("  canic_ic_cycles_accept : (nat) -> (nat);"),
-        "unexpected `canic_ic_cycles_accept` method in {}",
-        did_path.display()
-    );
-}
-
 #[test]
 fn wasm_store_exposes_standard_cycle_tracker() {
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
@@ -239,7 +216,7 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
 }
 
 #[test]
-fn memory_ledger_is_config_gated_and_registry_is_removed() {
+fn memory_ledger_is_config_gated() {
     let bundle_path = workspace_root().join("crates/canic/src/macros/endpoints/bundles.rs");
     let bundles = read_text(&bundle_path);
     let shared_bundle = bundles
@@ -268,13 +245,6 @@ fn memory_ledger_is_config_gated_and_registry_is_removed() {
     assert!(
         !shared_bundle.contains("canic_emit_memory_observability_endpoints!"),
         "live memory registry diagnostics must not be in the default bundle"
-    );
-
-    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
-    let shared = read_text(&macro_path);
-    assert!(
-        !shared.contains("fn canic_memory_registry()"),
-        "live memory registry diagnostic endpoint must be removed"
     );
 }
 

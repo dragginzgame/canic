@@ -357,9 +357,6 @@ pub struct DelegatedTokenConfig {
     #[serde(default = "default_delegated_tokens_enabled")]
     pub enabled: bool,
 
-    #[serde(default = "default_delegated_tokens_ecdsa_key_name")]
-    pub ecdsa_key_name: String,
-
     #[serde(default)]
     pub root_canister_id: Option<String>,
 
@@ -377,10 +374,6 @@ const fn default_delegated_tokens_enabled() -> bool {
     true
 }
 
-fn default_delegated_tokens_ecdsa_key_name() -> String {
-    "key_1".to_string()
-}
-
 fn default_delegated_tokens_network() -> String {
     "mainnet".to_string()
 }
@@ -389,7 +382,6 @@ impl Default for DelegatedTokenConfig {
     fn default() -> Self {
         Self {
             enabled: default_delegated_tokens_enabled(),
-            ecdsa_key_name: default_delegated_tokens_ecdsa_key_name(),
             root_canister_id: None,
             ic_root_public_key_raw_hex: None,
             network: default_delegated_tokens_network(),
@@ -407,18 +399,11 @@ impl Default for DelegatedTokenConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RoleAttestationConfig {
-    #[serde(default = "default_role_attestation_ecdsa_key_name")]
-    pub ecdsa_key_name: String,
-
     #[serde(default = "default_role_attestation_max_ttl_secs")]
     pub max_ttl_secs: u64,
 
     #[serde(default)]
     pub min_accepted_epoch_by_role: BTreeMap<String, u64>,
-}
-
-fn default_role_attestation_ecdsa_key_name() -> String {
-    "key_1".to_string()
 }
 
 const fn default_role_attestation_max_ttl_secs() -> u64 {
@@ -428,7 +413,6 @@ const fn default_role_attestation_max_ttl_secs() -> u64 {
 impl Default for RoleAttestationConfig {
     fn default() -> Self {
         Self {
-            ecdsa_key_name: default_role_attestation_ecdsa_key_name(),
             max_ttl_secs: default_role_attestation_max_ttl_secs(),
             min_accepted_epoch_by_role: BTreeMap::new(),
         }

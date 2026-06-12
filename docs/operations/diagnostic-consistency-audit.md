@@ -98,7 +98,7 @@ Use these gates when validating diagnostic consistency before RC promotion:
 bash scripts/ci/check-diagnostic-consistency-audit.sh
 cargo test --locked -p canic-core replay_policy --lib -- --nocapture
 cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
-cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
 cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 cargo test --locked -p canic-core workflow::ic::icp_refill --lib -- --nocapture
 cargo test --locked -p canic-core workflow::rpc::request::handler --lib -- --nocapture

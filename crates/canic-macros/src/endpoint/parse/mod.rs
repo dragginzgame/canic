@@ -458,13 +458,6 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 )));
             }
 
-            if is_removed_has_app_role_path(&path) {
-                return Err(syn::Error::new_spanned(
-                    &path,
-                    "caller::has_app_role(...) was removed; use explicit SignedRoleAttestation verification",
-                ));
-            }
-
             if args.next().is_some() {
                 return Err(syn::Error::new_spanned(
                     &path,
@@ -544,10 +537,6 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
 
 fn is_authenticated_path(path: &Path) -> bool {
     short_path_is(path, "auth", "authenticated")
-}
-
-fn is_removed_has_app_role_path(path: &Path) -> bool {
-    short_path_is(path, "caller", "has_app_role")
 }
 
 fn is_bare_authenticated_path(path: &Path) -> bool {

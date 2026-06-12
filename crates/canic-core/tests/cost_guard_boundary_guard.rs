@@ -33,47 +33,6 @@ fn cost_guard_permit_construction_stays_private() {
 }
 
 #[test]
-fn threshold_ecdsa_sign_adapter_requires_cost_guard_permit() {
-    let ecdsa_ops = source_root().join("ops/ic/ecdsa.rs");
-    let contents = fs::read_to_string(&ecdsa_ops).expect("read ecdsa ops");
-    let permit_args = contents.matches("_permit: &CostGuardPermit").count();
-
-    assert_eq!(
-        permit_args, 2,
-        "both threshold-ECDSA and non-threshold-ECDSA EcdsaOps::sign_bytes implementations must require CostGuardPermit"
-    );
-}
-
-#[test]
-fn threshold_ecdsa_sign_adapter_is_reached_only_from_prepared_auth_ops() {
-    let source_root = source_root();
-    let allowed_callers = [
-        "src/ops/auth/attestation.rs",
-        "src/ops/auth/delegation.rs",
-        "src/ops/auth/token.rs",
-    ];
-    let mut violations = Vec::new();
-
-    scan_rust_files(&source_root, &mut |path, contents| {
-        if !contents.contains("EcdsaOps::sign_bytes(") {
-            return;
-        }
-
-        let display_path = display(path);
-        if !allowed_callers.contains(&display_path.as_str()) {
-            violations.push(format!(
-                "{display_path} calls EcdsaOps::sign_bytes outside prepared auth signing ops"
-            ));
-        }
-    });
-
-    assert!(
-        violations.is_empty(),
-        "threshold ECDSA signing adapter boundary changed: {violations:?}"
-    );
-}
-
-#[test]
 fn icp_refill_value_transfer_adapters_require_cost_guard_permit() {
     let refill_ops = source_root().join("ops/ic/icp_refill.rs");
     let contents = fs::read_to_string(&refill_ops).expect("read ICP refill ops");

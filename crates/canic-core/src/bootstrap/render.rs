@@ -237,7 +237,6 @@ fn render_auth_config(config: &AuthConfig) -> TokenStream {
 // Render the delegated-token config subtree.
 fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
     let enabled = config.enabled;
-    let ecdsa_key_name = render_owned_string(&config.ecdsa_key_name);
     let root_canister_id = render_option(config.root_canister_id.as_ref(), |value| {
         render_owned_string(value)
     });
@@ -251,7 +250,6 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
     quote! {
         ::canic::__internal::core::bootstrap::compiled::DelegatedTokenConfig {
             enabled: #enabled,
-            ecdsa_key_name: #ecdsa_key_name,
             root_canister_id: #root_canister_id,
             ic_root_public_key_raw_hex: #ic_root_public_key_raw_hex,
             network: #network,
@@ -262,7 +260,6 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
 
 // Render the role-attestation config subtree.
 fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream {
-    let ecdsa_key_name = render_owned_string(&config.ecdsa_key_name);
     let max_ttl_secs = config.max_ttl_secs;
     let min_accepted_epoch_by_role = render_btree_map(
         config.min_accepted_epoch_by_role.iter(),
@@ -272,7 +269,6 @@ fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RoleAttestationConfig {
-            ecdsa_key_name: #ecdsa_key_name,
             max_ttl_secs: #max_ttl_secs,
             min_accepted_epoch_by_role: #min_accepted_epoch_by_role,
         }

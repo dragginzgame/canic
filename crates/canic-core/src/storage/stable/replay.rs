@@ -363,7 +363,7 @@ impl ReplayReceiptStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::replay::model::{EcdsaPurpose, RecoveryReason};
+    use crate::ops::replay::model::RecoveryReason;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -481,10 +481,9 @@ mod tests {
         assert_eq!(reserved.response_bytes, None);
         assert_eq!(reserved.effect, None);
 
-        let effect = ExternalEffectDescriptor::ThresholdEcdsaSign {
-            key_id_hash: [1; 32],
-            purpose: EcdsaPurpose::DelegationProof,
-            message_hash: [2; 32],
+        let effect = ExternalEffectDescriptor::ManagementCall {
+            canister: p(8),
+            method: "deposit_cycles".to_string(),
         };
         let mut recovery = receipt_record_fixture();
         recovery.status = ReplayReceiptStatus::RecoveryRequired {

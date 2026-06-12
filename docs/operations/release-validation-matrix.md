@@ -96,7 +96,6 @@ The GitHub Actions PR/main matrix currently includes:
 ```text
 cargo check --workspace --locked
 bash scripts/ci/run-layering-guards.sh
-bash scripts/ci/run-forbidden-crypto-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
@@ -115,7 +114,6 @@ The same CI job also installs and checks required helper tools including
 The tag workflow currently includes:
 
 ```text
-bash scripts/ci/run-forbidden-crypto-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
@@ -136,10 +134,9 @@ These gates should be run during 0.62 close-out and before RC promotion because
 they directly protect the 0.61 replay/auth/cost boundary:
 
 ```text
-bash scripts/ci/run-auth-trust-chain-guards.sh
 cargo test --locked -p canic-core replay_policy --lib -- --nocapture
 cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
-cargo test --locked -p canic-core --test delegated_auth_hard_cut_guard -- --nocapture
+cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
 ```
 
 If the slice touches stable memory, replay receipt state, or upgrade/state

@@ -93,25 +93,6 @@ fn deploy_root_command_dispatches_verify() {
 }
 
 #[test]
-fn deploy_root_inspect_command_is_removed() {
-    let parsed = parse_subcommand(
-        deploy_command(),
-        [
-            OsString::from("root"),
-            OsString::from("inspect"),
-            OsString::from("--request"),
-            OsString::from("root-verification.json"),
-        ],
-    )
-    .expect("parse deploy root command")
-    .expect("root command");
-    assert_eq!(parsed.0, "root");
-
-    let result = parse_subcommand(deploy_root::command(), parsed.1);
-    std::assert_matches!(result, Err(_));
-}
-
-#[test]
 fn root_verification_report_builder_delegates_to_host_report() {
     let report = deploy_root::build_verification_report(sample_root_verification_request())
         .expect("build root verification report");

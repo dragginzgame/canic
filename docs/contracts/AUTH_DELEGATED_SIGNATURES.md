@@ -12,7 +12,7 @@ configured root principal
   + configured raw IC root public key
   -> embedded root canister-signature proof
   -> root-certified DelegationCert
-  -> shard secp256k1 signature
+  -> issuer canister-signature proof
   -> reusable DelegatedToken
 ```
 
@@ -44,15 +44,12 @@ pub struct DelegatedRoleGrant {
     pub scopes: Vec<String>,
 }
 
-pub enum ShardKeyBinding {
-    IcThresholdEcdsaSecp256k1 {
-        key_name_hash: [u8; 32],
-        derivation_path_hash: [u8; 32],
-    },
+pub enum IssuerProofAlgorithm {
+    IcCanisterSignatureV1,
 }
 
-pub enum ShardSignatureAlgorithm {
-    IcThresholdEcdsaSecp256k1,
+pub enum IssuerProofBinding {
+    IcCanisterSignatureV1 { seed_hash: [u8; 32] },
 }
 
 pub enum RootProof {
@@ -66,12 +63,11 @@ pub struct IcCanisterSignatureProofV1 {
 
 pub struct DelegationCert {
     pub root_pid: Principal,
-    pub shard_pid: Principal,
-    pub shard_key_id: String,
-    pub shard_sig_alg: ShardSignatureAlgorithm,
-    pub shard_public_key_sec1: Vec<u8>,
-    pub shard_key_hash: [u8; 32],
-    pub shard_key_binding: ShardKeyBinding,
+    pub issuer_pid: Principal,
+    pub issuer_proof_alg: IssuerProofAlgorithm,
+    pub issuer_proof_binding_hash: [u8; 32],
+    pub issuer_proof_binding: IssuerProofBinding,
+    pub issuer_signer_generation: Option<u64>,
     pub issued_at_ns: u64,
     pub not_before_ns: u64,
     pub expires_at_ns: u64,
@@ -87,7 +83,7 @@ pub struct DelegationProof {
 
 pub struct DelegatedTokenClaims {
     pub subject: Principal,
-    pub issuer_shard_pid: Principal,
+    pub issuer_pid: Principal,
     pub cert_hash: [u8; 32],
     pub issued_at_ns: u64,
     pub expires_at_ns: u64,
@@ -136,10 +132,12 @@ Signed structures use `CanicAuthCanonical` rules from
 ```text
 cert_hash     = sha256(canonical_bytes(DelegationCert))
 claims_hash   = sha256(canonical_bytes(DelegatedTokenClaims))
-shard_key_hash =
-  sha256("canic-shard-key-v1" || shard_sig_alg ||
-         canonical_bytes(shard_public_key_sec1) ||
-         canonical_bytes(shard_key_binding))
+issuer_proof_binding_hash =
+  sha256("canic-issuer-proof-binding-v1" ||
+         issuer_pid ||
+         issuer_proof_alg ||
+         canonical_bytes(issuer_proof_binding) ||
+         canonical_optional_u64(issuer_signer_generation))
 ```
 
 Grant vectors must be strictly sorted by role and duplicate-free. Scope vectors
@@ -214,28 +212,32 @@ requested `cert_hash` must match pending metadata, and
 `now_ns < retrieval_expires_at_ns`.
 
 The normal auth surface does not expose a one-shot fresh-proof `mint_token`
-path. Client/test helpers may choreograph the three calls above, but they must
-not hide query certificate retrieval inside one shard update.
+path. Client/test helpers may choreograph the calls above, but they must not
+hide query certificate retrieval inside one update.
 
-## Shard Token Signature
+## Issuer Token Signature
 
-Shard token signatures remain threshold ECDSA secp256k1 for this slice.
+Issuer token signatures use the same canister-signature update-then-query
+mechanics as root proofs. The issuer signs the canonical claims hash, not a
+secp256k1 payload.
 
 ```text
-shard_token_hash =
-  sha256(domain_len ||
-         b"canic-shard-delegated-token" ||
-         canonical_bytes(DelegatedTokenClaims))
+claims_hash = sha256(canonical_bytes(DelegatedTokenClaims))
+issuer verifier message =
+  domain_len || b"canic-issuer-delegated-token" || claims_hash
 ```
 
-Threshold ECDSA signs `shard_token_hash`. Verifiers require a compressed SEC1
-secp256k1 shard public key of 33 bytes and verify the fixed secp256k1 signature
-bytes through the local ECDSA verifier.
+The issuer `SignatureMap` stores the domain-separated claims hash under seed
+`b"canic-issuer-delegated-token"`. Verification passes
+`domain_len || domain || claims_hash` to `verify_canister_sig`, checks the
+issuer proof public key DER embeds `cert.issuer_pid` and the expected seed, and
+uses the configured raw IC root key.
 
-The 0.65 hard cut removes the root threshold ECDSA signing cost from delegated
-root proof issuance. If shards mint a fresh delegated token for every endpoint
-request, shard threshold ECDSA signing can still dominate cost. The expected
-usage model is to reuse root proofs and delegated tokens for their TTL.
+The 0.65 hard cut removes management-canister ECDSA from normal delegated auth.
+The expected usage model is to reuse root proofs and delegated tokens for their
+TTL. Protected endpoint verification may use a bounded positive cache for the
+expensive root and issuer canister-signature checks, but endpoint-specific
+authorization still runs after cache hits.
 
 ## Verification Contract
 
@@ -252,10 +254,15 @@ Checks before authorization:
 - root canister-signature public key DER embeds the configured root canister id
   and expected seed
 - root canister signature verifies under the configured raw IC root key
-- shard key binding matches configured delegated-token ECDSA key name and shard
-  derivation path
-- `cert.shard_key_hash` matches algorithm, shard public key, and binding
-- shard token signature verifies under `cert.shard_public_key_sec1`
+- `cert.issuer_pid` matches `claims.issuer_pid`
+- `cert.issuer_proof_alg == IssuerProofAlgorithm::IcCanisterSignatureV1`
+- `cert.issuer_proof_binding` carries the expected issuer seed hash
+- `cert.issuer_proof_binding_hash` matches the canonical issuer proof binding
+- issuer proof variant is `IssuerProof::IcCanisterSignatureV1`
+- issuer canister-signature public key DER embeds `cert.issuer_pid` and
+  expected seed
+- issuer canister signature verifies over
+  `domain_len || b"canic-issuer-delegated-token" || claims_hash`
 - certificate and token time windows are valid using strict expiry:
   `now_ns >= expires_at_ns` means expired
 - certificate `not_before_ns` and token `issued_at_ns` may be at most
@@ -286,22 +293,15 @@ max_ttl_secs = 3600
 
 `root_canister_id` may fall back to initialized Canic root env. The raw IC root
 key may come from config or a test/runtime root-key provider. If delegated-token
-verification is enabled, startup must have the `auth-root-canister-sig-verify`
-feature and an effective root principal plus raw IC root key.
-
-`auth.delegated_tokens.ecdsa_key_name` remains the shard token-signing key name.
-It is not the root proof trust anchor.
+verification is enabled, startup must have root and issuer canister-signature
+verification features and an effective root principal plus raw IC root key.
 
 ## Revocation and TTL
 
 Delegated proofs and tokens are self-contained. A verifier with the token and
-configured IC root key can verify without online root state. Emergency
-revocation before `expires_at_ns` is not guaranteed unless a separate
-root-certified revocation epoch is introduced.
-
-The hard-cut mitigation is short cert/token TTLs, strict `max_ttl_secs`, and
-shard key rotation. Stronger revocation is a separate protocol addition and
-would weaken the no-required-verifier-state contract.
+configured IC root key can verify without online root or issuer state.
+Emergency revocation before `expires_at_ns` is not guaranteed. The hard-cut
+mitigation is short cert/token TTLs and strict `max_ttl_secs`.
 
 ## Forbidden Patterns
 
@@ -319,8 +319,6 @@ The auth architecture must not introduce:
 - relay envelope auth modes that skip delegated subject binding
 
 Normal delegated-token auth must not call management-canister threshold ECDSA.
-Legacy shard-token ECDSA proof inputs are rejected before protected endpoint
-execution.
 
 ## Test-Only Paths
 

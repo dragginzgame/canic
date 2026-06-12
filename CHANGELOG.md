@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.65.md](docs/changelog/0.65.md)
 
+- `0.65.21` deletes the isolated threshold-ECDSA signing adapter, feature flag,
+  replay external-effect variant, and ECDSA platform metric surface from active
+  code, removes dead ECDSA config knobs and absence-only legacy tests, and
+  updates active auth docs away from shard/ECDSA token language while removing
+  anti-resurrection guard scripts/tests, removed-design macro/parser/CLI tests,
+  and stale replay actor metadata in favor of current behavior tests and the
+  documented audit result.
+
 - `0.65.20` pins the auth certified-data ownership boundary in CI so only the
   root and issuer canister-signature helpers may call `certified_data_set`, and
   both must commit the exact labeled `"sig"` tree.

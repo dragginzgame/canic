@@ -55,7 +55,7 @@ impl RuntimeAuthWorkflow {
         Ok(())
     }
 
-    /// Fail fast when one delegated signer canister lacks threshold ECDSA support.
+    /// Fail fast when one delegated-token issuer lacks canister-signature support.
     pub fn ensure_nonroot_crypto_contract(
         canister_role: &CanisterRole,
         canister_cfg: &crate::config::schema::CanisterConfig,

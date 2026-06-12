@@ -14,18 +14,11 @@ use ic_memory::{
 };
 #[cfg(any(test, target_arch = "wasm32"))]
 use ic_memory::{decode_stable_cell_ledger_record, decode_stable_cell_payload};
-#[cfg(any(test, target_arch = "wasm32"))]
-use serde::Deserialize;
 use std::cell::RefCell;
 
 pub const MEMORY_LAYOUT_LEDGER_ID: u8 = ic_memory::MEMORY_MANAGER_LEDGER_ID;
 pub const MEMORY_LEDGER_SCHEMA_VERSION: u32 = 1;
 pub const MEMORY_PHYSICAL_FORMAT_ID: u32 = 1;
-#[cfg(any(test, target_arch = "wasm32"))]
-const LEGACY_CANIC_LEDGER_MAGIC: u64 = 0x4341_4E49_434D_454D;
-#[cfg(any(test, target_arch = "wasm32"))]
-const LEGACY_CANIC_LEDGER_ERROR: &str = "legacy Canic memory ledger format detected; this build uses ic-memory-native allocation persistence and cannot boot from the old format";
-
 thread_local! {
     static MEMORY_LAYOUT_LEDGER: RefCell<
         Cell<StableCellLedgerRecord, VirtualMemory<DefaultMemoryImpl>>
@@ -83,23 +76,9 @@ fn validate_existing_ledger_memory<M: Memory>(memory: &M) -> Result<(), MemoryRe
         return Ok(());
     }
 
-    if let Ok(probe) = crate::cdk::serialize::deserialize::<LegacyCanicLedgerProbe>(&bytes)
-        && probe.magic == LEGACY_CANIC_LEDGER_MAGIC
-    {
-        return Err(MemoryRegistryError::LedgerCorrupt {
-            reason: LEGACY_CANIC_LEDGER_ERROR,
-        });
-    }
-
     Err(MemoryRegistryError::LedgerCorrupt {
         reason: "foreign or corrupt native ic-memory ledger state",
     })
-}
-
-#[cfg(any(test, target_arch = "wasm32"))]
-#[derive(Deserialize)]
-struct LegacyCanicLedgerProbe {
-    magic: u64,
 }
 
 #[cfg(any(test, target_arch = "wasm32"))]
@@ -149,29 +128,6 @@ fn genesis_ledger() -> AllocationLedger {
 mod tests {
     use super::*;
     use ic_memory::{STABLE_CELL_LAYOUT_VERSION, STABLE_CELL_MAGIC, STABLE_CELL_VALUE_OFFSET};
-    use serde::Serialize;
-
-    #[test]
-    fn legacy_canic_ledger_payload_is_rejected() {
-        #[derive(Serialize)]
-        struct LegacyCanicLedgerProbeForTest {
-            magic: u64,
-        }
-
-        let payload = crate::cdk::serialize::serialize(&LegacyCanicLedgerProbeForTest {
-            magic: LEGACY_CANIC_LEDGER_MAGIC,
-        })
-        .expect("legacy probe payload");
-        let memory = DefaultMemoryImpl::default();
-        memory.grow(1);
-        write_stable_cell_payload(&memory, &payload);
-
-        let err = validate_existing_ledger_memory(&memory)
-            .expect_err("legacy Canic ledger must fail hard-cut bootstrap");
-        assert!(
-            matches!(err, MemoryRegistryError::LedgerCorrupt { reason } if reason == LEGACY_CANIC_LEDGER_ERROR)
-        );
-    }
 
     #[test]
     fn validates_native_ledger_cell_payload() {
