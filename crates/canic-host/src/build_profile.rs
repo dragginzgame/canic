@@ -24,7 +24,7 @@ impl CanisterBuildProfile {
 
     // Return the cargo profile flags for one Canic canister build.
     #[must_use]
-    pub const fn cargo_args(self) -> &'static [&'static str] {
+    pub(crate) const fn cargo_args(self) -> &'static [&'static str] {
         match self {
             Self::Debug => &[],
             Self::Fast => &["--profile", "fast"],

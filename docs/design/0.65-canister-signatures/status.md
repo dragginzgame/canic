@@ -37,7 +37,8 @@ Current zero-ECDSA closeout audit status:
 - no active code contains `DelegationProof.root_sig`,
   `EcdsaP256Sha256`, or `sign_prepared_delegation_proof`
 - residual `RootPublicKeyRecord` / `delegated_root_public_key` stable state and
-  auth key publication helpers are removed from the active codebase
+  auth key publication helpers are removed from the active codebase and checked
+  in wasm-store Candid sidecar
 - the only active root `certified_data_set` call is the root
   canister-signature certified-data owner helper for the exact `"sig"` tree
   shape

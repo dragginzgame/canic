@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 pub const DEFAULT_NNS_REGISTRY_SOURCE_ENDPOINT: &str = DEFAULT_MAINNET_ENDPOINT;
-pub const NNS_REGISTRY_VERSION_REPORT_SCHEMA_VERSION: u32 = 1;
+const NNS_REGISTRY_VERSION_REPORT_SCHEMA_VERSION: u32 = 1;
 
 ///
 /// NnsRegistryVersionRequest

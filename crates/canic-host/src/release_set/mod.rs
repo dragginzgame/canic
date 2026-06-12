@@ -49,7 +49,7 @@ use config::{
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
 pub(super) const ROOT_CONFIG_FILE: &str = "canic.toml";
 pub(super) const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
-pub const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
+pub(crate) const ROOT_RELEASE_SET_MANIFEST_FILE: &str = "root.release-set.json";
 pub(super) const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 pub(super) const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
 

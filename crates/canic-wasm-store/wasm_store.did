@@ -9,6 +9,7 @@ type ActiveDelegationProof = record {
 };
 type AppMode = variant { Enabled; Disabled; Readonly };
 type AppStateInput = record { mode : AppMode; cycles_funding_enabled : bool };
+type AuthRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type BootstrapStatusResponse = record {
   last_error : opt text;
   phase : text;
@@ -26,16 +27,7 @@ type CanisterInitPayload = record {
   subnet_index : vec IndexEntryInput;
   app_index : vec IndexEntryInput;
 };
-type CapabilityProof = variant {
-  Structural;
-  DelegatedGrant : CapabilityProofBlob;
-  RoleAttestation : CapabilityProofBlob;
-};
-type CapabilityProofBlob = record {
-  capability_hash : blob;
-  proof_version : nat16;
-  payload : blob;
-};
+type CapabilityProof = variant { Structural };
 type CapabilityRequestMetadata = record {
   request_id : blob;
   ttl_ns : nat64;
@@ -63,6 +55,36 @@ type CyclesRequest = record {
 };
 type CyclesResponse = record { cycles_transferred : nat };
 type DelegatedRoleGrant = record { scopes : vec text; target : text };
+type DelegatedToken = record {
+  claims : DelegatedTokenClaims;
+  issuer_proof : RootProof;
+  proof : DelegationProof;
+};
+type DelegatedTokenClaims = record {
+  aud : DelegationAudience;
+  ext : opt blob;
+  cert_hash : blob;
+  grants : vec DelegatedRoleGrant;
+  subject : principal;
+  issued_at_ns : nat64;
+  issuer_pid : principal;
+  nonce : blob;
+  expires_at_ns : nat64;
+};
+type DelegatedTokenGetRequest = record { claims_hash : blob };
+type DelegatedTokenPrepareRequest = record {
+  aud : DelegationAudience;
+  ext : opt blob;
+  grants : vec DelegatedRoleGrant;
+  subject : principal;
+  metadata : opt AuthRequestMetadata;
+  ttl_ns : nat64;
+};
+type DelegatedTokenPrepareResponse = record {
+  claims_hash : blob;
+  claims : DelegatedTokenClaims;
+  retrieval_expires_at_ns : nat64;
+};
 type DelegationAudience = variant {
   Canister : principal;
   CanicSubnet : principal;
@@ -72,12 +94,12 @@ type DelegationCert = record {
   aud : DelegationAudience;
   grants : vec DelegatedRoleGrant;
   max_token_ttl_ns : nat64;
-  issuer_proof_alg : IssuerProofAlgorithm;
-  issuer_pid : principal;
+  issuer_proof_binding_hash : blob;
+  issuer_proof_binding : IssuerProofBinding;
   not_before_ns : nat64;
   issued_at_ns : nat64;
-  issuer_proof_binding : IssuerProofBinding;
-  issuer_proof_binding_hash : blob;
+  issuer_pid : principal;
+  issuer_proof_alg : IssuerProofAlgorithm;
   expires_at_ns : nat64;
   root_pid : principal;
 };
@@ -104,7 +126,6 @@ type ErrorCode = variant {
   Unauthorized;
   PolicyReplicaRequiresSingletonWithScaling;
   AuthProofExpired;
-  AuthKeyUnknown;
   InternalRpcMalformed;
   ResourceExhausted;
   Unavailable;
@@ -121,6 +142,10 @@ type InstallActiveDelegationProofRequest = record { proof : DelegationProof };
 type InstallActiveDelegationProofResponse = record {
   active_proof : ActiveDelegationProof;
 };
+type IssuerProofAlgorithm = variant { IcCanisterSignatureV1 };
+type IssuerProofBinding = variant {
+  IcCanisterSignatureV1 : record { seed_hash : blob };
+};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -134,38 +159,28 @@ type PageRequest = record { offset : nat64; limit : nat64 };
 type Page_1 = record { total : nat64; entries : vec CycleTrackerEntry };
 type Result = variant { Ok : nat; Err : Error };
 type Result_1 = variant { Ok : Page; Err : Error };
+type Result_10 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
+type Result_11 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type Result_2 = variant { Ok : Page_1; Err : Error };
-type Result_3 = variant {
+type Result_3 = variant { Ok : DelegatedToken; Err : Error };
+type Result_4 = variant {
   Ok : InstallActiveDelegationProofResponse;
   Err : Error;
 };
-type Result_4 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
-type Result_5 = variant { Ok; Err : Error };
-type Result_6 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
-type Result_7 = variant { Ok : TemplateChunkResponse; Err : Error };
-type Result_8 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
-type Result_9 = variant { Ok : WasmStoreStatusResponse; Err : Error };
+type Result_5 = variant { Ok : DelegatedTokenPrepareResponse; Err : Error };
+type Result_6 = variant { Ok : NonrootCyclesCapabilityResponseV1; Err : Error };
+type Result_7 = variant { Ok; Err : Error };
+type Result_8 = variant { Ok : vec WasmStoreCatalogEntryResponse; Err : Error };
+type Result_9 = variant { Ok : TemplateChunkResponse; Err : Error };
 type RootProof = variant { IcCanisterSignatureV1 : IcCanisterSignatureProofV1 };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
-type IssuerProofAlgorithm = variant { IcCanisterSignatureV1 };
-type IssuerProofBinding = variant {
-  IcCanisterSignatureV1 : record { seed_hash : blob };
-};
 type StateSnapshotInput = record {
   subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
   subnet_index : opt vec IndexEntryInput;
   app_index : opt vec IndexEntryInput;
 };
-type SubnetAuthStateInput = record {
-  delegated_root_public_key : opt SubnetRootPublicKeyInput;
-};
-type SubnetRootPublicKeyInput = record {
-  key_hash : blob;
-  key_name : text;
-  public_key_sec1 : blob;
-};
-type SubnetStateInput = record { auth : SubnetAuthStateInput };
+type SubnetStateInput = record { auth : record {} };
 type TemplateChunkInput = record {
   chunk_index : nat32;
   template_id : text;
@@ -259,25 +274,27 @@ service : (CanisterInitPayload, opt blob) -> {
   canic_cycle_balance : () -> (Result) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
+  canic_get_delegated_token : (DelegatedTokenGetRequest) -> (Result_3) query;
   canic_install_active_delegation_proof : (
       InstallActiveDelegationProofRequest,
-    ) -> (Result_3);
+    ) -> (Result_4);
   canic_metadata : () -> (CanicMetadataResponse) query;
+  canic_prepare_delegated_token : (DelegatedTokenPrepareRequest) -> (Result_5);
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
-      Result_4,
+      Result_6,
     );
-  canic_sync_state : (StateSnapshotInput) -> (Result_5);
-  canic_sync_topology : (TopologySnapshotInput) -> (Result_5);
-  canic_wasm_store_begin_gc : () -> (Result_5);
-  canic_wasm_store_catalog : () -> (Result_6) query;
-  canic_wasm_store_chunk : (text, text, nat32) -> (Result_7);
-  canic_wasm_store_complete_gc : () -> (Result_5);
-  canic_wasm_store_info : (text, text) -> (Result_8);
-  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_8);
-  canic_wasm_store_prepare_gc : () -> (Result_5);
-  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_5);
-  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_5);
-  canic_wasm_store_status : () -> (Result_9) query;
+  canic_sync_state : (StateSnapshotInput) -> (Result_7);
+  canic_sync_topology : (TopologySnapshotInput) -> (Result_7);
+  canic_wasm_store_begin_gc : () -> (Result_7);
+  canic_wasm_store_catalog : () -> (Result_8) query;
+  canic_wasm_store_chunk : (text, text, nat32) -> (Result_9);
+  canic_wasm_store_complete_gc : () -> (Result_7);
+  canic_wasm_store_info : (text, text) -> (Result_10);
+  canic_wasm_store_prepare : (TemplateChunkSetPrepareInput) -> (Result_10);
+  canic_wasm_store_prepare_gc : () -> (Result_7);
+  canic_wasm_store_publish_chunk : (TemplateChunkInput) -> (Result_7);
+  canic_wasm_store_stage_manifest : (TemplateManifestInput) -> (Result_7);
+  canic_wasm_store_status : () -> (Result_11) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }

@@ -628,6 +628,16 @@ inspect only the files needed for the current task.
   release validation plus maintainer-owned release-note preparation as
   closeout work. This slice intentionally does not touch the unrelated local
   `canic-host` metadata visibility edit currently in the worktree.
+- Local `0.65.29` generated-surface closeout after committed `0.65.28`
+  refreshes the checked-in wasm-store Candid sidecar against the current
+  zero-ECDSA auth DTOs and endpoints. The sidecar no longer exposes
+  `SubnetAuthStateInput.delegated_root_public_key` or
+  `SubnetRootPublicKeyInput`, and it now includes delegated-token
+  prepare/get DTOs and methods plus the structural-only capability proof
+  shape. The slice also restores the `Cargo.lock` `time` dependency line to
+  `0.3.41`, because the newer `0.3.48` line fails to compile with
+  `ic-agent 0.47.3`. This slice intentionally does not touch the unrelated
+  local `canic-host` visibility edits currently in the worktree.
 - `0.65.15` is committed and removes the active shard ECDSA key/signature
   authority fields from delegated-token `DelegationCert`. Certs now bind
   issuer canister-signature authority instead of shard ECDSA key material.
