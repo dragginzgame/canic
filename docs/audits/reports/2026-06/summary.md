@@ -39,6 +39,6 @@ rewritten.
   deployment-truth decomposition before adding more promotion/lifecycle report
   families. The first host decomposition follow-ups moved external lifecycle
   error/digest helpers plus promotion error/request, digest, identity, policy,
-  guard, provenance, and execution-receipt helpers out of the largest modules,
-  with lifecycle and promotion internals under directory modules. Lifecycle and
-  install-root/report-family pressure remain open.
+  guard, provenance, execution-receipt, and materialization helpers out of the
+  largest modules, with lifecycle and promotion internals under directory
+  modules. Lifecycle and install-root/report-family pressure remain open.

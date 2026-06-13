@@ -12,14 +12,17 @@ present.
 
 ## Unreleased
 
-- Continues the host deployment-truth decomposition by moving artifact
-  promotion provenance and execution-receipt construction/validation into a
-  focused promotion child module while preserving the public deployment-truth
-  API.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.6` continues deployment-truth promotion decomposition by isolating
+  source-build materialization evidence, identity-report, output-group, and
+  transform-link validation helpers while preserving the public promotion API.
+
+- `0.67.5` continues deployment-truth promotion decomposition by isolating
+  artifact-promotion provenance and execution-receipt construction/validation
+  in a focused child module while preserving the public deployment-truth API.
 
 - `0.67.4` decomposes the largest host deployment-truth lifecycle and
   promotion internals into directory modules while preserving the public
