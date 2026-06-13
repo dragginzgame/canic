@@ -1190,7 +1190,7 @@ fn authority_v1_json_schema_shape_is_stable() {
 fn deployment_truth_authority_paths_have_no_controller_mutation_primitives() {
     for (path, source) in [
         ("authority.rs", include_str!("../authority.rs")),
-        ("lifecycle.rs", include_str!("../lifecycle.rs")),
+        ("lifecycle.rs", include_str!("../lifecycle/mod.rs")),
         ("receipt.rs", include_str!("../receipt.rs")),
         ("text.rs", include_str!("../text.rs")),
     ] {

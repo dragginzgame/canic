@@ -326,7 +326,11 @@ Commands used as source scans:
 ## Follow-up Actions
 
 1. Keep host deployment-truth decomposition as the main friction target before
-   adding more promotion/lifecycle report families.
+   adding more promotion/lifecycle report families. The first follow-up slices
+   moved external lifecycle error/digest helpers plus promotion error/request,
+   digest, identity, policy, and guard helpers out of the largest modules, with
+   lifecycle and promotion internals under directory modules. The
+   promotion/lifecycle gravity wells remain open.
 2. Treat new root capability request variants and delegated auth verifier rules
    as coordinated cross-layer slices with DTO, workflow, ops, metrics, tests,
    and docs planned together.

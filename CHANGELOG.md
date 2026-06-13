@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.4` decomposes the largest host deployment-truth lifecycle and
+  promotion internals into directory modules while preserving the public
+  deployment-truth API.
+
 - `0.67.3` tightens registry-record ownership so workflow and
   endpoint-boundary code use ops-owned subnet registry projections instead of
   consuming raw registry records.

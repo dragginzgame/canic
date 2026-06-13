@@ -2353,7 +2353,7 @@ fn external_upgrade_completion_report_text_reports_passive_boundary() {
 #[test]
 fn external_lifecycle_uses_canonical_control_class_model() {
     let model = include_str!("../model.rs");
-    let lifecycle = include_str!("../lifecycle.rs");
+    let lifecycle = include_str!("../lifecycle/mod.rs");
 
     assert_eq!(model.matches("pub enum CanisterControlClassV1").count(), 1);
     assert!(lifecycle.contains("CanisterControlClassV1"));

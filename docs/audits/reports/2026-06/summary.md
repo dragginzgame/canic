@@ -37,4 +37,8 @@ rewritten.
 - Carry forward the change-friction watchpoints: the `workflow/pool` direct
   storage-record reference was fixed on 2026-06-13; prioritize host
   deployment-truth decomposition before adding more promotion/lifecycle report
-  families.
+  families. The first host decomposition follow-ups moved external lifecycle
+  error/digest helpers plus promotion error/request, digest, identity, and
+  policy and guard helpers out of the largest modules, with lifecycle and
+  promotion internals under directory modules. Promotion/lifecycle gravity
+  wells remain open.

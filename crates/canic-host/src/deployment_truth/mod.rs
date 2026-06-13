@@ -45,6 +45,8 @@ pub use lifecycle::{
     ExternalUpgradeProposalReportError, ExternalUpgradeReceiptError,
     ExternalUpgradeVerificationCheckError, ExternalUpgradeVerificationPolicyError,
     ExternalUpgradeVerificationReportError, LifecycleAuthorityReportError,
+};
+pub use lifecycle::{
     critical_external_fix_report_from_pending, external_lifecycle_check_from_reports,
     external_lifecycle_handoff_from_reports, external_lifecycle_pending_report_from_plan,
     external_lifecycle_plan_from_check, external_upgrade_completion_report_from_evidence,
@@ -142,32 +144,35 @@ pub use observe::{
 };
 pub use plan::{LocalDeploymentPlanRequest, build_local_deployment_plan};
 pub use promotion::{
-    ArtifactPromotionExecutionReceiptError, ArtifactPromotionExecutionReceiptRequest,
-    ArtifactPromotionPlanError, ArtifactPromotionPlanRequest,
-    ArtifactPromotionProvenanceReportError, ArtifactPromotionProvenanceReportRequest,
-    BuildMaterializationEvidenceRequest, PromotionArtifactIdentityReportError,
-    PromotionArtifactIdentityReportRequest, PromotionArtifactSourceError,
-    PromotionMaterializationIdentityError, PromotionMaterializationIdentityReportError,
-    PromotionMaterializationIdentityReportRequest, PromotionPlanTransformError,
-    PromotionPlanTransformEvidenceError, PromotionPlanTransformEvidenceRequest,
-    PromotionPlanTransformRequest, PromotionPlanTransformWithMaterializationRequest,
-    PromotionPolicyCheckError, PromotionPolicyCheckRequest, PromotionReadinessError,
+    ArtifactPromotionExecutionReceiptError, ArtifactPromotionPlanError,
+    ArtifactPromotionProvenanceReportError, PromotionArtifactIdentityReportError,
+    PromotionArtifactSourceError, PromotionMaterializationIdentityError,
+    PromotionMaterializationIdentityReportError, PromotionPlanTransformError,
+    PromotionPlanTransformEvidenceError, PromotionPolicyCheckError, PromotionReadinessError,
+    PromotionTargetExecutionLineageError, PromotionWasmStoreCatalogVerificationError,
+    PromotionWasmStoreIdentityReportError,
+};
+pub use promotion::{
+    ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionPlanRequest,
+    ArtifactPromotionProvenanceReportRequest, BuildMaterializationEvidenceRequest,
+    PromotionArtifactIdentityReportRequest, PromotionMaterializationIdentityReportRequest,
+    PromotionPlanTransformEvidenceRequest, PromotionPlanTransformRequest,
+    PromotionPlanTransformWithMaterializationRequest, PromotionPolicyCheckRequest,
     PromotionReadinessRequest, PromotionReadinessWithPolicyRequest,
-    PromotionTargetExecutionLineageError, PromotionTargetExecutionLineageRequest,
-    PromotionWasmStoreCatalogVerificationError, PromotionWasmStoreCatalogVerificationRequest,
-    PromotionWasmStoreIdentityReportError, PromotionWasmStoreIdentityReportRequest,
+    PromotionTargetExecutionLineageRequest, PromotionWasmStoreCatalogVerificationRequest,
+    PromotionWasmStoreIdentityReportRequest,
+};
+pub use promotion::{
     artifact_promotion_execution_receipt, artifact_promotion_plan,
-    artifact_promotion_provenance_report, build_materialization_evidence,
-    build_materialization_input_digest, check_promotion_policy, check_promotion_readiness,
-    check_promotion_readiness_with_policy, promoted_deployment_plan_from_inputs,
-    promoted_deployment_plan_transform_from_inputs,
+    artifact_promotion_provenance_report, build_materialization_evidence, check_promotion_policy,
+    check_promotion_readiness, check_promotion_readiness_with_policy,
+    promoted_deployment_plan_from_inputs, promoted_deployment_plan_transform_from_inputs,
     promoted_deployment_plan_transform_from_inputs_with_materialization,
     promotion_artifact_identity_report, promotion_artifact_identity_report_from_inputs,
     promotion_materialization_identity_report,
-    promotion_materialization_identity_report_from_evidence, promotion_plan_lineage_digest,
-    promotion_plan_transform_evidence, promotion_policy_check_from_inputs,
-    promotion_readiness_from_inputs, promotion_readiness_from_inputs_with_policy,
-    promotion_target_execution_lineage, promotion_target_execution_lineage_digest,
+    promotion_materialization_identity_report_from_evidence, promotion_plan_transform_evidence,
+    promotion_policy_check_from_inputs, promotion_readiness_from_inputs,
+    promotion_readiness_from_inputs_with_policy, promotion_target_execution_lineage,
     promotion_wasm_store_catalog_verification, promotion_wasm_store_identity_report,
     promotion_wasm_store_identity_report_from_staging,
     validate_artifact_promotion_execution_receipt, validate_artifact_promotion_plan,
@@ -181,6 +186,10 @@ pub use promotion::{
     validate_promotion_wasm_store_catalog_verification,
     validate_promotion_wasm_store_identity_report, validate_role_artifact_source,
     validate_role_promotion_policy,
+};
+pub use promotion::{
+    build_materialization_input_digest, promotion_plan_lineage_digest,
+    promotion_target_execution_lineage_digest,
 };
 pub use receipt::{
     AuthorityEvidenceError, artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
