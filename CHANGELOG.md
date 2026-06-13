@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.9` adds cached NNS topology coverage/version inspection and hardens
+  backup plus wasm-store recovery paths so unsafe persisted state fails
+  explicitly.
+
 - `0.66.8` separates shared auth-proof trust-anchor support from delegated-token
   endpoint verification, renames the private root delegation proof client, and
   cleans active delegated-auth ops and docs away from stale shard/mint/signing

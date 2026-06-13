@@ -115,6 +115,30 @@ fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
 }
 
 #[test]
+fn clear_binding_reports_blocked_retired_slot() {
+    SubnetStateOps::import(SubnetStateRecord {
+        publication_store: PublicationStoreStateRecord {
+            active_binding: Some(WasmStoreBinding::new("active")),
+            detached_binding: Some(WasmStoreBinding::new("detached")),
+            retired_binding: Some(WasmStoreBinding::new("retired")),
+            generation: 3,
+            changed_at: 30,
+            retired_at: 20,
+        },
+        wasm_stores: Vec::new(),
+    });
+
+    let err = WasmStorePublicationWorkflow::clear_current_publication_store_binding()
+        .expect_err("clear must fail while it would overwrite a retired slot");
+
+    assert!(err.to_string().contains("rollover blocked"));
+    assert_eq!(
+        SubnetStateOps::publication_store_state().active_binding,
+        Some(WasmStoreBinding::new("active"))
+    );
+}
+
+#[test]
 fn detached_and_retired_bindings_are_not_publication_candidates() {
     let state = PublicationStoreStateRecord {
         active_binding: Some(WasmStoreBinding::new("active")),

@@ -278,6 +278,31 @@ fn runner_preflight_failure_leaves_mutation_blocked() {
     );
 }
 
+// Ensure a tampered temp path in a resumable download journal is not trusted.
+#[test]
+fn runner_rejects_unexpected_download_temp_path() {
+    let root = prepared_layout("canic-backup-runner-temp-path");
+
+    let mut first_executor = FakeExecutor::default();
+    backup_run_execute_with_executor(&runner_config(root.clone(), Some(4)), &mut first_executor)
+        .expect("run through download");
+
+    let layout = BackupLayout::new(root.clone());
+    let mut journal = layout.read_journal().expect("read download journal");
+    journal.artifacts[0].temp_path = Some("/tmp/canic-backup-outside".to_string());
+    layout
+        .write_journal(&journal)
+        .expect("write tampered journal");
+
+    let mut second_executor = FakeExecutor::default();
+    let err =
+        backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut second_executor)
+            .expect_err("tampered temp path rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    std::assert_matches!(err, BackupRunnerError::ArtifactTempPathMismatch { .. });
+}
+
 #[derive(Default)]
 struct FakeExecutor {
     commands: Vec<String>,

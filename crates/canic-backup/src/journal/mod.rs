@@ -1,6 +1,10 @@
 use candid::Principal;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, str::FromStr};
+use std::{
+    collections::BTreeSet,
+    path::{Component, PathBuf},
+    str::FromStr,
+};
 use thiserror::Error as ThisError;
 
 const SUPPORTED_JOURNAL_VERSION: u16 = 1;
@@ -157,6 +161,7 @@ impl ArtifactJournalEntry {
         validate_principal("artifacts[].canister_id", &self.canister_id)?;
         validate_nonempty("artifacts[].snapshot_id", &self.snapshot_id)?;
         validate_nonempty("artifacts[].artifact_path", &self.artifact_path)?;
+        validate_relative_artifact_path("artifacts[].artifact_path", &self.artifact_path)?;
         validate_nonempty("artifacts[].checksum_algorithm", &self.checksum_algorithm)?;
         validate_nonempty("artifacts[].updated_at", &self.updated_at)?;
 
@@ -319,6 +324,9 @@ pub enum JournalValidationError {
     #[error("unsupported hash algorithm {0}")]
     UnsupportedHashAlgorithm(String),
 
+    #[error("field {field} must be a relative artifact path under the backup root: {value}")]
+    InvalidArtifactPath { field: &'static str, value: String },
+
     #[error("duplicate artifact entry for canister {canister_id} snapshot {snapshot_id}")]
     DuplicateArtifact {
         canister_id: String,
@@ -348,6 +356,25 @@ fn validate_nonempty(field: &'static str, value: &str) -> Result<(), JournalVali
     } else {
         Ok(())
     }
+}
+
+// Validate durable artifact paths before any runner resume code trusts them.
+fn validate_relative_artifact_path(
+    field: &'static str,
+    value: &str,
+) -> Result<(), JournalValidationError> {
+    let path = PathBuf::from(value);
+    if path.is_absolute()
+        || !path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+    {
+        return Err(JournalValidationError::InvalidArtifactPath {
+            field,
+            value: value.to_string(),
+        });
+    }
+    Ok(())
 }
 
 // Validate required string fields represented as optional journal fields.

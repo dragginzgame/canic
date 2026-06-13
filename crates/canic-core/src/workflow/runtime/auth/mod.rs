@@ -335,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn verifier_only_nonroot_does_not_require_auth_crypto() {
+    fn verifier_only_nonroot_requires_root_and_issuer_proof_verifier_support() {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,

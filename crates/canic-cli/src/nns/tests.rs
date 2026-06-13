@@ -26,8 +26,9 @@ use super::{
         should_retry_info_as_deployment_target, subnet_usage,
     },
     topology::{
-        TopologyRefreshOptions, TopologySummaryOptions, topology_refresh_usage,
-        topology_summary_usage, topology_usage,
+        TopologyCoverageOptions, TopologyRefreshOptions, TopologySummaryOptions,
+        TopologyVersionsOptions, topology_coverage_usage, topology_refresh_usage,
+        topology_summary_usage, topology_usage, topology_versions_usage,
     },
 };
 use canic_host::{
@@ -576,6 +577,46 @@ fn topology_summary_parses_defaults_and_json_format() {
 }
 
 #[test]
+fn topology_versions_parses_defaults_and_json_format() {
+    let defaults = TopologyVersionsOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+
+    let options = TopologyVersionsOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse topology versions");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
+fn topology_coverage_parses_defaults_and_json_format() {
+    let defaults = TopologyCoverageOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+
+    let options = TopologyCoverageOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse topology coverage");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
 fn topology_refresh_parses_defaults_and_dry_run() {
     let defaults = TopologyRefreshOptions::parse([]).expect("parse defaults");
 
@@ -708,14 +749,24 @@ fn topology_help_is_advertised_under_nns() {
     let nns = usage();
     let topology = topology_usage();
     let summary = topology_summary_usage();
+    let coverage = topology_coverage_usage();
+    let versions = topology_versions_usage();
     let refresh = topology_refresh_usage();
 
     assert!(nns.contains("topology"));
     assert!(topology.contains("Summarize cached mainnet NNS topology reports"));
+    assert!(topology.contains("Show cached mainnet NNS topology join coverage"));
+    assert!(topology.contains("Show cached mainnet NNS topology component registry versions"));
     assert!(topology.contains("Refresh cached mainnet NNS topology component reports"));
     assert!(summary.contains("canic nns topology summary"));
     assert!(summary.contains("--format json"));
     assert!(summary.contains("--source-endpoint"));
+    assert!(coverage.contains("canic nns topology coverage"));
+    assert!(coverage.contains("--format json"));
+    assert!(coverage.contains("--source-endpoint"));
+    assert!(versions.contains("canic nns topology versions"));
+    assert!(versions.contains("--format json"));
+    assert!(versions.contains("--source-endpoint"));
     assert!(refresh.contains("canic nns topology refresh"));
     assert!(refresh.contains("--format json"));
     assert!(refresh.contains("--source-endpoint"));
@@ -811,6 +862,38 @@ fn topology_local_is_rejected_with_pinned_message() {
     let message = err.to_string();
     assert!(message.contains("supports only the mainnet `ic` network"));
     assert!(message.contains("canic --network ic nns topology summary"));
+    assert!(message.contains("canic --network ic nns topology coverage"));
+    assert!(message.contains("canic --network ic nns topology versions"));
+}
+
+#[test]
+fn topology_coverage_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("topology"),
+        OsString::from("coverage"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns topology coverage"));
+}
+
+#[test]
+fn topology_versions_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("topology"),
+        OsString::from("versions"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns topology versions"));
 }
 
 #[test]

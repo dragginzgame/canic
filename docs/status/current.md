@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
 ## Purpose
 
@@ -9,8 +9,9 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.66.7` is published as the current post-0.65 closeout baseline. `0.66.8`
-  is prepared in the worktree as an auth-proof support cleanup. It renames the
+- `0.66.8` is pushed as the current post-0.65 feedback baseline. Pause broad
+  cleanup until real Canic usage reports concrete regressions or patch-worthy
+  defects. This release renamed the
   shared root-key/root-canister trust-anchor config from delegated-token-only
   wording to `AuthProofVerifierConfig`, splits non-root startup predicates so
   role-attestation caches and token issuers require root proof verification
@@ -21,7 +22,7 @@ inspect only the files needed for the current task.
   signing terminology, removes unused RPC workflow error variants that still
   used `shard_pid` auth wording, and cleans active docs/runbooks/audit
   references away from stale shard/mint wording.
-  Current validation for this cleanup slice:
+  Recorded validation for `0.66.8`:
   ```text
   cargo fmt --all -- --check
   cargo check --locked -p canic-core -p canic
@@ -1007,7 +1008,7 @@ inspect only the files needed for the current task.
   `scripts/ci/check-diagnostic-consistency-audit.sh`. The audit classifies
   existing public errors, internal runtime logs, metrics, tests, and docs for
   replay-sensitive failure classes including duplicate replay, missing or
-  invalid operation IDs, expiration, caller/shard mismatch, delegation-proof
+  invalid operation IDs, expiration, caller/issuer mismatch, delegation-proof
   replay, delegated-token replay, pending operations, recovery-required state,
   cost-boundary refusal, permit-boundary refusal, and durable-publication
   ambiguity. This is docs/CI-only work: no runtime behavior, Candid, CLI
@@ -1029,7 +1030,7 @@ inspect only the files needed for the current task.
   `scripts/ci/check-recovery-runbooks.sh`. The runbooks document safe operator
   recovery decisions for replay-sensitive failures and uncertain operations,
   including same-input retries, committed replay, in-progress operations,
-  payload/caller mismatches, expired authorization, delegation caller/shard
+  payload/caller mismatches, expired authorization, delegation caller/issuer
   mismatch, project-local pending ICP refill, recovery-required refill,
   cost-boundary refusal, durable-publication ambiguity, upgrade interruption,
   and unexpected receipt state. This is docs/CI-only work: no runtime behavior,
@@ -1049,8 +1050,8 @@ inspect only the files needed for the current task.
   `docs/operations/upgrade-state-compatibility-audit.md` plus CI guard
   `scripts/ci/check-upgrade-state-audit.sh`. The audit classifies
   replay-sensitive state areas including replay receipts, operation IDs,
-  pending operation logs, delegated-auth hard-cut state, caller/shard binding,
-  delegated-token mint replay, ICP refill replay, cost-guard accounting,
+  pending operation logs, delegated-auth hard-cut state, caller/issuer binding,
+  delegated-token prepare replay, ICP refill replay, cost-guard accounting,
   upgrade request replay, lifecycle post-upgrade ordering, durable-publication
   state, and stable-memory ABI ownership. No release blocker was found in this
   audit. This is docs/CI-only work: no runtime behavior, Candid, CLI output,
@@ -1771,7 +1772,7 @@ inspect only the files needed for the current task.
   `docs/design/0.61-replay-protection/0.61-design.md`. Root
   delegation-proof issuance now uses shared replay receipts: shard-side
   requests attach root replay metadata, root rejects missing/invalid replay
-  metadata, the endpoint reserves `auth.assemble_delegation_proof_for_tests.v1` receipts
+  metadata, the endpoint reserves `auth.prepare_delegation_proof.v1` receipts
   before threshold ECDSA signing, marks the signing effect in flight, commits
   Candid-encoded proof bytes for duplicate replay, and reports conflict or
   recovery states for non-fresh receipts. The auth signing ops are split into

@@ -52,7 +52,7 @@ same operation ID, same actor, same payload
 Safe retry means the operator repeats the same logical operation with the same
 operation ID, same authenticated actor, same target, and same payload.
 
-Do not change payload, caller, shard, or target while reusing an operation ID.
+Do not change payload, caller, issuer, or target while reusing an operation ID.
 
 Do not manually edit canister stable state, replay receipts, cost-guard intent
 state, publication state, or pending operation stores as a recovery shortcut.

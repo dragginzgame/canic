@@ -169,6 +169,7 @@ fn execute_verify_artifact(
                 sequence: operation.sequence,
                 target_canister_id: target.clone(),
             })?;
+    ensure_expected_temp_path(layout, operation.sequence, &target, temp_path)?;
     let checksum = ArtifactChecksum::from_path(Path::new(temp_path))?;
     entry.checksum = Some(checksum.hash.clone());
     entry.advance_to(ArtifactState::ChecksumVerified, current_timestamp_marker())?;
@@ -196,12 +197,14 @@ fn execute_finalize_manifest(
             continue;
         }
         let canister_id = download_journal.artifacts[index].canister_id.clone();
-        let temp_path = download_journal.artifacts[index].temp_path.clone().ok_or(
-            BackupRunnerError::MissingArtifactEntry {
+        let temp_path = download_journal.artifacts[index]
+            .temp_path
+            .clone()
+            .ok_or_else(|| BackupRunnerError::MissingArtifactEntry {
                 sequence: operation.sequence,
-                target_canister_id: canister_id,
-            },
-        )?;
+                target_canister_id: canister_id.clone(),
+            })?;
+        ensure_expected_temp_path(layout, operation.sequence, &canister_id, &temp_path)?;
         let artifact_path = layout
             .root()
             .join(&download_journal.artifacts[index].artifact_path);
@@ -324,6 +327,24 @@ fn artifact_relative_path(canister_id: &str) -> String {
 
 fn artifact_temp_path(root: &Path, canister_id: &str) -> PathBuf {
     root.join(format!("{}.tmp", safe_path_segment(canister_id)))
+}
+
+fn ensure_expected_temp_path(
+    layout: &BackupLayout,
+    sequence: usize,
+    target: &str,
+    temp_path: &str,
+) -> Result<(), BackupRunnerError> {
+    let expected = artifact_temp_path(layout.root(), target);
+    if Path::new(temp_path) != expected {
+        return Err(BackupRunnerError::ArtifactTempPathMismatch {
+            sequence,
+            target_canister_id: target.to_string(),
+            journal_path: temp_path.to_string(),
+            expected_path: expected.display().to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn safe_path_segment(value: &str) -> String {

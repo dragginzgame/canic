@@ -87,8 +87,8 @@ pub fn set_current_publication_store_binding(binding: WasmStoreBinding) -> Resul
 }
 
 /// Clear the explicit publication binding for the current subnet.
-pub fn clear_current_publication_store_binding() {
-    WasmStorePublicationWorkflow::clear_current_publication_store_binding();
+pub fn clear_current_publication_store_binding() -> Result<(), Error> {
+    WasmStorePublicationWorkflow::clear_current_publication_store_binding().map_err(Error::from)
 }
 
 /// Retire the current detached publication binding for the current subnet.

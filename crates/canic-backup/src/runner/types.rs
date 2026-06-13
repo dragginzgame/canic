@@ -119,6 +119,16 @@ pub enum BackupRunnerError {
         target_canister_id: String,
     },
 
+    #[error(
+        "backup operation {sequence} artifact temp path for target {target_canister_id} does not match expected runner path: journal={journal_path}, expected={expected_path}"
+    )]
+    ArtifactTempPathMismatch {
+        sequence: usize,
+        target_canister_id: String,
+        journal_path: String,
+        expected_path: String,
+    },
+
     #[error("backup operation {sequence} failed: {status}: {message}")]
     CommandFailed {
         sequence: usize,

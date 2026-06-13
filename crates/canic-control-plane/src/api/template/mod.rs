@@ -237,8 +237,8 @@ impl WasmStorePublicationApi {
     }
 
     // Clear the explicit publication binding for the current subnet.
-    pub fn clear_current_publication_store_binding() {
-        support::clear_current_publication_store_binding();
+    pub fn clear_current_publication_store_binding() -> Result<(), Error> {
+        support::clear_current_publication_store_binding()
     }
 
     // Retire the current detached publication binding for the current subnet.

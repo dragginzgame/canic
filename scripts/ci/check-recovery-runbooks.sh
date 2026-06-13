@@ -31,7 +31,7 @@ require_texts "$RUNBOOK" "$GUARD_LABEL" \
     "### Operation Already In Progress" \
     "### Payload Or Caller Mismatch" \
     "### Expired Authorization Or Replay Metadata" \
-    "### Delegation Caller Or Shard Mismatch" \
+    "### Delegation Caller Or Issuer Mismatch" \
     "### Project-Local Pending ICP Refill" \
     "### ICP Refill Recovery-Required State" \
     "### Cost-Boundary Refusal" \
@@ -41,7 +41,7 @@ require_texts "$RUNBOOK" "$GUARD_LABEL" \
     "## Validation Gates" \
     "## Outcome Summary" \
     "same operation ID, same actor, same payload" \
-    "Do not change payload, caller, shard, or target while reusing an operation ID." \
+    "Do not change payload, caller, issuer, or target while reusing an operation ID." \
     "bash scripts/ci/check-recovery-runbooks.sh" \
     "cargo test --locked -p canic-core replay_policy --lib -- --nocapture" \
     "cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture" \

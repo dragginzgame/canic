@@ -98,6 +98,8 @@ canic nns node-provider list
 canic nns node-operator list
 canic nns topology refresh
 canic nns topology summary
+canic nns topology coverage
+canic nns topology versions
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```
 

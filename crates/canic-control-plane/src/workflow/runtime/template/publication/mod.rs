@@ -40,7 +40,7 @@ impl WasmStorePublicationWorkflow {
                 Ok(WasmStoreAdminResponse::SetPublicationBinding { binding })
             }
             WasmStoreAdminCommand::ClearPublicationBinding => {
-                Self::clear_current_publication_store_binding();
+                Self::clear_current_publication_store_binding()?;
                 Ok(WasmStoreAdminResponse::ClearedPublicationBinding)
             }
             WasmStoreAdminCommand::RetireDetachedBinding => {

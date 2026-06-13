@@ -122,6 +122,21 @@ fn duplicate_artifacts_fail_validation() {
     std::assert_matches!(err, JournalValidationError::DuplicateArtifact { .. });
 }
 
+// Ensure persisted artifact paths cannot escape the backup root during resume.
+#[test]
+fn artifact_paths_must_stay_relative_to_backup_root() {
+    for path in ["../outside", "/tmp/outside"] {
+        let mut journal = valid_journal();
+        journal.artifacts[0].artifact_path = path.to_string();
+
+        let err = journal
+            .validate()
+            .expect_err("escaping artifact path should fail");
+
+        std::assert_matches!(err, JournalValidationError::InvalidArtifactPath { .. });
+    }
+}
+
 // Ensure journals round-trip through the JSON format.
 #[test]
 fn journal_round_trips_through_json() {

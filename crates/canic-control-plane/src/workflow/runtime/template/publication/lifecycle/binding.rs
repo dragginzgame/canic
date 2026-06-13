@@ -154,11 +154,8 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Clear the explicit publication binding and fall back to configured store selection.
-    pub fn clear_current_publication_store_binding() {
-        if let Err(err) = Self::ensure_retired_binding_slot_available_for_promotion() {
-            log!(Topic::Wasm, Warn, "{err}");
-            return;
-        }
+    pub fn clear_current_publication_store_binding() -> Result<(), InternalError> {
+        Self::ensure_retired_binding_slot_available_for_promotion()?;
 
         let changed_at = IcOps::now_secs();
         let previous = SubnetStateOps::publication_store_state();
@@ -172,6 +169,8 @@ impl WasmStorePublicationWorkflow {
                 changed_at,
             );
         }
+
+        Ok(())
     }
 
     // Return the oldest known runtime-managed wasm-store binding for this subnet.

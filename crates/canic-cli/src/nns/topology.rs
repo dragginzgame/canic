@@ -15,8 +15,11 @@ use crate::{
 };
 use canic_host::{
     nns_topology::{
-        NnsTopologyRefreshRequest, NnsTopologySummaryRequest, build_nns_topology_summary_report,
-        nns_topology_refresh_report_text, nns_topology_summary_report_text,
+        NnsTopologyCoverageRequest, NnsTopologyRefreshRequest, NnsTopologySummaryRequest,
+        NnsTopologyVersionsRequest, build_nns_topology_coverage_report,
+        build_nns_topology_summary_report, build_nns_topology_versions_report,
+        nns_topology_coverage_report_text, nns_topology_refresh_report_text,
+        nns_topology_summary_report_text, nns_topology_versions_report_text,
         refresh_nns_topology_report,
     },
     release_set::icp_root,
@@ -28,6 +31,16 @@ Examples:
   canic nns topology summary
   canic --network ic nns topology summary --format json
   canic nns topology summary --source-endpoint https://icp-api.io";
+const TOPOLOGY_COVERAGE_HELP_AFTER: &str = "\
+Examples:
+  canic nns topology coverage
+  canic --network ic nns topology coverage --format json
+  canic nns topology coverage --source-endpoint https://icp-api.io";
+const TOPOLOGY_VERSIONS_HELP_AFTER: &str = "\
+Examples:
+  canic nns topology versions
+  canic --network ic nns topology versions --format json
+  canic nns topology versions --source-endpoint https://icp-api.io";
 const TOPOLOGY_REFRESH_HELP_AFTER: &str = "\
 Examples:
   canic nns topology refresh
@@ -42,6 +55,26 @@ const LOCK_STALE_AFTER_ARG: &str = "lock-stale-after";
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct TopologySummaryOptions {
+    pub(super) network: String,
+    pub(super) format: super::OutputFormat,
+    pub(super) source_endpoint: String,
+}
+
+///
+/// TopologyCoverageOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct TopologyCoverageOptions {
+    pub(super) network: String,
+    pub(super) format: super::OutputFormat,
+    pub(super) source_endpoint: String,
+}
+
+///
+/// TopologyVersionsOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct TopologyVersionsOptions {
     pub(super) network: String,
     pub(super) format: super::OutputFormat,
     pub(super) source_endpoint: String,
@@ -72,6 +105,8 @@ where
 
     match command.as_str() {
         "summary" => run_topology_summary(args),
+        "coverage" => run_topology_coverage(args),
+        "versions" => run_topology_versions(args),
         "refresh" => run_topology_refresh(args),
         _ => unreachable!("nns topology dispatch command only defines known commands"),
     }
@@ -115,6 +150,48 @@ where
     write_text_or_json(format, &report, nns_topology_summary_report_text)
 }
 
+fn run_topology_coverage<I>(args: I) -> Result<(), NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, topology_coverage_usage, version_text()) {
+        return Ok(());
+    }
+    let options = TopologyCoverageOptions::parse(args)?;
+    let format = options.format;
+    let icp_root = icp_root().map_err(|err| NnsCommandError::Usage(err.to_string()))?;
+    let request = NnsTopologyCoverageRequest {
+        icp_root,
+        network: options.network,
+        source_endpoint: options.source_endpoint,
+        now_unix_secs: now_unix_secs()?,
+    };
+    let report = build_nns_topology_coverage_report(&request)?;
+    write_text_or_json(format, &report, nns_topology_coverage_report_text)
+}
+
+fn run_topology_versions<I>(args: I) -> Result<(), NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, topology_versions_usage, version_text()) {
+        return Ok(());
+    }
+    let options = TopologyVersionsOptions::parse(args)?;
+    let format = options.format;
+    let icp_root = icp_root().map_err(|err| NnsCommandError::Usage(err.to_string()))?;
+    let request = NnsTopologyVersionsRequest {
+        icp_root,
+        network: options.network,
+        source_endpoint: options.source_endpoint,
+        now_unix_secs: now_unix_secs()?,
+    };
+    let report = build_nns_topology_versions_report(&request)?;
+    write_text_or_json(format, &report, nns_topology_versions_report_text)
+}
+
 fn run_topology_refresh<I>(args: I) -> Result<(), NnsCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -154,6 +231,38 @@ impl TopologySummaryOptions {
     }
 }
 
+impl TopologyCoverageOptions {
+    pub(super) fn parse<I>(args: I) -> Result<Self, NnsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(topology_coverage_command(), args)
+            .map_err(|_| NnsCommandError::Usage(topology_coverage_usage()))?;
+        let common = NnsCommonOptions::from_matches(&matches);
+        Ok(Self {
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
+        })
+    }
+}
+
+impl TopologyVersionsOptions {
+    pub(super) fn parse<I>(args: I) -> Result<Self, NnsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(topology_versions_command(), args)
+            .map_err(|_| NnsCommandError::Usage(topology_versions_usage()))?;
+        let common = NnsCommonOptions::from_matches(&matches);
+        Ok(Self {
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
+        })
+    }
+}
+
 impl TopologyRefreshOptions {
     pub(super) fn parse<I>(args: I) -> Result<Self, NnsCommandError>
     where
@@ -181,6 +290,13 @@ pub(super) fn topology_command() -> clap::Command {
             clap::Command::new("summary").about("Summarize cached mainnet NNS topology reports"),
         ))
         .subcommand(passthrough_subcommand(
+            clap::Command::new("coverage").about("Show cached mainnet NNS topology join coverage"),
+        ))
+        .subcommand(passthrough_subcommand(
+            clap::Command::new("versions")
+                .about("Show cached mainnet NNS topology component registry versions"),
+        ))
+        .subcommand(passthrough_subcommand(
             clap::Command::new("refresh")
                 .about("Refresh cached mainnet NNS topology component reports"),
         ))
@@ -198,6 +314,34 @@ fn topology_summary_command() -> clap::Command {
         )
         .arg(leaf::network_arg())
         .after_help(TOPOLOGY_SUMMARY_HELP_AFTER)
+}
+
+fn topology_coverage_command() -> clap::Command {
+    clap::Command::new("coverage")
+        .bin_name("canic nns topology coverage")
+        .about("Show cached mainnet NNS topology join coverage")
+        .disable_help_flag(true)
+        .arg(leaf::format_arg())
+        .arg(
+            leaf::source_endpoint_arg(canic_host::nns_node::DEFAULT_NNS_NODE_SOURCE_ENDPOINT)
+                .help("IC API endpoint used if a topology component cache is missing"),
+        )
+        .arg(leaf::network_arg())
+        .after_help(TOPOLOGY_COVERAGE_HELP_AFTER)
+}
+
+fn topology_versions_command() -> clap::Command {
+    clap::Command::new("versions")
+        .bin_name("canic nns topology versions")
+        .about("Show cached mainnet NNS topology component registry versions")
+        .disable_help_flag(true)
+        .arg(leaf::format_arg())
+        .arg(
+            leaf::source_endpoint_arg(canic_host::nns_node::DEFAULT_NNS_NODE_SOURCE_ENDPOINT)
+                .help("IC API endpoint used if a topology component cache is missing"),
+        )
+        .arg(leaf::network_arg())
+        .after_help(TOPOLOGY_VERSIONS_HELP_AFTER)
 }
 
 fn topology_refresh_command() -> clap::Command {
@@ -226,6 +370,14 @@ pub(super) fn topology_usage() -> String {
 
 pub(super) fn topology_summary_usage() -> String {
     render_help(topology_summary_command())
+}
+
+pub(super) fn topology_coverage_usage() -> String {
+    render_help(topology_coverage_command())
+}
+
+pub(super) fn topology_versions_usage() -> String {
+    render_help(topology_versions_command())
 }
 
 pub(super) fn topology_refresh_usage() -> String {

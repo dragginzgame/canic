@@ -97,17 +97,32 @@ Public IC registry metadata is inspected through the `nns` namespace:
 canic nns subnet refresh
 canic nns registry version
 canic nns subnet list
-canic nns data-center list
-canic nns node list
-canic nns node list --data-center <data-center-prefix>
-canic nns node list --node-provider <node-provider-prefix>
-canic nns node list --subnet <subnet-prefix> --kind system
-canic nns node-provider list
-canic nns node-operator list
-canic nns topology refresh
-canic nns topology summary
 canic nns subnet list --verbose
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
+canic nns data-center list
+canic nns data-center list --verbose
+canic nns data-center info <data-center-prefix>
+canic nns data-center refresh
+canic nns node list
+canic nns node list --verbose
+canic nns node info <node-prefix>
+canic nns node refresh
+canic nns node list --data-center <data-center-prefix>
+canic nns node list --node-provider <node-provider-prefix>
+canic nns node list --node-operator <node-operator-prefix>
+canic nns node list --subnet <subnet-prefix> --kind system
+canic nns node-provider list
+canic nns node-provider list --verbose
+canic nns node-provider info <node-provider-prefix>
+canic nns node-provider refresh
+canic nns node-operator list
+canic nns node-operator list --verbose
+canic nns node-operator info <node-operator-prefix>
+canic nns node-operator refresh
+canic nns topology refresh
+canic nns topology summary
+canic nns topology coverage
+canic nns topology versions
 ```
 
 Cached `list` and `info` commands read mainnet NNS-derived reports. Use

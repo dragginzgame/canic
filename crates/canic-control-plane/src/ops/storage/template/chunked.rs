@@ -154,7 +154,8 @@ impl TemplateChunkedOps {
         let stored_chunk_count = chunk_counts.get(&release).copied().unwrap_or(0);
         let publishable = manifest.chunking_mode == TemplateChunkingMode::Chunked
             && chunk_set.is_some()
-            && stored_chunk_count == expected_chunk_count;
+            && stored_chunk_count == expected_chunk_count
+            && Self::validate_staged_release(manifest).is_ok();
 
         TemplateStagingStatusResponse {
             role: manifest.role.clone(),
@@ -487,9 +488,26 @@ impl TemplateChunkedOps {
         chunk_index: u32,
     ) -> Result<TemplateChunkResponse, InternalError> {
         let release = TemplateReleaseKey::new(template_id.clone(), version.clone());
+        let info = TemplateChunkSetStateStore::get(&release)
+            .ok_or_else(|| TemplateManifestOpsError::TemplateChunkSetMissing(release.clone()))?;
+
+        if chunk_index >= info.chunk_count {
+            return Err(TemplateManifestOpsError::TemplateChunkIndexOutOfRange(
+                release,
+                chunk_index,
+            )
+            .into());
+        }
+
         let chunk_key = TemplateChunkKey::new(release, chunk_index);
         let record = TemplateChunkStore::get(&chunk_key)
             .ok_or_else(|| TemplateManifestOpsError::TemplateChunkMissing(chunk_key.clone()))?;
+        let expected_hash = &info.chunk_hashes[chunk_index as usize];
+        let actual_hash = wasm_hash(&record.bytes);
+
+        if actual_hash != *expected_hash {
+            return Err(TemplateManifestOpsError::TemplateChunkHashMismatch(chunk_key).into());
+        }
 
         Ok(TemplateChunkResponse {
             bytes: record.bytes,
@@ -823,5 +841,130 @@ mod tests {
         .expect_err("second chunk should fail once its incremental bytes exceed the limit");
 
         assert!(err.to_string().contains("capacity exceeded"));
+    }
+
+    #[test]
+    fn chunk_response_rejects_stale_chunk_after_prepare_replaces_hashes() {
+        reset_store();
+
+        let release = TemplateReleaseKey::new(
+            TemplateId::new("embedded:app"),
+            TemplateVersion::new("0.18.0"),
+        );
+        let old_chunk = vec![1_u8, 2, 3];
+        let new_chunk = vec![9_u8, 8, 7];
+
+        TemplateChunkedOps::prepare_chunk_set_from_input(
+            TemplateChunkSetPrepareInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                payload_hash: wasm_hash(&old_chunk),
+                payload_size_bytes: old_chunk.len() as u64,
+                chunk_hashes: vec![wasm_hash(&old_chunk)],
+            },
+            77,
+        )
+        .unwrap();
+        TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            template_id: release.template_id.clone(),
+            version: release.version.clone(),
+            chunk_index: 0,
+            bytes: old_chunk,
+        })
+        .unwrap();
+
+        TemplateChunkedOps::prepare_chunk_set_from_input(
+            TemplateChunkSetPrepareInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                payload_hash: wasm_hash(&new_chunk),
+                payload_size_bytes: new_chunk.len() as u64,
+                chunk_hashes: vec![wasm_hash(&new_chunk)],
+            },
+            78,
+        )
+        .unwrap();
+
+        let err = TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 0)
+            .expect_err("old chunk must not satisfy replaced chunk metadata");
+        assert!(err.to_string().contains("hash mismatch"));
+        let staging = TemplateChunkedOps::staging_status_response(
+            &TemplateManifestResponse {
+                template_id: release.template_id.clone(),
+                role: CanisterRole::new("app"),
+                version: release.version.clone(),
+                payload_hash: wasm_hash(&new_chunk),
+                payload_size_bytes: new_chunk.len() as u64,
+                store_binding: WasmStoreBinding::new("primary"),
+                chunking_mode: TemplateChunkingMode::Chunked,
+                manifest_state: TemplateManifestState::Approved,
+                approved_at: Some(78),
+                created_at: 78,
+            },
+            &TemplateChunkStore::count_by_release(),
+        );
+        assert!(!staging.publishable);
+
+        TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            template_id: release.template_id.clone(),
+            version: release.version.clone(),
+            chunk_index: 0,
+            bytes: new_chunk.clone(),
+        })
+        .unwrap();
+
+        let response =
+            TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 0)
+                .expect("new chunk should satisfy current metadata");
+        assert_eq!(response.bytes, new_chunk);
+    }
+
+    #[test]
+    fn chunk_response_rejects_stale_chunk_after_prepare_shrinks_set() {
+        reset_store();
+
+        let release = TemplateReleaseKey::new(
+            TemplateId::new("embedded:app"),
+            TemplateVersion::new("0.18.0"),
+        );
+        let chunk_zero = vec![1_u8, 2, 3];
+        let chunk_one = vec![4_u8, 5, 6];
+        let payload = [chunk_zero.clone(), chunk_one.clone()].concat();
+
+        TemplateChunkedOps::prepare_chunk_set_from_input(
+            TemplateChunkSetPrepareInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                payload_hash: wasm_hash(&payload),
+                payload_size_bytes: payload.len() as u64,
+                chunk_hashes: vec![wasm_hash(&chunk_zero), wasm_hash(&chunk_one)],
+            },
+            77,
+        )
+        .unwrap();
+        TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            template_id: release.template_id.clone(),
+            version: release.version.clone(),
+            chunk_index: 1,
+            bytes: chunk_one,
+        })
+        .unwrap();
+
+        TemplateChunkedOps::prepare_chunk_set_from_input(
+            TemplateChunkSetPrepareInput {
+                template_id: release.template_id.clone(),
+                version: release.version.clone(),
+                payload_hash: wasm_hash(&chunk_zero),
+                payload_size_bytes: chunk_zero.len() as u64,
+                chunk_hashes: vec![wasm_hash(&chunk_zero)],
+            },
+            78,
+        )
+        .unwrap();
+
+        let err = TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 1)
+            .expect_err("old out-of-range chunk must not be served");
+
+        assert!(err.to_string().contains("out of range"));
     }
 }

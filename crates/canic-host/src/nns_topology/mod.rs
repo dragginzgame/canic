@@ -36,6 +36,8 @@ use std::{collections::BTreeSet, path::PathBuf};
 use thiserror::Error as ThisError;
 
 pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 3;
+pub const NNS_TOPOLOGY_COVERAGE_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_TOPOLOGY_VERSIONS_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 
 ///
@@ -43,6 +45,28 @@ pub const NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NnsTopologySummaryRequest {
+    pub icp_root: PathBuf,
+    pub network: String,
+    pub source_endpoint: String,
+    pub now_unix_secs: u64,
+}
+
+///
+/// NnsTopologyCoverageRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NnsTopologyCoverageRequest {
+    pub icp_root: PathBuf,
+    pub network: String,
+    pub source_endpoint: String,
+    pub now_unix_secs: u64,
+}
+
+///
+/// NnsTopologyVersionsRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NnsTopologyVersionsRequest {
     pub icp_root: PathBuf,
     pub network: String,
     pub source_endpoint: String,
@@ -100,6 +124,30 @@ pub struct NnsTopologySummaryReport {
 }
 
 ///
+/// NnsTopologyCoverageReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyCoverageReport {
+    pub schema_version: u32,
+    pub network: String,
+    pub source_endpoint: String,
+    pub node_count: usize,
+    pub node_provider_count: usize,
+    pub node_operator_count: usize,
+    pub data_center_count: usize,
+    pub nodes_with_known_node_provider_count: usize,
+    pub nodes_with_unknown_node_provider_count: usize,
+    pub nodes_with_known_node_operator_count: usize,
+    pub nodes_with_unknown_node_operator_count: usize,
+    pub nodes_with_known_data_center_count: usize,
+    pub nodes_with_unknown_data_center_count: usize,
+    pub node_operators_with_known_node_provider_count: usize,
+    pub node_operators_with_unknown_node_provider_count: usize,
+    pub node_operators_with_known_data_center_count: usize,
+    pub node_operators_with_unknown_data_center_count: usize,
+}
+
+///
 /// NnsTopologyRegistryVersionRow
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -109,6 +157,18 @@ pub struct NnsTopologyRegistryVersionRow {
     pub fetched_at: String,
     pub source_endpoint: String,
     pub stale: Option<bool>,
+}
+
+///
+/// NnsTopologyVersionsReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyVersionsReport {
+    pub schema_version: u32,
+    pub network: String,
+    pub source_endpoint: String,
+    pub source_count: usize,
+    pub registry_versions: Vec<NnsTopologyRegistryVersionRow>,
 }
 
 ///
@@ -150,7 +210,7 @@ pub struct NnsTopologyRefreshRow {
 #[derive(Debug, ThisError)]
 pub enum NnsTopologyHostError {
     #[error(
-        "`canic nns topology` supports only the mainnet `ic` network\n\nThe NNS topology report is derived from public Internet Computer mainnet registry records.\nLocal replica NNS registry discovery is not implemented yet.\n\nTry:\n  canic --network ic nns topology summary\n  canic --network ic nns topology refresh"
+        "`canic nns topology` supports only the mainnet `ic` network\n\nThe NNS topology report is derived from public Internet Computer mainnet registry records.\nLocal replica NNS registry discovery is not implemented yet.\n\nTry:\n  canic --network ic nns topology summary\n  canic --network ic nns topology coverage\n  canic --network ic nns topology versions\n  canic --network ic nns topology refresh"
     )]
     UnsupportedNetwork { network: String },
 
@@ -230,6 +290,32 @@ pub fn build_nns_topology_summary_report(
         node_operator_report,
         data_center_report,
     ))
+}
+
+pub fn build_nns_topology_versions_report(
+    request: &NnsTopologyVersionsRequest,
+) -> Result<NnsTopologyVersionsReport, NnsTopologyHostError> {
+    let summary = build_nns_topology_summary_report(&NnsTopologySummaryRequest {
+        icp_root: request.icp_root.clone(),
+        network: request.network.clone(),
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    })?;
+
+    Ok(topology_versions_report_from_summary(summary))
+}
+
+pub fn build_nns_topology_coverage_report(
+    request: &NnsTopologyCoverageRequest,
+) -> Result<NnsTopologyCoverageReport, NnsTopologyHostError> {
+    let summary = build_nns_topology_summary_report(&NnsTopologySummaryRequest {
+        icp_root: request.icp_root.clone(),
+        network: request.network.clone(),
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    })?;
+
+    Ok(topology_coverage_report_from_summary(summary))
 }
 
 pub fn refresh_nns_topology_report(
@@ -319,15 +405,29 @@ pub fn nns_topology_summary_report_text(report: &NnsTopologySummaryReport) -> St
         report.node_provider_count,
         report.data_center_count
     ));
-    lines.push("counts:".to_string());
+    lines.push(String::new());
     lines.push(render_count_table(report));
-    lines.push("subnet_kinds:".to_string());
+    lines.push(String::new());
     lines.push(render_kind_table(report));
-    lines.push("join_coverage:".to_string());
-    lines.push(render_join_coverage_table(report));
-    lines.push("registry_versions:".to_string());
-    lines.push(render_registry_version_table(report));
+    lines.push(String::new());
+    lines.push(render_summary_join_coverage_table(report));
+    lines.push(String::new());
+    lines.push(render_registry_version_table(&report.registry_versions));
     lines.join("\n")
+}
+
+#[must_use]
+pub fn nns_topology_coverage_report_text(report: &NnsTopologyCoverageReport) -> String {
+    let mut lines = Vec::new();
+    lines.push(render_coverage_count_table(report));
+    lines.push(String::new());
+    lines.push(render_coverage_join_coverage_table(report));
+    lines.join("\n")
+}
+
+#[must_use]
+pub fn nns_topology_versions_report_text(report: &NnsTopologyVersionsReport) -> String {
+    render_registry_version_table(&report.registry_versions)
 }
 
 #[must_use]
@@ -566,6 +666,46 @@ fn topology_refresh_report_from_reports(
     }
 }
 
+fn topology_coverage_report_from_summary(
+    summary: NnsTopologySummaryReport,
+) -> NnsTopologyCoverageReport {
+    NnsTopologyCoverageReport {
+        schema_version: NNS_TOPOLOGY_COVERAGE_REPORT_SCHEMA_VERSION,
+        network: summary.network,
+        source_endpoint: summary.source_endpoint,
+        node_count: summary.node_count,
+        node_provider_count: summary.node_provider_count,
+        node_operator_count: summary.node_operator_count,
+        data_center_count: summary.data_center_count,
+        nodes_with_known_node_provider_count: summary.nodes_with_known_node_provider_count,
+        nodes_with_unknown_node_provider_count: summary.nodes_with_unknown_node_provider_count,
+        nodes_with_known_node_operator_count: summary.nodes_with_known_node_operator_count,
+        nodes_with_unknown_node_operator_count: summary.nodes_with_unknown_node_operator_count,
+        nodes_with_known_data_center_count: summary.nodes_with_known_data_center_count,
+        nodes_with_unknown_data_center_count: summary.nodes_with_unknown_data_center_count,
+        node_operators_with_known_node_provider_count: summary
+            .node_operators_with_known_node_provider_count,
+        node_operators_with_unknown_node_provider_count: summary
+            .node_operators_with_unknown_node_provider_count,
+        node_operators_with_known_data_center_count: summary
+            .node_operators_with_known_data_center_count,
+        node_operators_with_unknown_data_center_count: summary
+            .node_operators_with_unknown_data_center_count,
+    }
+}
+
+fn topology_versions_report_from_summary(
+    summary: NnsTopologySummaryReport,
+) -> NnsTopologyVersionsReport {
+    NnsTopologyVersionsReport {
+        schema_version: NNS_TOPOLOGY_VERSIONS_REPORT_SCHEMA_VERSION,
+        network: summary.network,
+        source_endpoint: summary.source_endpoint,
+        source_count: summary.registry_versions.len(),
+        registry_versions: summary.registry_versions,
+    }
+}
+
 ///
 /// NnsTopologyRefreshComponentReports
 ///
@@ -785,6 +925,28 @@ fn render_count_table(report: &NnsTopologySummaryReport) -> String {
     render_table(&headers, &rows, &alignments)
 }
 
+fn render_coverage_count_table(report: &NnsTopologyCoverageReport) -> String {
+    let headers = ["FIELD", "VALUE"];
+    let rows = [
+        ["network".to_string(), report.network.clone()],
+        ["nodes".to_string(), report.node_count.to_string()],
+        [
+            "node_operators".to_string(),
+            report.node_operator_count.to_string(),
+        ],
+        [
+            "node_providers".to_string(),
+            report.node_provider_count.to_string(),
+        ],
+        [
+            "data_centers".to_string(),
+            report.data_center_count.to_string(),
+        ],
+    ];
+    let alignments = [ColumnAlign::Left, ColumnAlign::Right];
+    render_table(&headers, &rows, &alignments)
+}
+
 fn render_kind_table(report: &NnsTopologySummaryReport) -> String {
     let headers = ["KIND", "SUBNETS", "NODES"];
     let rows = [
@@ -813,51 +975,99 @@ fn render_kind_table(report: &NnsTopologySummaryReport) -> String {
     render_table(&headers, &rows, &alignments)
 }
 
-fn render_join_coverage_table(report: &NnsTopologySummaryReport) -> String {
-    let headers = ["LINK", "KNOWN", "UNKNOWN"];
-    let rows = [
-        [
-            "nodes_to_node_providers".to_string(),
-            report.nodes_with_known_node_provider_count.to_string(),
-            report.nodes_with_unknown_node_provider_count.to_string(),
-        ],
-        [
-            "nodes_to_node_operators".to_string(),
-            report.nodes_with_known_node_operator_count.to_string(),
-            report.nodes_with_unknown_node_operator_count.to_string(),
-        ],
-        [
-            "nodes_to_data_centers".to_string(),
-            report.nodes_with_known_data_center_count.to_string(),
-            report.nodes_with_unknown_data_center_count.to_string(),
-        ],
-        [
-            "node_operators_to_node_providers".to_string(),
-            report
-                .node_operators_with_known_node_provider_count
-                .to_string(),
-            report
-                .node_operators_with_unknown_node_provider_count
-                .to_string(),
-        ],
-        [
-            "node_operators_to_data_centers".to_string(),
-            report
-                .node_operators_with_known_data_center_count
-                .to_string(),
-            report
-                .node_operators_with_unknown_data_center_count
-                .to_string(),
-        ],
+fn render_summary_join_coverage_table(report: &NnsTopologySummaryReport) -> String {
+    render_join_coverage_table(&[
+        (
+            "nodes -> node providers",
+            report.nodes_with_known_node_provider_count,
+            report.nodes_with_unknown_node_provider_count,
+        ),
+        (
+            "nodes -> node operators",
+            report.nodes_with_known_node_operator_count,
+            report.nodes_with_unknown_node_operator_count,
+        ),
+        (
+            "nodes -> data centers",
+            report.nodes_with_known_data_center_count,
+            report.nodes_with_unknown_data_center_count,
+        ),
+        (
+            "node operators -> node providers",
+            report.node_operators_with_known_node_provider_count,
+            report.node_operators_with_unknown_node_provider_count,
+        ),
+        (
+            "node operators -> data centers",
+            report.node_operators_with_known_data_center_count,
+            report.node_operators_with_unknown_data_center_count,
+        ),
+    ])
+}
+
+fn render_coverage_join_coverage_table(report: &NnsTopologyCoverageReport) -> String {
+    render_join_coverage_table(&[
+        (
+            "nodes -> node providers",
+            report.nodes_with_known_node_provider_count,
+            report.nodes_with_unknown_node_provider_count,
+        ),
+        (
+            "nodes -> node operators",
+            report.nodes_with_known_node_operator_count,
+            report.nodes_with_unknown_node_operator_count,
+        ),
+        (
+            "nodes -> data centers",
+            report.nodes_with_known_data_center_count,
+            report.nodes_with_unknown_data_center_count,
+        ),
+        (
+            "node operators -> node providers",
+            report.node_operators_with_known_node_provider_count,
+            report.node_operators_with_unknown_node_provider_count,
+        ),
+        (
+            "node operators -> data centers",
+            report.node_operators_with_known_data_center_count,
+            report.node_operators_with_unknown_data_center_count,
+        ),
+    ])
+}
+
+fn render_join_coverage_table(rows: &[(&str, usize, usize)]) -> String {
+    let headers = ["RELATION", "KNOWN", "UNKNOWN", "COVERAGE"];
+    let rows = rows
+        .iter()
+        .map(|(link, known, unknown)| {
+            [
+                (*link).to_string(),
+                known.to_string(),
+                unknown.to_string(),
+                coverage_percent_text(*known, *unknown),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let alignments = [
+        ColumnAlign::Left,
+        ColumnAlign::Right,
+        ColumnAlign::Right,
+        ColumnAlign::Right,
     ];
-    let alignments = [ColumnAlign::Left, ColumnAlign::Right, ColumnAlign::Right];
     render_table(&headers, &rows, &alignments)
 }
 
-fn render_registry_version_table(report: &NnsTopologySummaryReport) -> String {
+fn coverage_percent_text(known: usize, unknown: usize) -> String {
+    let total = known.saturating_add(unknown);
+    if total == 0 {
+        return "-".to_string();
+    }
+    format!("{:.1}%", (known as f64 / total as f64) * 100.0)
+}
+
+fn render_registry_version_table(rows: &[NnsTopologyRegistryVersionRow]) -> String {
     let headers = ["SOURCE", "VERSION", "FETCHED_AT", "STALE", "ENDPOINT"];
-    let rows = report
-        .registry_versions
+    let rows = rows
         .iter()
         .map(|row| {
             [
