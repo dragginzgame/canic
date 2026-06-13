@@ -418,10 +418,11 @@ pub fn nns_topology_summary_report_text(report: &NnsTopologySummaryReport) -> St
 
 #[must_use]
 pub fn nns_topology_coverage_report_text(report: &NnsTopologyCoverageReport) -> String {
-    let mut lines = Vec::new();
-    lines.push(render_coverage_count_table(report));
-    lines.push(String::new());
-    lines.push(render_coverage_join_coverage_table(report));
+    let lines = [
+        render_coverage_count_table(report),
+        String::new(),
+        render_coverage_join_coverage_table(report),
+    ];
     lines.join("\n")
 }
 
@@ -1062,7 +1063,8 @@ fn coverage_percent_text(known: usize, unknown: usize) -> String {
     if total == 0 {
         return "-".to_string();
     }
-    format!("{:.1}%", (known as f64 / total as f64) * 100.0)
+    let tenths = known.saturating_mul(1000).saturating_add(total / 2) / total;
+    format!("{}.{:01}%", tenths / 10, tenths % 10)
 }
 
 fn render_registry_version_table(rows: &[NnsTopologyRegistryVersionRow]) -> String {
