@@ -66,8 +66,6 @@ fn usage_lists_command_families() {
     assert!(plain.contains("Manage Canic fleets and roles"));
     assert!(plain.contains("Check, inspect, register, and install deployments"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
-    assert!(!plain.contains("Inspect cached IC network subnet metadata"));
-    assert!(!plain.contains("Inspect and refresh the IC subnet catalog"));
     assert!(!plain.contains("Check deployment truth before mutation"));
     assert!(!plain.contains("    network"));
     assert!(!plain.contains("    defaults"));

@@ -3,8 +3,32 @@ pub mod mapper;
 use crate::{
     InternalError,
     ops::prelude::*,
-    storage::stable::pool::{PoolRecord, PoolStatus, PoolStore, PoolStoreRecord},
+    storage::{
+        canister::CanisterRecord,
+        stable::pool::{PoolRecord, PoolStatus, PoolStore, PoolStoreRecord},
+    },
 };
+
+///
+/// PoolRegistrationMetadata
+///
+
+pub struct PoolRegistrationMetadata {
+    role: Option<CanisterRole>,
+    parent: Option<Principal>,
+    module_hash: Option<Vec<u8>>,
+}
+
+impl PoolRegistrationMetadata {
+    #[must_use]
+    pub fn from_canister_record(record: &CanisterRecord) -> Self {
+        Self {
+            role: Some(record.role.clone()),
+            parent: record.parent_pid,
+            module_hash: record.module_hash.clone(),
+        }
+    }
+}
 
 ///
 /// PoolOps
@@ -37,6 +61,22 @@ impl PoolOps {
         );
     }
 
+    pub fn register_ready_with_metadata(
+        pid: Principal,
+        cycles: Cycles,
+        metadata: &PoolRegistrationMetadata,
+        created_at: u64,
+    ) {
+        Self::register_ready(
+            pid,
+            cycles,
+            metadata.role.clone(),
+            metadata.parent,
+            metadata.module_hash.clone(),
+            created_at,
+        );
+    }
+
     pub fn register_pending_reset(
         pid: Principal,
         role: Option<CanisterRole>,
@@ -51,6 +91,20 @@ impl PoolOps {
             role,
             parent,
             module_hash,
+            created_at,
+        );
+    }
+
+    pub fn register_pending_reset_with_metadata(
+        pid: Principal,
+        metadata: &PoolRegistrationMetadata,
+        created_at: u64,
+    ) {
+        Self::register_pending_reset(
+            pid,
+            metadata.role.clone(),
+            metadata.parent,
+            metadata.module_hash.clone(),
             created_at,
         );
     }

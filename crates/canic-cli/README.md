@@ -51,8 +51,6 @@ canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy inspect catalog list
 canic deploy inspect catalog inspect <deployment>
-icq nns subnet list
-icq nns node list
 ```
 
 These commands do not imply one-command deployment, controller mutation,
@@ -89,50 +87,10 @@ canic build \
 For a full local development setup, including ICP CLI, helper tools, and the
 `canic` CLI, use the root `INSTALLING.md` guide.
 
-## NNS Inspection
+## Helper Tools
 
-Public IC registry metadata is inspected through the sibling `icq` binary:
-
-```bash
-icq nns subnet refresh
-icq nns registry version
-icq nns subnet list
-icq nns subnet list --verbose
-icq nns subnet info <subnet|canister|subnet-prefix>
-icq nns data-center list
-icq nns data-center list --verbose
-icq nns data-center info <data-center-prefix>
-icq nns data-center refresh
-icq nns node list
-icq nns node list --verbose
-icq nns node info <node-prefix>
-icq nns node refresh
-icq nns node list --data-center <data-center-prefix>
-icq nns node list --node-provider <node-provider-prefix>
-icq nns node list --node-operator <node-operator-prefix>
-icq nns node list --subnet <subnet-prefix> --kind system
-icq nns node-provider list
-icq nns node-provider list --verbose
-icq nns node-provider info <node-provider-prefix>
-icq nns node-provider refresh
-icq nns node-operator list
-icq nns node-operator list --verbose
-icq nns node-operator info <node-operator-prefix>
-icq nns node-operator refresh
-icq nns topology refresh
-icq nns topology summary
-icq nns topology coverage
-icq nns topology versions
-icq nns topology health
-icq nns topology gaps
-icq nns topology capacity
-icq nns topology regions
-icq nns topology providers
-```
-
-Cached `list` and `info` commands read mainnet NNS-derived reports. Use
-`refresh` to force a new NNS registry read. The command group defaults to
-`--network ic` and rejects local or custom networks.
+Some Canic workflows use external helper tools such as `icq`; their command
+surfaces are documented with those tools, not in `canic-cli`.
 
 ## Local Install And Registry Commands
 

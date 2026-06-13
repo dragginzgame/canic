@@ -44,7 +44,11 @@ use crate::{
             },
             recording::PoolMetricEvent as MetricEvent,
         },
-        storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
+        storage::{
+            intent::IntentStoreOps,
+            pool::{PoolOps, PoolRegistrationMetadata},
+            registry::subnet::SubnetRegistryOps,
+        },
     },
     replay_policy::CostClass,
     workflow::{
@@ -354,15 +358,12 @@ impl PoolWorkflow {
             MetricEvent::skipped(MetricOperation::Recycle, MetricReason::NotFound);
             return Ok(());
         };
-
-        let role = Some(entry.role.clone());
-        let parent = entry.parent_pid;
-        let module_hash = entry.module_hash.clone();
+        let metadata = PoolRegistrationMetadata::from_canister_record(&entry);
 
         // Remove from topology and record the pending pool entry before the
         // destructive reset, so duplicate retries cannot re-enter the reset path.
         let _ = SubnetRegistryOps::remove(&pid);
-        mark_pool_recycle_pending(pid, &entry, IcOps::now_secs());
+        mark_pool_recycle_pending(pid, &metadata, IcOps::now_secs());
 
         // Destructive reset
         let cycles = match Self::reset_into_pool(pid).await {
@@ -376,7 +377,7 @@ impl PoolWorkflow {
 
         // Register back into pool, preserving metadata
         let created_at = IcOps::now_secs();
-        PoolOps::register_ready(pid, cycles, role, parent, module_hash, created_at);
+        PoolOps::register_ready_with_metadata(pid, cycles, &metadata, created_at);
 
         MetricEvent::completed(MetricOperation::Recycle, MetricReason::Ok);
 
@@ -512,18 +513,8 @@ fn pool_recycle_already_present(pid: Principal) -> bool {
     )
 }
 
-fn mark_pool_recycle_pending(
-    pid: Principal,
-    entry: &crate::storage::canister::CanisterRecord,
-    created_at: u64,
-) {
-    PoolOps::register_pending_reset(
-        pid,
-        Some(entry.role.clone()),
-        entry.parent_pid,
-        entry.module_hash.clone(),
-        created_at,
-    );
+fn mark_pool_recycle_pending(pid: Principal, metadata: &PoolRegistrationMetadata, created_at: u64) {
+    PoolOps::register_pending_reset_with_metadata(pid, metadata, created_at);
 }
 
 fn mark_pool_import_queued_pending_reset(pid: Principal, created_at_override: Option<u64>) {
@@ -1089,8 +1080,9 @@ mod tests {
             .expect("child registered");
 
         let entry = SubnetRegistryOps::get(pid).expect("registry entry");
+        let metadata = PoolRegistrationMetadata::from_canister_record(&entry);
         let _ = SubnetRegistryOps::remove(&pid);
-        mark_pool_recycle_pending(pid, &entry, 102);
+        mark_pool_recycle_pending(pid, &metadata, 102);
 
         assert!(pool_recycle_already_present(pid));
         assert!(SubnetRegistryOps::get(pid).is_none());
