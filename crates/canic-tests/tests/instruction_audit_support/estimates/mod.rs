@@ -1,15 +1,14 @@
 use super::*;
-use canic_host::subnet_catalog::{
-    DEFAULT_STALE_AFTER_SECONDS, SubnetCatalogCacheRequest, catalog_stale_status,
-    load_cached_subnet_catalog, parse_stale_after_duration,
-};
-use canic_subnet_catalog::{MAINNET_NETWORK, ResolvedSubnet, RoutingRange, SubnetKind};
+use candid::Principal;
+use serde::{Deserialize, Serialize};
 use std::{
-    env,
+    env, fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
+const CATALOG_SCHEMA_VERSION: u32 = 1;
+const DEFAULT_STALE_AFTER_SECONDS: u64 = 7 * 24 * 60 * 60;
 pub(super) const ESTIMATE_SCHEMA_VERSION: u8 = 1;
 pub(super) const FORMULA_VERSION: &str = "canic-0.59-ic-cycle-costs-v1";
 const CATALOG_FORMULA_VERSION: &str = "base_13_node_linear_v1";
@@ -42,6 +41,8 @@ const ENV_CYCLES_PER_BILLION_INSTRUCTIONS: &str =
 const ENV_ESTIMATE_CANISTER_PRINCIPAL: &str = "CANIC_INSTRUCTION_AUDIT_ESTIMATE_CANISTER_PRINCIPAL";
 const ENV_ALLOW_STALE_SUBNET_CATALOG: &str = "CANIC_INSTRUCTION_AUDIT_ALLOW_STALE_SUBNET_CATALOG";
 const ENV_SUBNET_CATALOG_STALE_AFTER: &str = "CANIC_INSTRUCTION_AUDIT_SUBNET_CATALOG_STALE_AFTER";
+const MAINNET_NETWORK: &str = "ic";
+const MAINNET_REGISTRY_CANISTER_ID: &str = "rwlgt-iiaaa-aaaaa-aaaaa-cai";
 
 ///
 /// EstimateError
@@ -151,6 +152,182 @@ struct CatalogEstimateProvenance {
     resolver_backend: String,
     matched_canister_principal: Option<String>,
     matched_routing_range: Option<RoutingRange>,
+}
+
+///
+/// ClassificationSource
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ClassificationSource {
+    Curated,
+    Registry,
+    Unknown,
+}
+
+impl ClassificationSource {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Curated => "curated",
+            Self::Registry => "registry",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+///
+/// GeographicScope
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum GeographicScope {
+    Global,
+    Europe,
+    Unknown,
+}
+
+impl GeographicScope {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Global => "global",
+            Self::Europe => "europe",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+///
+/// SubnetKind
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SubnetKind {
+    Application,
+    CloudEngine,
+    System,
+    Unknown,
+}
+
+impl SubnetKind {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Application => "application",
+            Self::CloudEngine => "cloud_engine",
+            Self::System => "system",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+///
+/// SubnetSpecialization
+///
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SubnetSpecialization {
+    European,
+    Fiduciary,
+    None,
+    Unknown,
+}
+
+impl SubnetSpecialization {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::European => "european",
+            Self::Fiduciary => "fiduciary",
+            Self::None => "none",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+///
+/// RoutingRange
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(super) struct RoutingRange {
+    start_canister_id: String,
+    end_canister_id: String,
+    subnet_principal: String,
+}
+
+///
+/// SubnetInfo
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct SubnetInfo {
+    subnet_principal: String,
+    subnet_kind: SubnetKind,
+    subnet_kind_source: ClassificationSource,
+    subnet_specialization: SubnetSpecialization,
+    subnet_specialization_source: ClassificationSource,
+    geographic_scope: GeographicScope,
+    geographic_scope_source: ClassificationSource,
+    subnet_label: String,
+    subnet_label_source: ClassificationSource,
+    node_count: Option<u32>,
+    charges_apply_by_default: bool,
+}
+
+///
+/// SubnetCatalog
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct SubnetCatalog {
+    catalog_schema_version: u32,
+    network: String,
+    registry_canister_id: String,
+    registry_version: u64,
+    fetched_at: String,
+    fetched_by: String,
+    source_endpoint: String,
+    resolver_backend: String,
+    subnets: Vec<SubnetInfo>,
+    routing_ranges: Vec<RoutingRange>,
+}
+
+impl SubnetCatalog {
+    fn resolve_canister(&self, canister_principal: &str) -> Result<ResolvedSubnet, ()> {
+        let canister_bytes = principal_bytes(canister_principal)?;
+        for range in &self.routing_ranges {
+            let start = principal_bytes(&range.start_canister_id)?;
+            let end = principal_bytes(&range.end_canister_id)?;
+            if start <= canister_bytes && canister_bytes <= end {
+                let subnet = self
+                    .subnets
+                    .iter()
+                    .find(|subnet| subnet.subnet_principal == range.subnet_principal)
+                    .ok_or(())?;
+                return Ok(ResolvedSubnet {
+                    subnet: subnet.clone(),
+                    matched_canister_principal: Some(canister_principal.to_string()),
+                    matched_routing_range: Some(range.clone()),
+                });
+            }
+        }
+        Err(())
+    }
+}
+
+///
+/// ResolvedSubnet
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ResolvedSubnet {
+    subnet: SubnetInfo,
+    matched_canister_principal: Option<String>,
+    matched_routing_range: Option<RoutingRange>,
+}
+
+fn parse_catalog_json(data: &str) -> Result<SubnetCatalog, serde_json::Error> {
+    serde_json::from_str(data)
+}
+
+fn principal_bytes(value: &str) -> Result<Vec<u8>, ()> {
+    Principal::from_text(value)
+        .map(|principal| principal.as_slice().to_vec())
+        .map_err(|_| ())
 }
 
 ///
@@ -487,7 +664,7 @@ fn catalog_cycles_per_billion(node_count: u32) -> Option<u128> {
 }
 
 fn catalog_provenance(
-    catalog: &canic_subnet_catalog::SubnetCatalog,
+    catalog: &SubnetCatalog,
     resolved: &ResolvedSubnet,
     catalog_stale: bool,
 ) -> CatalogEstimateProvenance {
@@ -511,6 +688,134 @@ fn catalog_provenance(
         matched_canister_principal: resolved.matched_canister_principal.clone(),
         matched_routing_range: resolved.matched_routing_range.clone(),
     }
+}
+
+///
+/// SubnetCatalogCacheRequest
+///
+struct SubnetCatalogCacheRequest {
+    icp_root: PathBuf,
+    network: String,
+}
+
+///
+/// CachedSubnetCatalog
+///
+struct CachedSubnetCatalog {
+    catalog: SubnetCatalog,
+}
+
+///
+/// CatalogStaleStatus
+///
+struct CatalogStaleStatus {
+    catalog_stale: bool,
+}
+
+fn subnet_catalog_path(icp_root: &Path, network: &str) -> PathBuf {
+    icp_root
+        .join(".ic-query")
+        .join("subnet-catalog")
+        .join(network)
+        .join("catalog.json")
+}
+
+fn load_cached_subnet_catalog(
+    request: &SubnetCatalogCacheRequest,
+) -> Result<CachedSubnetCatalog, ()> {
+    if request.network != MAINNET_NETWORK {
+        return Err(());
+    }
+    let path = subnet_catalog_path(&request.icp_root, &request.network);
+    let data = fs::read_to_string(&path).map_err(|_| ())?;
+    let catalog = parse_catalog_json(&data).map_err(|_| ())?;
+    if catalog.network != request.network {
+        return Err(());
+    }
+    Ok(CachedSubnetCatalog { catalog })
+}
+
+fn catalog_stale_status(
+    catalog: &SubnetCatalog,
+    now_unix_secs: u64,
+    stale_after_seconds: u64,
+) -> CatalogStaleStatus {
+    let Some(fetched_at_unix_secs) = parse_utc_timestamp_secs(&catalog.fetched_at) else {
+        return CatalogStaleStatus {
+            catalog_stale: true,
+        };
+    };
+    let Some(age_seconds) = now_unix_secs.checked_sub(fetched_at_unix_secs) else {
+        return CatalogStaleStatus {
+            catalog_stale: false,
+        };
+    };
+    CatalogStaleStatus {
+        catalog_stale: age_seconds > stale_after_seconds,
+    }
+}
+
+fn parse_stale_after_duration(value: &str) -> Result<u64, ()> {
+    let (number, multiplier) = match value.as_bytes().last().copied() {
+        Some(b's') => (&value[..value.len() - 1], 1),
+        Some(b'm') => (&value[..value.len() - 1], 60),
+        Some(b'h') => (&value[..value.len() - 1], 60 * 60),
+        Some(b'd') => (&value[..value.len() - 1], 24 * 60 * 60),
+        Some(b'0'..=b'9') => (value, 1),
+        _ => return Err(()),
+    };
+    number
+        .parse::<u64>()
+        .ok()
+        .and_then(|amount| amount.checked_mul(multiplier))
+        .filter(|seconds| *seconds > 0)
+        .ok_or(())
+}
+
+fn parse_utc_timestamp_secs(value: &str) -> Option<u64> {
+    let value = value.strip_suffix('Z')?;
+    let (date, time) = value.split_once('T')?;
+    let mut date_parts = date.split('-');
+    let year = date_parts.next()?.parse::<i64>().ok()?;
+    let month = date_parts.next()?.parse::<u32>().ok()?;
+    let day = date_parts.next()?.parse::<u32>().ok()?;
+    if date_parts.next().is_some() {
+        return None;
+    }
+    let mut time_parts = time.split(':');
+    let hour = time_parts.next()?.parse::<u32>().ok()?;
+    let minute = time_parts.next()?.parse::<u32>().ok()?;
+    let second = time_parts.next()?.parse::<u32>().ok()?;
+    if time_parts.next().is_some()
+        || !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 23
+        || minute > 59
+        || second > 59
+    {
+        return None;
+    }
+    let days = days_from_civil(year, month, day)?;
+    let seconds = days
+        .checked_mul(86_400)?
+        .checked_add(i64::from(hour) * 3_600)?
+        .checked_add(i64::from(minute) * 60)?
+        .checked_add(i64::from(second))?;
+    u64::try_from(seconds).ok()
+}
+
+fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
+    let month = i64::from(month);
+    let day = i64::from(day);
+    let year = year - i64::from(month <= 2);
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400;
+    let month_prime = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * month_prime + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era.checked_mul(146_097)?
+        .checked_add(day_of_era)?
+        .checked_sub(719_468)
 }
 
 const fn node_count_table_rate(node_count: u16) -> Option<u128> {
@@ -646,11 +951,6 @@ fn parse_positive_u128(field: &'static str, value: &str) -> Result<u128, Estimat
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_host::subnet_catalog::subnet_catalog_path;
-    use canic_subnet_catalog::{
-        CATALOG_SCHEMA_VERSION, ClassificationSource, GeographicScope,
-        MAINNET_REGISTRY_CANISTER_ID, SubnetCatalog, SubnetInfo, SubnetSpecialization,
-    };
     use serde_json::Value;
     use std::{fs, process};
 

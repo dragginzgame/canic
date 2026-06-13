@@ -12,9 +12,20 @@ present.
 
 ## Unreleased
 
+## [0.67.x] - 2026-06-13 - IC query extraction
+
+Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.0` splits the NNS query surface into the external `ic-query`/`icq`
+  tool, removes the linked NNS registry query stack from Canic host and CLI,
+  and pins `icq` as required external tooling for Canic validation.
+
 ## [0.66.x] - 2026-06-12 - 0.65 audit, testing, and fixing
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
+
+- `0.66.11` adds cached NNS topology capacity, regional distribution, and node
+  provider distribution commands for topology allocation audits.
 
 - `0.66.10` adds cached NNS topology health and gap inspection commands and
   cleans topology text reports so operator-facing tables avoid filler headings.

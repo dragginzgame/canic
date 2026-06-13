@@ -3,16 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if [ -z "${ACTIONLINT_VERSION:-}" ] && [ -f "$ROOT_DIR/tool-versions.env" ]; then
+if [ -z "${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}" ] &&
+    [ -f "$ROOT_DIR/tool-versions.env" ]; then
     # shellcheck source=tool-versions.env
     source "$ROOT_DIR/tool-versions.env"
 fi
 
-VERSION="${1:-${ACTIONLINT_VERSION:-}}"
+VERSION="${1:-${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}}"
 INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 
 if [ -z "$VERSION" ]; then
-    echo "missing actionlint version; set ACTIONLINT_VERSION or update tool-versions.env" >&2
+    echo "missing actionlint version; set CANIC_ACTIONLINT_VERSION or update tool-versions.env" >&2
     exit 1
 fi
 

@@ -4,13 +4,14 @@ use crate::deployment_truth::observe::{
     observed_root_from_status, registry_entries_to_observed_canisters,
     registry_entries_to_observed_pool,
 };
+use crate::deployment_truth::report::{RootSubnetEvidence, RootSubnetEvidenceSource};
 use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
 use crate::install_root::{InstallState, RootVerificationStatus};
 use crate::registry::RegistryEntry;
 use crate::release_set::{ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE};
 use crate::test_support::temp_dir;
 use serde::Serialize;
-use std::{fs, path::Path};
+use std::fs;
 
 struct LimitedExecutor {
     context: DeploymentExecutionContextV1,
@@ -19,6 +20,21 @@ struct LimitedExecutor {
 impl DeploymentExecutor for LimitedExecutor {
     fn execution_context(&self) -> DeploymentExecutionContextV1 {
         self.context.clone()
+    }
+}
+
+struct FixtureRootSubnetEvidenceSource {
+    result: Result<RootSubnetEvidence, String>,
+}
+
+impl RootSubnetEvidenceSource for FixtureRootSubnetEvidenceSource {
+    fn root_subnet_evidence(
+        &self,
+        _network: &str,
+        _icp_root: &std::path::Path,
+        _canister_id: &str,
+    ) -> Result<RootSubnetEvidence, String> {
+        self.result.clone()
     }
 }
 
@@ -11012,25 +11028,23 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
 fn mainnet_deployment_check_blocks_cloud_engine_root_auth_signer() {
     let root = temp_dir("canic-deployment-cloud-engine-root-auth");
     let root_canister = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-    write_root_subnet_catalog(
-        &root,
-        root_canister,
-        canic_subnet_catalog::SubnetKind::CloudEngine,
-    );
     let mut inventory = sample_matching_inventory();
     let observed_root = inventory
         .observed_root
         .as_mut()
         .expect("sample has observed root");
-    observed_root.network = canic_subnet_catalog::MAINNET_NETWORK.to_string();
+    observed_root.network = "ic".to_string();
     observed_root.observed_canister_id = root_canister.to_string();
     let mut diff = compare_plan_to_inventory(&sample_plan(), &sample_matching_inventory());
+    let source = FixtureRootSubnetEvidenceSource {
+        result: Ok(RootSubnetEvidence {
+            subnet_principal: "subnet-cloud-engine".to_string(),
+            subnet_kind: "cloud_engine".to_string(),
+        }),
+    };
 
-    super::report::apply_root_canister_signature_subnet_check(
-        &mut diff,
-        &inventory,
-        canic_subnet_catalog::MAINNET_NETWORK,
-        &root,
+    super::report::apply_root_canister_signature_subnet_check_with_source(
+        &mut diff, &inventory, "ic", &root, &source,
     );
 
     let _ = fs::remove_dir_all(root);
@@ -13158,49 +13172,6 @@ fn sample_root_observation() -> DeploymentRootObservationV1 {
         status: Some("running".to_string()),
         role_assignment_source: Some("icp_canister_status".to_string()),
     }
-}
-
-fn write_root_subnet_catalog(
-    root: &Path,
-    root_canister: &str,
-    subnet_kind: canic_subnet_catalog::SubnetKind,
-) {
-    let path =
-        crate::subnet_catalog::subnet_catalog_path(root, canic_subnet_catalog::MAINNET_NETWORK);
-    fs::create_dir_all(path.parent().expect("catalog path has parent"))
-        .expect("create subnet catalog directory");
-    let subnet_principal = canic_subnet_catalog::MAINNET_REGISTRY_CANISTER_ID.to_string();
-    let catalog = canic_subnet_catalog::SubnetCatalog {
-        catalog_schema_version: canic_subnet_catalog::CATALOG_SCHEMA_VERSION,
-        network: canic_subnet_catalog::MAINNET_NETWORK.to_string(),
-        registry_canister_id: canic_subnet_catalog::MAINNET_REGISTRY_CANISTER_ID.to_string(),
-        registry_version: 123_456,
-        fetched_at: "2026-06-09T00:00:00Z".to_string(),
-        fetched_by: "fixture".to_string(),
-        source_endpoint: "https://icp-api.io".to_string(),
-        resolver_backend: "local-nns-subnet-catalog".to_string(),
-        subnets: vec![canic_subnet_catalog::SubnetInfo {
-            subnet_principal: subnet_principal.clone(),
-            subnet_kind,
-            subnet_kind_source: canic_subnet_catalog::ClassificationSource::Registry,
-            subnet_specialization: canic_subnet_catalog::SubnetSpecialization::None,
-            subnet_specialization_source: canic_subnet_catalog::ClassificationSource::Computed,
-            geographic_scope: canic_subnet_catalog::GeographicScope::Global,
-            geographic_scope_source: canic_subnet_catalog::ClassificationSource::Computed,
-            subnet_label: subnet_kind.as_str().to_string(),
-            subnet_label_source: canic_subnet_catalog::ClassificationSource::Computed,
-            node_count: Some(13),
-            charges_apply_by_default: subnet_kind.charges_apply_by_default(),
-        }],
-        routing_ranges: vec![canic_subnet_catalog::RoutingRange {
-            start_canister_id: root_canister.to_string(),
-            end_canister_id: root_canister.to_string(),
-            subnet_principal,
-        }],
-    };
-    let json = canic_subnet_catalog::catalog_to_pretty_json(&catalog)
-        .expect("fixture catalog should serialize");
-    fs::write(path, json).expect("write subnet catalog");
 }
 
 fn sample_check(plan: DeploymentPlanV1, inventory: DeploymentInventoryV1) -> DeploymentCheckV1 {

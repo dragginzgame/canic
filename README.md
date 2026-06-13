@@ -60,9 +60,9 @@ walkthrough.
   or teardown authority. See
   [v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md) and
   [v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md).
-* **NNS inspection:** The operator CLI can refresh and inspect cached public
-  IC subnet, node, node-operator, and node-provider metadata from the NNS
-  registry without mutating deployments or canisters.
+* **NNS inspection:** The `icq` binary can refresh and inspect cached public IC
+  subnet, node, node-operator, and node-provider metadata from the NNS registry
+  without mutating deployments or canisters.
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
   fleet configs and replica status, installs fleets, captures topology-aware
   snapshots, validates backup manifests, and drives guarded restore planning.
@@ -87,22 +87,25 @@ canic info medic test
 To inspect public IC NNS metadata:
 
 ```bash
-canic nns subnet refresh
-canic nns registry version
-canic nns subnet list
-canic nns data-center list
-canic nns node list
-canic nns node list --data-center <data-center-prefix>
-canic nns node list --node-provider <node-provider-prefix>
-canic nns node-provider list
-canic nns node-operator list
-canic nns topology refresh
-canic nns topology summary
-canic nns topology coverage
-canic nns topology versions
-canic nns topology health
-canic nns topology gaps
-canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
+icq nns subnet refresh
+icq nns registry version
+icq nns subnet list
+icq nns data-center list
+icq nns node list
+icq nns node list --data-center <data-center-prefix>
+icq nns node list --node-provider <node-provider-prefix>
+icq nns node-provider list
+icq nns node-operator list
+icq nns topology refresh
+icq nns topology summary
+icq nns topology coverage
+icq nns topology versions
+icq nns topology health
+icq nns topology gaps
+icq nns topology capacity
+icq nns topology regions
+icq nns topology providers
+icq nns subnet info <subnet|canister|subnet-prefix>
 ```
 
 Useful next reads:
@@ -117,6 +120,9 @@ Useful next reads:
   - compact v1-candidate commands, files, evidence outputs, and boundaries.
 * [crates/canic-cli/README.md](crates/canic-cli/README.md) - operator command
   guide, including backup and restore.
+* `ic-query` - IC metadata query commands, including the standalone `icq`
+  NNS inspection surface. Install `icq` with `make install-dev` or
+  `bash scripts/ci/install-ic-query.sh`.
 * [crates/canic-host/README.md](crates/canic-host/README.md) - build profiles,
   split workspace/ICP roots, custom canister roots, and lower-level install
   commands.

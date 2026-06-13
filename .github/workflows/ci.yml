@@ -69,14 +69,16 @@ jobs:
       - name: Lint GitHub Actions workflows
         shell: bash
         run: "$ACTIONLINT_BIN"
-      - name: Install ICP CLI tools
+      - name: Install IC CLI tools
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
+          bash scripts/ci/install-ic-query.sh
           npm install -g @icp-sdk/ic-wasm
-      - name: Check ICP CLI tools
+      - name: Check IC CLI tools
         run: |
           icp --version
+          icq --version
           ic-wasm --version
       - name: Cache PocketIC server
         uses: actions/cache@v5

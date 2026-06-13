@@ -51,8 +51,8 @@ canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy inspect catalog list
 canic deploy inspect catalog inspect <deployment>
-canic nns subnet list
-canic nns node list
+icq nns subnet list
+icq nns node list
 ```
 
 These commands do not imply one-command deployment, controller mutation,
@@ -91,40 +91,43 @@ For a full local development setup, including ICP CLI, helper tools, and the
 
 ## NNS Inspection
 
-Public IC registry metadata is inspected through the `nns` namespace:
+Public IC registry metadata is inspected through the sibling `icq` binary:
 
 ```bash
-canic nns subnet refresh
-canic nns registry version
-canic nns subnet list
-canic nns subnet list --verbose
-canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
-canic nns data-center list
-canic nns data-center list --verbose
-canic nns data-center info <data-center-prefix>
-canic nns data-center refresh
-canic nns node list
-canic nns node list --verbose
-canic nns node info <node-prefix>
-canic nns node refresh
-canic nns node list --data-center <data-center-prefix>
-canic nns node list --node-provider <node-provider-prefix>
-canic nns node list --node-operator <node-operator-prefix>
-canic nns node list --subnet <subnet-prefix> --kind system
-canic nns node-provider list
-canic nns node-provider list --verbose
-canic nns node-provider info <node-provider-prefix>
-canic nns node-provider refresh
-canic nns node-operator list
-canic nns node-operator list --verbose
-canic nns node-operator info <node-operator-prefix>
-canic nns node-operator refresh
-canic nns topology refresh
-canic nns topology summary
-canic nns topology coverage
-canic nns topology versions
-canic nns topology health
-canic nns topology gaps
+icq nns subnet refresh
+icq nns registry version
+icq nns subnet list
+icq nns subnet list --verbose
+icq nns subnet info <subnet|canister|subnet-prefix>
+icq nns data-center list
+icq nns data-center list --verbose
+icq nns data-center info <data-center-prefix>
+icq nns data-center refresh
+icq nns node list
+icq nns node list --verbose
+icq nns node info <node-prefix>
+icq nns node refresh
+icq nns node list --data-center <data-center-prefix>
+icq nns node list --node-provider <node-provider-prefix>
+icq nns node list --node-operator <node-operator-prefix>
+icq nns node list --subnet <subnet-prefix> --kind system
+icq nns node-provider list
+icq nns node-provider list --verbose
+icq nns node-provider info <node-provider-prefix>
+icq nns node-provider refresh
+icq nns node-operator list
+icq nns node-operator list --verbose
+icq nns node-operator info <node-operator-prefix>
+icq nns node-operator refresh
+icq nns topology refresh
+icq nns topology summary
+icq nns topology coverage
+icq nns topology versions
+icq nns topology health
+icq nns topology gaps
+icq nns topology capacity
+icq nns topology regions
+icq nns topology providers
 ```
 
 Cached `list` and `info` commands read mainnet NNS-derived reports. Use

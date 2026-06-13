@@ -65,11 +65,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Project,
     },
     CommandSpec {
-        name: "nns",
-        about: "Inspect cached NNS registry data",
-        scope: CommandScope::Project,
-    },
-    CommandSpec {
         name: "install",
         about: "Install and bootstrap a Canic fleet",
         scope: CommandScope::Deployment,
@@ -159,7 +154,7 @@ pub fn print_help_or_version(
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Operator CLI for Canic projects, deployments, NNS registry data, backups, and ICP wallet workflows")
+        .about("Operator CLI for Canic projects, deployments, backups, and ICP wallet workflows")
         .disable_version_flag(true)
         .arg(
             Arg::new("version")

@@ -13,7 +13,6 @@ mod install;
 mod list;
 mod medic;
 mod metrics;
-mod nns;
 mod output;
 mod replica;
 mod restore;
@@ -87,9 +86,6 @@ pub enum CliError {
     #[error("status: {0}")]
     Status(#[from] status::StatusCommandError),
 
-    #[error("nns: {0}")]
-    Nns(#[from] nns::NnsCommandError),
-
     #[error("token: {0}")]
     Token(#[from] token::TokenCommandError),
 }
@@ -145,7 +141,6 @@ where
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
-        "nns" => nns::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),

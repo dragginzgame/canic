@@ -33,8 +33,8 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/actionlint/ICP CLI/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/actionlint/ICP CLI development environment"
+	@echo "  install-dev      Install the shared Rust/Cargo/actionlint/ICP CLI/IC query/Canic toolchain"
+	@echo "  update-dev       Update the local Rust/Cargo/actionlint/ICP CLI/IC query development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -86,11 +86,11 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/actionlint/Canic toolchain
+# Install the shared Rust/Cargo/actionlint/ICP CLI/IC query/Canic toolchain.
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/actionlint/ICP CLI development environment.
+# Update the local Rust/Cargo/actionlint/ICP CLI/IC query development environment.
 update-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
@@ -100,6 +100,7 @@ update-dev:
 		ripgrep \
 		candid-extractor
 	icp --version
+	icq --version
 	ic-wasm --version
 	cargo audit
 	cargo update --quiet

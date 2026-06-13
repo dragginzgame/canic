@@ -17,8 +17,6 @@ PUBLISH_ORDER=(
     canic-control-plane
     canic-macros
     canic
-    canic-subnet-catalog
-    canic-ic-registry
     canic-host
     canic-cli
     canic-wasm-store
