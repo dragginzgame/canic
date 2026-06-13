@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Continues the host deployment-truth decomposition by moving artifact
+  promotion provenance and execution-receipt construction/validation into a
+  focused promotion child module while preserving the public deployment-truth
+  API.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
