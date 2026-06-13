@@ -103,8 +103,7 @@ pub(super) async fn install_canister(
         record_canister_op_failure(role, CanisterOpsMetricOperation::Install, &err);
         record_provisioning_failure(role, ProvisioningMetricOperation::Install, &err);
 
-        let removed = SubnetRegistryOps::remove(&pid);
-        if removed.is_none() {
+        if !SubnetRegistryOps::unregister(&pid) {
             log!(
                 Topic::CanisterLifecycle,
                 Warn,

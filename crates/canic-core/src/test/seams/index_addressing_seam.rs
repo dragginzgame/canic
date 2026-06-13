@@ -22,7 +22,7 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
     let _guard = lock();
 
     for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
     }
     SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
         entries: Vec::new(),
@@ -63,7 +63,7 @@ fn index_addressing_does_not_fallback_to_registry() {
     let _guard = lock();
 
     for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
     }
     SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
         entries: Vec::new(),

@@ -34,7 +34,7 @@ impl ProvisionWorkflow {
             return Err(err);
         }
 
-        let role = SubnetRegistryOps::get(pid).map(|record| record.role);
+        let role = SubnetRegistryOps::role_parent(pid).map(|(role, _)| role);
         record_delete_metric(
             role.as_ref(),
             CanisterOpsMetricOutcome::Started,
@@ -68,14 +68,14 @@ impl ProvisionWorkflow {
             return Err(err);
         }
 
-        let removed_entry = SubnetRegistryOps::remove(&pid);
-        match &removed_entry {
-            Some(c) => log!(
+        let removed_role = SubnetRegistryOps::remove_and_return_role(&pid);
+        match &removed_role {
+            Some(removed_role) => log!(
                 Topic::CanisterLifecycle,
                 Ok,
                 "🗑️ delete_canister: {} ({})",
                 pid,
-                c.role
+                removed_role
             ),
             None => log!(
                 Topic::CanisterLifecycle,

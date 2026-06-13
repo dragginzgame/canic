@@ -451,16 +451,17 @@ impl AuthApi {
             )));
         }
 
-        let registered = SubnetRegistryOps::get(request.subject).ok_or_else(|| {
-            Error::forbidden(format!(
-                "role attestation subject {} is not registered",
-                request.subject
-            ))
-        })?;
-        if registered.role != request.role {
+        let (registered_role, _) =
+            SubnetRegistryOps::role_parent(request.subject).ok_or_else(|| {
+                Error::forbidden(format!(
+                    "role attestation subject {} is not registered",
+                    request.subject
+                ))
+            })?;
+        if registered_role != request.role {
             return Err(Error::forbidden(format!(
                 "role attestation role mismatch for subject {}: requested {}, registered {}",
-                request.subject, request.role, registered.role
+                request.subject, request.role, registered_role
             )));
         }
 

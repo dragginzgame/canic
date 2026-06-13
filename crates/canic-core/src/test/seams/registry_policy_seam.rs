@@ -207,7 +207,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     let _guard = lock();
 
     for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
     }
 
     let role = CanisterRole::new("seam_registry_singleton");
@@ -347,7 +347,7 @@ fn registry_singleton_policy_blocks_under_parent() {
     let _guard = lock();
 
     for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
     }
 
     let role = CanisterRole::new("seam_registry_singleton_child");

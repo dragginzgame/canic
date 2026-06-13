@@ -112,19 +112,19 @@ pub(super) fn validate_bind_target_with_reason(
         ));
     }
 
-    let Some(record) = SubnetRegistryOps::get(pid) else {
+    let Some((actual_role, _)) = SubnetRegistryOps::role_parent(pid) else {
         return Err((
             DirectoryWorkflowError::RegistryEntryMissing(pid).into(),
             MetricReason::RegistryMissing,
         ));
     };
 
-    if record.role != *expected_role {
+    if actual_role != *expected_role {
         return Err((
             DirectoryWorkflowError::InstanceRoleMismatch {
                 pid,
                 expected: expected_role.clone(),
-                actual: record.role,
+                actual: actual_role,
             }
             .into(),
             MetricReason::RoleMismatch,

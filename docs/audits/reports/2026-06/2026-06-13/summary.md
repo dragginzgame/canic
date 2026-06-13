@@ -89,8 +89,8 @@
   root capability authorization/replay changes coordinated across API,
   workflow, metrics, and tests.
 - Keep the broader workflow-purity watchpoint active for future record
-  carriers, Candid codecs, and workflow call sites that consume registry
-  records through ops APIs; the direct `workflow/pool` storage-record reference
-  is closed.
+  carriers and Candid codecs. The direct `workflow/pool` storage-record
+  reference was closed in `0.67.2`, and workflow/API registry-record
+  projection was closed in the next cleanup slice.
 - Keep host deployment-truth decomposition as the main friction target before
   adding more promotion/lifecycle report families.

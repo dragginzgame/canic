@@ -26,9 +26,10 @@ rewritten.
 - Preserve the DRY consolidation watchpoints from the retained June reports.
 - Keep module-surface-hardening runs read-only unless the user explicitly asks
   for cleanup implementation.
-- Carry forward the workflow-purity follow-up to keep workflow record carriers,
-  Candid codecs, and registry-record projections behind ops/lower codec
-  ownership.
+- Carry forward the workflow-purity follow-up to keep workflow record carriers
+  and Candid codecs behind ops/lower codec ownership. The workflow/API
+  registry-record projection follow-up was closed after the 2026-06-13
+  change-friction report.
 - Carry forward the audience-target-binding method drift note: retired or
   absent internal-invocation and delegated-grant surfaces should either be
   removed from the recurring definition or explicitly tracked as historical

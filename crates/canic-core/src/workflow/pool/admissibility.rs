@@ -32,7 +32,7 @@ async fn probe_importable_on_local(pid: Principal) -> Result<(), String> {
 ///
 /// This is the main workflow entrypoint ops/workflows should use.
 pub async fn check_can_enter_pool(pid: Principal) -> Result<(), PoolPolicyError> {
-    let registered_in_subnet = SubnetRegistryOps::get(pid).is_some();
+    let registered_in_subnet = SubnetRegistryOps::is_registered(pid);
     let importable_on_local = probe_importable_on_local(pid).await;
 
     policy_can_enter_pool(pid, registered_in_subnet, importable_on_local)

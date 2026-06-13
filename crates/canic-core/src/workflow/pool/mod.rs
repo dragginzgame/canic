@@ -309,7 +309,7 @@ impl PoolWorkflow {
 
         match Self::reset_into_pool(pid).await {
             Ok(cycles) => {
-                let _ = SubnetRegistryOps::remove(&pid);
+                let _ = SubnetRegistryOps::unregister(&pid);
                 Self::mark_ready(pid, cycles);
 
                 if let Err(err) = commit_pool_import_intent(intent_id, pid) {
@@ -354,15 +354,14 @@ impl PoolWorkflow {
 
         // Recycling a missing child is an idempotent no-op so stale directory cleanup
         // never depends on the provisional child still existing.
-        let Some(entry) = SubnetRegistryOps::get(pid) else {
+        let Some(metadata) = PoolRegistrationMetadata::from_subnet_registry(pid) else {
             MetricEvent::skipped(MetricOperation::Recycle, MetricReason::NotFound);
             return Ok(());
         };
-        let metadata = PoolRegistrationMetadata::from_canister_record(&entry);
 
         // Remove from topology and record the pending pool entry before the
         // destructive reset, so duplicate retries cannot re-enter the reset path.
-        let _ = SubnetRegistryOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
         mark_pool_recycle_pending(pid, &metadata, IcOps::now_secs());
 
         // Destructive reset
@@ -1073,19 +1072,19 @@ mod tests {
         let module_hash = vec![1, 2, 3, 4];
 
         PoolOps::remove(&pid);
-        let _ = SubnetRegistryOps::remove(&pid);
-        let _ = SubnetRegistryOps::remove(&root);
+        let _ = SubnetRegistryOps::unregister(&pid);
+        let _ = SubnetRegistryOps::unregister(&root);
         SubnetRegistryOps::register_root(root, 100);
         SubnetRegistryOps::register_unchecked(pid, &role, root, module_hash.clone(), 101)
             .expect("child registered");
 
-        let entry = SubnetRegistryOps::get(pid).expect("registry entry");
-        let metadata = PoolRegistrationMetadata::from_canister_record(&entry);
-        let _ = SubnetRegistryOps::remove(&pid);
+        let metadata =
+            PoolRegistrationMetadata::from_subnet_registry(pid).expect("registry metadata");
+        let _ = SubnetRegistryOps::unregister(&pid);
         mark_pool_recycle_pending(pid, &metadata, 102);
 
         assert!(pool_recycle_already_present(pid));
-        assert!(SubnetRegistryOps::get(pid).is_none());
+        assert!(!SubnetRegistryOps::is_registered(pid));
 
         let pool_entry = PoolQuery::pool_entry(pid).expect("pending pool entry");
         assert_eq!(pool_entry.status, CanisterPoolStatus::PendingReset);
@@ -1103,8 +1102,8 @@ mod tests {
         );
 
         PoolOps::remove(&pid);
-        let _ = SubnetRegistryOps::remove(&pid);
-        let _ = SubnetRegistryOps::remove(&root);
+        let _ = SubnetRegistryOps::unregister(&pid);
+        let _ = SubnetRegistryOps::unregister(&root);
     }
 
     #[test]

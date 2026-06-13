@@ -16,7 +16,7 @@ use crate::{
 pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), Error> {
     let caller = IcOps::msg_caller();
 
-    if SubnetRegistryOps::get(caller).is_none() {
+    if !SubnetRegistryOps::is_registered(caller) {
         return Err(Error::forbidden(
             "structural proof requires caller to be registered in subnet registry",
         ));
@@ -51,12 +51,12 @@ fn verify_root_structural_child_target(
     target_pid: Principal,
     operation: &str,
 ) -> Result<(), Error> {
-    let target = SubnetRegistryOps::get(target_pid).ok_or_else(|| {
+    let (_, target_parent) = SubnetRegistryOps::role_parent(target_pid).ok_or_else(|| {
         Error::forbidden(format!(
             "structural proof requires registered {operation} target"
         ))
     })?;
-    if target.parent_pid != Some(caller) {
+    if target_parent != Some(caller) {
         return Err(Error::forbidden(format!(
             "structural proof requires {operation} target to be a direct child of caller"
         )));

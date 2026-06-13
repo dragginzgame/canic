@@ -136,8 +136,12 @@ impl SubnetRegistryOps {
         SubnetRegistry::update_module_hash(pid, module_hash)
     }
 
-    pub(crate) fn remove(pid: &Principal) -> Option<CanisterRecord> {
-        SubnetRegistry::remove(pid)
+    pub(crate) fn unregister(pid: &Principal) -> bool {
+        SubnetRegistry::remove(pid).is_some()
+    }
+
+    pub(crate) fn remove_and_return_role(pid: &Principal) -> Option<CanisterRole> {
+        SubnetRegistry::remove(pid).map(|record| record.role)
     }
 
     // ---------------------------------------------------------------------

@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.3` tightens registry-record ownership so workflow and
+  endpoint-boundary code use ops-owned subnet registry projections instead of
+  consuming raw registry records.
+
+- `0.67.2` finishes the post-helper-split CLI and audit cleanup by trimming
+  stale NNS command docs, recording the June 13 audit pass, refreshing helper
+  tooling pins, and closing the pool recycle workflow/storage boundary leak.
+
 - `0.67.1` audits `canic-host` after the `icq` split by removing stale host
   module wiring and reorganizing large host unit-test files into focused
   modules without changing CLI or runtime behavior.

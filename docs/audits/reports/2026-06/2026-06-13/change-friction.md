@@ -333,6 +333,7 @@ Commands used as source scans:
 3. Treat broad helper-backed operator command work as an integration slice:
    CLI surface, host adapter, install scripts, helper version checks, docs, and
    tests should move together rather than as follow-up fragments.
-4. Keep the broader workflow-purity watchpoint for future record carriers,
-   Candid codecs, and workflow call sites that consume registry records through
-   ops APIs; the explicit `workflow/pool` storage-record crossing is closed.
+4. Keep the broader workflow-purity watchpoint for future record carriers and
+   Candid codecs. The explicit `workflow/pool` storage-record crossing was
+   closed before this report was finalized, and the workflow/API registry-record
+   projection follow-up was closed by the next cleanup slice.

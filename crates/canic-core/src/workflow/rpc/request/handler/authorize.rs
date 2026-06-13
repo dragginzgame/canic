@@ -116,10 +116,10 @@ fn authorize_root_only(ctx: &RootContext) -> Result<(), InternalError> {
 }
 
 fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<(), InternalError> {
-    let registry_entry = SubnetRegistryOps::get(req.canister_pid)
+    let (_, parent_pid) = SubnetRegistryOps::role_parent(req.canister_pid)
         .ok_or(RpcWorkflowError::ChildNotFound(req.canister_pid))?;
 
-    if registry_entry.parent_pid != Some(ctx.caller) {
+    if parent_pid != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
     }
 
@@ -127,11 +127,11 @@ fn authorize_upgrade(ctx: &RootContext, req: &UpgradeCanisterRequest) -> Result<
 }
 
 fn authorize_recycle(ctx: &RootContext, req: &RecycleCanisterRequest) -> Result<(), InternalError> {
-    let Some(registry_entry) = SubnetRegistryOps::get(req.canister_pid) else {
+    let Some((_, parent_pid)) = SubnetRegistryOps::role_parent(req.canister_pid) else {
         return Ok(());
     };
 
-    if ctx.caller != ctx.self_pid && registry_entry.parent_pid != Some(ctx.caller) {
+    if ctx.caller != ctx.self_pid && parent_pid != Some(ctx.caller) {
         return Err(RpcWorkflowError::NotChildOfCaller(req.canister_pid, ctx.caller).into());
     }
 

@@ -333,7 +333,7 @@ pub(super) fn canister_upgrade_cost_guard_request(
 
 // Resolve the registry role and parent for one upgrade target.
 fn upgrade_target(pid: Principal) -> Result<(CanisterRole, Option<Principal>), InternalError> {
-    let Some(record) = SubnetRegistryOps::get(pid) else {
+    let Some(target) = SubnetRegistryOps::role_parent(pid) else {
         CanisterOpsMetrics::record_unknown_role(
             CanisterOpsMetricOperation::Upgrade,
             CanisterOpsMetricOutcome::Failed,
@@ -349,7 +349,7 @@ fn upgrade_target(pid: Principal) -> Result<(CanisterRole, Option<Principal>), I
         ));
     };
 
-    Ok((record.role, record.parent_pid))
+    Ok(target)
 }
 
 // Resolve the approved module source for one upgrade target role.
@@ -597,16 +597,16 @@ fn assert_registered_immediate_parent(
     pid: Principal,
     expected_parent: Principal,
 ) -> Result<(), InternalError> {
-    let record =
-        SubnetRegistryOps::get(pid).ok_or(TopologyPolicyError::RegistryEntryMissing(pid))?;
+    let (_, parent_pid) = SubnetRegistryOps::role_parent(pid)
+        .ok_or(TopologyPolicyError::RegistryEntryMissing(pid))?;
 
-    if record.parent_pid == Some(expected_parent) {
+    if parent_pid == Some(expected_parent) {
         Ok(())
     } else {
         Err(TopologyPolicyError::ImmediateParentMismatch {
             pid,
             expected: expected_parent,
-            found: record.parent_pid,
+            found: parent_pid,
         }
         .into())
     }

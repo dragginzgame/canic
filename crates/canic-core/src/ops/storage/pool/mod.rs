@@ -2,7 +2,7 @@ pub mod mapper;
 
 use crate::{
     InternalError,
-    ops::prelude::*,
+    ops::{prelude::*, storage::registry::subnet::SubnetRegistryOps},
     storage::{
         canister::CanisterRecord,
         stable::pool::{PoolRecord, PoolStatus, PoolStore, PoolStoreRecord},
@@ -27,6 +27,11 @@ impl PoolRegistrationMetadata {
             parent: record.parent_pid,
             module_hash: record.module_hash.clone(),
         }
+    }
+
+    #[must_use]
+    pub fn from_subnet_registry(pid: Principal) -> Option<Self> {
+        SubnetRegistryOps::get(pid).map(|record| Self::from_canister_record(&record))
     }
 }
 

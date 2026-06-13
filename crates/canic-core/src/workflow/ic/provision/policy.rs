@@ -12,8 +12,8 @@ pub(super) fn validate_registration_policy(
     parent_pid: Principal,
 ) -> Result<(), InternalError> {
     let canister_cfg = ConfigOps::current_subnet_canister(role)?;
-    let parent_role = SubnetRegistryOps::get(parent_pid)
-        .map(|record| record.role)
+    let parent_role = SubnetRegistryOps::role_parent(parent_pid)
+        .map(|(role, _)| role)
         .ok_or(policy::topology::TopologyPolicyError::ParentNotFound(
             parent_pid,
         ))?;
