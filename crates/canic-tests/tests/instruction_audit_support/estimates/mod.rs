@@ -915,7 +915,7 @@ fn optional_string_env(name: &'static str) -> Result<Option<String>, EstimateErr
 fn optional_duration_env(name: &'static str) -> Result<Option<u64>, EstimateError> {
     match env::var(name) {
         Ok(value) if value.is_empty() => Ok(None),
-        Ok(value) => parse_stale_after_duration(&value).map(Some).map_err(|_| {
+        Ok(value) => parse_stale_after_duration(&value).map(Some).map_err(|()| {
             EstimateError::InvalidDuration {
                 field: name,
                 value: value.clone(),
