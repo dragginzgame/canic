@@ -123,6 +123,8 @@ canic nns topology refresh
 canic nns topology summary
 canic nns topology coverage
 canic nns topology versions
+canic nns topology health
+canic nns topology gaps
 ```
 
 Cached `list` and `info` commands read mainnet NNS-derived reports. Use

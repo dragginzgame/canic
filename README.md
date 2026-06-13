@@ -100,6 +100,8 @@ canic nns topology refresh
 canic nns topology summary
 canic nns topology coverage
 canic nns topology versions
+canic nns topology health
+canic nns topology gaps
 canic nns subnet info <subnet|canister|subnet-prefix|deployment-target>
 ```
 

@@ -168,6 +168,8 @@ fn command_family_help_returns_ok() {
         &["nns", "topology", "summary", "help"],
         &["nns", "topology", "coverage", "help"],
         &["nns", "topology", "versions", "help"],
+        &["nns", "topology", "health", "help"],
+        &["nns", "topology", "gaps", "help"],
         &["nns", "topology", "refresh", "help"],
         &["restore", "help"],
         &["restore", "plan", "help"],

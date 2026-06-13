@@ -15,12 +15,14 @@ use crate::{
 };
 use canic_host::{
     nns_topology::{
-        NnsTopologyCoverageRequest, NnsTopologyRefreshRequest, NnsTopologySummaryRequest,
-        NnsTopologyVersionsRequest, build_nns_topology_coverage_report,
-        build_nns_topology_summary_report, build_nns_topology_versions_report,
-        nns_topology_coverage_report_text, nns_topology_refresh_report_text,
-        nns_topology_summary_report_text, nns_topology_versions_report_text,
-        refresh_nns_topology_report,
+        NnsTopologyCoverageRequest, NnsTopologyGapsRequest, NnsTopologyHealthRequest,
+        NnsTopologyRefreshRequest, NnsTopologySummaryRequest, NnsTopologyVersionsRequest,
+        build_nns_topology_coverage_report, build_nns_topology_gaps_report,
+        build_nns_topology_health_report, build_nns_topology_summary_report,
+        build_nns_topology_versions_report, nns_topology_coverage_report_text,
+        nns_topology_gaps_report_text, nns_topology_health_report_text,
+        nns_topology_refresh_report_text, nns_topology_summary_report_text,
+        nns_topology_versions_report_text, refresh_nns_topology_report,
     },
     release_set::icp_root,
 };
@@ -41,6 +43,16 @@ Examples:
   canic nns topology versions
   canic --network ic nns topology versions --format json
   canic nns topology versions --source-endpoint https://icp-api.io";
+const TOPOLOGY_HEALTH_HELP_AFTER: &str = "\
+Examples:
+  canic nns topology health
+  canic --network ic nns topology health --format json
+  canic nns topology health --source-endpoint https://icp-api.io";
+const TOPOLOGY_GAPS_HELP_AFTER: &str = "\
+Examples:
+  canic nns topology gaps
+  canic --network ic nns topology gaps --format json
+  canic nns topology gaps --source-endpoint https://icp-api.io";
 const TOPOLOGY_REFRESH_HELP_AFTER: &str = "\
 Examples:
   canic nns topology refresh
@@ -81,6 +93,26 @@ pub(super) struct TopologyVersionsOptions {
 }
 
 ///
+/// TopologyHealthOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct TopologyHealthOptions {
+    pub(super) network: String,
+    pub(super) format: super::OutputFormat,
+    pub(super) source_endpoint: String,
+}
+
+///
+/// TopologyGapsOptions
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct TopologyGapsOptions {
+    pub(super) network: String,
+    pub(super) format: super::OutputFormat,
+    pub(super) source_endpoint: String,
+}
+
+///
 /// TopologyRefreshOptions
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -107,6 +139,8 @@ where
         "summary" => run_topology_summary(args),
         "coverage" => run_topology_coverage(args),
         "versions" => run_topology_versions(args),
+        "health" => run_topology_health(args),
+        "gaps" => run_topology_gaps(args),
         "refresh" => run_topology_refresh(args),
         _ => unreachable!("nns topology dispatch command only defines known commands"),
     }
@@ -192,6 +226,48 @@ where
     write_text_or_json(format, &report, nns_topology_versions_report_text)
 }
 
+fn run_topology_health<I>(args: I) -> Result<(), NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, topology_health_usage, version_text()) {
+        return Ok(());
+    }
+    let options = TopologyHealthOptions::parse(args)?;
+    let format = options.format;
+    let icp_root = icp_root().map_err(|err| NnsCommandError::Usage(err.to_string()))?;
+    let request = NnsTopologyHealthRequest {
+        icp_root,
+        network: options.network,
+        source_endpoint: options.source_endpoint,
+        now_unix_secs: now_unix_secs()?,
+    };
+    let report = build_nns_topology_health_report(&request)?;
+    write_text_or_json(format, &report, nns_topology_health_report_text)
+}
+
+fn run_topology_gaps<I>(args: I) -> Result<(), NnsCommandError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let args = args.into_iter().collect::<Vec<_>>();
+    if print_help_or_version(&args, topology_gaps_usage, version_text()) {
+        return Ok(());
+    }
+    let options = TopologyGapsOptions::parse(args)?;
+    let format = options.format;
+    let icp_root = icp_root().map_err(|err| NnsCommandError::Usage(err.to_string()))?;
+    let request = NnsTopologyGapsRequest {
+        icp_root,
+        network: options.network,
+        source_endpoint: options.source_endpoint,
+        now_unix_secs: now_unix_secs()?,
+    };
+    let report = build_nns_topology_gaps_report(&request)?;
+    write_text_or_json(format, &report, nns_topology_gaps_report_text)
+}
+
 fn run_topology_refresh<I>(args: I) -> Result<(), NnsCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -263,6 +339,38 @@ impl TopologyVersionsOptions {
     }
 }
 
+impl TopologyHealthOptions {
+    pub(super) fn parse<I>(args: I) -> Result<Self, NnsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(topology_health_command(), args)
+            .map_err(|_| NnsCommandError::Usage(topology_health_usage()))?;
+        let common = NnsCommonOptions::from_matches(&matches);
+        Ok(Self {
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
+        })
+    }
+}
+
+impl TopologyGapsOptions {
+    pub(super) fn parse<I>(args: I) -> Result<Self, NnsCommandError>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let matches = parse_matches(topology_gaps_command(), args)
+            .map_err(|_| NnsCommandError::Usage(topology_gaps_usage()))?;
+        let common = NnsCommonOptions::from_matches(&matches);
+        Ok(Self {
+            network: common.network,
+            format: common.format,
+            source_endpoint: common.source_endpoint,
+        })
+    }
+}
+
 impl TopologyRefreshOptions {
     pub(super) fn parse<I>(args: I) -> Result<Self, NnsCommandError>
     where
@@ -295,6 +403,12 @@ pub(super) fn topology_command() -> clap::Command {
         .subcommand(passthrough_subcommand(
             clap::Command::new("versions")
                 .about("Show cached mainnet NNS topology component registry versions"),
+        ))
+        .subcommand(passthrough_subcommand(
+            clap::Command::new("health").about("Check cached mainnet NNS topology cache health"),
+        ))
+        .subcommand(passthrough_subcommand(
+            clap::Command::new("gaps").about("List cached mainnet NNS topology join gaps"),
         ))
         .subcommand(passthrough_subcommand(
             clap::Command::new("refresh")
@@ -344,6 +458,34 @@ fn topology_versions_command() -> clap::Command {
         .after_help(TOPOLOGY_VERSIONS_HELP_AFTER)
 }
 
+fn topology_health_command() -> clap::Command {
+    clap::Command::new("health")
+        .bin_name("canic nns topology health")
+        .about("Check cached mainnet NNS topology cache health")
+        .disable_help_flag(true)
+        .arg(leaf::format_arg())
+        .arg(
+            leaf::source_endpoint_arg(canic_host::nns_node::DEFAULT_NNS_NODE_SOURCE_ENDPOINT)
+                .help("IC API endpoint used if a topology component cache is missing"),
+        )
+        .arg(leaf::network_arg())
+        .after_help(TOPOLOGY_HEALTH_HELP_AFTER)
+}
+
+fn topology_gaps_command() -> clap::Command {
+    clap::Command::new("gaps")
+        .bin_name("canic nns topology gaps")
+        .about("List cached mainnet NNS topology join gaps")
+        .disable_help_flag(true)
+        .arg(leaf::format_arg())
+        .arg(
+            leaf::source_endpoint_arg(canic_host::nns_node::DEFAULT_NNS_NODE_SOURCE_ENDPOINT)
+                .help("IC API endpoint used if a topology component cache is missing"),
+        )
+        .arg(leaf::network_arg())
+        .after_help(TOPOLOGY_GAPS_HELP_AFTER)
+}
+
 fn topology_refresh_command() -> clap::Command {
     clap::Command::new("refresh")
         .bin_name("canic nns topology refresh")
@@ -378,6 +520,14 @@ pub(super) fn topology_coverage_usage() -> String {
 
 pub(super) fn topology_versions_usage() -> String {
     render_help(topology_versions_command())
+}
+
+pub(super) fn topology_health_usage() -> String {
+    render_help(topology_health_command())
+}
+
+pub(super) fn topology_gaps_usage() -> String {
+    render_help(topology_gaps_command())
 }
 
 pub(super) fn topology_refresh_usage() -> String {

@@ -26,9 +26,10 @@ use super::{
         should_retry_info_as_deployment_target, subnet_usage,
     },
     topology::{
-        TopologyCoverageOptions, TopologyRefreshOptions, TopologySummaryOptions,
-        TopologyVersionsOptions, topology_coverage_usage, topology_refresh_usage,
-        topology_summary_usage, topology_usage, topology_versions_usage,
+        TopologyCoverageOptions, TopologyGapsOptions, TopologyHealthOptions,
+        TopologyRefreshOptions, TopologySummaryOptions, TopologyVersionsOptions,
+        topology_coverage_usage, topology_gaps_usage, topology_health_usage,
+        topology_refresh_usage, topology_summary_usage, topology_usage, topology_versions_usage,
     },
 };
 use canic_host::{
@@ -617,6 +618,46 @@ fn topology_coverage_parses_defaults_and_json_format() {
 }
 
 #[test]
+fn topology_health_parses_defaults_and_json_format() {
+    let defaults = TopologyHealthOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+
+    let options = TopologyHealthOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse topology health");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
+fn topology_gaps_parses_defaults_and_json_format() {
+    let defaults = TopologyGapsOptions::parse([]).expect("parse defaults");
+
+    assert_eq!(defaults.network, MAINNET_NETWORK);
+    assert_eq!(defaults.format, OutputFormat::Text);
+    assert_eq!(defaults.source_endpoint, DEFAULT_NNS_NODE_SOURCE_ENDPOINT);
+
+    let options = TopologyGapsOptions::parse([
+        OsString::from("--format"),
+        OsString::from("json"),
+        OsString::from("--source-endpoint"),
+        OsString::from("https://icp-api.io"),
+    ])
+    .expect("parse topology gaps");
+
+    assert_eq!(options.format, OutputFormat::Json);
+    assert_eq!(options.source_endpoint, "https://icp-api.io");
+}
+
+#[test]
 fn topology_refresh_parses_defaults_and_dry_run() {
     let defaults = TopologyRefreshOptions::parse([]).expect("parse defaults");
 
@@ -751,12 +792,16 @@ fn topology_help_is_advertised_under_nns() {
     let summary = topology_summary_usage();
     let coverage = topology_coverage_usage();
     let versions = topology_versions_usage();
+    let health = topology_health_usage();
+    let gaps = topology_gaps_usage();
     let refresh = topology_refresh_usage();
 
     assert!(nns.contains("topology"));
     assert!(topology.contains("Summarize cached mainnet NNS topology reports"));
     assert!(topology.contains("Show cached mainnet NNS topology join coverage"));
     assert!(topology.contains("Show cached mainnet NNS topology component registry versions"));
+    assert!(topology.contains("Check cached mainnet NNS topology cache health"));
+    assert!(topology.contains("List cached mainnet NNS topology join gaps"));
     assert!(topology.contains("Refresh cached mainnet NNS topology component reports"));
     assert!(summary.contains("canic nns topology summary"));
     assert!(summary.contains("--format json"));
@@ -767,6 +812,12 @@ fn topology_help_is_advertised_under_nns() {
     assert!(versions.contains("canic nns topology versions"));
     assert!(versions.contains("--format json"));
     assert!(versions.contains("--source-endpoint"));
+    assert!(health.contains("canic nns topology health"));
+    assert!(health.contains("--format json"));
+    assert!(health.contains("--source-endpoint"));
+    assert!(gaps.contains("canic nns topology gaps"));
+    assert!(gaps.contains("--format json"));
+    assert!(gaps.contains("--source-endpoint"));
     assert!(refresh.contains("canic nns topology refresh"));
     assert!(refresh.contains("--format json"));
     assert!(refresh.contains("--source-endpoint"));
@@ -864,6 +915,8 @@ fn topology_local_is_rejected_with_pinned_message() {
     assert!(message.contains("canic --network ic nns topology summary"));
     assert!(message.contains("canic --network ic nns topology coverage"));
     assert!(message.contains("canic --network ic nns topology versions"));
+    assert!(message.contains("canic --network ic nns topology health"));
+    assert!(message.contains("canic --network ic nns topology gaps"));
 }
 
 #[test]
@@ -894,6 +947,36 @@ fn topology_versions_local_is_rejected_with_pinned_message() {
     let message = err.to_string();
     assert!(message.contains("supports only the mainnet `ic` network"));
     assert!(message.contains("canic --network ic nns topology versions"));
+}
+
+#[test]
+fn topology_health_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("topology"),
+        OsString::from("health"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns topology health"));
+}
+
+#[test]
+fn topology_gaps_local_is_rejected_with_pinned_message() {
+    let err = run([
+        OsString::from("topology"),
+        OsString::from("gaps"),
+        OsString::from("--__canic-network"),
+        OsString::from("local"),
+    ])
+    .expect_err("local rejected");
+
+    let message = err.to_string();
+    assert!(message.contains("supports only the mainnet `ic` network"));
+    assert!(message.contains("canic --network ic nns topology gaps"));
 }
 
 #[test]

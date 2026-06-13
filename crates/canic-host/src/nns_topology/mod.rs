@@ -38,6 +38,8 @@ use thiserror::Error as ThisError;
 pub const NNS_TOPOLOGY_SUMMARY_REPORT_SCHEMA_VERSION: u32 = 3;
 pub const NNS_TOPOLOGY_COVERAGE_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_TOPOLOGY_VERSIONS_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_TOPOLOGY_HEALTH_REPORT_SCHEMA_VERSION: u32 = 1;
+pub const NNS_TOPOLOGY_GAPS_REPORT_SCHEMA_VERSION: u32 = 1;
 pub const NNS_TOPOLOGY_REFRESH_REPORT_SCHEMA_VERSION: u32 = 1;
 
 ///
@@ -67,6 +69,28 @@ pub struct NnsTopologyCoverageRequest {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NnsTopologyVersionsRequest {
+    pub icp_root: PathBuf,
+    pub network: String,
+    pub source_endpoint: String,
+    pub now_unix_secs: u64,
+}
+
+///
+/// NnsTopologyHealthRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NnsTopologyHealthRequest {
+    pub icp_root: PathBuf,
+    pub network: String,
+    pub source_endpoint: String,
+    pub now_unix_secs: u64,
+}
+
+///
+/// NnsTopologyGapsRequest
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NnsTopologyGapsRequest {
     pub icp_root: PathBuf,
     pub network: String,
     pub source_endpoint: String,
@@ -172,6 +196,62 @@ pub struct NnsTopologyVersionsReport {
 }
 
 ///
+/// NnsTopologyHealthReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyHealthReport {
+    pub schema_version: u32,
+    pub network: String,
+    pub source_endpoint: String,
+    pub status: String,
+    pub registry_source_count: usize,
+    pub registry_version_min: Option<u64>,
+    pub registry_version_max: Option<u64>,
+    pub registry_versions_aligned: bool,
+    pub stale_source_count: usize,
+    pub subnet_catalog_stale: bool,
+    pub subnet_catalog_stale_reason: String,
+    pub known_join_count: usize,
+    pub unknown_join_count: usize,
+    pub join_coverage: String,
+    pub checks: Vec<NnsTopologyHealthCheckRow>,
+}
+
+///
+/// NnsTopologyHealthCheckRow
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyHealthCheckRow {
+    pub check: String,
+    pub status: String,
+    pub detail: String,
+}
+
+///
+/// NnsTopologyGapsReport
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyGapsReport {
+    pub schema_version: u32,
+    pub network: String,
+    pub source_endpoint: String,
+    pub status: String,
+    pub gap_count: usize,
+    pub gaps: Vec<NnsTopologyGapRow>,
+}
+
+///
+/// NnsTopologyGapRow
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NnsTopologyGapRow {
+    pub subject_kind: String,
+    pub subject: String,
+    pub missing_relation: String,
+    pub referenced_id: String,
+}
+
+///
 /// NnsTopologyRefreshReport
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -210,7 +290,7 @@ pub struct NnsTopologyRefreshRow {
 #[derive(Debug, ThisError)]
 pub enum NnsTopologyHostError {
     #[error(
-        "`canic nns topology` supports only the mainnet `ic` network\n\nThe NNS topology report is derived from public Internet Computer mainnet registry records.\nLocal replica NNS registry discovery is not implemented yet.\n\nTry:\n  canic --network ic nns topology summary\n  canic --network ic nns topology coverage\n  canic --network ic nns topology versions\n  canic --network ic nns topology refresh"
+        "`canic nns topology` supports only the mainnet `ic` network\n\nThe NNS topology report is derived from public Internet Computer mainnet registry records.\nLocal replica NNS registry discovery is not implemented yet.\n\nTry:\n  canic --network ic nns topology summary\n  canic --network ic nns topology coverage\n  canic --network ic nns topology versions\n  canic --network ic nns topology health\n  canic --network ic nns topology gaps\n  canic --network ic nns topology refresh"
     )]
     UnsupportedNetwork { network: String },
 
@@ -316,6 +396,68 @@ pub fn build_nns_topology_coverage_report(
     })?;
 
     Ok(topology_coverage_report_from_summary(summary))
+}
+
+pub fn build_nns_topology_health_report(
+    request: &NnsTopologyHealthRequest,
+) -> Result<NnsTopologyHealthReport, NnsTopologyHostError> {
+    let summary = build_nns_topology_summary_report(&NnsTopologySummaryRequest {
+        icp_root: request.icp_root.clone(),
+        network: request.network.clone(),
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    })?;
+
+    Ok(topology_health_report_from_summary(summary))
+}
+
+pub fn build_nns_topology_gaps_report(
+    request: &NnsTopologyGapsRequest,
+) -> Result<NnsTopologyGapsReport, NnsTopologyHostError> {
+    enforce_mainnet_network(&request.network)?;
+
+    let node_report = build_nns_node_list_report(&NnsNodeListRequest {
+        cache: NnsNodeCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+        filters: NnsNodeListFilters::default(),
+    })?;
+    let node_provider_report = build_nns_node_provider_list_report(&NnsNodeProviderListRequest {
+        cache: NnsNodeProviderCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    })?;
+    let node_operator_report = build_nns_node_operator_list_report(&NnsNodeOperatorListRequest {
+        cache: NnsNodeOperatorCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    })?;
+    let data_center_report = build_nns_data_center_list_report(&NnsDataCenterListRequest {
+        cache: NnsDataCenterCacheRequest {
+            icp_root: request.icp_root.clone(),
+            network: request.network.clone(),
+        },
+        source_endpoint: request.source_endpoint.clone(),
+        now_unix_secs: request.now_unix_secs,
+    })?;
+
+    Ok(topology_gaps_report_from_reports(
+        request.network.clone(),
+        request.source_endpoint.clone(),
+        node_report,
+        node_provider_report,
+        node_operator_report,
+        data_center_report,
+    ))
 }
 
 pub fn refresh_nns_topology_report(
@@ -429,6 +571,19 @@ pub fn nns_topology_coverage_report_text(report: &NnsTopologyCoverageReport) -> 
 #[must_use]
 pub fn nns_topology_versions_report_text(report: &NnsTopologyVersionsReport) -> String {
     render_registry_version_table(&report.registry_versions)
+}
+
+#[must_use]
+pub fn nns_topology_health_report_text(report: &NnsTopologyHealthReport) -> String {
+    render_health_check_table(&report.checks)
+}
+
+#[must_use]
+pub fn nns_topology_gaps_report_text(report: &NnsTopologyGapsReport) -> String {
+    if report.gaps.is_empty() {
+        return render_gaps_status_table(report);
+    }
+    render_gaps_table(&report.gaps)
 }
 
 #[must_use]
@@ -705,6 +860,285 @@ fn topology_versions_report_from_summary(
         source_count: summary.registry_versions.len(),
         registry_versions: summary.registry_versions,
     }
+}
+
+fn topology_health_report_from_summary(
+    summary: NnsTopologySummaryReport,
+) -> NnsTopologyHealthReport {
+    let health = topology_health_derived_metrics(&summary);
+    let status = if health.registry_versions_aligned
+        && health.stale_source_count == 0
+        && health.unknown_join_count == 0
+    {
+        "ok"
+    } else {
+        "attention"
+    }
+    .to_string();
+    let checks = topology_health_checks(&summary, &health);
+
+    NnsTopologyHealthReport {
+        schema_version: NNS_TOPOLOGY_HEALTH_REPORT_SCHEMA_VERSION,
+        network: summary.network,
+        source_endpoint: summary.source_endpoint,
+        status,
+        registry_source_count: health.registry_source_count,
+        registry_version_min: health.registry_version_min,
+        registry_version_max: health.registry_version_max,
+        registry_versions_aligned: health.registry_versions_aligned,
+        stale_source_count: health.stale_source_count,
+        subnet_catalog_stale: summary.subnet_catalog_stale,
+        subnet_catalog_stale_reason: summary.subnet_catalog_stale_reason,
+        known_join_count: health.known_join_count,
+        unknown_join_count: health.unknown_join_count,
+        join_coverage: health.join_coverage,
+        checks,
+    }
+}
+
+fn topology_gaps_report_from_reports(
+    network: String,
+    source_endpoint: String,
+    node_report: NnsNodeListReport,
+    node_provider_report: NnsNodeProviderListReport,
+    node_operator_report: NnsNodeOperatorListReport,
+    data_center_report: NnsDataCenterListReport,
+) -> NnsTopologyGapsReport {
+    let node_provider_principals = node_provider_report
+        .node_providers
+        .iter()
+        .map(|provider| provider.node_provider_principal.as_str())
+        .collect::<BTreeSet<_>>();
+    let node_operator_principals = node_operator_report
+        .node_operators
+        .iter()
+        .map(|operator| operator.node_operator_principal.as_str())
+        .collect::<BTreeSet<_>>();
+    let data_center_ids = data_center_report
+        .data_centers
+        .iter()
+        .map(|data_center| data_center.data_center_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut gaps = Vec::new();
+
+    for node in &node_report.nodes {
+        if !node_provider_principals.contains(node.node_provider_principal.as_str()) {
+            gaps.push(topology_gap_row(
+                "node",
+                &node.node_principal,
+                "node_provider",
+                &node.node_provider_principal,
+            ));
+        }
+        if !node_operator_principals.contains(node.node_operator_principal.as_str()) {
+            gaps.push(topology_gap_row(
+                "node",
+                &node.node_principal,
+                "node_operator",
+                &node.node_operator_principal,
+            ));
+        }
+        if !data_center_ids.contains(node.data_center_id.as_str()) {
+            gaps.push(topology_gap_row(
+                "node",
+                &node.node_principal,
+                "data_center",
+                &node.data_center_id,
+            ));
+        }
+    }
+
+    for operator in &node_operator_report.node_operators {
+        if !node_provider_principals.contains(operator.node_provider_principal.as_str()) {
+            gaps.push(topology_gap_row(
+                "node_operator",
+                &operator.node_operator_principal,
+                "node_provider",
+                &operator.node_provider_principal,
+            ));
+        }
+        if !data_center_ids.contains(operator.data_center_id.as_str()) {
+            gaps.push(topology_gap_row(
+                "node_operator",
+                &operator.node_operator_principal,
+                "data_center",
+                &operator.data_center_id,
+            ));
+        }
+    }
+
+    gaps.sort_by(|left, right| {
+        (
+            left.subject_kind.as_str(),
+            left.subject.as_str(),
+            left.missing_relation.as_str(),
+            left.referenced_id.as_str(),
+        )
+            .cmp(&(
+                right.subject_kind.as_str(),
+                right.subject.as_str(),
+                right.missing_relation.as_str(),
+                right.referenced_id.as_str(),
+            ))
+    });
+    let gap_count = gaps.len();
+    let status = if gap_count == 0 { "ok" } else { "attention" }.to_string();
+
+    NnsTopologyGapsReport {
+        schema_version: NNS_TOPOLOGY_GAPS_REPORT_SCHEMA_VERSION,
+        network,
+        source_endpoint,
+        status,
+        gap_count,
+        gaps,
+    }
+}
+
+fn topology_gap_row(
+    subject_kind: &str,
+    subject: &str,
+    missing_relation: &str,
+    referenced_id: &str,
+) -> NnsTopologyGapRow {
+    NnsTopologyGapRow {
+        subject_kind: subject_kind.to_string(),
+        subject: subject.to_string(),
+        missing_relation: missing_relation.to_string(),
+        referenced_id: referenced_id.to_string(),
+    }
+}
+
+///
+/// NnsTopologyHealthDerivedMetrics
+///
+struct NnsTopologyHealthDerivedMetrics {
+    registry_source_count: usize,
+    registry_version_min: Option<u64>,
+    registry_version_max: Option<u64>,
+    registry_versions_aligned: bool,
+    stale_source_count: usize,
+    known_join_count: usize,
+    unknown_join_count: usize,
+    join_coverage: String,
+}
+
+fn topology_health_derived_metrics(
+    summary: &NnsTopologySummaryReport,
+) -> NnsTopologyHealthDerivedMetrics {
+    let registry_version_min = summary
+        .registry_versions
+        .iter()
+        .map(|row| row.registry_version)
+        .min();
+    let registry_version_max = summary
+        .registry_versions
+        .iter()
+        .map(|row| row.registry_version)
+        .max();
+    let known_join_count = known_join_count(summary);
+    let unknown_join_count = unknown_join_count(summary);
+
+    NnsTopologyHealthDerivedMetrics {
+        registry_source_count: summary.registry_versions.len(),
+        registry_version_min,
+        registry_version_max,
+        registry_versions_aligned: registry_version_min == registry_version_max,
+        stale_source_count: summary
+            .registry_versions
+            .iter()
+            .filter(|row| row.stale == Some(true))
+            .count(),
+        known_join_count,
+        unknown_join_count,
+        join_coverage: coverage_percent_text(known_join_count, unknown_join_count),
+    }
+}
+
+fn topology_health_checks(
+    summary: &NnsTopologySummaryReport,
+    health: &NnsTopologyHealthDerivedMetrics,
+) -> Vec<NnsTopologyHealthCheckRow> {
+    vec![
+        health_check_row(
+            "registry_versions",
+            health.registry_versions_aligned,
+            registry_version_detail(
+                health.registry_source_count,
+                health.registry_version_min,
+                health.registry_version_max,
+                health.registry_versions_aligned,
+            ),
+        ),
+        health_check_row(
+            "cache_freshness",
+            health.stale_source_count == 0,
+            cache_freshness_detail(health.stale_source_count, summary),
+        ),
+        health_check_row(
+            "join_coverage",
+            health.unknown_join_count == 0,
+            format!(
+                "{} known, {} unknown ({})",
+                health.known_join_count, health.unknown_join_count, health.join_coverage
+            ),
+        ),
+    ]
+}
+
+fn health_check_row(check: &str, is_ok: bool, detail: String) -> NnsTopologyHealthCheckRow {
+    NnsTopologyHealthCheckRow {
+        check: check.to_string(),
+        status: if is_ok { "ok" } else { "attention" }.to_string(),
+        detail,
+    }
+}
+
+fn registry_version_detail(
+    source_count: usize,
+    min: Option<u64>,
+    max: Option<u64>,
+    aligned: bool,
+) -> String {
+    match (min, max, aligned) {
+        (Some(version), Some(_), true) => {
+            format!("{source_count} sources at registry version {version}")
+        }
+        (Some(min), Some(max), false) => {
+            format!("{source_count} sources span registry versions {min}..{max}")
+        }
+        _ => "no registry versions recorded".to_string(),
+    }
+}
+
+fn cache_freshness_detail(stale_source_count: usize, summary: &NnsTopologySummaryReport) -> String {
+    if stale_source_count == 0 {
+        return "no stale topology sources".to_string();
+    }
+    if summary.subnet_catalog_stale {
+        return format!(
+            "{stale_source_count} stale source; subnet catalog {}",
+            summary.subnet_catalog_stale_reason
+        );
+    }
+    format!("{stale_source_count} stale source")
+}
+
+const fn known_join_count(report: &NnsTopologySummaryReport) -> usize {
+    report
+        .nodes_with_known_node_provider_count
+        .saturating_add(report.nodes_with_known_node_operator_count)
+        .saturating_add(report.nodes_with_known_data_center_count)
+        .saturating_add(report.node_operators_with_known_node_provider_count)
+        .saturating_add(report.node_operators_with_known_data_center_count)
+}
+
+const fn unknown_join_count(report: &NnsTopologySummaryReport) -> usize {
+    report
+        .nodes_with_unknown_node_provider_count
+        .saturating_add(report.nodes_with_unknown_node_operator_count)
+        .saturating_add(report.nodes_with_unknown_data_center_count)
+        .saturating_add(report.node_operators_with_unknown_node_provider_count)
+        .saturating_add(report.node_operators_with_unknown_data_center_count)
 }
 
 ///
@@ -1054,6 +1488,50 @@ fn render_join_coverage_table(rows: &[(&str, usize, usize)]) -> String {
         ColumnAlign::Right,
         ColumnAlign::Right,
         ColumnAlign::Right,
+    ];
+    render_table(&headers, &rows, &alignments)
+}
+
+fn render_health_check_table(rows: &[NnsTopologyHealthCheckRow]) -> String {
+    let headers = ["CHECK", "STATUS", "DETAIL"];
+    let rows = rows
+        .iter()
+        .map(|row| [row.check.clone(), row.status.clone(), row.detail.clone()])
+        .collect::<Vec<_>>();
+    let alignments = [ColumnAlign::Left, ColumnAlign::Left, ColumnAlign::Left];
+    render_table(&headers, &rows, &alignments)
+}
+
+fn render_gaps_status_table(report: &NnsTopologyGapsReport) -> String {
+    let headers = ["STATUS", "DETAIL"];
+    let rows = [[report.status.clone(), "no topology join gaps".to_string()]];
+    let alignments = [ColumnAlign::Left, ColumnAlign::Left];
+    render_table(&headers, &rows, &alignments)
+}
+
+fn render_gaps_table(rows: &[NnsTopologyGapRow]) -> String {
+    let headers = [
+        "SUBJECT_KIND",
+        "SUBJECT",
+        "MISSING_RELATION",
+        "REFERENCED_ID",
+    ];
+    let rows = rows
+        .iter()
+        .map(|row| {
+            [
+                row.subject_kind.clone(),
+                row.subject.clone(),
+                row.missing_relation.clone(),
+                row.referenced_id.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let alignments = [
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
+        ColumnAlign::Left,
     ];
     render_table(&headers, &rows, &alignments)
 }

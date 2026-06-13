@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.66.md](docs/changelog/0.66.md)
 
+- `0.66.10` adds cached NNS topology health and gap inspection commands and
+  cleans topology text reports so operator-facing tables avoid filler headings.
+
 - `0.66.9` adds cached NNS topology coverage/version inspection and hardens
   backup plus wasm-store recovery paths so unsafe persisted state fails
   explicitly.
