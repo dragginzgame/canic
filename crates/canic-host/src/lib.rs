@@ -7,7 +7,6 @@ mod artifact_io;
 mod bootstrap_store;
 mod build_profile;
 pub mod build_provenance;
-pub mod cache_file;
 pub mod canister_build;
 mod cargo_metadata;
 pub mod deployment_catalog;
@@ -57,13 +56,4 @@ pub(crate) fn remove_optional_file(path: &std::path::Path) -> std::io::Result<()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::should_export_candid_artifacts;
-
-    // Keep public Candid export restricted to local/development environments.
-    #[test]
-    fn candid_artifact_export_is_dev_only() {
-        assert!(should_export_candid_artifacts("local"));
-        assert!(!should_export_candid_artifacts("ic"));
-    }
-}
+mod tests;

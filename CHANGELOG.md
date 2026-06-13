@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.1` audits `canic-host` after the `icq` split by removing stale host
+  module wiring and reorganizing large host unit-test files into focused
+  modules without changing CLI or runtime behavior.
+
 - `0.67.0` splits the NNS query surface into the external `ic-query`/`icq`
   tool, removes the linked NNS registry query stack from Canic host and CLI,
   and pins `icq` as required external tooling for Canic validation.

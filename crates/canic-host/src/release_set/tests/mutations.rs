@@ -1,0 +1,321 @@
+use super::*;
+
+#[test]
+fn declare_fleet_role_adds_declared_only_canister_role() {
+    let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+    let updated =
+        declare_fleet_role_source(config, "demo", "store", "store").expect("declare role");
+
+    assert_eq!(updated.role.display, "demo.store");
+    assert_eq!(updated.role.package, "store");
+    assert!(updated.source.contains("[roles.\"store\"]"));
+    assert!(updated.source.contains("kind = \"canister\""));
+    assert!(updated.source.contains("package = \"store\""));
+
+    let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+    let store = lifecycle
+        .iter()
+        .find(|role| role.role == "store")
+        .expect("store row");
+    assert_eq!(store.state, "declared");
+    assert_eq!(store.topology, None);
+}
+
+#[test]
+fn declare_fleet_role_rejects_root_and_duplicates() {
+    declare_fleet_role_source(REAL_CONFIG, "demo", "root", "root")
+        .expect_err("root declaration should fail");
+
+    declare_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "user_hub")
+        .expect_err("duplicate declaration should fail");
+}
+
+#[test]
+fn attach_fleet_role_adds_direct_topology_attachment() {
+    let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.store]
+kind = "canister"
+package = "store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+    let updated = attach_fleet_role_source(config, "demo", "store", "prime", "singleton")
+        .expect("attach role");
+
+    assert_eq!(updated.role.display, "demo.store");
+    assert_eq!(updated.role.topology, "prime/store");
+    assert!(
+        updated
+            .source
+            .contains("[subnets.\"prime\".canisters.\"store\"]")
+    );
+    assert!(updated.source.contains("kind = \"singleton\""));
+
+    let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+    let store = lifecycle
+        .iter()
+        .find(|role| role.role == "store")
+        .expect("store row");
+    assert_eq!(store.state, "attached");
+    assert_eq!(store.topology.as_deref(), Some("prime/store"));
+}
+
+#[test]
+fn attach_fleet_role_preserves_explicit_supported_kind() {
+    let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+    let updated = attach_fleet_role_source(config, "demo", "worker", "prime", "replica")
+        .expect("attach role");
+
+    assert_eq!(updated.role.kind, "replica");
+    assert_eq!(updated.role.topology, "prime/worker");
+    assert!(updated.source.contains("kind = \"replica\""));
+}
+
+#[test]
+fn attach_fleet_role_accepts_service_kind() {
+    let config = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+    let updated = attach_fleet_role_source(config, "demo", "worker", "prime", "service")
+        .expect("attach service role");
+
+    assert_eq!(updated.role.kind, "service");
+    assert_eq!(updated.role.topology, "prime/worker");
+    assert!(updated.source.contains("kind = \"service\""));
+}
+
+#[test]
+fn attach_fleet_role_rejects_missing_duplicate_root_and_unknown_kind() {
+    attach_fleet_role_source(REAL_CONFIG, "demo", "missing", "prime", "singleton")
+        .expect_err("missing role should fail");
+
+    attach_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "prime", "singleton")
+        .expect_err("duplicate attachment should fail");
+
+    attach_fleet_role_source(REAL_CONFIG, "demo", "root", "prime", "singleton")
+        .expect_err("root attachment should fail");
+
+    attach_fleet_role_source(REAL_CONFIG, "demo", "minimal", "prime", "worker")
+        .expect_err("unknown kind should fail");
+}
+
+#[test]
+fn rename_fleet_role_updates_declaration_topology_and_package_metadata() {
+    let temp = TempWorkspace::new();
+    let config_path = temp.path().join("canic.toml");
+    let package_dir = temp.path().join("hub");
+    fs::create_dir_all(&package_dir).expect("create package");
+    fs::write(
+        package_dir.join("Cargo.toml"),
+        r#"
+[package]
+name = "demo_hub"
+
+[package.metadata.canic]
+fleet = "demo"
+role = "hub"
+"#,
+    )
+    .expect("write manifest");
+    let config = r#"
+controllers = []
+app_index = ["hub"]
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.hub]
+kind = "canister"
+package = "hub"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.hub]
+kind = "service"
+
+[subnets.prime.canisters.hub.sharding.pools.primary]
+canister_role = "worker"
+
+[subnets.prime.canisters.worker]
+kind = "shard"
+"#;
+    let updated = rename_fleet_role_source(config, &config_path, "demo", "hub", "router")
+        .expect("rename role");
+
+    assert_eq!(updated.role.old_display, "demo.hub");
+    assert_eq!(updated.role.new_display, "demo.router");
+    assert_eq!(
+        updated
+            .role
+            .package_manifest
+            .as_deref()
+            .and_then(Path::file_name)
+            .and_then(std::ffi::OsStr::to_str),
+        Some("Cargo.toml")
+    );
+    assert!(updated.source.contains("[\"roles\".\"router\"]"));
+    assert!(
+        updated
+            .source
+            .contains("[\"subnets\".\"prime\".\"canisters\".\"router\"]")
+    );
+    assert!(updated.source.contains(
+        "[\"subnets\".\"prime\".\"canisters\".\"router\".\"sharding\".\"pools\".\"primary\"]"
+    ));
+    assert!(updated.source.contains("app_index = [\"router\"]"));
+    assert!(!updated.source.contains("[roles.hub]"));
+    assert!(
+        updated
+            .package_source
+            .as_deref()
+            .is_some_and(|source| source.contains("role = \"router\""))
+    );
+
+    let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+    assert!(lifecycle.iter().any(|role| role.role == "router"));
+    assert!(!lifecycle.iter().any(|role| role.role == "hub"));
+}
+
+#[test]
+fn rename_fleet_role_updates_role_bearing_references() {
+    let config = r#"
+controllers = []
+app_index = ["hub"]
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.hub]
+kind = "canister"
+package = "hub"
+
+[roles.worker]
+kind = "canister"
+package = "worker"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.hub]
+kind = "service"
+
+[subnets.prime.canisters.hub.sharding.pools.primary]
+canister_role = "worker"
+
+[subnets.prime.canisters.worker]
+kind = "shard"
+"#;
+    let config_path = Path::new("canic.toml");
+    let updated = rename_fleet_role_source(config, config_path, "demo", "worker", "worker_v2")
+        .expect("rename role");
+
+    assert!(updated.source.contains("canister_role = \"worker_v2\""));
+    assert!(updated.source.contains("[\"roles\".\"worker_v2\"]"));
+    assert!(
+        updated
+            .source
+            .contains("[\"subnets\".\"prime\".\"canisters\".\"worker_v2\"]")
+    );
+}
+
+#[test]
+fn rename_fleet_role_rejects_root_missing_duplicate_and_same_role() {
+    rename_fleet_role_source(
+        REAL_CONFIG,
+        Path::new("canic.toml"),
+        "demo",
+        "user_hub",
+        "scale_hub",
+    )
+    .expect_err("duplicate rename should fail");
+
+    rename_fleet_role_source(
+        REAL_CONFIG,
+        Path::new("canic.toml"),
+        "demo",
+        "missing",
+        "renamed",
+    )
+    .expect_err("missing rename should fail");
+
+    rename_fleet_role_source(REAL_CONFIG, Path::new("canic.toml"), "demo", "root", "app")
+        .expect_err("root rename should fail");
+
+    rename_fleet_role_source(
+        REAL_CONFIG,
+        Path::new("canic.toml"),
+        "demo",
+        "user_hub",
+        "user_hub",
+    )
+    .expect_err("same rename should fail");
+}

@@ -1,0 +1,261 @@
+use super::*;
+use crate::test_support::temp_dir;
+use std::{collections::BTreeMap, fmt::Write as _, fs, path::Path};
+
+#[test]
+fn defaults_local_gateway_port_without_network_config() {
+    let source = "canisters: []\n";
+
+    assert_eq!(
+        local_gateway_port_from_yaml(source),
+        DEFAULT_LOCAL_GATEWAY_PORT
+    );
+}
+
+#[test]
+fn reads_local_gateway_port_from_network_config() {
+    let source = "networks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8001\n";
+
+    assert_eq!(local_gateway_port_from_yaml(source), 8001);
+}
+
+#[test]
+fn ignores_nested_networks_keys_when_reading_local_gateway_port() {
+    let source = "canisters:\n  - name: root\n    metadata:\n      networks:\n        - local\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8010\n";
+
+    assert_eq!(local_gateway_port_from_yaml(source), 8010);
+}
+
+#[test]
+fn inspects_icp_yaml_without_mutating_it() {
+    let root = temp_dir("canic-icp-read-only");
+    let config = root.join("fleets/toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(
+        &config,
+        r#"
+[fleet]
+name = "toko"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+"#,
+    )
+    .expect("write config");
+    let source = r"
+canisters:
+  - name: root
+
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      port: 8010
+
+environments:
+  - name: toko
+    network: local
+    canisters: [root]
+";
+    fs::write(root.join("icp.yaml"), source).expect("write icp yaml");
+
+    let report = inspect_canic_icp_yaml_from_root(&root, Some("toko")).expect("inspect");
+
+    assert_eq!(report.canisters, vec!["root", "app"]);
+    assert_eq!(report.environments, vec!["toko"]);
+    assert_eq!(report.missing_canisters, vec!["app"]);
+    assert!(report.missing_environments.is_empty());
+    assert!(report.local_network_present);
+    assert!(!report.is_ready());
+    assert_eq!(
+        fs::read_to_string(root.join("icp.yaml")).expect("read icp yaml"),
+        source
+    );
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn reports_missing_icp_yaml_as_incomplete() {
+    let root = temp_dir("canic-icp-missing-yaml");
+    let config = root.join("fleets/toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(
+        &config,
+        r#"
+[fleet]
+name = "toko"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#,
+    )
+    .expect("write config");
+
+    let report = inspect_canic_icp_yaml_from_root(&root, Some("toko")).expect("inspect");
+
+    assert!(!report.icp_yaml_present);
+    assert_eq!(report.missing_canisters, vec!["root"]);
+    assert_eq!(report.missing_environments, vec!["toko"]);
+    assert!(!report.local_network_present);
+    assert!(!report.is_ready());
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn discovers_root_fleet_configs_for_icp_inspection() {
+    let root = temp_dir("canic-icp-inspect-root-fleets");
+    let config = root.join("fleets/toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(
+        &config,
+        r#"
+[fleet]
+name = "toko"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+"#,
+    )
+    .expect("write config");
+
+    let spec = discover_project_spec(&root, Some("toko")).expect("discover spec");
+
+    assert_eq!(spec.canisters, vec!["root", "app"]);
+    assert_eq!(
+        spec.environments,
+        BTreeMap::from([(
+            "toko".to_string(),
+            vec!["root".to_string(), "app".to_string()]
+        )])
+    );
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn fleet_filter_limits_inspected_project_spec() {
+    let root = temp_dir("canic-icp-inspect-fleet-filter");
+    write_test_config(
+        &root.join("fleets/demo/canic.toml"),
+        "demo",
+        &["root", "app"],
+    );
+    write_test_config(
+        &root.join("fleets/test/canic.toml"),
+        "test",
+        &["root", "scale"],
+    );
+
+    let spec = discover_project_spec(&root, Some("test")).expect("discover spec");
+
+    assert_eq!(spec.canisters, vec!["root", "scale"]);
+    assert_eq!(
+        spec.environments,
+        BTreeMap::from([(
+            "test".to_string(),
+            vec!["root".to_string(), "scale".to_string()]
+        )])
+    );
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn nested_commands_discover_outer_project_root_with_fleets() {
+    let root = temp_dir("canic-icp-root-nested");
+    let config = root.join("fleets/toko/canic.toml");
+    let nested = root.join("backend/src");
+    fs::create_dir_all(&nested).expect("create nested dir");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(root.join("icp.yaml"), "").expect("write icp config");
+    fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
+
+    let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
+        .expect("discover project root")
+        .expect("project root is present");
+
+    assert_eq!(icp_root, root.canonicalize().expect("canonical root"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn outer_project_root_wins_over_nested_fleets() {
+    let root = temp_dir("canic-icp-root-outer-wins");
+    let outer_config = root.join("fleets/toko/canic.toml");
+    let nested_config = root.join("services/fleets/toko/canic.toml");
+    let nested = root.join("services/src");
+    fs::create_dir_all(outer_config.parent().expect("outer config parent"))
+        .expect("create outer config parent");
+    fs::create_dir_all(nested_config.parent().expect("nested config parent"))
+        .expect("create nested config parent");
+    fs::create_dir_all(&nested).expect("create nested dir");
+    fs::write(root.join("icp.yaml"), "").expect("write icp config");
+    fs::write(&outer_config, "[fleet]\nname = \"toko\"\n").expect("write outer config");
+    fs::write(&nested_config, "[fleet]\nname = \"toko\"\n").expect("write nested config");
+
+    let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
+        .expect("discover project root")
+        .expect("project root is present");
+
+    assert_eq!(icp_root, root.canonicalize().expect("canonical root"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn icp_inspection_rejects_missing_fleet_configs() {
+    let root = temp_dir("canic-icp-inspect-missing");
+    fs::create_dir_all(&root).expect("create root");
+
+    let err = discover_project_spec(&root, None).expect_err("missing configs should fail");
+    let message = err.to_string();
+
+    assert!(message.contains("no Canic fleet configs found under"));
+    assert!(message.contains("fleets/<fleet>/canic.toml"));
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
+    fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
+    let mut source = format!("[fleet]\nname = \"{fleet}\"\n");
+    for role in roles {
+        let kind = if *role == "root" { "root" } else { "canister" };
+        write!(
+            source,
+            "\n[roles.{role}]\nkind = \"{kind}\"\npackage = \"{role}\"\n"
+        )
+        .expect("write role declaration");
+    }
+    for role in roles {
+        let kind = if *role == "root" { "root" } else { "service" };
+        write!(
+            source,
+            "\n[subnets.prime.canisters.{role}]\nkind = \"{kind}\"\n"
+        )
+        .expect("write config source");
+    }
+    fs::write(path, source).expect("write config");
+}
