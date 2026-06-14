@@ -12,14 +12,17 @@ present.
 
 ## Unreleased
 
-- Continues deployment-truth lifecycle decomposition by moving lifecycle
-  authority-report and external lifecycle-plan construction, validation, and
-  controller classification helpers into a focused child module while
-  preserving the public lifecycle API.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.8` continues deployment-truth lifecycle decomposition by isolating
+  lifecycle authority-report and external lifecycle-plan construction and
+  validation while preserving the public lifecycle API.
+
+- `0.67.7` finishes the current deployment-truth promotion decomposition by
+  isolating artifact identity, wasm-store identity/catalog, transform/readiness,
+  and artifact-plan helpers while preserving the public promotion API.
 
 - `0.67.6` continues deployment-truth promotion decomposition by isolating
   source-build materialization evidence, identity-report, output-group, and
