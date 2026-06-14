@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Continues canic-host deployment-truth report decomposition by isolating
+  artifact, canister, and pool diff comparison helpers in focused child modules
+  while preserving deployment diff behavior and public host APIs.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
