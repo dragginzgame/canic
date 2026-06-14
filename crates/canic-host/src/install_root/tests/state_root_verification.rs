@@ -544,7 +544,7 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
 
 #[test]
 fn verified_root_state_writes_stay_on_explicit_install_or_verify_paths() {
-    let install_source = include_str!("../mod.rs");
+    let install_source = include_str!("../install_state/mod.rs");
     let registration_source = include_str!("../deployment_registration/mod.rs");
 
     assert_eq!(

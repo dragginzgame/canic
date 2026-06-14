@@ -39,8 +39,17 @@ pub fn response_candid(value: &serde_json::Value) -> Option<&str> {
 pub fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
     let after_eq = field_value_after_equals(output, field)?;
     let after_quote = after_eq.trim_start().strip_prefix('"')?;
-    let (value, _) = after_quote.split_once('"')?;
-    Some(value.to_string())
+    parse_candid_quoted_text(after_quote)
+}
+
+#[must_use]
+pub fn parse_candid_text_like_field(output: &str, field: &str) -> Option<String> {
+    let after_eq = field_value_after_equals(output, field)?;
+    let after_quote = after_eq
+        .trim_start()
+        .strip_prefix("opt \"")
+        .or_else(|| after_eq.trim_start().strip_prefix('"'))?;
+    parse_candid_quoted_text(after_quote)
 }
 
 #[must_use]
@@ -61,6 +70,27 @@ fn parse_cycle_balance_candid(output: &str) -> Option<u128> {
         .map_or(output, |(_, cycles)| cycles)
         .lines()
         .find_map(parse_leading_u128_digits)
+}
+
+fn parse_candid_quoted_text(text_after_quote: &str) -> Option<String> {
+    let mut value = String::new();
+    let mut escaped = false;
+    for ch in text_after_quote.chars() {
+        if escaped {
+            value.push(ch);
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '"' {
+            return Some(value);
+        }
+        value.push(ch);
+    }
+    None
 }
 
 #[must_use]

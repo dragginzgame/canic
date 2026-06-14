@@ -1122,12 +1122,7 @@ fn wait_root_ready_operation_owns_current_install_evidence() {
 
 #[test]
 fn current_install_activation_phases_use_operation_runner() {
-    let source = include_str!("../mod.rs");
-    let activation = source_section(
-        source,
-        "fn run_root_activation_phases(",
-        "fn write_install_state_with_deployment_truth_receipt(",
-    );
+    let activation = include_str!("../activation/mod.rs");
 
     for operation in [
         "install_operation",
@@ -1154,7 +1149,7 @@ fn current_install_records_gates_before_activation_mutation() {
     let install = source_section(
         source,
         "pub fn install_root(",
-        "struct PreparedInstallTruth",
+        "fn resolve_install_identity(",
     );
     assert_before(
         install,
@@ -1162,11 +1157,7 @@ fn current_install_records_gates_before_activation_mutation() {
         "run_root_activation_phases(",
     );
 
-    let prepare = source_section(
-        source,
-        "fn prepare_install_deployment_truth(",
-        "fn resolve_root_canister_with_phase(",
-    );
+    let prepare = include_str!("../preparation/mod.rs");
     assert_before(
         prepare,
         "ensure_current_install_executor_capabilities(execution_context)?",

@@ -19,6 +19,22 @@ fn parse_ready_json_value_rejects_false_shapes() {
     assert!(!parse_ready_json_value(&serde_json::json!("true")));
 }
 
+#[test]
+fn decodes_bootstrap_status_response_bytes() {
+    let bytes = Encode!(&canic_core::dto::state::BootstrapStatusResponse {
+        ready: false,
+        phase: "root:init:create_canisters".to_string(),
+        last_error: Some("registry phase failed".to_string()),
+    })
+    .expect("encode bootstrap status");
+
+    let status = decode_bootstrap_status_response(&bytes).expect("decode bootstrap status");
+
+    assert!(!status.ready);
+    assert_eq!(status.phase, "root:init:create_canisters");
+    assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
+}
+
 // Ensure direct local queries use the ICP CLI local endpoint fallback when no project port is configured.
 #[test]
 fn local_replica_endpoint_defaults_to_icp_cli_port() {

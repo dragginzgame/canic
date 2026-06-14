@@ -3,6 +3,7 @@ use crate::icp_config::{
     configured_local_gateway_port_from_root,
 };
 use candid::{CandidType, Decode, Encode, Principal};
+use canic_core::dto::state::BootstrapStatusResponse;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -97,6 +98,22 @@ pub fn query_ready_from_root(
 ) -> Result<bool, ReplicaQueryError> {
     let bytes = local_query_from_root(network, canister, "canic_ready", icp_root)?;
     Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
+}
+
+/// Query `canic_bootstrap_status` using the configured port from one ICP root.
+pub fn query_bootstrap_status_from_root(
+    network: Option<&str>,
+    canister: &str,
+    icp_root: &Path,
+) -> Result<BootstrapStatusResponse, ReplicaQueryError> {
+    let bytes = local_query_from_root(network, canister, "canic_bootstrap_status", icp_root)?;
+    decode_bootstrap_status_response(&bytes)
+}
+
+fn decode_bootstrap_status_response(
+    bytes: &[u8],
+) -> Result<BootstrapStatusResponse, ReplicaQueryError> {
+    Decode!(bytes, BootstrapStatusResponse).map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
 /// Return true when the local replica HTTP status endpoint is reachable.

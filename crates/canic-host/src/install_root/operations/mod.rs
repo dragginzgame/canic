@@ -1,9 +1,10 @@
+use super::build_targets::run_canic_build_targets;
 use super::commands::{
-    add_icp_environment_target, ensure_local_root_min_cycles, icp_canister_command_in_network,
-    root_init_args, run_canic_build_targets, run_command,
+    add_icp_environment_target, icp_canister_command_in_network, root_init_args, run_command,
 };
 use super::readiness::wait_for_root_ready;
 use super::root_canister::ensure_root_canister_id;
+use super::root_cycles::ensure_local_root_min_cycles;
 use crate::canister_build::CanisterBuildProfile;
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, emit_root_release_set_manifest_with_config, resume_root_bootstrap,

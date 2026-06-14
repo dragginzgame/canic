@@ -1,4 +1,4 @@
-use super::commands::planned_build_artifact_root;
+use super::build_targets::planned_build_artifact_root;
 use super::deployment_truth_gate::{
     enforce_install_deployment_truth_gate, install_deployment_truth_gate_receipt,
     print_install_deployment_truth_gate,

@@ -1,8 +1,8 @@
 use super::commands::{
-    add_create_root_target, add_icp_environment_target, add_local_root_create_cycles_arg,
-    icp_canister_command_in_network, is_missing_canister_id_error, parse_created_canister_id,
-    run_command_stdout,
+    add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
+    is_missing_canister_id_error, parse_created_canister_id, run_command_stdout,
 };
+use super::root_cycles::add_local_root_create_cycles_arg;
 use canic_core::cdk::types::Principal;
 use std::path::Path;
 
