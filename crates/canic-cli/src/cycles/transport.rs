@@ -17,6 +17,7 @@ use crate::{
     },
 };
 use canic_host::{
+    cycle_balance::query_cycle_balance_optional,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
@@ -24,7 +25,6 @@ use canic_host::{
         resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
-    response_parse::parse_cycle_balance_response,
 };
 use std::{
     path::{Path, PathBuf},
@@ -43,6 +43,8 @@ const ICP_JSON_OUTPUT: &str = "json";
 struct CycleQueryTarget {
     icp: IcpCli,
     canister_id: String,
+    network: String,
+    icp_root: Option<PathBuf>,
     candid_path: Option<PathBuf>,
 }
 
@@ -233,16 +235,13 @@ pub(super) fn summarize_cycle_tracker(
 }
 
 fn query_live_cycle_balance(target: &CycleQueryTarget) -> Option<u128> {
-    target
-        .icp
-        .canister_query_output_with_candid(
-            &target.canister_id,
-            canic_core::protocol::CANIC_CYCLE_BALANCE,
-            Some(ICP_JSON_OUTPUT),
-            target.candid_path.as_deref(),
-        )
-        .ok()
-        .and_then(|output| parse_cycle_balance_response(&output))
+    query_cycle_balance_optional(
+        &target.icp,
+        &target.canister_id,
+        &target.network,
+        target.icp_root.as_deref(),
+        target.candid_path.as_deref(),
+    )
 }
 
 fn query_topup_events(target: &CycleQueryTarget) -> Result<Vec<CycleTopupEventSample>, String> {
@@ -344,6 +343,8 @@ fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQu
     CycleQueryTarget {
         icp: cycles_icp(options, root.as_deref()),
         canister_id: entry.pid.clone(),
+        network: options.network.clone(),
+        icp_root: root.clone(),
         candid_path: registry_entry_candid_path(root.as_deref(), &options.network, entry),
     }
 }

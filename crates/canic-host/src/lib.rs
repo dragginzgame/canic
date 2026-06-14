@@ -9,6 +9,7 @@ mod build_profile;
 pub mod build_provenance;
 pub mod canister_build;
 mod cargo_metadata;
+pub mod cycle_balance;
 pub mod deployment_catalog;
 pub mod deployment_truth;
 pub mod duration;

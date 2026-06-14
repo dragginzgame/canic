@@ -1,11 +1,8 @@
 use super::commands::{add_icp_environment_target, icp_canister_command_in_network, run_command};
+use crate::cycle_balance::query_cycle_balance;
 use crate::format::cycles_tc;
-use crate::release_set::{
-    LOCAL_ROOT_MIN_READY_CYCLES, configured_local_root_create_cycles, icp_query_on_network,
-};
-use crate::replica_query;
-use crate::response_parse::parse_cycle_balance_response;
-use canic_core::protocol;
+use crate::icp::IcpCli;
+use crate::release_set::{LOCAL_ROOT_MIN_READY_CYCLES, configured_local_root_create_cycles};
 use std::{path::Path, process::Command};
 
 pub(super) fn add_local_root_create_cycles_arg(
@@ -32,7 +29,7 @@ pub(super) fn ensure_local_root_min_cycles(
         return Ok(());
     }
 
-    let current = query_root_cycle_balance(network, root_canister)?;
+    let current = query_root_cycle_balance(icp_root, network, root_canister)?;
     if current >= LOCAL_ROOT_MIN_READY_CYCLES {
         return Ok(());
     }
@@ -55,29 +52,10 @@ pub(super) fn ensure_local_root_min_cycles(
 }
 
 fn query_root_cycle_balance(
+    icp_root: &Path,
     network: &str,
     root_canister: &str,
 ) -> Result<u128, Box<dyn std::error::Error>> {
-    if replica_query::should_use_local_replica_query(Some(network))
-        && let Ok(root) = crate::release_set::icp_root()
-        && let Ok(cycles) =
-            replica_query::query_cycle_balance_from_root(Some(network), root_canister, &root)
-    {
-        return Ok(cycles);
-    }
-
-    let output = icp_query_on_network(
-        network,
-        root_canister,
-        protocol::CANIC_CYCLE_BALANCE,
-        None,
-        Some("json"),
-    )?;
-    parse_cycle_balance_response(&output).ok_or_else(|| {
-        format!(
-            "could not parse {root_canister} {} response: {output}",
-            protocol::CANIC_CYCLE_BALANCE
-        )
-        .into()
-    })
+    let icp = IcpCli::new("icp", Some(network.to_string()), None).with_cwd(icp_root);
+    query_cycle_balance(&icp, root_canister, network, Some(icp_root), None).map_err(Into::into)
 }

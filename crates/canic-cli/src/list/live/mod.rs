@@ -6,6 +6,7 @@ use crate::cli::defaults::local_network;
 use crate::support::candid::registry_entry_candid_path;
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
+    cycle_balance::query_cycle_balance_optional,
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
@@ -15,7 +16,6 @@ use canic_host::{
     },
     registry::RegistryEntry,
     replica_query,
-    response_parse::parse_cycle_balance_response,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -239,15 +239,8 @@ fn query_cycle_balance_endpoint(
 ) -> Option<u128> {
     let network = network.unwrap_or_else(local_network);
     let candid_path = registry_entry_candid_path(icp_root, &network, entry);
-    let icp = live_icp(icp, Some(network), icp_root);
-    icp.canister_query_output_with_candid(
-        &entry.pid,
-        canic_core::protocol::CANIC_CYCLE_BALANCE,
-        Some("json"),
-        candid_path.as_deref(),
-    )
-    .ok()
-    .and_then(|output| parse_cycle_balance_response(&output))
+    let icp = live_icp(icp, Some(network.clone()), icp_root);
+    query_cycle_balance_optional(&icp, &entry.pid, &network, icp_root, candid_path.as_deref())
 }
 
 fn query_canic_metadata_version(
