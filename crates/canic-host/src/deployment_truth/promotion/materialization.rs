@@ -434,12 +434,12 @@ pub(super) fn validate_role_materialization_link(
     let Some(link) = &role.source_build_materialization else {
         return Ok(());
     };
-    super::ensure_role_field_matches(
+    super::transform::ensure_role_field_matches(
         role,
         "source_build_materialization",
         role.promotion_level == PromotionArtifactLevelV1::SourceBuild,
     )?;
-    super::ensure_role_field_matches(
+    super::transform::ensure_role_field_matches(
         role,
         "source_build_materialization.role",
         link.role == role.role,
@@ -481,22 +481,22 @@ pub(super) fn validate_role_materialization_link(
         "source_build_materialization.candid_sha256",
         &link.candid_sha256,
     )?;
-    super::ensure_role_field_matches(
+    super::transform::ensure_role_field_matches(
         role,
         "source_build_materialization.wasm_sha256",
         promoted_role.wasm_sha256.as_deref() == Some(link.wasm_sha256.as_str()),
     )?;
-    super::ensure_role_field_matches(
+    super::transform::ensure_role_field_matches(
         role,
         "source_build_materialization.wasm_gz_sha256",
         promoted_role.wasm_gz_sha256.as_deref() == Some(link.wasm_gz_sha256.as_str()),
     )?;
-    super::ensure_role_field_matches(
+    super::transform::ensure_role_field_matches(
         role,
         "source_build_materialization.installed_module_hash",
         promoted_role.installed_module_hash.as_deref() == Some(link.installed_module_hash.as_str()),
     )?;
-    super::ensure_role_field_matches(
+    super::transform::ensure_role_field_matches(
         role,
         "source_build_materialization.candid_sha256",
         promoted_role.candid_sha256.as_deref() == Some(link.candid_sha256.as_str()),

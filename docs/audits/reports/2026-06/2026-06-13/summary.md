@@ -95,7 +95,8 @@
 - Keep host deployment-truth decomposition as the main friction target before
   adding more promotion/lifecycle report families. The first follow-up slices
   moved external lifecycle error/digest helpers plus promotion error/request,
-  digest, identity, policy, guard, provenance, execution-receipt, and
-  materialization helpers out of the largest modules, with lifecycle and
-  promotion internals under directory modules. Lifecycle and
+  digest, identity, policy, guard, provenance, execution-receipt,
+  materialization, wasm-store identity/catalog, transform/readiness, and
+  artifact-plan/target lineage helpers out of the largest modules, with
+  lifecycle and promotion internals under directory modules. Lifecycle and
   install-root/report-family pressure remain open.

@@ -31,10 +31,13 @@ rerunning the boundary scan before this report was finalized.
 
 Post-report follow-up note: subsequent host decomposition slices moved
 external lifecycle error/digest helpers plus promotion request/error, digest,
-identity, policy, guard, provenance, execution-receipt, and materialization
-helpers into focused child modules. The promotion parent is now a smaller
-coordination module, with provenance/execution receipt and source-build
-materialization logic isolated under promotion.
+identity, policy, guard, provenance, execution-receipt, materialization,
+wasm-store identity/catalog, transform/readiness, and artifact-plan/target
+lineage helpers into focused child modules. The promotion parent is now a
+small re-export module, with provenance/execution receipt, source-build
+materialization, artifact identity, wasm-store identity/catalog,
+transform/readiness, and artifact-plan/target lineage logic isolated under
+promotion.
 
 ## 1. Velocity Risk Index
 
@@ -217,7 +220,7 @@ request/capability changes have the highest future amplification.
 | --- | --- | --- | --- |
 | `d81096f` touched 61 files | broad | structural cleanup sweep | Host tests moved into focused modules; high file count is not routine feature friction. |
 | `5996340` touched 64 files | broad | ownership extraction | Broad now, likely lower future Canic ownership for helper-backed NNS/operator data. |
-| host deployment-truth module pressure remains persistent | persistent | true drag | Lifecycle and install-root remain the main large host follow-ups after promotion provenance/receipt/materialization helpers moved out of the promotion parent. |
+| host deployment-truth module pressure remains persistent | persistent | true drag | Lifecycle and install-root remain the main large host follow-ups after promotion provenance/receipt/materialization/identity/wasm-store/transform/artifact-plan helpers moved out of the promotion parent. |
 | workflow direct storage type reference | one pre-fix crossing | remediated boundary pressure | Pool recycle metadata now goes through an ops-owned projection. |
 | auth cleanup slices touched API/ops/workflow/storage/docs | broad | release stabilization | Expected for post-hard-cut auth cleanup, but future verifier changes should be narrower. |
 
@@ -293,7 +296,7 @@ Most impacted files and modules:
 | Signal | Location | Evidence | Risk |
 | --- | --- | --- | --- |
 | workflow/storage type crossing | `workflow/pool/mod.rs`, `ops/storage/pool/mod.rs` | fixed by replacing the direct `CanisterRecord` helper parameter with `PoolRegistrationMetadata`; rerun scan found no direct workflow/access/api storage references | Low |
-| host deployment-truth gravity well | `deployment_truth/promotion/mod.rs`, `deployment_truth/lifecycle/mod.rs`, `install_root/mod.rs` | promotion parent pressure is lower after provenance and materialization child-module extraction; lifecycle and install-root remain large host files | Medium |
+| host deployment-truth gravity well | `deployment_truth/promotion/mod.rs`, `deployment_truth/lifecycle/mod.rs`, `install_root/mod.rs` | promotion parent pressure is lower after provenance, materialization, identity, wasm-store, transform/readiness, and artifact-plan child-module extraction; lifecycle and install-root remain large host files | Medium |
 | helper extraction breadth | `5996340` | 64 files across CLI, host, helper crates, scripts, docs, tests, workspace manifests | Medium |
 | auth cleanup breadth | `4f7e76e` and `2c1dd86` | auth config/verifier cleanup crossed API, config, ops, storage, workflow, docs/tests | Medium |
 | host test decomposition | `d81096f` | 61-file sweep primarily under host test modules | Low |
@@ -335,9 +338,10 @@ Commands used as source scans:
 1. Keep host deployment-truth decomposition as the main friction target before
    adding more promotion/lifecycle report families. The first follow-up slices
    moved external lifecycle error/digest helpers plus promotion error/request,
-   digest, identity, policy, guard, provenance, execution-receipt, and
-   materialization helpers out of the largest modules, with lifecycle and
-   promotion internals under directory modules. Lifecycle and
+   digest, identity, policy, guard, provenance, execution-receipt,
+   materialization, wasm-store identity/catalog, transform/readiness, and
+   artifact-plan/target lineage helpers out of the largest modules, with
+   lifecycle and promotion internals under directory modules. Lifecycle and
    install-root/report-family pressure remain open.
 2. Treat new root capability request variants and delegated auth verifier rules
    as coordinated cross-layer slices with DTO, workflow, ops, metrics, tests,

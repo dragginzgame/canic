@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Continues deployment-truth promotion decomposition by moving artifact identity
+  reports, wasm-store identity/catalog helpers, transform/readiness
+  construction and validation, and artifact promotion plan/target-lineage logic
+  into focused child modules while preserving the public promotion API.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
