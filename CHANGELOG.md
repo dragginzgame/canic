@@ -12,10 +12,10 @@ present.
 
 ## Unreleased
 
-- Continues deployment-truth promotion decomposition by moving artifact identity
-  reports, wasm-store identity/catalog helpers, transform/readiness
-  construction and validation, and artifact promotion plan/target-lineage logic
-  into focused child modules while preserving the public promotion API.
+- Continues deployment-truth lifecycle decomposition by moving lifecycle
+  authority-report and external lifecycle-plan construction, validation, and
+  controller classification helpers into a focused child module while
+  preserving the public lifecycle API.
 
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
