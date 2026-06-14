@@ -37,8 +37,9 @@ lineage helpers into focused child modules. The promotion parent is now a
 small re-export module, with provenance/execution receipt, source-build
 materialization, artifact identity, wasm-store identity/catalog,
 transform/readiness, and artifact-plan/target lineage logic isolated under
-promotion. Lifecycle authority-report and external lifecycle-plan
-construction/validation are now isolated under lifecycle.
+promotion. Lifecycle authority-report, external lifecycle-plan, pending,
+check, handoff, and critical-fix report construction/validation are now
+isolated under lifecycle.
 
 ## 1. Velocity Risk Index
 
@@ -221,7 +222,7 @@ request/capability changes have the highest future amplification.
 | --- | --- | --- | --- |
 | `d81096f` touched 61 files | broad | structural cleanup sweep | Host tests moved into focused modules; high file count is not routine feature friction. |
 | `5996340` touched 64 files | broad | ownership extraction | Broad now, likely lower future Canic ownership for helper-backed NNS/operator data. |
-| host deployment-truth module pressure remains persistent | persistent | true drag | Lifecycle and install-root remain the main large host follow-ups after promotion provenance/receipt/materialization/identity/wasm-store/transform/artifact-plan helpers moved out of the promotion parent and lifecycle authority-plan helpers moved into a child module. |
+| host deployment-truth module pressure remains persistent | persistent | true drag | External-upgrade lifecycle reports and install-root remain the main large host follow-ups after promotion provenance/receipt/materialization/identity/wasm-store/transform/artifact-plan helpers moved out of the promotion parent and lifecycle authority-plan plus pending, check, handoff, and critical-fix helpers moved into child modules. |
 | workflow direct storage type reference | one pre-fix crossing | remediated boundary pressure | Pool recycle metadata now goes through an ops-owned projection. |
 | auth cleanup slices touched API/ops/workflow/storage/docs | broad | release stabilization | Expected for post-hard-cut auth cleanup, but future verifier changes should be narrower. |
 
@@ -297,7 +298,7 @@ Most impacted files and modules:
 | Signal | Location | Evidence | Risk |
 | --- | --- | --- | --- |
 | workflow/storage type crossing | `workflow/pool/mod.rs`, `ops/storage/pool/mod.rs` | fixed by replacing the direct `CanisterRecord` helper parameter with `PoolRegistrationMetadata`; rerun scan found no direct workflow/access/api storage references | Low |
-| host deployment-truth gravity well | `deployment_truth/promotion/mod.rs`, `deployment_truth/lifecycle/mod.rs`, `install_root/mod.rs` | promotion parent pressure is lower after provenance, materialization, identity, wasm-store, transform/readiness, and artifact-plan child-module extraction; lifecycle pressure is lower after authority-plan extraction; install-root and remaining lifecycle report families are still large host files | Medium |
+| host deployment-truth gravity well | `deployment_truth/promotion/mod.rs`, `deployment_truth/lifecycle/mod.rs`, `install_root/mod.rs` | promotion parent pressure is lower after provenance, materialization, identity, wasm-store, transform/readiness, and artifact-plan child-module extraction; lifecycle pressure is lower after authority-plan plus pending, check, handoff, and critical-fix extraction; install-root and remaining external-upgrade lifecycle reports are still large host files | Medium |
 | helper extraction breadth | `5996340` | 64 files across CLI, host, helper crates, scripts, docs, tests, workspace manifests | Medium |
 | auth cleanup breadth | `4f7e76e` and `2c1dd86` | auth config/verifier cleanup crossed API, config, ops, storage, workflow, docs/tests | Medium |
 | host test decomposition | `d81096f` | 61-file sweep primarily under host test modules | Low |
@@ -342,10 +343,11 @@ Commands used as source scans:
    digest, identity, policy, guard, provenance, execution-receipt,
    materialization, wasm-store identity/catalog, transform/readiness, and
    artifact-plan/target lineage helpers out of the largest modules, then moved
-   lifecycle authority-plan construction/validation into a focused lifecycle
-   child module. Promotion is now a small re-export module; remaining
-   lifecycle report families plus install-root/report-family pressure remain
-   open.
+   lifecycle authority-plan and external lifecycle pending, check, handoff,
+   and critical-fix report construction/validation into focused lifecycle
+   child modules. Promotion is now a small re-export module; remaining
+   external-upgrade lifecycle report families plus install-root/report-family
+   pressure remain open.
 2. Treat new root capability request variants and delegated auth verifier rules
    as coordinated cross-layer slices with DTO, workflow, ops, metrics, tests,
    and docs planned together.

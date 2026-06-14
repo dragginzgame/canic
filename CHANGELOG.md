@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Continues deployment-truth lifecycle decomposition by moving external
+  lifecycle pending, check, handoff, and critical-fix report construction and
+  validation into a focused child module while preserving the public lifecycle
+  API.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
