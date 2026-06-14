@@ -1126,7 +1126,7 @@ fn current_install_activation_phases_use_operation_runner() {
     let activation = source_section(
         source,
         "fn run_root_activation_phases(",
-        "fn root_wasm_for_install_plan(",
+        "fn write_install_state_with_deployment_truth_receipt(",
     );
 
     for operation in [
@@ -1173,11 +1173,7 @@ fn current_install_records_gates_before_activation_mutation() {
         "run_install_deployment_truth_safety_gate(",
     );
 
-    let gate = source_section(
-        source,
-        "fn run_install_deployment_truth_safety_gate(",
-        "fn validate_expected_fleet_name(",
-    );
+    let gate = include_str!("../current_execution/mod.rs");
     assert_before(
         gate,
         "enforce_install_deployment_truth_gate(&deployment_truth_check)?",

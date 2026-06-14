@@ -1,4 +1,5 @@
 use super::deployment_truth_gate::deployment_truth_finding_label;
+use super::phase_receipts::receipt_with_execution_context;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentCommandResultV1,
@@ -44,7 +45,7 @@ pub(super) fn write_current_install_execution_preflight_receipt(
         )
     };
     let finished_at = super::current_unix_timestamp_label()?;
-    let receipt = super::receipt_with_execution_context(
+    let receipt = receipt_with_execution_context(
         deployment_receipt_from_check_with_status(
             check,
             format!("{}:execution_preflight", check.check_id),

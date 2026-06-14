@@ -1,4 +1,4 @@
-use super::InstallPhaseOperation;
+use super::operations::InstallPhaseOperation;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionContextV1,

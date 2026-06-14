@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Continues canic-host install-root decomposition by isolating
+  artifact-promotion receipts, install phase operations, plan artifact
+  manifest handling, and current execution gate helpers while preserving install
+  behavior and public host APIs.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)

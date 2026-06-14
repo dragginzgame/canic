@@ -1,75 +1,85 @@
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
-    ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionPlanV1,
-    ArtifactPromotionProvenanceReportRequest, CurrentCliDeploymentExecutor, DeploymentCheckV1,
-    DeploymentCommandResultV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightV1,
-    DeploymentExecutionStatusV1, DeploymentExecutor, DeploymentExecutorCapabilityV1,
-    DeploymentPlanV1, DeploymentReceiptV1, DeploymentRootVerificationEvidenceStatusV1,
+    ArtifactPromotionPlanV1, CurrentCliDeploymentExecutor, DeploymentCheckV1,
+    DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutorCapabilityV1,
+    DeploymentPlanV1, DeploymentRootVerificationEvidenceStatusV1,
     DeploymentRootVerificationReceiptV1, DeploymentRootVerificationRequestV1,
     DeploymentRootVerificationSourceV1, DeploymentRootVerificationStateV1,
-    LocalDeploymentCheckRequest, LocalInventoryRequest, ObservationStatusV1,
-    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
-    artifact_promotion_execution_receipt, artifact_promotion_provenance_report,
-    check_local_deployment, collect_local_deployment_inventory, compare_plan_to_inventory,
-    deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
-    deployment_root_verification_report_from_check, missing_executor_capabilities, phase_receipt,
+    LocalDeploymentCheckRequest, LocalInventoryRequest, check_local_deployment,
+    collect_local_deployment_inventory, compare_plan_to_inventory,
+    deployment_execution_preflight_from_check, deployment_root_verification_report_from_check,
     safety_report_from_diff, validate_deployment_execution_preflight_for_check,
     validate_deployment_root_verification_report,
 };
 use crate::release_set::{
-    LOCAL_ROOT_MIN_READY_CYCLES, RootReleaseSetManifest, configured_fleet_name,
-    configured_install_targets, emit_root_release_set_manifest_with_config, icp_root,
-    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap, workspace_root,
+    configured_fleet_name, configured_install_targets, icp_root, load_root_release_set_manifest,
+    resolve_artifact_root, workspace_root,
 };
-use canic_core::cdk::utils::hash::wasm_hash_hex;
-use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::types::Principal};
+use canic_core::cdk::types::Principal;
 use config_selection::resolve_install_config_path;
 use std::{
-    fs,
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod artifact_promotion;
 mod commands;
 mod config_selection;
+mod current_execution;
 mod deployment_truth_gate;
 mod execution_preflight;
+mod operations;
 mod phase_receipts;
+mod plan_artifacts;
 mod readiness;
 mod receipt_io;
 mod root_verification;
 mod staging;
 mod state;
 
+use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
 use commands::{
     BuildEnvGuard, add_create_root_target, add_icp_environment_target,
-    add_local_root_create_cycles_arg, ensure_icp_environment_ready, ensure_local_root_min_cycles,
+    add_local_root_create_cycles_arg, ensure_icp_environment_ready,
     icp_canister_command_in_network, icp_command_in_network, icp_command_on_network,
-    is_missing_canister_id_error, parse_created_canister_id, planned_build_artifact_root,
-    print_install_result_summary, print_install_timing_summary, root_init_args,
-    run_canic_build_targets, run_command, run_command_stdout,
+    is_missing_canister_id_error, parse_created_canister_id, print_install_result_summary,
+    print_install_timing_summary, run_command_stdout,
 };
 pub use config_selection::{
     current_canic_project_root, discover_canic_config_choices, discover_canic_project_root_from,
     discover_project_canic_config_choices, project_fleet_roots,
 };
 #[cfg(test)]
-use deployment_truth_gate::install_deployment_truth_gate_lines;
+use current_execution::current_install_executor_missing_capabilities;
+use current_execution::{
+    current_install_execution_context, ensure_current_install_executor_capabilities,
+    run_install_deployment_truth_safety_gate,
+};
+#[cfg(test)]
 use deployment_truth_gate::{
-    enforce_install_deployment_truth_gate, install_deployment_truth_gate_receipt,
-    print_install_deployment_truth_gate,
+    enforce_install_deployment_truth_gate, install_deployment_truth_gate_lines,
+    install_deployment_truth_gate_receipt,
 };
+#[cfg(test)]
 use execution_preflight::write_current_install_execution_preflight_receipt;
+#[cfg(test)]
+use operations::EmitRootManifestOperation;
+use operations::{
+    BuildInstallTargetsOperation, EnsureRootCyclesOperation, InstallRootWasmOperation,
+    ResolveRootCanisterOperation, ResumeBootstrapOperation, WaitRootReadyOperation,
+};
+#[cfg(test)]
+use phase_receipts::install_deployment_truth_phase_receipt;
 use phase_receipts::{
-    CompletedInstallPhase, InstallReceiptScope, completed_phase_role_receipt,
-    install_deployment_truth_phase_receipt, receipt_with_execution_context,
-    write_completed_install_phase_receipt,
+    CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
 };
-use readiness::wait_for_root_ready;
+use plan_artifacts::{
+    emit_manifest_with_deployment_truth_receipt, root_wasm_for_install_plan,
+    validate_plan_artifacts_with_phase,
+};
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
-use receipt_io::{
-    write_artifact_promotion_execution_receipt, write_install_deployment_truth_receipt,
-};
+#[cfg(test)]
+use receipt_io::write_install_deployment_truth_receipt;
 use root_verification::{
     RootVerificationReceiptInput, deployment_root_verification_state, file_sha256_hex,
     root_verification_receipt_from_report, verified_root_state_transition,
@@ -93,7 +103,7 @@ mod tests;
 #[cfg(test)]
 use crate::response_parse::parse_cycle_balance_response;
 #[cfg(test)]
-use commands::{parse_canister_id_json, render_install_timing_summary};
+use commands::{parse_canister_id_json, render_install_timing_summary, root_init_args};
 #[cfg(test)]
 use config_selection::config_selection_error;
 #[cfg(test)]
@@ -574,213 +584,6 @@ fn build_install_targets_with_phase(
     Ok((phase, duration))
 }
 
-fn validate_plan_artifacts_with_phase(
-    plan: &DeploymentPlanV1,
-    icp_root: &Path,
-    network: &str,
-) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
-    let started_at = current_unix_timestamp_label()?;
-    let started = Instant::now();
-    validate_plan_artifact_paths(plan, icp_root, network)?;
-    let duration = started.elapsed();
-    let role_names = plan
-        .role_artifacts
-        .iter()
-        .map(|artifact| artifact.role.clone())
-        .collect::<Vec<_>>();
-    let phase = CompletedInstallPhase {
-        phase: "materialize_artifacts",
-        attempted_action: "validate supplied deployment plan artifacts",
-        started_at,
-        finished_at: Some(current_unix_timestamp_label()?),
-        evidence: vec![format!("deployment_plan:{}", plan.plan_id)],
-        role_names,
-    };
-    Ok((phase, duration))
-}
-
-fn validate_plan_artifact_paths(
-    plan: &DeploymentPlanV1,
-    icp_root: &Path,
-    network: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
-    let root_artifact = plan
-        .role_artifacts
-        .iter()
-        .find(|artifact| artifact.role == "root")
-        .ok_or_else(|| "deployment plan is missing root role artifact".to_string())?;
-    let root_wasm = plan_role_wasm_path(icp_root, &artifact_root, root_artifact);
-    if !root_wasm.is_file() {
-        return Err(format!(
-            "deployment plan root wasm artifact does not exist: {}",
-            root_wasm.display()
-        )
-        .into());
-    }
-
-    for artifact in plan_release_role_artifacts(plan) {
-        let wasm_gz = plan_role_wasm_gz_path(icp_root, &artifact_root, artifact);
-        if !wasm_gz.is_file() {
-            return Err(format!(
-                "deployment plan role {} wasm.gz artifact does not exist: {}",
-                artifact.role,
-                wasm_gz.display()
-            )
-            .into());
-        }
-    }
-    Ok(())
-}
-
-fn emit_manifest_with_deployment_truth_receipt(
-    workspace_root: &Path,
-    icp_root: &Path,
-    options: &InstallRootOptions,
-    config_path: &Path,
-    deployment_name: &str,
-    deployment_truth_check: &DeploymentCheckV1,
-    execution_context: &DeploymentExecutionContextV1,
-) -> Result<(PathBuf, Duration), Box<dyn std::error::Error>> {
-    let operation =
-        EmitRootManifestOperation::new(workspace_root, icp_root, &options.network, config_path);
-    let emit_manifest_started_at_label = current_unix_timestamp_label()?;
-    let emit_manifest_started_at = Instant::now();
-    let manifest_path = if let Some(plan) = &options.deployment_plan_override {
-        emit_root_release_set_manifest_from_plan(icp_root, &options.network, plan)?
-    } else {
-        operation.execute()?
-    };
-    let emit_manifest_duration = emit_manifest_started_at.elapsed();
-    let emit_manifest_receipt = receipt_with_execution_context(
-        install_deployment_truth_phase_receipt(
-            deployment_truth_check,
-            "emit_manifest",
-            emit_manifest_started_at_label,
-            Some(current_unix_timestamp_label()?),
-            "emit root release-set manifest",
-            crate::deployment_truth::ObservationStatusV1::Observed,
-            EmitRootManifestOperation::evidence(&manifest_path),
-        ),
-        execution_context,
-    );
-    let emit_manifest_receipt_path = write_install_deployment_truth_receipt(
-        icp_root,
-        &options.network,
-        deployment_name,
-        &emit_manifest_receipt,
-    )?;
-    println!(
-        "Deployment truth receipt JSON: {}",
-        emit_manifest_receipt_path.display()
-    );
-    Ok((manifest_path, emit_manifest_duration))
-}
-
-fn emit_root_release_set_manifest_from_plan(
-    icp_root: &Path,
-    network: &str,
-    plan: &DeploymentPlanV1,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
-    let manifest_path = crate::release_set::root_release_set_manifest_path(&artifact_root)?;
-    let entries = plan_release_role_artifacts(plan)
-        .map(|artifact| release_set_entry_from_plan_artifact(icp_root, &artifact_root, artifact))
-        .collect::<Result<Vec<_>, _>>()?;
-    let manifest = RootReleaseSetManifest {
-        release_version: plan
-            .deployment_identity
-            .canic_version
-            .clone()
-            .unwrap_or_else(|| plan.plan_id.clone()),
-        entries,
-    };
-
-    fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
-    Ok(manifest_path)
-}
-
-fn release_set_entry_from_plan_artifact(
-    icp_root: &Path,
-    artifact_root: &Path,
-    artifact: &crate::deployment_truth::RoleArtifactV1,
-) -> Result<crate::release_set::ReleaseSetEntry, Box<dyn std::error::Error>> {
-    let artifact_path = plan_role_wasm_gz_path(icp_root, artifact_root, artifact);
-    let artifact_relative_path = artifact_path
-        .strip_prefix(icp_root)
-        .map_err(|_| {
-            format!(
-                "deployment plan artifact {} is not under ICP root {}",
-                artifact_path.display(),
-                icp_root.display()
-            )
-        })?
-        .to_string_lossy()
-        .to_string();
-    let wasm_module = fs::read(&artifact_path)?;
-    let chunk_hashes = wasm_module
-        .chunks(CANIC_WASM_CHUNK_BYTES)
-        .map(wasm_hash_hex)
-        .collect::<Vec<_>>();
-
-    Ok(crate::release_set::ReleaseSetEntry {
-        role: artifact.role.clone(),
-        template_id: format!("embedded:{}", artifact.role),
-        artifact_relative_path,
-        payload_size_bytes: wasm_module.len() as u64,
-        payload_sha256_hex: wasm_hash_hex(&wasm_module),
-        chunk_size_bytes: CANIC_WASM_CHUNK_BYTES as u64,
-        chunk_sha256_hex: chunk_hashes,
-    })
-}
-
-fn plan_release_role_artifacts(
-    plan: &DeploymentPlanV1,
-) -> impl Iterator<Item = &crate::deployment_truth::RoleArtifactV1> {
-    plan.role_artifacts
-        .iter()
-        .filter(|artifact| !matches!(artifact.role.as_str(), "root" | "wasm_store"))
-}
-
-fn plan_role_wasm_path(
-    icp_root: &Path,
-    artifact_root: &Path,
-    artifact: &crate::deployment_truth::RoleArtifactV1,
-) -> PathBuf {
-    artifact.wasm_path.as_ref().map_or_else(
-        || {
-            artifact_root
-                .join(&artifact.role)
-                .join(format!("{}.wasm", artifact.role))
-        },
-        |path| plan_artifact_path(icp_root, path),
-    )
-}
-
-fn plan_role_wasm_gz_path(
-    icp_root: &Path,
-    artifact_root: &Path,
-    artifact: &crate::deployment_truth::RoleArtifactV1,
-) -> PathBuf {
-    artifact.wasm_gz_path.as_ref().map_or_else(
-        || {
-            artifact_root
-                .join(&artifact.role)
-                .join(format!("{}.wasm.gz", artifact.role))
-        },
-        |path| plan_artifact_path(icp_root, path),
-    )
-}
-
-fn plan_artifact_path(icp_root: &Path, path: &str) -> PathBuf {
-    let path = PathBuf::from(path);
-    if path.is_absolute() {
-        path
-    } else {
-        icp_root.join(path)
-    }
-}
-
 fn run_root_activation_phases(
     receipt_scope: InstallReceiptScope<'_>,
     options: &InstallRootOptions,
@@ -847,330 +650,6 @@ fn run_root_activation_phases(
     Ok(timings)
 }
 
-fn root_wasm_for_install_plan(
-    icp_root: &Path,
-    network: &str,
-    root_build_target: &str,
-    plan: Option<&DeploymentPlanV1>,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
-    if let Some(plan) = plan {
-        let root_artifact = plan
-            .role_artifacts
-            .iter()
-            .find(|artifact| artifact.role == "root")
-            .ok_or_else(|| "deployment plan is missing root role artifact".to_string())?;
-        return Ok(plan_role_wasm_path(icp_root, &artifact_root, root_artifact));
-    }
-
-    Ok(artifact_root
-        .join(root_build_target)
-        .join(format!("{root_build_target}.wasm")))
-}
-
-trait InstallPhaseOperation {
-    fn phase(&self) -> &'static str;
-    fn attempted_action(&self) -> &'static str;
-    fn evidence(&self) -> Vec<String>;
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>>;
-}
-
-struct ResolveRootCanisterOperation<'a> {
-    icp_root: &'a Path,
-    network: &'a str,
-    root_canister: &'a str,
-    config_path: &'a Path,
-}
-
-impl<'a> ResolveRootCanisterOperation<'a> {
-    const fn new(
-        icp_root: &'a Path,
-        network: &'a str,
-        root_canister: &'a str,
-        config_path: &'a Path,
-    ) -> Self {
-        Self {
-            icp_root,
-            network,
-            root_canister,
-            config_path,
-        }
-    }
-
-    fn evidence(&self, root_canister_id: &str) -> Vec<String> {
-        vec![
-            format!("root_target:{}", self.root_canister),
-            format!("root_canister:{root_canister_id}"),
-        ]
-    }
-
-    fn execute(&self) -> Result<String, Box<dyn std::error::Error>> {
-        ensure_root_canister_id(
-            self.icp_root,
-            self.network,
-            self.root_canister,
-            self.config_path,
-        )
-    }
-}
-
-struct BuildInstallTargetsOperation<'a> {
-    network: &'a str,
-    build_targets: Vec<String>,
-    build_profile: Option<CanisterBuildProfile>,
-    config_path: &'a Path,
-    icp_root: &'a Path,
-}
-
-impl<'a> BuildInstallTargetsOperation<'a> {
-    const fn new(
-        network: &'a str,
-        build_targets: Vec<String>,
-        build_profile: Option<CanisterBuildProfile>,
-        config_path: &'a Path,
-        icp_root: &'a Path,
-    ) -> Self {
-        Self {
-            network,
-            build_targets,
-            build_profile,
-            config_path,
-            icp_root,
-        }
-    }
-
-    fn evidence(&self) -> Vec<String> {
-        self.build_targets
-            .iter()
-            .map(|target| format!("build_target:{target}"))
-            .collect()
-    }
-
-    fn role_names(&self) -> Vec<String> {
-        self.build_targets.clone()
-    }
-
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        run_canic_build_targets(
-            self.network,
-            &self.build_targets,
-            self.build_profile,
-            self.config_path,
-            self.icp_root,
-        )
-    }
-}
-
-struct EmitRootManifestOperation<'a> {
-    workspace_root: &'a Path,
-    icp_root: &'a Path,
-    network: &'a str,
-    config_path: &'a Path,
-}
-
-impl<'a> EmitRootManifestOperation<'a> {
-    const fn new(
-        workspace_root: &'a Path,
-        icp_root: &'a Path,
-        network: &'a str,
-        config_path: &'a Path,
-    ) -> Self {
-        Self {
-            workspace_root,
-            icp_root,
-            network,
-            config_path,
-        }
-    }
-
-    fn evidence(manifest_path: &Path) -> Vec<String> {
-        vec![format!("manifest_path:{}", manifest_path.display())]
-    }
-
-    fn execute(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        emit_root_release_set_manifest_with_config(
-            self.workspace_root,
-            self.icp_root,
-            self.network,
-            self.config_path,
-        )
-    }
-}
-
-struct InstallRootWasmOperation<'a> {
-    icp_root: &'a Path,
-    network: &'a str,
-    root_canister_id: &'a str,
-    root_wasm: PathBuf,
-}
-
-impl<'a> InstallRootWasmOperation<'a> {
-    const fn new(
-        icp_root: &'a Path,
-        network: &'a str,
-        root_canister_id: &'a str,
-        root_wasm: PathBuf,
-    ) -> Self {
-        Self {
-            icp_root,
-            network,
-            root_canister_id,
-            root_wasm,
-        }
-    }
-}
-
-impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "install_root"
-    }
-
-    fn attempted_action(&self) -> &'static str {
-        "install root wasm"
-    }
-
-    fn evidence(&self) -> Vec<String> {
-        vec![
-            format!("root_canister:{}", self.root_canister_id),
-            format!("root_wasm:{}", self.root_wasm.display()),
-        ]
-    }
-
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        reinstall_root_wasm(
-            self.icp_root,
-            self.network,
-            self.root_canister_id,
-            &self.root_wasm,
-        )
-    }
-}
-
-struct EnsureRootCyclesOperation<'a> {
-    icp_root: &'a Path,
-    network: &'a str,
-    root_canister_id: &'a str,
-    phase: &'static str,
-    attempted_action: &'static str,
-    phase_label: &'a str,
-}
-
-impl<'a> EnsureRootCyclesOperation<'a> {
-    const fn new(
-        icp_root: &'a Path,
-        network: &'a str,
-        root_canister_id: &'a str,
-        phase: &'static str,
-        attempted_action: &'static str,
-        phase_label: &'a str,
-    ) -> Self {
-        Self {
-            icp_root,
-            network,
-            root_canister_id,
-            phase,
-            attempted_action,
-            phase_label,
-        }
-    }
-}
-
-impl InstallPhaseOperation for EnsureRootCyclesOperation<'_> {
-    fn phase(&self) -> &'static str {
-        self.phase
-    }
-
-    fn attempted_action(&self) -> &'static str {
-        self.attempted_action
-    }
-
-    fn evidence(&self) -> Vec<String> {
-        vec![
-            format!("root_canister:{}", self.root_canister_id),
-            format!("minimum_cycles:{LOCAL_ROOT_MIN_READY_CYCLES}"),
-            format!("funding_phase:{}", self.phase_label),
-        ]
-    }
-
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        ensure_local_root_min_cycles(
-            self.icp_root,
-            self.network,
-            self.root_canister_id,
-            self.phase_label,
-        )
-    }
-}
-
-struct ResumeBootstrapOperation<'a> {
-    network: &'a str,
-    root_canister_id: &'a str,
-}
-
-impl<'a> ResumeBootstrapOperation<'a> {
-    const fn new(network: &'a str, root_canister_id: &'a str) -> Self {
-        Self {
-            network,
-            root_canister_id,
-        }
-    }
-}
-
-impl InstallPhaseOperation for ResumeBootstrapOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "resume_bootstrap"
-    }
-
-    fn attempted_action(&self) -> &'static str {
-        "resume root bootstrap"
-    }
-
-    fn evidence(&self) -> Vec<String> {
-        vec![format!("root_canister:{}", self.root_canister_id)]
-    }
-
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        resume_root_bootstrap(self.network, self.root_canister_id)
-    }
-}
-
-struct WaitRootReadyOperation<'a> {
-    network: &'a str,
-    root_canister_id: &'a str,
-    timeout_seconds: u64,
-}
-
-impl<'a> WaitRootReadyOperation<'a> {
-    const fn new(network: &'a str, root_canister_id: &'a str, timeout_seconds: u64) -> Self {
-        Self {
-            network,
-            root_canister_id,
-            timeout_seconds,
-        }
-    }
-}
-
-impl InstallPhaseOperation for WaitRootReadyOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "wait_ready"
-    }
-
-    fn attempted_action(&self) -> &'static str {
-        "wait for root bootstrap readiness"
-    }
-
-    fn evidence(&self) -> Vec<String> {
-        vec![
-            format!("root_canister:{}", self.root_canister_id),
-            format!("timeout_seconds:{}", self.timeout_seconds),
-        ]
-    }
-
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        wait_for_root_ready(self.network, self.root_canister_id, self.timeout_seconds)
-    }
-}
-
 fn write_install_state_with_deployment_truth_receipt(
     receipt_scope: InstallReceiptScope<'_>,
     network: &str,
@@ -1193,101 +672,6 @@ fn write_install_state_with_deployment_truth_receipt(
     };
     write_completed_install_phase_receipt(receipt_scope, completed)?;
     Ok(state_path)
-}
-
-fn write_artifact_promotion_execution_receipt_for_install(
-    options: &InstallRootOptions,
-    icp_root: &Path,
-    network: &str,
-    deployment_name: &str,
-    check: &DeploymentCheckV1,
-    execution_context: &DeploymentExecutionContextV1,
-) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let Some(promotion_plan) = &options.artifact_promotion_plan_override else {
-        return Ok(None);
-    };
-    let deployment_receipt =
-        promotion_install_deployment_receipt(check, execution_context, promotion_plan)?;
-    let provenance_report =
-        artifact_promotion_provenance_report(ArtifactPromotionProvenanceReportRequest {
-            report_id: format!("{}:execution-provenance", promotion_plan.plan_id),
-            artifact_promotion_plan: promotion_plan.clone(),
-            wasm_store_identity_report: None,
-            wasm_store_catalog_verification: None,
-            materialization_identity_report: None,
-        })?;
-    let receipt = artifact_promotion_execution_receipt(ArtifactPromotionExecutionReceiptRequest {
-        receipt_id: format!("{}:execution-receipt", promotion_plan.plan_id),
-        provenance_report,
-        deployment_receipt,
-    })?;
-    let path =
-        write_artifact_promotion_execution_receipt(icp_root, network, deployment_name, &receipt)?;
-    println!(
-        "Artifact promotion execution receipt JSON: {}",
-        path.display()
-    );
-    Ok(Some(path))
-}
-
-fn promotion_install_deployment_receipt(
-    check: &DeploymentCheckV1,
-    execution_context: &DeploymentExecutionContextV1,
-    promotion_plan: &ArtifactPromotionPlanV1,
-) -> Result<DeploymentReceiptV1, Box<dyn std::error::Error>> {
-    let started_at = current_unix_timestamp_label()?;
-    let finished_at = current_unix_timestamp_label()?;
-    let phase = phase_receipt(
-        "promoted_plan_install",
-        started_at.clone(),
-        Some(finished_at.clone()),
-        "execute promoted deployment plan through current install runner",
-        ObservationStatusV1::Observed,
-        vec![
-            format!("artifact_promotion_plan:{}", promotion_plan.plan_id),
-            format!(
-                "artifact_promotion_plan_digest:{}",
-                promotion_plan.artifact_promotion_plan_digest
-            ),
-            format!(
-                "promotion_plan_lineage_digest:{}",
-                promotion_plan.promotion_plan_lineage_digest
-            ),
-        ],
-    );
-    let role_phase_receipts = promotion_plan
-        .transform
-        .roles
-        .iter()
-        .map(|role| {
-            completed_phase_role_receipt(
-                check,
-                "promoted_plan_install",
-                &role.role,
-                crate::deployment_truth::RolePhaseResultV1::Applied,
-                None,
-            )
-            .ok_or_else(|| {
-                format!(
-                    "promoted role {} is missing from deployment plan artifacts",
-                    role.role
-                )
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(receipt_with_execution_context(
-        deployment_receipt_from_check_with_status(
-            check,
-            format!("{}:promoted_plan_install", check.check_id),
-            DeploymentExecutionStatusV1::Complete,
-            started_at,
-            Some(finished_at),
-            vec![phase],
-            role_phase_receipts,
-            DeploymentCommandResultV1::Succeeded,
-        ),
-        execution_context,
-    ))
 }
 
 /// Build the same read-only deployment truth check that can be used as a
@@ -1509,109 +893,6 @@ fn validate_current_install_plan_override(
     Ok(())
 }
 
-fn current_install_execution_context(
-    workspace_root: &Path,
-    icp_root: &Path,
-    network: &str,
-) -> DeploymentExecutionContextV1 {
-    CurrentCliDeploymentExecutor::new(
-        Some(workspace_root.display().to_string()),
-        Some(icp_root.display().to_string()),
-        current_install_artifact_roots(icp_root, network),
-    )
-    .execution_context()
-}
-
-fn ensure_current_install_executor_capabilities(
-    execution_context: &DeploymentExecutionContextV1,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let missing = current_install_executor_missing_capabilities(execution_context);
-    if missing.is_empty() {
-        return Ok(());
-    }
-
-    Err(format!(
-        "current install executor backend {:?} is missing required capabilities: {missing:?}",
-        execution_context.backend
-    )
-    .into())
-}
-
-fn current_install_executor_missing_capabilities(
-    execution_context: &DeploymentExecutionContextV1,
-) -> Vec<DeploymentExecutorCapabilityV1> {
-    missing_executor_capabilities(
-        &execution_context.backend_capabilities,
-        CURRENT_INSTALL_REQUIRED_CAPABILITIES,
-    )
-}
-
-fn current_install_artifact_roots(icp_root: &Path, network: &str) -> Vec<String> {
-    let planned_root = planned_build_artifact_root(icp_root);
-    let mut roots = vec![planned_root.display().to_string()];
-    if let Ok(resolved_root) = resolve_artifact_root(icp_root, network)
-        && resolved_root != planned_root
-    {
-        roots.push(resolved_root.display().to_string());
-    }
-    roots
-}
-
-fn run_install_deployment_truth_safety_gate(
-    options: &InstallRootOptions,
-    workspace_root: &Path,
-    icp_root: &Path,
-    config_path: &Path,
-    deployment_name: &str,
-    execution_context: &DeploymentExecutionContextV1,
-) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
-    let truth_gate_started_at = current_unix_timestamp_label()?;
-    let deployment_truth_check = current_install_deployment_truth_check_at(
-        options,
-        workspace_root,
-        icp_root,
-        config_path,
-        deployment_name,
-        truth_gate_started_at.clone(),
-    )?;
-    let artifact_gate_receipt = artifact_gate_phase_receipt(
-        &deployment_truth_check,
-        truth_gate_started_at.clone(),
-        Some(current_unix_timestamp_label()?),
-    );
-    let role_receipts = artifact_gate_role_phase_receipts(&deployment_truth_check);
-    let deployment_receipt = receipt_with_execution_context(
-        install_deployment_truth_gate_receipt(
-            &deployment_truth_check,
-            truth_gate_started_at,
-            vec![artifact_gate_receipt],
-            role_receipts,
-        ),
-        execution_context,
-    );
-    let receipt_write = write_install_deployment_truth_receipt(
-        icp_root,
-        &options.network,
-        deployment_name,
-        &deployment_receipt,
-    );
-    match &receipt_write {
-        Ok(path) => println!("Deployment truth receipt JSON: {}", path.display()),
-        Err(err) => eprintln!("Deployment truth receipt JSON write failed: {err}"),
-    }
-    print_install_deployment_truth_gate(&deployment_truth_check, &deployment_receipt);
-    enforce_install_deployment_truth_gate(&deployment_truth_check)?;
-    receipt_write?;
-    write_current_install_execution_preflight_receipt(
-        icp_root,
-        &options.network,
-        deployment_name,
-        &deployment_truth_check,
-        execution_context,
-    )?;
-    Ok(deployment_truth_check)
-}
-
 fn validate_expected_fleet_name(
     expected: Option<&str>,
     actual: &str,
@@ -1663,19 +944,6 @@ fn ensure_root_canister_id(
         )
         .into()
     })
-}
-fn reinstall_root_wasm(
-    icp_root: &Path,
-    network: &str,
-    root_canister: &str,
-    root_wasm: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut install = icp_canister_command_in_network(icp_root);
-    install.args(["install", root_canister, "--mode=reinstall", "-y", "--wasm"]);
-    install.arg(root_wasm);
-    install.args(["--args", &root_init_args(root_wasm)?]);
-    add_icp_environment_target(&mut install, network);
-    run_command(&mut install)
 }
 // Build the persisted project-local install state from a completed install.
 fn build_install_state(

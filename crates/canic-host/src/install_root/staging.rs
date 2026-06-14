@@ -1,4 +1,4 @@
-use super::InstallPhaseOperation;
+use super::operations::InstallPhaseOperation;
 use crate::deployment_truth::{
     ArtifactTransportV1, ObservationStatusV1, StagingReceiptV1, VerifiedPostconditionV1,
     staging_receipt_evidence,
