@@ -13,6 +13,11 @@ present.
 ## Unreleased
 
 - Continues canic-host deployment-truth report decomposition by isolating
+  controller authority, observed-controller reconciliation, and module-hash
+  and runtime-config digest comparison helpers in focused child modules while
+  preserving deployment diff behavior.
+
+- Continues canic-host deployment-truth report decomposition by isolating
   artifact, canister, and pool diff comparison helpers in focused child modules
   while preserving deployment diff behavior and public host APIs.
 

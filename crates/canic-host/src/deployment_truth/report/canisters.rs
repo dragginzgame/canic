@@ -1,8 +1,6 @@
 use super::super::*;
-use super::{
-    compare_role_controllers, conflicting_assignment_groups, diff_item, duplicate_evidence_groups,
-    finding,
-};
+use super::controllers::compare_role_controllers;
+use super::{conflicting_assignment_groups, diff_item, duplicate_evidence_groups, finding};
 use std::collections::BTreeSet;
 
 pub(super) fn compare_observed_canister_id_conflicts(
