@@ -61,7 +61,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     execution_context: &DeploymentExecutionContextV1,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     let truth_gate_started_at = super::current_unix_timestamp_label()?;
-    let deployment_truth_check = super::current_install_deployment_truth_check_at(
+    let deployment_truth_check = super::truth_check::current_install_deployment_truth_check_at(
         options,
         workspace_root,
         icp_root,

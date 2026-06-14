@@ -544,17 +544,18 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
 
 #[test]
 fn verified_root_state_writes_stay_on_explicit_install_or_verify_paths() {
-    let source = include_str!("../mod.rs");
+    let install_source = include_str!("../mod.rs");
+    let registration_source = include_str!("../deployment_registration/mod.rs");
 
     assert_eq!(
-        source
+        install_source
             .matches("root_verification: RootVerificationStatus::Verified")
             .count(),
         1,
         "only install-created state may initialize verified root state"
     );
     assert_eq!(
-        source
+        registration_source
             .matches("root_verification = RootVerificationStatus::Verified")
             .count(),
         1,
@@ -564,12 +565,12 @@ fn verified_root_state_writes_stay_on_explicit_install_or_verify_paths() {
 
 #[test]
 fn verify_registered_root_validates_and_writes_before_receipt() {
-    let source = include_str!("../mod.rs");
+    let source = include_str!("../deployment_registration/mod.rs");
     let start = source
         .find("pub fn verify_registered_deployment_root(")
         .expect("verify function start");
     let end = source[start..]
-        .find("struct PreparedInstallTruth")
+        .find("fn registered_deployment_release_set_manifest_path(")
         .map(|offset| start + offset)
         .expect("verify function end");
     let body = &source[start..end];

@@ -1,4 +1,4 @@
-use super::{icp_command_in_network, icp_command_on_network};
+use super::commands::{icp_command_in_network, icp_command_on_network};
 use crate::release_set::{icp_query_on_network, icp_root};
 use canic_core::protocol;
 use serde::Deserialize;

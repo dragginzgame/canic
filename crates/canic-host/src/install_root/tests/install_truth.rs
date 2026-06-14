@@ -1188,7 +1188,7 @@ fn current_install_records_gates_before_activation_mutation() {
 
 #[test]
 fn current_install_check_paths_do_not_write_or_mutate_state() {
-    let source = include_str!("../mod.rs");
+    let source = include_str!("../truth_check/mod.rs");
     let check_paths = source_section(
         source,
         "pub fn check_install_deployment_truth(",
