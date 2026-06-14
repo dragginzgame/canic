@@ -9,6 +9,8 @@ mod module_hashes;
 mod pools;
 mod receipt_resume;
 mod root_subnet;
+mod safety;
+mod verifier_readiness;
 
 use artifacts::compare_artifacts;
 use canisters::{compare_canisters, compare_observed_canister_id_conflicts};
@@ -23,6 +25,9 @@ pub(super) use root_subnet::{
     RootSubnetEvidence, RootSubnetEvidenceSource,
     apply_root_canister_signature_subnet_check_with_source,
 };
+pub use safety::safety_report_from_diff;
+pub(in crate::deployment_truth::report) use safety::{resume_safety_reasons, safety_status};
+use verifier_readiness::compare_verifier_readiness;
 
 ///
 /// DuplicateEvidenceGroup
@@ -234,26 +239,6 @@ fn record_plan_assumptions(
     }
 }
 
-/// Render an operator-facing safety report from a machine deployment diff.
-#[must_use]
-pub fn safety_report_from_diff(
-    report_id: impl Into<String>,
-    diff_id: Option<String>,
-    diff: &DeploymentDiffV1,
-) -> SafetyReportV1 {
-    let status = safety_status(&diff.hard_failures, &diff.warnings);
-    SafetyReportV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        report_id: report_id.into(),
-        diff_id,
-        status,
-        summary: safety_summary(status, diff.hard_failures.len(), diff.warnings.len()),
-        hard_failures: diff.hard_failures.clone(),
-        warnings: diff.warnings.clone(),
-        next_actions: safety_next_actions(status),
-    }
-}
-
 fn compare_identity(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -314,239 +299,6 @@ fn compare_identity(
         }
         _ => {}
     }
-}
-
-fn compare_verifier_readiness(
-    plan: &DeploymentPlanV1,
-    inventory: &DeploymentInventoryV1,
-    verifier_readiness_diff: &mut Vec<DiffItemV1>,
-    hard_failures: &mut Vec<SafetyFindingV1>,
-    warnings: &mut Vec<SafetyFindingV1>,
-) {
-    if !plan.expected_verifier_readiness.required {
-        return;
-    }
-    if inventory.observed_verifier_readiness.status == ObservationStatusV1::NotObserved {
-        verifier_readiness_diff.push(diff_item(
-            "verifier_readiness",
-            "deployment",
-            Some("required".to_string()),
-            Some("not_observed".to_string()),
-            SafetySeverityV1::Warning,
-        ));
-        warnings.push(finding(
-            "verifier_readiness_unobserved",
-            "verifier readiness was required but not observed",
-            SafetySeverityV1::Warning,
-            Some("verifier_readiness".to_string()),
-        ));
-    }
-
-    let planned_conflicting_roles = compare_planned_verifier_epoch_conflicts(
-        plan,
-        verifier_readiness_diff,
-        hard_failures,
-        warnings,
-    );
-    let conflicting_roles = compare_observed_verifier_epoch_conflicts(
-        inventory,
-        verifier_readiness_diff,
-        hard_failures,
-        warnings,
-    );
-    let mut observed_by_role = BTreeMap::new();
-    for epoch in &inventory.observed_verifier_readiness.role_epochs {
-        if conflicting_roles.contains(&epoch.role) {
-            continue;
-        }
-        observed_by_role.entry(epoch.role.as_str()).or_insert(epoch);
-    }
-    let mut compared_roles = BTreeSet::new();
-    for expected in &plan.expected_verifier_readiness.expected_role_epochs {
-        if planned_conflicting_roles.contains(&expected.role)
-            || conflicting_roles.contains(&expected.role)
-            || !compared_roles.insert(expected.role.as_str())
-        {
-            continue;
-        }
-        let observed = observed_by_role.get(expected.role.as_str());
-        if let Some(observed_epoch) = observed.and_then(|observed| {
-            (observed.status == ObservationStatusV1::Observed)
-                .then_some(observed.observed_epoch)
-                .flatten()
-        }) {
-            if observed_epoch < expected.minimum_epoch {
-                record_stale_verifier_role_epoch(
-                    expected,
-                    observed_epoch,
-                    verifier_readiness_diff,
-                    hard_failures,
-                );
-            }
-        } else {
-            record_unobserved_verifier_role_epoch(expected, verifier_readiness_diff, warnings);
-        }
-    }
-}
-
-fn record_stale_verifier_role_epoch(
-    expected: &RoleEpochExpectationV1,
-    observed_epoch: u64,
-    verifier_readiness_diff: &mut Vec<DiffItemV1>,
-    hard_failures: &mut Vec<SafetyFindingV1>,
-) {
-    verifier_readiness_diff.push(diff_item(
-        "verifier_role_epoch",
-        &expected.role,
-        Some(expected.minimum_epoch.to_string()),
-        Some(observed_epoch.to_string()),
-        SafetySeverityV1::HardFailure,
-    ));
-    hard_failures.push(finding(
-        "verifier_role_epoch_stale",
-        format!(
-            "verifier role {} has epoch {observed_epoch}, expected at least {}",
-            expected.role, expected.minimum_epoch
-        ),
-        SafetySeverityV1::HardFailure,
-        Some(expected.role.clone()),
-    ));
-}
-
-fn record_unobserved_verifier_role_epoch(
-    expected: &RoleEpochExpectationV1,
-    verifier_readiness_diff: &mut Vec<DiffItemV1>,
-    warnings: &mut Vec<SafetyFindingV1>,
-) {
-    verifier_readiness_diff.push(diff_item(
-        "verifier_role_epoch",
-        &expected.role,
-        Some(expected.minimum_epoch.to_string()),
-        Some("not_observed".to_string()),
-        SafetySeverityV1::Warning,
-    ));
-    warnings.push(finding(
-        "verifier_role_epoch_unobserved",
-        format!("verifier role {} epoch was not observed", expected.role),
-        SafetySeverityV1::Warning,
-        Some(expected.role.clone()),
-    ));
-}
-
-fn compare_planned_verifier_epoch_conflicts(
-    plan: &DeploymentPlanV1,
-    verifier_readiness_diff: &mut Vec<DiffItemV1>,
-    hard_failures: &mut Vec<SafetyFindingV1>,
-    warnings: &mut Vec<SafetyFindingV1>,
-) -> BTreeSet<String> {
-    let mut conflicting_roles = BTreeSet::new();
-    for group in duplicate_evidence_groups(
-        &plan.expected_verifier_readiness.expected_role_epochs,
-        |expected| expected.role.as_str().to_string(),
-        |expected| expected.minimum_epoch.to_string(),
-        ",",
-    ) {
-        if group.is_conflict {
-            conflicting_roles.insert(group.subject.clone());
-            verifier_readiness_diff.push(diff_item(
-                "planned_verifier_role_epoch_conflict",
-                &group.subject,
-                Some("one minimum epoch".to_string()),
-                Some(group.evidence_label.clone()),
-                SafetySeverityV1::HardFailure,
-            ));
-            hard_failures.push(finding(
-                "planned_verifier_role_epoch_conflict",
-                format!(
-                    "planned verifier role {} has conflicting minimum epochs: {}",
-                    group.subject, group.evidence_label
-                ),
-                SafetySeverityV1::HardFailure,
-                Some(group.subject),
-            ));
-        } else {
-            verifier_readiness_diff.push(diff_item(
-                "planned_verifier_role_epoch_duplicate",
-                &group.subject,
-                Some(group.evidence_label.clone()),
-                Some(group.count.to_string()),
-                SafetySeverityV1::Warning,
-            ));
-            warnings.push(finding(
-                "duplicate_planned_verifier_role_epoch",
-                format!(
-                    "planned verifier role {} epoch was declared {} times with identical evidence",
-                    group.subject, group.count
-                ),
-                SafetySeverityV1::Warning,
-                Some(group.subject),
-            ));
-        }
-    }
-    conflicting_roles
-}
-
-fn compare_observed_verifier_epoch_conflicts(
-    inventory: &DeploymentInventoryV1,
-    verifier_readiness_diff: &mut Vec<DiffItemV1>,
-    hard_failures: &mut Vec<SafetyFindingV1>,
-    warnings: &mut Vec<SafetyFindingV1>,
-) -> BTreeSet<String> {
-    let mut conflicting_roles = BTreeSet::new();
-    for group in duplicate_evidence_groups(
-        &inventory.observed_verifier_readiness.role_epochs,
-        |observed| observed.role.as_str().to_string(),
-        verifier_epoch_evidence_label,
-        ",",
-    ) {
-        if group.is_conflict {
-            conflicting_roles.insert(group.subject.clone());
-            verifier_readiness_diff.push(diff_item(
-                "verifier_role_epoch_conflict",
-                &group.subject,
-                Some("one epoch observation".to_string()),
-                Some(group.evidence_label.clone()),
-                SafetySeverityV1::HardFailure,
-            ));
-            hard_failures.push(finding(
-                "verifier_role_epoch_conflict",
-                format!(
-                    "verifier role {} has conflicting epoch observations: {}",
-                    group.subject, group.evidence_label
-                ),
-                SafetySeverityV1::HardFailure,
-                Some(group.subject),
-            ));
-        } else {
-            verifier_readiness_diff.push(diff_item(
-                "verifier_role_epoch_duplicate",
-                &group.subject,
-                Some(group.evidence_label.clone()),
-                Some(group.count.to_string()),
-                SafetySeverityV1::Warning,
-            ));
-            warnings.push(finding(
-                "duplicate_verifier_role_epoch_observed",
-                format!(
-                    "verifier role {} epoch was reported {} times with identical evidence",
-                    group.subject, group.count
-                ),
-                SafetySeverityV1::Warning,
-                Some(group.subject),
-            ));
-        }
-    }
-    conflicting_roles
-}
-
-fn verifier_epoch_evidence_label(observed: &RoleEpochObservationV1) -> String {
-    format!(
-        "epoch={};status={:?}",
-        observed
-            .observed_epoch
-            .map_or_else(|| "<none>".to_string(), |epoch| epoch.to_string()),
-        observed.status
-    )
 }
 
 fn finding(
@@ -651,68 +403,4 @@ fn group_by_subject<T>(
         }
     }
     by_subject
-}
-
-const fn safety_status(
-    hard_failures: &[SafetyFindingV1],
-    warnings: &[SafetyFindingV1],
-) -> SafetyStatusV1 {
-    if !hard_failures.is_empty() {
-        SafetyStatusV1::Blocked
-    } else if !warnings.is_empty() {
-        SafetyStatusV1::Warning
-    } else {
-        SafetyStatusV1::Safe
-    }
-}
-
-fn resume_safety_reasons(
-    hard_failures: &[SafetyFindingV1],
-    warnings: &[SafetyFindingV1],
-) -> Vec<String> {
-    if !hard_failures.is_empty() {
-        return hard_failures
-            .iter()
-            .map(|finding| finding.message.clone())
-            .collect();
-    }
-    if !warnings.is_empty() {
-        return warnings
-            .iter()
-            .map(|finding| finding.message.clone())
-            .collect();
-    }
-    vec!["no blocking deployment truth differences were found".to_string()]
-}
-
-fn safety_summary(
-    status: SafetyStatusV1,
-    hard_failure_count: usize,
-    warning_count: usize,
-) -> String {
-    match status {
-        SafetyStatusV1::Safe => "deployment inventory matches the checked plan".to_string(),
-        SafetyStatusV1::Warning => {
-            format!("deployment inventory has {warning_count} warning(s)")
-        }
-        SafetyStatusV1::Blocked => {
-            format!(
-                "deployment inventory has {hard_failure_count} blocking issue(s) and {warning_count} warning(s)"
-            )
-        }
-        SafetyStatusV1::NotEvaluated => "deployment safety has not been evaluated".to_string(),
-    }
-}
-
-fn safety_next_actions(status: SafetyStatusV1) -> Vec<String> {
-    match status {
-        SafetyStatusV1::Safe => Vec::new(),
-        SafetyStatusV1::Warning => {
-            vec!["review deployment warnings before continuing".to_string()]
-        }
-        SafetyStatusV1::Blocked => {
-            vec!["resolve blocking deployment truth differences before mutation".to_string()]
-        }
-        SafetyStatusV1::NotEvaluated => vec!["collect deployment inventory".to_string()],
-    }
 }
