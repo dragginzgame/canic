@@ -3,6 +3,7 @@ use crate::format::cycles_tc;
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, configured_local_root_create_cycles, icp_query_on_network,
 };
+use crate::replica_query;
 use crate::response_parse::parse_cycle_balance_response;
 use canic_core::protocol;
 use std::{path::Path, process::Command};
@@ -57,6 +58,14 @@ fn query_root_cycle_balance(
     network: &str,
     root_canister: &str,
 ) -> Result<u128, Box<dyn std::error::Error>> {
+    if replica_query::should_use_local_replica_query(Some(network))
+        && let Ok(root) = crate::release_set::icp_root()
+        && let Ok(cycles) =
+            replica_query::query_cycle_balance_from_root(Some(network), root_canister, &root)
+    {
+        return Ok(cycles);
+    }
+
     let output = icp_query_on_network(
         network,
         root_canister,

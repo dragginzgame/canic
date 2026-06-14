@@ -12,16 +12,20 @@ present.
 
 ## Unreleased
 
-- Continues canic-host install-root decomposition by isolating install
-  preparation, activation phase sequencing, final install-state receipts,
-  command output, build environment, build-target, local-cycle funding, and
-  timing helpers, while readiness polling now prefers decoded direct local
-  replica queries for root readiness/bootstrap status and preserves ICP CLI
-  fallback behavior.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.19` continues local-query cleanup by centralizing direct
+  `canic_subnet_registry` decoding in canic-host and using decoded registry
+  roles for install-root readiness diagnostics before falling back to ICP CLI
+  JSON.
+
+- `0.67.18` continues canic-host install-root decomposition by isolating
+  preparation, activation, install-state receipt, command-output,
+  build-environment, build-target, local-cycle funding, readiness, and timing
+  helpers while preferring decoded direct local replica queries for install
+  readiness and cycle-balance checks.
 
 - `0.67.17` continues canic-host install-root decomposition by isolating
   deployment registration, root-canister resolution, and read-only install

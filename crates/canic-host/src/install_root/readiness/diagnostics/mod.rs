@@ -1,6 +1,9 @@
 use super::super::commands::{icp_command_in_network, icp_command_on_network};
 use super::parsing::BootstrapStatusSnapshot;
-use crate::release_set::{icp_query_on_network, icp_root};
+use crate::{
+    release_set::{icp_query_on_network, icp_root},
+    replica_query,
+};
 use canic_core::protocol;
 use serde_json::Value;
 
@@ -31,15 +34,9 @@ pub(super) fn print_bootstrap_status(status: &BootstrapStatusSnapshot) {
 }
 
 pub(super) fn print_current_registry_roles(network: &str, root_canister: &str) {
-    if let Ok(registry_json) = icp_query_on_network(
-        network,
-        root_canister,
-        "canic_subnet_registry",
-        None,
-        Some("json"),
-    ) {
+    if let Some(registry_roles) = current_registry_roles(network, root_canister) {
         println!("Current subnet registry roles:");
-        println!("  {}", registry_roles(&registry_json));
+        println!("  {registry_roles}");
     }
 }
 
@@ -104,8 +101,31 @@ fn print_recent_root_logs(network: &str, root_canister: &str) {
     }
 }
 
+fn current_registry_roles(network: &str, root_canister: &str) -> Option<String> {
+    if replica_query::should_use_local_replica_query(Some(network))
+        && let Ok(root) = icp_root()
+        && let Ok(roles) = replica_query::query_subnet_registry_roles_from_root(
+            Some(network),
+            root_canister,
+            &root,
+        )
+    {
+        return Some(render_registry_roles(&roles));
+    }
+
+    let registry_json = icp_query_on_network(
+        network,
+        root_canister,
+        "canic_subnet_registry",
+        None,
+        Some("json"),
+    )
+    .ok()?;
+    Some(registry_roles_from_json(&registry_json))
+}
+
 // Render the current subnet registry roles from one JSON response.
-fn registry_roles(registry_json: &str) -> String {
+fn registry_roles_from_json(registry_json: &str) -> String {
     serde_json::from_str::<Value>(registry_json)
         .ok()
         .and_then(|data| {
@@ -133,6 +153,14 @@ fn registry_roles(registry_json: &str) -> String {
         )
 }
 
+fn render_registry_roles(roles: &[String]) -> String {
+    if roles.is_empty() {
+        "<empty>".to_string()
+    } else {
+        roles.join(", ")
+    }
+}
+
 // Print one raw `icp canister call` result to stderr for diagnostics.
 fn print_raw_call(network: &str, root_canister: &str, method: &str) {
     let mut command = icp_root().map_or_else(
@@ -143,4 +171,31 @@ fn print_raw_call(network: &str, root_canister: &str, method: &str) {
         .arg("canister")
         .args(["call", root_canister, method, "()", "-e", network])
         .status();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_registry_roles_from_decoded_role_list() {
+        assert_eq!(
+            render_registry_roles(&["root".to_string(), "worker".to_string()]),
+            "root, worker"
+        );
+        assert_eq!(render_registry_roles(&[]), "<empty>");
+    }
+
+    #[test]
+    fn registry_roles_json_fallback_preserves_diagnostic_summaries() {
+        assert_eq!(
+            registry_roles_from_json(r#"{"Ok":[{"role":"root"},{"role":"worker"}]}"#),
+            "root, worker"
+        );
+        assert_eq!(registry_roles_from_json(r#"{"Ok":[]}"#), "<empty>");
+        assert_eq!(
+            registry_roles_from_json(r#"{"Err":"registry unavailable"}"#),
+            "<unavailable>"
+        );
+    }
 }

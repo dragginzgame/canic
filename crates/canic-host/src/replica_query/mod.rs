@@ -3,7 +3,7 @@ use crate::icp_config::{
     configured_local_gateway_port_from_root,
 };
 use candid::{CandidType, Decode, Encode, Principal};
-use canic_core::dto::state::BootstrapStatusResponse;
+use canic_core::dto::{error::Error as CanicDtoError, state::BootstrapStatusResponse};
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -110,10 +110,26 @@ pub fn query_bootstrap_status_from_root(
     decode_bootstrap_status_response(&bytes)
 }
 
+/// Query `canic_cycle_balance` using the configured port from one ICP root.
+pub fn query_cycle_balance_from_root(
+    network: Option<&str>,
+    canister: &str,
+    icp_root: &Path,
+) -> Result<u128, ReplicaQueryError> {
+    let bytes = local_query_from_root(network, canister, "canic_cycle_balance", icp_root)?;
+    decode_cycle_balance_response(&bytes)
+}
+
 fn decode_bootstrap_status_response(
     bytes: &[u8],
 ) -> Result<BootstrapStatusResponse, ReplicaQueryError> {
     Decode!(bytes, BootstrapStatusResponse).map_err(|err| ReplicaQueryError::Query(err.to_string()))
+}
+
+fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, ReplicaQueryError> {
+    let result = Decode!(bytes, Result<u128, CanicDtoError>)
+        .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
+    result.map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
 /// Return true when the local replica HTTP status endpoint is reachable.
@@ -211,10 +227,7 @@ pub fn query_subnet_registry_json(
     network: Option<&str>,
     root: &str,
 ) -> Result<String, ReplicaQueryError> {
-    let bytes = local_query(network, root, "canic_subnet_registry")?;
-    let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicErrorWire>)
-        .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let response = result.map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
+    let response = query_subnet_registry_response(network, root)?;
     serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
 }
 
@@ -224,11 +237,42 @@ pub fn query_subnet_registry_json_from_root(
     root: &str,
     icp_root: &Path,
 ) -> Result<String, ReplicaQueryError> {
+    let response = query_subnet_registry_response_from_root(network, root, icp_root)?;
+    serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
+}
+
+/// Query `canic_subnet_registry` using the configured port from one ICP root and return roles.
+pub fn query_subnet_registry_roles_from_root(
+    network: Option<&str>,
+    root: &str,
+    icp_root: &Path,
+) -> Result<Vec<String>, ReplicaQueryError> {
+    Ok(query_subnet_registry_response_from_root(network, root, icp_root)?.roles())
+}
+
+fn query_subnet_registry_response(
+    network: Option<&str>,
+    root: &str,
+) -> Result<SubnetRegistryResponseWire, ReplicaQueryError> {
+    let bytes = local_query(network, root, "canic_subnet_registry")?;
+    decode_subnet_registry_response(&bytes)
+}
+
+fn query_subnet_registry_response_from_root(
+    network: Option<&str>,
+    root: &str,
+    icp_root: &Path,
+) -> Result<SubnetRegistryResponseWire, ReplicaQueryError> {
     let bytes = local_query_from_root(network, root, "canic_subnet_registry", icp_root)?;
+    decode_subnet_registry_response(&bytes)
+}
+
+fn decode_subnet_registry_response(
+    bytes: &[u8],
+) -> Result<SubnetRegistryResponseWire, ReplicaQueryError> {
     let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicErrorWire>)
         .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let response = result.map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
+    result.map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
 
 // Execute one anonymous query call against the local replica.
@@ -441,6 +485,11 @@ struct QueryReply {
 struct SubnetRegistryResponseWire(Vec<SubnetRegistryEntryWire>);
 
 impl SubnetRegistryResponseWire {
+    // Return registry roles in the same order the root reported them.
+    fn roles(&self) -> Vec<String> {
+        self.0.iter().map(|entry| entry.role.clone()).collect()
+    }
+
     // Convert direct Candid query output into the command JSON shape the discovery parser accepts.
     fn to_cli_json(&self) -> serde_json::Value {
         serde_json::json!({
