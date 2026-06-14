@@ -1191,6 +1191,18 @@ fn deployment_truth_authority_paths_have_no_controller_mutation_primitives() {
     for (path, source) in [
         ("authority.rs", include_str!("../authority.rs")),
         ("lifecycle.rs", include_str!("../lifecycle/mod.rs")),
+        (
+            "lifecycle/authority_plan.rs",
+            include_str!("../lifecycle/authority_plan.rs"),
+        ),
+        (
+            "lifecycle/external_lifecycle.rs",
+            include_str!("../lifecycle/external_lifecycle.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade.rs",
+            include_str!("../lifecycle/external_upgrade.rs"),
+        ),
         ("receipt.rs", include_str!("../receipt.rs")),
         ("text.rs", include_str!("../text.rs")),
     ] {

@@ -12,14 +12,21 @@ present.
 
 ## Unreleased
 
-- Continues deployment-truth lifecycle decomposition by moving external
-  lifecycle pending, check, handoff, and critical-fix report construction and
-  validation into a focused child module while preserving the public lifecycle
-  API.
+- Completes the current deployment-truth lifecycle decomposition by moving the
+  external-upgrade receipt, consent, verification, completion, and proposal
+  report implementation into a focused child module, leaving the lifecycle
+  parent as a small public re-export module, and starts install-root
+  decomposition by moving ICP command, build-environment, local-cycle, and
+  timing helpers plus root-verification state/receipt and receipt IO/pathing
+  helpers into focused child modules.
 
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.9` continues deployment-truth lifecycle decomposition by isolating
+  external lifecycle pending, check, handoff, and critical-fix report
+  construction and validation while preserving the public lifecycle API.
 
 - `0.67.8` continues deployment-truth lifecycle decomposition by isolating
   lifecycle authority-report and external lifecycle-plan construction and

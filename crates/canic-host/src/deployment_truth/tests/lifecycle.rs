@@ -2353,10 +2353,19 @@ fn external_upgrade_completion_report_text_reports_passive_boundary() {
 #[test]
 fn external_lifecycle_uses_canonical_control_class_model() {
     let model = include_str!("../model.rs");
-    let lifecycle = include_str!("../lifecycle/mod.rs");
+    let lifecycle_sources = [
+        include_str!("../lifecycle/mod.rs"),
+        include_str!("../lifecycle/authority_plan.rs"),
+        include_str!("../lifecycle/external_lifecycle.rs"),
+        include_str!("../lifecycle/external_upgrade.rs"),
+    ];
 
     assert_eq!(model.matches("pub enum CanisterControlClassV1").count(), 1);
-    assert!(lifecycle.contains("CanisterControlClassV1"));
+    assert!(
+        lifecycle_sources
+            .iter()
+            .any(|source| source.contains("CanisterControlClassV1"))
+    );
 
     for forbidden in [
         "ExternalControlClass",
@@ -2366,7 +2375,9 @@ fn external_lifecycle_uses_canonical_control_class_model() {
         "UserLifecycleControlClass",
     ] {
         assert!(
-            !lifecycle.contains(forbidden),
+            lifecycle_sources
+                .iter()
+                .all(|source| !source.contains(forbidden)),
             "external lifecycle must project from CanisterControlClassV1; found {forbidden}"
         );
     }

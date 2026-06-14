@@ -41,8 +41,10 @@ rewritten.
   error/digest helpers plus promotion error/request, digest, identity, policy,
   guard, provenance, execution-receipt, materialization, wasm-store
   identity/catalog, transform/readiness, and artifact-plan/target lineage
-  helpers out of the largest modules, then moved lifecycle authority-plan and
-  external lifecycle pending, check, handoff, and critical-fix report
-  construction/validation into focused lifecycle child modules. Promotion is
-  now a small re-export module; remaining external-upgrade lifecycle report
-  families plus install-root/report-family pressure remain open.
+  helpers out of the largest modules, then moved lifecycle authority-plan,
+  external lifecycle pending/check/handoff/critical-fix reports, and
+  external-upgrade report construction/validation into focused lifecycle child
+  modules. Promotion and lifecycle parents are now small re-export modules, and
+  install-root command/build, root-verification, and receipt IO support has
+  started moving into child modules; remaining install-truth/report/text
+  pressure remains open.

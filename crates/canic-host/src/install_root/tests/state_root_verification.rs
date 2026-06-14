@@ -569,7 +569,7 @@ fn verify_registered_root_validates_and_writes_before_receipt() {
         .find("pub fn verify_registered_deployment_root(")
         .expect("verify function start");
     let end = source[start..]
-        .find("struct RootVerificationReceiptInput")
+        .find("struct PreparedInstallTruth")
         .map(|offset| start + offset)
         .expect("verify function end");
     let body = &source[start..end];
