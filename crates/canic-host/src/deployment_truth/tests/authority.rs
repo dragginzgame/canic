@@ -1204,7 +1204,19 @@ fn deployment_truth_authority_paths_have_no_controller_mutation_primitives() {
             include_str!("../lifecycle/external_upgrade.rs"),
         ),
         ("receipt.rs", include_str!("../receipt.rs")),
-        ("text.rs", include_str!("../text.rs")),
+        ("text/mod.rs", include_str!("../text/mod.rs")),
+        ("text/authority.rs", include_str!("../text/authority.rs")),
+        ("text/comparison.rs", include_str!("../text/comparison.rs")),
+        (
+            "text/execution_preflight.rs",
+            include_str!("../text/execution_preflight.rs"),
+        ),
+        ("text/lifecycle.rs", include_str!("../text/lifecycle.rs")),
+        ("text/promotion.rs", include_str!("../text/promotion.rs")),
+        (
+            "text/root_verification.rs",
+            include_str!("../text/root_verification.rs"),
+        ),
     ] {
         for forbidden in [
             "update_settings",

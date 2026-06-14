@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.11` decomposes deployment-truth text rendering and starts
+  deployment-truth report decomposition by isolating receipt-resume and
+  root-subnet evidence helpers while preserving public host APIs.
+
 - `0.67.10` completes the current deployment-truth lifecycle decomposition by
   isolating external-upgrade report construction and validation, and starts
   install-root decomposition by isolating command/build, root-verification, and
