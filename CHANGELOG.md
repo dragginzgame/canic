@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.20` decomposes canic-host direct local replica querying into focused
+  transport, status, and wire-decoding modules with colocated tests while
+  preserving the public replica-query API and CLI behavior.
+
 - `0.67.19` continues local-query cleanup by centralizing direct
   `canic_subnet_registry` decoding in canic-host and using decoded registry
   roles for install-root readiness diagnostics before falling back to ICP CLI
