@@ -1126,7 +1126,7 @@ fn current_install_activation_phases_use_operation_runner() {
     let activation = source_section(
         source,
         "fn run_root_activation_phases(",
-        "#[derive(Clone, Copy)]",
+        "fn root_wasm_for_install_plan(",
     );
 
     for operation in [
@@ -1176,7 +1176,7 @@ fn current_install_records_gates_before_activation_mutation() {
     let gate = source_section(
         source,
         "fn run_install_deployment_truth_safety_gate(",
-        "fn enforce_install_deployment_truth_gate(",
+        "fn validate_expected_fleet_name(",
     );
     assert_before(
         gate,

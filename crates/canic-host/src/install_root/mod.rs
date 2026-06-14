@@ -1,28 +1,25 @@
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionPlanV1,
-    ArtifactPromotionProvenanceReportRequest, ArtifactTransportV1, CurrentCliDeploymentExecutor,
-    DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionContextV1,
-    DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1, DeploymentExecutor,
-    DeploymentExecutorCapabilityV1, DeploymentPlanV1, DeploymentReceiptV1,
-    DeploymentRootVerificationEvidenceStatusV1, DeploymentRootVerificationReceiptV1,
-    DeploymentRootVerificationRequestV1, DeploymentRootVerificationSourceV1,
-    DeploymentRootVerificationStateV1, LocalDeploymentCheckRequest, LocalInventoryRequest,
-    ObservationStatusV1, SafetyFindingV1, StagingReceiptV1, artifact_gate_phase_receipt,
-    artifact_gate_role_phase_receipts, artifact_promotion_execution_receipt,
-    artifact_promotion_provenance_report, check_local_deployment,
-    collect_local_deployment_inventory, compare_plan_to_inventory,
+    ArtifactPromotionProvenanceReportRequest, CurrentCliDeploymentExecutor, DeploymentCheckV1,
+    DeploymentCommandResultV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightV1,
+    DeploymentExecutionStatusV1, DeploymentExecutor, DeploymentExecutorCapabilityV1,
+    DeploymentPlanV1, DeploymentReceiptV1, DeploymentRootVerificationEvidenceStatusV1,
+    DeploymentRootVerificationReceiptV1, DeploymentRootVerificationRequestV1,
+    DeploymentRootVerificationSourceV1, DeploymentRootVerificationStateV1,
+    LocalDeploymentCheckRequest, LocalInventoryRequest, ObservationStatusV1,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts,
+    artifact_promotion_execution_receipt, artifact_promotion_provenance_report,
+    check_local_deployment, collect_local_deployment_inventory, compare_plan_to_inventory,
     deployment_execution_preflight_from_check, deployment_receipt_from_check_with_status,
     deployment_root_verification_report_from_check, missing_executor_capabilities, phase_receipt,
-    safety_report_from_diff, staging_receipt_evidence,
-    validate_deployment_execution_preflight_for_check,
+    safety_report_from_diff, validate_deployment_execution_preflight_for_check,
     validate_deployment_root_verification_report,
 };
 use crate::release_set::{
     LOCAL_ROOT_MIN_READY_CYCLES, RootReleaseSetManifest, configured_fleet_name,
     configured_install_targets, emit_root_release_set_manifest_with_config, icp_root,
-    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap,
-    stage_root_release_set, workspace_root,
+    load_root_release_set_manifest, resolve_artifact_root, resume_root_bootstrap, workspace_root,
 };
 use canic_core::cdk::utils::hash::wasm_hash_hex;
 use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::types::Principal};
@@ -35,9 +32,13 @@ use std::{
 
 mod commands;
 mod config_selection;
+mod deployment_truth_gate;
+mod execution_preflight;
+mod phase_receipts;
 mod readiness;
 mod receipt_io;
 mod root_verification;
+mod staging;
 mod state;
 
 use commands::{
@@ -52,6 +53,18 @@ pub use config_selection::{
     current_canic_project_root, discover_canic_config_choices, discover_canic_project_root_from,
     discover_project_canic_config_choices, project_fleet_roots,
 };
+#[cfg(test)]
+use deployment_truth_gate::install_deployment_truth_gate_lines;
+use deployment_truth_gate::{
+    enforce_install_deployment_truth_gate, install_deployment_truth_gate_receipt,
+    print_install_deployment_truth_gate,
+};
+use execution_preflight::write_current_install_execution_preflight_receipt;
+use phase_receipts::{
+    CompletedInstallPhase, InstallReceiptScope, completed_phase_role_receipt,
+    install_deployment_truth_phase_receipt, receipt_with_execution_context,
+    write_completed_install_phase_receipt,
+};
 use readiness::wait_for_root_ready;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 use receipt_io::{
@@ -62,6 +75,9 @@ use root_verification::{
     root_verification_receipt_from_report, verified_root_state_transition,
     write_verified_root_state_if_unchanged,
 };
+use staging::StageReleaseSetOperation;
+#[cfg(test)]
+use staging::current_install_staging_evidence;
 use state::{
     INSTALL_STATE_SCHEMA_VERSION, deployment_install_state_path, read_deployment_install_state,
     validate_network_name, validate_state_name, write_install_state,
@@ -852,24 +868,6 @@ fn root_wasm_for_install_plan(
         .join(format!("{root_build_target}.wasm")))
 }
 
-#[derive(Clone, Copy)]
-struct InstallReceiptScope<'a> {
-    icp_root: &'a Path,
-    network: &'a str,
-    deployment_name: &'a str,
-    check: &'a DeploymentCheckV1,
-    execution_context: Option<&'a DeploymentExecutionContextV1>,
-}
-
-struct CompletedInstallPhase {
-    phase: &'static str,
-    attempted_action: &'static str,
-    started_at: String,
-    finished_at: Option<String>,
-    evidence: Vec<String>,
-    role_names: Vec<String>,
-}
-
 trait InstallPhaseOperation {
     fn phase(&self) -> &'static str;
     fn attempted_action(&self) -> &'static str;
@@ -1173,77 +1171,6 @@ impl InstallPhaseOperation for WaitRootReadyOperation<'_> {
     }
 }
 
-fn write_completed_install_phase_receipt(
-    receipt_scope: InstallReceiptScope<'_>,
-    completed: CompletedInstallPhase,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let role_phase_receipts = completed
-        .role_names
-        .iter()
-        .filter_map(|role| {
-            completed_phase_role_receipt(
-                receipt_scope.check,
-                completed.phase,
-                role,
-                crate::deployment_truth::RolePhaseResultV1::Applied,
-                None,
-            )
-        })
-        .collect();
-    let receipt =
-        receipt_scope.with_execution_context(install_deployment_truth_phase_receipt_with_result(
-            receipt_scope.check,
-            PhaseReceiptInput {
-                phase: completed.phase,
-                started_at: completed.started_at,
-                finished_at: completed.finished_at,
-                attempted_action: completed.attempted_action,
-                status: crate::deployment_truth::ObservationStatusV1::Observed,
-                evidence: completed.evidence,
-                role_phase_receipts,
-                operation_status: DeploymentExecutionStatusV1::Complete,
-                command_result: DeploymentCommandResultV1::Succeeded,
-            },
-        ));
-    receipt_scope.write_receipt(&receipt)
-}
-
-fn completed_phase_role_receipt(
-    check: &DeploymentCheckV1,
-    phase: &str,
-    role: &str,
-    result: crate::deployment_truth::RolePhaseResultV1,
-    error: Option<String>,
-) -> Option<crate::deployment_truth::RolePhaseReceiptV1> {
-    let planned = check
-        .plan
-        .role_artifacts
-        .iter()
-        .find(|artifact| artifact.role == role)?;
-    let observed = check
-        .inventory
-        .observed_artifacts
-        .iter()
-        .find(|artifact| artifact.role == role);
-    let artifact_digest = observed
-        .and_then(|artifact| artifact.file_sha256.clone())
-        .or_else(|| observed.and_then(|artifact| artifact.payload_sha256.clone()))
-        .or_else(|| planned.observed_wasm_gz_file_sha256.clone())
-        .or_else(|| planned.wasm_gz_sha256.clone());
-
-    Some(crate::deployment_truth::RolePhaseReceiptV1 {
-        role: role.to_string(),
-        phase: phase.to_string(),
-        result,
-        previous_module_hash: None,
-        target_module_hash: planned.installed_module_hash.clone(),
-        observed_module_hash_after: None,
-        artifact_digest,
-        canonical_embedded_config_sha256: planned.canonical_embedded_config_sha256.clone(),
-        error,
-    })
-}
-
 fn write_install_state_with_deployment_truth_receipt(
     receipt_scope: InstallReceiptScope<'_>,
     network: &str,
@@ -1361,111 +1288,6 @@ fn promotion_install_deployment_receipt(
         ),
         execution_context,
     ))
-}
-
-impl InstallReceiptScope<'_> {
-    fn run_operation(
-        self,
-        operation: &impl InstallPhaseOperation,
-    ) -> Result<Duration, Box<dyn std::error::Error>> {
-        self.run_phase(
-            operation.phase(),
-            operation.attempted_action(),
-            operation.evidence(),
-            || operation.execute(),
-        )
-    }
-
-    fn run_phase(
-        self,
-        phase: &str,
-        attempted_action: &str,
-        evidence: Vec<String>,
-        run: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
-    ) -> Result<Duration, Box<dyn std::error::Error>> {
-        let started_at = current_unix_timestamp_label()?;
-        let started = Instant::now();
-        match run() {
-            Ok(()) => {
-                let duration = started.elapsed();
-                let receipt = self.with_execution_context(install_deployment_truth_phase_receipt(
-                    self.check,
-                    phase,
-                    started_at,
-                    Some(current_unix_timestamp_label()?),
-                    attempted_action,
-                    crate::deployment_truth::ObservationStatusV1::Observed,
-                    evidence,
-                ));
-                self.write_receipt(&receipt)?;
-                Ok(duration)
-            }
-            Err(err) => {
-                self.try_write_failed_phase_receipt(
-                    phase,
-                    started_at,
-                    attempted_action,
-                    evidence,
-                    err.as_ref(),
-                );
-                Err(err)
-            }
-        }
-    }
-
-    fn with_execution_context(self, receipt: DeploymentReceiptV1) -> DeploymentReceiptV1 {
-        match self.execution_context {
-            Some(context) => receipt_with_execution_context(receipt, context),
-            None => receipt,
-        }
-    }
-
-    fn write_receipt(
-        self,
-        receipt: &DeploymentReceiptV1,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let path = write_install_deployment_truth_receipt(
-            self.icp_root,
-            self.network,
-            self.deployment_name,
-            receipt,
-        )?;
-        println!("Deployment truth receipt JSON: {}", path.display());
-        Ok(path)
-    }
-
-    fn try_write_failed_phase_receipt(
-        self,
-        phase: &str,
-        started_at: String,
-        attempted_action: &str,
-        evidence: Vec<String>,
-        err: &dyn std::error::Error,
-    ) {
-        let receipt = install_deployment_truth_phase_receipt_with_result(
-            self.check,
-            PhaseReceiptInput {
-                phase,
-                started_at,
-                finished_at: Some(
-                    current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string()),
-                ),
-                attempted_action,
-                status: crate::deployment_truth::ObservationStatusV1::Inconclusive,
-                evidence,
-                role_phase_receipts: Vec::new(),
-                operation_status: DeploymentExecutionStatusV1::FailedAfterMutation,
-                command_result: DeploymentCommandResultV1::Failed {
-                    code: format!("{phase}_failed"),
-                    message: err.to_string(),
-                },
-            },
-        );
-        let receipt = self.with_execution_context(receipt);
-        if let Err(write_err) = self.write_receipt(&receipt) {
-            eprintln!("Deployment truth receipt JSON write failed: {write_err}");
-        }
-    }
 }
 
 /// Build the same read-only deployment truth check that can be used as a
@@ -1788,408 +1610,6 @@ fn run_install_deployment_truth_safety_gate(
         execution_context,
     )?;
     Ok(deployment_truth_check)
-}
-
-fn enforce_install_deployment_truth_gate(
-    check: &DeploymentCheckV1,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let blockers = install_deployment_truth_gate_blockers(check);
-    if blockers.is_empty() {
-        return Ok(());
-    }
-
-    let details = blockers
-        .iter()
-        .map(|finding| deployment_truth_finding_label(finding))
-        .collect::<Vec<_>>()
-        .join("; ");
-    Err(format!("deployment truth safety gate blocked install: {details}").into())
-}
-
-fn install_deployment_truth_gate_blockers(check: &DeploymentCheckV1) -> Vec<&SafetyFindingV1> {
-    check.report.hard_failures.iter().collect()
-}
-
-fn print_install_deployment_truth_gate(check: &DeploymentCheckV1, receipt: &DeploymentReceiptV1) {
-    for line in install_deployment_truth_gate_lines(check, receipt) {
-        println!("{line}");
-    }
-}
-
-fn install_deployment_truth_gate_lines(
-    check: &DeploymentCheckV1,
-    receipt: &DeploymentReceiptV1,
-) -> Vec<String> {
-    let mut lines = vec![
-        format!("Deployment truth: {}", check.report.summary),
-        format!(
-            "Deployment truth receipt: operation={} status={:?}",
-            receipt.operation_id, receipt.operation_status
-        ),
-    ];
-    for phase_receipt in &receipt.phase_receipts {
-        lines.push(format!(
-            "Deployment truth phase receipt: phase={} postcondition={:?}",
-            phase_receipt.phase, phase_receipt.verified_postcondition.status
-        ));
-    }
-    if !receipt.role_phase_receipts.is_empty() {
-        lines.push(format!(
-            "Deployment truth role receipts: {}",
-            receipt.role_phase_receipts.len()
-        ));
-    }
-    for role_receipt in &receipt.role_phase_receipts {
-        lines.push(format!(
-            "Deployment truth role receipt: phase={} role={} result={:?}",
-            role_receipt.phase, role_receipt.role, role_receipt.result
-        ));
-    }
-
-    if !check.report.hard_failures.is_empty() {
-        lines.push(format!(
-            "Deployment truth hard failures: {}",
-            check.report.hard_failures.len()
-        ));
-    }
-    for finding in install_deployment_truth_gate_blockers(check) {
-        lines.push(format!(
-            "Deployment truth blocker: {}",
-            deployment_truth_finding_label(finding)
-        ));
-    }
-    if !check.report.warnings.is_empty() {
-        lines.push(format!(
-            "Deployment truth warnings: {}",
-            check.report.warnings.len()
-        ));
-    }
-    for finding in &check.report.warnings {
-        lines.push(format!(
-            "Deployment truth warning: {}",
-            deployment_truth_finding_label(finding)
-        ));
-    }
-    lines
-}
-
-fn install_deployment_truth_gate_receipt(
-    check: &DeploymentCheckV1,
-    started_at: String,
-    phase_receipts: Vec<crate::deployment_truth::PhaseReceiptV1>,
-    role_phase_receipts: Vec<crate::deployment_truth::RolePhaseReceiptV1>,
-) -> DeploymentReceiptV1 {
-    let blockers = install_deployment_truth_gate_blockers(check);
-    let (operation_status, command_result) = if blockers.is_empty() {
-        (
-            DeploymentExecutionStatusV1::Complete,
-            DeploymentCommandResultV1::Succeeded,
-        )
-    } else {
-        (
-            DeploymentExecutionStatusV1::FailedBeforeMutation,
-            DeploymentCommandResultV1::Failed {
-                code: "deployment_truth_blocked".to_string(),
-                message: check.report.summary.clone(),
-            },
-        )
-    };
-    deployment_receipt_from_check_with_status(
-        check,
-        format!("{}:materialize_artifacts", check.check_id),
-        operation_status,
-        started_at,
-        Some(current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string())),
-        phase_receipts,
-        role_phase_receipts,
-        command_result,
-    )
-}
-
-fn write_current_install_execution_preflight_receipt(
-    icp_root: &Path,
-    network: &str,
-    deployment_name: &str,
-    check: &DeploymentCheckV1,
-    execution_context: &DeploymentExecutionContextV1,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let started_at = current_unix_timestamp_label()?;
-    let executor = CurrentCliDeploymentExecutor::new(
-        execution_context.workspace_root.clone(),
-        execution_context.icp_root.clone(),
-        execution_context.artifact_roots.clone(),
-    );
-    let preflight = deployment_execution_preflight_from_check(
-        check,
-        &executor,
-        CURRENT_INSTALL_REQUIRED_CAPABILITIES,
-    );
-    validate_deployment_execution_preflight_for_check(check, &preflight)?;
-    let blockers = preflight.blockers.clone();
-    let (operation_status, command_result) = if blockers.is_empty() {
-        (
-            DeploymentExecutionStatusV1::Complete,
-            DeploymentCommandResultV1::Succeeded,
-        )
-    } else {
-        (
-            DeploymentExecutionStatusV1::FailedBeforeMutation,
-            DeploymentCommandResultV1::Failed {
-                code: "execution_preflight_blocked".to_string(),
-                message: "deployment execution preflight blocked current install".to_string(),
-            },
-        )
-    };
-    let finished_at = current_unix_timestamp_label()?;
-    let receipt = receipt_with_execution_context(
-        deployment_receipt_from_check_with_status(
-            check,
-            format!("{}:execution_preflight", check.check_id),
-            operation_status,
-            started_at.clone(),
-            Some(finished_at.clone()),
-            vec![phase_receipt(
-                "execution_preflight",
-                started_at,
-                Some(finished_at),
-                "validate deployment plan, authority, and executor capability readiness",
-                crate::deployment_truth::ObservationStatusV1::Observed,
-                current_install_execution_preflight_evidence(&preflight),
-            )],
-            Vec::new(),
-            command_result,
-        ),
-        execution_context,
-    );
-    let path =
-        write_install_deployment_truth_receipt(icp_root, network, deployment_name, &receipt)?;
-    println!("Deployment truth receipt JSON: {}", path.display());
-    if !blockers.is_empty() {
-        let details = blockers
-            .iter()
-            .map(deployment_truth_finding_label)
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(format!("deployment execution preflight blocked install: {details}").into());
-    }
-    Ok(path)
-}
-
-struct StageReleaseSetOperation<'a> {
-    icp_root: &'a Path,
-    network: &'a str,
-    root_canister_id: &'a str,
-    manifest_path: &'a Path,
-    manifest: RootReleaseSetManifest,
-}
-
-impl<'a> StageReleaseSetOperation<'a> {
-    const fn new(
-        icp_root: &'a Path,
-        network: &'a str,
-        root_canister_id: &'a str,
-        manifest_path: &'a Path,
-        manifest: RootReleaseSetManifest,
-    ) -> Self {
-        Self {
-            icp_root,
-            network,
-            root_canister_id,
-            manifest_path,
-            manifest,
-        }
-    }
-}
-
-impl InstallPhaseOperation for StageReleaseSetOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "stage_release_set"
-    }
-
-    fn attempted_action(&self) -> &'static str {
-        "stage root release set"
-    }
-
-    fn evidence(&self) -> Vec<String> {
-        current_install_staging_evidence(self.root_canister_id, self.manifest_path, &self.manifest)
-    }
-
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        stage_root_release_set(
-            self.icp_root,
-            self.network,
-            self.root_canister_id,
-            &self.manifest,
-        )
-    }
-}
-
-fn current_install_execution_preflight_evidence(
-    preflight: &crate::deployment_truth::DeploymentExecutionPreflightV1,
-) -> Vec<String> {
-    let mut evidence = vec![
-        format!("execution_preflight_status:{:?}", preflight.status),
-        format!("authority_plan:{}", preflight.authority_plan_id),
-        format!("planned_phases:{}", preflight.planned_phases.len()),
-        format!(
-            "required_capabilities:{}",
-            preflight.required_capabilities.len()
-        ),
-        format!(
-            "missing_capabilities:{}",
-            preflight.missing_capabilities.len()
-        ),
-        format!("blockers:{}", preflight.blockers.len()),
-    ];
-    evidence.extend(
-        preflight
-            .missing_capabilities
-            .iter()
-            .map(|capability| format!("missing_capability:{capability:?}")),
-    );
-    evidence.extend(
-        preflight
-            .blockers
-            .iter()
-            .map(|finding| format!("blocker:{}:{}", finding.code, finding.message)),
-    );
-    evidence
-}
-
-fn current_install_staging_evidence(
-    root_canister_id: &str,
-    manifest_path: &Path,
-    manifest: &RootReleaseSetManifest,
-) -> Vec<String> {
-    let mut evidence = vec![
-        format!("root_canister:{root_canister_id}"),
-        format!("manifest_path:{}", manifest_path.display()),
-        format!("release_version:{}", manifest.release_version),
-    ];
-    let staging_receipts = current_install_staging_receipts(root_canister_id, manifest);
-    evidence.extend(staging_receipt_evidence(&staging_receipts));
-    evidence
-}
-
-fn current_install_staging_receipts(
-    root_canister_id: &str,
-    manifest: &RootReleaseSetManifest,
-) -> Vec<StagingReceiptV1> {
-    manifest
-        .entries
-        .iter()
-        .map(|entry| StagingReceiptV1 {
-            schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-            role: entry.role.clone(),
-            artifact_identity: format!(
-                "{}:{}:{}",
-                entry.template_id, manifest.release_version, entry.payload_sha256_hex
-            ),
-            transport: ArtifactTransportV1::WasmStore,
-            wasm_store_locator: Some(format!("root:{root_canister_id}:bootstrap")),
-            prepared_chunk_hashes: entry.chunk_sha256_hex.clone(),
-            published_chunk_count: entry.chunk_sha256_hex.len(),
-            verified_postcondition: crate::deployment_truth::VerifiedPostconditionV1 {
-                status: ObservationStatusV1::Observed,
-                evidence: vec![
-                    format!("payload_sha256:{}", entry.payload_sha256_hex),
-                    format!("payload_size_bytes:{}", entry.payload_size_bytes),
-                    format!("chunk_size_bytes:{}", entry.chunk_size_bytes),
-                    format!("chunk_count:{}", entry.chunk_sha256_hex.len()),
-                ],
-            },
-        })
-        .collect()
-}
-
-fn install_deployment_truth_phase_receipt(
-    check: &DeploymentCheckV1,
-    phase: &str,
-    started_at: String,
-    finished_at: Option<String>,
-    attempted_action: &str,
-    status: crate::deployment_truth::ObservationStatusV1,
-    evidence: Vec<String>,
-) -> DeploymentReceiptV1 {
-    install_deployment_truth_phase_receipt_with_result(
-        check,
-        PhaseReceiptInput {
-            phase,
-            started_at,
-            finished_at,
-            attempted_action,
-            status,
-            evidence,
-            role_phase_receipts: Vec::new(),
-            operation_status: DeploymentExecutionStatusV1::Complete,
-            command_result: DeploymentCommandResultV1::Succeeded,
-        },
-    )
-}
-
-fn install_deployment_truth_phase_receipt_with_result(
-    check: &DeploymentCheckV1,
-    input: PhaseReceiptInput<'_>,
-) -> DeploymentReceiptV1 {
-    deployment_receipt_from_check_with_status(
-        check,
-        format!("{}:{}", check.check_id, input.phase),
-        input.operation_status,
-        input.started_at.clone(),
-        input.finished_at.clone(),
-        vec![phase_receipt(
-            input.phase,
-            input.started_at,
-            input.finished_at,
-            input.attempted_action,
-            input.status,
-            input.evidence,
-        )],
-        input.role_phase_receipts,
-        input.command_result,
-    )
-}
-
-fn receipt_with_execution_context(
-    mut receipt: DeploymentReceiptV1,
-    execution_context: &DeploymentExecutionContextV1,
-) -> DeploymentReceiptV1 {
-    receipt.execution_context = Some(execution_context.clone());
-    receipt
-}
-
-struct PhaseReceiptInput<'a> {
-    phase: &'a str,
-    started_at: String,
-    finished_at: Option<String>,
-    attempted_action: &'a str,
-    status: crate::deployment_truth::ObservationStatusV1,
-    evidence: Vec<String>,
-    role_phase_receipts: Vec<crate::deployment_truth::RolePhaseReceiptV1>,
-    operation_status: DeploymentExecutionStatusV1,
-    command_result: DeploymentCommandResultV1,
-}
-
-fn deployment_truth_finding_label(finding: &SafetyFindingV1) -> String {
-    let subject = finding
-        .subject
-        .as_ref()
-        .map_or_else(|| "<none>".to_string(), Clone::clone);
-    format!(
-        "{}:{}:{}: {}",
-        deployment_truth_finding_source(&finding.code),
-        finding.code,
-        subject,
-        finding.message
-    )
-}
-
-fn deployment_truth_finding_source(code: &str) -> &'static str {
-    match code {
-        "plan_assumption" => "plan",
-        "observation_gap" => "inventory",
-        _ => "diff",
-    }
 }
 
 fn validate_expected_fleet_name(

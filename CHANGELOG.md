@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.15` continues canic-host install-root decomposition by isolating
+  deployment-truth gate enforcement/rendering, execution-preflight receipts,
+  release-set staging evidence, and phase-receipt scope handling while
+  preserving install-root behavior and public host APIs.
+
 - `0.67.14` continues canic-host deployment-truth report decomposition by
   isolating verifier-readiness and safety-report helpers while preserving
   deployment diff behavior and public report APIs.
