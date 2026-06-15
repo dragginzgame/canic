@@ -1,11 +1,9 @@
-use super::{
-    ListCommandError, options::ListOptions, parse::parse_canic_metadata_version_response,
-    render::ReadyStatus, state_network,
-};
+use super::{ListCommandError, options::ListOptions, render::ReadyStatus, state_network};
 use crate::cli::defaults::local_network;
 use crate::support::candid::registry_entry_candid_path;
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
+    canic_metadata::query_canic_metadata_version,
     canister_ready::{query_canister_ready, query_local_canister_ready},
     cycle_balance::query_cycle_balance_optional,
     format::{cycles_tc, wasm_size_label},
@@ -84,7 +82,7 @@ pub(super) fn list_canic_versions(
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
     collect_visible_entry_optional_values(registry, canister, move |entry| {
-        query_canic_metadata_version(&icp, network.clone(), icp_root.as_deref(), &entry)
+        query_canic_metadata_version_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
     })
 }
 
@@ -247,7 +245,7 @@ fn query_cycle_balance_endpoint(
     query_cycle_balance_optional(&icp, &entry.pid, &network, icp_root, candid_path.as_deref())
 }
 
-fn query_canic_metadata_version(
+fn query_canic_metadata_version_endpoint(
     icp: &str,
     network: Option<String>,
     icp_root: Option<&Path>,
@@ -256,14 +254,9 @@ fn query_canic_metadata_version(
     let network = network.unwrap_or_else(local_network);
     let candid_path = registry_entry_candid_path(icp_root, &network, entry);
     let icp = live_icp(icp, Some(network), icp_root);
-    icp.canister_query_output_with_candid(
-        &entry.pid,
-        canic_core::protocol::CANIC_METADATA,
-        Some("json"),
-        candid_path.as_deref(),
-    )
-    .ok()
-    .and_then(|output| parse_canic_metadata_version_response(&output))
+    query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref())
+        .ok()
+        .flatten()
 }
 
 fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {

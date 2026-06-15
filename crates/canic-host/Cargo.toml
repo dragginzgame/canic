@@ -18,6 +18,7 @@ ignored = ["serde_bytes"]
 
 [dependencies]
 candid = { workspace = true }
+candid_parser = { workspace = true }
 canic-core = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

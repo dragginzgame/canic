@@ -1,29 +1,154 @@
-use crate::endpoints::{
-    EndpointsCommandError,
-    model::{
-        EndpointCardinality, EndpointEntry, EndpointField, EndpointMode, EndpointServiceMethod,
-        EndpointType,
-    },
-    render::render_candid_method_name,
-};
 use candid::{
     TypeEnv,
     types::{FuncMode, Function, Label, Type, TypeInner},
 };
 use candid_parser::utils::CandidSource;
+use serde::Serialize;
+use thiserror::Error as ThisError;
 
-pub(super) fn parse_candid_service_endpoints(
+///
+/// CandidEndpointError
+///
+
+#[derive(Debug, ThisError)]
+pub enum CandidEndpointError {
+    #[error("canister interface did not contain a service block")]
+    MissingService,
+
+    #[error("failed to parse Candid interface: {0}")]
+    InvalidCandid(String),
+}
+
+///
+/// EndpointEntry
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct EndpointEntry {
+    pub name: String,
+    pub candid: String,
+    pub modes: Vec<EndpointMode>,
+    pub arguments: Vec<EndpointType>,
+    pub returns: Vec<EndpointType>,
+}
+
+///
+/// EndpointMode
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndpointMode {
+    Query,
+    CompositeQuery,
+    Oneway,
+}
+
+///
+/// EndpointCardinality
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndpointCardinality {
+    Single,
+    Optional,
+    Many,
+}
+
+///
+/// EndpointType
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum EndpointType {
+    Primitive {
+        candid: String,
+        cardinality: EndpointCardinality,
+        name: String,
+    },
+    Named {
+        candid: String,
+        cardinality: EndpointCardinality,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        resolved: Option<Box<Self>>,
+    },
+    Optional {
+        candid: String,
+        cardinality: EndpointCardinality,
+        inner: Box<Self>,
+    },
+    Vector {
+        candid: String,
+        cardinality: EndpointCardinality,
+        inner: Box<Self>,
+    },
+    Record {
+        candid: String,
+        cardinality: EndpointCardinality,
+        fields: Vec<EndpointField>,
+    },
+    Variant {
+        candid: String,
+        cardinality: EndpointCardinality,
+        cases: Vec<EndpointField>,
+    },
+    Function {
+        candid: String,
+        cardinality: EndpointCardinality,
+        modes: Vec<EndpointMode>,
+        arguments: Vec<Self>,
+        returns: Vec<Self>,
+    },
+    Service {
+        candid: String,
+        cardinality: EndpointCardinality,
+        methods: Vec<EndpointServiceMethod>,
+    },
+    Class {
+        candid: String,
+        cardinality: EndpointCardinality,
+        initializers: Vec<Self>,
+        service: Box<Self>,
+    },
+}
+
+///
+/// EndpointField
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct EndpointField {
+    pub label: String,
+    pub id: u32,
+    pub ty: EndpointType,
+}
+
+///
+/// EndpointServiceMethod
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct EndpointServiceMethod {
+    pub name: String,
+    pub ty: EndpointType,
+}
+
+/// Parse a Candid service interface into structured endpoint descriptions.
+pub fn parse_candid_service_endpoints(
     candid: &str,
-) -> Result<Vec<EndpointEntry>, EndpointsCommandError> {
+) -> Result<Vec<EndpointEntry>, CandidEndpointError> {
     let (env, actor) = CandidSource::Text(candid)
         .load()
-        .map_err(|err| EndpointsCommandError::InvalidCandid(err.to_string()))?;
+        .map_err(|err| CandidEndpointError::InvalidCandid(err.to_string()))?;
     let Some(actor) = actor else {
-        return Err(EndpointsCommandError::MissingService);
+        return Err(CandidEndpointError::MissingService);
     };
     let service = env
         .as_service(&actor)
-        .map_err(|_| EndpointsCommandError::MissingService)?;
+        .map_err(|_| CandidEndpointError::MissingService)?;
     service
         .iter()
         .map(|(name, ty)| endpoint_entry(&env, name, ty))
@@ -34,10 +159,10 @@ fn endpoint_entry(
     env: &TypeEnv,
     name: &str,
     ty: &Type,
-) -> Result<EndpointEntry, EndpointsCommandError> {
+) -> Result<EndpointEntry, CandidEndpointError> {
     let function = env
         .as_func(ty)
-        .map_err(|err| EndpointsCommandError::InvalidCandid(err.to_string()))?;
+        .map_err(|err| CandidEndpointError::InvalidCandid(err.to_string()))?;
     Ok(EndpointEntry {
         name: name.to_string(),
         candid: format!("{} : {};", render_candid_method_name(name), function),
@@ -213,3 +338,63 @@ fn endpoint_modes(function: &Function) -> Vec<EndpointMode> {
         })
         .collect()
 }
+
+/// Render a Candid method name, quoting identifiers that Candid requires quoted.
+#[must_use]
+pub fn render_candid_method_name(name: &str) -> String {
+    if is_candid_identifier(name) && !is_candid_reserved_word(name) {
+        name.to_string()
+    } else {
+        format!("{name:?}")
+    }
+}
+
+fn is_candid_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn is_candid_reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "blob"
+            | "bool"
+            | "composite_query"
+            | "empty"
+            | "false"
+            | "float32"
+            | "float64"
+            | "func"
+            | "import"
+            | "int"
+            | "int8"
+            | "int16"
+            | "int32"
+            | "int64"
+            | "nat"
+            | "nat8"
+            | "nat16"
+            | "nat32"
+            | "nat64"
+            | "null"
+            | "oneway"
+            | "opt"
+            | "principal"
+            | "query"
+            | "record"
+            | "reserved"
+            | "service"
+            | "text"
+            | "true"
+            | "type"
+            | "variant"
+            | "vec"
+    )
+}
+
+#[cfg(test)]
+mod tests;

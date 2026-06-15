@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.22` continues host/CLI boundary cleanup by centralizing readiness,
+  subnet-registry, metadata, response parsing, and endpoint Candid parsing in
+  canic-host while preserving operator command behavior.
+
+- `0.67.21` centralizes cycle-balance querying in canic-host so list, cycles,
+  and install-root paths share the same local-replica preference and ICP CLI
+  fallback behavior.
+
 - `0.67.20` decomposes canic-host direct local replica querying into focused
   transport, status, and wire-decoding modules with colocated tests while
   preserving the public replica-query API and CLI behavior.

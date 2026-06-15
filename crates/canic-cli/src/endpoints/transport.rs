@@ -3,10 +3,10 @@ use crate::{
     endpoints::{
         CANDID_SERVICE_METADATA, EndpointsCommandError, EndpointsOptions,
         model::{EndpointReport, EndpointTarget},
-        parse::parse_candid_service_endpoints,
     },
 };
 use canic_host::{
+    candid_endpoints::parse_candid_service_endpoints,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},

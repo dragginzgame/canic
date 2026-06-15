@@ -2,7 +2,6 @@ use crate::{cli::defaults::local_network, cli::help::print_help_or_version, vers
 mod config;
 mod live;
 mod options;
-mod parse;
 mod render;
 
 use canic_backup::discovery::DiscoveryError;

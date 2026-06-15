@@ -1,13 +1,7 @@
 mod model;
-mod parse;
 mod render;
 mod transport;
 
-#[cfg(test)]
-use crate::endpoints::{
-    model::{EndpointCardinality, EndpointEntry, EndpointMode, EndpointType},
-    parse::parse_candid_service_endpoints,
-};
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, render_usage, required_string, string_option,
@@ -18,6 +12,11 @@ use crate::{
     cli::help::print_help_or_version,
     endpoints::{render::render_plain_endpoints, transport::endpoint_report},
     version_text,
+};
+use canic_host::candid_endpoints::CandidEndpointError;
+#[cfg(test)]
+use canic_host::candid_endpoints::{
+    EndpointCardinality, EndpointEntry, EndpointMode, EndpointType,
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -39,11 +38,8 @@ pub enum EndpointsCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error("canister interface did not contain a service block")]
-    MissingService,
-
-    #[error("failed to parse Candid interface: {0}")]
-    InvalidCandid(String),
+    #[error(transparent)]
+    CandidEndpoint(#[from] CandidEndpointError),
 
     #[error(
         "live metadata was unavailable for {canister} in deployment target {deployment} and no local Candid artifact could be resolved"

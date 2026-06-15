@@ -335,7 +335,6 @@ name = "canic-cli"
 version = "0.67.21"
 dependencies = [
  "candid",
- "candid_parser",
  "canic-backup",
  "canic-core",
  "canic-host",
@@ -390,6 +389,7 @@ name = "canic-host"
 version = "0.67.21"
 dependencies = [
  "candid",
+ "candid_parser",
  "canic-core",
  "flate2",
  "serde",

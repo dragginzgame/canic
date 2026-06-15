@@ -7,6 +7,8 @@ mod artifact_io;
 mod bootstrap_store;
 mod build_profile;
 pub mod build_provenance;
+pub mod candid_endpoints;
+pub mod canic_metadata;
 pub mod canister_build;
 pub mod canister_ready;
 mod cargo_metadata;
