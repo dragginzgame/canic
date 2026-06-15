@@ -1,7 +1,17 @@
 #[test]
 fn external_lifecycle_uses_canonical_control_class_model() {
-    let model = include_str!("../../../model/mod.rs");
+    let model_sources = [
+        include_str!("../../../model/mod.rs"),
+        include_str!("../../../model/inventory/mod.rs"),
+    ];
     let lifecycle_sources = [
+        include_str!("../../../model/lifecycle/mod.rs"),
+        include_str!("../../../model/lifecycle/authority/mod.rs"),
+        include_str!("../../../model/lifecycle/completion/mod.rs"),
+        include_str!("../../../model/lifecycle/handoff/mod.rs"),
+        include_str!("../../../model/lifecycle/plan/mod.rs"),
+        include_str!("../../../model/lifecycle/proposal/mod.rs"),
+        include_str!("../../../model/lifecycle/verification/mod.rs"),
         include_str!("../../../lifecycle/mod.rs"),
         include_str!("../../../lifecycle/authority_plan/mod.rs"),
         include_str!("../../../lifecycle/authority_plan/authority/mod.rs"),
@@ -27,7 +37,13 @@ fn external_lifecycle_uses_canonical_control_class_model() {
         include_str!("../../../lifecycle/external_upgrade/verification/shared/mod.rs"),
     ];
 
-    assert_eq!(model.matches("pub enum CanisterControlClassV1").count(), 1);
+    assert_eq!(
+        model_sources
+            .iter()
+            .map(|source| source.matches("pub enum CanisterControlClassV1").count())
+            .sum::<usize>(),
+        1
+    );
     assert!(
         lifecycle_sources
             .iter()

@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.34` continues canic-host deployment-truth cleanup by decomposing the
+  remaining large passive model files into focused directory modules while
+  preserving JSON shapes, host behavior, and public APIs.
+
 - `0.67.33` continues canic-host structural cleanup by decomposing build,
   promotion/comparison, policy-gate, and install-root test modules into
   focused directory modules while preserving host behavior and public APIs.
