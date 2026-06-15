@@ -2352,7 +2352,7 @@ fn external_upgrade_completion_report_text_reports_passive_boundary() {
 
 #[test]
 fn external_lifecycle_uses_canonical_control_class_model() {
-    let model = include_str!("../model.rs");
+    let model = include_str!("../model/mod.rs");
     let lifecycle_sources = [
         include_str!("../lifecycle/mod.rs"),
         include_str!("../lifecycle/authority_plan.rs"),
