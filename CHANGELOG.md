@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.35` continues canic-host deployment-truth promotion cleanup by
+  decomposing artifact identity, source-build materialization, wasm-store,
+  policy, and provenance-report implementation internals into focused
+  directory modules while preserving behavior and public APIs.
+
 - `0.67.34` continues canic-host deployment-truth cleanup by decomposing the
   remaining large passive model files into focused directory modules while
   preserving JSON shapes, host behavior, and public APIs.
