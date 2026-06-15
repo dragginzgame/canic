@@ -89,7 +89,39 @@ const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
         "lifecycle/external_upgrade/verification/shared/mod.rs",
         include_str!("../../../lifecycle/external_upgrade/verification/shared/mod.rs"),
     ),
-    ("receipt.rs", include_str!("../../../receipt.rs")),
+    ("receipt/mod.rs", include_str!("../../../receipt/mod.rs")),
+    (
+        "receipt/artifacts.rs",
+        include_str!("../../../receipt/artifacts.rs"),
+    ),
+    (
+        "receipt/authority/mod.rs",
+        include_str!("../../../receipt/authority/mod.rs"),
+    ),
+    (
+        "receipt/authority/dry_run_receipt.rs",
+        include_str!("../../../receipt/authority/dry_run_receipt.rs"),
+    ),
+    (
+        "receipt/authority/error.rs",
+        include_str!("../../../receipt/authority/error.rs"),
+    ),
+    (
+        "receipt/authority/evidence.rs",
+        include_str!("../../../receipt/authority/evidence.rs"),
+    ),
+    (
+        "receipt/authority/observations.rs",
+        include_str!("../../../receipt/authority/observations.rs"),
+    ),
+    (
+        "receipt/authority/shared.rs",
+        include_str!("../../../receipt/authority/shared.rs"),
+    ),
+    (
+        "receipt/deployment.rs",
+        include_str!("../../../receipt/deployment.rs"),
+    ),
     ("text/mod.rs", include_str!("../../../text/mod.rs")),
     (
         "text/authority/mod.rs",
