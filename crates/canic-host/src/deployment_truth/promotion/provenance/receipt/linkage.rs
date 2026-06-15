@@ -1,142 +1,15 @@
-use super::super::{
-    digest::artifact_promotion_execution_receipt_digest,
+use super::super::super::{
     ensure::{ensure_execution_receipt_field, ensure_execution_receipt_sha256},
     error::ArtifactPromotionExecutionReceiptError,
-    request::ArtifactPromotionExecutionReceiptRequest,
 };
-use super::report::validate_artifact_promotion_provenance_report;
 use crate::deployment_truth::{
     ArtifactPromotionExecutionReceiptV1, ArtifactPromotionProvenanceReportV1,
     DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentReceiptV1, PromotionReadinessStatusV1,
-    RolePromotionExecutionReceiptV1, RolePromotionProvenanceV1,
+    RolePromotionExecutionReceiptV1,
 };
 use std::collections::BTreeSet;
 
-pub fn artifact_promotion_execution_receipt(
-    request: ArtifactPromotionExecutionReceiptRequest,
-) -> Result<ArtifactPromotionExecutionReceiptV1, ArtifactPromotionExecutionReceiptError> {
-    ensure_execution_receipt_field("receipt_id", &request.receipt_id)?;
-    validate_artifact_promotion_provenance_report(&request.provenance_report)?;
-    ensure_execution_receipt_provenance_ready(request.provenance_report.status)?;
-    validate_deployment_receipt_for_promotion(
-        &request.deployment_receipt,
-        &request.provenance_report,
-    )?;
-    let receipt = build_artifact_promotion_execution_receipt(request);
-    validate_artifact_promotion_execution_receipt(&receipt)?;
-    Ok(receipt)
-}
-
-pub fn validate_artifact_promotion_execution_receipt(
-    receipt: &ArtifactPromotionExecutionReceiptV1,
-) -> Result<(), ArtifactPromotionExecutionReceiptError> {
-    if receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
-        return Err(
-            ArtifactPromotionExecutionReceiptError::SchemaVersionMismatch {
-                expected: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-                found: receipt.schema_version,
-            },
-        );
-    }
-    ensure_execution_receipt_field("receipt_id", &receipt.receipt_id)?;
-    ensure_execution_receipt_sha256(
-        "execution_receipt_digest",
-        &receipt.execution_receipt_digest,
-    )?;
-    ensure_execution_receipt_field(
-        "artifact_promotion_plan_id",
-        &receipt.artifact_promotion_plan_id,
-    )?;
-    ensure_execution_receipt_sha256(
-        "artifact_promotion_plan_digest",
-        &receipt.artifact_promotion_plan_digest,
-    )?;
-    ensure_execution_receipt_field("provenance_report_id", &receipt.provenance_report_id)?;
-    ensure_execution_receipt_sha256(
-        "provenance_report_digest",
-        &receipt.provenance_report_digest,
-    )?;
-    ensure_execution_receipt_provenance_ready(receipt.provenance_status)?;
-    ensure_execution_receipt_field("promoted_plan_id", &receipt.promoted_plan_id)?;
-    ensure_execution_receipt_field(
-        "promotion_plan_lineage_digest",
-        &receipt.promotion_plan_lineage_digest,
-    )?;
-    ensure_execution_receipt_field("operation_id", &receipt.operation_id)?;
-    ensure_execution_receipt_field("started_at", &receipt.started_at)?;
-    if let Some(finished_at) = &receipt.finished_at {
-        ensure_execution_receipt_field("finished_at", finished_at)?;
-    }
-    ensure_execution_receipt_linkage(receipt)?;
-    if receipt.execution_receipt_digest != artifact_promotion_execution_receipt_digest(receipt) {
-        return Err(ArtifactPromotionExecutionReceiptError::LinkageMismatch {
-            field: "execution_receipt_digest",
-        });
-    }
-    Ok(())
-}
-
-fn build_artifact_promotion_execution_receipt(
-    request: ArtifactPromotionExecutionReceiptRequest,
-) -> ArtifactPromotionExecutionReceiptV1 {
-    let roles = request
-        .provenance_report
-        .roles
-        .iter()
-        .map(|role| role_promotion_execution_receipt(role, &request.deployment_receipt))
-        .collect::<Vec<_>>();
-    let mut receipt = ArtifactPromotionExecutionReceiptV1 {
-        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        receipt_id: request.receipt_id,
-        execution_receipt_digest: String::new(),
-        artifact_promotion_plan_id: request.provenance_report.artifact_promotion_plan_id.clone(),
-        artifact_promotion_plan_digest: request
-            .provenance_report
-            .artifact_promotion_plan_digest
-            .clone(),
-        provenance_report_id: request.provenance_report.report_id.clone(),
-        provenance_report_digest: request.provenance_report.provenance_report_digest,
-        provenance_status: request.provenance_report.status,
-        promoted_plan_id: request.provenance_report.promoted_plan_id.clone(),
-        promotion_plan_lineage_digest: request.provenance_report.promotion_plan_lineage_digest,
-        operation_id: request.deployment_receipt.operation_id.clone(),
-        operation_status: request.deployment_receipt.operation_status,
-        command_result: request.deployment_receipt.command_result.clone(),
-        started_at: request.deployment_receipt.started_at.clone(),
-        finished_at: request.deployment_receipt.finished_at.clone(),
-        deployment_receipt: request.deployment_receipt,
-        roles,
-    };
-    receipt.execution_receipt_digest = artifact_promotion_execution_receipt_digest(&receipt);
-    receipt
-}
-
-fn role_promotion_execution_receipt(
-    role: &RolePromotionProvenanceV1,
-    deployment_receipt: &DeploymentReceiptV1,
-) -> RolePromotionExecutionReceiptV1 {
-    let role_receipt = deployment_receipt
-        .role_phase_receipts
-        .iter()
-        .rev()
-        .find(|receipt| receipt.role == role.role);
-    RolePromotionExecutionReceiptV1 {
-        role: role.role.clone(),
-        promotion_level: role.promotion_level,
-        materialization_evidence_id: role.materialization_evidence_id.clone(),
-        materialization_evidence_digest: role.materialization_evidence_digest.clone(),
-        wasm_store_locator: role.wasm_store_locator.clone(),
-        wasm_store_catalog_observation_digest: role.wasm_store_catalog_observation_digest.clone(),
-        role_phase_result: role_receipt.map(|receipt| receipt.result),
-        artifact_digest: role_receipt.and_then(|receipt| receipt.artifact_digest.clone()),
-        observed_module_hash_after: role_receipt
-            .and_then(|receipt| receipt.observed_module_hash_after.clone()),
-        canonical_embedded_config_sha256: role_receipt
-            .and_then(|receipt| receipt.canonical_embedded_config_sha256.clone()),
-    }
-}
-
-fn validate_deployment_receipt_for_promotion(
+pub(super) fn validate_deployment_receipt_for_promotion(
     receipt: &DeploymentReceiptV1,
     provenance: &ArtifactPromotionProvenanceReportV1,
 ) -> Result<(), ArtifactPromotionExecutionReceiptError> {
@@ -161,7 +34,7 @@ fn validate_deployment_receipt_for_promotion(
     Ok(())
 }
 
-fn ensure_execution_receipt_linkage(
+pub(super) fn ensure_execution_receipt_linkage(
     receipt: &ArtifactPromotionExecutionReceiptV1,
 ) -> Result<(), ArtifactPromotionExecutionReceiptError> {
     if receipt.deployment_receipt.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
@@ -209,7 +82,7 @@ fn ensure_execution_receipt_linkage(
     ensure_unique_execution_receipt_roles(&receipt.roles)
 }
 
-const fn ensure_execution_receipt_provenance_ready(
+pub(super) const fn ensure_execution_receipt_provenance_ready(
     status: PromotionReadinessStatusV1,
 ) -> Result<(), ArtifactPromotionExecutionReceiptError> {
     if matches!(status, PromotionReadinessStatusV1::Ready) {
