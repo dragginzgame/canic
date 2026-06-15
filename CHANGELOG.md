@@ -16,6 +16,18 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.33` continues canic-host structural cleanup by decomposing build,
+  promotion/comparison, policy-gate, and install-root test modules into
+  focused directory modules while preserving host behavior and public APIs.
+
+- `0.67.32` continues canic-host decomposition by splitting adoption,
+  deployment-truth authority, and ICP command/query internals into focused
+  modules while preserving host behavior and public APIs.
+
+- `0.67.31` continues canic-host deployment-truth decomposition by splitting
+  observation, receipt, and root-verification internals into focused modules
+  while preserving host behavior and public APIs.
+
 - `0.67.30` continues canic-host deployment-truth cleanup by moving shared test
   fixtures plus authority, lifecycle, promotion, and root-verification text
   rendering into focused directory modules without changing host behavior, text

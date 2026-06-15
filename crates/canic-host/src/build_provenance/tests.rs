@@ -1,5 +1,14 @@
 use super::*;
-use crate::test_support::temp_dir;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use crate::{
+    canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile},
+    evidence_envelope::{CommandProvenanceV1, EvidenceTargetKindV1, PayloadSchemaRefV1},
+    test_support::temp_dir,
+};
 
 #[test]
 fn build_provenance_schema_is_stable() {
