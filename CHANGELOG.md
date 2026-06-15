@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.25` decomposes the passive deployment-truth model surface into focused
+  authority, comparison, lifecycle, promotion, and root-verification model
+  modules while preserving public host APIs.
+
+- `0.67.24` finishes the release-set config split by isolating raw-source
+  projection helpers from file-backed wrappers and keeping release-set behavior
+  unchanged.
+
 - `0.67.23` continues canic-host decomposition by splitting policy-gate
   evaluation and release-set config mutation internals into focused directory
   modules while preserving public host APIs and operator behavior.
