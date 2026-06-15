@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.26` continues canic-host deployment-truth lifecycle decomposition by
+  splitting passive external lifecycle and external upgrade implementation
+  logic into focused directory modules while preserving public host APIs.
+
 - `0.67.25` decomposes the passive deployment-truth model surface into focused
   authority, comparison, lifecycle, promotion, and root-verification model
   modules while preserving public host APIs.

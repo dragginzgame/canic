@@ -2356,8 +2356,23 @@ fn external_lifecycle_uses_canonical_control_class_model() {
     let lifecycle_sources = [
         include_str!("../lifecycle/mod.rs"),
         include_str!("../lifecycle/authority_plan.rs"),
-        include_str!("../lifecycle/external_lifecycle.rs"),
-        include_str!("../lifecycle/external_upgrade.rs"),
+        include_str!("../lifecycle/external_lifecycle/mod.rs"),
+        include_str!("../lifecycle/external_lifecycle/check/mod.rs"),
+        include_str!("../lifecycle/external_lifecycle/critical_fix/mod.rs"),
+        include_str!("../lifecycle/external_lifecycle/handoff/mod.rs"),
+        include_str!("../lifecycle/external_lifecycle/pending/mod.rs"),
+        include_str!("../lifecycle/external_lifecycle/validation/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/completion/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/consent/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/proposal/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/receipt/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/validation/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/verification/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/verification/check/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/verification/policy/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/verification/report/mod.rs"),
+        include_str!("../lifecycle/external_upgrade/verification/shared/mod.rs"),
     ];
 
     assert_eq!(model.matches("pub enum CanisterControlClassV1").count(), 1);

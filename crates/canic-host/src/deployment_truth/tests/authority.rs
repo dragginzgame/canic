@@ -1196,12 +1196,72 @@ fn deployment_truth_authority_paths_have_no_controller_mutation_primitives() {
             include_str!("../lifecycle/authority_plan.rs"),
         ),
         (
-            "lifecycle/external_lifecycle.rs",
-            include_str!("../lifecycle/external_lifecycle.rs"),
+            "lifecycle/external_lifecycle/mod.rs",
+            include_str!("../lifecycle/external_lifecycle/mod.rs"),
         ),
         (
-            "lifecycle/external_upgrade.rs",
-            include_str!("../lifecycle/external_upgrade.rs"),
+            "lifecycle/external_lifecycle/check/mod.rs",
+            include_str!("../lifecycle/external_lifecycle/check/mod.rs"),
+        ),
+        (
+            "lifecycle/external_lifecycle/critical_fix/mod.rs",
+            include_str!("../lifecycle/external_lifecycle/critical_fix/mod.rs"),
+        ),
+        (
+            "lifecycle/external_lifecycle/handoff/mod.rs",
+            include_str!("../lifecycle/external_lifecycle/handoff/mod.rs"),
+        ),
+        (
+            "lifecycle/external_lifecycle/pending/mod.rs",
+            include_str!("../lifecycle/external_lifecycle/pending/mod.rs"),
+        ),
+        (
+            "lifecycle/external_lifecycle/validation/mod.rs",
+            include_str!("../lifecycle/external_lifecycle/validation/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/mod.rs",
+            include_str!("../lifecycle/external_upgrade/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/completion/mod.rs",
+            include_str!("../lifecycle/external_upgrade/completion/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/consent/mod.rs",
+            include_str!("../lifecycle/external_upgrade/consent/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/proposal/mod.rs",
+            include_str!("../lifecycle/external_upgrade/proposal/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/receipt/mod.rs",
+            include_str!("../lifecycle/external_upgrade/receipt/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/validation/mod.rs",
+            include_str!("../lifecycle/external_upgrade/validation/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/verification/mod.rs",
+            include_str!("../lifecycle/external_upgrade/verification/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/verification/check/mod.rs",
+            include_str!("../lifecycle/external_upgrade/verification/check/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/verification/policy/mod.rs",
+            include_str!("../lifecycle/external_upgrade/verification/policy/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/verification/report/mod.rs",
+            include_str!("../lifecycle/external_upgrade/verification/report/mod.rs"),
+        ),
+        (
+            "lifecycle/external_upgrade/verification/shared/mod.rs",
+            include_str!("../lifecycle/external_upgrade/verification/shared/mod.rs"),
         ),
         ("receipt.rs", include_str!("../receipt.rs")),
         ("text/mod.rs", include_str!("../text/mod.rs")),
