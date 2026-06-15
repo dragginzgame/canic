@@ -16,6 +16,16 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.30` continues canic-host deployment-truth cleanup by moving shared test
+  fixtures plus authority, lifecycle, promotion, and root-verification text
+  rendering into focused directory modules without changing host behavior, text
+  output, or public APIs.
+
+- `0.67.29` finishes the large deployment-truth unit-test file split by
+  moving authority, diff, local observation, execution receipt, and root
+  verification tests into focused directory modules without changing host
+  behavior or public APIs.
+
 - `0.67.28` reorganizes the largest deployment-truth lifecycle and promotion
   unit-test files into focused directory modules without changing host
   behavior or public APIs.

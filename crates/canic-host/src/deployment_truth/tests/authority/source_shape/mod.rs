@@ -92,8 +92,28 @@ const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
     ("receipt.rs", include_str!("../../../receipt.rs")),
     ("text/mod.rs", include_str!("../../../text/mod.rs")),
     (
-        "text/authority.rs",
-        include_str!("../../../text/authority.rs"),
+        "text/authority/mod.rs",
+        include_str!("../../../text/authority/mod.rs"),
+    ),
+    (
+        "text/authority/evidence/mod.rs",
+        include_str!("../../../text/authority/evidence/mod.rs"),
+    ),
+    (
+        "text/authority/plan/mod.rs",
+        include_str!("../../../text/authority/plan/mod.rs"),
+    ),
+    (
+        "text/authority/receipt/mod.rs",
+        include_str!("../../../text/authority/receipt/mod.rs"),
+    ),
+    (
+        "text/authority/report/mod.rs",
+        include_str!("../../../text/authority/report/mod.rs"),
+    ),
+    (
+        "text/authority/shared/mod.rs",
+        include_str!("../../../text/authority/shared/mod.rs"),
     ),
     (
         "text/comparison.rs",
@@ -104,16 +124,100 @@ const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
         include_str!("../../../text/execution_preflight.rs"),
     ),
     (
-        "text/lifecycle.rs",
-        include_str!("../../../text/lifecycle.rs"),
+        "text/lifecycle/mod.rs",
+        include_str!("../../../text/lifecycle/mod.rs"),
     ),
     (
-        "text/promotion.rs",
-        include_str!("../../../text/promotion.rs"),
+        "text/lifecycle/authority/mod.rs",
+        include_str!("../../../text/lifecycle/authority/mod.rs"),
     ),
     (
-        "text/root_verification.rs",
-        include_str!("../../../text/root_verification.rs"),
+        "text/lifecycle/completion/mod.rs",
+        include_str!("../../../text/lifecycle/completion/mod.rs"),
+    ),
+    (
+        "text/lifecycle/consent/mod.rs",
+        include_str!("../../../text/lifecycle/consent/mod.rs"),
+    ),
+    (
+        "text/lifecycle/external_lifecycle/mod.rs",
+        include_str!("../../../text/lifecycle/external_lifecycle/mod.rs"),
+    ),
+    (
+        "text/lifecycle/plan/mod.rs",
+        include_str!("../../../text/lifecycle/plan/mod.rs"),
+    ),
+    (
+        "text/lifecycle/proposal/mod.rs",
+        include_str!("../../../text/lifecycle/proposal/mod.rs"),
+    ),
+    (
+        "text/lifecycle/receipt/mod.rs",
+        include_str!("../../../text/lifecycle/receipt/mod.rs"),
+    ),
+    (
+        "text/lifecycle/shared/mod.rs",
+        include_str!("../../../text/lifecycle/shared/mod.rs"),
+    ),
+    (
+        "text/lifecycle/verification/mod.rs",
+        include_str!("../../../text/lifecycle/verification/mod.rs"),
+    ),
+    (
+        "text/promotion/mod.rs",
+        include_str!("../../../text/promotion/mod.rs"),
+    ),
+    (
+        "text/promotion/execution_receipt/mod.rs",
+        include_str!("../../../text/promotion/execution_receipt/mod.rs"),
+    ),
+    (
+        "text/promotion/identity/mod.rs",
+        include_str!("../../../text/promotion/identity/mod.rs"),
+    ),
+    (
+        "text/promotion/materialization/mod.rs",
+        include_str!("../../../text/promotion/materialization/mod.rs"),
+    ),
+    (
+        "text/promotion/plan/mod.rs",
+        include_str!("../../../text/promotion/plan/mod.rs"),
+    ),
+    (
+        "text/promotion/policy/mod.rs",
+        include_str!("../../../text/promotion/policy/mod.rs"),
+    ),
+    (
+        "text/promotion/provenance/mod.rs",
+        include_str!("../../../text/promotion/provenance/mod.rs"),
+    ),
+    (
+        "text/promotion/readiness/mod.rs",
+        include_str!("../../../text/promotion/readiness/mod.rs"),
+    ),
+    (
+        "text/promotion/shared/mod.rs",
+        include_str!("../../../text/promotion/shared/mod.rs"),
+    ),
+    (
+        "text/promotion/wasm_store/mod.rs",
+        include_str!("../../../text/promotion/wasm_store/mod.rs"),
+    ),
+    (
+        "text/root_verification/mod.rs",
+        include_str!("../../../text/root_verification/mod.rs"),
+    ),
+    (
+        "text/root_verification/receipt/mod.rs",
+        include_str!("../../../text/root_verification/receipt/mod.rs"),
+    ),
+    (
+        "text/root_verification/report/mod.rs",
+        include_str!("../../../text/root_verification/report/mod.rs"),
+    ),
+    (
+        "text/root_verification/shared/mod.rs",
+        include_str!("../../../text/root_verification/shared/mod.rs"),
     ),
 ];
 
