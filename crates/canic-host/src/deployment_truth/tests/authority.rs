@@ -4,8 +4,24 @@ const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
     ("authority.rs", include_str!("../authority.rs")),
     ("lifecycle.rs", include_str!("../lifecycle/mod.rs")),
     (
-        "lifecycle/authority_plan.rs",
-        include_str!("../lifecycle/authority_plan.rs"),
+        "lifecycle/authority_plan/mod.rs",
+        include_str!("../lifecycle/authority_plan/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/authority/mod.rs",
+        include_str!("../lifecycle/authority_plan/authority/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/plan/mod.rs",
+        include_str!("../lifecycle/authority_plan/plan/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/policy/mod.rs",
+        include_str!("../lifecycle/authority_plan/policy/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/validation/mod.rs",
+        include_str!("../lifecycle/authority_plan/validation/mod.rs"),
     ),
     (
         "lifecycle/external_lifecycle/mod.rs",

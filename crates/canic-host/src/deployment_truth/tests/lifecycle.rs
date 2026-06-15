@@ -2355,7 +2355,11 @@ fn external_lifecycle_uses_canonical_control_class_model() {
     let model = include_str!("../model/mod.rs");
     let lifecycle_sources = [
         include_str!("../lifecycle/mod.rs"),
-        include_str!("../lifecycle/authority_plan.rs"),
+        include_str!("../lifecycle/authority_plan/mod.rs"),
+        include_str!("../lifecycle/authority_plan/authority/mod.rs"),
+        include_str!("../lifecycle/authority_plan/plan/mod.rs"),
+        include_str!("../lifecycle/authority_plan/policy/mod.rs"),
+        include_str!("../lifecycle/authority_plan/validation/mod.rs"),
         include_str!("../lifecycle/external_lifecycle/mod.rs"),
         include_str!("../lifecycle/external_lifecycle/check/mod.rs"),
         include_str!("../lifecycle/external_lifecycle/critical_fix/mod.rs"),
