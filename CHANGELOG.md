@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.28` reorganizes the largest deployment-truth lifecycle and promotion
+  unit-test files into focused directory modules without changing host
+  behavior or public APIs.
+
+- `0.67.27` continues canic-host deployment-truth lifecycle decomposition by
+  splitting authority-plan, lifecycle digest, and lifecycle error internals
+  into focused directory modules while preserving public host APIs.
+
 - `0.67.26` continues canic-host deployment-truth lifecycle decomposition by
   splitting passive external lifecycle and external upgrade implementation
   logic into focused directory modules while preserving public host APIs.
