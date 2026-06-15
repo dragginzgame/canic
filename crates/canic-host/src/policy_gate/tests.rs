@@ -1,11 +1,13 @@
 use super::*;
 use crate::build_provenance::{
-    ArtifactProvenanceV1, BuildProvenanceStatusV1, BuildScriptInputStateV1, CargoProvenanceV1,
-    SourceProvenanceV1, SourceVcsV1,
+    ArtifactProvenanceKindV1, ArtifactProvenanceV1, BuildProvenanceStatusV1, BuildProvenanceV1,
+    BuildScriptInputStateV1, CargoProvenanceV1, SourceDirtyPolicyV1, SourceProvenanceV1,
+    SourceVcsV1,
 };
 use crate::evidence_envelope::{
-    CommandProvenanceV1, EvidenceMessageSeverityV1, EvidenceMessageV1, EvidenceTargetKindV1,
-    InputPathDisplayV1, PayloadSchemaStabilityV1, evidence_envelope_schema,
+    CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
+    EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
+    InputPathDisplayV1, PayloadSchemaRefV1, PayloadSchemaStabilityV1, evidence_envelope_schema,
     policy_gate_report_schema,
 };
 use crate::test_support::temp_dir;

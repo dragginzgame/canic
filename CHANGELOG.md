@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.23` continues canic-host decomposition by splitting policy-gate
+  evaluation and release-set config mutation internals into focused directory
+  modules while preserving public host APIs and operator behavior.
+
 - `0.67.22` continues host/CLI boundary cleanup by centralizing readiness,
   subnet-registry, metadata, response parsing, and endpoint Candid parsing in
   canic-host while preserving operator command behavior.
