@@ -1,4 +1,5 @@
 use super::*;
+use std::{path::Path, process::Command};
 
 #[test]
 fn parses_icp_cli_versions_from_common_output() {

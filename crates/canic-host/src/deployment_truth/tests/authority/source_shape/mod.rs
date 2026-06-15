@@ -1,5 +1,28 @@
 const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
-    ("authority.rs", include_str!("../../../authority.rs")),
+    (
+        "authority/mod.rs",
+        include_str!("../../../authority/mod.rs"),
+    ),
+    (
+        "authority/plan.rs",
+        include_str!("../../../authority/plan.rs"),
+    ),
+    (
+        "authority/profile.rs",
+        include_str!("../../../authority/profile.rs"),
+    ),
+    (
+        "authority/reconciliation.rs",
+        include_str!("../../../authority/reconciliation.rs"),
+    ),
+    (
+        "authority/report.rs",
+        include_str!("../../../authority/report.rs"),
+    ),
+    (
+        "authority/shared.rs",
+        include_str!("../../../authority/shared.rs"),
+    ),
     ("lifecycle.rs", include_str!("../../../lifecycle/mod.rs")),
     (
         "lifecycle/authority_plan/mod.rs",

@@ -1,9 +1,9 @@
 use super::*;
 use crate::deployment_truth::{
-    ArtifactDigestSourceV1, DeploymentInventoryV1, DeploymentObservationGapV1,
-    DeploymentRootObservationSourceV1, DeploymentRootObservationV1, LocalDeploymentConfigV1,
-    ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1, ObservedPoolCanisterV1,
-    RoleArtifactManifestV1, RoleArtifactV1, VerifierReadinessObservationV1,
+    ArtifactDigestSourceV1, ArtifactSourceV1, CanisterControlClassV1, DeploymentInventoryV1,
+    DeploymentObservationGapV1, DeploymentRootObservationSourceV1, DeploymentRootObservationV1,
+    LocalDeploymentConfigV1, ObservationStatusV1, ObservedArtifactV1, ObservedCanisterV1,
+    ObservedPoolCanisterV1, RoleArtifactManifestV1, RoleArtifactV1, VerifierReadinessObservationV1,
 };
 
 mod authority;
