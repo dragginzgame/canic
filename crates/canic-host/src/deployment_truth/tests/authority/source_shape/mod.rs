@@ -1,0 +1,141 @@
+const DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES: &[(&str, &str)] = &[
+    ("authority.rs", include_str!("../../../authority.rs")),
+    ("lifecycle.rs", include_str!("../../../lifecycle/mod.rs")),
+    (
+        "lifecycle/authority_plan/mod.rs",
+        include_str!("../../../lifecycle/authority_plan/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/authority/mod.rs",
+        include_str!("../../../lifecycle/authority_plan/authority/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/plan/mod.rs",
+        include_str!("../../../lifecycle/authority_plan/plan/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/policy/mod.rs",
+        include_str!("../../../lifecycle/authority_plan/policy/mod.rs"),
+    ),
+    (
+        "lifecycle/authority_plan/validation/mod.rs",
+        include_str!("../../../lifecycle/authority_plan/validation/mod.rs"),
+    ),
+    (
+        "lifecycle/external_lifecycle/mod.rs",
+        include_str!("../../../lifecycle/external_lifecycle/mod.rs"),
+    ),
+    (
+        "lifecycle/external_lifecycle/check/mod.rs",
+        include_str!("../../../lifecycle/external_lifecycle/check/mod.rs"),
+    ),
+    (
+        "lifecycle/external_lifecycle/critical_fix/mod.rs",
+        include_str!("../../../lifecycle/external_lifecycle/critical_fix/mod.rs"),
+    ),
+    (
+        "lifecycle/external_lifecycle/handoff/mod.rs",
+        include_str!("../../../lifecycle/external_lifecycle/handoff/mod.rs"),
+    ),
+    (
+        "lifecycle/external_lifecycle/pending/mod.rs",
+        include_str!("../../../lifecycle/external_lifecycle/pending/mod.rs"),
+    ),
+    (
+        "lifecycle/external_lifecycle/validation/mod.rs",
+        include_str!("../../../lifecycle/external_lifecycle/validation/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/completion/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/completion/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/consent/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/consent/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/proposal/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/proposal/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/receipt/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/receipt/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/validation/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/validation/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/verification/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/verification/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/verification/check/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/verification/check/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/verification/policy/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/verification/policy/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/verification/report/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/verification/report/mod.rs"),
+    ),
+    (
+        "lifecycle/external_upgrade/verification/shared/mod.rs",
+        include_str!("../../../lifecycle/external_upgrade/verification/shared/mod.rs"),
+    ),
+    ("receipt.rs", include_str!("../../../receipt.rs")),
+    ("text/mod.rs", include_str!("../../../text/mod.rs")),
+    (
+        "text/authority.rs",
+        include_str!("../../../text/authority.rs"),
+    ),
+    (
+        "text/comparison.rs",
+        include_str!("../../../text/comparison.rs"),
+    ),
+    (
+        "text/execution_preflight.rs",
+        include_str!("../../../text/execution_preflight.rs"),
+    ),
+    (
+        "text/lifecycle.rs",
+        include_str!("../../../text/lifecycle.rs"),
+    ),
+    (
+        "text/promotion.rs",
+        include_str!("../../../text/promotion.rs"),
+    ),
+    (
+        "text/root_verification.rs",
+        include_str!("../../../text/root_verification.rs"),
+    ),
+];
+
+const CONTROLLER_MUTATION_PRIMITIVES: &[&str] = &[
+    "update_settings",
+    "install_code",
+    "create_canister",
+    "delete_canister",
+    "stop_canister",
+    "uninstall_code",
+    "provisional_create_canister",
+    "dfx",
+];
+
+#[test]
+fn deployment_truth_authority_paths_have_no_controller_mutation_primitives() {
+    for (path, source) in DEPLOYMENT_TRUTH_AUTHORITY_DRY_RUN_SOURCES {
+        for forbidden in CONTROLLER_MUTATION_PRIMITIVES {
+            assert!(
+                !source.contains(forbidden),
+                "deployment truth authority path {path} must stay dry-run; found forbidden token {forbidden}"
+            );
+        }
+    }
+}
