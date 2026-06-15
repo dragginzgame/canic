@@ -6,6 +6,7 @@ use crate::cli::defaults::local_network;
 use crate::support::candid::registry_entry_candid_path;
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
+    canister_ready::{query_canister_ready, query_local_canister_ready},
     cycle_balance::query_cycle_balance_optional,
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
@@ -54,7 +55,7 @@ pub(super) fn list_ready_statuses(
     for entry in visible_entries(registry, canister)? {
         statuses.insert(
             entry.pid.clone(),
-            check_ready_status(options, icp_root.as_deref(), entry)?,
+            check_ready_status(options, icp_root.as_deref(), entry),
         );
     }
     Ok(statuses)
@@ -140,23 +141,23 @@ fn check_ready_status(
     options: &ListOptions,
     icp_root: Option<&Path>,
     entry: &RegistryEntry,
-) -> Result<ReadyStatus, ListCommandError> {
+) -> ReadyStatus {
     let icp = live_icp(&options.icp, options.network.clone(), icp_root);
     let candid_path = registry_entry_candid_path(icp_root, &state_network(options), entry);
-    let Ok(output) = icp.canister_query_output_with_candid(
+    let Ok(ready) = query_canister_ready(
+        &icp,
         &entry.pid,
-        "canic_ready",
-        Some("json"),
+        &state_network(options),
+        icp_root,
         candid_path.as_deref(),
     ) else {
-        return Ok(ReadyStatus::Error);
+        return ReadyStatus::Error;
     };
-    let data = serde_json::from_str::<serde_json::Value>(&output)?;
-    Ok(if replica_query::parse_ready_json_value(&data) {
+    if ready {
         ReadyStatus::Ready
     } else {
         ReadyStatus::NotReady
-    })
+    }
 }
 
 fn local_ready_statuses(
@@ -166,16 +167,19 @@ fn local_ready_statuses(
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
-    collect_visible_values(registry, canister, move |pid| {
-        match icp_root.as_deref().map_or_else(
-            || replica_query::query_ready(network.as_deref(), &pid),
-            |root| replica_query::query_ready_from_root(network.as_deref(), &pid, root),
+    collect_visible_values(
+        registry,
+        canister,
+        move |pid| match query_local_canister_ready(
+            network.as_deref().unwrap_or("local"),
+            &pid,
+            icp_root.as_deref(),
         ) {
             Ok(true) => ReadyStatus::Ready,
             Ok(false) => ReadyStatus::NotReady,
             Err(_) => ReadyStatus::Error,
-        }
-    })
+        },
+    )
 }
 
 fn collect_visible_entry_optional_values<T, F>(

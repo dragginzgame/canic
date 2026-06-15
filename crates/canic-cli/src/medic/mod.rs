@@ -7,11 +7,11 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    canister_ready::query_canister_ready,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     install_root::InstallState,
     installed_deployment::read_installed_deployment_state_from_root,
-    replica_query,
     table::{ColumnAlign, render_table},
 };
 use clap::Command as ClapCommand;
@@ -199,22 +199,19 @@ fn check_root_ready(
     icp_root: Option<&Path>,
     state: &InstallState,
 ) -> MedicCheck {
-    let ready = if replica_query::should_use_local_replica_query(Some(&options.network)) {
-        icp_root
-            .map_or_else(
-                || replica_query::query_ready(Some(&options.network), &state.root_canister_id),
-                |root| {
-                    replica_query::query_ready_from_root(
-                        Some(&options.network),
-                        &state.root_canister_id,
-                        root,
-                    )
-                },
-            )
-            .map_err(|err| err.to_string())
-    } else {
-        query_ready_with_icp(options, icp_root, &state.root_canister_id)
-    };
+    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    if let Some(root) = icp_root {
+        icp = icp.with_cwd(root);
+    }
+    let candid_path = role_candid_path(icp_root, &options.network, "root");
+    let ready = query_canister_ready(
+        &icp,
+        &state.root_canister_id,
+        &options.network,
+        icp_root,
+        candid_path.as_deref(),
+    )
+    .map_err(|err| err.to_string());
 
     match ready {
         Ok(true) => MedicCheck::ok(
@@ -229,28 +226,6 @@ fn check_root_ready(
         ),
         Err(err) => MedicCheck::error("root ready", err, "run canic install"),
     }
-}
-
-fn query_ready_with_icp(
-    options: &MedicOptions,
-    icp_root: Option<&Path>,
-    canister: &str,
-) -> Result<bool, String> {
-    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
-    if let Some(root) = icp_root {
-        icp = icp.with_cwd(root);
-    }
-    let candid_path = role_candid_path(icp_root, &options.network, "root");
-    let output = icp
-        .canister_query_output_with_candid(
-            canister,
-            "canic_ready",
-            Some("json"),
-            candid_path.as_deref(),
-        )
-        .map_err(|err| err.to_string())?;
-    let data = serde_json::from_str::<serde_json::Value>(&output).map_err(|err| err.to_string())?;
-    Ok(replica_query::parse_ready_json_value(&data))
 }
 
 fn render_medic_report(checks: &[MedicCheck]) -> String {

@@ -8,7 +8,6 @@ use crate::cycles::{
 };
 use canic_host::format::compact_duration;
 use canic_host::registry::RegistryEntry;
-use canic_host::response_parse::parse_cycle_balance_response;
 use std::ffi::OsString;
 
 // Ensure common duration selectors parse into seconds.
@@ -171,25 +170,6 @@ fn parses_cycle_tracker_candid_text() {
     assert_eq!(page.total, 2);
     assert_eq!(page.entries.len(), 2);
     assert_eq!(page.entries[0].cycles, 1_000);
-}
-
-// Ensure live cycle balance responses can drive the CURRENT cycles column.
-#[test]
-fn parses_cycle_balance_response() {
-    assert_eq!(
-        parse_cycle_balance_response("(variant { 17_724 = 8_200_000_000_000 : nat })"),
-        Some(8_200_000_000_000)
-    );
-    assert_eq!(
-        parse_cycle_balance_response(
-            r#"{"response_candid":"(variant { Ok = 8_200_000_000_000 : nat })"}"#
-        ),
-        Some(8_200_000_000_000)
-    );
-    assert_eq!(
-        parse_cycle_balance_response("(variant { 17_725 = record { code = 1 : nat } })"),
-        None
-    );
 }
 
 // Ensure top-up event JSON output can be parsed from wrapped result shapes.

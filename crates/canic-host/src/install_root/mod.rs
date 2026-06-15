@@ -113,13 +113,11 @@ pub use truth_check::{check_install_deployment_truth, check_install_execution_pr
 mod tests;
 
 #[cfg(test)]
-use crate::response_parse::parse_cycle_balance_response;
-#[cfg(test)]
 use commands::{parse_canister_id_json, root_init_args};
 #[cfg(test)]
 use config_selection::config_selection_error;
 #[cfg(test)]
-use readiness::{parse_bootstrap_status_value, parse_root_ready_value};
+use readiness::parse_bootstrap_status_value;
 #[cfg(test)]
 use receipt_io::install_deployment_truth_receipt_path;
 #[cfg(test)]

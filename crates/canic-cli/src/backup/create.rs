@@ -31,7 +31,7 @@ use canic_host::{
         resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
-    replica_query,
+    subnet_registry::{SubnetRegistryQueryError, query_subnet_registry_json},
 };
 use std::path::{Path, PathBuf};
 
@@ -525,24 +525,24 @@ fn call_subnet_registry(
     icp_root: &Path,
     root: &str,
 ) -> Result<String, BackupCommandError> {
-    if replica_query::should_use_local_replica_query(Some(&options.network)) {
-        return replica_query::query_subnet_registry_json_from_root(
-            Some(&options.network),
-            root,
-            icp_root,
-        )
-        .map_err(|err| BackupCommandError::ReplicaQuery(err.to_string()));
-    }
+    let icp = IcpCli::new(&options.icp, None, Some(options.network.clone())).with_cwd(icp_root);
+    let candid_path = role_candid_path(Some(icp_root), &options.network, "root");
+    query_subnet_registry_json(
+        &icp,
+        root,
+        &options.network,
+        Some(icp_root),
+        candid_path.as_deref(),
+    )
+    .map(|query| query.registry_json)
+    .map_err(backup_subnet_registry_error)
+}
 
-    IcpCli::new(&options.icp, None, Some(options.network.clone()))
-        .with_cwd(icp_root)
-        .canister_query_output_with_candid(
-            root,
-            "canic_subnet_registry",
-            Some("json"),
-            role_candid_path(Some(icp_root), &options.network, "root").as_deref(),
-        )
-        .map_err(backup_icp_error)
+fn backup_subnet_registry_error(error: SubnetRegistryQueryError) -> BackupCommandError {
+    match error {
+        SubnetRegistryQueryError::Replica(err) => BackupCommandError::ReplicaQuery(err.to_string()),
+        SubnetRegistryQueryError::Icp(err) => backup_icp_error(err),
+    }
 }
 
 fn backup_icp_error(error: IcpCommandError) -> BackupCommandError {

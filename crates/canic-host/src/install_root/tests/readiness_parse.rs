@@ -1,30 +1,6 @@
 use super::*;
 
 #[test]
-fn parse_root_ready_accepts_plain_true() {
-    assert!(parse_root_ready_value(&json!(true)));
-}
-
-#[test]
-fn parse_root_ready_accepts_wrapped_ok_true() {
-    assert!(parse_root_ready_value(&json!({ "Ok": true })));
-}
-
-#[test]
-fn parse_root_ready_accepts_icp_cli_response_candid_true() {
-    assert!(parse_root_ready_value(&json!({
-        "response_candid": "(true)"
-    })));
-}
-
-#[test]
-fn parse_root_ready_rejects_false_shapes() {
-    assert!(!parse_root_ready_value(&json!(false)));
-    assert!(!parse_root_ready_value(&json!({ "Ok": false })));
-    assert!(!parse_root_ready_value(&json!({ "Err": "nope" })));
-}
-
-#[test]
 fn parse_bootstrap_status_accepts_plain_record() {
     let status = parse_bootstrap_status_value(&json!({
         "ready": false,
@@ -112,34 +88,4 @@ fn detects_missing_canister_id_errors() {
     assert!(!is_missing_canister_id_error(
         "Error: failed to connect to replica"
     ));
-}
-
-#[test]
-fn parses_root_cycle_balance_response() {
-    assert_eq!(
-        parse_cycle_balance_response("(variant { 17_724 = 4_487_280_757_485 : nat })"),
-        Some(4_487_280_757_485)
-    );
-    assert_eq!(
-        parse_cycle_balance_response(
-            r"
-(
-  variant {
-    Ok = 99_999_000_000_000 : nat;
-  },
-)
-"
-        ),
-        Some(99_999_000_000_000)
-    );
-    assert_eq!(
-        parse_cycle_balance_response(
-            r#"{"response_candid":"(variant { Ok = 99_999_000_000_000 : nat })"}"#
-        ),
-        Some(99_999_000_000_000)
-    );
-    assert_eq!(
-        parse_cycle_balance_response("(variant { Err = record { code = 1 : nat } })"),
-        None
-    );
 }

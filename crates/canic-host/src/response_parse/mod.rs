@@ -1,5 +1,8 @@
 pub const RECORD_MARKER: &str = "record {";
 
+#[cfg(test)]
+mod tests;
+
 #[must_use]
 pub fn find_field<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a serde_json::Value> {
     match value {

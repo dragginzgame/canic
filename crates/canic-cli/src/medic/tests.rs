@@ -59,17 +59,3 @@ fn missing_installed_deployment_error_is_warnable() {
         "failed to read canic deployment state: bad json"
     ));
 }
-
-// Ensure common command-line JSON shapes are accepted for readiness.
-#[test]
-fn parses_ready_json_shapes() {
-    assert!(replica_query::parse_ready_json_value(&serde_json::json!(
-        true
-    )));
-    assert!(replica_query::parse_ready_json_value(
-        &serde_json::json!([{"Ok": true}])
-    ));
-    assert!(!replica_query::parse_ready_json_value(
-        &serde_json::json!([{"Ok": false}])
-    ));
-}

@@ -1,4 +1,3 @@
-use crate::replica_query::parse_ready_json_value;
 use crate::response_parse::{
     field_value_after_equals, parse_candid_text_like_field, response_candid,
 };
@@ -6,11 +5,6 @@ use canic_core::dto::state::BootstrapStatusResponse;
 use serde_json::Value;
 
 pub(in crate::install_root) type BootstrapStatusSnapshot = BootstrapStatusResponse;
-
-// Accept both plain-bool and wrapped-result JSON shapes from `icp --output json`.
-pub(in crate::install_root) fn parse_root_ready_value(data: &Value) -> bool {
-    parse_ready_json_value(data)
-}
 
 pub(in crate::install_root) fn parse_bootstrap_status_value(
     data: &Value,

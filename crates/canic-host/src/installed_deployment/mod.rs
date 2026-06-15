@@ -5,7 +5,9 @@ use crate::{
         read_named_deployment_install_state_from_root,
     },
     registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
-    replica_query,
+    subnet_registry::{
+        SubnetRegistryQueryError, SubnetRegistryQuerySource, query_subnet_registry_json,
+    },
 };
 use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
@@ -190,16 +192,13 @@ fn query_registry(
     request: &InstalledDeploymentRequest,
     root: &str,
 ) -> Result<(InstalledDeploymentSource, String), InstalledDeploymentError> {
-    if replica_query::should_use_local_replica_query(Some(&request.network)) {
-        return replica_query::query_subnet_registry_json(Some(&request.network), root)
-            .map(|registry| (InstalledDeploymentSource::LocalReplica, registry))
-            .map_err(|err| local_registry_error(request, root, err.to_string()));
-    }
-
-    IcpCli::new(&request.icp, None, Some(request.network.clone()))
-        .canister_query_output(root, "canic_subnet_registry", Some("json"))
-        .map(|registry| (InstalledDeploymentSource::IcpCli, registry))
-        .map_err(installed_deployment_icp_error)
+    let icp = IcpCli::new(&request.icp, None, Some(request.network.clone()));
+    let query = query_subnet_registry_json(&icp, root, &request.network, None, None)
+        .map_err(|err| installed_deployment_registry_error(request, root, err))?;
+    Ok((
+        installed_deployment_source(query.source),
+        query.registry_json,
+    ))
 }
 
 fn query_registry_from_root(
@@ -207,26 +206,42 @@ fn query_registry_from_root(
     root: &str,
     icp_root: &Path,
 ) -> Result<(InstalledDeploymentSource, String), InstalledDeploymentError> {
-    if replica_query::should_use_local_replica_query(Some(&request.network)) {
-        return replica_query::query_subnet_registry_json_from_root(
-            Some(&request.network),
-            root,
-            icp_root,
-        )
-        .map(|registry| (InstalledDeploymentSource::LocalReplica, registry))
-        .map_err(|err| local_registry_error(request, root, err.to_string()));
-    }
+    let icp = IcpCli::new(&request.icp, None, Some(request.network.clone())).with_cwd(icp_root);
+    let candid_path = existing_local_canister_candid_path(icp_root, &request.network, "root");
+    let query = query_subnet_registry_json(
+        &icp,
+        root,
+        &request.network,
+        Some(icp_root),
+        candid_path.as_deref(),
+    )
+    .map_err(|err| installed_deployment_registry_error(request, root, err))?;
+    Ok((
+        installed_deployment_source(query.source),
+        query.registry_json,
+    ))
+}
 
-    IcpCli::new(&request.icp, None, Some(request.network.clone()))
-        .with_cwd(icp_root)
-        .canister_query_output_with_candid(
-            root,
-            "canic_subnet_registry",
-            Some("json"),
-            existing_local_canister_candid_path(icp_root, &request.network, "root").as_deref(),
-        )
-        .map(|registry| (InstalledDeploymentSource::IcpCli, registry))
-        .map_err(installed_deployment_icp_error)
+const fn installed_deployment_source(
+    source: SubnetRegistryQuerySource,
+) -> InstalledDeploymentSource {
+    match source {
+        SubnetRegistryQuerySource::LocalReplica => InstalledDeploymentSource::LocalReplica,
+        SubnetRegistryQuerySource::IcpCli => InstalledDeploymentSource::IcpCli,
+    }
+}
+
+fn installed_deployment_registry_error(
+    request: &InstalledDeploymentRequest,
+    root: &str,
+    error: SubnetRegistryQueryError,
+) -> InstalledDeploymentError {
+    match error {
+        SubnetRegistryQueryError::Replica(err) => {
+            local_registry_error(request, root, err.to_string())
+        }
+        SubnetRegistryQueryError::Icp(err) => installed_deployment_icp_error(err),
+    }
 }
 
 fn local_registry_error(

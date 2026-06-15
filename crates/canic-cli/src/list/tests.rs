@@ -1,6 +1,5 @@
 use super::*;
 use canic_host::registry::parse_registry_entries;
-use canic_host::replica_query;
 use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use options::ListSource;
 use render::ReadyStatus;
@@ -476,19 +475,6 @@ fn renders_config_output_with_fleet_roles() {
         ]
         .join("\n")
     );
-}
-
-// Ensure readiness parsing accepts common command-line JSON shapes.
-#[test]
-fn parses_ready_json_shapes() {
-    assert!(replica_query::parse_ready_json_value(&json!(true)));
-    assert!(replica_query::parse_ready_json_value(
-        &json!({ "Ok": true })
-    ));
-    assert!(!replica_query::parse_ready_json_value(&json!(false)));
-    assert!(!replica_query::parse_ready_json_value(
-        &json!({ "Ok": false })
-    ));
 }
 
 // Build representative subnet registry JSON.

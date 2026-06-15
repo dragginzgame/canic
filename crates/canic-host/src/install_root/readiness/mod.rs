@@ -3,8 +3,10 @@ use self::diagnostics::{
     print_root_diagnostics,
 };
 use self::parsing::BootstrapStatusSnapshot;
-pub(super) use self::parsing::{parse_bootstrap_status_value, parse_root_ready_value};
+pub(super) use self::parsing::parse_bootstrap_status_value;
 use crate::{
+    canister_ready::query_canister_ready,
+    icp::IcpCli,
     release_set::{icp_query_on_network, icp_root},
     replica_query,
 };
@@ -66,13 +68,9 @@ pub(super) fn wait_for_root_ready(
 
 // Return true once root reports `canic_ready == true`.
 fn root_ready(network: &str, root_canister: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    if let Some(ready) = local_root_ready(network, root_canister) {
-        return Ok(ready);
-    }
-
-    let output = icp_query_on_network(network, root_canister, "canic_ready", None, Some("json"))?;
-    let data = serde_json::from_str::<Value>(&output)?;
-    Ok(parse_root_ready_value(&data))
+    let root = icp_root()?;
+    let icp = IcpCli::new("icp", Some(network.to_string()), None).with_cwd(&root);
+    query_canister_ready(&icp, root_canister, network, Some(&root), None).map_err(Into::into)
 }
 
 // Return the current root bootstrap diagnostic state when the query is available.
@@ -105,14 +103,6 @@ fn root_bootstrap_status(
     };
     let data = serde_json::from_str::<Value>(&output)?;
     Ok(parse_bootstrap_status_value(&data))
-}
-
-fn local_root_ready(network: &str, root_canister: &str) -> Option<bool> {
-    if !replica_query::should_use_local_replica_query(Some(network)) {
-        return None;
-    }
-    let root = icp_root().ok()?;
-    replica_query::query_ready_from_root(Some(network), root_canister, &root).ok()
 }
 
 fn local_bootstrap_status(network: &str, root_canister: &str) -> Option<BootstrapStatusSnapshot> {

@@ -26,7 +26,7 @@ use canic_host::{
         resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
-    replica_query,
+    subnet_registry::{SubnetRegistryQueryError, query_subnet_registry_json},
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -426,28 +426,24 @@ fn call_subnet_registry(
     request: &ResolvedSnapshotDownload,
     root: &str,
 ) -> Result<String, SnapshotCommandError> {
-    if replica_query::should_use_local_replica_query(request.network.as_deref()) {
-        return replica_query::query_subnet_registry_json_from_root(
-            request.network.as_deref(),
-            root,
-            &request.icp_root,
-        )
-        .map_err(SnapshotCommandError::from);
-    }
+    let network = state_network(request.network.as_deref());
+    let candid_path = role_candid_path(Some(&request.icp_root), &network, "root");
+    query_subnet_registry_json(
+        &icp(request),
+        root,
+        &network,
+        Some(&request.icp_root),
+        candid_path.as_deref(),
+    )
+    .map(|query| query.registry_json)
+    .map_err(snapshot_subnet_registry_error)
+}
 
-    icp(request)
-        .canister_query_output_with_candid(
-            root,
-            "canic_subnet_registry",
-            Some("json"),
-            role_candid_path(
-                Some(&request.icp_root),
-                &state_network(request.network.as_deref()),
-                "root",
-            )
-            .as_deref(),
-        )
-        .map_err(snapshot_icp_error)
+fn snapshot_subnet_registry_error(error: SubnetRegistryQueryError) -> SnapshotCommandError {
+    match error {
+        SubnetRegistryQueryError::Replica(err) => SnapshotCommandError::from(err),
+        SubnetRegistryQueryError::Icp(err) => snapshot_icp_error(err),
+    }
 }
 
 fn create_snapshot(

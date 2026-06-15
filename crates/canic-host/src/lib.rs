@@ -8,6 +8,7 @@ mod bootstrap_store;
 mod build_profile;
 pub mod build_provenance;
 pub mod canister_build;
+pub mod canister_ready;
 mod cargo_metadata;
 pub mod cycle_balance;
 pub mod deployment_catalog;
@@ -24,6 +25,7 @@ pub mod registry;
 pub mod release_set;
 pub mod replica_query;
 pub mod response_parse;
+pub mod subnet_registry;
 pub mod table;
 #[cfg(test)]
 mod test_support;
