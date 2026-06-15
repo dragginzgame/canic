@@ -35,8 +35,15 @@ jobs:
           echo "RUSTUP_TOOLCHAIN=$CANIC_MSRV" >> "$GITHUB_ENV"
           rustup target add --toolchain "$CANIC_MSRV" wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - name: Check runner disk after Rust cache restore
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV after Rust cache restore" --min-free-mib 3072
       - name: Check workspace MSRV
         run: cargo check --workspace --locked
+      - name: Report runner disk at MSRV finish
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV finish"
 
   checks:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
@@ -54,6 +61,9 @@ jobs:
         with:
           node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
+      - name: Check runner disk after Rust cache restore
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks after Rust cache restore" --min-free-mib 3072
       - name: Install Rust helper tools
         run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
       - name: Install wasm target
@@ -112,8 +122,14 @@ jobs:
       - name: RC readiness audit guard
         shell: bash
         run: bash scripts/ci/check-rc-readiness-audit.sh
+      - name: Check runner disk before Rust validation
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096
       - run: make fmt-check
       - run: make clippy
+      - name: Check runner disk before test-unit
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before test-unit" --min-free-mib 3072
       - run: make test-unit
       - name: Build examples (default)
         if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
@@ -121,3 +137,7 @@ jobs:
       - name: Build release workspace
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: cargo build --release --workspace --locked
+      - name: Report runner disk at checks finish
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks finish"

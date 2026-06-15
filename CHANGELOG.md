@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- CI now reports GitHub runner disk availability and the largest likely disk
+  consumers around Rust cache and validation phases, so out-of-space failures
+  identify the cause instead of surfacing only as compiler write errors.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
