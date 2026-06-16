@@ -12,13 +12,18 @@ present.
 
 ## Unreleased
 
-- Continues `canic-cli` backup cleanup by splitting backup create planning,
-  persistence, ICP runner internals, report rendering, and create/verify tests
-  into focused child modules while preserving backup CLI behavior.
+- Continues `canic-cli` backup cleanup by splitting inspect, list, options,
+  reference, prune, status, and shared fixture test modules into focused child
+  modules, including list scan/status/timestamp coverage, while preserving
+  backup CLI behavior.
 
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.47` continues `canic-cli` backup cleanup by splitting create
+  planning, persistence, runner, rendering, and focused backup tests into child
+  modules while preserving backup CLI behavior.
 
 - `0.67.46` continues `canic-cli` cleanup by splitting evidence policy-gate
   envelope/render internals and backup test fixtures into focused child

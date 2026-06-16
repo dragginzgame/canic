@@ -1,49 +1,11 @@
-//! Module: backup::tests::options
+//! Module: backup::tests::options::parse
 //!
-//! Responsibility: backup CLI usage text and option parsing tests.
-//! Does not own: backup execution, persistence, or fixture construction.
-//! Boundary: command-line surface validation for the backup command family.
+//! Responsibility: backup option parser success-path tests.
+//! Does not own: selector conflict validation.
+//! Boundary: parsed option field values for backup subcommands.
 
-use super::super::*;
+use super::super::super::*;
 use std::{ffi::OsString, path::PathBuf};
-
-// Ensure backup help stays at command-family level.
-#[test]
-fn backup_usage_lists_commands_without_nested_flag_dump() {
-    let text = usage();
-
-    assert!(text.contains("Usage: canic backup"));
-    assert!(text.contains("create"));
-    assert!(text.contains("list"));
-    assert!(text.contains("inspect"));
-    assert!(text.contains("prune"));
-    assert!(text.contains("verify"));
-    assert!(text.contains("status"));
-}
-
-#[test]
-fn backup_create_usage_uses_deployment_target_wording() {
-    let text = create_usage();
-
-    assert!(text.contains("Usage: canic backup create [OPTIONS] <deployment>"));
-    assert!(text.contains("Create a topology-aware deployment backup"));
-    assert!(text.contains("Installed deployment target name to back up"));
-    assert!(text.contains("backups/deployment-<name>-YYYYMMDD-HHMMSS"));
-    assert!(!text.contains("backups/fleet-<name>"));
-    assert!(!text.contains("Installed fleet"));
-}
-
-#[test]
-fn missing_backup_deployment_mentions_unverified_registration_acknowledgement() {
-    let message = BackupCommandError::NoInstalledDeployment {
-        network: "local".to_string(),
-        deployment: "demo-local".to_string(),
-    }
-    .to_string();
-
-    assert!(message.contains("canic deploy register demo-local"));
-    assert!(message.contains("--allow-unverified"));
-}
 
 // Ensure backup create options parse planning and live-execution controls.
 #[test]
@@ -178,28 +140,4 @@ fn parses_backup_inspect_options() {
             .expect("parse reference");
     assert_eq!(referenced.backup_ref, Some("backup-test".to_string()));
     assert_eq!(referenced.dir, None);
-}
-
-// Ensure commands require one backup selector path, either by reference or explicit dir.
-#[test]
-fn backup_target_options_reject_missing_or_duplicate_selectors() {
-    let missing = BackupInspectOptions::parse([]).expect_err("missing selector rejects");
-    std::assert_matches!(missing, BackupCommandError::Usage(_));
-
-    let duplicate = BackupInspectOptions::parse([
-        OsString::from("1"),
-        OsString::from("--dir"),
-        OsString::from("backups/run"),
-    ])
-    .expect_err("duplicate selector rejects");
-    std::assert_matches!(duplicate, BackupCommandError::Usage(_));
-
-    let invalid_keep =
-        BackupPruneOptions::parse([OsString::from("--keep"), OsString::from("banana")])
-            .expect_err("invalid keep rejects");
-    std::assert_matches!(invalid_keep, BackupCommandError::Usage(_));
-
-    let missing_prune_selector =
-        BackupPruneOptions::parse([]).expect_err("missing prune selector rejects");
-    std::assert_matches!(missing_prune_selector, BackupCommandError::Usage(_));
 }
