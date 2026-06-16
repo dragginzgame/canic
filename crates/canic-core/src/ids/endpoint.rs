@@ -1,5 +1,12 @@
+//! Module: ids::endpoint
+//! Responsibility: endpoint identifiers and call-kind labels.
+//! Does not own: endpoint dispatch, authorization, or metrics emission.
+//! Boundary: provides small typed values used by replay and observability code.
+
 ///
 /// EndpointCall
+///
+/// One named endpoint invocation and its IC call mode.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -10,6 +17,8 @@ pub struct EndpointCall {
 
 ///
 /// EndpointCallKind
+///
+/// IC endpoint call mode used for replay and metrics labels.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -32,6 +41,8 @@ impl EndpointCallKind {
 
 ///
 /// EndpointId
+///
+/// Static endpoint name carried through replay and observability paths.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

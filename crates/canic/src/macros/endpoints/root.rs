@@ -1,8 +1,9 @@
-// -----------------------------------------------------------------------------
-// Root endpoint emitters
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::root
+//! Responsibility: emit root-canister endpoint macros for control and authority surfaces.
+//! Does not own: root state, pool policy, auth proof issuance, or wasm-store workflows.
+//! Boundary: exposes facade macros that delegate immediately to core/control-plane APIs.
 
-// Leaf emitter for the root-only control-plane, registry, and operator admin surface.
+/// Emit root-only control-plane, registry, and operator admin endpoints.
 #[macro_export]
 macro_rules! canic_emit_root_admin_endpoints {
     () => {
@@ -65,7 +66,7 @@ macro_rules! canic_emit_root_admin_endpoints {
     };
 }
 
-// Leaf emitter for the root-only auth, delegation, and attestation authority surface.
+/// Emit root-only auth, delegation, and attestation authority endpoints.
 #[macro_export]
 macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
@@ -99,7 +100,7 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
     };
 }
 
-// Leaf emitter for the root-only WasmStore bootstrap/publication control surface.
+/// Emit root-only wasm-store bootstrap and publication control endpoints.
 #[macro_export]
 macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {

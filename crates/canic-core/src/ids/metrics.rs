@@ -1,3 +1,8 @@
+//! Module: ids::metrics
+//! Responsibility: metric classification identifiers.
+//! Does not own: metric storage, aggregation, or emission.
+//! Boundary: exposes stable categories used by access and system metrics.
+
 use serde::{Deserialize, Serialize};
 
 ///
@@ -34,6 +39,8 @@ impl AccessMetricKind {
 
 ///
 /// SystemMetricKind
+///
+/// Enumerates platform operation families recorded by system metrics.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

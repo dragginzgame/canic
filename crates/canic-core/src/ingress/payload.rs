@@ -1,4 +1,7 @@
-//! Ingress payload limits registered by generated update endpoints.
+//! Module: ingress::payload
+//! Responsibility: update ingress payload limits registered by endpoint macros.
+//! Does not own: endpoint dispatch, authorization, or payload decoding.
+//! Boundary: stores method limit metadata consumed during ingress inspection.
 
 use crate::cdk;
 use std::sync::Mutex;
@@ -10,6 +13,8 @@ static UPDATE_LIMITS: Mutex<Vec<UpdatePayloadLimit>> = Mutex::new(Vec::new());
 ///
 /// UpdatePayloadLimit
 ///
+/// Payload byte limit registered for one update method.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UpdatePayloadLimit {
@@ -18,6 +23,10 @@ pub struct UpdatePayloadLimit {
 }
 
 /// Register one update endpoint payload limit.
+///
+/// # Panics
+///
+/// Panics if the process-local update payload limit registry mutex is poisoned.
 pub fn register_update_limit(method: &'static str, max_bytes: usize) {
     UPDATE_LIMITS
         .lock()
@@ -26,6 +35,10 @@ pub fn register_update_limit(method: &'static str, max_bytes: usize) {
 }
 
 /// Return the configured payload limit for one update method.
+///
+/// # Panics
+///
+/// Panics if the process-local update payload limit registry mutex is poisoned.
 pub fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePayloadLimit> {
     let limits = UPDATE_LIMITS
         .lock()
@@ -34,6 +47,11 @@ pub fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePa
 }
 
 /// Inspect the current ingress update and accept it only when within limit.
+///
+/// # Panics
+///
+/// Panics if reading the configured payload limit finds a poisoned registry
+/// mutex.
 pub fn inspect_update_message() {
     let method = cdk::api::msg_method_name();
     let payload_len = cdk::api::msg_arg_data().len();
@@ -49,6 +67,8 @@ pub fn inspect_update_message() {
 
 ///
 /// DuplicateUpdatePayloadLimit
+///
+/// Error returned when more than one limit is registered for the same method.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

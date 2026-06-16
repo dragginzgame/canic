@@ -1,8 +1,9 @@
-// -----------------------------------------------------------------------------
-// Shared endpoint emitters
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::shared
+//! Responsibility: emit endpoint macros shared by root, non-root, and wasm-store canisters.
+//! Does not own: endpoint auth policy, runtime state, metrics storage, or query semantics.
+//! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-// Leaf emitter for the lifecycle/runtime core shared by all Canic canisters.
+/// Emit the lifecycle and runtime readiness endpoints shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
@@ -23,7 +24,7 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
     };
 }
 
-// Leaf emitter for the ICRC standards-facing surface shared by all Canic canisters.
+/// Emit the ICRC standards-facing query endpoints shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_icrc_standards_endpoints {
     () => {
@@ -42,7 +43,7 @@ macro_rules! canic_emit_icrc_standards_endpoints {
     };
 }
 
-// Leaf emitter for Canic metadata shared by all Canic canisters.
+/// Emit the Canic metadata endpoint shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_canic_metadata_endpoints {
     () => {
@@ -59,7 +60,7 @@ macro_rules! canic_emit_canic_metadata_endpoints {
     };
 }
 
-// Bundle composer for the discovery surface preserved by the default runtime.
+/// Emit the default runtime discovery endpoint bundle.
 #[macro_export]
 macro_rules! canic_bundle_discovery_endpoints {
     () => {
@@ -70,7 +71,7 @@ macro_rules! canic_bundle_discovery_endpoints {
     };
 }
 
-// Leaf emitter for the minimal stable-memory ABI ledger recovery diagnostic.
+/// Emit the minimal stable-memory ABI ledger recovery diagnostic endpoint.
 #[macro_export]
 macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
     () => {
@@ -89,7 +90,7 @@ macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
     };
 }
 
-// Leaf emitter for environment snapshot diagnostics shared by all Canic canisters.
+/// Emit the environment snapshot diagnostic endpoint shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_env_observability_endpoints {
     () => {
@@ -100,7 +101,7 @@ macro_rules! canic_emit_env_observability_endpoints {
     };
 }
 
-// Leaf emitter for runtime log diagnostics shared by all Canic canisters.
+/// Emit runtime log diagnostic endpoints shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_log_observability_endpoints {
     () => {
@@ -118,7 +119,7 @@ macro_rules! canic_emit_log_observability_endpoints {
     };
 }
 
-// Bundle composer for shared observability and operator-facing diagnostics.
+/// Emit shared observability and operator-facing diagnostic endpoints.
 #[macro_export]
 macro_rules! canic_bundle_observability_endpoints {
     () => {
@@ -129,7 +130,7 @@ macro_rules! canic_bundle_observability_endpoints {
     };
 }
 
-// Leaf emitter for the metrics query surface shared by all Canic canisters.
+/// Emit the metrics query surface shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_metrics_endpoints {
     () => {
@@ -171,7 +172,7 @@ macro_rules! canic_emit_metrics_endpoints {
     };
 }
 
-// Leaf emitter for the response-capability and trust-chain runtime.
+/// Emit the response-capability and trust-chain runtime endpoint.
 #[macro_export]
 macro_rules! canic_emit_auth_attestation_endpoints {
     () => {

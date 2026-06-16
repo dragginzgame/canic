@@ -1,7 +1,13 @@
+//! Module: ids::network
+//! Responsibility: build network identifiers.
+//! Does not own: environment detection or deployment selection.
+//! Boundary: exposes the network label a canister believes it runs under.
+
 use std::fmt::{self, Display};
 
 ///
 /// BuildNetwork
+///
 /// Identifies the environment the canister believes it runs in.
 ///
 
