@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Continues `canic-cli` backup cleanup by splitting backup create planning,
+  persistence, ICP runner internals, report rendering, and create/verify tests
+  into focused child modules while preserving backup CLI behavior.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
