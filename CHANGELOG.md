@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.44` continues `canic-cli` fleet cleanup by splitting command
+  construction, option parsing, rendering, and adoption report internals into
+  focused child modules while preserving CLI behavior.
+
 - `0.67.43` continues `canic` endpoint macro cleanup by aligning endpoint
   emitter module documentation while preserving emitted endpoint surfaces.
 

@@ -1,8 +1,8 @@
+//! Module: cdk::types::string
 //!
-//! Bounded string wrappers that integrate with stable structures and enforce
-//! maximum lengths at construction time. These appear in configs and memory
-//! tables where size caps matter.
-//!
+//! Responsibility: bounded string wrappers for configs and stable structures.
+//! Does not own: field-specific validation or DTO compatibility policy.
+//! Boundary: enforces byte-size caps at construction and stable decoding.
 
 use crate::cdk::structures::{Storable, storable::Bound};
 use candid::CandidType;
@@ -16,6 +16,7 @@ use std::{
 
 ///
 /// BoundedString
+///
 /// String wrapper enforcing a compile-time maximum length, with serde and
 /// storage trait implementations.
 ///
@@ -25,6 +26,7 @@ pub struct BoundedString<const N: u32>(pub String);
 
 #[expect(clippy::cast_possible_truncation)]
 impl<const N: u32> BoundedString<N> {
+    /// Build a bounded string when the input fits within the byte limit.
     pub fn try_new(s: impl Into<String>) -> Result<Self, String> {
         let s: String = s.into();
 
@@ -36,6 +38,11 @@ impl<const N: u32> BoundedString<N> {
         }
     }
 
+    /// Build a bounded string and panic when the input exceeds the byte limit.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the input string is longer than `N` bytes.
     #[must_use]
     pub fn new(s: impl Into<String>) -> Self {
         let s: String = s.into();
@@ -86,7 +93,7 @@ pub type BoundedString64 = BoundedString<64>;
 pub type BoundedString128 = BoundedString<128>;
 pub type BoundedString256 = BoundedString<256>;
 
-// Fallible Into<String> back
+// Convert the bounded wrapper back into its owned string.
 impl<const N: u32> From<BoundedString<N>> for String {
     fn from(b: BoundedString<N>) -> Self {
         b.0
@@ -168,7 +175,7 @@ mod tests {
 
         assert_eq!(a, b);
         assert_ne!(a, c);
-        assert!(a < c); // "abc" < "def"
+        assert!(a < c);
     }
 
     #[test]

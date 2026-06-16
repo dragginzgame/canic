@@ -1,12 +1,16 @@
+//! Module: cdk::utils::hash
 //!
-//! Shared SHA-256 helpers for wasm/module identity and hex rendering.
-//!
+//! Responsibility: SHA-256 helpers for wasm/module identity and hex rendering.
+//! Does not own: artifact storage, wasm validation, or manifest policy.
+//! Boundary: provides pure hashing and hex conversion utilities.
 
 use sha2::{Digest, Sha256};
 use std::{error::Error, fmt};
 
 ///
 /// HashBytes
+///
+/// Owned byte buffer containing a decoded or computed hash.
 ///
 
 pub type HashBytes = Vec<u8>;
@@ -88,11 +92,15 @@ fn decode_nibble(byte: u8, index: usize) -> Result<u8, DecodeHexError> {
 ///
 /// DecodeHexError
 ///
+/// Typed failure returned while decoding hexadecimal input.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DecodeHexError {
+    /// The input had an odd number of characters.
     OddLength(usize),
 
+    /// The input contained a non-hexadecimal character at `index`.
     InvalidDigit { index: usize, byte: char },
 }
 

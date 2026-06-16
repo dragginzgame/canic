@@ -1,6 +1,9 @@
-///
-/// Canic IC SDK facade
-///
+//! Module: cdk
+//!
+//! Responsibility: Canic's IC CDK facade and stable-structure helper macros.
+//! Does not own: application policy, endpoint auth, or stable schema design.
+//! Boundary: re-exports IC-facing SDKs behind the Canic core surface.
+
 pub use candid;
 pub use ic_cdk::{
     api, call, eprintln, export_candid, futures, init, inspect_message, post_upgrade, println,
@@ -17,7 +20,9 @@ pub mod types;
 pub mod utils;
 
 ///
-/// Storable helpers
+/// impl_storable_bounded
+///
+/// Implement bounded stable storage encoding for one serde-backed type.
 ///
 
 #[macro_export]
@@ -52,6 +57,12 @@ macro_rules! impl_storable_bounded {
         }
     };
 }
+
+///
+/// impl_storable_unbounded
+///
+/// Implement unbounded stable storage encoding for one serde-backed type.
+///
 
 #[macro_export]
 macro_rules! impl_storable_unbounded {

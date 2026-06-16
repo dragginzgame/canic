@@ -1,3 +1,9 @@
+//! Module: cdk::spec::standards::xrc
+//!
+//! Responsibility: XRC Candid DTOs used by Canic callers.
+//! Does not own: exchange-rate policy, pricing decisions, or cycle payment.
+//! Boundary: mirrors the external XRC `get_exchange_rate` surface.
+
 use crate::cdk::spec::prelude::*;
 
 //

@@ -1,3 +1,9 @@
+//! Module: cdk::spec::standards::icrc::icrc2
+//!
+//! Responsibility: ICRC-2 Candid DTOs used by Canic callers.
+//! Does not own: allowance policy, ledger behavior, or transfer workflows.
+//! Boundary: mirrors the external ICRC-2 surface with Canic account aliases.
+
 use crate::cdk::spec::prelude::*;
 
 //

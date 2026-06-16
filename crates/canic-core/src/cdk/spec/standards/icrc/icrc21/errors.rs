@@ -1,3 +1,9 @@
+//! Module: cdk::spec::standards::icrc::icrc21::errors
+//!
+//! Responsibility: ICRC-21 consent error DTOs.
+//! Does not own: consent evaluation or wallet display behavior.
+//! Boundary: mirrors the external ICRC-21 error surface.
+
 use candid::{CandidType, Deserialize, Nat};
 use serde::Serialize;
 

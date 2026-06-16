@@ -1,8 +1,8 @@
+//! Module: cdk::spec
 //!
-//! Canonical representations of external IC specs (ICRC, NNS, etc.).
-//! This module corrals the verbose candid bindings so the rest of the codebase
-//! can import clean wrappers with consistent naming.
-//!
+//! Responsibility: canonical representations of external IC specs.
+//! Does not own: business interpretation of ICRC, NNS, or ledger behavior.
+//! Boundary: corrals verbose Candid bindings behind consistently named wrappers.
 
 pub mod standards;
 

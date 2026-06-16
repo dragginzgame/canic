@@ -1,11 +1,12 @@
+//! Module: cdk::utils::time
 //!
-//! Time helpers abstracting over host/IC execution so call sites can request
-//! UNIX epoch timestamps at various precisions.
-//!
+//! Responsibility: timestamp helpers that work under host and IC execution.
+//! Does not own: timer scheduling, lifecycle hooks, or clock policy.
+//! Boundary: exposes UNIX epoch timestamps at common precisions.
 
 use std::time::SystemTime;
 
-// time_nanos
+/// Return the current UNIX epoch time in nanoseconds as the internal base unit.
 #[cfg_attr(target_arch = "wasm32", expect(unreachable_code))]
 fn time_nanos() -> u128 {
     #[cfg(target_arch = "wasm32")]
@@ -58,7 +59,7 @@ mod tests {
     #[test]
     fn test_now_secs_sanity() {
         let now = now_secs();
-        let current_year_secs = 1_700_000_000; // ≈ Oct 2023
+        let current_year_secs = 1_700_000_000; // roughly Oct 2023
         assert!(now > current_year_secs);
     }
 }
