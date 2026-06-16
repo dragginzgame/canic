@@ -172,6 +172,28 @@ impl ShardingRegistryOps {
         })
     }
 
+    /// Release (unassign) a partition_key from its shard, decrementing that
+    /// shard's derived load counter. Returns the shard the key was assigned to,
+    /// or `None` if the key had no assignment. Inverse of [`Self::assign`]; used
+    /// by eviction / reclamation workflows to free a slot.
+    pub fn release(pool: &str, partition_key: &str) -> Result<Option<Principal>, InternalError> {
+        ShardingRegistry::with_mut(|core| {
+            let key = ShardKey::try_new(pool, partition_key)
+                .map_err(ShardingRegistryOpsError::InvalidKey)?;
+
+            let Some(shard) = core.remove_assignment(&key) else {
+                return Ok(None);
+            };
+
+            if let Some(mut entry) = core.get_entry(&shard) {
+                entry.count = entry.count.saturating_sub(1);
+                core.insert_entry(shard, entry);
+            }
+
+            Ok(Some(shard))
+        })
+    }
+
     /// NOTE:
     /// Returns canonical assignment keys. Callers should not stringify unless required
     /// at an API or DTO boundary.
@@ -221,5 +243,27 @@ mod tests {
         ShardingRegistryOps::assign("poolA", "partition_key1", shard_pid).unwrap();
         let count_after = ShardingRegistryOps::get(shard_pid).unwrap().count;
         assert_eq!(count_after, 1);
+    }
+
+    #[test]
+    fn release_frees_slot_and_decrements_count() {
+        ShardingRegistryOps::clear_for_test();
+        let role = CanisterRole::new("alpha");
+        let shard_pid = p(1);
+
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 0).unwrap();
+        ShardingRegistryOps::assign("poolA", "pk1", shard_pid).unwrap();
+        assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 1);
+
+        // Releasing the key returns its shard, drops the assignment, and frees
+        // the slot (count back to 0).
+        let released = ShardingRegistryOps::release("poolA", "pk1").unwrap();
+        assert_eq!(released, Some(shard_pid));
+        assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 0);
+        assert!(ShardingRegistryOps::partition_key_shard("poolA", "pk1").is_none());
+
+        // Releasing an unknown key is a no-op returning None.
+        assert_eq!(ShardingRegistryOps::release("poolA", "pk1").unwrap(), None);
+        assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 0);
     }
 }

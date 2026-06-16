@@ -295,6 +295,18 @@ impl ShardingWorkflow {
         Ok(ShardingPlanStateResponseMapper::record_to_view(plan.state))
     }
 
+    /// Release (unassign) a partition_key from its shard, freeing the slot and
+    /// decrementing the shard's load counter. Returns the shard the key was
+    /// assigned to, or `None` if it had no assignment. The inverse of
+    /// [`Self::assign_to_pool`]; intended for eviction / reclamation of stale or
+    /// never-completed assignments by a pool owner.
+    pub fn release_partition_key(
+        pool: &str,
+        partition_key: impl AsRef<str>,
+    ) -> Result<Option<Principal>, InternalError> {
+        ShardingRegistryOps::release(pool, partition_key.as_ref())
+    }
+
     fn blocked(reason: CreateBlockedReason, pool: &str, partition_key: &str) -> InternalError {
         ShardingWorkflowError::Policy(ShardingPolicyError::ShardCreationBlocked {
             reason,
