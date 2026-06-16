@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.50` continues `canic-backup` cleanup by splitting execution journal
+  and backup plan tests into focused modules while preserving backup behavior.
+
 - `0.67.49` continues `canic-cli` backup cleanup by splitting backup
   create/verify tests, option parsing, create execution, list/reference
   resolution, and dispatch/error ownership into focused modules while
