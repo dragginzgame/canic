@@ -3,15 +3,6 @@ use canic_backup::{
     discovery::DiscoveryError, execution::BackupExecutionJournalError,
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
 };
-#[cfg(test)]
-use canic_backup::{
-    persistence::BackupLayout,
-    plan::{
-        AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
-        SnapshotReadAuthority, build_backup_plan,
-    },
-    registry::RegistryEntry,
-};
 use canic_host::registry::RegistryParseError;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
