@@ -175,7 +175,7 @@ impl ShardingRegistryOps {
     /// Release (unassign) a partition_key from its shard, decrementing that
     /// shard's derived load counter. Returns the shard the key was assigned to,
     /// or `None` if the key had no assignment. Inverse of [`Self::assign`]; used
-    /// by eviction / reclamation workflows to free a slot.
+    /// by eviction / reclamation workflows to free shard capacity.
     pub fn release(pool: &str, partition_key: &str) -> Result<Option<Principal>, InternalError> {
         ShardingRegistry::with_mut(|core| {
             let key = ShardKey::try_new(pool, partition_key)
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 1);
 
         // Releasing the key returns its shard, drops the assignment, and frees
-        // the slot (count back to 0).
+        // shard capacity (count back to 0).
         let released = ShardingRegistryOps::release("poolA", "pk1").unwrap();
         assert_eq!(released, Some(shard_pid));
         assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 0);

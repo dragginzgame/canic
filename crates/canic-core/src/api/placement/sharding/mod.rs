@@ -60,10 +60,11 @@ impl ShardingApi {
         ShardingWorkflow::plan_assign_to_pool(pool, partition_key).map_err(Error::from)
     }
 
-    /// Release (unassign) a partition_key from its shard, freeing the slot and
-    /// decrementing the shard's load counter. Returns the shard it was assigned
-    /// to, or `None` if it was unassigned. Inverse of [`Self::assign_to_pool`] —
-    /// for pool owners reclaiming stale or never-completed assignments.
+    /// Release (unassign) a partition_key from its shard, freeing shard
+    /// capacity and decrementing the shard's load counter. Returns the shard it
+    /// was assigned to, or `None` if it was unassigned. Inverse of
+    /// [`Self::assign_to_pool`] for Canic pool-owner code reclaiming stale or
+    /// never-completed assignments.
     pub fn release_partition_key(
         pool: &str,
         partition_key: impl AsRef<str>,
