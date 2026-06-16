@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::cycles
+//!
 //! Responsibility: emit cycle-tracker endpoint macros for consumer canisters.
 //! Does not own: cycle accounting state or page query semantics.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.

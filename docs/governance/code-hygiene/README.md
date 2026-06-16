@@ -100,10 +100,15 @@ Required top-of-file sequence for module files:
 Non-trivial modules should begin with a module-level documentation header that
 states responsibility and boundary.
 
+Keep the first doc paragraph short. Clippy's
+`too_long_first_doc_paragraph` lint treats consecutive `//!` lines as one
+paragraph, so put a blank doc line after the one-line module name.
+
 Example:
 
 ```rust
 //! Module: workflow::project::install
+//!
 //! Responsibility: orchestrate project canister install steps.
 //! Does not own: authorization, stable records, or pure placement policy.
 //! Boundary: calls ops and policy after endpoints authenticate input.

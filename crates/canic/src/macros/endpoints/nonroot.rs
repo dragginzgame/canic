@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::nonroot
+//!
 //! Responsibility: emit non-root endpoint macros for propagation and issuer support.
 //! Does not own: cascade state application, delegated-token issuance, or proof storage.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.

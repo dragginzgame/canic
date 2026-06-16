@@ -1,4 +1,5 @@
 //! Module: ids::metrics
+//!
 //! Responsibility: metric classification identifiers.
 //! Does not own: metric storage, aggregation, or emission.
 //! Boundary: exposes stable categories used by access and system metrics.

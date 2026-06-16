@@ -1,4 +1,5 @@
 //! Module: replay_policy::pool_admin_manifest
+//!
 //! Responsibility: record replay policy for pool-admin command variants.
 //! Boundary: owns manifest data only; pool workflow dispatch stays elsewhere.
 

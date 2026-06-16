@@ -12,13 +12,12 @@ present.
 
 ## Unreleased
 
-- Continues `canic` endpoint macro cleanup by aligning shared, root,
-  non-root, ICP refill, and bundle emitter module headers with the existing
-  facade-style endpoint macro documentation without changing emitted surfaces.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.43` continues `canic` endpoint macro cleanup by aligning endpoint
+  emitter module documentation while preserving emitted endpoint surfaces.
 
 - `0.67.42` continues `canic-core` replay-policy cleanup by splitting the
   manifest inventory into focused modules while preserving the public

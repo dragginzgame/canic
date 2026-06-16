@@ -1,4 +1,5 @@
 //! Module: ids::network
+//!
 //! Responsibility: build network identifiers.
 //! Does not own: environment detection or deployment selection.
 //! Boundary: exposes the network label a canister believes it runs under.

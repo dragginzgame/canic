@@ -1,4 +1,5 @@
 //! Module: ids::intent
+//!
 //! Responsibility: intent identifiers and resource keys.
 //! Does not own: intent execution, replay policy, or resource authorization.
 //! Boundary: exposes compact IDs used across workflow and ops boundaries.

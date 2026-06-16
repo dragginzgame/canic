@@ -1,4 +1,5 @@
 //! Module: replay_policy::types
+//!
 //! Responsibility: define the public replay-policy manifest data shapes.
 //! Boundary: owns passive policy metadata types, not endpoint execution.
 

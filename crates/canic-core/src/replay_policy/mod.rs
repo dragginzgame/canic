@@ -1,4 +1,5 @@
 //! Module: replay_policy
+//!
 //! Responsibility: expose the replay-policy manifest for Canic-owned surfaces.
 //! Boundary: owns policy inventory data, not replay receipt execution or guards.
 

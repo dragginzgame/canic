@@ -1,4 +1,5 @@
 //! Module: diagnostic
+//!
 //! Responsibility: compact diagnostic vocabulary for the example crate.
 //! Does not own: production error codes or runtime error mapping.
 //! Boundary: carries typed failures without relying on string matching.

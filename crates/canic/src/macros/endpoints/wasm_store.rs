@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::wasm_store
+//!
 //! Responsibility: emit local wasm-store endpoint macros for non-root stores.
 //! Does not own: template chunk storage, manifest validation, or GC workflow.
 //! Boundary: exposes facade macros that delegate immediately to wasm-store APIs.

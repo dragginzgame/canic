@@ -1,4 +1,5 @@
 //! Module: replay_policy::endpoint_manifest
+//!
 //! Responsibility: record replay policy for Canic-owned endpoint surfaces.
 //! Boundary: owns manifest data only; endpoint routing and execution stay elsewhere.
 

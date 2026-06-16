@@ -1,4 +1,5 @@
 //! Module: macros::endpoints
+//!
 //! Responsibility: collect endpoint emitter and bundle macro modules.
 //! Does not own: endpoint implementations, generated endpoint bodies, or lifecycle wiring.
 //! Boundary: module discovery only; exported macros are defined by child modules.

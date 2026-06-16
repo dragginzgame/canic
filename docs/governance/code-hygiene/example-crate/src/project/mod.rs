@@ -1,4 +1,5 @@
 //! Module: project
+//!
 //! Responsibility: project admission example and owner-local state.
 //! Does not own: endpoint authorization, stable storage, or workflow execution.
 //! Boundary: validates project requests before publishing accepted project facts.
