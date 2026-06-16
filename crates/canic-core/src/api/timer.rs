@@ -1,8 +1,15 @@
+//! Module: api::timer
+//!
+//! Responsibility: public timer facade for macro-expanded lifecycle code.
+//! Does not own: timer persistence, lifecycle hooks, or scheduling policy.
+//! Boundary: delegates timer creation and clearing to runtime timer workflow.
+
 use crate::workflow::runtime::timer::{TimerId, TimerWorkflow};
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 
 ///
 /// TimerHandle
+///
 /// Opaque handle for scheduled timers (no direct access to TimerId).
 ///
 
@@ -11,6 +18,7 @@ pub struct TimerHandle(TimerId);
 
 ///
 /// TimerSlot
+///
 /// Opaque timer slot handle for guarded scheduling.
 ///
 
@@ -18,6 +26,7 @@ pub type TimerSlot = LocalKey<RefCell<Option<TimerHandle>>>;
 
 ///
 /// TimerApi
+///
 /// Lifecycle timer api façade for macro-expanded entrypoints.
 ///
 

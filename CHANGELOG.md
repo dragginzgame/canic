@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Continues `canic-cli` evidence cleanup by moving evidence command
+  construction, option parsing, envelope comparison, and policy-gate handling
+  plus evidence tests into focused child modules while preserving CLI behavior.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
