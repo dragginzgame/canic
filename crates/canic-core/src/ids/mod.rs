@@ -1,17 +1,10 @@
-//! Layer-neutral identifiers and boundary-safe primitives.
-//!
-//! This module contains:
-//! - Pure identifiers (IDs, enums, newtypes)
-//! - Boundary-safe wrappers used across ops, workflow, and API
-//!
-//! It must not contain:
-//! - Business logic
-//! - Policy decisions
-//! - Storage-backed types
+//! Module: ids
+//! Responsibility: layer-neutral identifiers and boundary-safe primitives.
+//! Does not own: business logic, policy decisions, or storage-backed types.
+//! Boundary: exposes pure IDs, enums, and newtypes across ops, workflow, and API.
 
-pub mod capability;
-pub use capability as cap;
 mod canister;
+pub mod capability;
 mod endpoint;
 mod intent;
 mod metrics;
@@ -19,6 +12,7 @@ mod network;
 mod subnet;
 
 pub use canister::CanisterRole;
+pub use capability as cap;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};

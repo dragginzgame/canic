@@ -1,8 +1,9 @@
-// -----------------------------------------------------------------------------
-// Non-root endpoint emitters
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::nonroot
+//! Responsibility: emit non-root endpoint macros for propagation and issuer support.
+//! Does not own: cascade state application, delegated-token issuance, or proof storage.
+//! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-// Leaf emitter for the non-root sync surface used for state/topology propagation.
+/// Emit the non-root sync endpoints used for state and topology propagation.
 #[macro_export]
 macro_rules! canic_emit_nonroot_sync_topology_endpoints {
     () => {
@@ -22,7 +23,7 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
     };
 }
 
-// Leaf emitter for the non-root auth/attestation provisioning surface.
+/// Emit the non-root delegated-token issuer provisioning endpoints.
 #[macro_export]
 macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
     () => {

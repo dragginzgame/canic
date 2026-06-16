@@ -1,14 +1,22 @@
-use crate::cdk::candid::CandidType;
-use crate::impl_storable_bounded;
+//! Module: ids::subnet
+//! Responsibility: subnet role identifiers shared across Canic layers.
+//! Does not own: placement policy, subnet registry state, or authorization.
+//! Boundary: provides stable, bounded subnet role names for storage and DTOs.
+
+use crate::{cdk::candid::CandidType, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, borrow::Cow, fmt, str::FromStr};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt,
+    str::FromStr,
+};
 
 ///
 /// SubnetRole
 ///
-/// A human-readable identifier for a subnet type
+/// A human-readable identifier for a subnet type.
 ///
-/// Stored as `Cow<'static, str>` so known constants can be zero‑copy while
+/// Stored as `Cow<'static, str>` so known constants can be zero-copy while
 /// dynamic values allocate only when needed.
 ///
 

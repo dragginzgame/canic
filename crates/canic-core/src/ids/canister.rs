@@ -1,7 +1,15 @@
-use crate::cdk::candid::CandidType;
-use crate::impl_storable_bounded;
+//! Module: ids::canister
+//! Responsibility: canister role identifiers shared across Canic layers.
+//! Does not own: role authorization policy or canister registry state.
+//! Boundary: provides stable, bounded role names for storage and DTOs.
+
+use crate::{cdk::candid::CandidType, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, borrow::Cow, fmt, str::FromStr};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt,
+    str::FromStr,
+};
 
 const ROOT_ROLE: &str = "root";
 const WASM_STORE_ROLE: &str = "wasm_store";

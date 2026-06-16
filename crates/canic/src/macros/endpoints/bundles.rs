@@ -1,14 +1,9 @@
-// -----------------------------------------------------------------------------
-// Endpoint bundle macros
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::bundles
+//! Responsibility: compose endpoint emitter macros into default runtime surfaces.
+//! Does not own: endpoint implementations, lifecycle hooks, or Candid export order.
+//! Boundary: preserves `start!` capability composition through explicit macro bundles.
 
-// Macros that generate public IC endpoints for Canic canisters.
-// These emitters and bundles define the compile-time capability surface for
-// `start!`. The default compositions intentionally preserve
-// the current feature set; bundle boundaries exist to make linker policy
-// explicit.
-
-// Bundle composer for the default shared runtime surface on all Canic canisters.
+/// Emit the default shared runtime endpoint surface for all Canic canisters.
 #[macro_export]
 macro_rules! canic_bundle_shared_runtime_endpoints {
     () => {
@@ -27,7 +22,7 @@ macro_rules! canic_bundle_shared_runtime_endpoints {
     };
 }
 
-// Bundle composer for the root-only runtime surface.
+/// Emit the root-only runtime endpoint surface.
 #[macro_export]
 macro_rules! canic_bundle_root_only_endpoints {
     () => {
@@ -37,7 +32,7 @@ macro_rules! canic_bundle_root_only_endpoints {
     };
 }
 
-// Bundle composer for the non-root-only runtime surface.
+/// Emit the non-root-only runtime endpoint surface.
 #[macro_export]
 macro_rules! canic_bundle_nonroot_only_endpoints {
     () => {
@@ -48,7 +43,7 @@ macro_rules! canic_bundle_nonroot_only_endpoints {
     };
 }
 
-// Bundle composer for the canonical subnet-local wasm_store runtime surface.
+/// Emit the canonical subnet-local wasm-store runtime endpoint surface.
 #[macro_export]
 macro_rules! canic_bundle_wasm_store_runtime_endpoints {
     () => {

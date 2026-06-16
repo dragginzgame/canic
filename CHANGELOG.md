@@ -12,14 +12,17 @@ present.
 
 ## Unreleased
 
-- Continues `canic-core` replay-policy cleanup by splitting the manifest
-  inventory into focused endpoint, pool-admin, root-capability, quota, type,
-  and test modules, and by documenting the new module/type boundaries while
-  preserving the public replay-policy API.
+- Continues `canic` endpoint macro cleanup by aligning shared, root,
+  non-root, ICP refill, and bundle emitter module headers with the existing
+  facade-style endpoint macro documentation without changing emitted surfaces.
 
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.42` continues `canic-core` replay-policy cleanup by splitting the
+  manifest inventory into focused modules while preserving the public
+  replay-policy API.
 
 - `0.67.41` continues `canic-core` workflow cleanup by splitting pool and ICP
   refill internals into focused modules while preserving behavior and public
