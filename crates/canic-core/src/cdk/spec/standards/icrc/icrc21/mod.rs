@@ -1,10 +1,12 @@
-//! The [ICRC-21](https://github.com/dfinity/wg-identity-authentication/blob/main/topics/ICRC-21/icrc_21_consent_msg.md)
-//! Canister Call Consent Messages standard.
+//! Module: cdk::spec::standards::icrc::icrc21
+//!
+//! Responsibility: ICRC-21 Canister Call Consent Message Candid DTOs.
+//! Does not own: consent policy, wallet UX, or application authorization.
+//! Boundary: mirrors the external ICRC-21 surface for Canic callers.
 
 //
-// NOTE: We're using the code directly as importing the icrc-ledger-types is not
-// currently a good idea.  It's got a lot of bloated dependencies and an older version
-// of ic-stable-structures
+// Keep these DTOs local rather than importing icrc-ledger-types. That crate
+// pulls in broad dependencies and an older ic-stable-structures version.
 //
 mod errors;
 

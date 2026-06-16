@@ -1,3 +1,9 @@
+//! Module: cdk::types::cycles
+//!
+//! Responsibility: cycle amount wrapper and parsing helpers.
+//! Does not own: billing policy, cycle transfer workflows, or ledger calls.
+//! Boundary: provides stable serialization and display behavior for cycle values.
+
 use crate::cdk::{
     candid::{CandidType, Nat},
     structures::{Storable, storable::Bound},
@@ -12,6 +18,7 @@ use std::{
 
 ///
 /// Constants
+///
 /// Cycle unit shorthands for configs and logs
 ///
 
@@ -23,6 +30,7 @@ pub const QC: u128 = 1_000_000_000_000_000;
 
 ///
 /// Cycles
+///
 /// Thin wrapper around `Nat` that carries helper traits and serializers for
 /// arithmetic on cycle balances.
 ///
@@ -48,8 +56,7 @@ impl Cycles {
         self.0
     }
 
-    // from_config
-    // accepts the short hand 10T format or a number
+    /// Deserialize cycle config from either shorthand text such as `10T` or a number.
     pub fn from_config<'de, D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -71,7 +78,7 @@ impl Cycles {
 #[expect(clippy::cast_precision_loss)]
 impl Display for Cycles {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // default format in TeraCycles
+        // Render balances in teracycles for compact operator output.
         write!(f, "{:.3} TC", self.to_u128() as f64 / 1_000_000_000_000f64)
     }
 }
@@ -126,7 +133,7 @@ impl SubAssign for Cycles {
     }
 }
 
-// Human-input parser: "10K", "1.5T", etc.
+// Accept human-input cycle shorthand such as "10K" and "1.5T".
 #[expect(clippy::cast_precision_loss)]
 #[expect(clippy::cast_sign_loss)]
 #[expect(clippy::cast_possible_truncation)]
@@ -166,7 +173,7 @@ impl FromStr for Cycles {
 }
 
 impl Storable for Cycles {
-    // u128 is exactly 16 bytes, fixed-size
+    // u128 is exactly 16 bytes, fixed-size.
     const BOUND: Bound = Bound::Bounded {
         max_size: 16,
         is_fixed_size: true,
@@ -183,7 +190,7 @@ impl Storable for Cycles {
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
         let b = bytes.as_ref();
 
-        // Defensive decode: never panic on corrupted data
+        // Defensive decode: never panic on corrupted data.
         if b.len() != 16 {
             return Self::default();
         }

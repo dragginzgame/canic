@@ -1,5 +1,11 @@
 use super::*;
 use crate::test_support::temp_dir;
+use canic_host::adoption::{
+    AdoptionArtifactStateV1, AdoptionObservationStateV1, AdoptionPackageStateV1, AdoptionProfileV1,
+};
+use canic_host::release_set::{
+    AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, RenamedFleetRole,
+};
 use std::fs;
 
 // Ensure fleet listing options accept network selection.

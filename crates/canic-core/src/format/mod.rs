@@ -1,10 +1,15 @@
+//! Module: format
 //!
-//! Small formatting helpers shared across logs and status responses.
-//!
+//! Responsibility: small formatting helpers for logs and status responses.
+//! Does not own: DTO rendering policy or operator-facing message contracts.
+//! Boundary: provides reusable display adapters and compact value formatters.
+
 use std::fmt::{self, Display, Formatter};
 
 ///
 /// OptionalDisplay
+///
+/// Display adapter that renders `None` explicitly for operator-facing output.
 ///
 
 pub struct OptionalDisplay<T>(pub Option<T>);
