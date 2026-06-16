@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod config;
 mod manifest;
 mod paths;
-mod stage;
+pub(crate) mod stage;
 
 pub use config::{
     AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,

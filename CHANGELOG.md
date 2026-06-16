@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Continues canic-host release-set cleanup by splitting raw config projection,
+  config mutation, and staging helpers into focused modules while preserving
+  host behavior, operator output, and public APIs.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
