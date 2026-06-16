@@ -1,7 +1,16 @@
+//! Module: manifest::error
+//!
+//! Responsibility: report typed backup manifest validation failures.
+//! Does not own: validation traversal, manifest data, or restore execution.
+//! Boundary: shared error contract for manifest readers and validators.
+
 use thiserror::Error as ThisError;
 
 ///
 /// ManifestValidationError
+///
+/// Typed validation failure for backup manifest contracts.
+/// Owned by backup manifest validation and returned to callers before restore.
 ///
 
 #[derive(Debug, ThisError)]

@@ -1,9 +1,19 @@
+//! Module: execution::types
+//!
+//! Responsibility: define serialized backup execution journal contracts.
+//! Does not own: transition logic, backup planning, or artifact IO.
+//! Boundary: durable journal and receipt shapes shared by backup runners.
+
 use crate::plan::BackupOperationKind;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
 /// BackupExecutionJournal
+///
+/// Durable execution journal for one backup plan run.
+/// Owned by backup execution and persisted for resume and integrity checks.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -21,6 +31,9 @@ pub struct BackupExecutionJournal {
 ///
 /// BackupExecutionJournalOperation
 ///
+/// One ordered operation tracked by the backup execution journal.
+/// Owned by backup execution and derived from validated backup plans.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BackupExecutionJournalOperation {
@@ -36,6 +49,9 @@ pub struct BackupExecutionJournalOperation {
 ///
 /// BackupExecutionOperationState
 ///
+/// Durable runner state for one backup execution operation.
+/// Owned by backup execution and interpreted by resume logic.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -50,6 +66,9 @@ pub enum BackupExecutionOperationState {
 
 ///
 /// BackupExecutionOperationReceipt
+///
+/// Durable receipt for one attempted backup operation transition.
+/// Owned by backup execution and checked against journal state.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -76,6 +95,9 @@ pub struct BackupExecutionOperationReceipt {
 ///
 /// BackupExecutionOperationReceiptOutcome
 ///
+/// Terminal receipt outcome for one backup execution operation.
+/// Owned by backup execution and mapped back into operation state.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -87,6 +109,9 @@ pub enum BackupExecutionOperationReceiptOutcome {
 
 ///
 /// BackupExecutionResumeSummary
+///
+/// Read-only summary of journal progress used by resume/reporting surfaces.
+/// Owned by backup execution and derived from current journal state.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -108,6 +133,9 @@ pub struct BackupExecutionResumeSummary {
 
 ///
 /// BackupExecutionJournalError
+///
+/// Typed execution journal validation or transition failure.
+/// Owned by backup execution and returned before mutating invalid state.
 ///
 
 #[derive(Debug, ThisError)]

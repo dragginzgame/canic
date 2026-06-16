@@ -1,3 +1,12 @@
+//! Module: discovery
+//!
+//! Responsibility: convert registry observations into backup target sets.
+//! Does not own: snapshot IO, manifest validation, or persisted backup state.
+//! Boundary: prepares discovery projections consumed by backup planning.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     manifest::{
         DeploymentMember, DeploymentSection, IdentityMode, SourceSnapshot, VerificationCheck,
@@ -10,6 +19,9 @@ use thiserror::Error as ThisError;
 
 ///
 /// DiscoveredFleet
+///
+/// Registry-derived fleet snapshot before it is serialized into a manifest.
+/// Owned by backup discovery and consumed by manifest construction.
 ///
 
 #[derive(Clone, Debug)]
@@ -43,6 +55,9 @@ impl DiscoveredFleet {
 
 ///
 /// DiscoveredMember
+///
+/// One discovered deployment member with backup policy and snapshot metadata.
+/// Owned by backup discovery and projected into deployment manifest members.
 ///
 
 #[derive(Clone, Debug)]
@@ -83,6 +98,9 @@ impl DiscoveredMember {
 ///
 /// SnapshotPlan
 ///
+/// Source snapshot metadata planned for one discovered deployment member.
+/// Owned by backup discovery and copied into manifest source snapshots.
+///
 
 #[derive(Clone, Debug)]
 pub struct SnapshotPlan {
@@ -97,6 +115,9 @@ pub struct SnapshotPlan {
 ///
 /// SnapshotTarget
 ///
+/// Registry target selected for snapshot capture.
+/// Owned by backup discovery and consumed by snapshot planning.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotTarget {
@@ -108,6 +129,9 @@ pub struct SnapshotTarget {
 
 ///
 /// DiscoveryError
+///
+/// Typed discovery failure returned while selecting backup targets.
+/// Owned by backup discovery and surfaced to snapshot and planning callers.
 ///
 
 #[derive(Debug, ThisError)]
@@ -198,6 +222,3 @@ fn validate_discovered_members(members: &[DiscoveredMember]) -> Result<(), Disco
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

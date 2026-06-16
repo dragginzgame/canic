@@ -1,17 +1,31 @@
+//! Module: artifacts
+//!
+//! Responsibility: compute and validate backup artifact checksums.
+//! Does not own: snapshot capture, artifact storage, or restore planning.
+//! Boundary: provides deterministic checksum primitives to backup workflows.
+
+#[cfg(test)]
+mod tests;
+
 use crate::hash::{hex_bytes, sha256_hex};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+
 use std::{
     fs::{self, File},
     io::{self, Read},
     path::{Path, PathBuf},
 };
+
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 const SHA256_ALGORITHM: &str = "sha256";
 
 ///
 /// ArtifactChecksum
+///
+/// SHA-256 checksum metadata for a backup artifact file or directory.
+/// Owned by backup artifact support and serialized into manifests.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -103,6 +117,9 @@ impl ArtifactChecksum {
 ///
 /// ArtifactChecksumError
 ///
+/// Typed checksum failure returned by backup artifact hashing and validation.
+/// Owned by backup artifact support and surfaced to snapshot/runner callers.
+///
 
 #[derive(Debug, ThisError)]
 pub enum ArtifactChecksumError {
@@ -137,6 +154,3 @@ fn collect_files(
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

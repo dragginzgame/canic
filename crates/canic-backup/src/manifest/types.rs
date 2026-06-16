@@ -1,7 +1,16 @@
+//! Module: manifest::types
+//!
+//! Responsibility: define serialized backup manifest data contracts.
+//! Does not own: validation, discovery, snapshot capture, or restore actions.
+//! Boundary: stable JSON shapes shared by backup creation and restore flows.
+
 use serde::{Deserialize, Serialize};
 
 ///
 /// DeploymentBackupManifest
+///
+/// Top-level deployment backup manifest persisted with a backup bundle.
+/// Owned by backup manifest contracts and consumed by restore planning.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -19,6 +28,9 @@ pub struct DeploymentBackupManifest {
 ///
 /// ToolMetadata
 ///
+/// Tool identity recorded with one generated backup manifest.
+/// Owned by backup manifest contracts and written during backup creation.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ToolMetadata {
@@ -28,6 +40,9 @@ pub struct ToolMetadata {
 
 ///
 /// SourceMetadata
+///
+/// Source environment identity recorded for a backup bundle.
+/// Owned by backup manifest contracts and used by restore validation.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -39,6 +54,9 @@ pub struct SourceMetadata {
 ///
 /// ConsistencySection
 ///
+/// Backup unit grouping used to validate deployment consistency.
+/// Owned by backup manifest contracts and checked before restore planning.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConsistencySection {
@@ -47,6 +65,9 @@ pub struct ConsistencySection {
 
 ///
 /// BackupUnit
+///
+/// Role grouping that must be captured and restored as one consistency unit.
+/// Owned by backup manifest contracts and validated against deployment roles.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -59,6 +80,9 @@ pub struct BackupUnit {
 ///
 /// BackupUnitKind
 ///
+/// Consistency grouping mode for a backup unit.
+/// Owned by backup manifest contracts and interpreted by validators.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -69,6 +93,9 @@ pub enum BackupUnitKind {
 
 ///
 /// DeploymentSection
+///
+/// Captured deployment topology and member list for one backup.
+/// Owned by backup manifest contracts and consumed by restore planning.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -83,6 +110,9 @@ pub struct DeploymentSection {
 
 ///
 /// DeploymentMember
+///
+/// One canister member captured in a deployment backup manifest.
+/// Owned by backup manifest contracts and mapped into restore plan members.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -100,6 +130,9 @@ pub struct DeploymentMember {
 ///
 /// IdentityMode
 ///
+/// Restore identity policy for one deployment member.
+/// Owned by backup manifest contracts and enforced during restore planning.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -110,6 +143,9 @@ pub enum IdentityMode {
 
 ///
 /// SourceSnapshot
+///
+/// Snapshot artifact metadata for one deployment member.
+/// Owned by backup manifest contracts and validated before restore execution.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -126,6 +162,9 @@ pub struct SourceSnapshot {
 ///
 /// VerificationPlan
 ///
+/// Deployment and member verification checks required for a backup bundle.
+/// Owned by backup manifest contracts and consumed by restore validation.
+///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct VerificationPlan {
@@ -136,6 +175,9 @@ pub struct VerificationPlan {
 ///
 /// MemberVerificationChecks
 ///
+/// Verification checks scoped to one deployment role.
+/// Owned by backup manifest contracts and validated against deployment members.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemberVerificationChecks {
@@ -145,6 +187,9 @@ pub struct MemberVerificationChecks {
 
 ///
 /// VerificationCheck
+///
+/// Named verification check and the deployment roles it covers.
+/// Owned by backup manifest contracts and interpreted by validators.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

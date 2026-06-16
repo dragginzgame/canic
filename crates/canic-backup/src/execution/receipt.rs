@@ -1,3 +1,9 @@
+//! Module: execution::receipt
+//!
+//! Responsibility: construct and validate execution operation receipts.
+//! Does not own: journal transitions, plan construction, or artifact IO.
+//! Boundary: checks receipts against journal state before they are recorded.
+
 use super::{
     BackupExecutionJournal, BackupExecutionJournalError, BackupExecutionJournalOperation,
     BackupExecutionOperationReceipt, BackupExecutionOperationReceiptOutcome,

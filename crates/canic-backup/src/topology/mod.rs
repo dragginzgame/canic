@@ -1,9 +1,22 @@
+//! Module: topology
+//!
+//! Responsibility: model and hash backup topology snapshots.
+//! Does not own: registry discovery, manifest projection, or snapshot IO.
+//! Boundary: provides deterministic topology inputs for backup invariants.
+
+#[cfg(test)]
+mod tests;
+
 use crate::hash::sha256_hex;
+
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 
 ///
 /// TopologyRecord
+///
+/// Backup topology row used to build deterministic topology hashes.
+/// Owned by backup topology support and projected from discovered targets.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -17,6 +30,9 @@ pub struct TopologyRecord {
 ///
 /// TopologyHash
 ///
+/// Deterministic hash metadata for a discovered or pre-snapshot topology.
+/// Owned by backup topology support and stored in backup manifests.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TopologyHash {
@@ -27,6 +43,9 @@ pub struct TopologyHash {
 
 ///
 /// TopologyHasher
+///
+/// Stateless topology hashing entry point for discovery and snapshot guards.
+/// Owned by backup topology support and used by discovery and snapshot flows.
 ///
 
 pub struct TopologyHasher;
@@ -74,6 +93,3 @@ fn optional_principal(value: Option<Principal>) -> String {
 fn optional_str(value: Option<&str>) -> &str {
     value.unwrap_or("null")
 }
-
-#[cfg(test)]
-mod tests;

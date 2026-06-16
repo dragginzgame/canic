@@ -1,14 +1,7 @@
-use crate::{cli::clap::parse_required_subcommand, cli::help::print_help_or_version, version_text};
-use canic_backup::{
-    discovery::DiscoveryError, execution::BackupExecutionJournalError,
-    persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
-};
-use canic_host::registry::RegistryParseError;
-use std::ffi::OsString;
-use thiserror::Error as ThisError;
-
 mod command;
 mod create;
+mod dispatch;
+mod error;
 mod inspect;
 mod labels;
 mod layout;
@@ -28,6 +21,8 @@ use command::{
 use create::backup_create;
 #[cfg(test)]
 use create::{persist_backup_create_dry_run, persist_backup_create_dry_run_with_layout};
+pub use dispatch::run;
+pub use error::BackupCommandError;
 use inspect::backup_inspect;
 use manifest::run as run_manifest;
 pub use model::{
@@ -49,174 +44,6 @@ use render::{
 };
 use status::{backup_status, enforce_status_requirements};
 use verify::verify_backup;
-
-///
-/// BackupCommandError
-///
-
-#[derive(Debug, ThisError)]
-pub enum BackupCommandError {
-    #[error("{0}")]
-    Usage(String),
-
-    #[error(
-        "backup journal {backup_id} is incomplete: {pending_artifacts}/{total_artifacts} artifacts still require resume work"
-    )]
-    IncompleteJournal {
-        backup_id: String,
-        total_artifacts: usize,
-        pending_artifacts: usize,
-    },
-
-    #[error("backup plan {plan_id} is a dry-run layout, not a complete backup")]
-    DryRunNotComplete { plan_id: String },
-
-    #[error("backup reference {reference} was not found under backups; run `canic backup list`")]
-    BackupReferenceNotFound { reference: String },
-
-    #[error("backup reference {reference} is ambiguous under backups; use `--dir <dir>`")]
-    BackupReferenceAmbiguous { reference: String },
-
-    #[error("manifest: {0}")]
-    Manifest(String),
-
-    #[error(
-        "backup layout at --out is for a different request: {field} existing={existing}, requested={requested}"
-    )]
-    BackupLayoutMismatch {
-        field: &'static str,
-        existing: String,
-        requested: String,
-    },
-
-    #[error("backup layout is incomplete: missing {missing}")]
-    BackupLayoutIncomplete { missing: &'static str },
-
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before planning a backup"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error(
-        "deployment target {deployment} points to root {root}, but that canister is not present on local network {network}. Local ICP CLI replica state is not persistent; run `canic install <fleet-template>` to recreate it or re-register {deployment} with `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified`."
-    )]
-    LostLocalDeployment {
-        network: String,
-        deployment: String,
-        root: String,
-    },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
-
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
-
-    #[error("registry entry {canister_id} is not a valid principal")]
-    InvalidRegistryPrincipal { canister_id: String },
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Registry(#[from] RegistryParseError),
-
-    #[error(transparent)]
-    Persistence(#[from] PersistenceError),
-
-    #[error(transparent)]
-    Discovery(#[from] DiscoveryError),
-
-    #[error(transparent)]
-    BackupPlan(#[from] BackupPlanError),
-
-    #[error(transparent)]
-    BackupExecutionJournal(#[from] BackupExecutionJournalError),
-
-    #[error(transparent)]
-    BackupRunner(#[from] BackupRunnerError),
-}
-
-pub fn run<I>(args: I) -> Result<(), BackupCommandError>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
-        return Ok(());
-    }
-
-    let (command, args) = parse_required_subcommand(backup_command(), args)
-        .map_err(|_| BackupCommandError::Usage(usage()))?;
-
-    match command.as_str() {
-        "create" => {
-            if print_help_or_version(&args, create_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupCreateOptions::parse(args)?;
-            let report = backup_create(&options)?;
-            write_create_report(&report);
-            Ok(())
-        }
-        "list" => {
-            if print_help_or_version(&args, list_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupListOptions::parse(args)?;
-            let entries = backup_list(&options)?;
-            write_list_report(&options, &entries)?;
-            Ok(())
-        }
-        "inspect" => {
-            if print_help_or_version(&args, inspect_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupInspectOptions::parse(args)?;
-            let report = backup_inspect(&options)?;
-            write_inspect_report(&options, &report)?;
-            Ok(())
-        }
-        "manifest" => {
-            run_manifest(args).map_err(|err| BackupCommandError::Manifest(err.to_string()))
-        }
-        "prune" => {
-            if print_help_or_version(&args, prune_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupPruneOptions::parse(args)?;
-            let report = backup_prune(&options)?;
-            write_prune_report(&options, &report)?;
-            Ok(())
-        }
-        "status" => {
-            if print_help_or_version(&args, status_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupStatusOptions::parse(args)?;
-            let report = backup_status(&options)?;
-            write_status_report(&options, &report)?;
-            enforce_status_requirements(&options, &report)?;
-            Ok(())
-        }
-        "verify" => {
-            if print_help_or_version(&args, verify_usage, version_text()) {
-                return Ok(());
-            }
-            let options = BackupVerifyOptions::parse(args)?;
-            let report = verify_backup(&options)?;
-            write_verify_report(&options, &report)?;
-            Ok(())
-        }
-        _ => unreachable!("backup dispatch command only defines known commands"),
-    }
-}
 
 #[cfg(test)]
 mod tests;
