@@ -66,7 +66,8 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 - Use triple-line `///` section markers above structs, enums, and traits to
   improve scanability:
   `///`, `/// TypeName`, `///`.
-- Comment intent/invariants only. See `docs/governance/code-hygiene.md`.
+- Comment intent/invariants only. See
+  `docs/governance/code-hygiene/README.md`.
 - Shipped `CandidType` types should avoid `///` unless metadata is intentional.
 
 ## Testing

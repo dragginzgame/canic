@@ -19,7 +19,7 @@ framework; the cleanup runner is the shorter per-module workflow.
 Use **Module Surface Hardening**, not **Code Hygiene**.
 
 Reason: `code hygiene` already means formatting, imports, docs, ordering, and
-small readability standards in `docs/governance/code-hygiene.md`. This audit is
+small readability standards in `docs/governance/code-hygiene/README.md`. This audit is
 narrower and more consequential: remove dead or stale exposed surface, collapse
 unnecessary complexity lanes, and verify that every retained in-scope code unit
 has a current Canic authority reason without regressing hot-path or

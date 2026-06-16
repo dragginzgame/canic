@@ -1,8 +1,9 @@
-// -----------------------------------------------------------------------------
-// Cycle endpoint emitters
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::cycles
+//! Responsibility: emit cycle-tracker endpoint macros for consumer canisters.
+//! Does not own: cycle accounting state or page query semantics.
+//! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-// Leaf emitter for the standard cycle-tracker view.
+/// Emit the standard cycle-tracker query endpoints.
 #[macro_export]
 macro_rules! canic_emit_cycle_tracker_endpoints {
     () => {
