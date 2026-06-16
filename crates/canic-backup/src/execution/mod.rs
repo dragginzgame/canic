@@ -1,5 +1,13 @@
+//! Module: execution
+//!
+//! Responsibility: build and advance backup execution journals.
+//! Does not own: backup plan construction, artifact IO, or manifest storage.
+//! Boundary: tracks runner progress from validated plans through receipts.
+
 mod operation;
 mod receipt;
+#[cfg(test)]
+mod tests;
 mod types;
 mod validation;
 
@@ -333,6 +341,3 @@ impl BackupExecutionJournal {
         stopped && unstarted
     }
 }
-
-#[cfg(test)]
-mod tests;

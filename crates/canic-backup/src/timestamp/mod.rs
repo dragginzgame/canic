@@ -1,14 +1,8 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Return the current wall-clock timestamp as a compact unix-seconds marker.
-#[must_use]
-pub fn current_timestamp_marker() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs());
-
-    format!("unix:{seconds}")
-}
+//! Module: timestamp
+//!
+//! Responsibility: generate compact wall-clock markers for backup metadata.
+//! Does not own: clock synchronization, ordering guarantees, or persistence.
+//! Boundary: supplies human-readable timestamps to backup journals and reports.
 
 #[cfg(test)]
 mod tests {
@@ -24,4 +18,16 @@ mod tests {
 
         assert!(seconds.parse::<u64>().is_ok());
     }
+}
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Return the current wall-clock timestamp as a compact unix-seconds marker.
+#[must_use]
+pub fn current_timestamp_marker() -> String {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs());
+
+    format!("unix:{seconds}")
 }

@@ -1,3 +1,9 @@
+//! Module: execution::validation
+//!
+//! Responsibility: provide local execution journal validation helpers.
+//! Does not own: journal transitions, receipt construction, or persistence.
+//! Boundary: shared predicates used by execution journal and receipt logic.
+
 use super::{BackupExecutionJournalError, BackupExecutionJournalOperation};
 use crate::plan::BackupOperationKind;
 
