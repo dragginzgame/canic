@@ -12,15 +12,17 @@ present.
 
 ## Unreleased
 
-- Adds sharding assignment reclamation support through the Canic
-  `release_partition_key` Rust API, validating the current pool owner before
-  unassigning stale partition keys, decrementing shard load counters, and
-  recording bounded release metrics while keeping sharding assignment and
-  release workflow internals in focused modules.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.41` continues `canic-core` workflow cleanup by splitting pool and ICP
+  refill internals into focused modules while preserving behavior and public
+  call sites.
+
+- `0.67.40` adds the Canic `release_partition_key` Rust API for reclaiming
+  sharding assignments from the current pool owner with bounded release
+  metrics.
 
 - `0.67.39` continues canic-host cleanup by splitting release-set
   path/package-version helpers and install-root phase operations into focused
