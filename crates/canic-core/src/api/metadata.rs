@@ -1,3 +1,9 @@
+//! Module: api::metadata
+//!
+//! Responsibility: public Canic metadata facade for endpoint callers.
+//! Does not own: package metadata generation or endpoint macro emission.
+//! Boundary: builds metadata DTOs from package and canister version inputs.
+
 use crate::dto::metadata::CanicMetadataResponse;
 
 const CANISTER_NAME: &str = env!("CARGO_PKG_NAME");
@@ -6,6 +12,8 @@ const CANISTER_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
 ///
 /// CanicMetadataApi
+///
+/// Thin endpoint-facing facade for Canic metadata responses.
 ///
 
 pub struct CanicMetadataApi;

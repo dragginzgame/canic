@@ -1,12 +1,8 @@
-//! Public API façade for canister endpoints.
+//! Module: api
 //!
-//! This module contains thin wrappers exposed to proc-macro–generated
-//! endpoints. Functions here translate public API calls into internal
-//! workflow or ops calls and map internal errors into `Error`.
-//!
-//! No orchestration or business logic should live here.
-//! Any wrapper callable from an endpoint must return a `Result` so errors
-//! are consistently mapped at the boundary.
+//! Responsibility: public API facades for macro-generated canister endpoints.
+//! Does not own: orchestration, business logic, policy, or storage invariants.
+//! Boundary: maps endpoint calls into workflow/ops calls and public errors.
 
 pub mod auth;
 pub mod cascade;
