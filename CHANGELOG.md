@@ -12,14 +12,14 @@ present.
 
 ## Unreleased
 
-- Continues `canic-cli` backup cleanup by splitting backup create/verify tests,
-  backup option parsing, backup create executor internals, and backup
-  list/reference resolution, plus backup dispatch/error ownership, into focused
-  child modules while preserving backup CLI behavior.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.49` continues `canic-cli` backup cleanup by splitting backup
+  create/verify tests, option parsing, create execution, list/reference
+  resolution, and dispatch/error ownership into focused modules while
+  preserving backup CLI behavior.
 
 - `0.67.48` continues `canic-cli` backup test cleanup by splitting backup
   inspect, list, options, reference, prune, status, and fixture coverage into

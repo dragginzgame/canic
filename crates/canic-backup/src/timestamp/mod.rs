@@ -4,6 +4,18 @@
 //! Does not own: clock synchronization, ordering guarantees, or persistence.
 //! Boundary: supplies human-readable timestamps to backup journals and reports.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Return the current wall-clock timestamp as a compact unix-seconds marker.
+#[must_use]
+pub fn current_timestamp_marker() -> String {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs());
+
+    format!("unix:{seconds}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -18,16 +30,4 @@ mod tests {
 
         assert!(seconds.parse::<u64>().is_ok());
     }
-}
-
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Return the current wall-clock timestamp as a compact unix-seconds marker.
-#[must_use]
-pub fn current_timestamp_marker() -> String {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs());
-
-    format!("unix:{seconds}")
 }
