@@ -1,3 +1,9 @@
+//! Module: plan::validation
+//!
+//! Responsibility: validate backup plan structure and execution readiness.
+//! Does not own: plan construction, preflight receipt mapping, or journaling.
+//! Boundary: enforces plan invariants before dry-run or live execution.
+
 use super::{
     BackupOperation, BackupOperationKind, BackupPlan, BackupPlanError, BackupScopeKind,
     ControlAuthority, ControlAuthoritySource,

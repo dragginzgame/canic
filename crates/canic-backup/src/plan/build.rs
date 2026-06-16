@@ -1,3 +1,9 @@
+//! Module: plan::build
+//!
+//! Responsibility: construct backup plans from registry-backed selections.
+//! Does not own: registry querying, preflight execution, or journal state.
+//! Boundary: maps discovered targets into validated plan operations.
+
 use super::{
     BackupOperation, BackupOperationKind, BackupPlan, BackupPlanError, BackupScopeKind,
     BackupTarget, ControlAuthority, ControlAuthoritySource, QuiescencePolicy,
@@ -16,6 +22,9 @@ use std::{
 
 ///
 /// BackupPlanBuildInput
+///
+/// Input bundle required to build a backup plan from registry entries.
+/// Owned by backup plan construction and supplied by higher-level workflows.
 ///
 
 pub struct BackupPlanBuildInput<'a> {

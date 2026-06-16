@@ -1,3 +1,12 @@
+//! Module: journal
+//!
+//! Responsibility: track resumable backup artifact download state.
+//! Does not own: execution planning, snapshot capture, or manifest validation.
+//! Boundary: persists artifact progress for backup resume and integrity checks.
+
+#[cfg(test)]
+mod tests;
+
 use candid::Principal;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,6 +21,9 @@ const SHA256_ALGORITHM: &str = "sha256";
 
 ///
 /// DownloadJournal
+///
+/// Durable artifact download journal for one backup run.
+/// Owned by backup journaling and consumed by resume and integrity checks.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -96,6 +108,9 @@ impl DownloadJournal {
 ///
 /// DownloadOperationMetrics
 ///
+/// Counters for artifact download lifecycle progress.
+/// Owned by backup journaling and reported in resume summaries.
+///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DownloadOperationMetrics {
@@ -112,6 +127,9 @@ pub struct DownloadOperationMetrics {
 
 ///
 /// ArtifactJournalEntry
+///
+/// Durable journal entry for one snapshot artifact.
+/// Owned by backup journaling and advanced by snapshot download workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -192,6 +210,9 @@ impl ArtifactJournalEntry {
 ///
 /// ArtifactState
 ///
+/// Monotonic durable state for one snapshot artifact.
+/// Owned by backup journaling and used to derive idempotent resume actions.
+///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -223,6 +244,9 @@ impl ArtifactState {
 ///
 /// ResumeAction
 ///
+/// Next idempotent action needed to resume an artifact download.
+/// Owned by backup journaling and derived from artifact state.
+///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -235,6 +259,9 @@ pub enum ResumeAction {
 
 ///
 /// JournalResumeReport
+///
+/// Read-only resume projection of one download journal.
+/// Owned by backup journaling and consumed by status/reporting surfaces.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -252,6 +279,9 @@ pub struct JournalResumeReport {
 
 ///
 /// JournalStateCounts
+///
+/// Aggregated artifact state and resume-action counters.
+/// Owned by backup journaling and embedded in resume reports.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -288,6 +318,9 @@ impl JournalStateCounts {
 ///
 /// ArtifactResumeReport
 ///
+/// Read-only resume projection for one artifact journal entry.
+/// Owned by backup journaling and embedded in resume reports.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ArtifactResumeReport {
@@ -302,6 +335,9 @@ pub struct ArtifactResumeReport {
 
 ///
 /// JournalValidationError
+///
+/// Typed validation failure for durable artifact journals.
+/// Owned by backup journaling and returned before unsafe resume.
 ///
 
 #[derive(Debug, ThisError)]
@@ -431,6 +467,3 @@ fn validate_hash(field: &'static str, value: &str) -> Result<(), JournalValidati
         Err(JournalValidationError::InvalidHash(field))
     }
 }
-
-#[cfg(test)]
-mod tests;

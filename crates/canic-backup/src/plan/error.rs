@@ -1,8 +1,18 @@
+//! Module: plan::error
+//!
+//! Responsibility: report typed backup plan validation failures.
+//! Does not own: plan construction, preflight validation, or execution state.
+//! Boundary: shared error contract for plan builders and execution preflights.
+
 use crate::discovery::DiscoveryError;
+
 use thiserror::Error as ThisError;
 
 ///
 /// BackupPlanError
+///
+/// Typed backup plan construction, validation, or preflight failure.
+/// Owned by backup planning and returned before invalid execution can start.
 ///
 
 #[derive(Debug, ThisError)]

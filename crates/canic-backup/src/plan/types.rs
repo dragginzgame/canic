@@ -1,8 +1,18 @@
+//! Module: plan::types
+//!
+//! Responsibility: define serialized backup plan and preflight contracts.
+//! Does not own: registry discovery, validation, execution, or persistence.
+//! Boundary: data shapes shared by backup planners, runners, and preflights.
+
 use crate::manifest::IdentityMode;
+
 use serde::{Deserialize, Serialize};
 
 ///
 /// BackupPlan
+///
+/// Executable backup plan derived from a selected deployment scope.
+/// Owned by backup planning and consumed by execution journals and runners.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -27,6 +37,9 @@ pub struct BackupPlan {
 ///
 /// BackupScopeKind
 ///
+/// Backup selection mode used to derive target and operation scope.
+/// Owned by backup planning and serialized into plan and preflight contracts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -39,6 +52,9 @@ pub enum BackupScopeKind {
 
 ///
 /// BackupTarget
+///
+/// One canister selected for backup with authority and restore policy.
+/// Owned by backup planning and used by preflight and execution builders.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -56,6 +72,9 @@ pub struct BackupTarget {
 ///
 /// AuthorityEvidence
 ///
+/// Confidence level for an authority decision embedded in a backup plan.
+/// Owned by backup planning and refined by execution preflight receipts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -67,6 +86,9 @@ pub enum AuthorityEvidence {
 
 ///
 /// ControlAuthority
+///
+/// Control authority decision for one selected backup target.
+/// Owned by backup planning and validated before mutation execution.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -130,6 +152,9 @@ impl ControlAuthority {
 ///
 /// ControlAuthoritySource
 ///
+/// Source of a control authority decision for one backup target.
+/// Owned by backup planning and interpreted by preflight validation.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case", tag = "kind")]
@@ -142,6 +167,9 @@ pub enum ControlAuthoritySource {
 
 ///
 /// SnapshotReadAuthority
+///
+/// Snapshot read authority decision for one selected backup target.
+/// Owned by backup planning and validated before snapshot download.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -201,6 +229,9 @@ impl SnapshotReadAuthority {
 ///
 /// SnapshotReadAuthoritySource
 ///
+/// Source of a snapshot-read authority decision for one backup target.
+/// Owned by backup planning and interpreted by preflight validation.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -215,6 +246,9 @@ pub enum SnapshotReadAuthoritySource {
 ///
 /// QuiescencePolicy
 ///
+/// Consistency policy requested before backup mutation begins.
+/// Owned by backup planning and checked by execution preflight receipts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -227,6 +261,9 @@ pub enum QuiescencePolicy {
 ///
 /// BackupOperation
 ///
+/// Ordered operation generated for one backup plan.
+/// Owned by backup planning and converted into execution journal operations.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BackupOperation {
@@ -238,6 +275,9 @@ pub struct BackupOperation {
 
 ///
 /// BackupOperationKind
+///
+/// Operation class used by backup execution and preflight validation.
+/// Owned by backup planning and interpreted by execution journals.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -258,6 +298,9 @@ pub enum BackupOperationKind {
 ///
 /// BackupReceipt
 ///
+/// Legacy per-operation backup receipt retained for plan-facing contracts.
+/// Owned by backup planning and superseded by execution operation receipts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BackupReceipt {
@@ -272,6 +315,9 @@ pub struct BackupReceipt {
 ///
 /// BackupReceiptStatus
 ///
+/// Terminal status for a plan-facing backup receipt.
+/// Owned by backup planning and serialized with legacy receipt contracts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -283,6 +329,9 @@ pub enum BackupReceiptStatus {
 
 ///
 /// BackupExecutionPreflightReceipts
+///
+/// Complete preflight receipt bundle required before backup mutation.
+/// Owned by backup planning and consumed by execution journals.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -300,6 +349,9 @@ pub struct BackupExecutionPreflightReceipts {
 ///
 /// ControlAuthorityReceipt
 ///
+/// Control authority preflight result for one selected backup target.
+/// Owned by backup planning and applied before execution can mutate targets.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ControlAuthorityReceipt {
@@ -315,6 +367,9 @@ pub struct ControlAuthorityReceipt {
 
 ///
 /// SnapshotReadAuthorityReceipt
+///
+/// Snapshot-read authority preflight result for one selected backup target.
+/// Owned by backup planning and applied before snapshot download can run.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -332,6 +387,9 @@ pub struct SnapshotReadAuthorityReceipt {
 ///
 /// AuthorityProofSource
 ///
+/// Evidence source used by an authority preflight receipt.
+/// Owned by backup planning and serialized with authority receipt contracts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -345,6 +403,9 @@ pub enum AuthorityProofSource {
 
 ///
 /// ControlAuthorityPreflightRequest
+///
+/// Request shape for proving control authority over selected targets.
+/// Owned by backup planning and sent to execution preflight providers.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -360,6 +421,9 @@ pub struct ControlAuthorityPreflightRequest {
 
 ///
 /// ControlAuthorityPreflightTarget
+///
+/// Target row included in a control-authority preflight request.
+/// Owned by backup planning and projected from selected backup targets.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -384,6 +448,9 @@ impl From<&BackupTarget> for ControlAuthorityPreflightTarget {
 ///
 /// SnapshotReadAuthorityPreflightRequest
 ///
+/// Request shape for proving snapshot read authority over selected targets.
+/// Owned by backup planning and sent to execution preflight providers.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SnapshotReadAuthorityPreflightRequest {
@@ -397,6 +464,9 @@ pub struct SnapshotReadAuthorityPreflightRequest {
 
 ///
 /// SnapshotReadAuthorityPreflightTarget
+///
+/// Target row included in a snapshot-read preflight request.
+/// Owned by backup planning and projected from selected backup targets.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -421,6 +491,9 @@ impl From<&BackupTarget> for SnapshotReadAuthorityPreflightTarget {
 ///
 /// TopologyPreflightRequest
 ///
+/// Request shape for confirming selected topology before mutation.
+/// Owned by backup planning and sent to execution preflight providers.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TopologyPreflightRequest {
@@ -437,6 +510,9 @@ pub struct TopologyPreflightRequest {
 
 ///
 /// TopologyPreflightTarget
+///
+/// Target row included in a topology preflight request and receipt.
+/// Owned by backup planning and projected from selected backup targets.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -459,6 +535,9 @@ impl From<&BackupTarget> for TopologyPreflightTarget {
 ///
 /// TopologyPreflightReceipt
 ///
+/// Topology preflight result accepted before backup mutation begins.
+/// Owned by backup planning and checked against the selected plan.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TopologyPreflightReceipt {
@@ -475,6 +554,9 @@ pub struct TopologyPreflightReceipt {
 ///
 /// QuiescencePreflightRequest
 ///
+/// Request shape for confirming the selected quiescence policy.
+/// Owned by backup planning and sent to execution preflight providers.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct QuiescencePreflightRequest {
@@ -490,6 +572,9 @@ pub struct QuiescencePreflightRequest {
 
 ///
 /// QuiescencePreflightTarget
+///
+/// Target row included in a quiescence preflight request and receipt.
+/// Owned by backup planning and projected from selected backup targets.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -511,6 +596,9 @@ impl From<&BackupTarget> for QuiescencePreflightTarget {
 
 ///
 /// QuiescencePreflightReceipt
+///
+/// Quiescence preflight result accepted before backup mutation begins.
+/// Owned by backup planning and checked against the selected plan.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
