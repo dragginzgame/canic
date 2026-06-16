@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 if {
     [ -z "${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}" ] ||
+        [ -z "${CANIC_SHELLCHECK_VERSION:-}" ] ||
         [ -z "${CANIC_ICP_CLI_VERSION:-}" ] ||
         [ -z "${CANIC_ICQ_VERSION:-${CANIC_IC_QUERY_VERSION:-}}" ]
 } &&
@@ -16,10 +17,13 @@ CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.67.36}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.96.0}"
 CANIC_ACTIONLINT_VERSION="${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
+CANIC_SHELLCHECK_VERSION="${CANIC_SHELLCHECK_VERSION:-}"
+SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_ICP_CLI_VERSION="${CANIC_ICP_CLI_VERSION:-}"
 CANIC_ICQ_VERSION="${CANIC_ICQ_VERSION:-${CANIC_IC_QUERY_VERSION:-}}"
 CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
 if [ -z "$CANIC_ACTIONLINT_VERSION" ] ||
+    [ -z "$CANIC_SHELLCHECK_VERSION" ] ||
     [ -z "$CANIC_ICP_CLI_VERSION" ] ||
     [ -z "$CANIC_ICQ_VERSION" ]; then
     echo "missing external tool version pin; expected tool-versions.env or explicit environment overrides" >&2
@@ -104,6 +108,27 @@ install_or_update_actionlint() {
         green "actionlint on PATH: $(command -v actionlint)"
     else
         yellow "actionlint installed at $ACTIONLINT_INSTALL_DIR/actionlint; add $ACTIONLINT_INSTALL_DIR to PATH to run it directly."
+    fi
+}
+
+install_or_update_shellcheck() {
+    local bin
+
+    yellow "ShellCheck:"
+    cyan_command "CANIC_SHELLCHECK_VERSION=$CANIC_SHELLCHECK_VERSION SHELLCHECK_INSTALL_DIR=$SHELLCHECK_INSTALL_DIR bash scripts/ci/install-shellcheck.sh"
+    require_command curl
+    require_command tar
+    bin="$(
+        CANIC_SHELLCHECK_VERSION="$CANIC_SHELLCHECK_VERSION" \
+            SHELLCHECK_INSTALL_DIR="$SHELLCHECK_INSTALL_DIR" \
+            bash "$ROOT_DIR/scripts/ci/install-shellcheck.sh"
+    )"
+
+    green "ShellCheck installed: $("$bin" --version 2>&1 | head -n 1)"
+    if command -v shellcheck >/dev/null 2>&1; then
+        green "shellcheck on PATH: $(command -v shellcheck)"
+    else
+        yellow "shellcheck installed at $SHELLCHECK_INSTALL_DIR/shellcheck; add $SHELLCHECK_INSTALL_DIR to PATH to run it directly."
     fi
 }
 
@@ -212,7 +237,8 @@ install_or_update_ic_wasm() {
     require_command npm
     mkdir -p "$npm_bin_dir"
     clean_icp_npm_staging_dirs
-    export PATH="$(resolved_cargo_bin_dir):$npm_bin_dir:$PATH"
+    PATH="$(resolved_cargo_bin_dir):$npm_bin_dir:$PATH"
+    export PATH
     hash -r 2>/dev/null || true
     cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/ic-wasm"
     npm install -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/ic-wasm
@@ -240,13 +266,14 @@ configure_git_hooks_if_present() {
 
 main() {
     if [ "${1:-}" = "--update-prereqs" ]; then
-        blue "Checking Python, workflow lint, ICP CLI, and IC query prerequisites"
+        blue "Checking Python, shell lint, workflow lint, ICP CLI, and IC query prerequisites"
         require_python
+        install_or_update_shellcheck
         install_or_update_actionlint
         install_or_update_icp_cli
         install_or_update_ic_query
         install_or_update_ic_wasm
-        green "Python, workflow lint, ICP CLI, and IC query prerequisites ready."
+        green "Python, shell lint, workflow lint, ICP CLI, and IC query prerequisites ready."
         return 0
     fi
 
@@ -279,6 +306,7 @@ main() {
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
+    install_or_update_shellcheck
     install_or_update_actionlint
     install_or_update_icp_cli
     install_or_update_ic_query

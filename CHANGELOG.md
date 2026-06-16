@@ -12,13 +12,13 @@ present.
 
 ## Unreleased
 
-- CI now reports GitHub runner disk availability and the largest likely disk
-  consumers around Rust cache and validation phases, so out-of-space failures
-  identify the cause instead of surfacing only as compiler write errors.
-
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.37` adds GitHub runner disk diagnostics around Rust cache and
+  validation phases, and installs pinned ShellCheck through local developer
+  setup while keeping pinned `icq` installs sourced from crates.io by default.
 
 - `0.67.36` continues canic-host deployment-truth promotion cleanup by
   decomposing shared promotion support plus transform/readiness and execution

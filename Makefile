@@ -11,6 +11,7 @@
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
+SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
@@ -33,8 +34,8 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/actionlint/ICP CLI/IC query/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/actionlint/ICP CLI/IC query development environment"
+	@echo "  install-dev      Install the shared Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query/Canic toolchain"
+	@echo "  update-dev       Update the local Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -86,13 +87,13 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/actionlint/ICP CLI/IC query/Canic toolchain.
+# Install the shared Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query/Canic toolchain.
 install-dev:
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" bash scripts/dev/install_dev.sh
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/actionlint/ICP CLI/IC query development environment.
+# Update the local Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query development environment.
 update-dev:
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
 	cargo install --quiet \
 		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \

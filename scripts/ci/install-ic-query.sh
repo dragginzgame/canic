@@ -11,7 +11,6 @@ fi
 
 version="${1:-${CANIC_ICQ_VERSION:-${CANIC_IC_QUERY_VERSION:-}}}"
 cargo_bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
-default_local_path="$ROOT_DIR/../ic-query"
 install_path="${CANIC_ICQ_PATH:-${CANIC_IC_QUERY_PATH:-}}"
 install_git="${CANIC_ICQ_GIT:-${CANIC_IC_QUERY_GIT:-}}"
 install_rev="${CANIC_ICQ_REV:-${CANIC_IC_QUERY_REV:-}}"
@@ -30,6 +29,36 @@ icq_version_matches() {
     esac
 }
 
+latest_ic_query_version() {
+    local latest_version=""
+    local search_output=""
+
+    search_output="$(cargo search ic-query --limit 1 2>/dev/null)" || return 1
+    latest_version="$(
+        printf '%s\n' "$search_output" |
+            sed -n 's/^ic-query = "\([^"]\+\)".*/\1/p' |
+            head -n 1
+    )"
+    if [[ "$latest_version" =~ ^[0-9]+(\.[0-9]+){1,2}([-+][0-9A-Za-z.-]+)?$ ]]; then
+        printf '%s\n' "$latest_version"
+        return 0
+    fi
+    return 1
+}
+
+warn_if_newer_ic_query_exists() {
+    local latest_version=""
+    local pinned_version="$1"
+
+    if [ "${CANIC_ICQ_LATEST_CHECK:-1}" = "0" ]; then
+        return 0
+    fi
+    latest_version="$(latest_ic_query_version)" || return 0
+    if [ "$latest_version" != "$pinned_version" ]; then
+        echo "warning: crates.io latest ic-query release is v$latest_version; Canic remains pinned to v$pinned_version in tool-versions.env" >&2
+    fi
+}
+
 if [ -z "$version" ]; then
     echo "missing ic-query version; set CANIC_ICQ_VERSION or update tool-versions.env" >&2
     exit 1
@@ -46,10 +75,6 @@ hash -r 2>/dev/null || true
 
 if [ -n "${GITHUB_PATH:-}" ]; then
     printf '%s\n' "$cargo_bin_dir" >>"$GITHUB_PATH"
-fi
-
-if [ -z "$install_path" ] && [ -f "$default_local_path/Cargo.toml" ]; then
-    install_path="$default_local_path"
 fi
 
 if [ -n "$install_path" ]; then
@@ -93,3 +118,4 @@ if ! icq_version_matches "$icq_version_output" "$version"; then
 fi
 
 echo "icq ready: $icq_version_output ($icq_path)" >&2
+warn_if_newer_ic_query_exists "$version"
