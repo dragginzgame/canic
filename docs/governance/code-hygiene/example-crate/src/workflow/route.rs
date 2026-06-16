@@ -1,4 +1,5 @@
 //! Module: workflow::route
+//!
 //! Responsibility: workflow step labels and step-kind classification.
 //! Does not own: project validation or execution side effects.
 //! Boundary: validates step labels before workflow code receives them.

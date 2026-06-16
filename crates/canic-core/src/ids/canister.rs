@@ -1,4 +1,5 @@
 //! Module: ids::canister
+//!
 //! Responsibility: canister role identifiers shared across Canic layers.
 //! Does not own: role authorization policy or canister registry state.
 //! Boundary: provides stable, bounded role names for storage and DTOs.

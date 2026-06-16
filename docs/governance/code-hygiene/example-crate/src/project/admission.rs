@@ -1,4 +1,5 @@
 //! Module: project::admission
+//!
 //! Responsibility: project admission request and report contracts.
 //! Does not own: record storage or workflow execution.
 //! Boundary: turns caller input into owner-approved project facts.

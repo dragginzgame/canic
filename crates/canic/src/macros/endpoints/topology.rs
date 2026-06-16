@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::topology
+//!
 //! Responsibility: emit topology state, index, children, and placement views.
 //! Does not own: topology state, placement policy, or authorization policy.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.

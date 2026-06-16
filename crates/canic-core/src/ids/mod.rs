@@ -1,4 +1,5 @@
 //! Module: ids
+//!
 //! Responsibility: layer-neutral identifiers and boundary-safe primitives.
 //! Does not own: business logic, policy decisions, or storage-backed types.
 //! Boundary: exposes pure IDs, enums, and newtypes across ops, workflow, and API.

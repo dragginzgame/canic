@@ -1,4 +1,5 @@
 //! Module: replay_policy::quota
+//!
 //! Responsibility: name quota and cycle-reserve policy labels used by manifests.
 //! Boundary: owns labels only; enforcement remains in cost/replay guard ops.
 

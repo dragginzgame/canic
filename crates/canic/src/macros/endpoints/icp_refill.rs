@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::icp_refill
+//!
 //! Responsibility: emit the opt-in ICP refill endpoint macro.
 //! Does not own: refill replay, ledger calls, CMC notification, or cost guards.
 //! Boundary: exposes a guarded facade macro that delegates to the core refill API.

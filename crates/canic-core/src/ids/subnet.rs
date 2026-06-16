@@ -1,4 +1,5 @@
 //! Module: ids::subnet
+//!
 //! Responsibility: subnet role identifiers shared across Canic layers.
 //! Does not own: placement policy, subnet registry state, or authorization.
 //! Boundary: provides stable, bounded subnet role names for storage and DTOs.

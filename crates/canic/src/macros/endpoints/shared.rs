@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::shared
+//!
 //! Responsibility: emit endpoint macros shared by root, non-root, and wasm-store canisters.
 //! Does not own: endpoint auth policy, runtime state, metrics storage, or query semantics.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.

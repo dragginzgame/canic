@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::bundles
+//!
 //! Responsibility: compose endpoint emitter macros into default runtime surfaces.
 //! Does not own: endpoint implementations, lifecycle hooks, or Candid export order.
 //! Boundary: preserves `start!` capability composition through explicit macro bundles.

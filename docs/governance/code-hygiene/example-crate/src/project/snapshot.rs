@@ -1,4 +1,5 @@
 //! Module: project::snapshot
+//!
 //! Responsibility: owner-local accepted project record representation.
 //! Does not own: stable-memory schema or lifecycle hooks.
 //! Boundary: records accepted project facts after admission validation.

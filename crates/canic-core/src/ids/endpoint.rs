@@ -1,4 +1,5 @@
 //! Module: ids::endpoint
+//!
 //! Responsibility: endpoint identifiers and call-kind labels.
 //! Does not own: endpoint dispatch, authorization, or metrics emission.
 //! Boundary: provides small typed values used by replay and observability code.

@@ -1,4 +1,5 @@
 //! Module: replay_policy::root_capability_manifest
+//!
 //! Responsibility: record replay policy for root-capability command variants.
 //! Boundary: owns manifest data only; capability RPC execution stays elsewhere.
 

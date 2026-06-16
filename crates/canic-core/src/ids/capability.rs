@@ -1,4 +1,5 @@
 //! Module: ids::capability
+//!
 //! Responsibility: canonical capability scope names for delegated auth.
 //! Does not own: authorization policy or capability validation.
 //! Boundary: exposes broad string constants that consumers may specialize later.

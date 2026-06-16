@@ -1,4 +1,5 @@
 //! Module: macros::endpoints::root
+//!
 //! Responsibility: emit root-canister endpoint macros for control and authority surfaces.
 //! Does not own: root state, pool policy, auth proof issuance, or wasm-store workflows.
 //! Boundary: exposes facade macros that delegate immediately to core/control-plane APIs.
