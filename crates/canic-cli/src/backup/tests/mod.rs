@@ -12,10 +12,7 @@ use super::*;
 use crate::test_support::temp_dir;
 use canic_backup::{execution::BackupExecutionJournal, persistence::BackupLayout};
 use fixtures::*;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 // Ensure dry-run persistence writes a plan and matching execution journal.
 #[test]
