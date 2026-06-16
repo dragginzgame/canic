@@ -12,13 +12,24 @@ present.
 
 ## Unreleased
 
-- Continues canic-host cleanup by splitting release-set path/package-version
-  helpers and install-root phase operations into focused modules while
-  preserving host behavior, operator output, and public APIs.
+- Adds sharding assignment reclamation support through the Canic
+  `release_partition_key` Rust API, validating the current pool owner before
+  unassigning stale partition keys, decrementing shard load counters, and
+  recording bounded release metrics while keeping sharding assignment and
+  release workflow internals in focused modules.
 
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
+
+- `0.67.39` continues canic-host cleanup by splitting release-set
+  path/package-version helpers and install-root phase operations into focused
+  modules while preserving host behavior, operator output, and public APIs.
+
+- `0.67.38` continues canic-host release-set cleanup by splitting raw config
+  projection, config mutation, and staging helpers into focused modules, and
+  adds forward-looking blob-storage design notes while preserving host
+  behavior and public APIs.
 
 - `0.67.37` adds GitHub runner disk diagnostics around Rust cache and
   validation phases, and installs pinned ShellCheck through local developer

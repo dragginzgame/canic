@@ -457,6 +457,11 @@ fn sharding_metrics_are_exposed_with_stable_labels() {
         ShardingMetricOutcome::Skipped,
         ShardingMetricReason::TargetSatisfied,
     );
+    ShardingMetrics::record(
+        ShardingMetricOperation::ReleaseKey,
+        ShardingMetricOutcome::Skipped,
+        ShardingMetricReason::NotAssigned,
+    );
 
     let entries = entries(MetricsKind::Placement);
 
@@ -469,6 +474,11 @@ fn sharding_metrics_are_exposed_with_stable_labels() {
         &entries,
         &["sharding", "bootstrap_pool", "skipped", "target_satisfied"],
         2,
+    );
+    assert_metric_count(
+        &entries,
+        &["sharding", "release_key", "skipped", "not_assigned"],
+        1,
     );
 }
 

@@ -23,6 +23,7 @@ pub enum ShardingMetricOperation {
     BootstrapPool,
     CreateShard,
     PlanAssign,
+    ReleaseKey,
 }
 
 impl ShardingMetricOperation {
@@ -37,6 +38,7 @@ impl ShardingMetricOperation {
             Self::BootstrapPool => "bootstrap_pool",
             Self::CreateShard => "create_shard",
             Self::PlanAssign => "plan_assign",
+            Self::ReleaseKey => "release_key",
         }
     }
 }
@@ -81,6 +83,7 @@ pub enum ShardingMetricReason {
     ManagementCall,
     NoFreeSlots,
     NoInitialShards,
+    NotAssigned,
     Ok,
     PolicyDenied,
     PoolAtCapacity,
@@ -101,6 +104,7 @@ impl ShardingMetricReason {
             Self::ManagementCall => "management_call",
             Self::NoFreeSlots => "no_free_slots",
             Self::NoInitialShards => "no_initial_shards",
+            Self::NotAssigned => "not_assigned",
             Self::Ok => "ok",
             Self::PolicyDenied => "policy_denied",
             Self::PoolAtCapacity => "pool_at_capacity",
@@ -221,6 +225,11 @@ mod tests {
             ShardingMetricOutcome::Skipped,
             ShardingMetricReason::TargetSatisfied,
         );
+        ShardingMetrics::record(
+            ShardingMetricOperation::ReleaseKey,
+            ShardingMetricOutcome::Skipped,
+            ShardingMetricReason::NotAssigned,
+        );
 
         let map = snapshot_map();
 
@@ -239,6 +248,14 @@ mod tests {
                 reason: ShardingMetricReason::TargetSatisfied,
             }),
             Some(&2)
+        );
+        assert_eq!(
+            map.get(&ShardingMetricKey {
+                operation: ShardingMetricOperation::ReleaseKey,
+                outcome: ShardingMetricOutcome::Skipped,
+                reason: ShardingMetricReason::NotAssigned,
+            }),
+            Some(&1)
         );
     }
 }
