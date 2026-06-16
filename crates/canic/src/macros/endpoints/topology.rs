@@ -1,8 +1,9 @@
-// -----------------------------------------------------------------------------
-// Topology endpoint emitters
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::topology
+//! Responsibility: emit topology state, index, children, and placement views.
+//! Does not own: topology state, placement policy, or authorization policy.
+//! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-// Leaf emitter for shared state snapshots.
+/// Emit root-only topology state snapshot endpoints.
 #[macro_export]
 macro_rules! canic_emit_topology_state_endpoints {
     () => {
@@ -22,7 +23,7 @@ macro_rules! canic_emit_topology_state_endpoints {
     };
 }
 
-// Leaf emitter for shared index views.
+/// Emit shared topology index query endpoints.
 #[macro_export]
 macro_rules! canic_emit_topology_index_endpoints {
     () => {
@@ -48,7 +49,7 @@ macro_rules! canic_emit_topology_index_endpoints {
     };
 }
 
-// Leaf emitter for the shared topology-children view.
+/// Emit the shared topology-children query endpoint.
 #[macro_export]
 macro_rules! canic_emit_topology_children_endpoints {
     () => {
@@ -62,7 +63,7 @@ macro_rules! canic_emit_topology_children_endpoints {
     };
 }
 
-// Leaf emitter for shared scaling/sharding placement views.
+/// Emit shared scaling and sharding placement view endpoints.
 #[macro_export]
 macro_rules! canic_emit_topology_placement_endpoints {
     () => {
@@ -91,7 +92,7 @@ macro_rules! canic_emit_topology_placement_endpoints {
     };
 }
 
-// Bundle composer for shared state, index, topology, and placement views.
+/// Emit the standard topology view endpoint bundle.
 #[macro_export]
 macro_rules! canic_bundle_topology_views_endpoints {
     () => {

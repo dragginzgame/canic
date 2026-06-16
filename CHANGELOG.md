@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Continues `canic-core` replay-policy cleanup by splitting the manifest
+  inventory into focused endpoint, pool-admin, root-capability, quota, type,
+  and test modules, and by documenting the new module/type boundaries while
+  preserving the public replay-policy API.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)

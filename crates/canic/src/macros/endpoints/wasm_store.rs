@@ -1,8 +1,9 @@
-// -----------------------------------------------------------------------------
-// Local wasm-store endpoint emitters
-// -----------------------------------------------------------------------------
+//! Module: macros::endpoints::wasm_store
+//! Responsibility: emit local wasm-store endpoint macros for non-root stores.
+//! Does not own: template chunk storage, manifest validation, or GC workflow.
+//! Boundary: exposes facade macros that delegate immediately to wasm-store APIs.
 
-// Leaf emitter for the canonical local wasm-store canister surface.
+/// Emit the canonical local wasm-store canister endpoint surface.
 #[macro_export]
 macro_rules! canic_emit_local_wasm_store_endpoints {
     () => {
