@@ -155,7 +155,7 @@ impl AuthStateOps {
         AuthState::get_root_issuer(issuer_pid).map(RootIssuerPolicyRecordMapper::record_to_policy)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, canic_test_delegation_material))]
     pub fn upsert_root_issuer_policy(policy: RootIssuerPolicy) {
         AuthState::upsert_root_issuer(RootIssuerPolicyRecordMapper::policy_to_record(policy));
     }

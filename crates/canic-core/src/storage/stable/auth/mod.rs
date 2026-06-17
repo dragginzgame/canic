@@ -203,7 +203,7 @@ impl AuthState {
     }
 
     // Upsert a root delegation-proof issuer policy record.
-    #[cfg(test)]
+    #[cfg(any(test, canic_test_delegation_material))]
     pub(crate) fn upsert_root_issuer(record: RootIssuerRecord) {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();

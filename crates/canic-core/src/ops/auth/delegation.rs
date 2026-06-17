@@ -5,6 +5,7 @@ use super::{
             InstallActiveDelegationProofError, InstallActiveDelegationProofInput,
             install_active_delegation_proof as build_active_delegation_proof,
         },
+        canonical::cert_hash as delegation_cert_hash,
         cert_rules::DelegatedAuthTtlLimits,
         delegation_cert::{
             PrepareDelegationCertError, PrepareDelegationCertInput, finish_delegation_proof,
@@ -29,7 +30,8 @@ use crate::{
             DelegationAudience, DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
             RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
             RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareRequest,
-            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof, RootProof,
+            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
+            RootDelegationProofInstallOutcome, RootProof,
         },
         error::Error,
     },
@@ -82,6 +84,7 @@ impl PendingDelegationProofBatchKey {
 struct PreparedRootDelegationProofBatchEntry {
     prepared: PreparedRootDelegationProof,
     _refresh_after_ns: u64,
+    installed: bool,
 }
 
 impl AuthOps {
@@ -293,6 +296,22 @@ impl AuthOps {
             )
         })
     }
+
+    pub(crate) fn preflight_delegation_proof_batch_install_proof(
+        batch_id: [u8; 32],
+        proof: &RootDelegationProofBatchProof,
+        now_ns: u64,
+    ) -> Result<(), RootDelegationProofInstallOutcome> {
+        preflight_delegation_proof_batch_install_proof(batch_id, proof, now_ns)
+    }
+
+    pub(crate) fn mark_delegation_proof_batch_installed(
+        batch_id: [u8; 32],
+        issuer_pid: Principal,
+        cert_hash: [u8; 32],
+    ) {
+        mark_delegation_proof_batch_installed(batch_id, issuer_pid, cert_hash);
+    }
 }
 
 fn prepare_delegation_proof_batch_with_root_signature(
@@ -378,6 +397,7 @@ fn cache_prepared_delegation_proof_batch(
             PreparedRootDelegationProofBatchEntry {
                 prepared,
                 _refresh_after_ns: refresh_after_ns,
+                installed: false,
             },
         );
     });
@@ -459,6 +479,60 @@ fn get_delegation_proof_batch_with_root_signature(
         batch_id: request.batch_id,
         proofs,
     })
+}
+
+fn preflight_delegation_proof_batch_install_proof(
+    batch_id: [u8; 32],
+    proof: &RootDelegationProofBatchProof,
+    now_ns: u64,
+) -> Result<(), RootDelegationProofInstallOutcome> {
+    if proof.proof.cert.issuer_pid != proof.issuer_pid {
+        return Err(RootDelegationProofInstallOutcome::ProofMismatch);
+    }
+    if now_ns >= proof.proof.cert.expires_at_ns {
+        return Err(RootDelegationProofInstallOutcome::ExpiredOrSuperseded);
+    }
+    let cert_hash = delegation_cert_hash(&proof.proof.cert)
+        .map_err(|_| RootDelegationProofInstallOutcome::ProofMismatch)?;
+    if cert_hash != proof.cert_hash {
+        return Err(RootDelegationProofInstallOutcome::ProofMismatch);
+    }
+
+    let pending = pending_delegation_proof_batch_entry(batch_id, proof.issuer_pid, proof.cert_hash)
+        .map_err(|_| RootDelegationProofInstallOutcome::ProofMismatch)?;
+    if pending.prepared.cert_hash != proof.cert_hash
+        || pending.prepared.cert != proof.proof.cert
+        || pending.prepared.cert.issuer_pid != proof.issuer_pid
+    {
+        return Err(RootDelegationProofInstallOutcome::ProofMismatch);
+    }
+    if pending.installed {
+        return Err(RootDelegationProofInstallOutcome::AlreadyInstalled);
+    }
+    if now_ns >= pending.prepared.retrieval_expires_at_ns
+        || now_ns >= pending.prepared.cert.expires_at_ns
+    {
+        return Err(RootDelegationProofInstallOutcome::ExpiredOrSuperseded);
+    }
+
+    Ok(())
+}
+
+fn mark_delegation_proof_batch_installed(
+    batch_id: [u8; 32],
+    issuer_pid: Principal,
+    cert_hash: [u8; 32],
+) {
+    PENDING_DELEGATION_PROOF_BATCHES.with(|pending| {
+        if let Some(entry) = pending
+            .borrow_mut()
+            .get_mut(&PendingDelegationProofBatchKey::new(
+                batch_id, issuer_pid, cert_hash,
+            ))
+        {
+            entry.installed = true;
+        }
+    });
 }
 
 fn root_delegation_proof_batch_metadata(
@@ -1022,5 +1096,90 @@ mod tests {
         assert_eq!(retrieved_hashes, expected_hashes);
         assert_eq!(retrieved_issuers, expected_issuers);
         assert_eq!(requested_hashes, expected_hashes);
+    }
+
+    #[test]
+    fn batch_install_preflight_accepts_retrieved_proof() {
+        let response = prepared_batch(p(46), 46, 90);
+        let retrieved = get_delegation_proof_batch_with_root_signature(
+            batch_get_request(&response),
+            p(1),
+            80,
+            |_cert_hash| Ok(root_proof(11)),
+        )
+        .expect("prepared batch should retrieve proofs");
+
+        assert_eq!(
+            preflight_delegation_proof_batch_install_proof(
+                response.batch_id,
+                &retrieved.proofs[0],
+                80,
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn batch_install_preflight_rejects_proof_mismatch() {
+        let response = prepared_batch(p(47), 47, 90);
+        let retrieved = get_delegation_proof_batch_with_root_signature(
+            batch_get_request(&response),
+            p(1),
+            80,
+            |_cert_hash| Ok(root_proof(12)),
+        )
+        .expect("prepared batch should retrieve proofs");
+        let mut proof = retrieved.proofs[0].clone();
+        proof.cert_hash = [9; 32];
+
+        assert_eq!(
+            preflight_delegation_proof_batch_install_proof(response.batch_id, &proof, 80),
+            Err(RootDelegationProofInstallOutcome::ProofMismatch)
+        );
+    }
+
+    #[test]
+    fn batch_install_preflight_rejects_stale_pending_metadata() {
+        let response = prepared_batch(p(48), 48, 70);
+        let retrieved = get_delegation_proof_batch_with_root_signature(
+            batch_get_request(&response),
+            p(1),
+            60,
+            |_cert_hash| Ok(root_proof(13)),
+        )
+        .expect("prepared batch should retrieve proofs before expiry");
+
+        assert_eq!(
+            preflight_delegation_proof_batch_install_proof(
+                response.batch_id,
+                &retrieved.proofs[0],
+                70,
+            ),
+            Err(RootDelegationProofInstallOutcome::ExpiredOrSuperseded)
+        );
+    }
+
+    #[test]
+    fn batch_install_preflight_reports_already_installed_after_success_mark() {
+        let response = prepared_batch(p(49), 49, 70);
+        let retrieved = get_delegation_proof_batch_with_root_signature(
+            batch_get_request(&response),
+            p(1),
+            60,
+            |_cert_hash| Ok(root_proof(14)),
+        )
+        .expect("prepared batch should retrieve proofs before expiry");
+        let proof = &retrieved.proofs[0];
+        assert_eq!(
+            preflight_delegation_proof_batch_install_proof(response.batch_id, proof, 60),
+            Ok(())
+        );
+
+        mark_delegation_proof_batch_installed(response.batch_id, proof.issuer_pid, proof.cert_hash);
+
+        assert_eq!(
+            preflight_delegation_proof_batch_install_proof(response.batch_id, proof, 80),
+            Err(RootDelegationProofInstallOutcome::AlreadyInstalled)
+        );
     }
 }

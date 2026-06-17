@@ -29,6 +29,14 @@ use crate::{
     },
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
+#[cfg(canic_test_delegation_material)]
+use crate::{
+    domain::policy::auth::{
+        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+    },
+    dto::auth::{DelegatedRoleGrant, DelegationAudience},
+    ops::storage::auth::AuthStateOps,
+};
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
@@ -48,8 +56,6 @@ impl AuthApi {
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const DELEGATED_TOKEN_ISSUER_DISABLED: &str = "delegated token issuer disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_issuer=true in canic.toml";
     const ROOT_DELEGATION_PROOF_SELF_PROVISIONING_DISABLED: &str = "issuer-initiated root delegation proof provisioning is unsupported; use root hard-cut provisioning";
-    const ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE: &str =
-        "root delegation proof batch provisioning is not implemented yet";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
@@ -137,6 +143,33 @@ impl AuthApi {
         Ok(AuthOps::active_delegation_proof_status(IcOps::now_nanos()))
     }
 
+    /// Install root issuer policy in explicit delegation-material test builds.
+    #[cfg(canic_test_delegation_material)]
+    pub fn test_upsert_root_issuer_policy(
+        issuer_pid: Principal,
+        allowed_audiences: Vec<DelegationAudience>,
+        allowed_grants: Vec<DelegatedRoleGrant>,
+        max_cert_ttl_ns: u64,
+        refresh_after_ratio_bps: u16,
+    ) -> Result<(), Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        AuthStateOps::upsert_root_issuer_policy(RootIssuerPolicy {
+            issuer_pid,
+            enabled: true,
+            allowed_audiences: allowed_audiences
+                .iter()
+                .map(root_delegation_audience_policy)
+                .collect(),
+            allowed_grants: allowed_grants
+                .iter()
+                .map(root_delegated_role_grant_policy)
+                .collect(),
+            max_cert_ttl_ns,
+            refresh_after_ratio_bps,
+        });
+        Ok(())
+    }
+
     /// Reject the issuer-initiated root delegation proof provisioning path.
     pub fn prepare_delegation_proof(
         _request: DelegationProofIssueRequest,
@@ -181,13 +214,13 @@ impl AuthApi {
     }
 
     /// Install retrieved root delegation proof batches from the local root update path.
-    pub fn install_delegation_proof_batch_root(
-        _request: RootDelegationProofBatchInstallRequest,
+    pub async fn install_delegation_proof_batch_root(
+        request: RootDelegationProofBatchInstallRequest,
     ) -> Result<RootDelegationProofBatchInstallResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        Err(Error::unavailable(
-            Self::ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE,
-        ))
+        RuntimeAuthWorkflow::install_delegation_proof_batch_root(request)
+            .await
+            .map_err(Self::map_auth_error)
     }
 
     /// Prepare a root-certified role attestation from the local root update path.
@@ -232,6 +265,27 @@ impl AuthApi {
         max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
             Error::invalid("auth.delegated_tokens.max_ttl_secs overflows nanoseconds")
         })
+    }
+}
+
+#[cfg(canic_test_delegation_material)]
+fn root_delegation_audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
+    match audience {
+        DelegationAudience::Canister(canister) => RootDelegationAudiencePolicy::Canister(*canister),
+        DelegationAudience::CanicSubnet(subnet) => {
+            RootDelegationAudiencePolicy::CanicSubnet(*subnet)
+        }
+        DelegationAudience::Project(project) => {
+            RootDelegationAudiencePolicy::Project(project.clone())
+        }
+    }
+}
+
+#[cfg(canic_test_delegation_material)]
+fn root_delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> RootDelegatedRoleGrantPolicy {
+    RootDelegatedRoleGrantPolicy {
+        target: grant.target.clone(),
+        scopes: grant.scopes.clone(),
     }
 }
 

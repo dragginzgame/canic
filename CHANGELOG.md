@@ -12,13 +12,18 @@ present.
 
 ## Unreleased
 
-- Root delegation proof batch retrieval now resolves pending batch metadata,
-  assembles direct root query proofs, and returns the MVP batch get response
-  while batch install remains deferred.
+- Root delegation proof batch install now validates submitted proofs against
+  pending batch metadata and broadcasts valid proofs to signer install
+  endpoints with per-signer outcomes, including root-side `AlreadyInstalled`
+  idempotency for repeated successful installs.
 
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.11` enables direct root query retrieval for root delegation proof
+  batches, returning prepared proofs from pending metadata while keeping
+  provisioning out of issuer nested-query paths.
 
 - `0.68.10` turns root delegation proof batch prepare into a real MVP prepare
   step that validates request metadata, certifies root signature leaves, caches

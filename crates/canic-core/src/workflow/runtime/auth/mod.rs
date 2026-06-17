@@ -5,6 +5,7 @@
 //! Boundary: lifecycle and API layers call this after config/runtime context is available.
 
 mod prepare;
+mod provisioning;
 
 use crate::{
     InternalError, InternalErrorOrigin,
