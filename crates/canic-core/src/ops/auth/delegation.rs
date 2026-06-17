@@ -27,8 +27,9 @@ use crate::{
             ActiveDelegationProof, ActiveDelegationProofStatus,
             ActiveDelegationProofStatusResponse, AuthRequestMetadata, DelegatedRoleGrant,
             DelegationAudience, DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
-            RootDelegationProofBatchEntry, RootDelegationProofBatchPrepareRequest,
-            RootDelegationProofBatchPrepareResponse,
+            RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
+            RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareRequest,
+            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof, RootProof,
         },
         error::Error,
     },
@@ -79,7 +80,7 @@ impl PendingDelegationProofBatchKey {
 
 #[derive(Clone)]
 struct PreparedRootDelegationProofBatchEntry {
-    _prepared: PreparedRootDelegationProof,
+    prepared: PreparedRootDelegationProof,
     _refresh_after_ns: u64,
 }
 
@@ -276,6 +277,22 @@ impl AuthOps {
             },
         )
     }
+
+    pub(crate) fn get_delegation_proof_batch(
+        request: RootDelegationProofBatchGetRequest,
+    ) -> Result<RootDelegationProofBatchGetResponse, InternalError> {
+        let root_pid = IcOps::canister_self();
+        let now_ns = IcOps::now_nanos();
+        get_delegation_proof_batch_with_root_signature(request, root_pid, now_ns, |cert_hash| {
+            Self::get_root_canister_signature_proof(
+                RootPayloadKind::DelegationCert,
+                cert_hash,
+                root_pid,
+                root_pid,
+                now_ns,
+            )
+        })
+    }
 }
 
 fn prepare_delegation_proof_batch_with_root_signature(
@@ -359,11 +376,89 @@ fn cache_prepared_delegation_proof_batch(
         pending.borrow_mut().insert(
             PendingDelegationProofBatchKey::new(batch_id, issuer_pid, prepared.cert_hash),
             PreparedRootDelegationProofBatchEntry {
-                _prepared: prepared,
+                prepared,
                 _refresh_after_ns: refresh_after_ns,
             },
         );
     });
+}
+
+fn pending_delegation_proof_batch_entry(
+    batch_id: [u8; 32],
+    issuer_pid: Principal,
+    cert_hash: [u8; 32],
+) -> Result<PreparedRootDelegationProofBatchEntry, InternalError> {
+    PENDING_DELEGATION_PROOF_BATCHES
+        .with(|pending| {
+            pending
+                .borrow()
+                .get(&PendingDelegationProofBatchKey::new(
+                    batch_id, issuer_pid, cert_hash,
+                ))
+                .cloned()
+        })
+        .ok_or_else(|| {
+            AuthValidationError::Auth(
+                "delegation proof batch entry was not prepared or has expired".to_string(),
+            )
+            .into()
+        })
+}
+
+fn get_delegation_proof_batch_with_root_signature(
+    request: RootDelegationProofBatchGetRequest,
+    root_pid: Principal,
+    now_ns: u64,
+    mut get_root_proof: impl FnMut([u8; 32]) -> Result<RootProof, InternalError>,
+) -> Result<RootDelegationProofBatchGetResponse, InternalError> {
+    if request.entries.is_empty() {
+        return Err(InternalError::public(Error::invalid(
+            "root delegation proof batch get must contain at least one proof reference",
+        )));
+    }
+
+    let mut proofs = Vec::with_capacity(request.entries.len());
+    for proof_ref in request.entries {
+        let pending = pending_delegation_proof_batch_entry(
+            request.batch_id,
+            proof_ref.issuer_pid,
+            proof_ref.cert_hash,
+        )?;
+        if pending.prepared.cert.issuer_pid != proof_ref.issuer_pid
+            || pending.prepared.cert_hash != proof_ref.cert_hash
+            || pending.prepared.cert.root_pid != root_pid
+        {
+            return Err(InternalError::invariant(
+                crate::InternalErrorOrigin::Ops,
+                "pending delegation proof batch metadata mismatch",
+            ));
+        }
+        if now_ns >= pending.prepared.retrieval_expires_at_ns {
+            return Err(AuthValidationError::Auth(
+                "delegation proof batch retrieval window expired".to_string(),
+            )
+            .into());
+        }
+
+        let root_proof = get_root_proof(pending.prepared.cert_hash)?;
+        let finalized = finish_delegation_proof(
+            super::delegated::delegation_cert::PreparedDelegationCert {
+                cert: pending.prepared.cert,
+                cert_hash: pending.prepared.cert_hash,
+            },
+            root_proof,
+        );
+        proofs.push(RootDelegationProofBatchProof {
+            issuer_pid: proof_ref.issuer_pid,
+            cert_hash: finalized.cert_hash,
+            proof: finalized.proof,
+        });
+    }
+
+    Ok(RootDelegationProofBatchGetResponse {
+        batch_id: request.batch_id,
+        proofs,
+    })
 }
 
 fn root_delegation_proof_batch_metadata(
@@ -457,11 +552,13 @@ fn active_delegation_proof_status_response(
 mod tests {
     use super::*;
     use crate::{
+        InternalErrorClass,
         domain::policy::auth::RootIssuerPolicy,
         dto::auth::{
             AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience, DelegationCert,
-            IcCanisterSignatureProofV1, RootDelegationProofBatchPrepareEntry,
-            RootDelegationProofBatchPrepareRequest, RootProof,
+            IcCanisterSignatureProofV1, RootDelegationProofBatchGetRequest,
+            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
+            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef, RootProof,
         },
         dto::error::ErrorCode,
         ids::{CanisterRole, cap},
@@ -506,21 +603,28 @@ mod tests {
         }
     }
 
+    fn batch_prepare_entry(
+        issuer_pid: Principal,
+        cert_ttl_ns: u64,
+    ) -> RootDelegationProofBatchPrepareEntry {
+        RootDelegationProofBatchPrepareEntry {
+            issuer_pid,
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![DelegatedRoleGrant {
+                target: CanisterRole::owned("project_instance".to_string()),
+                scopes: vec![cap::READ.to_string()],
+            }],
+            cert_ttl_ns,
+        }
+    }
+
     fn batch_prepare_request(
         issuer_pid: Principal,
         cert_ttl_ns: u64,
     ) -> RootDelegationProofBatchPrepareRequest {
         RootDelegationProofBatchPrepareRequest {
             metadata: None,
-            entries: vec![RootDelegationProofBatchPrepareEntry {
-                issuer_pid,
-                aud: DelegationAudience::Project("test".to_string()),
-                grants: vec![DelegatedRoleGrant {
-                    target: CanisterRole::owned("project_instance".to_string()),
-                    scopes: vec![cap::READ.to_string()],
-                }],
-                cert_ttl_ns,
-            }],
+            entries: vec![batch_prepare_entry(issuer_pid, cert_ttl_ns)],
         }
     }
 
@@ -542,6 +646,55 @@ mod tests {
             }],
             max_cert_ttl_ns: 120_000_000_000,
             refresh_after_ratio_bps: 8_000,
+        }
+    }
+
+    fn root_proof(byte: u8) -> RootProof {
+        RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![byte; 8],
+            public_key_der: vec![byte; 4],
+        })
+    }
+
+    fn prepared_batch(
+        issuer_pid: Principal,
+        metadata_id: u8,
+        retrieval_expires_at_ns: u64,
+    ) -> RootDelegationProofBatchPrepareResponse {
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(issuer_pid));
+        let mut request = batch_prepare_request(issuer_pid, 60_000_000_000);
+        request.metadata = Some(metadata(metadata_id, 60_000_000_000));
+        let decisions =
+            AuthOps::preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
+
+        prepare_delegation_proof_batch_with_root_signature(
+            request,
+            [metadata_id; 32],
+            decisions,
+            120_000_000_000,
+            10,
+            p(1),
+            |batch_id, _cert_hash| {
+                assert_eq!(batch_id, [metadata_id; 32]);
+                Ok(retrieval_expires_at_ns)
+            },
+        )
+        .expect("batch prepare should produce metadata")
+    }
+
+    fn batch_get_request(
+        response: &RootDelegationProofBatchPrepareResponse,
+    ) -> RootDelegationProofBatchGetRequest {
+        RootDelegationProofBatchGetRequest {
+            batch_id: response.batch_id,
+            entries: response
+                .entries
+                .iter()
+                .map(|entry| RootDelegationProofBatchProofRef {
+                    issuer_pid: entry.issuer_pid,
+                    cert_hash: entry.cert_hash,
+                })
+                .collect(),
         }
     }
 
@@ -681,15 +834,7 @@ mod tests {
     fn batch_prepare_rejects_invalid_metadata_ttl() {
         let request = RootDelegationProofBatchPrepareRequest {
             metadata: Some(metadata(28, 0)),
-            entries: vec![RootDelegationProofBatchPrepareEntry {
-                issuer_pid: p(28),
-                aud: DelegationAudience::Project("test".to_string()),
-                grants: vec![DelegatedRoleGrant {
-                    target: CanisterRole::owned("project_instance".to_string()),
-                    scopes: vec![cap::READ.to_string()],
-                }],
-                cert_ttl_ns: 60_000_000_000,
-            }],
+            entries: vec![batch_prepare_entry(p(28), 60_000_000_000)],
         };
 
         let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
@@ -730,5 +875,152 @@ mod tests {
         assert_eq!(response.entries[0].refresh_after_ns, 48_000_000_010);
         assert_eq!(response.retrieval_expires_at_ns, 70);
         assert_eq!(signed_hashes, vec![response.entries[0].cert_hash]);
+    }
+
+    #[test]
+    fn batch_get_rejects_empty_entries() {
+        let err = get_delegation_proof_batch_with_root_signature(
+            RootDelegationProofBatchGetRequest {
+                batch_id: [40; 32],
+                entries: vec![],
+            },
+            p(1),
+            10,
+            |_cert_hash| panic!("empty get request must not request a root proof"),
+        )
+        .expect_err("empty get request must fail");
+        let public = err.public_error().expect("public get error");
+
+        assert_eq!(public.code, ErrorCode::InvalidInput);
+    }
+
+    #[test]
+    fn batch_get_rejects_missing_pending_metadata() {
+        let err = get_delegation_proof_batch_with_root_signature(
+            RootDelegationProofBatchGetRequest {
+                batch_id: [41; 32],
+                entries: vec![RootDelegationProofBatchProofRef {
+                    issuer_pid: p(41),
+                    cert_hash: [1; 32],
+                }],
+            },
+            p(1),
+            10,
+            |_cert_hash| panic!("missing pending entry must not request a root proof"),
+        )
+        .expect_err("missing pending entry must fail");
+
+        assert_eq!(err.class(), InternalErrorClass::Ops);
+    }
+
+    #[test]
+    fn batch_get_rejects_expired_pending_metadata() {
+        let response = prepared_batch(p(42), 42, 70);
+
+        let err = get_delegation_proof_batch_with_root_signature(
+            batch_get_request(&response),
+            p(1),
+            70,
+            |_cert_hash| panic!("expired pending entry must not request a root proof"),
+        )
+        .expect_err("expired pending entry must fail");
+
+        assert_eq!(err.class(), InternalErrorClass::Ops);
+    }
+
+    #[test]
+    fn batch_get_returns_prepared_proofs() {
+        let response = prepared_batch(p(43), 43, 90);
+        let mut requested_hashes = Vec::new();
+
+        let retrieved = get_delegation_proof_batch_with_root_signature(
+            batch_get_request(&response),
+            p(1),
+            80,
+            |cert_hash| {
+                requested_hashes.push(cert_hash);
+                Ok(root_proof(9))
+            },
+        )
+        .expect("prepared batch should retrieve proofs");
+
+        assert_eq!(retrieved.batch_id, response.batch_id);
+        assert_eq!(retrieved.proofs.len(), 1);
+        assert_eq!(retrieved.proofs[0].issuer_pid, p(43));
+        assert_eq!(retrieved.proofs[0].cert_hash, response.entries[0].cert_hash);
+        assert_eq!(retrieved.proofs[0].proof.cert.root_pid, p(1));
+        assert_eq!(retrieved.proofs[0].proof.cert.issuer_pid, p(43));
+        assert_eq!(requested_hashes, vec![response.entries[0].cert_hash]);
+    }
+
+    #[test]
+    fn batch_get_preserves_requested_entry_order() {
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(44)));
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(45)));
+        let request = RootDelegationProofBatchPrepareRequest {
+            metadata: Some(metadata(44, 60_000_000_000)),
+            entries: vec![
+                batch_prepare_entry(p(44), 60_000_000_000),
+                batch_prepare_entry(p(45), 60_000_000_000),
+            ],
+        };
+        let decisions =
+            AuthOps::preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
+        let response = prepare_delegation_proof_batch_with_root_signature(
+            request,
+            [44; 32],
+            decisions,
+            120_000_000_000,
+            10,
+            p(1),
+            |_batch_id, _cert_hash| Ok(90),
+        )
+        .expect("batch prepare should produce metadata");
+        let requested_entries = response
+            .entries
+            .iter()
+            .rev()
+            .map(|entry| RootDelegationProofBatchProofRef {
+                issuer_pid: entry.issuer_pid,
+                cert_hash: entry.cert_hash,
+            })
+            .collect::<Vec<_>>();
+        let expected_hashes = requested_entries
+            .iter()
+            .map(|entry| entry.cert_hash)
+            .collect::<Vec<_>>();
+        let expected_issuers = requested_entries
+            .iter()
+            .map(|entry| entry.issuer_pid)
+            .collect::<Vec<_>>();
+        let mut requested_hashes = Vec::new();
+
+        let retrieved = get_delegation_proof_batch_with_root_signature(
+            RootDelegationProofBatchGetRequest {
+                batch_id: response.batch_id,
+                entries: requested_entries,
+            },
+            p(1),
+            80,
+            |cert_hash| {
+                requested_hashes.push(cert_hash);
+                Ok(root_proof(10))
+            },
+        )
+        .expect("prepared batch should retrieve proofs");
+
+        let retrieved_hashes = retrieved
+            .proofs
+            .iter()
+            .map(|proof| proof.cert_hash)
+            .collect::<Vec<_>>();
+        let retrieved_issuers = retrieved
+            .proofs
+            .iter()
+            .map(|proof| proof.issuer_pid)
+            .collect::<Vec<_>>();
+        assert_eq!(retrieved_hashes, expected_hashes);
+        assert_eq!(retrieved_issuers, expected_issuers);
+        assert_eq!(requested_hashes, expected_hashes);
     }
 }

@@ -174,12 +174,10 @@ impl AuthApi {
 
     /// Retrieve root delegation proofs from the local direct root query path.
     pub fn get_delegation_proof_batch_root(
-        _request: RootDelegationProofBatchGetRequest,
+        request: RootDelegationProofBatchGetRequest,
     ) -> Result<RootDelegationProofBatchGetResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        Err(Error::unavailable(
-            Self::ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE,
-        ))
+        AuthOps::get_delegation_proof_batch(request).map_err(Self::map_auth_error)
     }
 
     /// Install retrieved root delegation proof batches from the local root update path.
