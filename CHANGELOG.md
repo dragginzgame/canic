@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Adds pure root delegation proof issuer policy validation for registration,
+  enabled state, allowed audiences/grants, certificate TTL, and refresh timing
+  as the next foundation for batch prepare.
+
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)

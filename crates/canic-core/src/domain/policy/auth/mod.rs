@@ -11,6 +11,14 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
+mod root_provisioning;
+
+pub use root_provisioning::{
+    RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
+    RootDelegationProofPreparePolicyInput, RootIssuerPolicy,
+    validate_root_delegation_proof_prepare_policy,
+};
+
 ///
 /// AuthPolicyError
 ///
@@ -21,6 +29,44 @@ pub enum AuthPolicyError {
         "delegated token prepare public issuance scope '{scope}' is not self-grantable for role {role}"
     )]
     PublicPrepareScopeNotSelfGrantable { role: CanisterRole, scope: String },
+
+    #[error("root issuer audience is not allowed for issuer {issuer_pid}")]
+    RootIssuerAudienceNotAllowed { issuer_pid: Principal },
+
+    #[error("root issuer certificate TTL must be greater than zero")]
+    RootIssuerCertTtlZero,
+
+    #[error(
+        "root issuer certificate TTL {cert_ttl_ns} exceeds max certificate TTL {max_cert_ttl_ns}"
+    )]
+    RootIssuerCertTtlExceedsMax {
+        cert_ttl_ns: u64,
+        max_cert_ttl_ns: u64,
+    },
+
+    #[error("root issuer {issuer_pid} is disabled")]
+    RootIssuerDisabled { issuer_pid: Principal },
+
+    #[error("root issuer grant scope '{scope}' is not allowed for role {role}")]
+    RootIssuerGrantNotAllowed { role: CanisterRole, scope: String },
+
+    #[error("root issuer policy is for {expected}, but request named issuer {found}")]
+    RootIssuerPolicyMismatch {
+        expected: Principal,
+        found: Principal,
+    },
+
+    #[error("root issuer refresh-after offset must be within the certificate TTL")]
+    RootIssuerRefreshAfterInvalid,
+
+    #[error("root issuer refresh-after timestamp overflows nanoseconds")]
+    RootIssuerRefreshAfterOverflow,
+
+    #[error("root issuer refresh ratio must be between 1 and 9999 basis points")]
+    RootIssuerRefreshRatioInvalid { refresh_after_ratio_bps: u16 },
+
+    #[error("root issuer is not registered")]
+    RootIssuerUnregistered,
 
     #[error("delegated token prepare subject must match caller")]
     SubjectCallerMismatch,

@@ -17,13 +17,25 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{
-        ActiveDelegationProof, ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
-        DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
+    domain::policy::auth::{
+        AuthPolicyError, RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
+        RootDelegationProofPreparePolicyInput, RootIssuerPolicy,
+        validate_root_delegation_proof_prepare_policy,
+    },
+    dto::{
+        auth::{
+            ActiveDelegationProof, ActiveDelegationProofStatus,
+            ActiveDelegationProofStatusResponse, DelegatedRoleGrant, DelegationAudience,
+            DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
+            RootDelegationProofBatchPrepareRequest,
+        },
+        error::Error,
     },
     ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
 use std::{cell::RefCell, collections::BTreeMap};
+
+const DEFAULT_ROOT_PROVISIONING_REFRESH_AFTER_RATIO_BPS: u16 = 8_000;
 
 thread_local! {
     static PENDING_DELEGATION_PROOFS: RefCell<BTreeMap<PendingDelegationProofKey, PreparedRootDelegationProof>> =
@@ -176,6 +188,39 @@ impl AuthOps {
     pub(crate) fn set_active_delegation_proof(proof: ActiveDelegationProof) {
         AuthStateOps::set_active_delegation_proof(proof);
     }
+
+    pub(crate) fn preflight_delegation_proof_batch_prepare_request(
+        request: &RootDelegationProofBatchPrepareRequest,
+        max_cert_ttl_ns: u64,
+        issued_at_ns: u64,
+    ) -> Result<(), InternalError> {
+        for entry in &request.entries {
+            let audience = audience_policy(&entry.aud);
+            let grants = grant_policies(&entry.grants);
+            let policy = RootIssuerPolicy {
+                issuer_pid: entry.issuer_pid,
+                enabled: true,
+                allowed_audiences: vec![audience.clone()],
+                allowed_grants: grants.clone(),
+                max_cert_ttl_ns,
+                refresh_after_ratio_bps: DEFAULT_ROOT_PROVISIONING_REFRESH_AFTER_RATIO_BPS,
+            };
+
+            validate_root_delegation_proof_prepare_policy(
+                Some(&policy),
+                RootDelegationProofPreparePolicyInput {
+                    issuer_pid: entry.issuer_pid,
+                    audience: &audience,
+                    grants: &grants,
+                    cert_ttl_ns: entry.cert_ttl_ns,
+                    issued_at_ns,
+                },
+            )
+            .map_err(map_root_provisioning_policy_error)?;
+        }
+
+        Ok(())
+    }
 }
 
 fn cache_prepared_delegation_proof(caller: Principal, prepared: PreparedRootDelegationProof) {
@@ -195,6 +240,32 @@ fn map_install_active_delegation_proof_error(
     err: InstallActiveDelegationProofError,
 ) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()
+}
+
+fn map_root_provisioning_policy_error(err: AuthPolicyError) -> InternalError {
+    InternalError::public(Error::forbidden(err.to_string()))
+}
+
+fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
+    match audience {
+        DelegationAudience::Canister(canister) => RootDelegationAudiencePolicy::Canister(*canister),
+        DelegationAudience::CanicSubnet(subnet) => {
+            RootDelegationAudiencePolicy::CanicSubnet(*subnet)
+        }
+        DelegationAudience::Project(project) => {
+            RootDelegationAudiencePolicy::Project(project.clone())
+        }
+    }
+}
+
+fn grant_policies(grants: &[DelegatedRoleGrant]) -> Vec<RootDelegatedRoleGrantPolicy> {
+    grants
+        .iter()
+        .map(|grant| RootDelegatedRoleGrantPolicy {
+            target: grant.target.clone(),
+            scopes: grant.scopes.clone(),
+        })
+        .collect()
 }
 
 fn active_delegation_proof_status_response(
@@ -236,8 +307,10 @@ mod tests {
     use crate::{
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, IcCanisterSignatureProofV1,
+            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
             RootProof,
         },
+        dto::error::ErrorCode,
         ids::CanisterRole,
     };
 
@@ -280,6 +353,21 @@ mod tests {
         }
     }
 
+    fn batch_prepare_request(cert_ttl_ns: u64) -> RootDelegationProofBatchPrepareRequest {
+        RootDelegationProofBatchPrepareRequest {
+            metadata: None,
+            entries: vec![RootDelegationProofBatchPrepareEntry {
+                issuer_pid: p(2),
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![DelegatedRoleGrant {
+                    target: CanisterRole::owned("project_instance".to_string()),
+                    scopes: vec!["canic.issue".to_string()],
+                }],
+                cert_ttl_ns,
+            }],
+        }
+    }
+
     #[test]
     fn active_delegation_proof_status_reports_missing() {
         let status = active_delegation_proof_status_response(50, None);
@@ -304,5 +392,28 @@ mod tests {
 
         let expired = active_delegation_proof_status_response(100, Some(active_proof()));
         assert_eq!(expired.status, ActiveDelegationProofStatus::Expired);
+    }
+
+    #[test]
+    fn batch_prepare_preflight_accepts_request_shape() {
+        AuthOps::preflight_delegation_proof_batch_prepare_request(
+            &batch_prepare_request(60_000_000_000),
+            120_000_000_000,
+            10,
+        )
+        .expect("valid batch prepare shape");
+    }
+
+    #[test]
+    fn batch_prepare_preflight_rejects_ttl_above_max() {
+        let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+            &batch_prepare_request(121_000_000_000),
+            120_000_000_000,
+            10,
+        )
+        .expect_err("ttl above max must fail preflight");
+        let public = err.public_error().expect("public policy error");
+
+        assert_eq!(public.code, ErrorCode::Forbidden);
     }
 }
