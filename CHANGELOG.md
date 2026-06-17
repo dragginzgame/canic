@@ -12,7 +12,7 @@ present.
 
 ## Unreleased
 
-## [0.68.x] - 2026-06-17 - Backup cleanup closeout
+## [0.68.x] - 2026-06-17 - Blob Storage & Canister Signatures
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
