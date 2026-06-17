@@ -47,7 +47,10 @@ pub mod ops {
     }
 
     pub mod cost_guard {
-        pub use crate::ops::cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest};
+        pub use crate::ops::cost_guard::{
+            CostGuardOps, CostGuardPermit, CostGuardRequest, CostGuardReserveError,
+            CostGuardReservePublicKind,
+        };
     }
 
     pub mod ic {

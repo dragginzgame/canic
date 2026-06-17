@@ -5,7 +5,10 @@ use canic_core::{
         error::{InternalError, InternalErrorOrigin},
         ops::{
             config::ConfigOps,
-            cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+            cost_guard::{
+                CostGuardOps, CostGuardPermit, CostGuardRequest, CostGuardReserveError,
+                CostGuardReservePublicKind,
+            },
             ic::{IcOps, mgmt::MgmtOps},
             replay::model::CommandKind,
         },
@@ -14,6 +17,7 @@ use canic_core::{
             CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
         },
     },
+    dto::error::Error,
     log,
     log::Topic,
 };
@@ -100,4 +104,17 @@ fn reserve_control_plane_deployment_cost_guard(
         cycle_reservation_cycles,
         min_cycles_after_reservation: MIN_CONTROL_PLANE_CYCLES_AFTER_RESERVATION,
     })
+    .map_err(map_control_plane_cost_guard_reserve_error)
+}
+
+fn map_control_plane_cost_guard_reserve_error(err: CostGuardReserveError) -> InternalError {
+    match err.public_kind() {
+        Some(CostGuardReservePublicKind::InvalidInput) => {
+            InternalError::public(Error::invalid(err.to_string()))
+        }
+        Some(CostGuardReservePublicKind::ResourceExhausted) => {
+            InternalError::public(Error::exhausted(err.to_string()))
+        }
+        None => err.into(),
+    }
 }
