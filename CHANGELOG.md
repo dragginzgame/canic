@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Root delegation proof batch retrieval now resolves pending batch metadata,
+  assembles direct root query proofs, and returns the MVP batch get response
+  while batch install remains deferred.
+
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
