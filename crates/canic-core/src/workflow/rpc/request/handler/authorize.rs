@@ -1,3 +1,9 @@
+//! Module: workflow::rpc::request::handler::authorize
+//!
+//! Responsibility: authorize root-capability requests before execution.
+//! Does not own: replay reservation, capability execution, or request mapping.
+//! Boundary: reads workflow context and storage ops after endpoints authenticate input.
+
 use super::{RootCapability, RootContext, nonroot_cycles};
 use crate::{
     InternalError,
@@ -18,6 +24,9 @@ use crate::{
     workflow::rpc::RpcWorkflowError,
 };
 
+/// authorize
+///
+/// Apply capability-specific authorization and record root-capability metrics.
 pub(super) fn authorize(
     ctx: &RootContext,
     capability: &RootCapability,

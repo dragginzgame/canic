@@ -1,3 +1,9 @@
+//! Module: workflow::rpc::request::handler::capability
+//!
+//! Responsibility: map root RPC requests into executable capability envelopes.
+//! Does not own: authorization, replay storage, or capability side effects.
+//! Boundary: produces deterministic descriptors and payload hashes for handler workflow.
+
 use crate::{
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest,
@@ -6,6 +12,11 @@ use crate::{
     ops::runtime::metrics::root_capability::RootCapabilityMetricKey,
 };
 
+///
+/// RootCapability
+///
+/// Internal workflow envelope for root-bound RPC capabilities.
+///
 #[derive(Clone, Debug)]
 pub(super) enum RootCapability {
     Provision(CreateCanisterRequest),
@@ -14,6 +25,11 @@ pub(super) enum RootCapability {
     RequestCycles(CyclesRequest),
 }
 
+///
+/// RootCapabilityDescriptor
+///
+/// Stable capability metadata used by replay, metrics, and logs.
+///
 #[derive(Clone, Copy)]
 pub(super) struct RootCapabilityDescriptor {
     pub(super) name: &'static str,
@@ -21,6 +37,11 @@ pub(super) struct RootCapabilityDescriptor {
     pub(super) key: RootCapabilityMetricKey,
 }
 
+///
+/// RootReplayInput
+///
+/// Canonical replay input derived from a capability and caller metadata.
+///
 #[derive(Clone, Copy)]
 pub(super) struct RootReplayInput {
     pub(super) descriptor: RootCapabilityDescriptor,
@@ -94,9 +115,7 @@ impl RootCapability {
     }
 }
 
-// hash_create_canister_parent
-//
-// Append the canonical create-parent selector into the replay payload hash.
+// Keep create-parent selectors stable; replay payload hashes are protocol-visible.
 fn hash_create_canister_parent(hasher: &mut sha2::Sha256, parent: &CreateCanisterParent) {
     match parent {
         CreateCanisterParent::Root => super::replay::hash_str(hasher, "Root"),
@@ -143,6 +162,9 @@ fn hash_request_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
     super::replay::finish_payload_hash(hasher)
 }
 
+/// map_request
+///
+/// Convert the boundary RPC request into the internal root-capability envelope.
 pub(super) fn map_request(req: Request) -> RootCapability {
     match req {
         Request::CreateCanister(req) => RootCapability::Provision(req),

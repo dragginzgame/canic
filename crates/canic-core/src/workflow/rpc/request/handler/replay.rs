@@ -1,3 +1,9 @@
+//! Module: workflow::rpc::request::handler::replay
+//!
+//! Responsibility: gate root-capability execution with replay protection.
+//! Does not own: capability authorization, capability execution, or replay record schema.
+//! Boundary: adapts workflow capability metadata into replay ops and cached responses.
+
 use super::{
     MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_NS,
     REPLAY_PAYLOAD_HASH_DOMAIN, REPLAY_PURGE_SCAN_LIMIT, RootCapability, RootContext,

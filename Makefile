@@ -4,6 +4,7 @@
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm test-bump build check clippy fmt fmt-check clean \
+        blob-storage-inventory-gate \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-canisters fmt-core cloc
@@ -183,17 +184,20 @@ test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --profile "$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" test
 
-test: clippy test-unit
+test: blob-storage-inventory-gate clippy test-unit
 
 # Fast iteration path for wasm work.
 # Skips integration tests under `tests/`, which is where the PocketIC-heavy
 # suites live today.
-test-wasm: clippy test-unit-fast
+test-wasm: blob-storage-inventory-gate clippy test-unit-fast
 
 # Version-bump gate.
 # Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
 # local ICP CLI fast path as an explicit manual target.
-test-bump: clippy test-unit-fast
+test-bump: blob-storage-inventory-gate clippy test-unit-fast
+
+blob-storage-inventory-gate:
+	bash scripts/ci/check-blob-storage-inventory-gate.sh
 
 # Keep rust test execution single-threaded inside each test binary for PocketIC
 # stability and deterministic fixture reuse.

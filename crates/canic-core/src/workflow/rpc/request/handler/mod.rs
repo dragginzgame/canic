@@ -1,16 +1,8 @@
-use crate::{
-    InternalError,
-    cdk::types::Principal,
-    dto::rpc::{Request, Response},
-    log,
-    log::Topic,
-    ops::{
-        ic::IcOps,
-        replay::guard::ReplayPending,
-        runtime::env::EnvOps,
-        runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
-    },
-};
+//! Module: workflow::rpc::request::handler
+//!
+//! Responsibility: orchestrate root-bound RPC request replay, authorization, and execution.
+//! Does not own: endpoint authentication, pure policy decisions, or storage record schema.
+//! Boundary: calls ops and helper workflow modules after request DTOs are mapped.
 
 #[cfg(test)]
 mod tests;
@@ -20,6 +12,23 @@ mod capability;
 mod execute;
 mod nonroot_cycles;
 mod replay;
+
+use crate::{
+    InternalError,
+    cdk::types::Principal,
+    dto::rpc::{Request, Response},
+    log,
+    log::Topic,
+    ops::{
+        ic::IcOps,
+        replay::guard::ReplayPending,
+        runtime::{
+            env::EnvOps,
+            metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
+        },
+    },
+};
+
 use capability::{RootCapability, RootReplayInput};
 
 pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
@@ -33,6 +42,8 @@ const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"root-replay-payload-hash:v1";
 ///
 /// RootContext
 ///
+/// Runtime context extracted once for root RPC request handling.
+///
 
 #[derive(Clone, Copy, Debug)]
 struct RootContext {
@@ -43,11 +54,23 @@ struct RootContext {
     now: u64,
 }
 
+///
+/// PreparedExecution
+///
+/// Replay reservation plus any authorization artifact required for execution.
+///
+
 #[derive(Clone, Debug)]
 struct PreparedExecution {
     pending: ReplayPending,
     authorized_cycles: Option<nonroot_cycles::AuthorizedCyclesGrant>,
 }
+
+///
+/// RootPreflight
+///
+/// Result of replay and authorization checks before capability execution.
+///
 
 #[derive(Debug)]
 enum RootPreflight {
@@ -57,6 +80,8 @@ enum RootPreflight {
 
 ///
 /// AuthorizationPipelineOrder
+///
+/// Ordering strategy for replay and authorization checks.
 ///
 
 #[derive(Clone, Copy, Debug)]
@@ -68,6 +93,8 @@ enum AuthorizationPipelineOrder {
 
 ///
 /// RootResponseWorkflow
+///
+/// Workflow entry point for root-bound request execution.
 ///
 
 pub struct RootResponseWorkflow;

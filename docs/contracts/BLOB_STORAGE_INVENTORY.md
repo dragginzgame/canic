@@ -306,6 +306,15 @@ The following actions are blocked while this document remains incomplete:
 - Adding `BlobStorageApi`.
 - Adding PocketIC lifecycle tests that assert protocol behavior.
 
+This gate is enforced in CI and local Make test/release-bump paths by
+`scripts/ci/check-blob-storage-inventory-gate.sh`. While the status remains
+incomplete, the guard rejects blob-storage feature metadata, source/module
+paths, gateway method literals, and public blob-storage API/model names outside
+this protocol inventory/design documentation. When this inventory is marked
+`Complete`, the same guard verifies that all six method sections are present
+and individually complete, have no `TBD` fields, and that the Toko
+compatibility section is also complete.
+
 The only safe next steps are:
 
 - Locate the upstream source or generated `.did`.

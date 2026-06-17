@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.3` adds an executable blob-storage inventory gate so CI and local
+  release/test gates block premature gateway endpoint, DTO, feature, and API
+  implementation until the external protocol inventory is complete.
+
+- `0.68.2` records an accidental version-only release artifact with no code,
+  API, or behavior changes beyond release metadata and install-version
+  references.
+
 - `0.68.1` hardens delegated-token public prepare by binding issuance to the
   caller subject and limiting open self-issued grants to login/session scopes,
   preserving subnet-wide login while blocking self-granted privileged scopes.
