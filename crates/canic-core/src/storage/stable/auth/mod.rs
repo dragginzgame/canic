@@ -13,7 +13,7 @@ pub use records::{
     ActiveDelegationProofRecord, AuthStateRecord, DelegatedRoleGrantRecord,
     DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationAudienceRecord,
     DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
-    IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootProofRecord,
+    IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord, RootProofRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -186,6 +186,36 @@ impl AuthState {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
             data.active_delegation_proof = None;
+            cell.set(data);
+        });
+    }
+
+    // Resolve a root delegation-proof issuer policy record by issuer principal.
+    #[must_use]
+    pub(crate) fn get_root_issuer(issuer_pid: Principal) -> Option<RootIssuerRecord> {
+        AUTH_STATE.with_borrow(|cell| {
+            cell.get()
+                .root_issuers
+                .iter()
+                .find(|record| record.issuer_pid == issuer_pid)
+                .cloned()
+        })
+    }
+
+    // Upsert a root delegation-proof issuer policy record.
+    #[cfg(test)]
+    pub(crate) fn upsert_root_issuer(record: RootIssuerRecord) {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            if let Some(existing) = data
+                .root_issuers
+                .iter_mut()
+                .find(|existing| existing.issuer_pid == record.issuer_pid)
+            {
+                *existing = record;
+            } else {
+                data.root_issuers.push(record);
+            }
             cell.set(data);
         });
     }

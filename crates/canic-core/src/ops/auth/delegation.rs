@@ -19,7 +19,7 @@ use crate::{
     cdk::types::Principal,
     domain::policy::auth::{
         AuthPolicyError, RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
-        RootDelegationProofPreparePolicyInput, RootIssuerPolicy,
+        RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
         validate_root_delegation_proof_prepare_policy,
     },
     dto::{
@@ -34,8 +34,6 @@ use crate::{
     ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
 use std::{cell::RefCell, collections::BTreeMap};
-
-const DEFAULT_ROOT_PROVISIONING_REFRESH_AFTER_RATIO_BPS: u16 = 8_000;
 
 thread_local! {
     static PENDING_DELEGATION_PROOFS: RefCell<BTreeMap<PendingDelegationProofKey, PreparedRootDelegationProof>> =
@@ -191,23 +189,16 @@ impl AuthOps {
 
     pub(crate) fn preflight_delegation_proof_batch_prepare_request(
         request: &RootDelegationProofBatchPrepareRequest,
-        max_cert_ttl_ns: u64,
         issued_at_ns: u64,
-    ) -> Result<(), InternalError> {
+    ) -> Result<Vec<RootDelegationProofPreparePolicyDecision>, InternalError> {
+        let mut decisions = Vec::with_capacity(request.entries.len());
         for entry in &request.entries {
             let audience = audience_policy(&entry.aud);
             let grants = grant_policies(&entry.grants);
-            let policy = RootIssuerPolicy {
-                issuer_pid: entry.issuer_pid,
-                enabled: true,
-                allowed_audiences: vec![audience.clone()],
-                allowed_grants: grants.clone(),
-                max_cert_ttl_ns,
-                refresh_after_ratio_bps: DEFAULT_ROOT_PROVISIONING_REFRESH_AFTER_RATIO_BPS,
-            };
+            let policy = AuthStateOps::root_issuer_policy(entry.issuer_pid);
 
-            validate_root_delegation_proof_prepare_policy(
-                Some(&policy),
+            let decision = validate_root_delegation_proof_prepare_policy(
+                policy.as_ref(),
                 RootDelegationProofPreparePolicyInput {
                     issuer_pid: entry.issuer_pid,
                     audience: &audience,
@@ -217,9 +208,10 @@ impl AuthOps {
                 },
             )
             .map_err(map_root_provisioning_policy_error)?;
+            decisions.push(decision);
         }
 
-        Ok(())
+        Ok(decisions)
     }
 }
 
@@ -305,6 +297,7 @@ fn active_delegation_proof_status_response(
 mod tests {
     use super::*;
     use crate::{
+        domain::policy::auth::RootIssuerPolicy,
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, IcCanisterSignatureProofV1,
             RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
@@ -353,11 +346,14 @@ mod tests {
         }
     }
 
-    fn batch_prepare_request(cert_ttl_ns: u64) -> RootDelegationProofBatchPrepareRequest {
+    fn batch_prepare_request(
+        issuer_pid: Principal,
+        cert_ttl_ns: u64,
+    ) -> RootDelegationProofBatchPrepareRequest {
         RootDelegationProofBatchPrepareRequest {
             metadata: None,
             entries: vec![RootDelegationProofBatchPrepareEntry {
-                issuer_pid: p(2),
+                issuer_pid,
                 aud: DelegationAudience::Project("test".to_string()),
                 grants: vec![DelegatedRoleGrant {
                     target: CanisterRole::owned("project_instance".to_string()),
@@ -365,6 +361,20 @@ mod tests {
                 }],
                 cert_ttl_ns,
             }],
+        }
+    }
+
+    fn root_issuer_policy(issuer_pid: Principal) -> RootIssuerPolicy {
+        RootIssuerPolicy {
+            issuer_pid,
+            enabled: true,
+            allowed_audiences: vec![RootDelegationAudiencePolicy::Project("test".to_string())],
+            allowed_grants: vec![RootDelegatedRoleGrantPolicy {
+                target: CanisterRole::owned("project_instance".to_string()),
+                scopes: vec!["canic.issue".to_string()],
+            }],
+            max_cert_ttl_ns: 120_000_000_000,
+            refresh_after_ratio_bps: 8_000,
         }
     }
 
@@ -395,23 +405,77 @@ mod tests {
     }
 
     #[test]
-    fn batch_prepare_preflight_accepts_request_shape() {
-        AuthOps::preflight_delegation_proof_batch_prepare_request(
-            &batch_prepare_request(60_000_000_000),
-            120_000_000_000,
+    fn batch_prepare_preflight_accepts_registered_issuer_policy() {
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(21)));
+
+        let decisions = AuthOps::preflight_delegation_proof_batch_prepare_request(
+            &batch_prepare_request(p(21), 60_000_000_000),
             10,
         )
         .expect("valid batch prepare shape");
+
+        assert_eq!(
+            decisions,
+            vec![RootDelegationProofPreparePolicyDecision {
+                expires_at_ns: 60_000_000_010,
+                refresh_after_ns: 48_000_000_010,
+            }]
+        );
     }
 
     #[test]
     fn batch_prepare_preflight_rejects_ttl_above_max() {
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(22)));
+
         let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
-            &batch_prepare_request(121_000_000_000),
-            120_000_000_000,
+            &batch_prepare_request(p(22), 121_000_000_000),
             10,
         )
         .expect_err("ttl above max must fail preflight");
+        let public = err.public_error().expect("public policy error");
+
+        assert_eq!(public.code, ErrorCode::Forbidden);
+    }
+
+    #[test]
+    fn batch_prepare_preflight_rejects_unregistered_issuer() {
+        let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+            &batch_prepare_request(p(23), 60_000_000_000),
+            10,
+        )
+        .expect_err("unregistered issuer must fail preflight");
+        let public = err.public_error().expect("public policy error");
+
+        assert_eq!(public.code, ErrorCode::Forbidden);
+    }
+
+    #[test]
+    fn batch_prepare_preflight_rejects_disabled_issuer() {
+        let mut policy = root_issuer_policy(p(24));
+        policy.enabled = false;
+        AuthStateOps::upsert_root_issuer_policy(policy);
+
+        let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+            &batch_prepare_request(p(24), 60_000_000_000),
+            10,
+        )
+        .expect_err("disabled issuer must fail preflight");
+        let public = err.public_error().expect("public policy error");
+
+        assert_eq!(public.code, ErrorCode::Forbidden);
+    }
+
+    #[test]
+    fn batch_prepare_preflight_rejects_grant_outside_issuer_policy() {
+        let mut policy = root_issuer_policy(p(25));
+        policy.allowed_grants[0].scopes = vec!["canic.read".to_string()];
+        AuthStateOps::upsert_root_issuer_policy(policy);
+
+        let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+            &batch_prepare_request(p(25), 60_000_000_000),
+            10,
+        )
+        .expect_err("grant outside issuer policy must fail preflight");
         let public = err.public_error().expect("public policy error");
 
         assert_eq!(public.code, ErrorCode::Forbidden);

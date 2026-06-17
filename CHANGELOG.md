@@ -12,6 +12,10 @@ present.
 
 ## Unreleased
 
+- Wires root delegation proof batch prepare preflight to persisted root issuer
+  registry state, including issuer enablement, audience/grant policy, TTL, and
+  refresh timing validation.
+
 - Adds pure root delegation proof issuer policy validation for registration,
   enabled state, allowed audiences/grants, certificate TTL, and refresh timing
   as the next foundation for batch prepare.

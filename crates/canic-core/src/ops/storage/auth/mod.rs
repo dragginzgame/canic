@@ -2,12 +2,13 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
+    domain::policy::auth::RootIssuerPolicy,
     dto::auth::ActiveDelegationProof,
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
     },
 };
-use mapper::ActiveDelegationProofRecordMapper;
+use mapper::{ActiveDelegationProofRecordMapper, RootIssuerPolicyRecordMapper};
 
 pub use crate::storage::stable::auth::DelegatedSessionUpsertResult;
 
@@ -148,6 +149,16 @@ impl AuthStateOps {
     pub fn clear_active_delegation_proof() {
         AuthState::clear_active_delegation_proof();
     }
+
+    #[must_use]
+    pub fn root_issuer_policy(issuer_pid: Principal) -> Option<RootIssuerPolicy> {
+        AuthState::get_root_issuer(issuer_pid).map(RootIssuerPolicyRecordMapper::record_to_policy)
+    }
+
+    #[cfg(test)]
+    pub fn upsert_root_issuer_policy(policy: RootIssuerPolicy) {
+        AuthState::upsert_root_issuer(RootIssuerPolicyRecordMapper::policy_to_record(policy));
+    }
 }
 
 const fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
@@ -198,6 +209,9 @@ const fn delegated_session_bootstrap_binding_view_to_record(
 mod tests {
     use super::*;
     use crate::{
+        domain::policy::auth::{
+            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+        },
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
             IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
@@ -259,5 +273,29 @@ mod tests {
 
         AuthStateOps::clear_active_delegation_proof();
         assert_eq!(AuthStateOps::active_delegation_proof(20), None);
+    }
+
+    #[test]
+    fn root_issuer_policy_round_trips_through_auth_state() {
+        let policy = RootIssuerPolicy {
+            issuer_pid: p(31),
+            enabled: true,
+            allowed_audiences: vec![
+                RootDelegationAudiencePolicy::Canister(p(32)),
+                RootDelegationAudiencePolicy::CanicSubnet(p(33)),
+                RootDelegationAudiencePolicy::Project("test".to_string()),
+            ],
+            allowed_grants: vec![RootDelegatedRoleGrantPolicy {
+                target: CanisterRole::owned("project_instance".to_string()),
+                scopes: vec!["canic.issue".to_string(), "canic.read".to_string()],
+            }],
+            max_cert_ttl_ns: 120_000_000_000,
+            refresh_after_ratio_bps: 8_000,
+        };
+
+        AuthStateOps::upsert_root_issuer_policy(policy.clone());
+
+        assert_eq!(AuthStateOps::root_issuer_policy(p(31)), Some(policy));
+        assert_eq!(AuthStateOps::root_issuer_policy(p(34)), None);
     }
 }

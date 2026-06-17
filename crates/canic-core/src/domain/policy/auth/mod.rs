@@ -15,8 +15,8 @@ mod root_provisioning;
 
 pub use root_provisioning::{
     RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
-    RootDelegationProofPreparePolicyInput, RootIssuerPolicy,
-    validate_root_delegation_proof_prepare_policy,
+    RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
+    RootIssuerPolicy, validate_root_delegation_proof_prepare_policy,
 };
 
 ///
