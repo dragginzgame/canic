@@ -2,13 +2,13 @@
 
 Status: **Incomplete - implementation blocked**
 
-Release line: 0.69
+Release line: 0.70
 
 Last updated: 2026-06-17
 
 ## Purpose
 
-This inventory is the source-of-truth gate for Canic's 0.69 blob-storage
+This inventory is the source-of-truth gate for Canic's 0.70 blob-storage
 Cashier integration.
 
 No `blob-storage-billing` feature, Cashier DTO, Cashier client wrapper, billing
@@ -16,7 +16,7 @@ stable record, gateway-principal sync workflow, funding workflow, billing
 endpoint macro, billing Candid snapshot, or billing behavior test may merge
 until this inventory is complete and cites exact protocol sources.
 
-This inventory does not replace the 0.68 gateway protocol inventory. The 0.69
+This inventory does not replace the 0.69 gateway protocol inventory. The 0.70
 billing line remains blocked until both inventories are complete:
 
 - `docs/contracts/BLOB_STORAGE_INVENTORY.md`
@@ -86,7 +86,7 @@ Method status values are intentionally narrow:
 Design-note statements may describe expected ownership or implementation
 direction, but they do not satisfy source, Candid, DTO, behavior, or
 compatibility fields. Keep unknown protocol facts as `TBD` instead of inferring
-them from the 0.69 design.
+them from the 0.70 design.
 
 ## Method Inventory
 
@@ -99,7 +99,7 @@ deployed Candid source are recorded.
 
 Status: **Missing source**
 
-Owning release: 0.69
+Owning release: 0.70
 
 Known from design only:
 
@@ -128,7 +128,7 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.69
+Owning release: 0.70
 
 Known from design only:
 
@@ -157,11 +157,11 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.69
+Owning release: 0.70
 
 Known from design only:
 
-- Provides the gateway principals that 0.69 syncs into the 0.68
+- Provides the gateway principals that 0.70 syncs into the 0.69
   gateway-principal store.
 - Canic must not invent empty-list, duplicate, anonymous-principal, or
   management-canister-principal semantics.
@@ -193,7 +193,7 @@ Status: **Incomplete**
 Required before implementation:
 
 - Complete list of Cashier methods discovered in the source/deployed Candid.
-- For each omitted method, a reason why 0.69 does not need it.
+- For each omitted method, a reason why 0.70 does not need it.
 - Confirmation that no omitted method is required for balance reads,
   project-as-payment-account top-up, or gateway-principal sync.
 
@@ -228,5 +228,5 @@ The only safe next steps are:
 - Locate the upstream Cashier source or generated `.did`.
 - Fill the method inventory from immutable source references.
 - Add Candid snapshots copied or generated from the inventoried source.
-- Update the 0.69 design if the protocol source contradicts current design
+- Update the 0.70 design if the protocol source contradicts current design
   assumptions.

@@ -12,14 +12,17 @@ present.
 
 ## Unreleased
 
-- Adds a Cashier protocol inventory scaffold and executable guard so 0.69
-  blob-storage billing remains blocked until Cashier Candid, behavior, and
-  optional-method provenance are recorded, with regression coverage for both
-  incomplete and synthetic-complete inventory states.
-
-## [0.68.x] - 2026-06-17 - Blob Storage & Canister Signatures
+## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.6` reserves 0.68 for root delegation proof provisioning repair and
+  expands blob-storage gateway and Cashier inventory-gate regression coverage
+  while later blob-storage implementation remains gated.
+
+- `0.68.5` adds a Cashier protocol inventory scaffold and executable gate so
+  0.70 blob-storage billing remains blocked until Cashier protocol provenance
+  is recorded.
 
 - `0.68.4` records local Toko blob/asset compatibility evidence and tightens
   blob-storage inventory gates so billing/Cashier work also remains blocked

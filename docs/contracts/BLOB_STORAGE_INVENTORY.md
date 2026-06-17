@@ -2,21 +2,21 @@
 
 Status: **Incomplete - implementation blocked**
 
-Release line: 0.68
+Release line: 0.69
 
 Last updated: 2026-06-17
 
 ## Purpose
 
-This inventory is the source-of-truth gate for Canic's 0.68 `blob-storage`
+This inventory is the source-of-truth gate for Canic's 0.69 `blob-storage`
 protocol work.
 
 No endpoint, DTO, Candid snapshot, macro, stable-record, ops, workflow, or
 internal `BlobStorageApi` implementation may merge from this design until this
 inventory is complete and cites exact upstream protocol sources.
 
-The 0.68 design requires inventory coverage for all six gateway methods, even
-though only four non-billing methods are emitted in 0.68.
+The 0.69 design requires inventory coverage for all six gateway methods, even
+though only four non-billing methods are emitted in 0.69.
 
 ## Current Finding
 
@@ -67,7 +67,7 @@ Required behavior metadata:
 - Duplicate-input semantics.
 - Idempotency expectations.
 - Production-vs-local behavior differences.
-- 0.68 or 0.69 ownership classification.
+- 0.69 or 0.70 ownership classification.
 - Toko behavior-level compatibility notes.
 
 ### Status Vocabulary
@@ -86,7 +86,7 @@ Method status values are intentionally narrow:
 Design-note statements may describe expected ownership or implementation
 direction, but they do not satisfy source, Candid, DTO, behavior, or
 compatibility fields. Keep unknown protocol facts as `TBD` instead of inferring
-them from the 0.68 design.
+them from the 0.69 design.
 
 ## Method Inventory
 
@@ -99,13 +99,13 @@ deployed Candid source are recorded.
 
 Status: **Missing source**
 
-Owning release: 0.68
+Owning release: 0.69
 
-Emission in 0.68: yes
+Emission in 0.69: yes
 
 Known from design only:
 
-- Non-billing liveness query backed by 0.68 live blob state.
+- Non-billing liveness query backed by 0.69 live blob state.
 - Public/malformed behavior must match the upstream protocol.
 - External input encoding is unresolved. Implementers must not assume text
   hashes or `sha256:<hex>` unless the source proves that shape.
@@ -131,13 +131,13 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.68
+Owning release: 0.69
 
-Emission in 0.68: yes
+Emission in 0.69: yes
 
 Known from design only:
 
-- Non-billing deletion coordination backed by 0.68 pending deletion state.
+- Non-billing deletion coordination backed by 0.69 pending deletion state.
 - Caller authorization must be gateway-only against stored gateway principals.
 - Non-gateway behavior is unresolved and must not be invented.
 
@@ -161,13 +161,13 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.68
+Owning release: 0.69
 
-Emission in 0.68: yes
+Emission in 0.69: yes
 
 Known from design only:
 
-- Non-billing deletion confirmation backed by 0.68 lifecycle transitions.
+- Non-billing deletion confirmation backed by 0.69 lifecycle transitions.
 - Caller authorization must be gateway-only against stored gateway principals.
 - Unknown, already-confirmed, and live-but-not-pending behavior is unresolved.
 
@@ -191,9 +191,9 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.68
+Owning release: 0.69
 
-Emission in 0.68: yes
+Emission in 0.69: yes
 
 Known from design only:
 
@@ -224,14 +224,14 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.69
+Owning release: 0.70
 
-Emission in 0.68: no
+Emission in 0.69: no
 
 Known from design only:
 
 - Deferred billing/sync endpoint.
-- 0.68 must inventory the exact signature so 0.69 consumes, rather than
+- 0.69 must inventory the exact signature so 0.70 consumes, rather than
   invents, the gateway-facing protocol.
 
 Required fields:
@@ -251,14 +251,14 @@ Required fields:
 
 Status: **Missing source**
 
-Owning release: 0.69
+Owning release: 0.70
 
-Emission in 0.68: no
+Emission in 0.69: no
 
 Known from design only:
 
 - Deferred billing/funding endpoint.
-- 0.68 must inventory the exact signature so 0.69 consumes, rather than
+- 0.69 must inventory the exact signature so 0.70 consumes, rather than
   invents, the gateway-facing protocol.
 
 Required fields:
@@ -319,7 +319,7 @@ Existing Toko project-instance mirror state:
   `location.asset_id`.
 - Local source comments say `Id<RemoteAsset>` is externally asserted from the
   asset-canister ULID, but the observed creation path inserts a fresh
-  `RemoteAsset` without assigning the source asset id as the row id. The 0.68
+  `RemoteAsset` without assigning the source asset id as the row id. The 0.69
   Canic design must treat `location.asset_id` as the reliable observed source
   identity unless Toko is corrected or a later audit proves otherwise.
 
@@ -348,7 +348,7 @@ Compatibility findings:
   maps existing Toko asset identities to canonical gateway blob roots. This is
   still TBD and must be decided before implementation unlocks.
 
-No 0.68 storage schema should be treated as final until these compatibility
+No 0.69 storage schema should be treated as final until these compatibility
 facts are recorded or an explicit no-state-move path is accepted.
 
 ## Implementation Gate
@@ -381,5 +381,5 @@ The only safe next steps are:
 - Locate the upstream source or generated `.did`.
 - Fill the method inventory from immutable source references.
 - Add Candid snapshots copied or generated from the inventoried source.
-- Update the 0.68 design if the protocol source contradicts current design
+- Update the 0.69 design if the protocol source contradicts current design
   assumptions.
