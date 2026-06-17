@@ -1,4 +1,7 @@
 use crate::{
+    domain::policy::auth::{
+        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+    },
     dto::auth::{
         ActiveDelegationProof, DelegatedRoleGrant, DelegationAudience, DelegationCert,
         DelegationProof, IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
@@ -7,7 +10,7 @@ use crate::{
     storage::stable::auth::{
         ActiveDelegationProofRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
         DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
-        IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootProofRecord,
+        IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord, RootProofRecord,
     },
 };
 
@@ -41,6 +44,55 @@ impl ActiveDelegationProofRecordMapper {
             refresh_after_ns: record.refresh_after_ns,
             installed_at_ns: record.installed_at_ns,
             installed_by: record.installed_by,
+        }
+    }
+}
+
+///
+/// RootIssuerPolicyRecordMapper
+///
+
+pub struct RootIssuerPolicyRecordMapper;
+
+impl RootIssuerPolicyRecordMapper {
+    #[must_use]
+    pub fn record_to_policy(record: RootIssuerRecord) -> RootIssuerPolicy {
+        RootIssuerPolicy {
+            issuer_pid: record.issuer_pid,
+            enabled: record.enabled,
+            allowed_audiences: record
+                .allowed_audiences
+                .into_iter()
+                .map(audience_record_to_policy)
+                .collect(),
+            allowed_grants: record
+                .allowed_grants
+                .into_iter()
+                .map(grant_record_to_policy)
+                .collect(),
+            max_cert_ttl_ns: record.max_cert_ttl_ns,
+            refresh_after_ratio_bps: record.refresh_after_ratio_bps,
+        }
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub fn policy_to_record(policy: RootIssuerPolicy) -> RootIssuerRecord {
+        RootIssuerRecord {
+            issuer_pid: policy.issuer_pid,
+            enabled: policy.enabled,
+            allowed_audiences: policy
+                .allowed_audiences
+                .into_iter()
+                .map(audience_policy_to_record)
+                .collect(),
+            allowed_grants: policy
+                .allowed_grants
+                .into_iter()
+                .map(grant_policy_to_record)
+                .collect(),
+            max_cert_ttl_ns: policy.max_cert_ttl_ns,
+            refresh_after_ratio_bps: policy.refresh_after_ratio_bps,
         }
     }
 }
@@ -140,6 +192,50 @@ fn grant_record_to_dto(record: DelegatedRoleGrantRecord) -> DelegatedRoleGrant {
     DelegatedRoleGrant {
         target: record.target,
         scopes: record.scopes,
+    }
+}
+
+fn audience_record_to_policy(record: DelegationAudienceRecord) -> RootDelegationAudiencePolicy {
+    match record {
+        DelegationAudienceRecord::Canister(canister) => {
+            RootDelegationAudiencePolicy::Canister(canister)
+        }
+        DelegationAudienceRecord::CanicSubnet(subnet) => {
+            RootDelegationAudiencePolicy::CanicSubnet(subnet)
+        }
+        DelegationAudienceRecord::Project(project) => {
+            RootDelegationAudiencePolicy::Project(project)
+        }
+    }
+}
+
+#[cfg(test)]
+fn audience_policy_to_record(policy: RootDelegationAudiencePolicy) -> DelegationAudienceRecord {
+    match policy {
+        RootDelegationAudiencePolicy::Canister(canister) => {
+            DelegationAudienceRecord::Canister(canister)
+        }
+        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
+            DelegationAudienceRecord::CanicSubnet(subnet)
+        }
+        RootDelegationAudiencePolicy::Project(project) => {
+            DelegationAudienceRecord::Project(project)
+        }
+    }
+}
+
+fn grant_record_to_policy(record: DelegatedRoleGrantRecord) -> RootDelegatedRoleGrantPolicy {
+    RootDelegatedRoleGrantPolicy {
+        target: record.target,
+        scopes: record.scopes,
+    }
+}
+
+#[cfg(test)]
+fn grant_policy_to_record(policy: RootDelegatedRoleGrantPolicy) -> DelegatedRoleGrantRecord {
+    DelegatedRoleGrantRecord {
+        target: policy.target,
+        scopes: policy.scopes,
     }
 }
 

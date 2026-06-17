@@ -129,6 +129,30 @@ pub struct ActiveDelegationProofRecord {
 }
 
 ///
+/// RootIssuerRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRecord {
+    pub issuer_pid: Principal,
+    pub enabled: bool,
+    pub allowed_audiences: Vec<DelegationAudienceRecord>,
+    pub allowed_grants: Vec<DelegatedRoleGrantRecord>,
+    pub max_cert_ttl_ns: u64,
+    pub refresh_after_ratio_bps: u16,
+}
+
+///
+/// RootProvisionerRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootProvisionerRecord {
+    pub principal: Principal,
+    pub enabled: bool,
+}
+
+///
 /// AuthStateRecord
 ///
 
@@ -140,4 +164,10 @@ pub struct AuthStateRecord {
 
     #[serde(default)]
     pub active_delegation_proof: Option<ActiveDelegationProofRecord>,
+
+    #[serde(default)]
+    pub root_issuers: Vec<RootIssuerRecord>,
+
+    #[serde(default)]
+    pub root_provisioners: Vec<RootProvisionerRecord>,
 }
