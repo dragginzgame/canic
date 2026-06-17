@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
 
+- `0.67.51` continues `canic-backup` cleanup by splitting backup journal,
+  manifest validation, persistence, runner operation, and plan preflight
+  internals into focused child modules while preserving backup behavior.
+
 - `0.67.50` continues `canic-backup` cleanup by splitting execution journal
   and backup plan tests into focused modules while preserving backup behavior.
 
