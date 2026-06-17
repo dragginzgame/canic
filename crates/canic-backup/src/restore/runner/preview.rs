@@ -1,3 +1,9 @@
+//! Module: restore::runner::preview
+//!
+//! Responsibility: preview and recover restore apply journal runner state.
+//! Does not own: command execution, restore planning, or artifact validation.
+//! Boundary: returns runner responses without executing mutating restore commands.
+
 use super::{
     RestoreApplyJournalError, RestoreApplyOperationState,
     io::{RestoreJournalLock, read_apply_journal_file, state_updated_at, write_apply_journal_file},

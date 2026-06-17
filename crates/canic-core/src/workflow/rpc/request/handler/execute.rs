@@ -27,6 +27,7 @@ use crate::{
         canister_lifecycle::{
             CanisterLifecycleEvent, CanisterLifecycleWorkflow, CanisterUpgradeCostContext,
         },
+        cost_guard::map_cost_guard_reserve_error,
         pool::PoolWorkflow,
         rpc::RpcWorkflowError,
     },
@@ -158,6 +159,7 @@ fn reserve_root_provision_cost_guard(
         reservation_cycles,
         MgmtOps::canister_cycle_balance().to_u128(),
     ))
+    .map_err(map_cost_guard_reserve_error)
 }
 
 pub(super) fn root_provision_cost_guard_request(

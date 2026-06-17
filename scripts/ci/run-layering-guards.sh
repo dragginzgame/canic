@@ -11,6 +11,11 @@ if rg "(^|[^A-Za-z0-9_])api::|crate::api::" crates/canic-core/src/workflow --glo
     exit 1
 fi
 
+if rg "ops::replay|ReplayReceipt|ReplayPayloadHasher|ReplayReceiptDecision|ReplayReceiptReserveInput|reserve_or_replay_receipt|commit_receipt_response|mark_recovery_required" crates/canic-core/src/api --glob '*.rs' --glob '!**/tests.rs'; then
+    echo "api must delegate shared replay orchestration to workflow" >&2
+    exit 1
+fi
+
 if rg "struct .*Policy|enum .*Policy|impl .*Policy" crates/canic-core/src/workflow --glob '*.rs' --glob '!**/tests.rs'; then
     echo "workflow must apply policy, not define policy types" >&2
     exit 1

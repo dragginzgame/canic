@@ -1,8 +1,18 @@
+//! Module: restore::plan::types
+//!
+//! Responsibility: define serialized restore plan and mapping data shapes.
+//! Does not own: restore planning decisions, artifact validation, or execution.
+//! Boundary: data contracts shared by restore planning, apply dry-runs, and runners.
+
 use crate::manifest::{IdentityMode, SourceSnapshot, VerificationCheck};
+
 use serde::{Deserialize, Serialize};
 
 ///
 /// RestoreMapping
+///
+/// Optional operator mapping from source canisters to restore targets.
+/// Owned by restore planning and accepted by restore plan construction.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -23,6 +33,9 @@ impl RestoreMapping {
 ///
 /// RestoreMappingEntry
 ///
+/// One source-to-target canister mapping row.
+/// Owned by restore planning and embedded in `RestoreMapping`.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RestoreMappingEntry {
@@ -32,6 +45,9 @@ pub struct RestoreMappingEntry {
 
 ///
 /// RestorePlan
+///
+/// No-mutation restore plan derived from one backup manifest.
+/// Owned by restore planning and consumed by apply dry-run and runner workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -63,6 +79,9 @@ impl RestorePlan {
 ///
 /// RestoreIdentitySummary
 ///
+/// Read-only summary of in-place and remapped restore identities.
+/// Owned by restore planning and embedded in `RestorePlan`.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreIdentitySummary {
@@ -78,6 +97,9 @@ pub struct RestoreIdentitySummary {
 ///
 /// RestoreSnapshotSummary
 ///
+/// Read-only summary of snapshot metadata completeness.
+/// Owned by restore planning and embedded in `RestorePlan`.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreSnapshotSummary {
@@ -91,6 +113,9 @@ pub struct RestoreSnapshotSummary {
 
 ///
 /// RestoreVerificationSummary
+///
+/// Read-only summary of restore verification work.
+/// Owned by restore planning and embedded in `RestorePlan`.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -107,6 +132,9 @@ pub struct RestoreVerificationSummary {
 ///
 /// RestoreReadinessSummary
 ///
+/// Read-only restore readiness projection with blocking reasons.
+/// Owned by restore planning and embedded in `RestorePlan`.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreReadinessSummary {
@@ -116,6 +144,9 @@ pub struct RestoreReadinessSummary {
 
 ///
 /// RestoreOperationSummary
+///
+/// Read-only summary of concrete restore operations to schedule.
+/// Owned by restore planning and embedded in `RestorePlan`.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -133,6 +164,9 @@ pub struct RestoreOperationSummary {
 ///
 /// RestoreOrderingSummary
 ///
+/// Read-only summary of restore member ordering dependencies.
+/// Owned by restore planning and embedded in `RestorePlan`.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreOrderingSummary {
@@ -143,6 +177,9 @@ pub struct RestoreOrderingSummary {
 
 ///
 /// RestorePlanMember
+///
+/// Planned restore row for one manifest member.
+/// Owned by restore planning and consumed by apply dry-run and runner workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -162,6 +199,9 @@ pub struct RestorePlanMember {
 ///
 /// RestoreOrderingDependency
 ///
+/// Parent-before-child dependency attached to one restore member.
+/// Owned by restore planning and embedded in `RestorePlanMember`.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreOrderingDependency {
@@ -172,6 +212,9 @@ pub struct RestoreOrderingDependency {
 
 ///
 /// RestoreOrderingRelationship
+///
+/// Supported restore member ordering relationship.
+/// Owned by restore planning and serialized in ordering dependency rows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

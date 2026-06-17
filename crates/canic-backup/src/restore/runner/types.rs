@@ -1,3 +1,9 @@
+//! Module: restore::runner::types
+//!
+//! Responsibility: define native restore runner configuration, responses, receipts, and errors.
+//! Does not own: journal persistence, command execution, or restore plan construction.
+//! Boundary: public response contract for restore runner preview and execution APIs.
+
 use super::{
     RestoreApplyCommandConfig, RestoreApplyCommandOutputPair, RestoreApplyJournalError,
     RestoreApplyJournalOperation, RestoreApplyJournalReport, RestoreApplyOperationKind,
@@ -12,6 +18,9 @@ use thiserror::Error as ThisError;
 ///
 /// RestoreRunnerConfig
 ///
+/// Native restore runner configuration for one apply journal command.
+/// Owned by restore runner callers and consumed by preview/execute entrypoints.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RestoreRunnerConfig {
@@ -23,6 +32,9 @@ pub struct RestoreRunnerConfig {
 
 ///
 /// RestoreRunnerCommandExecutor
+///
+/// Command execution trait injected into the native restore runner.
+/// Owned by restore runner execution and implemented by CLI/process adapters.
 ///
 
 pub trait RestoreRunnerCommandExecutor {
@@ -36,6 +48,9 @@ pub trait RestoreRunnerCommandExecutor {
 ///
 /// RestoreRunnerCommandOutput
 ///
+/// Process-like command output returned by a restore runner executor.
+/// Owned by restore runner execution and converted into durable receipts.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RestoreRunnerCommandOutput {
@@ -47,6 +62,9 @@ pub struct RestoreRunnerCommandOutput {
 
 ///
 /// RestoreRunnerError
+///
+/// Typed native restore runner failure.
+/// Owned by restore runner execution and returned by preview/recovery/execute APIs.
 ///
 
 #[derive(Debug, ThisError)]
@@ -129,6 +147,9 @@ pub enum RestoreRunnerError {
 ///
 /// RestoreRunResponse
 ///
+/// Stable JSON response emitted by native restore runner modes.
+/// Owned by restore runner APIs and consumed by operators and automation.
+///
 
 #[derive(Clone, Debug, Serialize)]
 #[expect(
@@ -184,7 +205,6 @@ pub struct RestoreRunResponse {
 }
 
 impl RestoreRunResponse {
-    // Build the shared native runner response fields from an apply journal report.
     pub(super) fn from_report(
         backup_id: String,
         report: RestoreApplyJournalReport,
@@ -229,14 +249,12 @@ impl RestoreRunResponse {
         }
     }
 
-    // Replace the detailed receipt stream and refresh the compact counters.
     pub(super) fn set_operation_receipts(&mut self, receipts: Vec<RestoreRunOperationReceipt>) {
         self.operation_receipt_summary = RestoreRunReceiptSummary::from_receipts(&receipts);
         self.operation_receipt_count = Some(receipts.len());
         self.operation_receipts = receipts;
     }
 
-    // Echo the caller-provided state marker for receipt-free runner summaries.
     pub(super) fn set_requested_state_updated_at(&mut self, updated_at: Option<&String>) {
         self.requested_state_updated_at = updated_at.cloned();
     }
@@ -244,6 +262,9 @@ impl RestoreRunResponse {
 
 ///
 /// RestoreRunReceiptSummary
+///
+/// Compact count summary for restore runner receipts.
+/// Owned by restore runner responses and derived from detailed receipt rows.
 ///
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -256,7 +277,6 @@ pub struct RestoreRunReceiptSummary {
 }
 
 impl RestoreRunReceiptSummary {
-    // Count restore runner receipt classes for script-friendly summaries.
     fn from_receipts(receipts: &[RestoreRunOperationReceipt]) -> Self {
         let mut summary = Self {
             total_receipts: receipts.len(),
@@ -280,6 +300,9 @@ impl RestoreRunReceiptSummary {
 ///
 /// RestoreRunOperationReceipt
 ///
+/// Script-friendly receipt for one restore runner operation event.
+/// Owned by restore runner responses and returned alongside durable journal receipts.
+///
 
 #[derive(Clone, Debug, Serialize)]
 pub struct RestoreRunOperationReceipt {
@@ -297,7 +320,6 @@ pub struct RestoreRunOperationReceipt {
 }
 
 impl RestoreRunOperationReceipt {
-    // Build a receipt for a completed runner command.
     pub(super) fn completed(
         operation: RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
@@ -314,7 +336,6 @@ impl RestoreRunOperationReceipt {
         )
     }
 
-    // Build a receipt for a failed runner command.
     pub(super) fn failed(
         operation: RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
@@ -331,7 +352,6 @@ impl RestoreRunOperationReceipt {
         )
     }
 
-    // Build a receipt for a recovered pending operation.
     pub(super) fn recovered_pending(
         operation: RestoreApplyJournalOperation,
         updated_at: Option<String>,
@@ -346,7 +366,6 @@ impl RestoreRunOperationReceipt {
         )
     }
 
-    // Build a receipt for a recovered failed operation.
     pub(super) fn recovered_failed(
         operation: RestoreApplyJournalOperation,
         updated_at: Option<String>,
@@ -361,7 +380,6 @@ impl RestoreRunOperationReceipt {
         )
     }
 
-    // Map one operation event into a compact audit receipt.
     fn from_operation(
         event: &'static str,
         operation: RestoreApplyJournalOperation,
@@ -386,6 +404,9 @@ impl RestoreRunOperationReceipt {
 ///
 /// RestoreRunExecutedOperation
 ///
+/// Summary row for one command the native restore runner executed.
+/// Owned by restore runner responses and emitted during execute mode.
+///
 
 #[derive(Clone, Debug, Serialize)]
 pub struct RestoreRunExecutedOperation {
@@ -398,7 +419,6 @@ pub struct RestoreRunExecutedOperation {
 }
 
 impl RestoreRunExecutedOperation {
-    // Build a completed executed-operation summary row from a runner operation.
     pub(super) fn completed(
         operation: RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
@@ -407,7 +427,6 @@ impl RestoreRunExecutedOperation {
         Self::from_operation(operation, command, status, RESTORE_RUN_EXECUTED_COMPLETED)
     }
 
-    // Build a failed executed-operation summary row from a runner operation.
     pub(super) fn failed(
         operation: RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
@@ -416,7 +435,6 @@ impl RestoreRunExecutedOperation {
         Self::from_operation(operation, command, status, RESTORE_RUN_EXECUTED_FAILED)
     }
 
-    // Map a journal operation into the compact runner execution row.
     fn from_operation(
         operation: RestoreApplyJournalOperation,
         command: RestoreApplyRunnerCommand,
@@ -437,6 +455,9 @@ impl RestoreRunExecutedOperation {
 ///
 /// RestoreRunnerOutcome
 ///
+/// Internal execute result carrying a response and optional deferred error.
+/// Owned by restore runner execution and converted by public execute wrappers.
+///
 
 pub struct RestoreRunnerOutcome {
     pub response: RestoreRunResponse,
@@ -444,7 +465,6 @@ pub struct RestoreRunnerOutcome {
 }
 
 impl RestoreRunnerOutcome {
-    // Build a successful runner response with no deferred error.
     pub(super) const fn ok(response: RestoreRunResponse) -> Self {
         Self {
             response,
@@ -456,6 +476,9 @@ impl RestoreRunnerOutcome {
 ///
 /// RestoreStoppedPreconditionFailure
 ///
+/// Internal stopped-canister precondition failure details.
+/// Owned by restore runner preconditions and committed as failed operation receipts.
+///
 
 pub(super) struct RestoreStoppedPreconditionFailure {
     pub(super) command: RestoreApplyRunnerCommand,
@@ -466,6 +489,9 @@ pub(super) struct RestoreStoppedPreconditionFailure {
 
 ///
 /// RestoreRunResponseMode
+///
+/// Internal response-mode flags for stable restore runner JSON.
+/// Owned by restore runner response construction.
 ///
 
 #[expect(
@@ -483,7 +509,6 @@ pub(super) struct RestoreRunResponseMode {
 }
 
 impl RestoreRunResponseMode {
-    // Build a response mode from the stable JSON mode flags and action labels.
     #[expect(
         clippy::fn_params_excessive_bools,
         reason = "Internal constructor keeps stable JSON mode flags explicit"
@@ -508,7 +533,6 @@ impl RestoreRunResponseMode {
         }
     }
 
-    // Build a dry-run response mode with a computed stop reason and action.
     pub(super) const fn dry_run(stopped_reason: &'static str, next_action: &'static str) -> Self {
         Self::new(
             RESTORE_RUN_MODE_DRY_RUN,

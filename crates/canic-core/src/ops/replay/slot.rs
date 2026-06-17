@@ -1,7 +1,15 @@
+//! Module: ops::replay::slot
+//!
+//! Responsibility: adapt legacy root replay slots onto shared replay receipts.
+//! Does not own: replay policy, response encoding, or command execution.
+//! Boundary: `ops::replay` uses this while root replay callers migrate.
+
+use crate::cdk::types::Principal;
 use crate::ops::{
     replay::{
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
         guard::ReplayPending,
+        model::ReplayActor,
         receipt::{commit_receipt_response, reserve_receipt_token},
     },
     storage::replay::ReplayReceiptOps,
@@ -38,11 +46,8 @@ pub fn root_slot_len() -> usize {
 ///
 /// Return the number of non-expired replay receipts currently stored for a caller.
 #[must_use]
-pub fn active_root_slot_len_for_caller(caller: crate::cdk::types::Principal, now_ns: u64) -> usize {
-    ReplayReceiptOps::active_len_for_actor(
-        crate::ops::replay::model::ReplayActor::direct_caller(caller),
-        now_ns,
-    )
+pub fn active_root_slot_len_for_caller(caller: Principal, now_ns: u64) -> usize {
+    ReplayReceiptOps::active_len_for_actor(ReplayActor::direct_caller(caller), now_ns)
 }
 
 /// purge_root_expired

@@ -1,3 +1,9 @@
+//! Module: restore::runner::precondition
+//!
+//! Responsibility: enforce stopped-canister preconditions before snapshot load.
+//! Does not own: apply journal transitions, command execution policy, or receipts.
+//! Boundary: probes target status through the injected runner executor.
+
 use super::{
     RestoreApplyCommandOutputPair, RestoreApplyJournalOperation, RestoreApplyRunnerCommand,
     constants::{RESTORE_RUN_OUTPUT_RECEIPT_LIMIT, RESTORE_RUN_STOPPED_PRECONDITION_FAILED},
@@ -8,7 +14,6 @@ use super::{
     },
 };
 
-// Verify a stopped-canister command precondition before running a mutating load.
 pub(super) fn enforce_stopped_canister_precondition(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
@@ -39,7 +44,6 @@ pub(super) fn enforce_stopped_canister_precondition(
     }))
 }
 
-// Build the non-mutating status command used to prove stopped-canister state.
 fn stopped_canister_status_command(
     config: &RestoreRunnerConfig,
     operation: &RestoreApplyJournalOperation,
@@ -62,7 +66,6 @@ fn stopped_canister_status_command(
     }
 }
 
-// Detect stopped status from bounded command output.
 fn status_output_reports_stopped(output: &RestoreApplyCommandOutputPair) -> bool {
     status_json_reports_stopped(&output.stdout.text)
         || status_json_reports_stopped(&output.stderr.text)
@@ -99,7 +102,6 @@ fn find_json_field<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a 
 mod tests {
     use super::*;
 
-    // Ensure stopped-canister status parsing accepts current command-style output.
     #[test]
     fn status_output_reports_stopped_status() {
         let output =
@@ -116,7 +118,6 @@ mod tests {
         assert!(status_output_reports_stopped(&output));
     }
 
-    // Ensure running status output does not satisfy snapshot-load preconditions.
     #[test]
     fn status_output_rejects_running_status() {
         let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Running\n", b"", 1024);
@@ -124,7 +125,6 @@ mod tests {
         assert!(!status_output_reports_stopped(&output));
     }
 
-    // Keep legacy human status output accepted for older command receipts.
     #[test]
     fn status_output_reports_legacy_stopped_status() {
         let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Stopped\n", b"", 1024);

@@ -1,13 +1,19 @@
+//! Module: ops::cost_guard
+//!
+//! Responsibility: reserve and settle mechanical cost guard quota/cycle permits.
+//! Does not own: workflow authorization, command semantics, or public error mapping.
+//! Boundary: workflows submit cost guard requests before external-effect boundaries.
+
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    dto::error::Error,
     ids::{IntentId, IntentResourceKey},
     ops::{replay::model::CommandKind, storage::intent::IntentStoreOps},
     replay_policy::CostClass,
 };
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
+use thiserror::Error as ThisError;
 
 const KEY_HASH_BYTES: usize = 8;
 const MIN_QUOTA_WINDOW_SECONDS: u64 = 1;
@@ -32,6 +38,9 @@ pub struct CostGuardPermit {
 ///
 /// CostGuardRequest
 ///
+/// Input for reserving quota and cycle budget for a costed command.
+/// Owned by ops and supplied by workflows before external effects.
+///
 #[derive(Clone, Debug)]
 pub struct CostGuardRequest {
     pub cost_class: CostClass,
@@ -47,12 +56,99 @@ pub struct CostGuardRequest {
 }
 
 ///
+/// CostGuardReservePublicKind
+///
+/// Public-facing class for cost guard reservation failures.
+/// Owned by ops and mapped by workflow into boundary errors.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CostGuardReservePublicKind {
+    InvalidInput,
+    ResourceExhausted,
+}
+
+///
+/// CostGuardReserveError
+///
+/// Typed cost guard reservation failure.
+/// Owned by ops and returned before a permit is issued.
+///
+
+#[derive(Debug, ThisError)]
+pub enum CostGuardReserveError {
+    #[error("cost guard requires a costed operation class")]
+    UncostedClass,
+
+    #[error("cost guard quota window must be greater than zero")]
+    InvalidQuotaWindow,
+
+    #[error("cost guard quota rejects all new operations")]
+    QuotaRejectsAll,
+
+    #[error("cost guard cycle reservation exceeds supported accounting range")]
+    CycleReservationOverflow,
+
+    #[error("cost guard quota exceeded for {command_kind}: used={used} max={max}")]
+    QuotaExceeded {
+        command_kind: String,
+        used: u64,
+        max: u64,
+    },
+
+    #[error(
+        "cost guard cycle reserve rejected {command_kind}: available={available} required={required}"
+    )]
+    CycleReserveRejected {
+        command_kind: String,
+        available: u128,
+        required: u128,
+    },
+
+    #[error("cost guard resource key is invalid: {0}")]
+    ResourceKeyInvalid(String),
+
+    #[error(transparent)]
+    Store(#[from] InternalError),
+}
+
+impl CostGuardReserveError {
+    #[must_use]
+    pub const fn public_kind(&self) -> Option<CostGuardReservePublicKind> {
+        match self {
+            Self::UncostedClass | Self::InvalidQuotaWindow | Self::ResourceKeyInvalid(_) => {
+                Some(CostGuardReservePublicKind::InvalidInput)
+            }
+            Self::QuotaRejectsAll
+            | Self::CycleReservationOverflow
+            | Self::QuotaExceeded { .. }
+            | Self::CycleReserveRejected { .. } => {
+                Some(CostGuardReservePublicKind::ResourceExhausted)
+            }
+            Self::Store(_) => None,
+        }
+    }
+}
+
+impl From<CostGuardReserveError> for InternalError {
+    fn from(err: CostGuardReserveError) -> Self {
+        match err {
+            CostGuardReserveError::Store(err) => err,
+            other => Self::ops(InternalErrorOrigin::Ops, other.to_string()),
+        }
+    }
+}
+
+///
 /// CostGuardOps
+///
+/// Mechanical quota and cycle-reservation facade.
+/// Owned by ops and consumed by workflows crossing expensive side effects.
 ///
 pub struct CostGuardOps;
 
 impl CostGuardOps {
-    pub fn reserve(request: CostGuardRequest) -> Result<CostGuardPermit, InternalError> {
+    pub fn reserve(request: CostGuardRequest) -> Result<CostGuardPermit, CostGuardReserveError> {
         validate_request(&request)?;
 
         let quota_key = quota_resource_key(&request)?;
@@ -70,22 +166,22 @@ impl CostGuardOps {
             request.now_secs,
         )?;
 
-        let reservation_id = match IntentStoreOps::allocate_intent_id().and_then(|intent_id| {
-            let quantity = u64::try_from(request.cycle_reservation_cycles).map_err(|_| {
-                InternalError::public(Error::exhausted(
-                    "cost guard cycle reservation exceeds supported accounting range",
-                ))
-            })?;
-            IntentStoreOps::try_reserve(
-                intent_id,
-                reservation_key,
-                quantity,
-                request.now_secs,
-                Some(INTENT_TTL_SECONDS),
-                request.now_secs,
-            )
-            .map(|record| record.id)
-        }) {
+        let reservation_id = match IntentStoreOps::allocate_intent_id()
+            .map_err(CostGuardReserveError::from)
+            .and_then(|intent_id| {
+                let quantity = u64::try_from(request.cycle_reservation_cycles)
+                    .map_err(|_| CostGuardReserveError::CycleReservationOverflow)?;
+                IntentStoreOps::try_reserve(
+                    intent_id,
+                    reservation_key,
+                    quantity,
+                    request.now_secs,
+                    Some(INTENT_TTL_SECONDS),
+                    request.now_secs,
+                )
+                .map(|record| record.id)
+                .map_err(CostGuardReserveError::from)
+            }) {
             Ok(reservation_id) => reservation_id,
             Err(err) => {
                 let _ = IntentStoreOps::abort(quota_record.id);
@@ -123,26 +219,18 @@ impl CostGuardOps {
     }
 }
 
-fn validate_request(request: &CostGuardRequest) -> Result<(), InternalError> {
+fn validate_request(request: &CostGuardRequest) -> Result<(), CostGuardReserveError> {
     if request.cost_class == CostClass::None {
-        return Err(InternalError::public(Error::invalid(
-            "cost guard requires a costed operation class",
-        )));
+        return Err(CostGuardReserveError::UncostedClass);
     }
     if request.quota_window_secs < MIN_QUOTA_WINDOW_SECONDS {
-        return Err(InternalError::public(Error::invalid(
-            "cost guard quota window must be greater than zero",
-        )));
+        return Err(CostGuardReserveError::InvalidQuotaWindow);
     }
     if request.max_operations_per_window == 0 {
-        return Err(InternalError::public(Error::exhausted(
-            "cost guard quota rejects all new operations",
-        )));
+        return Err(CostGuardReserveError::QuotaRejectsAll);
     }
     if request.cycle_reservation_cycles > u128::from(u64::MAX) {
-        return Err(InternalError::public(Error::exhausted(
-            "cost guard cycle reservation exceeds supported accounting range",
-        )));
+        return Err(CostGuardReserveError::CycleReservationOverflow);
     }
     Ok(())
 }
@@ -150,16 +238,15 @@ fn validate_request(request: &CostGuardRequest) -> Result<(), InternalError> {
 fn enforce_quota(
     quota_key: &IntentResourceKey,
     request: &CostGuardRequest,
-) -> Result<(), InternalError> {
+) -> Result<(), CostGuardReserveError> {
     let totals = IntentStoreOps::totals_at(quota_key, request.now_secs);
     let used = totals.committed_qty.saturating_add(totals.reserved_qty);
     if used >= request.max_operations_per_window {
-        return Err(InternalError::public(Error::exhausted(format!(
-            "cost guard quota exceeded for {}: used={} max={}",
-            request.command_kind.as_str(),
+        return Err(CostGuardReserveError::QuotaExceeded {
+            command_kind: request.command_kind.as_str().to_string(),
             used,
-            request.max_operations_per_window
-        ))));
+            max: request.max_operations_per_window,
+        });
     }
     Ok(())
 }
@@ -167,7 +254,7 @@ fn enforce_quota(
 fn enforce_cycle_reserve(
     reservation_key: &IntentResourceKey,
     request: &CostGuardRequest,
-) -> Result<(), InternalError> {
+) -> Result<(), CostGuardReserveError> {
     let outstanding =
         u128::from(IntentStoreOps::totals_at(reservation_key, request.now_secs).reserved_qty);
     let available = request.current_cycle_balance.saturating_sub(outstanding);
@@ -176,17 +263,18 @@ fn enforce_cycle_reserve(
         .saturating_add(request.cycle_reservation_cycles);
 
     if available < required {
-        return Err(InternalError::public(Error::exhausted(format!(
-            "cost guard cycle reserve rejected {}: available={} required={}",
-            request.command_kind.as_str(),
+        return Err(CostGuardReserveError::CycleReserveRejected {
+            command_kind: request.command_kind.as_str().to_string(),
             available,
-            required
-        ))));
+            required,
+        });
     }
     Ok(())
 }
 
-fn quota_resource_key(request: &CostGuardRequest) -> Result<IntentResourceKey, InternalError> {
+fn quota_resource_key(
+    request: &CostGuardRequest,
+) -> Result<IntentResourceKey, CostGuardReserveError> {
     let bucket = request.now_secs / request.quota_window_secs;
     cost_key([
         "cost",
@@ -200,7 +288,7 @@ fn quota_resource_key(request: &CostGuardRequest) -> Result<IntentResourceKey, I
 
 fn reservation_resource_key(
     request: &CostGuardRequest,
-) -> Result<IntentResourceKey, InternalError> {
+) -> Result<IntentResourceKey, CostGuardReserveError> {
     cost_key([
         "cost",
         "reserve",
@@ -209,12 +297,11 @@ fn reservation_resource_key(
     ])
 }
 
-fn cost_key<const N: usize>(segments: [&str; N]) -> Result<IntentResourceKey, InternalError> {
-    IntentResourceKey::try_new(segments.join(":")).map_err(|err| {
-        InternalError::public(Error::invalid(format!(
-            "cost guard resource key is invalid: {err}"
-        )))
-    })
+fn cost_key<const N: usize>(
+    segments: [&str; N],
+) -> Result<IntentResourceKey, CostGuardReserveError> {
+    IntentResourceKey::try_new(segments.join(":"))
+        .map_err(CostGuardReserveError::ResourceKeyInvalid)
 }
 
 const fn cost_class_label(cost_class: CostClass) -> &'static str {
@@ -249,7 +336,7 @@ fn hash_bytes(value: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dto::error::ErrorCode, storage::stable::intent::IntentStore};
+    use crate::storage::stable::intent::IntentStore;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -283,8 +370,8 @@ mod tests {
 
         let err = CostGuardOps::reserve(request(20)).expect_err("same bucket exhausted");
         assert_eq!(
-            err.public_error().expect("quota rejection is public").code,
-            ErrorCode::ResourceExhausted
+            err.public_kind(),
+            Some(CostGuardReservePublicKind::ResourceExhausted)
         );
 
         CostGuardOps::reserve(request(70)).expect("next bucket allowed");
@@ -299,10 +386,8 @@ mod tests {
 
         let err = CostGuardOps::reserve(low).expect_err("low cycle reserve rejected");
         assert_eq!(
-            err.public_error()
-                .expect("cycle reserve rejection is public")
-                .code,
-            ErrorCode::ResourceExhausted
+            err.public_kind(),
+            Some(CostGuardReservePublicKind::ResourceExhausted)
         );
         assert_eq!(IntentStoreOps::pending_total().expect("meta"), 0);
     }
@@ -333,10 +418,8 @@ mod tests {
 
         let err = CostGuardOps::reserve(second_req).expect_err("outstanding reserve counts");
         assert_eq!(
-            err.public_error()
-                .expect("cycle reserve rejection is public")
-                .code,
-            ErrorCode::ResourceExhausted
+            err.public_kind(),
+            Some(CostGuardReservePublicKind::ResourceExhausted)
         );
     }
 }

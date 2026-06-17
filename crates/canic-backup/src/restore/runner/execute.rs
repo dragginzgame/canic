@@ -1,3 +1,9 @@
+//! Module: restore::runner::execute
+//!
+//! Responsibility: execute ready restore apply journal operations.
+//! Does not own: command rendering, apply journal validation, or restore planning.
+//! Boundary: claims operations, invokes an injected executor, and persists receipts.
+
 use super::{
     RestoreApplyCommandOutputPair, RestoreApplyJournal, RestoreApplyOperationKind,
     RestoreApplyOperationReceipt,
@@ -33,7 +39,6 @@ pub fn restore_run_execute_with_executor(
     Ok(run.response)
 }
 
-// Execute ready restore apply operations and retain any deferred runner error.
 pub fn restore_run_execute_result_with_executor(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
@@ -91,7 +96,6 @@ pub fn restore_run_execute_result_with_executor(
     }
 }
 
-// Claim the next renderable operation and persist the pending state.
 fn restore_run_prepare_next_operation(
     config: &RestoreRunnerConfig,
     journal: &mut RestoreApplyJournal,
@@ -128,7 +132,6 @@ fn restore_run_prepare_next_operation(
     })
 }
 
-// Execute one claimed operation and commit either success or failure.
 fn restore_run_execute_prepared_operation(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
@@ -183,7 +186,6 @@ fn restore_run_execute_prepared_operation(
     restore_run_commit_command_failure(config, journal, prepared, status_label, output_pair)
 }
 
-// Commit a successful upload command whose output is missing the required snapshot id.
 fn restore_run_commit_missing_uploaded_snapshot_id(
     config: &RestoreRunnerConfig,
     journal: &mut RestoreApplyJournal,
@@ -224,7 +226,6 @@ fn restore_run_commit_missing_uploaded_snapshot_id(
     })
 }
 
-// Commit a stopped-canister precondition failure for a claimed operation.
 fn restore_run_commit_precondition_failure(
     config: &RestoreRunnerConfig,
     journal: &mut RestoreApplyJournal,
@@ -264,7 +265,6 @@ fn restore_run_commit_precondition_failure(
     })
 }
 
-// Commit a successful process command for a claimed operation.
 fn restore_run_commit_command_success(
     config: &RestoreRunnerConfig,
     journal: &mut RestoreApplyJournal,
@@ -301,7 +301,6 @@ fn restore_run_commit_command_success(
     })
 }
 
-// Commit a failed process command for a claimed operation.
 fn restore_run_commit_command_failure(
     config: &RestoreRunnerConfig,
     journal: &mut RestoreApplyJournal,
@@ -343,7 +342,6 @@ fn restore_run_commit_command_failure(
     })
 }
 
-// Build the final native runner execution summary.
 fn restore_run_execute_summary(
     journal: &RestoreApplyJournal,
     executed_operations: Vec<RestoreRunExecutedOperation>,
@@ -369,7 +367,6 @@ fn restore_run_execute_summary(
     response
 }
 
-// Ensure a runner claim still matches the operation it previewed.
 fn enforce_apply_claim_sequence(
     expected: usize,
     journal: &RestoreApplyJournal,

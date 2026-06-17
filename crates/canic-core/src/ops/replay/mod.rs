@@ -1,18 +1,40 @@
-use crate::cdk::types::Principal;
-use crate::dto::rpc::{CyclesResponse, Response};
-use candid::{decode_one, encode_one};
+//! Module: ops::replay
+//!
+//! Responsibility: provide mechanical replay reservation and response helpers.
+//! Does not own: authorization, command policy, or command execution.
+//! Boundary: workflow calls replay ops after deciding which command is protected.
 
-use self::{
-    guard::ReplayPending,
-    model::{ExternalEffectDescriptor, RecoveryReason},
-    receipt::{abort_reserved_receipt, mark_external_effect_in_flight, mark_recovery_required},
-    slot as replay_slot,
-};
 pub mod guard;
 pub mod model;
 pub mod receipt;
 pub mod slot;
 pub mod ttl;
+
+use crate::{
+    cdk::types::Principal,
+    dto::{
+        auth::{
+            DelegatedTokenPrepareResponse, DelegationProofPrepareResponse,
+            RoleAttestationPrepareResponse,
+        },
+        icp_refill::IcpRefillResponse,
+        pool::PoolAdminResponse,
+        rpc::{CyclesResponse, Response},
+    },
+    ops::replay::{
+        guard::ReplayPending,
+        model::{ExternalEffectDescriptor, RecoveryReason, ReplayReceipt},
+        receipt::{abort_reserved_receipt, mark_external_effect_in_flight, mark_recovery_required},
+        slot as replay_slot,
+    },
+};
+use candid::{decode_one, encode_one};
+
+pub const DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
+pub const DELEGATION_PROOF_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
+pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
+pub const POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
+pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR2";
 const ROOT_REPLAY_COMPACT_CYCLES_V1: u8 = 0;
@@ -20,7 +42,9 @@ const ROOT_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 ///
 /// ReplayReserveError
+///
 /// Mechanical replay-reservation failures surfaced by ops replay reservation APIs.
+/// Owned by replay ops and mapped by workflow callers into public errors.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReserveError {
@@ -35,7 +59,9 @@ pub enum ReplayReserveError {
 
 ///
 /// ReplayCommitError
+///
 /// Mechanical replay-commit failures surfaced by ops replay commit APIs.
+/// Owned by replay ops and returned when response serialization fails.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayCommitError {
@@ -44,7 +70,9 @@ pub enum ReplayCommitError {
 
 ///
 /// ReplayDecodeError
+///
 /// Mechanical replay-decode failures surfaced by cached replay readers.
+/// Owned by replay ops and mapped by workflow replay adapters.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayDecodeError {
@@ -144,6 +172,147 @@ pub fn decode_root_cycles_replay_response(
     }
 }
 
+/// encode_delegated_token_prepare_replay_response
+///
+/// Encode the delegated-token prepare response payload stored in shared replay receipts.
+pub fn encode_delegated_token_prepare_replay_response(
+    response: &DelegatedTokenPrepareResponse,
+) -> Result<Vec<u8>, ReplayCommitError> {
+    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+}
+
+/// decode_delegated_token_prepare_replay_response
+///
+/// Decode a committed delegated-token prepare response from shared replay receipts.
+pub fn decode_delegated_token_prepare_replay_response(
+    receipt: &ReplayReceipt,
+) -> Result<DelegatedTokenPrepareResponse, ReplayDecodeError> {
+    let response_bytes = committed_response_bytes(
+        receipt,
+        DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+        "delegated token prepare",
+    )?;
+    decode_one(response_bytes).map_err(|err| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "failed to decode delegated token prepare replay response: {err}"
+        ))
+    })
+}
+
+/// encode_delegation_proof_prepare_replay_response
+///
+/// Encode the delegation-proof prepare response payload stored in shared replay receipts.
+pub fn encode_delegation_proof_prepare_replay_response(
+    response: &DelegationProofPrepareResponse,
+) -> Result<Vec<u8>, ReplayCommitError> {
+    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+}
+
+/// decode_delegation_proof_prepare_replay_response
+///
+/// Decode a committed delegation-proof prepare response from shared replay receipts.
+pub fn decode_delegation_proof_prepare_replay_response(
+    receipt: &ReplayReceipt,
+) -> Result<DelegationProofPrepareResponse, ReplayDecodeError> {
+    let response_bytes = committed_response_bytes(
+        receipt,
+        DELEGATION_PROOF_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+        "delegation",
+    )?;
+    decode_one(response_bytes).map_err(|err| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "failed to decode delegation proof prepare replay response: {err}"
+        ))
+    })
+}
+
+/// encode_icp_refill_replay_response
+///
+/// Encode the ICP refill response payload stored in shared replay receipts.
+pub fn encode_icp_refill_replay_response(
+    response: &IcpRefillResponse,
+) -> Result<Vec<u8>, ReplayCommitError> {
+    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+}
+
+/// decode_icp_refill_replay_response
+///
+/// Decode a committed ICP refill response payload from shared replay receipts.
+pub fn decode_icp_refill_replay_response(
+    receipt: &ReplayReceipt,
+) -> Result<IcpRefillResponse, ReplayDecodeError> {
+    let response_bytes = committed_response_bytes(
+        receipt,
+        ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
+        "ICP refill",
+    )?;
+    decode_one(response_bytes).map_err(|err| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "failed to decode ICP refill replay response: {err}"
+        ))
+    })
+}
+
+/// encode_pool_create_empty_replay_response
+///
+/// Encode the pool create-empty response payload stored in shared replay receipts.
+pub fn encode_pool_create_empty_replay_response(
+    response: &PoolAdminResponse,
+) -> Result<Vec<u8>, ReplayCommitError> {
+    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+}
+
+/// decode_pool_create_empty_replay_response
+///
+/// Decode a committed pool create-empty response from shared replay receipts.
+pub fn decode_pool_create_empty_replay_response(
+    receipt: &ReplayReceipt,
+) -> Result<Principal, ReplayDecodeError> {
+    let response_bytes = committed_response_bytes(
+        receipt,
+        POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
+        "pool create-empty",
+    )?;
+    let response: PoolAdminResponse = decode_one(response_bytes).map_err(|err| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "failed to decode pool create-empty replay response: {err}"
+        ))
+    })?;
+    match response {
+        PoolAdminResponse::Created { pid } => Ok(pid),
+        _ => Err(ReplayDecodeError::DecodeFailed(
+            "pool create-empty replay receipt contains the wrong response variant".to_string(),
+        )),
+    }
+}
+
+/// encode_role_attestation_prepare_replay_response
+///
+/// Encode the role-attestation prepare response payload stored in shared replay receipts.
+pub fn encode_role_attestation_prepare_replay_response(
+    response: &RoleAttestationPrepareResponse,
+) -> Result<Vec<u8>, ReplayCommitError> {
+    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
+}
+
+/// decode_role_attestation_prepare_replay_response
+///
+/// Decode a committed role-attestation prepare response from shared replay receipts.
+pub fn decode_role_attestation_prepare_replay_response(
+    receipt: &ReplayReceipt,
+) -> Result<RoleAttestationPrepareResponse, ReplayDecodeError> {
+    let response_bytes = committed_response_bytes(
+        receipt,
+        ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+        "role attestation prepare",
+    )?;
+    decode_one(response_bytes).map_err(|err| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "failed to decode role attestation prepare replay response: {err}"
+        ))
+    })
+}
+
 /// abort_root_replay
 ///
 /// Remove an in-flight replay reservation after failed capability execution.
@@ -179,6 +348,28 @@ fn try_encode_compact_root_replay_response(response: &Response) -> Option<Vec<u8
     bytes.push(ROOT_REPLAY_COMPACT_CYCLES_V1);
     bytes.extend_from_slice(&payload);
     Some(bytes)
+}
+
+fn committed_response_bytes<'a>(
+    receipt: &'a ReplayReceipt,
+    expected_schema_version: u32,
+    response_label: &'static str,
+) -> Result<&'a [u8], ReplayDecodeError> {
+    let response_schema_version = receipt.response_schema_version.ok_or_else(|| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "{response_label} replay receipt is missing response schema version"
+        ))
+    })?;
+    if response_schema_version != expected_schema_version {
+        return Err(ReplayDecodeError::DecodeFailed(format!(
+            "unsupported {response_label} replay response schema version {response_schema_version}"
+        )));
+    }
+    receipt.response_bytes.as_deref().ok_or_else(|| {
+        ReplayDecodeError::DecodeFailed(format!(
+            "{response_label} replay receipt is missing response bytes"
+        ))
+    })
 }
 
 fn try_decode_compact_root_replay_response(

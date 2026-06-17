@@ -1,3 +1,9 @@
+//! Module: restore
+//!
+//! Responsibility: plan, preview, journal, and execute restore workflows.
+//! Does not own: backup capture, backup persistence, or canister snapshot download.
+//! Boundary: consumes backup manifests and artifacts to produce restore plans and runner state.
+
 mod apply;
 mod plan;
 mod runner;

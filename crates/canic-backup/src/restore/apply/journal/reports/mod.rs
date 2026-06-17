@@ -1,11 +1,21 @@
+//! Module: restore::apply::journal::reports
+//!
+//! Responsibility: project restore apply journals into operator reports.
+//! Does not own: journal transitions, command rendering, or receipt validation.
+//! Boundary: returns compact read-only progress and attention summaries.
+
 use super::{
     RestoreApplyJournal, RestoreApplyJournalOperation, RestoreApplyOperationKind,
     RestoreApplyOperationKindCounts, RestoreApplyOperationState,
 };
+
 use serde::{Deserialize, Serialize};
 
 ///
 /// RestoreApplyJournalReport
+///
+/// Internal operator report for one restore apply journal.
+/// Owned by restore apply journaling and exposed through restore report APIs.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -72,6 +82,9 @@ impl RestoreApplyJournalReport {
 ///
 /// RestoreApplyPendingSummary
 ///
+/// Read-only summary of pending restore apply work.
+/// Owned by restore apply reporting and embedded in journal reports.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreApplyPendingSummary {
@@ -108,13 +121,15 @@ impl RestoreApplyPendingSummary {
     }
 }
 
-// Return whether a journal update marker can be compared by automation.
 fn known_state_update_marker(value: &str) -> bool {
     !value.trim().is_empty() && value != "unknown"
 }
 
 ///
 /// RestoreApplyProgressSummary
+///
+/// Read-only restore apply progress counters.
+/// Owned by restore apply reporting and embedded in journal reports.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -151,7 +166,6 @@ impl RestoreApplyProgressSummary {
     }
 }
 
-// Return completion as basis points so JSON stays deterministic and integer-only.
 const fn completion_basis_points(completed_operations: usize, operation_count: usize) -> usize {
     if operation_count == 0 {
         return 0;
@@ -162,6 +176,9 @@ const fn completion_basis_points(completed_operations: usize, operation_count: u
 
 ///
 /// RestoreApplyReportOutcome
+///
+/// High-level operator outcome for one restore apply journal.
+/// Owned by restore apply reporting and used to classify attention needs.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -176,7 +193,6 @@ pub enum RestoreApplyReportOutcome {
 }
 
 impl RestoreApplyReportOutcome {
-    // Classify the journal into one high-level operator outcome.
     const fn from_journal(journal: &RestoreApplyJournal, complete: bool) -> Self {
         if journal.operation_count == 0 {
             return Self::Empty;
@@ -196,7 +212,6 @@ impl RestoreApplyReportOutcome {
         Self::InProgress
     }
 
-    // Return whether this outcome needs operator or automation attention.
     const fn attention_required(&self) -> bool {
         matches!(self, Self::Failed | Self::Blocked | Self::Pending)
     }
@@ -204,6 +219,9 @@ impl RestoreApplyReportOutcome {
 
 ///
 /// RestoreApplyReportOperation
+///
+/// Compact report row for one restore apply journal operation.
+/// Owned by restore apply reporting and embedded in state-specific report lists.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -220,7 +238,6 @@ pub struct RestoreApplyReportOperation {
 }
 
 impl RestoreApplyReportOperation {
-    // Build one compact report row from one journal operation.
     fn from_journal_operation(operation: &RestoreApplyJournalOperation) -> Self {
         Self {
             sequence: operation.sequence,
@@ -236,7 +253,6 @@ impl RestoreApplyReportOperation {
     }
 }
 
-// Return compact report rows for operations in one state.
 fn report_operations_with_state(
     journal: &RestoreApplyJournal,
     state: RestoreApplyOperationState,

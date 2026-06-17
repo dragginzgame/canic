@@ -1,4 +1,10 @@
-use super::replay::icp_refill_command_kind;
+//! Module: workflow::ic::icp_refill::cost_guard
+//!
+//! Responsibility: reserve and settle value-transfer cost guards for ICP refill effects.
+//! Does not own: replay receipt state, storage records, or ledger/CMC calls.
+//! Boundary: guards external value-transfer effects before workflow invokes IC ops.
+
+use super::replay::{icp_refill_command_kind, operation_id_display};
 use crate::{
     InternalError, InternalErrorOrigin,
     ops::{
@@ -7,9 +13,8 @@ use crate::{
         replay::receipt::ReplayReceiptToken,
     },
     replay_policy::CostClass,
-    storage::stable::icp_refill::IcpRefillRecord,
-    workflow::ic::icp_refill::replay::operation_id_display,
-    workflow::prelude::*,
+    view::icp_refill::IcpRefillOperation,
+    workflow::{cost_guard::map_cost_guard_reserve_error, prelude::*},
 };
 
 pub(super) const ICP_REFILL_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
@@ -19,7 +24,7 @@ pub(super) const MIN_ICP_REFILL_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 
 pub(super) fn reserve_icp_refill_cost_guard_if_needed(
     token: &ReplayReceiptToken,
-    record: &IcpRefillRecord,
+    operation: &IcpRefillOperation,
     cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<(), InternalError> {
     if cost_permit.is_some() {
@@ -31,8 +36,9 @@ pub(super) fn reserve_icp_refill_cost_guard_if_needed(
         IcOps::canister_self(),
         MgmtOps::canister_cycle_balance().to_u128(),
         IcOps::now_secs(),
-    ))?;
-    log_icp_refill_cost_guard_reserved(record);
+    ))
+    .map_err(map_cost_guard_reserve_error)?;
+    log_icp_refill_cost_guard_reserved(operation);
     *cost_permit = Some(permit);
     Ok(())
 }
@@ -98,16 +104,16 @@ pub(super) fn recover_icp_refill_cost_guard(cost_permit: Option<&CostGuardPermit
     }
 }
 
-fn log_icp_refill_cost_guard_reserved(record: &IcpRefillRecord) {
+fn log_icp_refill_cost_guard_reserved(operation: &IcpRefillOperation) {
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
         "icp refill value-transfer cost guard reserved command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
         super::ICP_REFILL_REPLAY_COMMAND_KIND,
-        operation_id_display(record.operation_id),
-        record.id,
-        record.source_canister,
-        record.target_canister,
-        record.amount_e8s
+        operation_id_display(operation.operation_id),
+        operation.id,
+        operation.source_canister,
+        operation.target_canister,
+        operation.amount_e8s
     );
 }

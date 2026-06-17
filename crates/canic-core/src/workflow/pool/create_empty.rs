@@ -1,3 +1,9 @@
+//! Module: workflow::pool::create_empty
+//!
+//! Responsibility: create empty pool canisters behind replay and cost guards.
+//! Does not own: endpoint authorization, stable pool schemas, or management-call ops.
+//! Boundary: pool workflow validates admin access, reserves replay/cost, then calls ops.
+
 use super::PoolWorkflow;
 use crate::{
     InternalError, InternalErrorOrigin,
@@ -11,6 +17,7 @@ use crate::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
+            self as replay_ops, POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
             guard::secs_to_ns,
             model::{
                 CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
@@ -29,14 +36,12 @@ use crate::{
         storage::pool::PoolOps,
     },
     replay_policy::CostClass,
-    workflow::prelude::*,
+    workflow::{cost_guard::map_cost_guard_reserve_error, prelude::*},
 };
-use candid::{decode_one, encode_one};
 
 /// Default cycles allocated to freshly created pool canisters.
 const POOL_CANISTER_CYCLES: u128 = 5 * TC;
 const POOL_CREATE_EMPTY_REPLAY_COMMAND_KIND: &str = "pool.create_empty.v1";
-const POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 const POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS: u64 = 300_000_000_000;
 const POOL_CREATE_EMPTY_QUOTA_WINDOW_SECONDS: u64 = 60;
 const POOL_CREATE_EMPTY_MAX_OPERATIONS_PER_WINDOW: u64 = 10;
@@ -156,6 +161,9 @@ fn pool_create_empty_replay_metadata(
 ///
 /// PoolCreateEmptyReplayReservation
 ///
+/// Replay reservation outcome for one empty-pool creation request.
+/// Owned by pool workflow and mapped into either execution or cached response.
+///
 enum PoolCreateEmptyReplayReservation {
     Fresh {
         command_kind: CommandKind,
@@ -172,22 +180,14 @@ fn reserve_pool_create_empty_replay(
     let actor = ReplayActor::direct_caller(caller);
     let payload_hash = pool_create_empty_payload_hash(&command_kind, &actor);
     let now_secs = IcOps::now_secs();
-    let replay_input = ReplayReceiptReserveInput::new(
+    let replay_input = pool_create_empty_replay_input(
         command_kind.clone(),
-        OperationId::from_bytes(metadata.request_id),
+        metadata.request_id,
         actor,
         payload_hash,
         secs_to_ns(now_secs),
-    )
-    .with_expires_at_ns(
-        secs_to_ns(now_secs)
-            .checked_add(metadata.ttl_ns)
-            .ok_or_else(|| {
-                InternalError::public(Error::invalid(
-                    "pool create-empty replay metadata ttl_ns overflows nanoseconds",
-                ))
-            })?,
-    );
+        metadata.ttl_ns,
+    )?;
 
     match reserve_or_replay_receipt(replay_input) {
         Ok(ReplayReceiptDecision::Fresh(token)) => Ok(PoolCreateEmptyReplayReservation::Fresh {
@@ -198,6 +198,29 @@ fn reserve_pool_create_empty_replay(
             .map(PoolCreateEmptyReplayReservation::Replay),
         Err(err) => Err(map_pool_create_empty_replay_store_error(err)),
     }
+}
+
+fn pool_create_empty_replay_input(
+    command_kind: CommandKind,
+    request_id: [u8; 32],
+    actor: ReplayActor,
+    payload_hash: [u8; 32],
+    now_ns: u64,
+    ttl_ns: u64,
+) -> Result<ReplayReceiptReserveInput, InternalError> {
+    let expires_at_ns = now_ns.checked_add(ttl_ns).ok_or_else(|| {
+        InternalError::public(Error::invalid(
+            "pool create-empty replay metadata ttl_ns overflows nanoseconds",
+        ))
+    })?;
+    Ok(ReplayReceiptReserveInput::new(
+        command_kind,
+        OperationId::from_bytes(request_id),
+        actor,
+        payload_hash,
+        now_ns,
+    )
+    .with_expires_at_ns(expires_at_ns))
 }
 
 fn reserve_pool_create_empty_cost_guard(
@@ -216,6 +239,7 @@ fn reserve_pool_create_empty_cost_guard(
         cycle_reservation_cycles: POOL_CANISTER_CYCLES,
         min_cycles_after_reservation: POOL_CREATE_EMPTY_MIN_CYCLES_AFTER_RESERVATION,
     })
+    .map_err(map_cost_guard_reserve_error)
 }
 
 fn mark_pool_create_empty_external_effect(token: &ReplayReceiptToken, command_kind: &CommandKind) {
@@ -324,48 +348,20 @@ fn map_pool_create_empty_replay_store_error(err: ReplayReceiptStoreError) -> Int
 fn encode_pool_create_empty_response(
     response: &PoolAdminResponse,
 ) -> Result<Vec<u8>, InternalError> {
-    encode_one(response).map_err(|err| {
-        InternalError::workflow(
+    replay_ops::encode_pool_create_empty_replay_response(response).map_err(|err| match err {
+        replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
-            format!("failed to encode pool create-empty replay response: {err}"),
-        )
+            format!("failed to encode pool create-empty replay response: {message}"),
+        ),
     })
 }
 
 fn decode_pool_create_empty_response(receipt: &ReplayReceipt) -> Result<Principal, InternalError> {
-    let response_schema_version = receipt.response_schema_version.ok_or_else(|| {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "pool create-empty replay receipt is missing response schema version",
-        )
-    })?;
-    if response_schema_version != POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION {
-        return Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!(
-                "unsupported pool create-empty replay response schema version {response_schema_version}"
-            ),
-        ));
-    }
-    let response_bytes = receipt.response_bytes.as_deref().ok_or_else(|| {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "pool create-empty replay receipt is missing response bytes",
-        )
-    })?;
-    let response = decode_one(response_bytes).map_err(|err| {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to decode pool create-empty replay response: {err}"),
-        )
-    })?;
-    match response {
-        PoolAdminResponse::Created { pid } => Ok(pid),
-        _ => Err(InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "pool create-empty replay receipt contains the wrong response variant",
-        )),
-    }
+    replay_ops::decode_pool_create_empty_replay_response(receipt).map_err(|err| match err {
+        replay_ops::ReplayDecodeError::DecodeFailed(message) => {
+            InternalError::workflow(InternalErrorOrigin::Workflow, message)
+        }
+    })
 }
 
 #[cfg(test)]

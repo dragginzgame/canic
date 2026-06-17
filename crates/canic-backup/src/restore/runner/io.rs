@@ -1,3 +1,9 @@
+//! Module: restore::runner::io
+//!
+//! Responsibility: read, write, lock, and receipt-check restore apply journals.
+//! Does not own: command execution, response rendering, or restore plan construction.
+//! Boundary: filesystem adapter for native restore runner journal state.
+
 use super::{
     RestoreApplyJournal, RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState,
     types::RestoreRunnerError,
@@ -9,7 +15,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// Read and validate a restore apply journal from disk.
 pub(super) fn read_apply_journal_file(
     path: &Path,
 ) -> Result<RestoreApplyJournal, RestoreRunnerError> {
@@ -20,12 +25,10 @@ pub(super) fn read_apply_journal_file(
     Ok(journal)
 }
 
-// Return the caller-supplied journal update marker or the current timestamp.
 pub(super) fn state_updated_at(updated_at: Option<&String>) -> String {
     updated_at.cloned().unwrap_or_else(current_timestamp_marker)
 }
 
-// Persist the restore apply journal to its canonical runner path.
 pub(super) fn write_apply_journal_file(
     path: &Path,
     journal: &RestoreApplyJournal,
@@ -38,13 +41,15 @@ pub(super) fn write_apply_journal_file(
 ///
 /// RestoreJournalLock
 ///
+/// Sidecar filesystem lock for mutating restore runner operations.
+/// Owned by restore runner IO and held while journal state is advanced.
+///
 
 pub(super) struct RestoreJournalLock {
     path: PathBuf,
 }
 
 impl RestoreJournalLock {
-    // Acquire an atomic sidecar lock for mutating restore runner operations.
     pub(super) fn acquire(journal_path: &Path) -> Result<Self, RestoreRunnerError> {
         let path = journal_lock_path(journal_path);
         match fs::OpenOptions::new()
@@ -67,20 +72,17 @@ impl RestoreJournalLock {
 }
 
 impl Drop for RestoreJournalLock {
-    // Release the sidecar lock when the mutating command completes or fails.
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
 }
 
-// Derive the sidecar lock path for one apply journal.
 fn journal_lock_path(path: &Path) -> PathBuf {
     let mut lock_path = path.as_os_str().to_os_string();
     lock_path.push(".lock");
     PathBuf::from(lock_path)
 }
 
-// Ensure terminal restore-runner state is backed by a durable command receipt.
 fn validate_terminal_operation_receipts(
     journal: &RestoreApplyJournal,
 ) -> Result<(), RestoreRunnerError> {

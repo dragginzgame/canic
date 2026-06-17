@@ -1,7 +1,14 @@
-use super::{
+//! Module: restore::plan::ordering
+//!
+//! Responsibility: order restore members so parents are restored before children.
+//! Does not own: member mapping, artifact validation, or command rendering.
+//! Boundary: annotates restore ordering dependencies for dry-run and apply workflows.
+
+use crate::restore::{
     RestoreOrderingDependency, RestoreOrderingRelationship, RestoreOrderingSummary,
     RestorePlanError, RestorePlanMember,
 };
+
 use std::collections::BTreeSet;
 
 pub(super) fn order_members(

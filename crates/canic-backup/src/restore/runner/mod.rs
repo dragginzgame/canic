@@ -1,3 +1,9 @@
+//! Module: restore::runner
+//!
+//! Responsibility: run restore apply journals through native command execution.
+//! Does not own: restore planning, apply journal construction, or ICP command semantics.
+//! Boundary: reads/writes restore apply journals and returns operator runner responses.
+
 mod constants;
 mod execute;
 mod io;

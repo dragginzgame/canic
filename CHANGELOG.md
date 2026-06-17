@@ -12,13 +12,17 @@ present.
 
 ## Unreleased
 
+## [0.68.x] - 2026-06-17 - Backup cleanup closeout
+
+Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.0` completes the backup cleanup closeout by splitting
+  `canic-backup` journal, manifest validation, persistence, runner operation,
+  and plan internals into focused modules while preserving backup behavior.
+
 ## [0.67.x] - 2026-06-13 - IC query extraction
 
 Detailed patch breakdown: [docs/changelog/0.67.md](docs/changelog/0.67.md)
-
-- `0.67.51` continues `canic-backup` cleanup by splitting backup journal,
-  manifest validation, persistence, runner operation, and plan preflight
-  internals into focused child modules while preserving backup behavior.
 
 - `0.67.50` continues `canic-backup` cleanup by splitting execution journal
   and backup plan tests into focused modules while preserving backup behavior.

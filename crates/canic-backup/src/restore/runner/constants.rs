@@ -1,3 +1,9 @@
+//! Module: restore::runner::constants
+//!
+//! Responsibility: define stable restore runner JSON labels and receipt constants.
+//! Does not own: runner execution, journal state, or command rendering.
+//! Boundary: shared constants for native restore runner responses and receipts.
+
 pub(super) const RESTORE_RUN_MODE_DRY_RUN: &str = "dry-run";
 pub(super) const RESTORE_RUN_MODE_EXECUTE: &str = "execute";
 pub(super) const RESTORE_RUN_MODE_RETRY_FAILED: &str = "retry-failed";

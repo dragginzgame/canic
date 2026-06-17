@@ -1,26 +1,30 @@
 #![allow(dead_code)]
-// Slice B extracts the shared receipt API before root and domain commands are
-// migrated onto it.
+//! Module: ops::replay::receipt
+//!
+//! Responsibility: reserve, classify, and mutate shared replay receipts.
+//! Does not own: command authorization, response encoding, or stable schemas.
+//! Boundary: workflow and replay guards call this API for receipt lifecycle.
 
 use crate::{
     ops::{
         replay::model::{
-            ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
-            REPLAY_RECEIPT_SCHEMA_VERSION, ReplayActor, ReplayReceipt, ReplayReceiptStatus,
-            ReplayTerminalErrorCode, bounded_terminal_error_bytes,
+            CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+            REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceipt,
+            ReplayReceiptStatus, ReplayTerminalErrorCode, bounded_terminal_error_bytes,
         },
         storage::replay::ReplayReceiptOps,
     },
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey},
 };
 
-use super::model::{CommandKind, RecoveryReason};
-
 pub const MAX_PENDING_REPLAY_RECEIPTS_PER_ACTOR: usize = 64;
 pub const MAX_PENDING_REPLAY_RECEIPTS_PER_COMMAND_KIND: usize = 512;
 
 ///
 /// ReplayReceiptReserveInput
+///
+/// Input used to reserve or replay a shared receipt.
+/// Owned by replay ops and supplied by workflow replay adapters.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayReceiptReserveInput {
@@ -63,6 +67,9 @@ impl ReplayReceiptReserveInput {
 ///
 /// ReplayReceiptToken
 ///
+/// Capability proving a fresh replay receipt reservation.
+/// Owned by replay ops and passed to commit/abort/effect helpers.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayReceiptToken {
     key: ReplayReceiptSlotKey,
@@ -83,6 +90,9 @@ impl ReplayReceiptToken {
 
 ///
 /// ReplayReceiptDecision
+///
+/// Mechanical replay decision for one shared receipt lookup.
+/// Owned by replay ops and mapped by workflow into command-specific outcomes.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReceiptDecision {
@@ -110,6 +120,9 @@ pub enum ReplayReceiptDecision {
 
 ///
 /// ReplayReceiptStoreError
+///
+/// Storage adapter failure while decoding shared replay receipts.
+/// Owned by replay ops and mapped by callers into workflow errors.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReceiptStoreError {
