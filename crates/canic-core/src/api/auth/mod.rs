@@ -167,12 +167,9 @@ impl AuthApi {
         request: RootDelegationProofBatchPrepareRequest,
     ) -> Result<RootDelegationProofBatchPrepareResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        Self::delegated_token_max_ttl_ns()?;
-        AuthOps::preflight_delegation_proof_batch_prepare_request(&request, IcOps::now_nanos())
-            .map_err(Self::map_auth_error)?;
-        Err(Error::unavailable(
-            Self::ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE,
-        ))
+        let max_cert_ttl_ns = Self::delegated_token_max_ttl_ns()?;
+        AuthOps::prepare_delegation_proof_batch(request, max_cert_ttl_ns, IcOps::now_nanos())
+            .map_err(Self::map_auth_error)
     }
 
     /// Retrieve root delegation proofs from the local direct root query path.

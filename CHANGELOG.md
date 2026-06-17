@@ -12,17 +12,20 @@ present.
 
 ## Unreleased
 
-- Wires root delegation proof batch prepare preflight to persisted root issuer
-  registry state, including issuer enablement, audience/grant policy, TTL, and
-  refresh timing validation.
-
-- Adds pure root delegation proof issuer policy validation for registration,
-  enabled state, allowed audiences/grants, certificate TTL, and refresh timing
-  as the next foundation for batch prepare.
-
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.10` turns root delegation proof batch prepare into a real MVP prepare
+  step that validates request metadata, certifies root signature leaves, caches
+  pending batch metadata, and returns batch metadata.
+
+- `0.68.9` wires root delegation proof batch prepare preflight to persisted
+  root issuer registry state so issuers must be registered and policy-valid
+  before provisioning continues.
+
+- `0.68.8` adds pure root delegation proof issuer policy validation for issuer
+  enablement, allowed audiences/grants, certificate TTL, and refresh timing.
 
 - `0.68.7` starts the root provisioning hard cut by disabling issuer-driven
   root proof self-provisioning, pinning the batch provisioning protocol
