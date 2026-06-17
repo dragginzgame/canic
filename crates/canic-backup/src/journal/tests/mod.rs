@@ -3,7 +3,6 @@ use super::*;
 const ROOT: &str = "aaaaa-aa";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-// Build one valid durable journal for validation tests.
 fn valid_journal() -> DownloadJournal {
     DownloadJournal {
         journal_version: 1,
@@ -24,7 +23,6 @@ fn valid_journal() -> DownloadJournal {
     }
 }
 
-// Ensure durable artifact journals validate.
 #[test]
 fn valid_journal_passes_validation() {
     let journal = valid_journal();
@@ -32,7 +30,6 @@ fn valid_journal_passes_validation() {
     journal.validate().expect("journal should validate");
 }
 
-// Ensure state determines the next idempotent resume action.
 #[test]
 fn resume_action_matches_artifact_state() {
     let mut entry = valid_journal().artifacts.remove(0);
@@ -50,7 +47,6 @@ fn resume_action_matches_artifact_state() {
     assert_eq!(entry.resume_action(), ResumeAction::Skip);
 }
 
-// Ensure resume reports summarize states and next idempotent actions.
 #[test]
 fn resume_report_counts_states_and_actions() {
     let mut journal = valid_journal();
@@ -81,7 +77,6 @@ fn resume_report_counts_states_and_actions() {
     assert_eq!(report.artifacts[0].resume_action, ResumeAction::Download);
 }
 
-// Ensure journal transitions cannot move backward.
 #[test]
 fn state_transitions_are_monotonic() {
     let mut entry = valid_journal().artifacts.remove(0);
@@ -96,7 +91,6 @@ fn state_transitions_are_monotonic() {
     std::assert_matches!(err, JournalValidationError::InvalidStateTransition { .. });
 }
 
-// Ensure checksum is required once an artifact is durable.
 #[test]
 fn durable_artifact_requires_checksum() {
     let mut journal = valid_journal();
@@ -109,7 +103,6 @@ fn durable_artifact_requires_checksum() {
     std::assert_matches!(err, JournalValidationError::EmptyField(_));
 }
 
-// Ensure duplicate canister/snapshot rows are rejected.
 #[test]
 fn duplicate_artifacts_fail_validation() {
     let mut journal = valid_journal();
@@ -122,7 +115,6 @@ fn duplicate_artifacts_fail_validation() {
     std::assert_matches!(err, JournalValidationError::DuplicateArtifact { .. });
 }
 
-// Ensure persisted artifact paths cannot escape the backup root during resume.
 #[test]
 fn artifact_paths_must_stay_relative_to_backup_root() {
     for path in ["../outside", "/tmp/outside"] {
@@ -137,7 +129,6 @@ fn artifact_paths_must_stay_relative_to_backup_root() {
     }
 }
 
-// Ensure journals round-trip through the JSON format.
 #[test]
 fn journal_round_trips_through_json() {
     let journal = valid_journal();

@@ -1,14 +1,15 @@
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
+    artifacts::ArtifactChecksum,
     execution::{
         BackupExecutionJournal, BackupExecutionOperationReceipt, BackupExecutionOperationState,
     },
-    journal::{ArtifactJournalEntry, ArtifactState},
+    journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     manifest::{
-        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentMember, DeploymentSection,
-        IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
-        VerificationPlan,
+        BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
+        DeploymentSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
+        VerificationCheck, VerificationPlan,
     },
     plan::{
         AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
@@ -16,13 +17,12 @@ use crate::{
     },
     registry::RegistryEntry,
 };
-use std::fs;
+use std::{fs, path::Path};
 
 const ROOT: &str = "aaaaa-aa";
 const CHILD: &str = "renrk-eyaaa-aaaaa-aaada-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-// Ensure manifest writes create parent dirs and round-trip through validation.
 #[test]
 fn manifest_round_trips_through_layout() {
     let root = temp_dir("canic-backup-manifest-layout");
@@ -38,7 +38,6 @@ fn manifest_round_trips_through_layout() {
     assert_eq!(read.backup_id, manifest.backup_id);
 }
 
-// Ensure journal writes create parent dirs and round-trip through validation.
 #[test]
 fn journal_round_trips_through_layout() {
     let root = temp_dir("canic-backup-journal-layout");
@@ -54,7 +53,6 @@ fn journal_round_trips_through_layout() {
     assert_eq!(read.backup_id, journal.backup_id);
 }
 
-// Ensure backup plans write atomically and round-trip through validation.
 #[test]
 fn backup_plan_round_trips_through_layout() {
     let root = temp_dir("canic-backup-plan-layout");
@@ -71,7 +69,6 @@ fn backup_plan_round_trips_through_layout() {
     assert_eq!(read.phases, plan.phases);
 }
 
-// Ensure invalid backup plans are rejected before writing.
 #[test]
 fn invalid_backup_plan_is_not_written() {
     let root = temp_dir("canic-backup-invalid-plan");
@@ -89,7 +86,6 @@ fn invalid_backup_plan_is_not_written() {
     assert!(!plan_path.exists());
 }
 
-// Ensure execution journal writes create parent dirs and round-trip through validation.
 #[test]
 fn execution_journal_round_trips_through_layout() {
     let root = temp_dir("canic-backup-execution-journal-layout");
@@ -108,7 +104,6 @@ fn execution_journal_round_trips_through_layout() {
     assert_eq!(read.operations.len(), journal.operations.len());
 }
 
-// Ensure invalid execution journals are rejected before writing.
 #[test]
 fn invalid_execution_journal_is_not_written() {
     let root = temp_dir("canic-backup-invalid-execution-journal");
@@ -126,7 +121,6 @@ fn invalid_execution_journal_is_not_written() {
     assert!(!journal_path.exists());
 }
 
-// Ensure persisted plans and execution journals are checked together for resume.
 #[test]
 fn execution_integrity_verifies_plan_and_journal_match() {
     let root = temp_dir("canic-backup-execution-integrity");
@@ -149,7 +143,6 @@ fn execution_integrity_verifies_plan_and_journal_match() {
     assert_eq!(report.plan_operations, plan.phases.len());
 }
 
-// Ensure resume cannot pair a plan with an unrelated execution journal.
 #[test]
 fn execution_integrity_rejects_plan_journal_operation_mismatch() {
     let root = temp_dir("canic-backup-execution-integrity-mismatch");
@@ -171,7 +164,6 @@ fn execution_integrity_rejects_plan_journal_operation_mismatch() {
     std::assert_matches!(err, PersistenceError::PlanJournalOperationMismatch { .. });
 }
 
-// Ensure terminal mutating operations cannot be accepted without receipts.
 #[test]
 fn execution_integrity_rejects_completed_mutation_without_receipt() {
     let root = temp_dir("canic-backup-execution-integrity-missing-receipt");
@@ -204,7 +196,6 @@ fn execution_integrity_rejects_completed_mutation_without_receipt() {
     );
 }
 
-// Ensure retry history cannot hide a stale terminal receipt/state mismatch.
 #[test]
 fn execution_integrity_requires_latest_mutation_receipt_to_match_state() {
     let root = temp_dir("canic-backup-execution-integrity-latest-receipt");
@@ -266,7 +257,6 @@ fn execution_integrity_requires_latest_mutation_receipt_to_match_state() {
     );
 }
 
-// Ensure terminal operation timestamps cannot drift from their durable receipts.
 #[test]
 fn execution_integrity_requires_terminal_timestamp_to_match_receipt() {
     let root = temp_dir("canic-backup-execution-integrity-receipt-timestamp");
@@ -306,7 +296,6 @@ fn execution_integrity_requires_terminal_timestamp_to_match_receipt() {
     );
 }
 
-// Ensure invalid manifests are rejected before writing.
 #[test]
 fn invalid_manifest_is_not_written() {
     let root = temp_dir("canic-backup-invalid-manifest");
@@ -324,7 +313,6 @@ fn invalid_manifest_is_not_written() {
     assert!(!manifest_path.exists());
 }
 
-// Ensure layout integrity verifies manifest, journal, and artifact checksums.
 #[test]
 fn integrity_verifies_durable_artifacts() {
     let root = temp_dir("canic-backup-integrity");
@@ -347,7 +335,6 @@ fn integrity_verifies_durable_artifacts() {
     assert_eq!(report.artifacts[0].checksum, checksum.hash);
 }
 
-// Ensure mismatched manifest and journal backup IDs are rejected.
 #[test]
 fn integrity_rejects_backup_id_mismatch() {
     let root = temp_dir("canic-backup-integrity-id");
@@ -369,7 +356,6 @@ fn integrity_rejects_backup_id_mismatch() {
     std::assert_matches!(err, PersistenceError::BackupIdMismatch { .. });
 }
 
-// Ensure manifest and journal topology receipts cannot silently diverge.
 #[test]
 fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
     let root = temp_dir("canic-backup-integrity-topology");
@@ -395,7 +381,6 @@ fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
     );
 }
 
-// Ensure incomplete journals cannot pass backup integrity verification.
 #[test]
 fn integrity_rejects_non_durable_artifacts() {
     let root = temp_dir("canic-backup-integrity-state");
@@ -417,7 +402,6 @@ fn integrity_rejects_non_durable_artifacts() {
     std::assert_matches!(err, PersistenceError::NonDurableArtifact { .. });
 }
 
-// Ensure journals cannot include artifacts outside the manifest boundary.
 #[test]
 fn integrity_rejects_unexpected_journal_artifacts() {
     let root = temp_dir("canic-backup-integrity-extra");
@@ -441,7 +425,6 @@ fn integrity_rejects_unexpected_journal_artifacts() {
     std::assert_matches!(err, PersistenceError::UnexpectedJournalArtifact { .. });
 }
 
-// Ensure manifest snapshot checksums cannot drift from the durable journal.
 #[test]
 fn integrity_rejects_manifest_journal_checksum_mismatch() {
     let root = temp_dir("canic-backup-integrity-manifest-checksum");
@@ -467,7 +450,6 @@ fn integrity_rejects_manifest_journal_checksum_mismatch() {
     );
 }
 
-// Ensure manifest and journal artifact paths cannot silently diverge.
 #[test]
 fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
     let root = temp_dir("canic-backup-integrity-manifest-path");
@@ -493,7 +475,6 @@ fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
     );
 }
 
-// Build one valid manifest for persistence tests.
 fn valid_manifest() -> DeploymentBackupManifest {
     DeploymentBackupManifest {
         manifest_version: 1,
@@ -548,14 +529,12 @@ fn valid_manifest() -> DeploymentBackupManifest {
     }
 }
 
-// Build one valid execution journal for persistence tests.
 fn valid_execution_journal() -> BackupExecutionJournal {
     let plan = valid_backup_plan();
 
     BackupExecutionJournal::from_plan(&plan).expect("execution journal")
 }
 
-// Build one valid backup plan for persistence tests.
 fn valid_backup_plan() -> BackupPlan {
     build_backup_plan(BackupPlanBuildInput {
         plan_id: "plan-001".to_string(),
@@ -593,12 +572,10 @@ fn valid_backup_plan() -> BackupPlan {
     .expect("backup plan")
 }
 
-// Build one valid durable journal for persistence tests.
 fn valid_journal() -> DownloadJournal {
     journal_with_checksum(HASH.to_string())
 }
 
-// Build one durable journal with a caller-provided checksum.
 fn journal_with_checksum(checksum: String) -> DownloadJournal {
     DownloadJournal {
         journal_version: 1,
@@ -619,7 +596,6 @@ fn journal_with_checksum(checksum: String) -> DownloadJournal {
     }
 }
 
-// Write one artifact at the layout-relative path used by test journals.
 fn write_artifact(root: &Path, bytes: &[u8]) -> ArtifactChecksum {
     let path = root.join("artifacts/root");
     fs::create_dir_all(path.parent().expect("artifact has parent")).expect("create artifacts");
