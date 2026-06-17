@@ -107,6 +107,9 @@ jobs:
       - name: Blob storage inventory gate
         shell: bash
         run: bash scripts/ci/check-blob-storage-inventory-gate.sh
+      - name: Blob storage Cashier inventory gate
+        shell: bash
+        run: bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
       - name: Release validation matrix guard
         shell: bash
         run: bash scripts/ci/check-release-validation-matrix.sh
