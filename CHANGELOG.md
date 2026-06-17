@@ -12,18 +12,13 @@ present.
 
 ## Unreleased
 
-- Hard-cuts issuer-initiated root delegation proof provisioning so non-root
-  callers fail locally and must use the 0.68 root provisioning flow; root-side
-  compatibility endpoints remain local-only.
-- Adds the root delegation proof batch prepare/get/install protocol and DTO
-  surface with explicit unavailable API stubs until the 0.68 backend lands.
-- Adds signer-local active delegation proof status DTO/API/query surface so
-  provisioners can detect missing, refresh-needed, and expired proofs without
-  putting root in the frontend auth path.
-
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.7` starts the root provisioning hard cut by disabling issuer-driven
+  root proof self-provisioning, pinning the batch provisioning protocol
+  surface, and adding signer-local active-proof status for provisioners.
 
 - `0.68.6` reserves 0.68 for root delegation proof provisioning repair and
   expands blob-storage gateway and Cashier inventory-gate regression coverage
