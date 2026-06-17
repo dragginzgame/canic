@@ -1,11 +1,21 @@
+//! Module: restore::apply::journal::counts
+//!
+//! Responsibility: count restore apply operations by state and operation kind.
+//! Does not own: journal transitions, command rendering, or receipt validation.
+//! Boundary: validates reported journal counters against concrete operation rows.
+
 use super::{
     RestoreApplyDryRunOperation, RestoreApplyJournalError, RestoreApplyJournalOperation,
     RestoreApplyOperationKind, RestoreApplyOperationState, validate_apply_journal_count,
 };
+
 use serde::{Deserialize, Serialize};
 
 ///
 /// RestoreApplyJournalStateCounts
+///
+/// Internal state counter projection for restore apply journal operations.
+/// Owned by restore apply journaling and used during journal validation.
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -18,7 +28,6 @@ pub(super) struct RestoreApplyJournalStateCounts {
 }
 
 impl RestoreApplyJournalStateCounts {
-    // Count operation states from concrete journal operation rows.
     pub(super) fn from_operations(operations: &[RestoreApplyJournalOperation]) -> Self {
         let mut counts = Self::default();
         for operation in operations {
@@ -36,6 +45,9 @@ impl RestoreApplyJournalStateCounts {
 
 ///
 /// RestoreApplyOperationKindCounts
+///
+/// Serializable operation-kind counter projection for restore apply journals.
+/// Owned by restore apply journaling and embedded in dry-run and journal outputs.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -111,7 +123,6 @@ impl RestoreApplyOperationKindCounts {
         counts
     }
 
-    // Record one operation kind in the aggregate count object.
     const fn record(&mut self, operation: &RestoreApplyOperationKind) {
         match operation {
             RestoreApplyOperationKind::StopCanister => self.canister_stops += 1,

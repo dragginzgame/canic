@@ -25,8 +25,9 @@ use crate::{
     },
     replay_policy::CostClass,
     workflow::{
-        canister_lifecycle::propagation::PropagationWorkflow, ic::provision::ProvisionWorkflow,
-        prelude::*, runtime::install::ModuleInstallWorkflow,
+        canister_lifecycle::propagation::PropagationWorkflow,
+        cost_guard::map_cost_guard_reserve_error, ic::provision::ProvisionWorkflow, prelude::*,
+        runtime::install::ModuleInstallWorkflow,
     },
 };
 
@@ -310,6 +311,7 @@ fn reserve_canister_upgrade_cost_guard(
         cost_context,
         current_cycle_balance,
     ))
+    .map_err(map_cost_guard_reserve_error)
 }
 
 pub(super) fn canister_upgrade_cost_guard_request(

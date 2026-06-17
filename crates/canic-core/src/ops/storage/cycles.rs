@@ -1,3 +1,9 @@
+//! Module: ops::storage::cycles
+//!
+//! Responsibility: mutate and project cycle tracker/top-up event records.
+//! Does not own: funding policy, runtime metrics, or endpoint authorization.
+//! Boundary: storage ops convert stable records into DTO response shapes.
+
 use crate::{
     dto::{
         cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
@@ -5,15 +11,38 @@ use crate::{
     },
     ops::prelude::*,
     storage::stable::cycles::{
-        CycleTopupEventKey, CycleTopupEventRecord, CycleTopupEvents, CycleTracker,
+        CycleTopupEventKey, CycleTopupEventRecord, CycleTopupEventStatusRecord, CycleTopupEvents,
+        CycleTracker,
     },
 };
 
 const TOPUP_ERROR_MAX_CHARS: usize = 256;
 
+impl From<CycleTopupEventStatus> for CycleTopupEventStatusRecord {
+    fn from(status: CycleTopupEventStatus) -> Self {
+        match status {
+            CycleTopupEventStatus::RequestErr => Self::RequestErr,
+            CycleTopupEventStatus::RequestOk => Self::RequestOk,
+            CycleTopupEventStatus::RequestScheduled => Self::RequestScheduled,
+        }
+    }
+}
+
+impl From<CycleTopupEventStatusRecord> for CycleTopupEventStatus {
+    fn from(status: CycleTopupEventStatusRecord) -> Self {
+        match status {
+            CycleTopupEventStatusRecord::RequestErr => Self::RequestErr,
+            CycleTopupEventStatusRecord::RequestOk => Self::RequestOk,
+            CycleTopupEventStatusRecord::RequestScheduled => Self::RequestScheduled,
+        }
+    }
+}
+
 ///
 /// CycleTrackerOps
+///
 /// Stable storage wrapper for the cycle tracker.
+/// Owned by storage ops and consumed by runtime cycle workflows.
 ///
 
 pub struct CycleTrackerOps;
@@ -51,7 +80,9 @@ impl CycleTrackerOps {
 
 ///
 /// CycleTopupEventOps
+///
 /// Stable storage wrapper for cycle top-up event history.
+/// Owned by storage ops and consumed by cycle funding workflows.
 ///
 
 pub struct CycleTopupEventOps;
@@ -94,7 +125,13 @@ impl CycleTopupEventOps {
         status: CycleTopupEventStatus,
         error: Option<String>,
     ) {
-        CycleTopupEvents::record(now, requested_cycles, transferred_cycles, status, error);
+        CycleTopupEvents::record(
+            now,
+            requested_cycles,
+            transferred_cycles,
+            status.into(),
+            error,
+        );
     }
 
     #[must_use]
@@ -120,7 +157,7 @@ impl CycleTopupEventOps {
                     sequence: key.sequence,
                     requested_cycles: record.requested_cycles,
                     transferred_cycles: record.transferred_cycles,
-                    status: record.status,
+                    status: record.status.into(),
                     error: record.error,
                 })
                 .collect(),

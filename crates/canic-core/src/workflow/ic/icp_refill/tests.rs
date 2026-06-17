@@ -16,10 +16,12 @@ use crate::{
         replay::model::{
             ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus,
         },
+        storage::icp_refill::{IcpRefillRecordOps, IcpRefillStoreOps},
         storage::replay::ReplayReceiptOps,
     },
     replay_policy::CostClass,
     storage::stable::icp_refill::IcpRefillRecord,
+    view::icp_refill::IcpRefillOperation,
 };
 use std::str::FromStr;
 
@@ -45,13 +47,35 @@ fn sample_record(status: IcpRefillStatus) -> IcpRefillRecord {
         ledger_block_index: None,
         notify_attempts: 0,
         cycles_sent: None,
-        status,
+        status: status.into(),
         error_code: None,
         error_message: None,
         refund_block_index: None,
         transaction_too_old_min_block_index: None,
         created_at_ns: 1_000,
         updated_at_ns: 1_000,
+    }
+}
+
+fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
+    IcpRefillOperation {
+        id: record.id,
+        operation_id: record.operation_id,
+        source_canister: record.source_canister,
+        source_subaccount: record.source_subaccount,
+        target_canister: record.target_canister,
+        ledger_canister_id: record.ledger_canister_id,
+        cmc_canister_id: record.cmc_canister_id,
+        amount_e8s: record.amount_e8s,
+        fee_e8s: record.fee_e8s,
+        memo: record.memo.clone(),
+        created_at_time_ns: record.created_at_time_ns,
+        ledger_block_index: record.ledger_block_index,
+        notify_attempts: record.notify_attempts,
+        cycles_sent: record.cycles_sent.clone(),
+        status: record.status.into(),
+        error_code: record.error_code.map(Into::into),
+        error_message: record.error_message.clone(),
     }
 }
 
@@ -165,13 +189,13 @@ fn refill_canister_overrides_follow_config_resolution_fields() {
 fn transfer_window_stale_uses_strict_tx_window() {
     let record = sample_record(IcpRefillStatus::Requested);
 
-    assert!(!IcpRefillRecordOps::transfer_window_stale(
-        &record,
+    assert!(!IcpRefillStoreOps::transfer_window_stale(
+        &operation_from_record(&record),
         record.created_at_time_ns + TX_WINDOW_NANOS,
         TX_WINDOW_NANOS
     ));
-    assert!(IcpRefillRecordOps::transfer_window_stale(
-        &record,
+    assert!(IcpRefillStoreOps::transfer_window_stale(
+        &operation_from_record(&record),
         record.created_at_time_ns + TX_WINDOW_NANOS + 1,
         TX_WINDOW_NANOS
     ));
@@ -181,15 +205,15 @@ fn transfer_window_stale_uses_strict_tx_window() {
 fn transfer_window_stale_requires_requested_without_block_index() {
     let mut record = sample_record(IcpRefillStatus::Requested);
     record.ledger_block_index = Some(10);
-    assert!(!IcpRefillRecordOps::transfer_window_stale(
-        &record,
+    assert!(!IcpRefillStoreOps::transfer_window_stale(
+        &operation_from_record(&record),
         record.created_at_time_ns + TX_WINDOW_NANOS + 1,
         TX_WINDOW_NANOS
     ));
 
     let record = sample_record(IcpRefillStatus::Failed);
-    assert!(!IcpRefillRecordOps::transfer_window_stale(
-        &record,
+    assert!(!IcpRefillStoreOps::transfer_window_stale(
+        &operation_from_record(&record),
         record.created_at_time_ns + TX_WINDOW_NANOS + 1,
         TX_WINDOW_NANOS
     ));
@@ -198,18 +222,24 @@ fn transfer_window_stale_requires_requested_without_block_index() {
 #[test]
 fn notify_retry_only_allows_notify_failed_with_block_index() {
     let mut record = sample_record(IcpRefillStatus::Failed);
-    record.error_code = Some(IcpRefillErrorCode::NotifyFailed);
+    record.error_code = Some(IcpRefillErrorCode::NotifyFailed.into());
     record.ledger_block_index = Some(10);
     assert!(IcpRefillRecordOps::can_retry_notify(&record));
-    assert!(IcpRefillRecordOps::should_notify(&record));
+    assert!(IcpRefillStoreOps::should_notify(&operation_from_record(
+        &record
+    )));
 
     record.ledger_block_index = None;
     assert!(!IcpRefillRecordOps::can_retry_notify(&record));
-    assert!(!IcpRefillRecordOps::should_notify(&record));
+    assert!(!IcpRefillStoreOps::should_notify(&operation_from_record(
+        &record
+    )));
 
     let mut transferred = sample_record(IcpRefillStatus::Transferred);
     transferred.ledger_block_index = Some(11);
-    assert!(IcpRefillRecordOps::should_notify(&transferred));
+    assert!(IcpRefillStoreOps::should_notify(&operation_from_record(
+        &transferred
+    )));
 }
 
 #[test]
@@ -225,16 +255,16 @@ fn hub_self_refill_resumes_in_flight_and_retryable_records() {
     )));
 
     let mut notify_failed = sample_record(IcpRefillStatus::Failed);
-    notify_failed.error_code = Some(IcpRefillErrorCode::NotifyFailed);
+    notify_failed.error_code = Some(IcpRefillErrorCode::NotifyFailed.into());
     notify_failed.ledger_block_index = Some(11);
     assert!(IcpRefillRecordOps::is_resumable(&notify_failed));
 
     let mut bad_fee = sample_record(IcpRefillStatus::Failed);
-    bad_fee.error_code = Some(IcpRefillErrorCode::BadFee);
+    bad_fee.error_code = Some(IcpRefillErrorCode::BadFee.into());
     assert!(IcpRefillRecordOps::is_resumable(&bad_fee));
 
     let mut transfer_failed = sample_record(IcpRefillStatus::Failed);
-    transfer_failed.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed);
+    transfer_failed.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed.into());
     assert!(!IcpRefillRecordOps::is_resumable(&transfer_failed));
     assert!(!IcpRefillRecordOps::is_resumable(&sample_record(
         IcpRefillStatus::Completed
@@ -244,24 +274,24 @@ fn hub_self_refill_resumes_in_flight_and_retryable_records() {
 #[test]
 fn bad_fee_retry_requires_no_block_index() {
     let mut record = sample_record(IcpRefillStatus::Failed);
-    record.error_code = Some(IcpRefillErrorCode::BadFee);
+    record.error_code = Some(IcpRefillErrorCode::BadFee.into());
     assert!(IcpRefillRecordOps::can_retry_bad_fee(&record));
 
     record.ledger_block_index = Some(10);
     assert!(!IcpRefillRecordOps::can_retry_bad_fee(&record));
 
     record.ledger_block_index = None;
-    record.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed);
+    record.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed.into());
     assert!(!IcpRefillRecordOps::can_retry_bad_fee(&record));
 }
 
 #[test]
 fn transfer_window_stale_applies_to_bad_fee_retry() {
     let mut record = sample_record(IcpRefillStatus::Failed);
-    record.error_code = Some(IcpRefillErrorCode::BadFee);
+    record.error_code = Some(IcpRefillErrorCode::BadFee.into());
 
-    assert!(IcpRefillRecordOps::transfer_window_stale(
-        &record,
+    assert!(IcpRefillStoreOps::transfer_window_stale(
+        &operation_from_record(&record),
         record.created_at_time_ns + TX_WINDOW_NANOS + 1,
         TX_WINDOW_NANOS
     ));
@@ -271,12 +301,18 @@ fn transfer_window_stale_applies_to_bad_fee_retry() {
 fn retry_request_must_match_stored_operation_identity() {
     let record = sample_record(IcpRefillStatus::Requested);
     let mut request = request_for(&record);
-    IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)
-        .expect("matching retry");
+    IcpRefillStoreOps::validate_retry_request_matches_operation(
+        &request,
+        &operation_from_record(&record),
+    )
+    .expect("matching retry");
 
     request.amount_e8s += 1;
-    IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)
-        .expect_err("changed amount must fail");
+    IcpRefillStoreOps::validate_retry_request_matches_operation(
+        &request,
+        &operation_from_record(&record),
+    )
+    .expect_err("changed amount must fail");
 }
 
 #[test]
@@ -384,8 +420,10 @@ fn refill_replay_commits_terminal_response_for_replay() {
     record.operation_id = operation_id;
     record.ledger_block_index = Some(123);
     record.cycles_sent = Some(Nat::from(456_u64));
-    let response = IcpRefillRecordOps::to_response(&record);
-    finish_icp_refill_replay(&token, &record, &response, None).expect("commit terminal response");
+    let operation = operation_from_record(&record);
+    let response = IcpRefillStoreOps::to_response(&operation);
+    finish_icp_refill_replay(&token, &operation, &response, None)
+        .expect("commit terminal response");
 
     let replay = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
         .expect("committed replay");
@@ -408,9 +446,11 @@ fn refill_replay_resumable_response_aborts_reserved_receipt() {
         panic!("expected fresh reservation");
     };
     let record = sample_record(IcpRefillStatus::Requested);
-    let response = IcpRefillRecordOps::to_response(&record);
+    let operation = operation_from_record(&record);
+    let response = IcpRefillStoreOps::to_response(&operation);
 
-    finish_icp_refill_replay(&token, &record, &response, None).expect("abort resumable response");
+    finish_icp_refill_replay(&token, &operation, &response, None)
+        .expect("abort resumable response");
 
     assert!(matches!(
         reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_001))
@@ -514,6 +554,7 @@ fn refill_value_transfer_cost_guard_enforces_actor_quota() {
 
     let err = CostGuardOps::reserve(icp_refill_cost_guard_request(&token, p(99), balance, now))
         .expect_err("same actor quota bucket exhausted");
+    let err = crate::workflow::cost_guard::map_cost_guard_reserve_error(err);
     assert_eq!(
         err.public_error().expect("quota rejection is public").code,
         ErrorCode::ResourceExhausted
@@ -532,7 +573,8 @@ fn refill_replay_marks_ledger_transfer_effect() {
     let mut record = sample_record(IcpRefillStatus::Requested);
     record.operation_id = request.operation_id;
 
-    mark_icp_refill_transfer_effect(&token, &record);
+    let operation = operation_from_record(&record);
+    mark_icp_refill_transfer_effect(&token, &operation);
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")
@@ -559,7 +601,8 @@ fn refill_replay_marks_cmc_notify_effect() {
     let mut record = sample_record(IcpRefillStatus::Transferred);
     record.operation_id = request.operation_id;
 
-    mark_icp_refill_notify_effect(&token, &record);
+    let operation = operation_from_record(&record);
+    mark_icp_refill_notify_effect(&token, &operation);
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")
@@ -586,10 +629,11 @@ fn refill_replay_resumable_response_aborts_in_flight_receipt() {
     };
     let mut record = sample_record(IcpRefillStatus::Requested);
     record.operation_id = request.operation_id;
-    let response = IcpRefillRecordOps::to_response(&record);
-    mark_icp_refill_transfer_effect(&token, &record);
+    let operation = operation_from_record(&record);
+    let response = IcpRefillStoreOps::to_response(&operation);
+    mark_icp_refill_transfer_effect(&token, &operation);
 
-    finish_icp_refill_replay(&token, &record, &response, None).expect("abort in-flight receipt");
+    finish_icp_refill_replay(&token, &operation, &response, None).expect("abort in-flight receipt");
 
     assert!(ReplayReceiptOps::get(token.key()).is_none());
     assert!(matches!(
@@ -610,11 +654,12 @@ fn refill_replay_recovery_required_preserves_effect_receipt() {
     };
     let mut record = sample_record(IcpRefillStatus::Requested);
     record.operation_id = request.operation_id;
-    mark_icp_refill_transfer_effect(&token, &record);
+    let operation = operation_from_record(&record);
+    mark_icp_refill_transfer_effect(&token, &operation);
 
     mark_icp_refill_recovery_required(
         &token,
-        &record,
+        &operation,
         "ledger_transfer",
         &InternalError::infra(InternalErrorOrigin::Infra, "call failed"),
     );
@@ -642,7 +687,11 @@ fn direct_child_refill_grant_records_matching_parent() {
     let record = sample_record(IcpRefillStatus::Completed);
 
     assert_eq!(
-        direct_child_refill_grant(&record, &Nat::from(123_u64), Some(record.source_canister)),
+        direct_child_refill_grant(
+            &operation_from_record(&record),
+            &Nat::from(123_u64),
+            Some(record.source_canister)
+        ),
         Some((record.target_canister, 123))
     );
 }
@@ -652,11 +701,15 @@ fn direct_child_refill_grant_ignores_non_child_targets() {
     let record = sample_record(IcpRefillStatus::Completed);
 
     assert_eq!(
-        direct_child_refill_grant(&record, &Nat::from(123_u64), None),
+        direct_child_refill_grant(&operation_from_record(&record), &Nat::from(123_u64), None),
         None
     );
     assert_eq!(
-        direct_child_refill_grant(&record, &Nat::from(123_u64), Some(p(9))),
+        direct_child_refill_grant(
+            &operation_from_record(&record),
+            &Nat::from(123_u64),
+            Some(p(9))
+        ),
         None
     );
 }
@@ -668,7 +721,11 @@ fn direct_child_refill_grant_saturates_large_cycle_totals() {
         Nat::from_str("340282366920938463463374607431768211456").expect("u128 max plus one");
 
     assert_eq!(
-        direct_child_refill_grant(&record, &too_large, Some(record.source_canister)),
+        direct_child_refill_grant(
+            &operation_from_record(&record),
+            &too_large,
+            Some(record.source_canister)
+        ),
         Some((record.target_canister, u128::MAX))
     );
 }
@@ -703,7 +760,7 @@ fn fifth_notify_failure_attempt_is_terminal() {
     let mut record = stored_record(10_002, 102, IcpRefillStatus::Failed);
     record.ledger_block_index = Some(43);
     record.notify_attempts = MAX_NOTIFY_ATTEMPTS - 1;
-    record.error_code = Some(IcpRefillErrorCode::NotifyFailed);
+    record.error_code = Some(IcpRefillErrorCode::NotifyFailed.into());
     IcpRefillRecordOps::insert(record.clone());
 
     let record =
@@ -739,7 +796,7 @@ fn notify_processing_before_attempt_cap_stays_retryable() {
 
     assert_eq!(record.status, IcpRefillStatus::NotifyProcessing);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::Processing));
-    assert!(IcpRefillRecordOps::should_notify(&record));
+    assert!(IcpRefillStoreOps::should_notify(&record));
 }
 
 #[test]
@@ -758,9 +815,10 @@ fn notify_refunded_preserves_refund_block_index() {
 
     assert_eq!(record.status, IcpRefillStatus::Refunded);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::Refunded));
-    assert_eq!(record.refund_block_index, Some(55));
+    let stored = IcpRefillRecordOps::get(record.id).expect("stored refunded record");
+    assert_eq!(stored.refund_block_index, Some(55));
     assert_eq!(record.error_message.as_deref(), Some("refunded by cmc"));
-    assert!(!IcpRefillRecordOps::is_resumable(&record));
+    assert!(!IcpRefillStoreOps::is_resumable(&record));
 }
 
 #[test]
@@ -775,8 +833,9 @@ fn notify_transaction_too_old_preserves_min_block_index() {
         record.error_code,
         Some(IcpRefillErrorCode::TransactionTooOld)
     );
-    assert_eq!(record.transaction_too_old_min_block_index, Some(56));
-    assert!(!IcpRefillRecordOps::is_resumable(&record));
+    let stored = IcpRefillRecordOps::get(record.id).expect("stored transaction-too-old record");
+    assert_eq!(stored.transaction_too_old_min_block_index, Some(56));
+    assert!(!IcpRefillStoreOps::is_resumable(&record));
 }
 
 #[test]
@@ -796,7 +855,7 @@ fn notify_invalid_transaction_is_terminal() {
         Some(IcpRefillErrorCode::InvalidTransaction)
     );
     assert_eq!(record.error_message.as_deref(), Some("bad top-up block"));
-    assert!(!IcpRefillRecordOps::is_resumable(&record));
+    assert!(!IcpRefillStoreOps::is_resumable(&record));
 }
 
 #[test]
@@ -821,7 +880,7 @@ fn notify_other_error_stays_retryable_before_attempt_cap() {
         record.error_message.as_deref(),
         Some("notify_top_up error 12: cmc busy")
     );
-    assert!(IcpRefillRecordOps::can_retry_notify(&record));
+    assert!(IcpRefillStoreOps::can_retry_notify(&record));
 }
 
 #[test]
@@ -839,7 +898,7 @@ fn transfer_bad_fee_updates_persisted_fee() {
     assert_eq!(record.status, IcpRefillStatus::Failed);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::BadFee));
     assert_eq!(record.fee_e8s, 20_000);
-    assert!(IcpRefillRecordOps::can_retry_bad_fee(&record));
+    assert!(IcpRefillStoreOps::can_retry_bad_fee(&record));
 }
 
 #[test]
@@ -857,7 +916,7 @@ fn transfer_duplicate_records_recovered_block_index() {
     assert_eq!(record.status, IcpRefillStatus::Transferred);
     assert_eq!(record.error_code, Some(IcpRefillErrorCode::Duplicate));
     assert_eq!(record.ledger_block_index, Some(58));
-    assert!(IcpRefillRecordOps::should_notify(&record));
+    assert!(IcpRefillStoreOps::should_notify(&record));
 }
 
 #[test]
@@ -872,5 +931,5 @@ fn transfer_too_old_marks_retry_window_stale() {
         record.error_code,
         Some(IcpRefillErrorCode::TransferWindowStale)
     );
-    assert!(!IcpRefillRecordOps::is_resumable(&record));
+    assert!(!IcpRefillStoreOps::is_resumable(&record));
 }

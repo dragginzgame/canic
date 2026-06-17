@@ -1,7 +1,17 @@
-use super::{RestoreMapping, RestorePlanError, RestorePlanMember};
-use crate::manifest::{
-    DeploymentBackupManifest, DeploymentMember, IdentityMode, VerificationCheck, VerificationPlan,
+//! Module: restore::plan::members
+//!
+//! Responsibility: resolve manifest members into concrete restore plan members.
+//! Does not own: member ordering, artifact validation, or restore execution.
+//! Boundary: applies optional target mapping while preserving manifest metadata.
+
+use crate::{
+    manifest::{
+        DeploymentBackupManifest, DeploymentMember, IdentityMode, VerificationCheck,
+        VerificationPlan,
+    },
+    restore::{RestoreMapping, RestorePlanError, RestorePlanMember},
 };
+
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn resolve_members(

@@ -1,3 +1,9 @@
+//! Module: restore::plan
+//!
+//! Responsibility: build no-mutation restore plans from backup manifests.
+//! Does not own: artifact verification, command rendering, or restore execution.
+//! Boundary: maps manifest members and optional target mappings into ordered restore plans.
+
 mod error;
 mod mapping;
 mod members;
@@ -9,6 +15,7 @@ pub use error::RestorePlanError;
 pub use types::*;
 
 use crate::manifest::DeploymentBackupManifest;
+
 use mapping::{validate_mapping, validate_mapping_sources};
 use members::resolve_members;
 use ordering::{order_members, restore_ordering_summary};
@@ -19,6 +26,9 @@ use summary::{
 
 ///
 /// RestorePlanner
+///
+/// Stateless planner for restore dry-run and apply workflows.
+/// Owned by restore planning and used by restore apply and runner callers.
 ///
 
 pub struct RestorePlanner;

@@ -1,5 +1,11 @@
+//! Module: ops::storage::replay
+//!
+//! Responsibility: provide deterministic access to shared replay receipt storage.
+//! Does not own: replay decisions, command payload hashing, or response encoding.
+//! Boundary: replay ops call this storage facade instead of stable records directly.
+
 use crate::{
-    ops::replay::model::{CommandKind, OperationId},
+    model::replay::{CommandKind, OperationId, ReplayActor},
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey, ReplayReceiptStore},
 };
 use sha2::{Digest, Sha256};
@@ -8,14 +14,14 @@ const REPLAY_RECEIPT_SLOT_KEY_DOMAIN: &[u8] = b"canic-replay-receipt-slot-key:v1
 
 ///
 /// ReplayReceiptOps
+///
 /// Mechanical shared replay receipt store access (no policy).
 ///
 
 pub struct ReplayReceiptOps;
 
 impl ReplayReceiptOps {
-    /// Build a shared receipt slot key:
-    /// H(domain || command_kind || operation_id)
+    /// Build a shared receipt slot key from domain, command kind, and operation id.
     #[must_use]
     pub fn slot_key(command_kind: &CommandKind, operation_id: OperationId) -> ReplayReceiptSlotKey {
         let mut hasher = Sha256::new();
@@ -35,7 +41,7 @@ impl ReplayReceiptOps {
 
     #[must_use]
     pub fn list_by_actor_operation_excluding_command(
-        actor: crate::ops::replay::model::ReplayActor,
+        actor: ReplayActor,
         operation_id: OperationId,
         command_kind: &CommandKind,
     ) -> Vec<ReplayReceiptRecord> {
@@ -60,18 +66,12 @@ impl ReplayReceiptOps {
     }
 
     #[must_use]
-    pub fn active_len_for_actor(
-        actor: crate::ops::replay::model::ReplayActor,
-        now_ns: u64,
-    ) -> usize {
+    pub fn active_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
         ReplayReceiptStore::active_len_for_actor(actor, now_ns)
     }
 
     #[must_use]
-    pub fn pending_len_for_actor(
-        actor: crate::ops::replay::model::ReplayActor,
-        now_ns: u64,
-    ) -> usize {
+    pub fn pending_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
         ReplayReceiptStore::pending_len_for_actor(actor, now_ns)
     }
 

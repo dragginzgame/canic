@@ -1,3 +1,11 @@
+//! Module: workflow::runtime::auth
+//!
+//! Responsibility: orchestrate runtime auth startup checks and local verification.
+//! Does not own: endpoint authorization, auth storage records, or crypto primitives.
+//! Boundary: lifecycle and API layers call this after config/runtime context is available.
+
+mod prepare;
+
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -22,6 +30,7 @@ use crate::{
 ///
 /// Owns delegated-auth runtime startup checks and auth-specific runtime boot
 /// logging for root and non-root canisters.
+/// Owned by runtime workflow and consumed by lifecycle/API auth surfaces.
 ///
 
 pub struct RuntimeAuthWorkflow;
@@ -205,7 +214,6 @@ fn log_attestation_verifier_rejection(
     );
 }
 
-// Decide whether the root runtime must create canister-signature root proofs.
 fn root_requires_delegated_token_proofs(cfg: &ConfigModel) -> bool {
     cfg.subnets.values().any(|subnet| {
         subnet.canisters.values().any(|canister| {
@@ -223,14 +231,12 @@ fn root_requires_role_attestation_proofs(cfg: &ConfigModel) -> bool {
     })
 }
 
-// Decide whether one non-root runtime must create issuer canister signatures.
 const fn nonroot_requires_delegated_token_issuer(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {
     canister_cfg.auth.delegated_token_issuer
 }
 
-// Decide whether one non-root runtime must verify root canister-signature proofs.
 const fn nonroot_requires_root_proof_verifier_support(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {
@@ -239,7 +245,6 @@ const fn nonroot_requires_root_proof_verifier_support(
         || canister_cfg.auth.role_attestation_cache
 }
 
-// Decide whether one non-root runtime must verify issuer canister-signature proofs.
 const fn nonroot_requires_issuer_proof_verifier_support(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {

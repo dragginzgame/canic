@@ -1,11 +1,21 @@
+//! Module: restore::apply::journal::receipts
+//!
+//! Responsibility: define and validate durable restore apply command receipts.
+//! Does not own: command rendering, process execution, or journal state transitions.
+//! Boundary: records command outcomes against restore apply journal operations.
+
 use super::{
     RestoreApplyJournal, RestoreApplyJournalError, RestoreApplyJournalOperation,
     RestoreApplyOperationKind, RestoreApplyRunnerCommand, validate_apply_journal_nonempty,
 };
+
 use serde::{Deserialize, Serialize};
 
 ///
 /// RestoreApplyOperationReceipt
+///
+/// Durable command receipt for one restore apply operation attempt.
+/// Owned by restore apply journaling and consumed by resume and audit reports.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -95,7 +105,6 @@ impl RestoreApplyOperationReceipt {
         )
     }
 
-    // Build one durable receipt row from shared operation metadata.
     fn from_operation(
         operation: &RestoreApplyJournalOperation,
         operation_kind: RestoreApplyOperationKind,
@@ -121,7 +130,6 @@ impl RestoreApplyOperationReceipt {
         }
     }
 
-    // Return whether this upload receipt satisfies one later load operation.
     pub(super) fn matches_load_operation(&self, load: &RestoreApplyJournalOperation) -> bool {
         self.operation == RestoreApplyOperationKind::UploadSnapshot
             && self.outcome == RestoreApplyOperationReceiptOutcome::CommandCompleted
@@ -136,7 +144,6 @@ impl RestoreApplyOperationReceipt {
                 .is_some_and(|id| !id.trim().is_empty())
     }
 
-    // Validate one durable operation receipt against the journal operation rows.
     pub(super) fn validate_against(
         &self,
         journal: &RestoreApplyJournal,
@@ -212,6 +219,9 @@ impl RestoreApplyOperationReceipt {
 ///
 /// RestoreApplyOperationReceiptOutcome
 ///
+/// Command outcome stored in a restore apply operation receipt.
+/// Owned by restore apply journaling and serialized with command receipts.
+///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -223,6 +233,9 @@ pub enum RestoreApplyOperationReceiptOutcome {
 
 ///
 /// RestoreApplyOperationReceiptDetails
+///
+/// Internal receipt construction input shared by completed and failed commands.
+/// Owned by restore apply journaling and not serialized directly.
 ///
 
 #[derive(Default)]
@@ -239,6 +252,9 @@ struct RestoreApplyOperationReceiptDetails {
 
 ///
 /// RestoreApplyCommandOutput
+///
+/// Bounded command output captured for durable restore receipts.
+/// Owned by restore apply journaling and embedded in operation receipts.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

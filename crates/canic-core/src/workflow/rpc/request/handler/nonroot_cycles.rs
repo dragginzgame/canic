@@ -34,7 +34,7 @@ use crate::{
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
-    workflow::rpc::RpcWorkflowError,
+    workflow::{cost_guard::map_cost_guard_reserve_error, rpc::RpcWorkflowError},
 };
 
 const ROOT_REQUEST_CYCLES_COMMAND_KIND: &str = "root.request_cycles.v1";
@@ -512,6 +512,7 @@ fn reserve_request_cycles_cost_guard(
         approved_cycles,
         MgmtOps::canister_cycle_balance().to_u128(),
     ))
+    .map_err(map_cost_guard_reserve_error)
 }
 
 pub(super) fn request_cycles_cost_guard_request(

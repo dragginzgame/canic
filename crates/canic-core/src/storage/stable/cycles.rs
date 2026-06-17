@@ -1,6 +1,11 @@
+//! Module: storage::stable::cycles
+//!
+//! Responsibility: define stable-memory schemas for cycle telemetry.
+//! Does not own: cycle funding policy, DTO mapping, or runtime metrics.
+//! Boundary: storage ops wrap these records before workflow access.
+
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
-    dto::cycles::CycleTopupEventStatus,
     eager_static,
     storage::{
         prelude::*,
@@ -33,6 +38,9 @@ eager_static! {
 ///
 /// CycleTracker
 ///
+/// Stable map of observed cycle balances by timestamp.
+/// Owned by stable storage and wrapped by cycle storage ops.
+///
 
 pub struct CycleTracker {
     map: StableBtreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
@@ -40,6 +48,9 @@ pub struct CycleTracker {
 
 ///
 /// CycleTopupEventKey
+///
+/// Stable key for ordered cycle top-up event history.
+/// Owned by stable storage and encoded as timestamp plus sequence.
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -92,14 +103,32 @@ impl Storable for CycleTopupEventKey {
 }
 
 ///
+/// CycleTopupEventStatusRecord
+///
+/// Stable status for a cycle top-up event.
+/// Owned by stable storage and converted to the boundary DTO enum by storage ops.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[remain::sorted]
+pub enum CycleTopupEventStatusRecord {
+    RequestErr,
+    RequestOk,
+    RequestScheduled,
+}
+
+///
 /// CycleTopupEventRecord
+///
+/// Stable record for one cycle top-up event.
+/// Owned by stable storage and projected through cycle storage ops.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CycleTopupEventRecord {
     pub requested_cycles: Cycles,
     pub transferred_cycles: Option<Cycles>,
-    pub status: CycleTopupEventStatus,
+    pub status: CycleTopupEventStatusRecord,
     pub error: Option<String>,
 }
 
@@ -115,6 +144,9 @@ impl_storable_bounded!(
 
 ///
 /// CycleTopupEvents
+///
+/// Stable map facade for cycle top-up event records.
+/// Owned by stable storage and wrapped by cycle storage ops.
 ///
 
 pub struct CycleTopupEvents {
@@ -137,7 +169,7 @@ impl CycleTopupEvents {
         timestamp_secs: u64,
         requested_cycles: Cycles,
         transferred_cycles: Option<Cycles>,
-        status: CycleTopupEventStatus,
+        status: CycleTopupEventStatusRecord,
         error: Option<String>,
     ) {
         CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| {
@@ -205,8 +237,6 @@ impl CycleTracker {
         Self { map }
     }
 
-    // -------- PUBLIC API (model-facing) -------- //
-
     pub(crate) fn record(now: u64, cycles: Cycles) {
         CYCLE_TRACKER.with_borrow_mut(|t| t.insert(now, cycles));
     }
@@ -229,9 +259,6 @@ impl CycleTracker {
         })
     }
 
-    // -------- INTERNAL MAP OPERATIONS -------- //
-
-    /// Remove entries older than the provided cutoff timestamp.
     fn purge_inner(&mut self, cutoff: u64) -> usize {
         let mut purged = 0;
 

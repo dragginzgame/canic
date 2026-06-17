@@ -693,6 +693,7 @@ fn request_cycles_value_transfer_cost_guard_enforces_actor_quota() {
         5_000_000_000,
     ))
     .expect_err("same actor quota bucket exhausted");
+    let err = crate::workflow::cost_guard::map_cost_guard_reserve_error(err);
     assert_eq!(
         err.public_error().expect("quota rejection is public").code,
         ErrorCode::ResourceExhausted

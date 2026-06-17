@@ -1,10 +1,15 @@
+//! Module: restore::runner::status
+//!
+//! Responsibility: classify restore runner status, next actions, and command availability.
+//! Does not own: journal persistence, command execution, or receipt creation.
+//! Boundary: shared status policy for preview and execute runner modes.
+
 use super::{
     RestoreApplyCommandPreview, RestoreApplyJournal, RestoreApplyJournalReport,
     constants::*,
     types::{RestoreRunnerConfig, RestoreRunnerError},
 };
 
-// Check whether execute mode has reached its requested operation batch size.
 pub(super) fn restore_run_max_steps_reached(
     config: &RestoreRunnerConfig,
     executed_operation_count: usize,
@@ -13,7 +18,6 @@ pub(super) fn restore_run_max_steps_reached(
     config.max_steps == Some(executed_operation_count) && !report.complete
 }
 
-// Classify why the native runner stopped for operator summaries.
 pub(super) const fn restore_run_stopped_reason(
     report: &RestoreApplyJournalReport,
     max_steps_reached: bool,
@@ -40,7 +44,6 @@ pub(super) const fn restore_run_stopped_reason(
     RESTORE_RUN_STOPPED_PREVIEW
 }
 
-// Recommend the next operator action for the native runner summary.
 pub(super) const fn restore_run_next_action(report: &RestoreApplyJournalReport) -> &'static str {
     if report.complete {
         return RESTORE_RUN_ACTION_DONE;
@@ -57,7 +60,6 @@ pub(super) const fn restore_run_next_action(report: &RestoreApplyJournalReport) 
     RESTORE_RUN_ACTION_RERUN
 }
 
-// Ensure the journal can be advanced by the native restore runner.
 pub(super) fn enforce_restore_run_executable(
     journal: &RestoreApplyJournal,
     report: &RestoreApplyJournalReport,
@@ -90,7 +92,6 @@ pub(super) fn enforce_restore_run_executable(
     })
 }
 
-// Convert an unavailable native runner command into the shared fail-closed error.
 pub(super) fn enforce_restore_run_command_available(
     preview: &RestoreApplyCommandPreview,
 ) -> Result<(), RestoreRunnerError> {
@@ -101,7 +102,6 @@ pub(super) fn enforce_restore_run_command_available(
     Err(restore_command_unavailable_error(preview))
 }
 
-// Build a shared command-unavailable error from a preview.
 pub(super) fn restore_command_unavailable_error(
     preview: &RestoreApplyCommandPreview,
 ) -> RestoreRunnerError {
@@ -113,7 +113,6 @@ pub(super) fn restore_command_unavailable_error(
     }
 }
 
-// Extract the uploaded target snapshot ID from command output.
 pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
     if let Ok(value) = serde_json::from_str::<serde_json::Value>(output) {
         return parse_uploaded_snapshot_id_json(&value);
@@ -148,7 +147,6 @@ fn parse_uploaded_snapshot_id_json(value: &serde_json::Value) -> Option<String> 
 mod tests {
     use super::*;
 
-    // Prefer the current ICP CLI JSON snapshot-upload receipt when present.
     #[test]
     fn parses_uploaded_snapshot_id_json() {
         let snapshot_id =

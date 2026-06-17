@@ -1,8 +1,16 @@
-use super::{
-    RestoreIdentitySummary, RestoreOperationSummary, RestorePlanMember, RestoreReadinessSummary,
-    RestoreSnapshotSummary, RestoreVerificationSummary,
+//! Module: restore::plan::summary
+//!
+//! Responsibility: summarize restore identity, snapshot, verification, and operation readiness.
+//! Does not own: member resolution, artifact validation, or command execution.
+//! Boundary: derives read-only projections embedded in restore plans.
+
+use crate::{
+    manifest::{DeploymentBackupManifest, IdentityMode},
+    restore::{
+        RestoreIdentitySummary, RestoreOperationSummary, RestorePlanMember,
+        RestoreReadinessSummary, RestoreSnapshotSummary, RestoreVerificationSummary,
+    },
 };
-use crate::manifest::{DeploymentBackupManifest, IdentityMode};
 
 pub(super) fn restore_identity_summary(
     members: &[RestorePlanMember],

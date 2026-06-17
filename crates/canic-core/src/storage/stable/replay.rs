@@ -1,9 +1,15 @@
+//! Module: storage::stable::replay
+//!
+//! Responsibility: define stable-memory schemas for replay receipts.
+//! Does not own: replay decisions, receipt lifecycle, or command execution.
+//! Boundary: storage ops convert between these records and replay model types.
+
 #[cfg(test)]
 use crate::cdk::types::Principal;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     eager_static,
-    ops::replay::model::{
+    model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
         ReplayActor, ReplayReceipt, ReplayReceiptStatus,
     },
@@ -26,6 +32,10 @@ eager_static! {
 ///
 /// ReplayReceiptSlotKey
 ///
+/// Stable key for replay receipt records.
+/// Owned by stable storage and derived by replay storage ops.
+///
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ReplayReceiptSlotKey(pub [u8; 32]);
 
@@ -58,6 +68,10 @@ impl Storable for ReplayReceiptSlotKey {
 ///
 /// ReplayReceiptRecord
 ///
+/// Stable-memory representation of a shared replay receipt.
+/// Owned by stable storage and converted to `ReplayReceipt` for replay ops.
+///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReplayReceiptRecord {
     pub schema_version: u32,
@@ -139,6 +153,9 @@ impl Storable for ReplayReceiptRecord {
 
 ///
 /// RootReplayRecord
+///
+/// Legacy test-only root replay record shape.
+/// Owned by stable storage tests to preserve manual encoding coverage.
 ///
 
 #[cfg(test)]
@@ -241,6 +258,10 @@ impl Storable for RootReplayRecord {
 ///
 /// ReplayReceiptStore
 ///
+/// Stable BTreeMap facade for shared replay receipt records.
+/// Owned by stable storage and wrapped by storage ops.
+///
+
 pub struct ReplayReceiptStore;
 
 impl ReplayReceiptStore {
@@ -363,7 +384,7 @@ impl ReplayReceiptStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::replay::model::RecoveryReason;
+    use crate::model::replay::RecoveryReason;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -394,9 +415,6 @@ mod tests {
             .expect("stable replay receipt decodes")
     }
 
-    // round_trip_record
-    //
-    // Ensure the manual replay record encoding is lossless for stored payloads.
     fn round_trip_record(record: RootReplayRecord) {
         let encoded = record.clone().into_bytes();
         let decoded = RootReplayRecord::from_bytes(Cow::Owned(encoded.clone()));

@@ -1,3 +1,9 @@
+//! Module: workflow::ic::icp_refill::hub
+//!
+//! Responsibility: orchestrate automatic hub self-refill requests.
+//! Does not own: refill policy evaluation, storage mutation, or IC ledger calls.
+//! Boundary: builds self-refill requests and delegates execution to manual refill flow.
+
 use super::{
     IcpRefillWorkflow, RateQueryMode, build_network, configured_rate, current_topup_policy,
     funding_cooldown_retry_after_secs, in_flight_for_request, policy_denied, policy_input,
@@ -10,7 +16,7 @@ use crate::{
     dto::icp_refill::{IcpRefillMode, IcpRefillRequest, IcpRefillResponse},
     ops::{
         ic::{IcOps, icp_refill::IcpRefillOps},
-        storage::{icp_refill::IcpRefillRecordOps, state::app::AppStateOps},
+        storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
     },
 };
 use sha2::{Digest, Sha256};
@@ -20,8 +26,8 @@ impl IcpRefillWorkflow {
         hub_cycles: Cycles,
     ) -> Result<IcpRefillResponse, InternalError> {
         let self_pid = IcOps::canister_self();
-        if let Some(record) = IcpRefillRecordOps::find_resumable_hub_self_refill(self_pid) {
-            let request = IcpRefillRecordOps::to_request(&record);
+        if let Some(operation) = IcpRefillStoreOps::find_resumable_hub_self_refill(self_pid) {
+            let request = IcpRefillStoreOps::to_request(&operation);
             return Self::execute_manual_refill(request).await;
         }
 

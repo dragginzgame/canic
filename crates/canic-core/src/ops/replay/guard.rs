@@ -1,3 +1,9 @@
+//! Module: ops::replay::guard
+//!
+//! Responsibility: evaluate root replay guard decisions without command logic.
+//! Does not own: authorization, response encoding, or stable schemas.
+//! Boundary: root request workflow calls this before executing replayed commands.
+
 use crate::{
     cdk::types::Principal,
     ops::replay::{
@@ -6,15 +12,16 @@ use crate::{
             ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
             ReplayReceiptToken, prepare_replay_receipt,
         },
+        slot, ttl,
     },
     ops::storage::replay::ReplayReceiptOps,
 };
 
-use super::{slot, ttl};
-
+///
 /// RootReplayGuardInput
 ///
 /// Mechanical replay input context used by the root replay guard.
+///
 #[derive(Clone, Debug)]
 pub struct RootReplayGuardInput {
     pub caller: Principal,
@@ -27,9 +34,11 @@ pub struct RootReplayGuardInput {
     pub purge_scan_limit: usize,
 }
 
+///
 /// ReplayPending
 ///
 /// Fresh replay reservation metadata for later commit.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayPending {
     pub caller: Principal,
@@ -39,9 +48,11 @@ pub struct ReplayPending {
     pub expires_at_ns: u64,
 }
 
+///
 /// ReplayDecision
 ///
 /// Pure replay outcome independent from auth/policy decisions.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayDecision {
     Fresh(ReplayPending),
@@ -56,14 +67,17 @@ pub enum ReplayDecision {
 /// ReplayCached
 ///
 /// Canonical cached replay payload bytes for identical replay requests.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayCached {
     pub response_bytes: Vec<u8>,
 }
 
+///
 /// ReplayGuardError
 ///
 /// Mechanical guard failures emitted before decision classification.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayGuardError {
     InvalidTtl { ttl_ns: u64, max_ttl_ns: u64 },
@@ -229,16 +243,10 @@ mod tests {
         storage::stable::replay::ReplayReceiptRecord,
     };
 
-    /// p
-    ///
-    /// Build deterministic principals for replay tests.
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
-    /// base_input
-    ///
-    /// Build a baseline replay guard input for decision tests.
     fn base_input() -> RootReplayGuardInput {
         RootReplayGuardInput {
             caller: p(1),

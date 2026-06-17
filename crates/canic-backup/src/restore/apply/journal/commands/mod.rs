@@ -1,10 +1,23 @@
-use super::{RestoreApplyJournal, RestoreApplyJournalOperation, RestoreApplyOperationKind};
-use crate::persistence::resolve_backup_artifact_path;
-use serde::{Deserialize, Serialize};
+//! Module: restore::apply::journal::commands
+//!
+//! Responsibility: render restore apply journal operations into command previews.
+//! Does not own: command execution, receipt persistence, or journal transitions.
+//! Boundary: produces no-execute runner command payloads from journal state.
+
+use crate::{
+    persistence::resolve_backup_artifact_path,
+    restore::{RestoreApplyJournal, RestoreApplyJournalOperation, RestoreApplyOperationKind},
+};
+
 use std::path::Path;
+
+use serde::{Deserialize, Serialize};
 
 ///
 /// RestoreApplyCommandPreview
+///
+/// No-execute preview of the next restore apply command.
+/// Owned by restore apply journaling and returned to operators before execution.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -59,6 +72,9 @@ impl RestoreApplyCommandPreview {
 ///
 /// RestoreApplyCommandConfig
 ///
+/// Command rendering configuration for restore apply previews.
+/// Owned by restore apply journaling and supplied by native runner callers.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreApplyCommandConfig {
@@ -79,6 +95,9 @@ impl Default for RestoreApplyCommandConfig {
 ///
 /// RestoreApplyRunnerCommand
 ///
+/// Rendered restore runner command and safety metadata.
+/// Owned by restore apply journaling and embedded in previews and receipts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreApplyRunnerCommand {
@@ -90,7 +109,6 @@ pub struct RestoreApplyRunnerCommand {
 }
 
 impl RestoreApplyRunnerCommand {
-    // Build a no-execute ICP CLI command preview for one ready operation.
     fn from_operation(
         operation: &RestoreApplyJournalOperation,
         journal: &RestoreApplyJournal,
@@ -185,7 +203,6 @@ impl RestoreApplyRunnerCommand {
     }
 }
 
-// Return an operator note for member-level or deployment-level verification commands.
 const fn verification_command_note(
     operation: &RestoreApplyOperationKind,
     member_note: &'static str,
@@ -201,7 +218,6 @@ const fn verification_command_note(
     }
 }
 
-// Build `icp canister` arguments with the optional network selector.
 fn icp_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) -> Vec<String> {
     let mut args = vec!["canister".to_string()];
     args.append(&mut tail);
@@ -212,7 +228,6 @@ fn icp_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) 
     args
 }
 
-// Resolve upload artifact paths the same way validation resolved them.
 fn upload_artifact_command_path(
     operation: &RestoreApplyJournalOperation,
     journal: &RestoreApplyJournal,

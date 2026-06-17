@@ -1,6 +1,8 @@
-use super::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+//! Module: restore::apply::journal
+//!
+//! Responsibility: persist and advance restore apply operation state.
+//! Does not own: restore plan construction, command execution, or backup artifact checksums.
+//! Boundary: turns dry-runs into durable journals, reports, previews, and receipts.
 
 mod commands;
 mod counts;
@@ -26,6 +28,13 @@ pub use types::{
     RestoreApplyJournalError, RestoreApplyJournalOperation, RestoreApplyOperationKind,
     RestoreApplyOperationState,
 };
+
+use crate::restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
+
+use std::collections::BTreeSet;
+
+use serde::{Deserialize, Serialize};
+
 use types::{
     restore_apply_blocked_reasons, validate_apply_journal_count, validate_apply_journal_nonempty,
     validate_apply_journal_sequences, validate_apply_journal_version,
@@ -33,6 +42,9 @@ use types::{
 
 ///
 /// RestoreApplyJournal
+///
+/// Durable restore apply operation journal.
+/// Owned by restore apply journaling and consumed by restore runners and reports.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

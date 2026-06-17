@@ -1,7 +1,17 @@
-use super::{RestoreMapping, RestorePlanError};
-use crate::manifest::DeploymentBackupManifest;
-use candid::Principal;
+//! Module: restore::plan::mapping
+//!
+//! Responsibility: validate explicit restore source-to-target mappings.
+//! Does not own: restore member resolution, operation ordering, or execution.
+//! Boundary: rejects malformed mappings before restore plans are built.
+
+use crate::{
+    manifest::DeploymentBackupManifest,
+    restore::{RestoreMapping, RestorePlanError},
+};
+
 use std::{collections::BTreeSet, str::FromStr};
+
+use candid::Principal;
 
 pub(super) fn validate_mapping(mapping: &RestoreMapping) -> Result<(), RestorePlanError> {
     let mut sources = BTreeSet::new();

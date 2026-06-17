@@ -1,3 +1,9 @@
+//! Module: workflow::ic::icp_refill::execution
+//!
+//! Responsibility: execute ICP ledger transfers and CMC top-up notifications.
+//! Does not own: endpoint authorization, stable record schemas, or pure policy.
+//! Boundary: orchestrates ops/storage/replay after request preflight.
+
 use super::{
     MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
     cost_guard::{require_icp_refill_cost_permit, reserve_icp_refill_cost_guard_if_needed},
@@ -20,10 +26,10 @@ use crate::{
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{
             children::CanisterChildrenOps,
-            icp_refill::{IcpRefillRecordCreateInput, IcpRefillRecordOps},
+            icp_refill::{IcpRefillOperationCreateInput, IcpRefillStoreOps},
         },
     },
-    storage::stable::icp_refill::IcpRefillRecord,
+    view::icp_refill::IcpRefillOperation,
 };
 
 pub(super) async fn execute_fresh_manual_refill(
@@ -32,18 +38,19 @@ pub(super) async fn execute_fresh_manual_refill(
     token: &ReplayReceiptToken,
 ) -> Result<IcpRefillResponse, InternalError> {
     let mut cost_permit = None;
-    let record =
-        match execute_manual_refill_record(request, operation_id, token, &mut cost_permit).await {
-            Ok(record) => record,
+    let operation =
+        match execute_manual_refill_operation(request, operation_id, token, &mut cost_permit).await
+        {
+            Ok(operation) => operation,
             Err(err) => {
                 super::cost_guard::recover_icp_refill_cost_guard(cost_permit.as_ref());
                 abort_reserved_receipt(token);
                 return Err(err);
             }
         };
-    let response = IcpRefillRecordOps::to_response(&record);
+    let response = IcpRefillStoreOps::to_response(&operation);
 
-    if let Err(err) = finish_icp_refill_replay(token, &record, &response, cost_permit.as_ref()) {
+    if let Err(err) = finish_icp_refill_replay(token, &operation, &response, cost_permit.as_ref()) {
         abort_reserved_receipt(token);
         return Err(err);
     }
@@ -51,21 +58,21 @@ pub(super) async fn execute_fresh_manual_refill(
     Ok(response)
 }
 
-async fn execute_manual_refill_record(
+async fn execute_manual_refill_operation(
     request: IcpRefillRequest,
     operation_id: [u8; 32],
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
-) -> Result<IcpRefillRecord, InternalError> {
-    if let Some(record) = IcpRefillRecordOps::find_by_operation_id(operation_id) {
-        IcpRefillRecordOps::validate_retry_request_matches_record(&request, &record)?;
-        return advance_record(record, token, cost_permit).await;
+) -> Result<IcpRefillOperation, InternalError> {
+    if let Some(operation) = IcpRefillStoreOps::find_by_operation_id(operation_id) {
+        IcpRefillStoreOps::validate_retry_request_matches_operation(&request, &operation)?;
+        return advance_operation(operation, token, cost_permit).await;
     }
 
     let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
     let cmc_account =
         IcpRefillOps::cmc_topup_account(context.cmc_canister_id, request.target_canister)?;
-    let record = IcpRefillRecordOps::create_or_get(IcpRefillRecordCreateInput {
+    let operation = IcpRefillStoreOps::create_or_get(IcpRefillOperationCreateInput {
         operation_id,
         source_canister: request.source_canister,
         source_subaccount: request.source_subaccount,
@@ -81,125 +88,128 @@ async fn execute_manual_refill_record(
         now_ns: IcOps::now_nanos(),
     })?;
 
-    advance_record(record, token, cost_permit).await
+    advance_operation(operation, token, cost_permit).await
 }
 
-async fn transfer_record(
-    record: IcpRefillRecord,
+async fn transfer_operation(
+    operation: IcpRefillOperation,
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
-) -> Result<IcpRefillRecord, InternalError> {
-    let to = IcpRefillOps::cmc_topup_account(record.cmc_canister_id, record.target_canister)?;
+) -> Result<IcpRefillOperation, InternalError> {
+    let to = IcpRefillOps::cmc_topup_account(operation.cmc_canister_id, operation.target_canister)?;
     let transfer_arg = IcpRefillOps::transfer_arg(
-        record.source_subaccount,
+        operation.source_subaccount,
         to,
-        record.amount_e8s,
-        record.fee_e8s,
-        record.memo.clone(),
-        record.created_at_time_ns,
+        operation.amount_e8s,
+        operation.fee_e8s,
+        operation.memo.clone(),
+        operation.created_at_time_ns,
     );
 
-    reserve_icp_refill_cost_guard_if_needed(token, &record, cost_permit)?;
+    reserve_icp_refill_cost_guard_if_needed(token, &operation, cost_permit)?;
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
-    mark_icp_refill_transfer_effect(token, &record);
+    mark_icp_refill_transfer_effect(token, &operation);
 
-    match IcpRefillOps::icrc1_transfer(cost_permit, record.ledger_canister_id, transfer_arg).await {
+    match IcpRefillOps::icrc1_transfer(cost_permit, operation.ledger_canister_id, transfer_arg)
+        .await
+    {
         Err(err) => {
-            mark_icp_refill_recovery_required(token, &record, "ledger_transfer", &err);
+            mark_icp_refill_recovery_required(token, &operation, "ledger_transfer", &err);
             Err(err)
         }
         Ok(Ok(block_index)) => {
             let block_index = match IcpRefillOps::checked_block_index(block_index) {
                 Ok(block_index) => block_index,
                 Err(err) => {
-                    return IcpRefillRecordOps::mark_transfer_failed(
-                        record.id,
+                    return IcpRefillStoreOps::mark_transfer_failed(
+                        operation.id,
                         IcpRefillErrorCode::InvalidLedgerBlockIndex,
                         err.to_string(),
                         IcOps::now_nanos(),
                     );
                 }
             };
-            IcpRefillRecordOps::mark_transferred(record.id, block_index, IcOps::now_nanos())
+            IcpRefillStoreOps::mark_transferred(operation.id, block_index, IcOps::now_nanos())
         }
-        Ok(Err(err)) => apply_transfer_error(record.id, err),
+        Ok(Err(err)) => apply_transfer_error(operation.id, err),
     }
 }
 
-async fn advance_record(
-    record: IcpRefillRecord,
+async fn advance_operation(
+    operation: IcpRefillOperation,
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
-) -> Result<IcpRefillRecord, InternalError> {
-    let record = match record.status {
+) -> Result<IcpRefillOperation, InternalError> {
+    let operation = match operation.status {
         IcpRefillStatus::Requested => {
-            transfer_unless_window_stale(record, token, cost_permit).await?
+            transfer_unless_window_stale(operation, token, cost_permit).await?
         }
-        IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing => record,
-        IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_notify(&record) => record,
-        IcpRefillStatus::Failed if IcpRefillRecordOps::can_retry_bad_fee(&record) => {
-            transfer_unless_window_stale(record, token, cost_permit).await?
+        IcpRefillStatus::Transferred | IcpRefillStatus::NotifyProcessing => operation,
+        IcpRefillStatus::Failed if IcpRefillStoreOps::can_retry_notify(&operation) => operation,
+        IcpRefillStatus::Failed if IcpRefillStoreOps::can_retry_bad_fee(&operation) => {
+            transfer_unless_window_stale(operation, token, cost_permit).await?
         }
         IcpRefillStatus::Completed
         | IcpRefillStatus::Failed
         | IcpRefillStatus::InvalidTransaction
         | IcpRefillStatus::Refunded
-        | IcpRefillStatus::TransactionTooOld => return Ok(record),
+        | IcpRefillStatus::TransactionTooOld => return Ok(operation),
     };
 
-    if IcpRefillRecordOps::should_notify(&record) {
-        notify_record(record, token, cost_permit).await
+    if IcpRefillStoreOps::should_notify(&operation) {
+        notify_operation(operation, token, cost_permit).await
     } else {
-        Ok(record)
+        Ok(operation)
     }
 }
 
 async fn transfer_unless_window_stale(
-    record: IcpRefillRecord,
+    operation: IcpRefillOperation,
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
-) -> Result<IcpRefillRecord, InternalError> {
+) -> Result<IcpRefillOperation, InternalError> {
     let now_ns = IcOps::now_nanos();
-    if IcpRefillRecordOps::transfer_window_stale(&record, now_ns, TX_WINDOW_NANOS) {
-        IcpRefillRecordOps::mark_transfer_window_stale(record.id, now_ns)
+    if IcpRefillStoreOps::transfer_window_stale(&operation, now_ns, TX_WINDOW_NANOS) {
+        IcpRefillStoreOps::mark_transfer_window_stale(operation.id, now_ns)
     } else {
-        transfer_record(record, token, cost_permit).await
+        transfer_operation(operation, token, cost_permit).await
     }
 }
 
-async fn notify_record(
-    record: IcpRefillRecord,
+async fn notify_operation(
+    operation: IcpRefillOperation,
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
-) -> Result<IcpRefillRecord, InternalError> {
-    let Some(block_index) = record.ledger_block_index else {
-        return IcpRefillRecordOps::mark_notify_failed(
-            record.id,
+) -> Result<IcpRefillOperation, InternalError> {
+    let Some(block_index) = operation.ledger_block_index else {
+        return IcpRefillStoreOps::mark_notify_failed(
+            operation.id,
             "notify_top_up cannot run before ledger block is recorded".to_string(),
             IcOps::now_nanos(),
         );
     };
 
-    let record = IcpRefillRecordOps::mark_notify_attempt_started(record.id, IcOps::now_nanos())?;
+    let operation =
+        IcpRefillStoreOps::mark_notify_attempt_started(operation.id, IcOps::now_nanos())?;
     let args = NotifyTopUpArg {
         block_index,
-        canister_id: record.target_canister,
+        canister_id: operation.target_canister,
     };
 
-    reserve_icp_refill_cost_guard_if_needed(token, &record, cost_permit)?;
+    reserve_icp_refill_cost_guard_if_needed(token, &operation, cost_permit)?;
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
-    mark_icp_refill_notify_effect(token, &record);
+    mark_icp_refill_notify_effect(token, &operation);
 
-    match IcpRefillOps::notify_top_up(cost_permit, record.cmc_canister_id, args).await {
+    match IcpRefillOps::notify_top_up(cost_permit, operation.cmc_canister_id, args).await {
         Ok(Ok(cycles_sent)) => {
-            let record =
-                IcpRefillRecordOps::mark_completed(record.id, cycles_sent, IcOps::now_nanos())?;
-            record_direct_child_refill_grant(&record, IcOps::now_secs());
-            Ok(record)
+            let operation =
+                IcpRefillStoreOps::mark_completed(operation.id, cycles_sent, IcOps::now_nanos())?;
+            record_direct_child_refill_grant(&operation, IcOps::now_secs());
+            Ok(operation)
         }
-        Ok(Err(err)) => apply_notify_error(record.id, record.notify_attempts, err),
+        Ok(Err(err)) => apply_notify_error(operation.id, operation.notify_attempts, err),
         Err(err) => {
-            mark_icp_refill_recovery_required(token, &record, "cmc_notify_top_up", &err);
+            mark_icp_refill_recovery_required(token, &operation, "cmc_notify_top_up", &err);
             Err(err)
         }
     }
@@ -208,14 +218,14 @@ async fn notify_record(
 pub(super) fn apply_transfer_error(
     record_id: u64,
     err: TransferError,
-) -> Result<IcpRefillRecord, InternalError> {
+) -> Result<IcpRefillOperation, InternalError> {
     match err {
         TransferError::BadFee { expected_fee } => {
             let expected_fee_e8s =
                 match super::checked_nat_u64("bad_fee.expected_fee", expected_fee) {
                     Ok(expected_fee_e8s) => expected_fee_e8s,
                     Err(err) => {
-                        return IcpRefillRecordOps::mark_transfer_failed(
+                        return IcpRefillStoreOps::mark_transfer_failed(
                             record_id,
                             IcpRefillErrorCode::BadFee,
                             err.to_string(),
@@ -223,7 +233,7 @@ pub(super) fn apply_transfer_error(
                         );
                     }
                 };
-            IcpRefillRecordOps::mark_bad_fee(
+            IcpRefillStoreOps::mark_bad_fee(
                 record_id,
                 expected_fee_e8s,
                 format!("bad fee; expected {expected_fee_e8s}"),
@@ -234,7 +244,7 @@ pub(super) fn apply_transfer_error(
             let duplicate_of = match IcpRefillOps::checked_block_index(duplicate_of) {
                 Ok(block_index) => block_index,
                 Err(err) => {
-                    return IcpRefillRecordOps::mark_transfer_failed(
+                    return IcpRefillStoreOps::mark_transfer_failed(
                         record_id,
                         IcpRefillErrorCode::InvalidLedgerBlockIndex,
                         err.to_string(),
@@ -242,16 +252,16 @@ pub(super) fn apply_transfer_error(
                     );
                 }
             };
-            IcpRefillRecordOps::mark_duplicate_transferred(
+            IcpRefillStoreOps::mark_duplicate_transferred(
                 record_id,
                 duplicate_of,
                 IcOps::now_nanos(),
             )
         }
         TransferError::TooOld => {
-            IcpRefillRecordOps::mark_transfer_window_stale(record_id, IcOps::now_nanos())
+            IcpRefillStoreOps::mark_transfer_window_stale(record_id, IcOps::now_nanos())
         }
-        other => IcpRefillRecordOps::mark_transfer_failed(
+        other => IcpRefillStoreOps::mark_transfer_failed(
             record_id,
             IcpRefillErrorCode::LedgerTransferFailed,
             other.to_string(),
@@ -264,18 +274,18 @@ pub(super) fn apply_notify_error(
     record_id: u64,
     notify_attempts: u32,
     err: NotifyTopUpError,
-) -> Result<IcpRefillRecord, InternalError> {
+) -> Result<IcpRefillOperation, InternalError> {
     match err {
         NotifyTopUpError::Refunded {
             block_index,
             reason,
-        } => IcpRefillRecordOps::mark_refunded(record_id, block_index, reason, IcOps::now_nanos()),
+        } => IcpRefillStoreOps::mark_refunded(record_id, block_index, reason, IcOps::now_nanos()),
         NotifyTopUpError::InvalidTransaction(reason) => {
-            IcpRefillRecordOps::mark_invalid_transaction(record_id, reason, IcOps::now_nanos())
+            IcpRefillStoreOps::mark_invalid_transaction(record_id, reason, IcOps::now_nanos())
         }
         NotifyTopUpError::Processing => mark_notify_processing(record_id, notify_attempts),
         NotifyTopUpError::TransactionTooOld(min_block_index) => {
-            IcpRefillRecordOps::mark_transaction_too_old(
+            IcpRefillStoreOps::mark_transaction_too_old(
                 record_id,
                 Some(min_block_index),
                 IcOps::now_nanos(),
@@ -295,15 +305,15 @@ pub(super) fn apply_notify_error(
 pub(super) fn mark_notify_processing(
     record_id: u64,
     notify_attempts: u32,
-) -> Result<IcpRefillRecord, InternalError> {
+) -> Result<IcpRefillOperation, InternalError> {
     if notify_attempts >= MAX_NOTIFY_ATTEMPTS {
-        IcpRefillRecordOps::mark_notify_max_attempts(
+        IcpRefillStoreOps::mark_notify_max_attempts(
             record_id,
             "notify_top_up returned Processing after max attempts".to_string(),
             IcOps::now_nanos(),
         )
     } else {
-        IcpRefillRecordOps::mark_notify_processing(record_id, IcOps::now_nanos())
+        IcpRefillStoreOps::mark_notify_processing(record_id, IcOps::now_nanos())
     }
 }
 
@@ -311,23 +321,25 @@ pub(super) fn mark_retryable_notify_failure(
     record_id: u64,
     notify_attempts: u32,
     error_message: String,
-) -> Result<IcpRefillRecord, InternalError> {
+) -> Result<IcpRefillOperation, InternalError> {
     if notify_attempts >= MAX_NOTIFY_ATTEMPTS {
-        IcpRefillRecordOps::mark_notify_max_attempts(record_id, error_message, IcOps::now_nanos())
+        IcpRefillStoreOps::mark_notify_max_attempts(record_id, error_message, IcOps::now_nanos())
     } else {
-        IcpRefillRecordOps::mark_notify_failed(record_id, error_message, IcOps::now_nanos())
+        IcpRefillStoreOps::mark_notify_failed(record_id, error_message, IcOps::now_nanos())
     }
 }
 
-fn record_direct_child_refill_grant(record: &IcpRefillRecord, now_secs: u64) {
-    let Some(cycles_sent) = record.cycles_sent.as_ref() else {
+fn record_direct_child_refill_grant(operation: &IcpRefillOperation, now_secs: u64) {
+    let Some(cycles_sent) = operation.cycles_sent.as_ref() else {
         return;
     };
-    let Some((_child_role, parent_pid)) = CanisterChildrenOps::role_parent(record.target_canister)
+    let Some((_child_role, parent_pid)) =
+        CanisterChildrenOps::role_parent(operation.target_canister)
     else {
         return;
     };
-    let Some((child, cycles)) = direct_child_refill_grant(record, cycles_sent, parent_pid) else {
+    let Some((child, cycles)) = direct_child_refill_grant(operation, cycles_sent, parent_pid)
+    else {
         return;
     };
 
@@ -335,17 +347,17 @@ fn record_direct_child_refill_grant(record: &IcpRefillRecord, now_secs: u64) {
 }
 
 pub(super) fn direct_child_refill_grant(
-    record: &IcpRefillRecord,
+    operation: &IcpRefillOperation,
     cycles_sent: &Nat,
     parent_pid: Option<Principal>,
 ) -> Option<(Principal, u128)> {
-    if !direct_child_refill_parent_matches(parent_pid, record.source_canister) {
+    if !direct_child_refill_parent_matches(parent_pid, operation.source_canister) {
         return None;
     }
 
     Some((
-        record.target_canister,
-        IcpRefillRecordOps::nat_to_u128_saturating(cycles_sent),
+        operation.target_canister,
+        IcpRefillStoreOps::nat_to_u128_saturating(cycles_sent),
     ))
 }
 

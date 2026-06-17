@@ -11,12 +11,13 @@
 //! - `access/` contains access expressions, predicates, and metrics for boundary enforcement.
 //! - `workflow/` implements orchestration and lifecycle workflows.
 //! - `domain/` contains pure value and decision helpers.
+//! - `model/` contains pure runtime state models shared by ops and storage.
 //! - `ops/` provides mechanical, reusable side-effecting operations.
 //! - `storage/` owns stable-memory-backed schemas and helpers.
 //! - `view/` exposes internal read-only projections over stored/runtime state.
 //! - macro entrypoints live in the `canic` facade crate.
 //!
-//! The default flow is: endpoints → workflow → domain/decision helpers → ops → storage.
+//! The default flow is: endpoints → workflow → domain/decision helpers → ops → storage/model.
 
 #[doc(hidden)]
 pub mod access;
@@ -50,6 +51,7 @@ pub(crate) mod config;
 pub(crate) mod domain;
 pub(crate) mod infra;
 pub(crate) mod lifecycle;
+pub(crate) mod model;
 pub(crate) mod ops;
 pub(crate) mod storage;
 pub(crate) mod view;

@@ -1,11 +1,10 @@
 use crate::{
     cdk::types::Principal,
-    dto::{
-        icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
-        metrics::{MetricEntry, MetricValue},
-    },
+    dto::metrics::{MetricEntry, MetricValue},
     ops::storage::icp_refill::IcpRefillRecordOps,
-    storage::stable::icp_refill::IcpRefillRecord,
+    storage::stable::icp_refill::{
+        IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus,
+    },
 };
 use std::collections::BTreeMap;
 
@@ -42,7 +41,7 @@ pub(super) fn entries_from_records(records: &[IcpRefillRecord]) -> Vec<MetricEnt
             record.target_canister,
             u128::from(record.amount_e8s),
         );
-        if record.status == IcpRefillStatus::Completed
+        if record.status == IcpRefillRecordStatus::Completed
             && let Some(cycles_sent) = &record.cycles_sent
         {
             saturating_add_principal_value(
@@ -136,66 +135,68 @@ fn saturating_add_principal_value(
 
 const fn record_phase(record: &IcpRefillRecord) -> &'static str {
     match record.status {
-        IcpRefillStatus::Requested => "preflight",
-        IcpRefillStatus::Transferred
-        | IcpRefillStatus::NotifyProcessing
-        | IcpRefillStatus::Completed
-        | IcpRefillStatus::InvalidTransaction
-        | IcpRefillStatus::Refunded
-        | IcpRefillStatus::TransactionTooOld => "notify",
-        IcpRefillStatus::Failed => match record.error_code {
+        IcpRefillRecordStatus::Requested => "preflight",
+        IcpRefillRecordStatus::Transferred
+        | IcpRefillRecordStatus::NotifyProcessing
+        | IcpRefillRecordStatus::Completed
+        | IcpRefillRecordStatus::InvalidTransaction
+        | IcpRefillRecordStatus::Refunded
+        | IcpRefillRecordStatus::TransactionTooOld => "notify",
+        IcpRefillRecordStatus::Failed => match record.error_code {
             Some(error_code) => error_phase(error_code),
             None => "transfer",
         },
     }
 }
 
-const fn error_phase(error: IcpRefillErrorCode) -> &'static str {
+const fn error_phase(error: IcpRefillRecordErrorCode) -> &'static str {
     match error {
-        IcpRefillErrorCode::RateGateDenied | IcpRefillErrorCode::RequestDenied => "preflight",
-        IcpRefillErrorCode::BadFee
-        | IcpRefillErrorCode::Duplicate
-        | IcpRefillErrorCode::InvalidLedgerBlockIndex
-        | IcpRefillErrorCode::LedgerTransferFailed
-        | IcpRefillErrorCode::TransferWindowStale => "transfer",
-        IcpRefillErrorCode::InvalidTransaction
-        | IcpRefillErrorCode::NotifyFailed
-        | IcpRefillErrorCode::NotifyMaxAttempts
-        | IcpRefillErrorCode::Processing
-        | IcpRefillErrorCode::Refunded
-        | IcpRefillErrorCode::TransactionTooOld => "notify",
-        IcpRefillErrorCode::FabricationUnavailable => "fabricate",
+        IcpRefillRecordErrorCode::RateGateDenied | IcpRefillRecordErrorCode::RequestDenied => {
+            "preflight"
+        }
+        IcpRefillRecordErrorCode::BadFee
+        | IcpRefillRecordErrorCode::Duplicate
+        | IcpRefillRecordErrorCode::InvalidLedgerBlockIndex
+        | IcpRefillRecordErrorCode::LedgerTransferFailed
+        | IcpRefillRecordErrorCode::TransferWindowStale => "transfer",
+        IcpRefillRecordErrorCode::InvalidTransaction
+        | IcpRefillRecordErrorCode::NotifyFailed
+        | IcpRefillRecordErrorCode::NotifyMaxAttempts
+        | IcpRefillRecordErrorCode::Processing
+        | IcpRefillRecordErrorCode::Refunded
+        | IcpRefillRecordErrorCode::TransactionTooOld => "notify",
+        IcpRefillRecordErrorCode::FabricationUnavailable => "fabricate",
     }
 }
 
-const fn status_label(status: IcpRefillStatus) -> &'static str {
+const fn status_label(status: IcpRefillRecordStatus) -> &'static str {
     match status {
-        IcpRefillStatus::Completed => "completed",
-        IcpRefillStatus::Failed => "failed",
-        IcpRefillStatus::InvalidTransaction => "invalid_transaction",
-        IcpRefillStatus::NotifyProcessing => "notify_processing",
-        IcpRefillStatus::Refunded => "refunded",
-        IcpRefillStatus::Requested => "requested",
-        IcpRefillStatus::TransactionTooOld => "transaction_too_old",
-        IcpRefillStatus::Transferred => "transferred",
+        IcpRefillRecordStatus::Completed => "completed",
+        IcpRefillRecordStatus::Failed => "failed",
+        IcpRefillRecordStatus::InvalidTransaction => "invalid_transaction",
+        IcpRefillRecordStatus::NotifyProcessing => "notify_processing",
+        IcpRefillRecordStatus::Refunded => "refunded",
+        IcpRefillRecordStatus::Requested => "requested",
+        IcpRefillRecordStatus::TransactionTooOld => "transaction_too_old",
+        IcpRefillRecordStatus::Transferred => "transferred",
     }
 }
 
-const fn error_label(error: IcpRefillErrorCode) -> &'static str {
+const fn error_label(error: IcpRefillRecordErrorCode) -> &'static str {
     match error {
-        IcpRefillErrorCode::BadFee => "bad_fee",
-        IcpRefillErrorCode::Duplicate => "duplicate",
-        IcpRefillErrorCode::FabricationUnavailable => "fabrication_unavailable",
-        IcpRefillErrorCode::InvalidLedgerBlockIndex => "invalid_ledger_block_index",
-        IcpRefillErrorCode::InvalidTransaction => "invalid_transaction",
-        IcpRefillErrorCode::LedgerTransferFailed => "ledger_transfer_failed",
-        IcpRefillErrorCode::NotifyFailed => "notify_failed",
-        IcpRefillErrorCode::NotifyMaxAttempts => "notify_max_attempts",
-        IcpRefillErrorCode::Processing => "processing",
-        IcpRefillErrorCode::RateGateDenied => "rate_gate_denied",
-        IcpRefillErrorCode::Refunded => "refunded",
-        IcpRefillErrorCode::RequestDenied => "request_denied",
-        IcpRefillErrorCode::TransactionTooOld => "transaction_too_old",
-        IcpRefillErrorCode::TransferWindowStale => "transfer_window_stale",
+        IcpRefillRecordErrorCode::BadFee => "bad_fee",
+        IcpRefillRecordErrorCode::Duplicate => "duplicate",
+        IcpRefillRecordErrorCode::FabricationUnavailable => "fabrication_unavailable",
+        IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => "invalid_ledger_block_index",
+        IcpRefillRecordErrorCode::InvalidTransaction => "invalid_transaction",
+        IcpRefillRecordErrorCode::LedgerTransferFailed => "ledger_transfer_failed",
+        IcpRefillRecordErrorCode::NotifyFailed => "notify_failed",
+        IcpRefillRecordErrorCode::NotifyMaxAttempts => "notify_max_attempts",
+        IcpRefillRecordErrorCode::Processing => "processing",
+        IcpRefillRecordErrorCode::RateGateDenied => "rate_gate_denied",
+        IcpRefillRecordErrorCode::Refunded => "refunded",
+        IcpRefillRecordErrorCode::RequestDenied => "request_denied",
+        IcpRefillRecordErrorCode::TransactionTooOld => "transaction_too_old",
+        IcpRefillRecordErrorCode::TransferWindowStale => "transfer_window_stale",
     }
 }

@@ -1,10 +1,21 @@
-use super::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
-use serde::{Deserialize, Serialize};
+//! Module: restore::apply::journal::types
+//!
+//! Responsibility: define restore apply journal operations, states, kinds, and errors.
+//! Does not own: command previews, operation receipts, or reporting.
+//! Boundary: provides journal row validation and shared journal helper functions.
+
+use crate::restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
+
 use std::collections::BTreeSet;
+
+use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
 ///
 /// RestoreApplyJournalOperation
+///
+/// Durable restore apply operation row.
+/// Owned by restore apply journaling and consumed by command preview and runner code.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -25,7 +36,6 @@ pub struct RestoreApplyJournalOperation {
 }
 
 impl RestoreApplyJournalOperation {
-    // Build one initial journal operation from the dry-run operation row.
     pub(super) fn from_dry_run_operation(
         operation: &RestoreApplyDryRunOperation,
         state: RestoreApplyOperationState,
@@ -51,7 +61,6 @@ impl RestoreApplyJournalOperation {
         }
     }
 
-    // Validate one restore apply journal operation row.
     pub(super) fn validate(&self) -> Result<(), RestoreApplyJournalError> {
         validate_apply_journal_nonempty("operations[].source_canister", &self.source_canister)?;
         validate_apply_journal_nonempty("operations[].target_canister", &self.target_canister)?;
@@ -85,7 +94,6 @@ impl RestoreApplyJournalOperation {
         }
     }
 
-    // Validate fields required by the operation kind before runner command rendering.
     fn validate_operation_fields(&self) -> Result<(), RestoreApplyJournalError> {
         match self.operation {
             RestoreApplyOperationKind::UploadSnapshot => self
@@ -114,7 +122,6 @@ impl RestoreApplyJournalOperation {
         }
     }
 
-    // Return one required optional field after checking it is present and nonempty.
     fn validate_required_field<'a>(
         &self,
         field: &'static str,
@@ -138,7 +145,6 @@ impl RestoreApplyJournalOperation {
         Ok(value)
     }
 
-    // Decide whether an operation can move to the requested next state.
     pub(super) const fn can_transition_to(&self, next_state: &RestoreApplyOperationState) -> bool {
         match (&self.state, next_state) {
             (
@@ -176,6 +182,9 @@ impl RestoreApplyJournalOperation {
 ///
 /// RestoreApplyOperationState
 ///
+/// Durable lifecycle state for one restore apply operation.
+/// Owned by restore apply journaling and used by runners to advance work.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -189,6 +198,9 @@ pub enum RestoreApplyOperationState {
 
 ///
 /// RestoreApplyJournalError
+///
+/// Typed restore apply journal validation or transition failure.
+/// Owned by restore apply journaling and returned before unsafe mutation proceeds.
 ///
 
 #[derive(Debug, ThisError)]
@@ -271,6 +283,9 @@ pub enum RestoreApplyJournalError {
 ///
 /// RestoreApplyOperationKind
 ///
+/// Restore apply operation kind rendered into runner commands.
+/// Owned by restore apply journaling and shared by dry-runs, journals, and receipts.
+///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -283,7 +298,6 @@ pub enum RestoreApplyOperationKind {
     VerifyDeployment,
 }
 
-// Validate the supported restore apply journal format version.
 pub(super) const fn validate_apply_journal_version(
     version: u16,
 ) -> Result<(), RestoreApplyJournalError> {
@@ -294,7 +308,6 @@ pub(super) const fn validate_apply_journal_version(
     Err(RestoreApplyJournalError::UnsupportedVersion(version))
 }
 
-// Validate required nonempty restore apply journal fields.
 pub(super) fn validate_apply_journal_nonempty(
     field: &'static str,
     value: &str,
@@ -306,7 +319,6 @@ pub(super) fn validate_apply_journal_nonempty(
     Err(RestoreApplyJournalError::MissingField(field))
 }
 
-// Validate one reported restore apply journal count.
 pub(super) const fn validate_apply_journal_count(
     field: &'static str,
     reported: usize,
@@ -323,7 +335,6 @@ pub(super) const fn validate_apply_journal_count(
     })
 }
 
-// Validate operation sequence values are unique and contiguous from zero.
 pub(super) fn validate_apply_journal_sequences(
     operations: &[RestoreApplyJournalOperation],
 ) -> Result<(), RestoreApplyJournalError> {
@@ -345,7 +356,6 @@ pub(super) fn validate_apply_journal_sequences(
     Ok(())
 }
 
-// Explain why an apply journal is blocked before mutation is allowed.
 pub(super) fn restore_apply_blocked_reasons(dry_run: &RestoreApplyDryRun) -> Vec<String> {
     let mut reasons = dry_run.readiness_reasons.clone();
 

@@ -1,3 +1,9 @@
+//! Module: workflow::ic::icp_refill
+//!
+//! Responsibility: orchestrate ICP-to-cycles refill execution.
+//! Does not own: endpoint auth, stable record mutation, or pure refill policy.
+//! Boundary: calls policy, IC ops, storage ops, and replay/cost-guard helpers.
+
 mod cost_guard;
 mod execution;
 mod hub;
@@ -22,7 +28,7 @@ use crate::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
         runtime::cycles_funding::CyclesFundingLedgerOps,
-        storage::{icp_refill::IcpRefillRecordOps, state::app::AppStateOps},
+        storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
     },
     workflow::ic::network::NetworkWorkflow,
 };
@@ -34,16 +40,24 @@ const TX_WINDOW_NANOS: u64 = 24 * 60 * 60 * 1_000_000_000;
 const MAX_NOTIFY_ATTEMPTS: u32 = 5;
 const ICP_LEDGER_DECIMALS: u8 = 8;
 const ICP_REFILL_REPLAY_COMMAND_KIND: &str = "icp.refill.v1";
-const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
 ///
 /// IcpRefillWorkflowError
 ///
+/// Typed workflow-layer failure for ICP refill orchestration.
+/// Owned by ICP refill workflow and converted into internal workflow errors.
+///
 
 #[derive(Debug, ThisError)]
 pub enum IcpRefillWorkflowError {
-    #[error("ICP refill only supports canister mode in this workflow")]
-    UnsupportedMode,
+    #[error("ICP refill request is marked dry_run; call dry_run_manual_refill instead")]
+    DryRunRequest,
+
+    #[error("ICP refill Nat field {field} does not fit in u64: {value}")]
+    NatU64Overflow { field: &'static str, value: Nat },
+
+    #[error("ICP refill policy denied request: {0:?}")]
+    PolicyDenied(IcpRefillPolicyViolation),
 
     #[error("ICP refill source canister {source_canister} must be this canister {self_pid}")]
     SourceCanisterMismatch {
@@ -51,17 +65,11 @@ pub enum IcpRefillWorkflowError {
         self_pid: Principal,
     },
 
-    #[error("ICP refill request is marked dry_run; call dry_run_manual_refill instead")]
-    DryRunRequest,
-
-    #[error("ICP refill policy denied request: {0:?}")]
-    PolicyDenied(IcpRefillPolicyViolation),
-
-    #[error("ICP refill Nat field {field} does not fit in u64: {value}")]
-    NatU64Overflow { field: &'static str, value: Nat },
-
     #[error("ICP refill expected ICP ledger decimals=8, found {0}")]
     UnexpectedLedgerDecimals(u8),
+
+    #[error("ICP refill only supports canister mode in this workflow")]
+    UnsupportedMode,
 }
 
 impl From<IcpRefillWorkflowError> for InternalError {
@@ -73,11 +81,17 @@ impl From<IcpRefillWorkflowError> for InternalError {
 ///
 /// IcpRefillWorkflow
 ///
+/// Workflow entrypoint for manual and automatic ICP refill orchestration.
+/// Owned by workflow and called after endpoints authenticate input.
+///
 
 pub struct IcpRefillWorkflow;
 
 ///
 /// IcpRefillExecutionContext
+///
+/// Prepared IC canister IDs and fee/rate context for one refill execution.
+/// Owned by workflow and passed into execution helpers.
 ///
 
 struct IcpRefillExecutionContext {
@@ -89,16 +103,19 @@ struct IcpRefillExecutionContext {
 }
 
 ///
-/// ManualRefillPolicyPreflight
+/// ManualRefillPreflight
+///
+/// Cached policy preflight input for manual refill requests.
+/// Owned by workflow and evaluated before mutation or IC calls proceed.
 ///
 
-struct ManualRefillPolicyPreflight<'a> {
+struct ManualRefillPreflight<'a> {
     policy: Option<&'a IcpRefillPolicy>,
     input: IcpRefillPolicyInput,
     rate_gate_configured: bool,
 }
 
-impl<'a> ManualRefillPolicyPreflight<'a> {
+impl<'a> ManualRefillPreflight<'a> {
     fn new(policy: Option<&'a IcpRefillPolicy>, request: &IcpRefillRequest) -> Self {
         let input = policy_input(
             0,
@@ -132,6 +149,9 @@ impl<'a> ManualRefillPolicyPreflight<'a> {
 ///
 /// RateQueryMode
 ///
+/// Controls whether workflow must query the CMC conversion rate.
+/// Owned by ICP refill workflow policy preparation.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RateQueryMode {
@@ -144,9 +164,9 @@ async fn prepare_context(
     rate_query_mode: RateQueryMode,
 ) -> Result<IcpRefillExecutionContext, InternalError> {
     let policy = current_icp_refill_policy()?;
-    let policy_preflight = ManualRefillPolicyPreflight::new(policy.as_ref(), request);
-    if !policy_preflight.rate_gate_configured {
-        policy_preflight.evaluate(None)?;
+    let preflight = ManualRefillPreflight::new(policy.as_ref(), request);
+    if !preflight.rate_gate_configured {
+        preflight.evaluate(None)?;
     }
 
     let canisters = IcpRefillOps::resolve_canisters(
@@ -159,8 +179,8 @@ async fn prepare_context(
     let xdr_permyriad_per_icp =
         configured_rate(policy.as_ref(), canisters.cmc_canister_id, rate_query_mode).await?;
 
-    if policy_preflight.rate_gate_configured {
-        policy_preflight.evaluate(xdr_permyriad_per_icp)?;
+    if preflight.rate_gate_configured {
+        preflight.evaluate(xdr_permyriad_per_icp)?;
     }
 
     Ok(IcpRefillExecutionContext {
@@ -265,7 +285,7 @@ fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {
 }
 
 fn in_flight_for_request(request: &IcpRefillRequest) -> bool {
-    IcpRefillRecordOps::has_in_flight_for_key(
+    IcpRefillStoreOps::has_in_flight_for_key(
         request.source_canister,
         request.source_subaccount,
         request.target_canister,
