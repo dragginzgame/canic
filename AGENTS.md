@@ -11,10 +11,12 @@ with this file, the code is wrong.
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for
   commands, git boundaries, versioning, release, network selection, and
   automation language rules. Do not duplicate its rules here.
-- Automated agents must not change Cargo package versions, workspace dependency
-  versions, release-script default versions, or install URLs during ordinary
-  development slices. Version bumps are release-preparation work and require an
-  explicit maintainer request.
+- Automated agents must never change Cargo package versions unless the
+  maintainer explicitly asks for a version bump, release-preparation version
+  change, or exact version correction. This includes
+  `workspace.package.version`, workspace `canic*` dependency versions, package
+  versions in any `Cargo.toml`, release-script default versions, install URLs,
+  and the matching `Cargo.lock` package versions.
 
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog
