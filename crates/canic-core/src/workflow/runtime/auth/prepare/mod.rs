@@ -8,6 +8,7 @@ use super::RuntimeAuthWorkflow;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
+    domain::policy::auth::{AuthPolicyError, validate_public_delegated_token_prepare},
     dto::{
         auth::{
             AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenPrepareRequest,
@@ -62,6 +63,7 @@ impl RuntimeAuthWorkflow {
         let label = "delegated token prepare";
         let metadata = token_replay_metadata(request.metadata, label)?;
         let caller = IcOps::msg_caller();
+        validate_token_prepare_public_request(caller, &request)?;
         let command_kind = token_prepare_replay_command_kind();
         let actor = ReplayActor::direct_caller(caller);
         let payload_hash = token_prepare_replay_payload_hash(&command_kind, &actor, &request);
@@ -446,6 +448,18 @@ fn token_replay_metadata(
     Ok(metadata)
 }
 
+fn validate_token_prepare_public_request(
+    caller: Principal,
+    request: &DelegatedTokenPrepareRequest,
+) -> Result<(), InternalError> {
+    validate_public_delegated_token_prepare(caller, request.subject, &request.grants)
+        .map_err(map_token_prepare_policy_error)
+}
+
+fn map_token_prepare_policy_error(err: AuthPolicyError) -> InternalError {
+    InternalError::public(Error::forbidden(err.to_string()))
+}
+
 fn delegation_replay_command_kind() -> CommandKind {
     CommandKind::new(DELEGATION_REPLAY_COMMAND_KIND)
         .expect("delegation replay command kind is a valid static label")
@@ -783,7 +797,10 @@ fn decode_delegation_prepare_response(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dto::error::ErrorCode, ids::CanisterRole};
+    use crate::{
+        dto::error::ErrorCode,
+        ids::{CanisterRole, cap},
+    };
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -901,6 +918,46 @@ mod tests {
             too_large.public_error().expect("public error").code,
             ErrorCode::InvalidInput
         );
+    }
+
+    #[test]
+    fn delegated_token_public_prepare_rejects_subject_mismatch_before_replay() {
+        let mut request = token_prepare_request(1);
+        request.subject = p(9);
+        request.grants = vec![grant("project_instance", &[cap::SESSION])];
+
+        let err = validate_token_prepare_public_request(p(8), &request)
+            .expect_err("subject mismatch must fail");
+
+        assert_eq!(
+            err.public_error().expect("public error").code,
+            ErrorCode::Forbidden
+        );
+    }
+
+    #[test]
+    fn delegated_token_public_prepare_rejects_privileged_self_grants_before_replay() {
+        let mut request = token_prepare_request(1);
+        request.grants = vec![grant("project_instance", &[cap::WRITE])];
+
+        let err = validate_token_prepare_public_request(p(8), &request)
+            .expect_err("privileged self-grant must fail");
+
+        assert_eq!(
+            err.public_error().expect("public error").code,
+            ErrorCode::Forbidden
+        );
+    }
+
+    #[test]
+    fn delegated_token_public_prepare_accepts_login_scopes_before_replay() {
+        let mut request = token_prepare_request(1);
+        request.grants = vec![
+            grant("project_hub", &[cap::SESSION]),
+            grant("project_instance", &[cap::VERIFY]),
+        ];
+
+        validate_token_prepare_public_request(p(8), &request).expect("login scopes");
     }
 
     #[test]

@@ -524,6 +524,10 @@ Security boundaries:
   `ic_root_public_key_raw_hex`.
 - token issuers must set `delegated_token_issuer = true`; only those canisters
   expose delegated-token prepare/get/install provisioning endpoints.
+- public delegated-token prepare self-issues only login/session material
+  (`session` and `verify` scopes) for the caller subject. Privileged
+  application scopes must be issued through a caller-authorized path or checked
+  against verifier-local application state after authentication.
 - protected endpoint verifiers must set `delegated_token_verifier = true`; the
   runtime delegated-token verifier rejects before proof verification when the
   current canister is not explicitly configured as a delegated-token verifier.

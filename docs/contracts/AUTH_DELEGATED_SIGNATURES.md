@@ -198,6 +198,13 @@ execution.
 6. caller/session     -> endpoint with DelegatedToken
 ```
 
+The public delegated-token prepare endpoint is a login/session materialization
+surface. It rejects requests where `subject` does not match the update caller
+and only self-issues public login scopes: `session` and `verify`. Privileged
+application scopes such as `read`, `write`, `admin`, or application-specific
+admin labels must be issued by a separate caller-authorized path instead of
+being accepted from open caller-supplied prepare payloads.
+
 `canic_prepare_delegation_proof` is replay-protected. The same caller,
 operation id, and payload returns the same prepared response; the same caller
 and operation id with a different payload is a replay conflict. The first fresh
