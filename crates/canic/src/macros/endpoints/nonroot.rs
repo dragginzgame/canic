@@ -48,5 +48,11 @@ macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
         ) -> Result<::canic::dto::auth::InstallActiveDelegationProofResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(request)
         }
+
+        #[$crate::canic_query]
+        async fn canic_active_delegation_proof_status()
+        -> Result<::canic::dto::auth::ActiveDelegationProofStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status()
+        }
     };
 }
