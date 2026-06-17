@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.1` hardens delegated-token public prepare by binding issuance to the
+  caller subject and limiting open self-issued grants to login/session scopes,
+  preserving subnet-wide login while blocking self-granted privileged scopes.
+
 - `0.68.0` completes the backup cleanup closeout by splitting
   `canic-backup` journal, manifest validation, persistence, runner operation,
   and plan internals into focused modules while preserving backup behavior.

@@ -7,4 +7,5 @@
 pub const READ: &str = "read";
 pub const WRITE: &str = "write";
 pub const VERIFY: &str = "verify";
+pub const SESSION: &str = "session";
 pub const ADMIN: &str = "admin";

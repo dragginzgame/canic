@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod cycles;
 pub mod cycles_funding;
 pub mod env;
@@ -17,6 +18,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum PolicyError {
+    #[error(transparent)]
+    AuthPolicy(#[from] auth::AuthPolicyError),
+
     #[error(transparent)]
     EnvPolicy(#[from] env::EnvPolicyError),
 

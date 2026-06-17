@@ -1,3 +1,9 @@
+//! Module: workflow::rpc::request::handler::execute
+//!
+//! Responsibility: execute authorized root capability requests.
+//! Does not own: endpoint auth, replay guard classification, or storage schemas.
+//! Boundary: RPC handler delegates capability side effects and response construction here.
+
 use super::{
     RootCapability, RootContext, nonroot_cycles, nonroot_cycles::AuthorizedCyclesGrant, replay,
 };

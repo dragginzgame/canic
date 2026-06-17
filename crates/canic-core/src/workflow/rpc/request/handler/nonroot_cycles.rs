@@ -1,3 +1,9 @@
+//! Module: workflow::rpc::request::handler::nonroot_cycles
+//!
+//! Responsibility: authorize and execute replay-protected non-root cycles requests.
+//! Does not own: endpoint auth, stable replay receipts, or management-call primitives.
+//! Boundary: RPC request handler calls this for root and non-root cycles funding paths.
+
 use super::{
     MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_NS,
     REPLAY_PURGE_SCAN_LIMIT, RootContext,
@@ -45,13 +51,30 @@ const MIN_ROOT_REQUEST_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 ///
 /// NonrootCyclesCapabilityWorkflow
 ///
+/// Workflow entrypoint for replay-first non-root cycles requests.
+/// Owned by RPC workflow and called after endpoint/root metadata handling.
+///
 
 pub struct NonrootCyclesCapabilityWorkflow;
+
+///
+/// AuthorizedCyclesGrant
+///
+/// Approved cycle transfer amount after authorization and policy checks.
+/// Owned by RPC workflow and passed into execution helpers.
+///
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct AuthorizedCyclesGrant {
     approved_cycles: u128,
 }
+
+///
+/// ResolvedCyclesChild
+///
+/// Child role and parent relationship used during cycles authorization.
+/// Owned by RPC workflow and resolved from child registries.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ResolvedCyclesChild {
@@ -133,7 +156,6 @@ async fn response_replay_first_with_planner(
     Ok(response)
 }
 
-// Build the current cycles execution context with a known root-vs-non-root lane.
 fn extract_cycles_context(is_root_env: bool) -> Result<RootContext, InternalError> {
     Ok(RootContext {
         caller: IcOps::msg_caller(),
@@ -144,7 +166,7 @@ fn extract_cycles_context(is_root_env: bool) -> Result<RootContext, InternalErro
     })
 }
 
-// Run cycles authorization while preserving the existing root-capability metrics.
+/// Run cycles authorization while preserving the existing root-capability metrics.
 pub(super) fn authorize_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -152,7 +174,7 @@ pub(super) fn authorize_request_cycles(
     authorize_request_cycles_plan(ctx, req).map(|_| ())
 }
 
-// Run root cycles authorization against the authoritative subnet registry.
+/// Run root cycles authorization against the authoritative subnet registry.
 pub(super) fn authorize_root_request_cycles(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -160,7 +182,7 @@ pub(super) fn authorize_root_request_cycles(
     authorize_root_request_cycles_plan(ctx, req).map(|_| ())
 }
 
-// Resolve an approved non-root cycles grant in one authorization pass.
+/// Resolve an approved non-root cycles grant in one authorization pass.
 pub(super) fn authorize_request_cycles_plan(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -168,7 +190,7 @@ pub(super) fn authorize_request_cycles_plan(
     authorize_request_cycles_with_resolver(ctx, req, direct_child_record)
 }
 
-// Resolve an approved root cycles grant in one authorization pass.
+/// Resolve an approved root cycles grant in one authorization pass.
 pub(super) fn authorize_root_request_cycles_plan(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -176,7 +198,6 @@ pub(super) fn authorize_root_request_cycles_plan(
     authorize_request_cycles_with_resolver(ctx, req, registry_child_record)
 }
 
-// Apply cycles authorization with a caller->child lookup chosen by the caller type.
 fn authorize_request_cycles_with_resolver(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -218,7 +239,7 @@ fn authorize_request_cycles_with_resolver(
     decision
 }
 
-// Apply the existing cycles funding policy and structural child checks.
+/// Apply the existing cycles funding policy and structural child checks.
 pub(super) fn authorize_request_cycles_inner(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -291,7 +312,7 @@ pub(super) fn authorize_request_cycles_inner(
     })
 }
 
-// Execute the approved cycles transfer and return the canonical cycles response.
+/// Execute the approved cycles transfer and return the canonical cycles response.
 pub(super) async fn execute_request_cycles(
     ctx: &RootContext,
     pending: &ReplayPending,
@@ -301,7 +322,7 @@ pub(super) async fn execute_request_cycles(
     execute_authorized_request_cycles(ctx, pending, grant).await
 }
 
-// Execute root cycles funding against the authoritative subnet registry.
+/// Execute root cycles funding against the authoritative subnet registry.
 pub(super) async fn execute_root_request_cycles(
     ctx: &RootContext,
     pending: &ReplayPending,
@@ -311,7 +332,7 @@ pub(super) async fn execute_root_request_cycles(
     execute_authorized_request_cycles(ctx, pending, grant).await
 }
 
-// Execute an already-authorized cycles transfer.
+/// Execute an already-authorized cycles transfer.
 pub(super) async fn execute_authorized_request_cycles(
     ctx: &RootContext,
     pending: &ReplayPending,
@@ -350,19 +371,16 @@ pub(super) async fn execute_authorized_request_cycles(
     })
 }
 
-// Resolve one direct child record from the locally cascaded children cache.
 fn direct_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
     CanisterChildrenOps::role_parent(pid)
         .map(|(role, parent_pid)| ResolvedCyclesChild { role, parent_pid })
 }
 
-// Resolve one child record from the authoritative root subnet registry.
 fn registry_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
     SubnetRegistryOps::role_parent(pid)
         .map(|(role, parent_pid)| ResolvedCyclesChild { role, parent_pid })
 }
 
-// Map pure funding policy failures into workflow errors with current metrics.
 fn map_funding_policy_violation(
     ctx: &RootContext,
     requested_cycles: u128,
@@ -397,7 +415,6 @@ fn map_funding_policy_violation(
     }
 }
 
-// Check replay state for a cycles request using the same root replay store and payload hash.
 fn check_cycles_replay(
     ctx: &RootContext,
     req: &CyclesRequest,
@@ -587,7 +604,6 @@ fn mark_request_cycles_recovery_required(
     );
 }
 
-// Convert replay guard failures into the existing workflow replay error surface.
 fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
     match err {
         ReplayGuardError::InvalidTtl { ttl_ns, max_ttl_ns } => {
@@ -620,7 +636,6 @@ fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
     }
 }
 
-// Convert replay reservation failures into the current workflow replay errors.
 fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
     match err {
         ReplayReserveError::CapacityReached { max_entries } => {
@@ -649,7 +664,6 @@ fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
     }
 }
 
-// Convert replay decode failures into the current workflow replay errors.
 fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
     match err {
         ReplayDecodeError::DecodeFailed(message) => {
@@ -663,7 +677,6 @@ fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
     }
 }
 
-// Decode a cached replay entry back into the cycles response shape.
 fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
     match replay_ops::decode_root_cycles_replay_response(bytes) {
         Ok(response) => {
@@ -678,7 +691,6 @@ fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError>
     }
 }
 
-// Persist a successful cycles response into the shared replay store.
 fn commit_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
     replay_ops::commit_root_cycles_replay(pending, response);
     ReplayMetrics::record(
@@ -688,7 +700,6 @@ fn commit_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
     );
 }
 
-// Abort an in-flight cycles replay reservation after a failed request.
 fn abort_replay(pending: ReplayPending) {
     replay_ops::abort_root_replay(pending);
     ReplayMetrics::record(
@@ -698,7 +709,6 @@ fn abort_replay(pending: ReplayPending) {
     );
 }
 
-// Hash the canonical cycles payload using the shared replay field-hashing helpers.
 fn hash_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
     let mut hasher = super::replay::payload_hasher();
     super::replay::hash_str(&mut hasher, "RequestCycles");
