@@ -1,0 +1,232 @@
+# Blob Storage Cashier Protocol Inventory
+
+Status: **Incomplete - implementation blocked**
+
+Release line: 0.69
+
+Last updated: 2026-06-17
+
+## Purpose
+
+This inventory is the source-of-truth gate for Canic's 0.69 blob-storage
+Cashier integration.
+
+No `blob-storage-billing` feature, Cashier DTO, Cashier client wrapper, billing
+stable record, gateway-principal sync workflow, funding workflow, billing
+endpoint macro, billing Candid snapshot, or billing behavior test may merge
+until this inventory is complete and cites exact protocol sources.
+
+This inventory does not replace the 0.68 gateway protocol inventory. The 0.69
+billing line remains blocked until both inventories are complete:
+
+- `docs/contracts/BLOB_STORAGE_INVENTORY.md`
+- `docs/contracts/BLOB_STORAGE_CASHIER_INVENTORY.md`
+
+## Current Finding
+
+The Cashier protocol source has not yet been identified in this repository.
+
+Initial exact-match searches in the local tree found only Canic design notes
+for:
+
+- `account_balance_get_v1`
+- `account_top_up_v1`
+- `storage_gateway_principal_list_v1`
+
+No Candid signature, source repository URL, source commit SHA, deployed `.did`,
+or upstream implementation file has been recorded yet.
+
+## Completion Criteria
+
+This inventory is complete only when every required field below is filled from
+an upstream source, generated Candid artifact, deployed interface, or other
+maintainer-approved protocol source.
+
+Required source metadata:
+
+- Production Cashier canister ID.
+- Source repository URL or local source identifier.
+- Source commit SHA or immutable provenance identifier.
+- Per-method source file path.
+- Per-method source file commit SHA when different from the repository SHA.
+- Generated Candid source path or command used to generate the Candid.
+
+Required behavior metadata:
+
+- Method name.
+- Query/update mode.
+- Exact Candid signature.
+- Request DTO shape.
+- Response DTO shape.
+- Nested records and variants.
+- Result/error variant behavior.
+- Trap, reject, and result behavior.
+- Malformed request behavior.
+- Malformed response behavior expected from Canic wrappers.
+- Cycle-attachment requirements.
+- Balance units and integer width.
+- Empty gateway-principal list behavior.
+- Duplicate gateway-principal behavior.
+- Optional Cashier methods and why each is implemented or deferred.
+- Production-vs-local behavior differences.
+
+### Status Vocabulary
+
+Method status values are intentionally narrow:
+
+- `Missing source`: no immutable protocol source has been identified.
+- `Source identified`: source repository or local source identifier, immutable
+  provenance, and per-method source path are recorded, but Candid or behavior
+  fields remain incomplete.
+- `Snapshot captured`: source metadata and exact Candid are recorded, but
+  behavior fields or wrapper compatibility notes remain incomplete.
+- `Complete`: every required source, Candid, behavior, and compatibility field
+  is filled from cited protocol evidence.
+
+Design-note statements may describe expected ownership or implementation
+direction, but they do not satisfy source, Candid, DTO, behavior, or
+compatibility fields. Keep unknown protocol facts as `TBD` instead of inferring
+them from the 0.69 design.
+
+## Method Inventory
+
+Every method section must keep design-only facts separate from source-backed
+facts. Do not move a method out of `Missing source` until at least the source
+identifier, immutable provenance, per-method source path, and generated or
+deployed Candid source are recorded.
+
+### `account_balance_get_v1`
+
+Status: **Missing source**
+
+Owning release: 0.69
+
+Known from design only:
+
+- Reads a Cashier account balance for blob-storage readiness/status.
+- Canic wrappers must not invent balance units, integer width, or result/error
+  variants.
+
+Required fields:
+
+- Source repository or local source identifier: TBD
+- Source commit SHA: TBD
+- Source file path: TBD
+- Mode: TBD
+- Candid signature: TBD
+- Request DTO shape: TBD
+- Response DTO shape: TBD
+- Balance units: TBD
+- Integer width: TBD
+- Result/error variants: TBD
+- Trap/reject behavior: TBD
+- Malformed request behavior: TBD
+- Malformed response behavior expected from Canic wrappers: TBD
+- Production-vs-local differences: TBD
+
+### `account_top_up_v1`
+
+Status: **Missing source**
+
+Owning release: 0.69
+
+Known from design only:
+
+- Receives attached cycles from the project-as-payment-account funding path.
+- Canic funding policy must not attach cycles until exact cycle attachment and
+  success/failure behavior is inventoried.
+
+Required fields:
+
+- Source repository or local source identifier: TBD
+- Source commit SHA: TBD
+- Source file path: TBD
+- Mode: TBD
+- Candid signature: TBD
+- Request DTO shape: TBD
+- Response DTO shape: TBD
+- Cycle attachment requirements: TBD
+- Balance mutation timing: TBD
+- Result/error variants: TBD
+- Trap/reject behavior: TBD
+- Malformed request behavior: TBD
+- Funding success/failure behavior: TBD
+- Production-vs-local differences: TBD
+
+### `storage_gateway_principal_list_v1`
+
+Status: **Missing source**
+
+Owning release: 0.69
+
+Known from design only:
+
+- Provides the gateway principals that 0.69 syncs into the 0.68
+  gateway-principal store.
+- Canic must not invent empty-list, duplicate, anonymous-principal, or
+  management-canister-principal semantics.
+
+Required fields:
+
+- Source repository or local source identifier: TBD
+- Source commit SHA: TBD
+- Source file path: TBD
+- Mode: TBD
+- Candid signature: TBD
+- Request DTO shape: TBD
+- Response DTO shape: TBD
+- Empty-list behavior: TBD
+- Duplicate-principal behavior: TBD
+- Anonymous-principal behavior: TBD
+- Management-canister-principal behavior: TBD
+- Maximum principal count: TBD
+- Result/error variants: TBD
+- Trap/reject behavior: TBD
+- Malformed request behavior: TBD
+- Malformed response behavior expected from Canic wrappers: TBD
+- Production-vs-local differences: TBD
+
+## Optional Cashier Methods
+
+Status: **Incomplete**
+
+Required before implementation:
+
+- Complete list of Cashier methods discovered in the source/deployed Candid.
+- For each omitted method, a reason why 0.69 does not need it.
+- Confirmation that no omitted method is required for balance reads,
+  project-as-payment-account top-up, or gateway-principal sync.
+
+## Implementation Gate
+
+The following actions are blocked while this document remains incomplete:
+
+- Adding the `blob-storage-billing` feature.
+- Adding Cashier DTOs or Candid snapshots.
+- Adding Cashier call wrappers.
+- Adding billing config stable records.
+- Adding gateway-principal sync storage or workflow.
+- Adding funding policy or funding workflow.
+- Emitting `_immutableObjectStorageUpdateGatewayPrincipals`.
+- Emitting `_immutableObjectStorageFundFromProjectCycles`.
+- Emitting `get_blob_storage_status`.
+- Adding billing macro tests, Cashier wrapper tests, or PocketIC billing
+  behavior tests that assert protocol behavior.
+
+This gate is enforced in CI and local Make test/release-bump paths by
+`scripts/ci/check-blob-storage-cashier-inventory-gate.sh`. While the status
+remains incomplete, the guard rejects blob-storage billing feature metadata,
+source/module paths, Cashier method literals, billing status endpoint literals,
+and public Cashier/billing API/model names outside this protocol inventory and
+design documentation. When this inventory is marked `Complete`, the same guard
+verifies that all required method sections are present and individually
+complete, have no `TBD` fields, and that the optional Cashier methods section
+is also complete.
+
+The only safe next steps are:
+
+- Locate the upstream Cashier source or generated `.did`.
+- Fill the method inventory from immutable source references.
+- Add Candid snapshots copied or generated from the inventoried source.
+- Update the 0.69 design if the protocol source contradicts current design
+  assumptions.

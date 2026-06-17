@@ -1,3 +1,9 @@
+//! Module: ops::rpc::request::dispatch
+//!
+//! Responsibility: build typed root RPC requests and decode typed responses.
+//! Does not own: workflow policy, capability proof verification, or replay storage.
+//! Boundary: delegates transport to `RpcOps` after attaching request metadata.
+
 use super::{
     CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
     CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse, Request, RequestOpsError,
@@ -22,12 +28,14 @@ static ROOT_REQUEST_NONCE: AtomicU64 = AtomicU64::new(1);
 
 ///
 /// RequestOps
+///
 /// Ops-level helpers for request/response RPCs.
 ///
 
 pub struct RequestOps;
 
 impl RequestOps {
+    /// Dispatch a create-canister request to the configured root canister.
     pub async fn create_canister<A>(
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
@@ -56,6 +64,7 @@ impl RequestOps {
         .await
     }
 
+    /// Dispatch an upgrade request for a child canister through root RPC.
     pub async fn upgrade_canister(
         canister_pid: Principal,
     ) -> Result<UpgradeCanisterResponse, InternalError> {
@@ -70,6 +79,7 @@ impl RequestOps {
         .await
     }
 
+    /// Dispatch a recycle request for a child canister through root RPC.
     pub async fn recycle_canister(
         canister_pid: Principal,
     ) -> Result<RecycleCanisterResponse, InternalError> {
@@ -84,6 +94,7 @@ impl RequestOps {
         .await
     }
 
+    /// Dispatch a cycles request to the current parent canister.
     pub async fn request_cycles(cycles: u128) -> Result<CyclesResponse, InternalError> {
         let parent_pid = EnvOps::parent_pid()?;
         RpcOps::execute_response_rpc(
@@ -99,6 +110,8 @@ impl RequestOps {
 
 ///
 /// CreateCanisterRpc
+///
+/// Internal command adapter for create-canister RPCs.
 ///
 
 struct CreateCanisterRpc {
@@ -131,6 +144,8 @@ impl Rpc for CreateCanisterRpc {
 ///
 /// UpgradeCanisterRpc
 ///
+/// Internal command adapter for upgrade-canister RPCs.
+///
 
 pub struct UpgradeCanisterRpc {
     pub canister_pid: Principal,
@@ -158,6 +173,8 @@ impl Rpc for UpgradeCanisterRpc {
 ///
 /// RecycleCanisterRpc
 ///
+/// Internal command adapter for recycle-canister RPCs.
+///
 
 pub struct RecycleCanisterRpc {
     pub canister_pid: Principal,
@@ -184,6 +201,8 @@ impl Rpc for RecycleCanisterRpc {
 
 ///
 /// CyclesRpc
+///
+/// Internal command adapter for cycles-funding RPCs.
 ///
 
 pub struct CyclesRpc {
@@ -230,6 +249,10 @@ fn generate_request_id() -> [u8; 32] {
     hasher.update(canister.as_slice());
     hasher.finalize().into()
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

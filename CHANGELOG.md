@@ -12,6 +12,11 @@ present.
 
 ## Unreleased
 
+- Adds a Cashier protocol inventory scaffold and executable guard so 0.69
+  blob-storage billing remains blocked until Cashier Candid, behavior, and
+  optional-method provenance are recorded, with regression coverage for both
+  incomplete and synthetic-complete inventory states.
+
 ## [0.68.x] - 2026-06-17 - Blob Storage & Canister Signatures
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
