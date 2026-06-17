@@ -1,4 +1,5 @@
 use std::{
+    fmt::Write as _,
     fs,
     path::{Path, PathBuf},
     process::{Command, Output},
@@ -76,8 +77,9 @@ fn complete_inventory_with_toko_section(toko_section: &str) -> String {
     let mut inventory =
         "# Blob Storage Gateway Protocol Inventory\n\nStatus: **Complete**\n".to_string();
     for suffix in REQUIRED_METHODS {
-        let method = format!("_immutableObject{}{}", "Sto", format!("rage{suffix}"));
-        inventory.push_str(&format!("\n### `{method}`\n\nStatus: **Complete**\n"));
+        let method = format!("_immutableObject{}rage{suffix}", "Sto");
+        write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+            .expect("writing to String should not fail");
     }
     inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
     inventory.push_str(toko_section);
