@@ -52,6 +52,19 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     update_replay_protected(
+        "canic_prepare_delegation_proof_batch",
+        "auth.prepare_delegation_proof_batch.v1",
+        ReplayImplementationStatus::Implemented,
+        CostClass::RootCanisterSignaturePrepare,
+        Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
+        None,
+    ),
+    query_read_only("canic_get_delegation_proof_batch"),
+    update_response_idempotent(
+        "canic_install_delegation_proof_batch",
+        "auth.install_delegation_proof_batch.v1",
+    ),
+    update_replay_protected(
         "canic_prepare_role_attestation",
         "auth.prepare_role_attestation.v1",
         ReplayImplementationStatus::Implemented,
@@ -76,6 +89,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "auth.install_active_delegation_proof.v1",
         "controller maintenance endpoint replaces issuer-local active proof metadata",
     ),
+    query_read_only("canic_active_delegation_proof_status"),
     update_replay_protected(
         "canic_prepare_delegated_token",
         "auth.prepare_delegated_token.v1",

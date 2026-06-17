@@ -99,6 +99,10 @@ fn public_protocol_reexports_wasm_store_root_update_manifest() {
 #[test]
 fn active_delegation_proof_installer_surface_is_issuer_gated() {
     assert_eq!(
+        canic::protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+        canic_core::protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS
+    );
+    assert_eq!(
         canic::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
         canic_core::protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF
     );
@@ -141,16 +145,75 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
             && endpoint.contains("AuthApi::install_active_delegation_proof"),
         "active proof installer must call the auth API with the install DTOs"
     );
+    assert!(
+        endpoint_source.contains("fn canic_active_delegation_proof_status(")
+            && endpoint_source.contains("ActiveDelegationProofStatusResponse")
+            && endpoint_source.contains("AuthApi::active_delegation_proof_status"),
+        "delegated-token issuer bundle must expose active proof status"
+    );
 
     let did_path = workspace_root().join("crates/canic-wasm-store/wasm_store.did");
     let did = read_text(&did_path);
     assert!(
         !did.contains("canic_install_active_delegation_proof")
+            && !did.contains("canic_active_delegation_proof_status")
             && !did.contains("canic_prepare_delegated_token")
             && !did.contains("canic_get_delegated_token")
             && !did.contains("type InstallActiveDelegationProofRequest = record")
             && !did.contains("type DelegatedTokenPrepareRequest = record"),
         "canonical wasm_store DID must not expose delegated-token issuer provisioning"
+    );
+}
+
+#[test]
+fn root_delegation_proof_batch_surface_is_pinned() {
+    assert_eq!(
+        canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
+        canic_core::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH
+    );
+    assert_eq!(
+        canic::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
+        canic_core::protocol::CANIC_GET_DELEGATION_PROOF_BATCH
+    );
+    assert_eq!(
+        canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+        canic_core::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH
+    );
+    assert_eq!(
+        canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
+        "canic_prepare_delegation_proof_batch"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
+        "canic_get_delegation_proof_batch"
+    );
+    assert_eq!(
+        canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+        "canic_install_delegation_proof_batch"
+    );
+
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    assert!(
+        source.contains("fn canic_prepare_delegation_proof_batch(")
+            && source.contains("RootDelegationProofBatchPrepareRequest")
+            && source.contains("RootDelegationProofBatchPrepareResponse")
+            && source.contains("AuthApi::prepare_delegation_proof_batch_root"),
+        "root auth endpoint bundle must expose batch prepare"
+    );
+    assert!(
+        source.contains("fn canic_get_delegation_proof_batch(")
+            && source.contains("RootDelegationProofBatchGetRequest")
+            && source.contains("RootDelegationProofBatchGetResponse")
+            && source.contains("AuthApi::get_delegation_proof_batch_root"),
+        "root auth endpoint bundle must expose batch get"
+    );
+    assert!(
+        source.contains("fn canic_install_delegation_proof_batch(")
+            && source.contains("RootDelegationProofBatchInstallRequest")
+            && source.contains("RootDelegationProofBatchInstallResponse")
+            && source.contains("AuthApi::install_delegation_proof_batch_root"),
+        "root auth endpoint bundle must expose batch install"
     );
 }
 

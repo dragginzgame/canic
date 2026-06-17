@@ -8,11 +8,14 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            DelegatedToken, DelegatedTokenGetRequest, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationProof, DelegationProofGetRequest,
-            DelegationProofIssueRequest, DelegationProofPrepareResponse,
+            ActiveDelegationProofStatusResponse, DelegatedToken, DelegatedTokenGetRequest,
+            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationProof,
+            DelegationProofGetRequest, DelegationProofIssueRequest, DelegationProofPrepareResponse,
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
+            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
+            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
+            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
             SignedRoleAttestation,
         },
         error::Error,
@@ -26,13 +29,9 @@ use crate::{
     },
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
-use root_delegation_client::RootDelegationProofClient;
 
 // Internal auth pipeline:
 // - `session` owns delegated-session ingress and replay/session state handling.
-// - `metadata` owns root request metadata construction.
-mod metadata;
-mod root_delegation_client;
 mod session;
 
 ///
@@ -48,6 +47,9 @@ impl AuthApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const DELEGATED_TOKEN_ISSUER_DISABLED: &str = "delegated token issuer disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_issuer=true in canic.toml";
+    const ROOT_DELEGATION_PROOF_SELF_PROVISIONING_DISABLED: &str = "issuer-initiated root delegation proof provisioning is unsupported; use root hard-cut provisioning";
+    const ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE: &str =
+        "root delegation proof batch provisioning is not implemented yet";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
@@ -129,12 +131,19 @@ impl AuthApi {
         Ok(InstallActiveDelegationProofResponse { active_proof })
     }
 
-    /// Prepare a root delegation proof from root over RPC.
-    pub async fn prepare_delegation_proof(
-        request: DelegationProofIssueRequest,
+    /// Report non-secret issuer-local active proof lifecycle status for provisioners.
+    pub fn active_delegation_proof_status() -> Result<ActiveDelegationProofStatusResponse, Error> {
+        Self::require_delegated_token_issuer_enabled()?;
+        Ok(AuthOps::active_delegation_proof_status(IcOps::now_nanos()))
+    }
+
+    /// Reject the issuer-initiated root delegation proof provisioning path.
+    pub fn prepare_delegation_proof(
+        _request: DelegationProofIssueRequest,
     ) -> Result<DelegationProofPrepareResponse, Error> {
-        let request = metadata::with_delegation_request_metadata(request);
-        Self::prepare_delegation_proof_remote(request).await
+        Err(Error::forbidden(
+            Self::ROOT_DELEGATION_PROOF_SELF_PROVISIONING_DISABLED,
+        ))
     }
 
     /// Prepare a root-certified delegation proof from the local root update path.
@@ -151,6 +160,36 @@ impl AuthApi {
         EnvOps::require_root().map_err(Error::from)?;
         let caller = IcOps::msg_caller();
         AuthOps::get_delegation_proof(caller, request.cert_hash).map_err(Self::map_auth_error)
+    }
+
+    /// Prepare root delegation proof batch metadata from the local root update path.
+    pub fn prepare_delegation_proof_batch_root(
+        _request: RootDelegationProofBatchPrepareRequest,
+    ) -> Result<RootDelegationProofBatchPrepareResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Err(Error::unavailable(
+            Self::ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE,
+        ))
+    }
+
+    /// Retrieve root delegation proofs from the local direct root query path.
+    pub fn get_delegation_proof_batch_root(
+        _request: RootDelegationProofBatchGetRequest,
+    ) -> Result<RootDelegationProofBatchGetResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Err(Error::unavailable(
+            Self::ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE,
+        ))
+    }
+
+    /// Install retrieved root delegation proof batches from the local root update path.
+    pub fn install_delegation_proof_batch_root(
+        _request: RootDelegationProofBatchInstallRequest,
+    ) -> Result<RootDelegationProofBatchInstallResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Err(Error::unavailable(
+            Self::ROOT_DELEGATION_PROOF_BATCH_PROVISIONING_UNAVAILABLE,
+        ))
     }
 
     /// Prepare a root-certified role attestation from the local root update path.
@@ -198,15 +237,45 @@ impl AuthApi {
     }
 }
 
-impl AuthApi {
-    // Route a delegation proof prepare request over RPC to root.
-    async fn prepare_delegation_proof_remote(
-        request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProofPrepareResponse, Error> {
-        let root_pid = EnvOps::root_pid().map_err(Error::from)?;
-        RootDelegationProofClient::new(root_pid)
-            .prepare_delegation_proof(request)
-            .await
-            .map_err(Self::map_auth_error)
+#[cfg(test)]
+mod tests {
+    use super::AuthApi;
+    use crate::{
+        cdk::types::Principal,
+        dto::{
+            auth::{DelegatedRoleGrant, DelegationAudience, DelegationProofIssueRequest},
+            error::ErrorCode,
+        },
+        ids::CanisterRole,
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn delegation_request() -> DelegationProofIssueRequest {
+        DelegationProofIssueRequest {
+            metadata: None,
+            issuer_pid: p(2),
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![DelegatedRoleGrant {
+                target: CanisterRole::owned("user_shard".to_string()),
+                scopes: vec!["canic.issue".to_string()],
+            }],
+            cert_ttl_ns: 60_000_000_000,
+        }
+    }
+
+    #[test]
+    fn issuer_root_delegation_prepare_is_hard_cut() {
+        let err = AuthApi::prepare_delegation_proof(delegation_request())
+            .expect_err("issuer-initiated root proof prepare must be hard-cut");
+
+        assert_eq!(err.code, ErrorCode::Forbidden);
+        assert!(
+            err.message.contains("root hard-cut provisioning"),
+            "unexpected error message: {}",
+            err.message
+        );
     }
 }

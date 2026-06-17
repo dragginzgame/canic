@@ -5,8 +5,12 @@
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
 pub const CANIC_PREPARE_DELEGATION_PROOF: &str = "canic_prepare_delegation_proof";
 pub const CANIC_GET_DELEGATION_PROOF: &str = "canic_get_delegation_proof";
+pub const CANIC_PREPARE_DELEGATION_PROOF_BATCH: &str = "canic_prepare_delegation_proof_batch";
+pub const CANIC_GET_DELEGATION_PROOF_BATCH: &str = "canic_get_delegation_proof_batch";
+pub const CANIC_INSTALL_DELEGATION_PROOF_BATCH: &str = "canic_install_delegation_proof_batch";
 pub const CANIC_PREPARE_DELEGATED_TOKEN: &str = "canic_prepare_delegated_token";
 pub const CANIC_GET_DELEGATED_TOKEN: &str = "canic_get_delegated_token";
+pub const CANIC_ACTIVE_DELEGATION_PROOF_STATUS: &str = "canic_active_delegation_proof_status";
 pub const CANIC_PREPARE_ROLE_ATTESTATION: &str = "canic_prepare_role_attestation";
 pub const CANIC_GET_ROLE_ATTESTATION: &str = "canic_get_role_attestation";
 pub const CANIC_INSTALL_ACTIVE_DELEGATION_PROOF: &str = "canic_install_active_delegation_proof";

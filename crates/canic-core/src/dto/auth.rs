@@ -130,6 +130,32 @@ pub struct InstallActiveDelegationProofResponse {
 }
 
 //
+// ActiveDelegationProofStatus
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ActiveDelegationProofStatus {
+    Missing,
+    Valid,
+    RefreshNeeded,
+    Expired,
+}
+
+//
+// ActiveDelegationProofStatusResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ActiveDelegationProofStatusResponse {
+    pub status: ActiveDelegationProofStatus,
+    pub root_pid: Option<Principal>,
+    pub issuer_pid: Option<Principal>,
+    pub cert_hash: Option<[u8; 32]>,
+    pub expires_at_ns: Option<u64>,
+    pub refresh_after_ns: Option<u64>,
+}
+
+//
 // DelegatedTokenClaims
 //
 
@@ -200,6 +226,138 @@ pub struct DelegationProofPrepareResponse {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegationProofGetRequest {
     pub cert_hash: [u8; 32],
+}
+
+//
+// RootDelegationProofBatchPrepareRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchPrepareRequest {
+    #[serde(default)]
+    pub metadata: Option<AuthRequestMetadata>,
+    pub entries: Vec<RootDelegationProofBatchPrepareEntry>,
+}
+
+//
+// RootDelegationProofBatchPrepareEntry
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchPrepareEntry {
+    pub issuer_pid: Principal,
+    pub aud: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
+    pub cert_ttl_ns: u64,
+}
+
+//
+// RootDelegationProofBatchPrepareResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchPrepareResponse {
+    pub batch_id: [u8; 32],
+    pub entries: Vec<RootDelegationProofBatchEntry>,
+    pub retrieval_expires_at_ns: u64,
+}
+
+//
+// RootDelegationProofBatchEntry
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchEntry {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+    pub expires_at_ns: u64,
+    pub refresh_after_ns: u64,
+}
+
+//
+// RootDelegationProofBatchGetRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchGetRequest {
+    pub batch_id: [u8; 32],
+    pub entries: Vec<RootDelegationProofBatchProofRef>,
+}
+
+//
+// RootDelegationProofBatchProofRef
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchProofRef {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+}
+
+//
+// RootDelegationProofBatchGetResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchGetResponse {
+    pub batch_id: [u8; 32],
+    pub proofs: Vec<RootDelegationProofBatchProof>,
+}
+
+//
+// RootDelegationProofBatchProof
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchProof {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+    pub proof: DelegationProof,
+}
+
+//
+// RootDelegationProofBatchInstallRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchInstallRequest {
+    pub batch_id: [u8; 32],
+    pub proofs: Vec<RootDelegationProofBatchProof>,
+}
+
+//
+// RootDelegationProofBatchInstallResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchInstallResponse {
+    pub batch_id: [u8; 32],
+    pub outcomes: Vec<RootDelegationProofBatchInstallResult>,
+}
+
+//
+// RootDelegationProofBatchInstallResult
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationProofBatchInstallResult {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+    pub outcome: RootDelegationProofInstallOutcome,
+}
+
+//
+// RootDelegationProofInstallOutcome
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootDelegationProofInstallOutcome {
+    Installed,
+    AlreadyInstalled,
+    RejectedBySigner,
+    CallFailed,
+    ProofMismatch,
+    ExpiredOrSuperseded,
 }
 
 //

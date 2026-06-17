@@ -17,7 +17,10 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::auth::{ActiveDelegationProof, DelegationProof, IssuerProofAlgorithm, IssuerProofBinding},
+    dto::auth::{
+        ActiveDelegationProof, ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
+        DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
+    },
     ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
 use std::{cell::RefCell, collections::BTreeMap};
@@ -161,6 +164,15 @@ impl AuthOps {
         AuthStateOps::active_delegation_proof(now_ns)
     }
 
+    pub(crate) fn active_delegation_proof_status(
+        now_ns: u64,
+    ) -> ActiveDelegationProofStatusResponse {
+        active_delegation_proof_status_response(
+            now_ns,
+            AuthStateOps::active_delegation_proof_snapshot(),
+        )
+    }
+
     pub(crate) fn set_active_delegation_proof(proof: ActiveDelegationProof) {
         AuthStateOps::set_active_delegation_proof(proof);
     }
@@ -183,4 +195,114 @@ fn map_install_active_delegation_proof_error(
     err: InstallActiveDelegationProofError,
 ) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()
+}
+
+fn active_delegation_proof_status_response(
+    now_ns: u64,
+    proof: Option<ActiveDelegationProof>,
+) -> ActiveDelegationProofStatusResponse {
+    let Some(proof) = proof else {
+        return ActiveDelegationProofStatusResponse {
+            status: ActiveDelegationProofStatus::Missing,
+            root_pid: None,
+            issuer_pid: None,
+            cert_hash: None,
+            expires_at_ns: None,
+            refresh_after_ns: None,
+        };
+    };
+
+    let status = if now_ns >= proof.expires_at_ns {
+        ActiveDelegationProofStatus::Expired
+    } else if now_ns >= proof.refresh_after_ns {
+        ActiveDelegationProofStatus::RefreshNeeded
+    } else {
+        ActiveDelegationProofStatus::Valid
+    };
+
+    ActiveDelegationProofStatusResponse {
+        status,
+        root_pid: Some(proof.proof.cert.root_pid),
+        issuer_pid: Some(proof.proof.cert.issuer_pid),
+        cert_hash: Some(proof.cert_hash),
+        expires_at_ns: Some(proof.expires_at_ns),
+        refresh_after_ns: Some(proof.refresh_after_ns),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        dto::auth::{
+            DelegatedRoleGrant, DelegationAudience, DelegationCert, IcCanisterSignatureProofV1,
+            RootProof,
+        },
+        ids::CanisterRole,
+    };
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn active_proof() -> ActiveDelegationProof {
+        ActiveDelegationProof {
+            proof: DelegationProof {
+                cert: DelegationCert {
+                    root_pid: p(1),
+                    issuer_pid: p(2),
+                    issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+                    issuer_proof_binding_hash: [3; 32],
+                    issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
+                        seed_hash: [4; 32],
+                    },
+                    issued_at_ns: 10,
+                    not_before_ns: 20,
+                    expires_at_ns: 100,
+                    max_token_ttl_ns: 30,
+                    aud: DelegationAudience::CanicSubnet(p(7)),
+                    grants: vec![DelegatedRoleGrant {
+                        target: CanisterRole::owned("project_instance".to_string()),
+                        scopes: vec!["canic.issue".to_string()],
+                    }],
+                },
+                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+                    signature_cbor: vec![8; 64],
+                    public_key_der: vec![9; 32],
+                }),
+            },
+            cert_hash: [10; 32],
+            not_before_ns: 20,
+            expires_at_ns: 100,
+            refresh_after_ns: 80,
+            installed_at_ns: 20,
+            installed_by: p(11),
+        }
+    }
+
+    #[test]
+    fn active_delegation_proof_status_reports_missing() {
+        let status = active_delegation_proof_status_response(50, None);
+
+        assert_eq!(status.status, ActiveDelegationProofStatus::Missing);
+        assert_eq!(status.root_pid, None);
+        assert_eq!(status.cert_hash, None);
+    }
+
+    #[test]
+    fn active_delegation_proof_status_reports_lifecycle_states() {
+        let valid = active_delegation_proof_status_response(79, Some(active_proof()));
+        assert_eq!(valid.status, ActiveDelegationProofStatus::Valid);
+        assert_eq!(valid.root_pid, Some(p(1)));
+        assert_eq!(valid.issuer_pid, Some(p(2)));
+        assert_eq!(valid.cert_hash, Some([10; 32]));
+        assert_eq!(valid.expires_at_ns, Some(100));
+        assert_eq!(valid.refresh_after_ns, Some(80));
+
+        let refresh = active_delegation_proof_status_response(80, Some(active_proof()));
+        assert_eq!(refresh.status, ActiveDelegationProofStatus::RefreshNeeded);
+
+        let expired = active_delegation_proof_status_response(100, Some(active_proof()));
+        assert_eq!(expired.status, ActiveDelegationProofStatus::Expired);
+    }
 }

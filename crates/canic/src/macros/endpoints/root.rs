@@ -85,6 +85,31 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
             $crate::__internal::core::api::auth::AuthApi::get_delegation_proof_root(request)
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_prepare_delegation_proof_batch(
+            request: ::canic::dto::auth::RootDelegationProofBatchPrepareRequest,
+        ) -> Result<::canic::dto::auth::RootDelegationProofBatchPrepareResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::prepare_delegation_proof_batch_root(
+                request,
+            )
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_get_delegation_proof_batch(
+            request: ::canic::dto::auth::RootDelegationProofBatchGetRequest,
+        ) -> Result<::canic::dto::auth::RootDelegationProofBatchGetResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::get_delegation_proof_batch_root(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_install_delegation_proof_batch(
+            request: ::canic::dto::auth::RootDelegationProofBatchInstallRequest,
+        ) -> Result<::canic::dto::auth::RootDelegationProofBatchInstallResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::install_delegation_proof_batch_root(
+                request,
+            )
+        }
+
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_prepare_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,

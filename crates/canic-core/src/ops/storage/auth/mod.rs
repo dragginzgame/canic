@@ -132,6 +132,12 @@ impl AuthStateOps {
         Some(proof)
     }
 
+    #[must_use]
+    pub fn active_delegation_proof_snapshot() -> Option<ActiveDelegationProof> {
+        AuthState::get_active_delegation_proof()
+            .map(ActiveDelegationProofRecordMapper::record_to_dto)
+    }
+
     pub fn set_active_delegation_proof(proof: ActiveDelegationProof) {
         AuthState::set_active_delegation_proof(ActiveDelegationProofRecordMapper::dto_to_record(
             proof,
