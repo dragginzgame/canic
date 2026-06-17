@@ -1,3 +1,9 @@
+//! Module: workflow::rpc
+//!
+//! Responsibility: define RPC workflow boundaries and shared workflow errors.
+//! Does not own: endpoint DTOs, stable records, or low-level IC calls.
+//! Boundary: exposes request and capability workflow modules to endpoints.
+
 pub mod capability;
 pub mod request;
 
@@ -11,6 +17,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// RpcWorkflowError
+///
+/// Typed workflow failures raised while preparing or executing RPC flows.
 ///
 
 #[derive(Debug, ThisError)]
@@ -168,9 +176,9 @@ impl From<RpcWorkflowError> for InternalError {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

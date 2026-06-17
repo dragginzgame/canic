@@ -181,12 +181,29 @@ the condition. Prefer typed errors when callers can recover.
 Use section banners only when grouping multiple related functions in a large
 module.
 
+Section banners are navigation comments, not item documentation. Use normal
+`//` comments for them, including test section banners; do not use `///`
+rustdoc blocks for headings such as `Tests`.
+
 Example:
 
 ```rust
 // -----------------------------------------------------------------------------
 // Validation
 // -----------------------------------------------------------------------------
+```
+
+Test section example:
+
+```rust
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    // ...
+}
 ```
 
 Do not add banners to small files where the type and function order is already

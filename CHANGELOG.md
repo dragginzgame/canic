@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.4` records local Toko blob/asset compatibility evidence and tightens
+  blob-storage inventory gates so billing/Cashier work also remains blocked
+  until gateway protocol provenance and `BlobRootHash` mapping are proven.
+
 - `0.68.3` adds an executable blob-storage inventory gate so CI and local
   release/test gates block premature gateway endpoint, DTO, feature, and API
   implementation until the external protocol inventory is complete.

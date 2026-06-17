@@ -1,3 +1,20 @@
+//! Module: workflow::rpc::capability
+//!
+//! Responsibility: validate and dispatch capability-envelope RPC requests.
+//! Does not own: endpoint authentication, request execution, or replay storage schema.
+//! Boundary: maps capability DTOs into proof checks, replay metadata, and handler calls.
+
+mod envelope;
+mod hash;
+mod nonroot;
+mod proof;
+mod replay;
+mod root;
+mod verifier;
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -14,24 +31,15 @@ use crate::{
     },
 };
 
-mod envelope;
-mod hash;
-mod nonroot;
-mod proof;
-mod replay;
-mod root;
-mod verifier;
-
-#[cfg(test)]
-mod tests;
-
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
 
+///
 /// RootCapabilityProofMode
 ///
 /// Canonical classification for capability proof logging and metrics.
+///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RootCapabilityProofMode {
     Structural,
@@ -60,9 +68,11 @@ impl RootCapabilityProofMode {
     }
 }
 
+///
 /// RootCapabilityProof
 ///
 /// Validated proof view used after envelope checks and before verification.
+///
 #[derive(Clone, Copy, Debug)]
 pub(super) enum RootCapabilityProof {
     Structural,
@@ -84,6 +94,7 @@ impl RootCapabilityProof {
     }
 }
 
+/// Handle a v1 non-root cycles capability envelope.
 pub async fn response_capability_v1_nonroot(
     envelope: NonrootCyclesCapabilityEnvelopeV1,
 ) -> Result<NonrootCyclesCapabilityResponseV1, InternalError> {
@@ -92,6 +103,7 @@ pub async fn response_capability_v1_nonroot(
         .map_err(InternalError::public)
 }
 
+/// Handle a v1 root capability envelope.
 pub async fn response_capability_v1_root(
     envelope: crate::dto::capability::RootCapabilityEnvelopeV1,
 ) -> Result<crate::dto::capability::RootCapabilityResponseV1, InternalError> {
@@ -166,6 +178,7 @@ const fn root_capability_family(capability: &Request) -> &'static str {
     capability.family().label()
 }
 
+/// Compute the canonical root capability hash for proof binding.
 pub fn root_capability_hash(
     target_canister: Principal,
     capability_version: u16,
