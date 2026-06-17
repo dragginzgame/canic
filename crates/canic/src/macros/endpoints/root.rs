@@ -108,6 +108,7 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
             $crate::__internal::core::api::auth::AuthApi::install_delegation_proof_batch_root(
                 request,
             )
+            .await
         }
 
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
