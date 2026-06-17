@@ -1,3 +1,9 @@
+//! Module: ops::rpc
+//!
+//! Responsibility: perform outbound RPC calls and capability-envelope transport.
+//! Does not own: workflow authorization, endpoint DTO definitions, or replay policy.
+//! Boundary: wraps IC call ops and preserves wire-level public errors.
+
 pub mod request;
 
 use crate::{
@@ -31,6 +37,8 @@ use thiserror::Error as ThisError;
 ///
 /// RpcOpsError
 ///
+/// Ops-layer failures raised while transporting RPC requests.
+///
 
 #[derive(Debug, ThisError)]
 pub enum RpcOpsError {
@@ -54,6 +62,7 @@ impl From<RpcOpsError> for InternalError {
 
 ///
 /// Rpc
+///
 /// Typed RPC command binding a request variant to its response payload.
 ///
 
@@ -70,6 +79,8 @@ static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
 
 ///
 /// RpcOps
+///
+/// Ops facade for executing protocol-level RPC requests.
 ///
 
 pub struct RpcOps;
@@ -206,6 +217,8 @@ fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetad
 ///
 /// CapabilitySourceMetadata
 ///
+/// Replay metadata extracted from a request before capability projection.
+///
 
 #[derive(Clone, Copy)]
 struct CapabilitySourceMetadata {
@@ -238,9 +251,9 @@ fn generate_capability_nonce() -> [u8; 16] {
     out
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

@@ -279,16 +279,74 @@ Required fields:
 
 ### Toko
 
-Status: **Incomplete**
+Status: **Incomplete - local Toko source captured, blob-root mapping unresolved**
 
-Required before implementation:
+Source evidence captured:
 
-- Existing Toko live blob state shape.
-- Existing Toko pending deletion state shape.
-- Existing Toko gateway-principal state shape.
-- Mapping from Toko blob identity into Canic `BlobRootHash`.
-- Whether Toko can bulk-register state, read through existing state, move state,
-  or start with empty state.
+- Local source identifier: sibling checkout `../toko`
+- Source commit SHA: `600dcfbe91c30311c5896f3ac0399d27e2e36ab6`
+- Source checkout note: the local checkout had Cargo metadata edits, but the
+  source files cited below were not listed as dirty by `git status --short`.
+
+Existing Toko asset-canister source state:
+
+- `backend/src/design/src/entity/asset.rs` defines source-of-truth uploaded
+  binary state as `Asset` records in `schema::asset::store::AssetStore`.
+  `Asset` stores a storage-native ULID `id`, unbounded text `reference`,
+  `creator_pid`, `Manifest`, and file `Metadata`.
+- The same file defines uploaded `Chunk` records in
+  `schema::asset::store::ChunkStore`, keyed by a storage-native ULID `id` with
+  `asset_id`, `index`, unbounded `bytes`, and an optional 32-byte `sha256`.
+- `backend/src/design/src/app/asset/mod.rs` defines `Manifest` as chunk-upload
+  state: expected chunk count/size, received chunk count/bytes, completion
+  bool, and a chunk-present bitmap.
+- `backend/src/design/src/app/asset/file.rs` defines file `Metadata` with an
+  optional `hash`, but `fleets/toko/asset/src/dto/mod.rs` currently converts
+  `PostRemoteAsset` into metadata without setting a file hash.
+- `fleets/toko/asset/src/ops/chunk.rs` verifies each uploaded chunk against the
+  caller-supplied 32-byte SHA-256 before inserting it. This is per-chunk
+  integrity, not proof of a whole-blob root hash.
+
+Existing Toko project-instance mirror state:
+
+- `backend/src/design/src/entity/project/instance/asset.rs` defines
+  `RemoteAsset` as a project-instance projection with `id`, `name`, `location`,
+  `reference`, `tags`, `mime_type`, `extension`, and optional `thumbnail`.
+- `Location` stores the source asset-canister ULID and the asset-canister
+  principal. The local creation path in
+  `fleets/toko/project/instance/src/ops/asset.rs` constructs a new
+  `RemoteAsset` from the source `Asset` and stores source identity in
+  `location.asset_id`.
+- Local source comments say `Id<RemoteAsset>` is externally asserted from the
+  asset-canister ULID, but the observed creation path inserts a fresh
+  `RemoteAsset` without assigning the source asset id as the row id. The 0.68
+  Canic design must treat `location.asset_id` as the reliable observed source
+  identity unless Toko is corrected or a later audit proves otherwise.
+
+Existing Toko deletion state:
+
+- `fleets/toko/project/instance/src/ops/asset.rs` prevents deleting remote
+  assets assigned to live tokens, calls the asset canister `delete_assets`, then
+  deletes project-local `RemoteAsset` rows.
+- `fleets/toko/asset/src/ops/asset.rs` handles `delete_assets` by deleting
+  `Asset` and `Chunk` rows immediately. No pending-deletion queue,
+  gateway-confirmation state, tombstone, or gateway-principal check was found
+  in the local Toko source.
+
+Compatibility findings:
+
+- Existing Toko live asset state is chunk-upload state, not the Caffeine
+  immutable object-storage gateway protocol.
+- Existing Toko pending deletion state shape: none found.
+- Existing Toko gateway-principal state shape: none found.
+- Mapping from Toko blob identity into Canic `BlobRootHash`: unresolved. Toko
+  currently has asset ULIDs, text references, optional unset file metadata
+  hashes, and per-chunk SHA-256 values. None of those are proven to be the
+  gateway's canonical blob root hash.
+- Migration/read-through strategy: unresolved. A compatible path may require
+  empty-state adoption, explicit bulk registration, or an external source that
+  maps existing Toko asset identities to canonical gateway blob roots. This is
+  still TBD and must be decided before implementation unlocks.
 
 No 0.68 storage schema should be treated as final until these compatibility
 facts are recorded or an explicit no-state-move path is accepted.
@@ -305,15 +363,18 @@ The following actions are blocked while this document remains incomplete:
 - Adding blob storage ops or workflow modules.
 - Adding `BlobStorageApi`.
 - Adding PocketIC lifecycle tests that assert protocol behavior.
+- Adding `blob-storage-billing`, Cashier wrappers, gateway-principal sync,
+  funding, or status surfaces that depend on blob-storage implementation.
 
 This gate is enforced in CI and local Make test/release-bump paths by
 `scripts/ci/check-blob-storage-inventory-gate.sh`. While the status remains
 incomplete, the guard rejects blob-storage feature metadata, source/module
-paths, gateway method literals, and public blob-storage API/model names outside
-this protocol inventory/design documentation. When this inventory is marked
-`Complete`, the same guard verifies that all six method sections are present
-and individually complete, have no `TBD` fields, and that the Toko
-compatibility section is also complete.
+paths, gateway method literals, public blob-storage API/model names, and
+premature blob-storage billing/Cashier implementation surfaces outside this
+protocol inventory/design documentation. When this inventory is marked
+`Complete`, the same guard verifies that all six method sections are present and
+individually complete, have no `TBD` fields, and that the Toko compatibility
+section is also complete.
 
 The only safe next steps are:
 

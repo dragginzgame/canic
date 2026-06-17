@@ -145,6 +145,14 @@ check_forbidden \
         --glob "*.rs" \
         --glob "*.did"
 
+check_forbidden \
+    "blob-storage billing/Cashier implementation surface before inventory completion" \
+    rg -n "blob-storage-billing|blob_storage_billing|cashier|Cashier|account_balance_get_v1|account_top_up_v1|storage_gateway_principal_list_v1|get_blob_storage_status" \
+        crates canisters fleets \
+        --glob "*.rs" \
+        --glob "*.did" \
+        --glob "*.toml"
+
 if (( failed != 0 )); then
     echo "complete $inventory before adding blob-storage implementation files" >&2
     exit 1
