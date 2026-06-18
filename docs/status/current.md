@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-13
+Last updated: 2026-06-18
 
 ## Purpose
 
@@ -8,6 +8,16 @@ This file is the compact handoff for new agent sessions. Read it first, then
 inspect only the files needed for the current task.
 
 ## Current Line
+
+- `0.68.24` is prepared as the root proof provisioning guard-hardening slice.
+  It adds CI layer guards for DTO leakage in domain/model/storage, auth-ops
+  public-error DTO construction, and root issuer policy upsert handling
+  drifting back into the API layer. The 0.68 MVP is now at:
+  root issuer policy upsert -> root batch prepare -> direct root query get ->
+  root batch install -> issuer-local active proof status -> issuer-local
+  delegated-token prepare/get.
+
+  *** WAITING FDOR DEV FEEDBACK ***
 
 - `0.66.8` is pushed as the current post-0.65 feedback baseline. Pause broad
   cleanup until real Canic usage reports concrete regressions or patch-worthy

@@ -10,7 +10,6 @@ pub mod ledger;
 pub mod mgmt;
 pub mod network;
 pub mod provision;
-pub mod xrc;
 
 use crate::{
     InternalError,

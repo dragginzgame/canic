@@ -1,3 +1,9 @@
+//! Module: workflow::ic::icp_refill::manual
+//!
+//! Responsibility: validate and execute manual ICP refill requests.
+//! Does not own: ledger execution, replay storage schema, or endpoint authorization.
+//! Boundary: coordinates manual request preflight, replay reservation, and execution.
+
 use crate::{
     InternalError,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillMode, IcpRefillRequest, IcpRefillResponse},

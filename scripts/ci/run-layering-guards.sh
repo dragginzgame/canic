@@ -16,8 +16,23 @@ if rg "ops::replay|ReplayReceipt|ReplayPayloadHasher|ReplayReceiptDecision|Repla
     exit 1
 fi
 
+if rg "RootDelegatedRoleGrantPolicy|RootDelegationAudiencePolicy|\bRootIssuerPolicy\b|AuthStateOps::upsert_root_issuer_policy|fn root_issuer_policy_|fn validate_root_issuer_policy_upsert_request" crates/canic-core/src/api --glob '*.rs' --glob '!**/tests.rs'; then
+    echo "api must delegate root issuer policy upsert handling to auth ops" >&2
+    exit 1
+fi
+
 if rg "struct .*Policy|enum .*Policy|impl .*Policy" crates/canic-core/src/workflow --glob '*.rs' --glob '!**/tests.rs'; then
     echo "workflow must apply policy, not define policy types" >&2
+    exit 1
+fi
+
+if rg "crate::dto::|use crate::dto|\bdto::" crates/canic-core/src/domain crates/canic-core/src/storage crates/canic-core/src/model --glob '*.rs'; then
+    echo "domain, storage, and model layers must not depend on DTOs" >&2
+    exit 1
+fi
+
+if rg "dto::error::Error|crate::dto::error|ErrorCode|InternalError::public\(" crates/canic-core/src/ops/auth --glob '*.rs' --glob '!**/tests.rs'; then
+    echo "auth ops must use internal error constructors, not public error DTOs" >&2
     exit 1
 fi
 

@@ -176,6 +176,12 @@ Ordering rule for documented items with attributes:
 Public APIs with reachable panic paths must include a `# Panics` section naming
 the condition. Prefer typed errors when callers can recover.
 
+## 4.1 Lint Suppressions
+
+Prefer `#[expect(...)]` over `#[allow(...)]` for lint suppressions so stale
+suppressions surface automatically. Use `#[allow(...)]` only for confirmed
+false positives where the lint may legitimately stop firing.
+
 ## 5. Section Banners
 
 Use section banners only when grouping multiple related functions in a large

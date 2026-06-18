@@ -21,9 +21,6 @@ with this file, the code is wrong.
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog
   policy. Do not duplicate its rules here.
-- Use root `CHANGELOG.md` as the concise release ledger. Detailed patch
-  breakdowns belong in `docs/changelog/<major>.<minor>.md`, and release
-  preparation must keep both views aligned.
 
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-macros`.
@@ -63,6 +60,9 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 - Follow `docs/governance/code-hygiene/README.md`; it is the authoritative
   style policy for imports, module headers, type documentation, comments,
   visibility, and hygiene checks. Do not duplicate its rules here.
+- Prefer `#[expect(...)]` over `#[allow(...)]` for lint suppressions so stale
+  suppressions surface automatically. Use `#[allow(...)]` only for confirmed
+  false positives where the lint may legitimately stop firing.
 - Rust edition is 2024.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
 - Do not use `#[path = "..."]` for module layout. Rename files/directories so

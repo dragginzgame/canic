@@ -31,15 +31,6 @@ pub static CYCLES_MINTING_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
 });
 
 ///
-/// EXCHANGE_RATE_CANISTER
-///
-
-pub static EXCHANGE_RATE_CANISTER: LazyLock<Principal> = LazyLock::new(|| {
-    Principal::from_text("uf6dk-hyaaa-aaaaq-qaaaq-cai")
-        .expect("exchange rate canister principal literal must be valid")
-});
-
-///
 /// CKUSDC_LEDGER_CANISTER
 ///
 

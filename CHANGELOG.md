@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.24` hardens the layer-boundary guard so CI catches the root
+  provisioning layering drift fixed in `0.68.23`.
+
 - `0.68.23` removes obsolete root issuer test-material provisioning hooks and
   fixes root provisioning layer-boundary drift found by the audit.
 

@@ -9,6 +9,8 @@ use crate::{cdk::types::Principal, storage::stable::sharding::lifecycle::Shardin
 ///
 /// ShardingLifecycleOps
 ///
+/// Storage ops facade for the sharding active-set lifecycle.
+///
 
 pub struct ShardingLifecycleOps;
 
@@ -20,11 +22,5 @@ impl ShardingLifecycleOps {
 
     pub fn set_active(pid: Principal) {
         ShardingLifecycle::set_active(pid);
-    }
-
-    #[cfg(test)]
-    #[expect(dead_code)]
-    pub(crate) fn clear_for_test() {
-        ShardingLifecycle::clear();
     }
 }

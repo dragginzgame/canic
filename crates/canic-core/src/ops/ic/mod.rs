@@ -33,7 +33,6 @@ pub mod ledger;
 pub mod mgmt;
 pub mod network;
 pub mod nns;
-pub mod xrc;
 
 use crate::{
     InternalError,
@@ -63,9 +62,6 @@ pub enum IcOpsError {
 
     #[error(transparent)]
     LedgerOps(#[from] ledger::LedgerOpsError),
-
-    #[error(transparent)]
-    XrcOps(#[from] xrc::XrcOpsError),
 }
 
 impl From<IcOpsError> for InternalError {
