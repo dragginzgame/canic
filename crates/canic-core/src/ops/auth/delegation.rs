@@ -1,3 +1,21 @@
+//! Module: ops::auth::delegation
+//!
+//! Responsibility: manage issuer-local active delegation proof state and root
+//! delegation proof batch metadata.
+//! Does not own: endpoint authorization, IC call orchestration, or stable
+//! auth record layout.
+//! Boundary: API/workflow layers call this after endpoint guards have already
+//! accepted the caller.
+//!
+//! Root proof provisioning shape:
+//! - prepare runs in a root update and commits canister-signature leaves;
+//! - get runs only as a direct root query so root has `data_certificate()`;
+//! - install validates retrieved proofs against pending metadata before the
+//!   runtime workflow broadcasts issuer-local installs.
+//!
+//! MVP invariant: pending batch metadata is bounded and pruned, while
+//! signature-map leaves are retained.
+
 use super::{
     AuthOps, PreparedRootDelegationProof,
     delegated::{

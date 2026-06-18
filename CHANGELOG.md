@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.21` documents the implemented root proof provisioning MVP with a
+  versionless operator runbook, source-map handoff notes, and issuer-canister
+  terminology alignment for developer validation.
+
 - `0.68.20` bounds root proof batch pending metadata with MVP quotas, prunes
   expired provisioning state opportunistically, and documents the retained
   signature-map leaf behavior.

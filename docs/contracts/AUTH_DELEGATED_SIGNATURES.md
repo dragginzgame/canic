@@ -217,7 +217,7 @@ pending batches, and 16 pending root delegation proofs per issuer. Expired
 pending metadata is pruned opportunistically during prepare and install.
 Uninstalled pending entries are removed after their retrieval window expires;
 installed entries remain available for idempotent reinstall until certificate
-expiry. Signature-map leaf pruning is not part of the 0.68 MVP.
+expiry. Signature-map leaf pruning is not part of the current MVP.
 
 `canic_get_delegation_proof_batch` is not separately replay-protected. It is a
 direct root query over existing pending batch metadata. The requested

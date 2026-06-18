@@ -293,7 +293,7 @@ Root batch provisioning is bounded in the MVP:
 Expired pending batch metadata is pruned opportunistically during prepare and
 install. Uninstalled entries are removed after their retrieval window expires;
 installed entries remain available for idempotent reinstall until certificate
-expiry. The 0.68 MVP does not prune canister-signature map leaves.
+expiry. The current MVP does not prune canister-signature map leaves.
 
 `canic_get_delegation_proof_batch` is a direct root query over existing pending
 batch metadata and is not separately replay-protected. The requested
@@ -302,8 +302,8 @@ batch metadata and is not separately replay-protected. The requested
 
 The retired single-proof `canic_prepare_delegation_proof` and
 `canic_get_delegation_proof` root endpoints are removed from the active
-protocol. Signers must not retrieve root proof material through composite-query
-wrappers.
+protocol. Issuer canisters must not retrieve root proof material through
+composite-query wrappers.
 
 The pending retrieval window is one minute, matching the upstream
 `SignatureMap` retention period used by the root canister-signature map.
