@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::policy
+//!
+//! Responsibility: validate provisioning registry policy before installation.
+//! Does not own: topology policy definitions, registry mutation, or canister creation.
+//! Boundary: gathers targeted observations and delegates decisions to domain policy.
+
 use crate::{
     InternalError,
     config::schema::CanisterKind,

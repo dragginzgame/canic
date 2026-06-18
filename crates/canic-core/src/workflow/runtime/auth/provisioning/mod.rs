@@ -3,7 +3,7 @@
 //! Responsibility: orchestrate root-triggered delegated-auth proof provisioning.
 //! Does not own: endpoint authorization, proof storage, or proof verification.
 //! Boundary: root auth API calls this to validate pending proof batches and
-//! broadcast signer-local install requests.
+//! broadcast issuer-local install requests.
 
 use crate::{
     InternalError,
@@ -35,19 +35,19 @@ impl RuntimeAuthWorkflow {
     ) -> Result<RootDelegationProofBatchInstallResponse, InternalError> {
         EnvOps::require_root()?;
         let now_ns = IcOps::now_nanos();
-        install_delegation_proof_batch_with_signer_install(
+        install_delegation_proof_batch_with_issuer_install(
             request,
             now_ns,
-            install_delegation_proof_on_signer,
+            install_delegation_proof_on_issuer,
         )
         .await
     }
 }
 
-async fn install_delegation_proof_batch_with_signer_install<F, Fut>(
+async fn install_delegation_proof_batch_with_issuer_install<F, Fut>(
     request: RootDelegationProofBatchInstallRequest,
     now_ns: u64,
-    mut install_signer: F,
+    mut install_issuer: F,
 ) -> Result<RootDelegationProofBatchInstallResponse, InternalError>
 where
     F: FnMut(Principal, InstallActiveDelegationProofRequest) -> Fut,
@@ -69,7 +69,7 @@ where
             now_ns,
         ) {
             Ok(()) => {
-                let outcome = install_signer(
+                let outcome = install_issuer(
                     issuer_pid,
                     InstallActiveDelegationProofRequest { proof: proof.proof },
                 )
@@ -98,7 +98,7 @@ where
     })
 }
 
-async fn install_delegation_proof_on_signer(
+async fn install_delegation_proof_on_issuer(
     issuer_pid: Principal,
     request: InstallActiveDelegationProofRequest,
 ) -> RootDelegationProofInstallOutcome {
@@ -111,10 +111,10 @@ async fn install_delegation_proof_on_signer(
     let Ok(call) = builder.execute().await else {
         return RootDelegationProofInstallOutcome::CallFailed;
     };
-    signer_install_outcome(call)
+    issuer_install_outcome(call)
 }
 
-fn signer_install_outcome(call: CallResult) -> RootDelegationProofInstallOutcome {
+fn issuer_install_outcome(call: CallResult) -> RootDelegationProofInstallOutcome {
     let result: Result<InstallActiveDelegationProofResponse, Error> = match call.candid() {
         Ok(result) => result,
         Err(_) => return RootDelegationProofInstallOutcome::CallFailed,
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn install_batch_rejects_empty_request() {
-        let err = block_on(install_delegation_proof_batch_with_signer_install(
+        let err = block_on(install_delegation_proof_batch_with_issuer_install(
             RootDelegationProofBatchInstallRequest {
                 batch_id: [1; 32],
                 proofs: vec![],
@@ -191,8 +191,8 @@ mod tests {
     }
 
     #[test]
-    fn install_batch_does_not_call_signer_when_local_validation_fails() {
-        let response = block_on(install_delegation_proof_batch_with_signer_install(
+    fn install_batch_does_not_call_issuer_when_local_validation_fails() {
+        let response = block_on(install_delegation_proof_batch_with_issuer_install(
             RootDelegationProofBatchInstallRequest {
                 batch_id: [2; 32],
                 proofs: vec![proof()],
@@ -200,7 +200,7 @@ mod tests {
             20,
             |_issuer_pid, _request| async { panic!("invalid local proof must not be broadcast") },
         ))
-        .expect("invalid proof should be returned as a per-signer outcome");
+        .expect("invalid proof should be returned as a per-issuer outcome");
 
         assert_eq!(response.batch_id, [2; 32]);
         assert_eq!(response.outcomes.len(), 1);

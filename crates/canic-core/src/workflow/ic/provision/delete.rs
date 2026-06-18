@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::delete
+//!
+//! Responsibility: uninstall and delete provisioned canisters.
+//! Does not own: endpoint authorization, subnet registry schema, or management call internals.
+//! Boundary: validates root context, delegates management calls, and updates registry state.
+
 use crate::{
     InternalError,
     ops::{

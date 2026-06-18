@@ -1,4 +1,8 @@
-//! Exchange Rate Canister (XRC) helpers.
+//! Module: workflow::ic::xrc
+//!
+//! Responsibility: expose Exchange Rate Canister workflow helpers.
+//! Does not own: XRC call execution, endpoint authorization, or DTO schemas.
+//! Boundary: delegates XRC calls to IC ops with workflow-level defaults.
 
 use crate::{
     InternalError,
@@ -8,6 +12,8 @@ use crate::{
 
 ///
 /// XrcWorkflow
+///
+/// Workflow facade for Exchange Rate Canister operations.
 ///
 
 pub struct XrcWorkflow;

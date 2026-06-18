@@ -124,16 +124,16 @@ fn root_batch_install_reports_partial_failure_and_retry() {
         .expect("user_hub must exist in sharding profile");
     let subject = Principal::from_slice(&[58; 29]);
     let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
-    let missing_signer_pid = Principal::from_slice(&[159; 29]);
+    let missing_issuer_pid = Principal::from_slice(&[159; 29]);
 
     upsert_delegation_issuer(&setup, shard_pid);
-    upsert_delegation_issuer(&setup, missing_signer_pid);
+    upsert_delegation_issuer(&setup, missing_issuer_pid);
 
     let request = RootDelegationProofBatchPrepareRequest {
         metadata: Some(batch_metadata(58, shard_pid)),
         entries: vec![
             batch_prepare_entry(shard_pid),
-            batch_prepare_entry(missing_signer_pid),
+            batch_prepare_entry(missing_issuer_pid),
         ],
     };
     let prepared = prepare_root_delegation_proof_batch(&setup, request);
@@ -151,7 +151,7 @@ fn root_batch_install_reports_partial_failure_and_retry() {
     );
     assert_install_outcome(
         &installed,
-        missing_signer_pid,
+        missing_issuer_pid,
         RootDelegationProofInstallOutcome::CallFailed,
     );
 
@@ -163,7 +163,7 @@ fn root_batch_install_reports_partial_failure_and_retry() {
     );
     assert_install_outcome(
         &repeated,
-        missing_signer_pid,
+        missing_issuer_pid,
         RootDelegationProofInstallOutcome::CallFailed,
     );
 }

@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::metrics
+//!
+//! Responsibility: record provisioning and canister operation metrics.
+//! Does not own: metric schemas, provisioning decisions, or canister lifecycle effects.
+//! Boundary: maps workflow outcomes and errors into runtime metric recorders.
+
 use crate::{
     InternalError,
     ops::runtime::metrics::{

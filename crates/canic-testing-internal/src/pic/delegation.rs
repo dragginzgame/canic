@@ -18,7 +18,7 @@ pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal
     created.expect("create_account application failed")
 }
 
-// Issue one delegated token from the signer's already-installed active proof.
+// Issue one delegated token from the issuer's already-installed active proof.
 #[must_use]
 pub fn issue_delegated_token_from_active_proof(
     pic: &Pic,
