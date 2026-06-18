@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::platform_call
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the platform_call family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -170,9 +176,9 @@ impl PlatformCallMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

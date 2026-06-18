@@ -439,9 +439,9 @@ fn record_access_failure(ctx: &AccessContext, failure: AccessFailure) -> AccessE
     failure.error
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

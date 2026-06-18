@@ -1,7 +1,15 @@
+//! Module: ops::storage::pool::mapper
+//!
+//! Responsibility: convert pool storage records into pool response views.
+//! Does not own: pool mutation, scheduling workflow, or DTO definitions.
+//! Boundary: storage ops conversion layer for stable pool records.
+
 use crate::{
     dto::pool::{CanisterPoolEntry, CanisterPoolResponse, CanisterPoolStatus},
-    ops::prelude::*,
-    ops::storage::pool::{PoolRecord, PoolStatus, PoolStoreRecord},
+    ops::{
+        prelude::*,
+        storage::pool::{PoolRecord, PoolStatus, PoolStoreRecord},
+    },
 };
 
 ///

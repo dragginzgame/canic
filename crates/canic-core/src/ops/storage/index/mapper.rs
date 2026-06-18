@@ -1,3 +1,9 @@
+//! Module: ops::storage::index::mapper
+//!
+//! Responsibility: convert app/subnet index records to boundary views and inputs.
+//! Does not own: stable index mutation, workflow orchestration, or DTO definitions.
+//! Boundary: storage ops conversion layer for topology index records.
+
 use crate::{
     cdk::types::Principal,
     dto::{
@@ -8,7 +14,9 @@ use crate::{
     storage::stable::index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
 };
 
-// --- Helpers ---------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 // Map stored index tuples into the shared index input entry shape.
 fn record_entries_to_input(entries: Vec<(CanisterRole, Principal)>) -> Vec<IndexEntryInput> {

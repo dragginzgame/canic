@@ -1,3 +1,9 @@
+//! Module: ops::storage::placement::scaling
+//!
+//! Responsibility: provide deterministic access to scaling worker registry records.
+//! Does not own: scaling policy, worker orchestration, or endpoint DTOs.
+//! Boundary: storage ops facade over stable scaling registry records.
+
 use crate::{
     dto::placement::scaling::{ScalingRegistryEntry, ScalingRegistryResponse},
     ops::{placement::scaling::mapper::WorkerEntryRecordMapper, prelude::*},

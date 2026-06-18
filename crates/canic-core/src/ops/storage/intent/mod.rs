@@ -1,4 +1,8 @@
-//! Mechanical intent store operations (no business policy).
+//! Module: ops::storage::intent
+//!
+//! Responsibility: provide mechanical intent store reservation and cleanup operations.
+//! Does not own: business policy, workflow orchestration, or endpoint DTOs.
+//! Boundary: storage ops facade over stable intent records.
 
 use crate::{
     InternalError,
@@ -11,9 +15,9 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
-/// -----------------------------------------------------------------------------
-/// Errors
-/// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Errors
+// -----------------------------------------------------------------------------
 
 #[derive(Debug, ThisError)]
 pub enum IntentStoreOpsError {
@@ -72,16 +76,16 @@ impl From<IntentStoreOpsError> for InternalError {
     }
 }
 
-/// -----------------------------------------------------------------------------
-/// Ops
-/// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Ops
+// -----------------------------------------------------------------------------
 
 pub struct IntentStoreOps;
 
 impl IntentStoreOps {
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Allocation
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     pub fn allocate_intent_id() -> Result<IntentId, InternalError> {
         let mut meta = ensure_schema()?;
@@ -96,9 +100,9 @@ impl IntentStoreOps {
         Ok(id)
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Commands
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     pub fn try_reserve(
         intent_id: IntentId,
@@ -259,9 +263,9 @@ impl IntentStoreOps {
         Ok(updated)
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Read-only views (TTL authoritative)
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {
         let committed_qty = IntentStore::get_totals(resource_key).map_or(0, |t| t.committed_qty);
@@ -327,9 +331,9 @@ impl IntentStoreOps {
         Ok(ensure_schema()?.pending_total)
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Cleanup / repair helpers
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     pub fn abort_intent_if_pending(intent_id: IntentId) -> Result<bool, InternalError> {
         let Some(record) = IntentStore::get_record(intent_id) else {
@@ -367,9 +371,9 @@ impl IntentStoreOps {
     }
 }
 
-/// -----------------------------------------------------------------------------
-/// Internal helpers (mechanical)
-/// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Internal helpers
+// -----------------------------------------------------------------------------
 
 fn ensure_schema() -> Result<IntentStoreMetaRecord, IntentStoreOpsError> {
     let meta = IntentStore::meta();

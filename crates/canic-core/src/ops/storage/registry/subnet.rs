@@ -1,3 +1,9 @@
+//! Module: ops::storage::registry::subnet
+//!
+//! Responsibility: provide deterministic access to subnet canister registry records.
+//! Does not own: stable registry schema, topology workflow, or endpoint DTOs.
+//! Boundary: storage ops facade used by topology workflows and queries.
+
 use crate::{
     InternalError,
     dto::topology::SubnetRegistryResponse,
@@ -97,9 +103,9 @@ impl SubnetRegistryRecord {
 pub struct SubnetRegistryOps;
 
 impl SubnetRegistryOps {
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Mutation
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     pub fn register_unchecked(
         pid: Principal,
@@ -250,9 +256,9 @@ impl SubnetRegistryOps {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

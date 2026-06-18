@@ -1,3 +1,9 @@
+//! Module: ops::storage::auth::mapper
+//!
+//! Responsibility: convert auth DTOs and policies to stable auth records.
+//! Does not own: auth verification, storage mutation, or endpoint authorization.
+//! Boundary: storage ops conversion layer for persisted auth material.
+
 use crate::{
     domain::policy::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,

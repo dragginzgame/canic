@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::access
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the access family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use crate::ids::AccessMetricKind;
 use std::{cell::RefCell, collections::HashMap};
 
@@ -65,9 +71,9 @@ impl AccessMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

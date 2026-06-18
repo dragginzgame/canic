@@ -1,3 +1,9 @@
+//! Module: ops::storage::registry::mapper
+//!
+//! Responsibility: convert registry records into public topology response shapes.
+//! Does not own: stable registry mutation, workflow orchestration, or DTO definitions.
+//! Boundary: storage ops conversion layer for topology registry records.
+
 use crate::{
     cdk::types::Principal,
     dto::canister::CanisterInfo,

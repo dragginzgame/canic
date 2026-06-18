@@ -11,9 +11,9 @@ use crate::{log, log::Topic};
 
 const SYNC_CALL_WARN_THRESHOLD: usize = 10;
 
-///
-/// Helpers
-///
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 fn warn_if_large(label: &str, count: usize) {
     if count > SYNC_CALL_WARN_THRESHOLD {

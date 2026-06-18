@@ -1,3 +1,9 @@
+//! Module: ops::storage::children::mapper
+//!
+//! Responsibility: convert child cache records into canister info views.
+//! Does not own: child cache mutation, topology workflow, or DTO definitions.
+//! Boundary: storage ops conversion layer for child cache records.
+
 use crate::{
     cdk::types::Principal, dto::canister::CanisterInfo, storage::canister::CanisterRecord,
 };

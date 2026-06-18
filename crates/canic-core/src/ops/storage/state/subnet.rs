@@ -1,3 +1,9 @@
+//! Module: ops::storage::state::subnet
+//!
+//! Responsibility: import and snapshot deterministic subnet-state records.
+//! Does not own: endpoint authorization, workflow orchestration, or DTO schemas.
+//! Boundary: storage ops facade over the stable subnet-state record.
+
 use crate::{
     dto::state::{SubnetStateInput, SubnetStateResponse},
     ops::storage::state::mapper::SubnetStateMapper,

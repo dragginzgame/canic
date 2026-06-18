@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::auth::labels
+//!
+//! Responsibility: centralize stable auth metric endpoint and predicate labels.
+//! Does not own: auth metric counters, auth policy, or endpoint DTOs.
+//! Boundary: private label vocabulary shared by auth metric recorders.
+
 const AUTH_SESSION_ENDPOINT: &str = "auth_session";
 const AUTH_ATTESTATION_VERIFIER_ENDPOINT: &str = "auth_attestation_verifier";
 

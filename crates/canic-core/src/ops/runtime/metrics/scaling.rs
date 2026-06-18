@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::scaling
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the scaling family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use crate::{
     InternalError, InternalErrorClass, InternalErrorOrigin,
     domain::policy::placement::scaling::ScalingPlanReason,
@@ -182,9 +188,9 @@ impl ScalingMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

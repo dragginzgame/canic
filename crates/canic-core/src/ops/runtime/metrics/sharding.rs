@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::sharding
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the sharding family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use crate::{
     InternalError, InternalErrorClass, InternalErrorOrigin,
     domain::policy::placement::sharding::CreateBlockedReason,
@@ -192,9 +198,9 @@ impl ShardingMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

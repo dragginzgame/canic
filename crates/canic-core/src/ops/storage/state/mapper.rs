@@ -1,3 +1,9 @@
+//! Module: ops::storage::state::mapper
+//!
+//! Responsibility: convert app/subnet state records to boundary inputs and views.
+//! Does not own: stable state mutation, workflow orchestration, or DTO definitions.
+//! Boundary: storage ops conversion layer for state records.
+
 use crate::{
     dto::state::{
         AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse, SubnetAuthStateInput,
@@ -10,7 +16,9 @@ use crate::{
     },
 };
 
-// --- Helpers ---------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 // Map stored app mode values into the shared DTO enum.
 const fn app_mode_to_dto(mode: StorageAppMode) -> AppModeDto {

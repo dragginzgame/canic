@@ -1,4 +1,8 @@
-//! Ops helpers for app and subnet indexes plus shared validation.
+//! Module: ops::storage::index
+//!
+//! Responsibility: validate and map app/subnet index storage records.
+//! Does not own: stable index schemas, workflow orchestration, or DTO policy.
+//! Boundary: storage ops between workflow snapshots and stable index records.
 
 pub mod app;
 pub mod mapper;

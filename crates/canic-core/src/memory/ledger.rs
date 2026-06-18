@@ -120,9 +120,9 @@ fn genesis_ledger() -> AllocationLedger {
         .expect("empty ic-memory genesis ledger is structurally valid")
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

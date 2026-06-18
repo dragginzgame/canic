@@ -1,3 +1,9 @@
+//! Module: ops::storage::placement::directory
+//!
+//! Responsibility: provide deterministic directory registry claim and binding operations.
+//! Does not own: placement policy, provisioning workflow, or endpoint DTOs.
+//! Boundary: storage ops facade over stable directory registry records.
+
 use crate::{
     InternalError,
     dto::placement::directory::{

@@ -1,3 +1,12 @@
+//! Module: config::schema
+//!
+//! Responsibility: define and validate the authoritative configuration schema.
+//! Does not own: runtime config storage, workflow orchestration, or endpoint DTOs.
+//! Boundary: configuration input deserializes here before downstream code trusts it.
+//!
+//! All configuration must deserialize into these types and pass validation.
+//! Invariants enforced here are assumed everywhere else in the system.
+
 mod log;
 mod role;
 mod subnet;
@@ -14,29 +23,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
-
-///
-/// Configuration schema and validation.
-///
-/// WHY THIS MODULE EXISTS
-/// -----------------------
-/// This module defines the **authoritative configuration contract** for the
-/// entire canister network.
-///
-/// All configuration MUST:
-///   1. Deserialize into these types
-///   2. Pass `Validate::validate()`
-///
-/// Invariants enforced here are assumed everywhere else in the system and
-/// MUST NOT be revalidated at runtime.
-///
-/// This module is intentionally strict:
-/// - `deny_unknown_fields` prevents silent misconfiguration
-/// - Validation fails fast with human-readable errors
-/// - Defaults are explicit and conservative
-///
-/// If validation passes, downstream code is allowed to trust the config.
-///
 
 ///
 /// ConfigSchemaError

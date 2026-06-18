@@ -9,9 +9,9 @@ use crate::{
     ops::{ic::network::NetworkOps, runtime::env::EnvOps},
 };
 
-///
-/// Env Checks
-///
+// -----------------------------------------------------------------------------
+// Env Checks
+// -----------------------------------------------------------------------------
 
 pub fn is_prime_root() -> Result<(), AccessError> {
     if EnvOps::is_prime_root() {
@@ -45,9 +45,9 @@ pub fn build_network_local() -> Result<(), AccessError> {
     check_build_network(BuildNetwork::Local)
 }
 
-///
-/// Helpers
-///
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 pub fn check_build_network(expected: BuildNetwork) -> Result<(), AccessError> {
     let actual = NetworkOps::build_network();
@@ -64,9 +64,9 @@ pub fn check_build_network(expected: BuildNetwork) -> Result<(), AccessError> {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

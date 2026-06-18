@@ -1,7 +1,28 @@
+//! Module: ops::runtime::metrics::auth
+//!
+//! Responsibility: record and snapshot low-cardinality runtime auth metrics.
+//! Does not own: auth policy, session state, or endpoint DTOs.
+//! Boundary: ops-layer counters consumed by metrics projection and auth recorders.
+
 mod attestation;
 mod labels;
 mod sessions;
 
+use crate::ops::runtime::metrics::auth::labels::{
+    attestation_epoch_rejected_predicate, attestation_verify_failed_predicate,
+    auth_attestation_verifier_endpoint, auth_session_endpoint,
+    session_bootstrap_rejected_capacity_predicate, session_bootstrap_rejected_disabled_predicate,
+    session_bootstrap_rejected_replay_conflict_predicate,
+    session_bootstrap_rejected_replay_reused_predicate,
+    session_bootstrap_rejected_subject_mismatch_predicate,
+    session_bootstrap_rejected_subject_rejected_predicate,
+    session_bootstrap_rejected_token_invalid_predicate,
+    session_bootstrap_rejected_ttl_invalid_predicate,
+    session_bootstrap_rejected_wallet_caller_rejected_predicate,
+    session_bootstrap_replay_idempotent_predicate, session_cleared_predicate,
+    session_created_predicate, session_fallback_invalid_subject_predicate,
+    session_fallback_raw_caller_predicate, session_pruned_predicate, session_replaced_predicate,
+};
 use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
@@ -16,22 +37,6 @@ pub use sessions::{
     record_session_bootstrap_replay_idempotent, record_session_cleared, record_session_created,
     record_session_fallback_invalid_subject, record_session_fallback_raw_caller,
     record_session_pruned, record_session_replaced,
-};
-
-use labels::{
-    attestation_epoch_rejected_predicate, attestation_verify_failed_predicate,
-    auth_attestation_verifier_endpoint, auth_session_endpoint,
-    session_bootstrap_rejected_capacity_predicate, session_bootstrap_rejected_disabled_predicate,
-    session_bootstrap_rejected_replay_conflict_predicate,
-    session_bootstrap_rejected_replay_reused_predicate,
-    session_bootstrap_rejected_subject_mismatch_predicate,
-    session_bootstrap_rejected_subject_rejected_predicate,
-    session_bootstrap_rejected_token_invalid_predicate,
-    session_bootstrap_rejected_ttl_invalid_predicate,
-    session_bootstrap_rejected_wallet_caller_rejected_predicate,
-    session_bootstrap_replay_idempotent_predicate, session_cleared_predicate,
-    session_created_predicate, session_fallback_invalid_subject_predicate,
-    session_fallback_raw_caller_predicate, session_pruned_predicate, session_replaced_predicate,
 };
 
 thread_local! {

@@ -1,10 +1,20 @@
-use super::{ensure_allowed_roles, ensure_required_roles, ensure_unique_roles};
+//! Module: ops::storage::index::app
+//!
+//! Responsibility: provide deterministic access to the app index stable record.
+//! Does not own: stable schema, topology workflow, or endpoint DTOs.
+//! Boundary: storage ops facade used by topology workflows and queries.
+
 use crate::{
     InternalError,
     dto::topology::AppIndexArgs,
-    ops::config::ConfigOps,
-    ops::prelude::*,
-    ops::storage::index::mapper::AppIndexRecordMapper,
+    ops::{
+        config::ConfigOps,
+        prelude::*,
+        storage::index::{
+            ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
+            mapper::AppIndexRecordMapper,
+        },
+    },
     storage::stable::index::app::{AppIndex, AppIndexRecord},
 };
 
@@ -15,9 +25,9 @@ use crate::{
 pub struct AppIndexOps;
 
 impl AppIndexOps {
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Getters
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
@@ -27,9 +37,9 @@ impl AppIndexOps {
             .find_map(|(r, pid)| (r == role).then_some(*pid))
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Canonical data access
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn data() -> AppIndexRecord {

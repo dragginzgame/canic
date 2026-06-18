@@ -4,12 +4,14 @@ use canic::{
     dto::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
-            DelegationAudience, RootDelegationProofBatchGetRequest,
-            RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
-            RootDelegationProofBatchInstallResponse, RootDelegationProofBatchPrepareEntry,
-            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-            RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
+            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
+            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
+            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
+            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
+            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
+            RootDelegationProofInstallOutcome,
         },
+        error::ErrorCode,
         placement::sharding::ShardingRegistryResponse,
     },
     ids::{CanisterRole, cap},
@@ -25,6 +27,7 @@ use canic_tests::root::{
     assertions::assert_registry_parents,
     harness::{RootSetup, setup_cached_root},
 };
+use std::time::Duration;
 
 #[test]
 fn user_hub_sharding_profile_prewarms_first_user_shard() {
@@ -145,6 +148,62 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
     let status = assert_active_delegation_proof_status(&setup, shard_pid, &prepared);
     verify_signer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
     assert_repeated_batch_install_is_idempotent(&setup, install_request);
+    assert_active_delegation_proof_refresh_and_expiry(&setup, shard_pid, subject, &status);
+}
+
+#[test]
+fn root_batch_install_reports_partial_failure_and_retry() {
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
+
+    let user_hub_pid = setup
+        .subnet_index
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in sharding profile");
+    let subject = Principal::from_slice(&[58; 29]);
+    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+    let missing_signer_pid = Principal::from_slice(&[159; 29]);
+
+    upsert_delegation_issuer(&setup, shard_pid);
+    upsert_delegation_issuer(&setup, missing_signer_pid);
+
+    let request = RootDelegationProofBatchPrepareRequest {
+        metadata: Some(batch_metadata(58, shard_pid)),
+        entries: vec![
+            batch_prepare_entry(shard_pid),
+            batch_prepare_entry(missing_signer_pid),
+        ],
+    };
+    let prepared = prepare_root_delegation_proof_batch(&setup, request);
+    let retrieved = retrieve_root_delegation_proof_batch(&setup, &prepared);
+    let install_request = RootDelegationProofBatchInstallRequest {
+        batch_id: retrieved.batch_id,
+        proofs: retrieved.proofs,
+    };
+
+    let installed = install_root_delegation_proof_batch(&setup, install_request.clone());
+    assert_install_outcome(
+        &installed,
+        shard_pid,
+        RootDelegationProofInstallOutcome::Installed,
+    );
+    assert_install_outcome(
+        &installed,
+        missing_signer_pid,
+        RootDelegationProofInstallOutcome::CallFailed,
+    );
+
+    let repeated = install_root_delegation_proof_batch(&setup, install_request);
+    assert_install_outcome(
+        &repeated,
+        shard_pid,
+        RootDelegationProofInstallOutcome::AlreadyInstalled,
+    );
+    assert_install_outcome(
+        &repeated,
+        missing_signer_pid,
+        RootDelegationProofInstallOutcome::CallFailed,
+    );
 }
 
 fn install_root_batch_delegation_proof(
@@ -154,31 +213,74 @@ fn install_root_batch_delegation_proof(
     RootDelegationProofBatchPrepareResponse,
     RootDelegationProofBatchInstallRequest,
 ) {
-    let registered: Result<(), Error> = setup.pic.update_call_or_panic(
-        setup.root_id,
-        "root_test_upsert_delegation_issuer",
-        (shard_pid,),
-    );
-    registered.expect("root test issuer registration application failed");
+    upsert_delegation_issuer(setup, shard_pid);
 
     let request = RootDelegationProofBatchPrepareRequest {
         metadata: Some(batch_metadata(56, shard_pid)),
-        entries: vec![RootDelegationProofBatchPrepareEntry {
-            issuer_pid: shard_pid,
-            aud: DelegationAudience::Project("test".to_string()),
-            grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
-            cert_ttl_ns: 60_000_000_000,
-        }],
+        entries: vec![batch_prepare_entry(shard_pid)],
     };
+    let prepared = prepare_root_delegation_proof_batch(setup, request);
+    assert_eq!(prepared.entries.len(), 1);
+
+    let retrieved = retrieve_root_delegation_proof_batch(setup, &prepared);
+    assert_eq!(retrieved.batch_id, prepared.batch_id);
+    assert_eq!(retrieved.proofs.len(), 1);
+
+    let install_request = RootDelegationProofBatchInstallRequest {
+        batch_id: retrieved.batch_id,
+        proofs: retrieved.proofs,
+    };
+    let installed = install_root_delegation_proof_batch(setup, install_request.clone());
+    assert_eq!(installed.batch_id, prepared.batch_id);
+    assert_eq!(installed.outcomes.len(), 1);
+    assert_eq!(installed.outcomes[0].issuer_pid, shard_pid);
+    assert_eq!(
+        installed.outcomes[0].cert_hash,
+        prepared.entries[0].cert_hash
+    );
+    assert_eq!(
+        installed.outcomes[0].outcome,
+        RootDelegationProofInstallOutcome::Installed
+    );
+
+    (prepared, install_request)
+}
+
+fn upsert_delegation_issuer(setup: &RootSetup, issuer_pid: Principal) {
+    let registered: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        "root_test_upsert_delegation_issuer",
+        (issuer_pid,),
+    );
+    registered.expect("root test issuer registration application failed");
+}
+
+fn batch_prepare_entry(issuer_pid: Principal) -> RootDelegationProofBatchPrepareEntry {
+    RootDelegationProofBatchPrepareEntry {
+        issuer_pid,
+        aud: DelegationAudience::Project("test".to_string()),
+        grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
+        cert_ttl_ns: 60_000_000_000,
+    }
+}
+
+fn prepare_root_delegation_proof_batch(
+    setup: &RootSetup,
+    request: RootDelegationProofBatchPrepareRequest,
+) -> RootDelegationProofBatchPrepareResponse {
     let prepared: Result<RootDelegationProofBatchPrepareResponse, Error> =
         setup.pic.update_call_or_panic(
             setup.root_id,
             protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
             (request,),
         );
-    let prepared = prepared.expect("batch prepare application failed");
-    assert_eq!(prepared.entries.len(), 1);
+    prepared.expect("batch prepare application failed")
+}
 
+fn retrieve_root_delegation_proof_batch(
+    setup: &RootSetup,
+    prepared: &RootDelegationProofBatchPrepareResponse,
+) -> RootDelegationProofBatchGetResponse {
     let retrieved: Result<RootDelegationProofBatchGetResponse, Error> =
         setup.pic.query_call_or_panic(
             setup.root_id,
@@ -195,34 +297,33 @@ fn install_root_batch_delegation_proof(
                     .collect(),
             },),
         );
-    let retrieved = retrieved.expect("batch get application failed");
-    assert_eq!(retrieved.batch_id, prepared.batch_id);
-    assert_eq!(retrieved.proofs.len(), 1);
+    retrieved.expect("batch get application failed")
+}
 
-    let install_request = RootDelegationProofBatchInstallRequest {
-        batch_id: retrieved.batch_id,
-        proofs: retrieved.proofs,
-    };
+fn install_root_delegation_proof_batch(
+    setup: &RootSetup,
+    install_request: RootDelegationProofBatchInstallRequest,
+) -> RootDelegationProofBatchInstallResponse {
     let installed: Result<RootDelegationProofBatchInstallResponse, Error> =
         setup.pic.update_call_or_panic(
             setup.root_id,
             protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-            (install_request.clone(),),
+            (install_request,),
         );
-    let installed = installed.expect("batch install application failed");
-    assert_eq!(installed.batch_id, prepared.batch_id);
-    assert_eq!(installed.outcomes.len(), 1);
-    assert_eq!(installed.outcomes[0].issuer_pid, shard_pid);
-    assert_eq!(
-        installed.outcomes[0].cert_hash,
-        prepared.entries[0].cert_hash
-    );
-    assert_eq!(
-        installed.outcomes[0].outcome,
-        RootDelegationProofInstallOutcome::Installed
-    );
+    installed.expect("batch install application failed")
+}
 
-    (prepared, install_request)
+fn assert_install_outcome(
+    response: &RootDelegationProofBatchInstallResponse,
+    issuer_pid: Principal,
+    expected: RootDelegationProofInstallOutcome,
+) {
+    let outcome = response
+        .outcomes
+        .iter()
+        .find(|entry| entry.issuer_pid == issuer_pid)
+        .unwrap_or_else(|| panic!("missing install outcome for issuer {issuer_pid}"));
+    assert_eq!(outcome.outcome, expected);
 }
 
 fn assert_active_delegation_proof_status(
@@ -230,12 +331,7 @@ fn assert_active_delegation_proof_status(
     shard_pid: Principal,
     prepared: &RootDelegationProofBatchPrepareResponse,
 ) -> ActiveDelegationProofStatusResponse {
-    let status: Result<ActiveDelegationProofStatusResponse, Error> = setup.pic.query_call_or_panic(
-        shard_pid,
-        protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
-        (),
-    );
-    let status = status.expect("active delegation proof status application failed");
+    let status = query_active_delegation_proof_status(setup, shard_pid);
     assert_eq!(status.status, ActiveDelegationProofStatus::Valid);
     assert_eq!(status.root_pid, Some(setup.root_id));
     assert_eq!(status.issuer_pid, Some(shard_pid));
@@ -290,6 +386,75 @@ fn assert_repeated_batch_install_is_idempotent(
         repeated.outcomes[0].outcome,
         RootDelegationProofInstallOutcome::AlreadyInstalled
     );
+}
+
+fn assert_active_delegation_proof_refresh_and_expiry(
+    setup: &RootSetup,
+    shard_pid: Principal,
+    subject: Principal,
+    installed_status: &ActiveDelegationProofStatusResponse,
+) {
+    advance_pic_to_ns(
+        setup,
+        installed_status
+            .refresh_after_ns
+            .expect("valid active proof status must expose refresh threshold"),
+    );
+    let refresh_status = query_active_delegation_proof_status(setup, shard_pid);
+    assert_eq!(
+        refresh_status.status,
+        ActiveDelegationProofStatus::RefreshNeeded
+    );
+    assert_eq!(refresh_status.cert_hash, installed_status.cert_hash);
+
+    advance_pic_to_ns(
+        setup,
+        installed_status
+            .expires_at_ns
+            .expect("valid active proof status must expose expiry"),
+    );
+    let expired_status = query_active_delegation_proof_status(setup, shard_pid);
+    assert_eq!(expired_status.status, ActiveDelegationProofStatus::Expired);
+    assert_eq!(expired_status.cert_hash, installed_status.cert_hash);
+
+    let request = DelegatedTokenPrepareRequest {
+        metadata: Some(batch_metadata(57, shard_pid)),
+        subject,
+        aud: DelegationAudience::Project("test".to_string()),
+        grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
+        ttl_ns: 1_000_000_000,
+        ext: None,
+    };
+    let prepared: Result<DelegatedTokenPrepareResponse, Error> = setup.pic.update_call_as_or_panic(
+        shard_pid,
+        subject,
+        protocol::CANIC_PREPARE_DELEGATED_TOKEN,
+        (request,),
+    );
+    let err = prepared.expect_err("expired active proof must stop new delegated-token prepare");
+    assert_eq!(err.code, ErrorCode::Internal);
+}
+
+fn query_active_delegation_proof_status(
+    setup: &RootSetup,
+    shard_pid: Principal,
+) -> ActiveDelegationProofStatusResponse {
+    let status: Result<ActiveDelegationProofStatusResponse, Error> = setup.pic.query_call_or_panic(
+        shard_pid,
+        protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+        (),
+    );
+    status.expect("active delegation proof status application failed")
+}
+
+fn advance_pic_to_ns(setup: &RootSetup, target_ns: u64) {
+    let now_ns = setup.pic.current_time_nanos();
+    if target_ns > now_ns {
+        setup
+            .pic
+            .advance_time(Duration::from_nanos(target_ns - now_ns));
+    }
+    setup.pic.tick();
 }
 
 fn batch_metadata(id: u8, issuer_pid: Principal) -> AuthRequestMetadata {

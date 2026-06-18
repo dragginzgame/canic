@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics
+//!
+//! Responsibility: project runtime metric families into public metric rows.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 pub mod access;
 pub mod auth;
 pub mod canister_ops;

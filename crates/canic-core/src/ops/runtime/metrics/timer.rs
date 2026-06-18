@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::timer
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the timer family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use crate::{ids::SystemMetricKind, ops::runtime::metrics::system::SystemMetrics};
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
@@ -151,9 +157,9 @@ impl TimerMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

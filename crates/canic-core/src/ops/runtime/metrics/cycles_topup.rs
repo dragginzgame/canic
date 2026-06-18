@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::cycles_topup
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the cycles_topup family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -100,9 +106,9 @@ impl CyclesTopupMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

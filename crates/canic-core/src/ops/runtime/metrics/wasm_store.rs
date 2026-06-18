@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::wasm_store
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the wasm_store family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -187,9 +193,9 @@ impl WasmStoreMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

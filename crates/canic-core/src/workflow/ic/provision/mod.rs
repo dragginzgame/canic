@@ -1,12 +1,8 @@
-// =============================================================================
-// PROVISIONING (ROOT ORCHESTRATOR HELPERS)
-// =============================================================================
-
-//! Provisioning helpers for creating, installing, and tearing down canisters.
+//! Module: workflow::ic::provision
 //!
-//! These routines bundle the multi-phase orchestration that root performs when
-//! scaling out the topology: reserving cycles, recording registry state,
-//! installing WASM modules, and cascading state updates to descendants.
+//! Responsibility: orchestrate root canister provisioning and teardown.
+//! Does not own: authorization, stable records, or pure placement policy.
+//! Boundary: workflow calls ops and policy after endpoints authenticate input.
 
 mod allocation;
 mod delete;
@@ -18,7 +14,21 @@ mod policy;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    ops::{cost_guard::CostGuardPermit, runtime::install_source::ModuleSourceRuntimeApi},
+    ops::{
+        cost_guard::CostGuardPermit,
+        runtime::{
+            install_source::ModuleSourceRuntimeApi,
+            metrics::{
+                canister_ops::{
+                    CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+                },
+                provisioning::{
+                    ProvisioningMetricOperation, ProvisioningMetricOutcome,
+                    ProvisioningMetricReason,
+                },
+            },
+        },
+    },
     workflow::{
         ic::provision::{
             allocation::{AllocationSource, allocate_canister},
@@ -27,13 +37,6 @@ use crate::{
         },
         pool::PoolWorkflow,
         prelude::*,
-    },
-};
-
-use crate::ops::runtime::metrics::{
-    canister_ops::{CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason},
-    provisioning::{
-        ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
     },
 };
 

@@ -44,9 +44,9 @@ fn apply(op: Op, intent_id: IntentId) -> Result<IntentRecord, InternalError> {
 
 #[test]
 fn idempotent_ops_do_not_double_count() {
-    ///
-    /// Case
-    ///
+    // -------------------------------------------------------------------------
+    // Case
+    // -------------------------------------------------------------------------
 
     struct Case {
         name: &'static str,

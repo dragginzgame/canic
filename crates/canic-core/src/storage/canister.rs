@@ -19,9 +19,9 @@ impl CanisterRecord {
 
 impl_storable_bounded!(CanisterRecord, CanisterRecord::STORABLE_MAX_SIZE, false);
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

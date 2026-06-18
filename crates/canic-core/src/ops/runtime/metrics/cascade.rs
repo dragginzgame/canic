@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::cascade
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the cascade family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use crate::{InternalError, InternalErrorClass, InternalErrorOrigin};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -190,9 +196,9 @@ impl CascadeMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

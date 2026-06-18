@@ -1,3 +1,9 @@
+//! Module: ops::storage::registry::app
+//!
+//! Responsibility: provide deterministic access to app registry bindings.
+//! Does not own: stable registry schema, topology workflow, or endpoint DTOs.
+//! Boundary: storage ops facade used by topology workflows and queries.
+
 use crate::{
     ops::prelude::Principal,
     storage::stable::registry::app::{AppRegistry, AppRegistryRecord},
@@ -10,18 +16,18 @@ use crate::{
 pub struct AppRegistryOps;
 
 impl AppRegistryOps {
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Mutation
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     /// Record the root canister serving one subnet.
     pub fn upsert(subnet_pid: Principal, root_pid: Principal) {
         AppRegistry::upsert(subnet_pid, root_pid);
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Canonical data access
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn data() -> AppRegistryRecord {
@@ -29,9 +35,9 @@ impl AppRegistryOps {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

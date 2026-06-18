@@ -1,15 +1,25 @@
-use crate::InternalError;
+//! Module: ops::runtime::metrics::recording
+//!
+//! Responsibility: provide typed recording adapters for runtime metric counters.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use super::{
-    directory::{
-        DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason, DirectoryMetrics,
+use crate::{
+    InternalError,
+    ops::runtime::metrics::{
+        directory::{
+            DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason,
+            DirectoryMetrics,
+        },
+        pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
+        scaling::{
+            ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics,
+        },
     },
-    pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
-    scaling::{ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason, ScalingMetrics},
 };
 
 #[cfg(feature = "sharding")]
-use super::sharding::{
+use crate::ops::runtime::metrics::sharding::{
     ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
 };
 

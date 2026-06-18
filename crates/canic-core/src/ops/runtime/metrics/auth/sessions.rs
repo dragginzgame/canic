@@ -1,19 +1,31 @@
-use super::{
-    AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface, AuthMetrics,
-    auth_session_endpoint, session_bootstrap_rejected_capacity_predicate,
-    session_bootstrap_rejected_disabled_predicate,
-    session_bootstrap_rejected_replay_conflict_predicate,
-    session_bootstrap_rejected_replay_reused_predicate,
-    session_bootstrap_rejected_subject_mismatch_predicate,
-    session_bootstrap_rejected_subject_rejected_predicate,
-    session_bootstrap_rejected_token_invalid_predicate,
-    session_bootstrap_rejected_ttl_invalid_predicate,
-    session_bootstrap_rejected_wallet_caller_rejected_predicate,
-    session_bootstrap_replay_idempotent_predicate, session_cleared_predicate,
-    session_created_predicate, session_fallback_invalid_subject_predicate,
-    session_fallback_raw_caller_predicate, session_pruned_predicate, session_replaced_predicate,
+//! Module: ops::runtime::metrics::auth::sessions
+//!
+//! Responsibility: record auth metrics for session lifecycle and bootstrap outcomes.
+//! Does not own: session storage, delegated-token verification, or endpoint DTOs.
+//! Boundary: auth workflow calls these ops helpers after typed outcomes are known.
+
+use crate::{
+    ids::AccessMetricKind,
+    ops::runtime::metrics::{
+        access::AccessMetrics,
+        auth::{
+            AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
+            AuthMetrics, auth_session_endpoint, session_bootstrap_rejected_capacity_predicate,
+            session_bootstrap_rejected_disabled_predicate,
+            session_bootstrap_rejected_replay_conflict_predicate,
+            session_bootstrap_rejected_replay_reused_predicate,
+            session_bootstrap_rejected_subject_mismatch_predicate,
+            session_bootstrap_rejected_subject_rejected_predicate,
+            session_bootstrap_rejected_token_invalid_predicate,
+            session_bootstrap_rejected_ttl_invalid_predicate,
+            session_bootstrap_rejected_wallet_caller_rejected_predicate,
+            session_bootstrap_replay_idempotent_predicate, session_cleared_predicate,
+            session_created_predicate, session_fallback_invalid_subject_predicate,
+            session_fallback_raw_caller_predicate, session_pruned_predicate,
+            session_replaced_predicate,
+        },
+    },
 };
-use crate::{ids::AccessMetricKind, ops::runtime::metrics::access::AccessMetrics};
 
 /// Record a rejected session bootstrap when delegated-token auth is disabled.
 pub fn record_session_bootstrap_rejected_disabled() {

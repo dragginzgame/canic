@@ -184,9 +184,9 @@ fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryReg
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

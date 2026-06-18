@@ -12,6 +12,12 @@ present.
 
 ## Unreleased
 
+- Root proof provisioning MVP coverage now proves signer active-proof status
+  reaches `RefreshNeeded` at `refresh_after_ns`, reaches `Expired` at proof
+  expiry, blocks new signer-local delegated-token issuance after expiry, and
+  reports partial batch install failure/retry outcomes without losing already
+  installed signer state.
+
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)

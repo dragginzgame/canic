@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::icp_refill
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the icp_refill family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use crate::{
     cdk::types::Principal,
     dto::metrics::{MetricEntry, MetricValue},
