@@ -68,6 +68,7 @@ type ErrorCode = variant {
   AuthProofExpired;
   InternalRpcMalformed;
   ResourceExhausted;
+  RootDataCertificateUnavailable;
   Unavailable;
   Forbidden;
   OperationIdRequired;

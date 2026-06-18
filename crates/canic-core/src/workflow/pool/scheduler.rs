@@ -1,17 +1,8 @@
-//! Pool reset scheduler and worker runtime.
+//! Module: workflow::pool::scheduler
 //!
-//! This module owns:
-//! - background scheduling
-//! - concurrency guards
-//! - batch execution
-//! - timer wiring
-//!
-//! It does NOT:
-//! - decide *which* canisters belong in the pool
-//! - perform policy checks
-//! - expose admin APIs
-//!
-//! All pool semantics live in `workflow.rs`.
+//! Responsibility: schedule and execute background pool reset batches.
+//! Does not own: pool admission policy, admin APIs, or stable pool schemas.
+//! Boundary: workflow runtime helper coordinating timers, admission checks, reset, and metrics.
 
 use crate::{
     InternalError,
@@ -42,17 +33,17 @@ use std::{cell::RefCell, time::Duration};
 /// Default batch size for resetting pending pool entries.
 pub const POOL_RESET_BATCH_SIZE: usize = 10;
 
-//
-// TIMER STATE
-//
+// -----------------------------------------------------------------------------
+// Timer State
+// -----------------------------------------------------------------------------
 
 thread_local! {
     static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
 }
 
-//
-// INTERNAL SCHEDULER STATE
-//
+// -----------------------------------------------------------------------------
+// Internal Scheduler State
+// -----------------------------------------------------------------------------
 
 thread_local! {
     static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
@@ -216,8 +207,9 @@ impl PoolSchedulerWorkflow {
     }
 }
 
-//
-// TEST HOOKS
+// -----------------------------------------------------------------------------
+// Test Hooks
+// -----------------------------------------------------------------------------
 //
 
 #[cfg(test)]

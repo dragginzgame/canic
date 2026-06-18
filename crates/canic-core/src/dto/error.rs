@@ -77,6 +77,15 @@ impl Error {
     pub fn unavailable(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Unavailable, message.into())
     }
+
+    // 503 – Root proof retrieval was not run in a direct root query context.
+    #[must_use]
+    pub fn root_data_certificate_unavailable() -> Self {
+        Self::new(
+            ErrorCode::RootDataCertificateUnavailable,
+            "root data certificate unavailable for delegation proof retrieval".to_string(),
+        )
+    }
 }
 
 impl Display for Error {
@@ -117,6 +126,7 @@ pub enum ErrorCode {
     PolicyShardRequiresSingletonWithSharding,
     PolicySingletonAlreadyRegisteredUnderParent,
     ResourceExhausted,
+    RootDataCertificateUnavailable,
     Unauthorized,
     Unavailable,
 }

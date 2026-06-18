@@ -4,7 +4,6 @@
 //! Does not own: endpoint authorization, stable pool schemas, or management-call ops.
 //! Boundary: pool workflow validates admin access, reserves replay/cost, then calls ops.
 
-use super::PoolWorkflow;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::TC,
@@ -36,7 +35,7 @@ use crate::{
         storage::pool::PoolOps,
     },
     replay_policy::CostClass,
-    workflow::{cost_guard::map_cost_guard_reserve_error, prelude::*},
+    workflow::{cost_guard::map_cost_guard_reserve_error, pool::PoolWorkflow, prelude::*},
 };
 
 /// Default cycles allocated to freshly created pool canisters.

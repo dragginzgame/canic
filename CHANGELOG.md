@@ -12,15 +12,17 @@ present.
 
 ## Unreleased
 
-- Root proof provisioning MVP coverage now proves signer active-proof status
-  reaches `RefreshNeeded` at `refresh_after_ns`, reaches `Expired` at proof
-  expiry, blocks new signer-local delegated-token issuance after expiry, and
-  reports partial batch install failure/retry outcomes without losing already
-  installed signer state.
-
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.15` maps root proof retrieval failures without a root data certificate
+  to the stable `RootDataCertificateUnavailable` error, making direct-query
+  context failures distinguishable from ACL failures.
+
+- `0.68.14` strengthens root proof provisioning MVP regression coverage for
+  refresh/expiry status, expired signer-local issuance blocking, and partial
+  batch install retry behavior.
 
 - `0.68.13` finalizes the controller-only root provisioning MVP by documenting
   provisioner ACL as the later automation target, proving signer-local

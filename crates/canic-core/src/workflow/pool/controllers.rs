@@ -1,7 +1,13 @@
-use super::PoolWorkflow;
+//! Module: workflow::pool::controllers
+//!
+//! Responsibility: compute controller sets for parked pool canisters.
+//! Does not own: authorization, state mutation, or IC management calls.
+//! Boundary: workflow helper deriving controller inputs from config and runtime identity.
+
 use crate::{
     InternalError,
     ops::{config::ConfigOps, ic::IcOps},
+    workflow::pool::PoolWorkflow,
     workflow::prelude::*,
 };
 

@@ -1,3 +1,9 @@
+//! Module: workflow::pool::admissibility
+//!
+//! Responsibility: check whether a canister can enter or remain in the pool.
+//! Does not own: pool storage mutation, endpoint authorization, or policy rules.
+//! Boundary: workflow helper gathering observable state before pure policy evaluation.
+
 use crate::{
     domain::policy::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
     ids::BuildNetwork,
