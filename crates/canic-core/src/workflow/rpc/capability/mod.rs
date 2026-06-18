@@ -40,6 +40,7 @@ const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
 ///
 /// Canonical classification for capability proof logging and metrics.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RootCapabilityProofMode {
     Structural,
@@ -73,6 +74,7 @@ impl RootCapabilityProofMode {
 ///
 /// Validated proof view used after envelope checks and before verification.
 ///
+
 #[derive(Clone, Copy, Debug)]
 pub(super) enum RootCapabilityProof {
     Structural,

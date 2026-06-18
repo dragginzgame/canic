@@ -1,7 +1,9 @@
-use super::{
-    RootCapabilityProofMode, project_replay_metadata, validate_nonroot_cycles_envelope,
-    verify_nonroot_cycles_proof,
-};
+//! Module: workflow::rpc::capability::nonroot
+//!
+//! Responsibility: validate and dispatch non-root cycles capability envelopes.
+//! Does not own: request execution, replay storage schema, or endpoint authentication.
+//! Boundary: coordinates structural proof checks, metrics, and cycles dispatch.
+
 use crate::{
     dto::{
         capability::{NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1},
@@ -15,7 +17,13 @@ use crate::{
             RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
         },
     },
-    workflow::rpc::request::handler::NonrootCyclesCapabilityWorkflow,
+    workflow::rpc::{
+        capability::{
+            RootCapabilityProofMode, project_replay_metadata, validate_nonroot_cycles_envelope,
+            verify_nonroot_cycles_proof,
+        },
+        request::handler::NonrootCyclesCapabilityWorkflow,
+    },
 };
 
 /// Validate and execute the non-root request-cycles capability path.

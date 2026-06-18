@@ -60,17 +60,13 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
   should be idempotent.
 
 ## Style
+- Follow `docs/governance/code-hygiene/README.md`; it is the authoritative
+  style policy for imports, module headers, type documentation, comments,
+  visibility, and hygiene checks. Do not duplicate its rules here.
 - Rust edition is 2024.
-- Prefer existing local patterns; keep imports at file top.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
 - Do not use `#[path = "..."]` for module layout. Rename files/directories so
   Rust's normal module discovery works.
-- Use triple-line `///` section markers above structs, enums, and traits to
-  improve scanability:
-  `///`, `/// TypeName`, `///`.
-- Comment intent/invariants only. See
-  `docs/governance/code-hygiene/README.md`.
-- Shipped `CandidType` types should avoid `///` unless metadata is intentional.
 
 ## Testing
 - Unit tests live next to code; integration tests live in `tests/`.

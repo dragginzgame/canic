@@ -1,3 +1,9 @@
+//! Module: workflow::rpc::capability::proof
+//!
+//! Responsibility: verify structural capability proof constraints.
+//! Does not own: envelope validation, metrics, request dispatch, or replay metadata.
+//! Boundary: checks caller topology and canonical capability hash bindings.
+
 use crate::{
     cdk::types::Principal,
     dto::{
@@ -89,7 +95,11 @@ pub(super) fn verify_capability_hash_binding(
     capability: &Request,
     capability_hash: [u8; 32],
 ) -> Result<(), Error> {
-    let expected = super::root_capability_hash(target_canister, capability_version, capability)?;
+    let expected = crate::workflow::rpc::capability::root_capability_hash(
+        target_canister,
+        capability_version,
+        capability,
+    )?;
     if capability_hash != expected {
         return Err(Error::invalid(
             "capability_hash does not match capability payload",
