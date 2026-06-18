@@ -1,5 +1,9 @@
-use super::state::{pending_is_stale, validate_bind_target_with_reason};
-use super::{DirectoryWorkflow, state::DirectoryEntryClassification};
+//! Module: workflow::placement::directory::classification
+//!
+//! Responsibility: classify directory entries for resolve and recovery flows.
+//! Does not own: storage mutation, child creation, or recovery side effects.
+//! Boundary: maps registry state into workflow-only classification outcomes.
+
 use crate::{
     config::schema::DirectoryPool,
     ops::{
@@ -10,6 +14,10 @@ use crate::{
             recording::DirectoryMetricEvent as MetricEvent,
         },
         storage::placement::directory::{DirectoryEntryState, DirectoryRegistryOps},
+    },
+    workflow::placement::directory::{
+        DirectoryWorkflow,
+        state::{DirectoryEntryClassification, pending_is_stale, validate_bind_target_with_reason},
     },
 };
 

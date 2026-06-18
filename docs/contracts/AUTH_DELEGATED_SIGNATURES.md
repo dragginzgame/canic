@@ -190,12 +190,13 @@ during update execution and the data certificate is available during query
 execution.
 
 ```text
-1. maintenance client -> root canic_prepare_delegation_proof update
-2. maintenance client -> root canic_get_delegation_proof query
-3. controller         -> issuer canic_install_active_delegation_proof update
-4. caller/session     -> issuer canic_prepare_delegated_token update
-5. caller/session     -> issuer canic_get_delegated_token query
-6. caller/session     -> endpoint with DelegatedToken
+1. provisioner    -> root canic_prepare_delegation_proof_batch update
+2. provisioner    -> root canic_get_delegation_proof_batch direct query
+3. provisioner    -> root canic_install_delegation_proof_batch update
+4. root           -> issuer canic_install_active_delegation_proof update
+5. caller/session -> issuer canic_prepare_delegated_token update
+6. caller/session -> issuer canic_get_delegated_token query
+7. caller/session -> endpoint with DelegatedToken
 ```
 
 The public delegated-token prepare endpoint is a login/session materialization
@@ -205,16 +206,21 @@ application scopes such as `read`, `write`, `admin`, or application-specific
 admin labels must be issued by a separate caller-authorized path instead of
 being accepted from open caller-supplied prepare payloads.
 
-`canic_prepare_delegation_proof` is replay-protected. The same caller,
-operation id, and payload returns the same prepared response; the same caller
-and operation id with a different payload is a replay conflict. The first fresh
-prepare adds one signature-map entry, refreshes certified data once, and stores
-pending proof metadata.
+`canic_prepare_delegation_proof_batch` is request-id keyed. The same provision
+request id and payload returns the same prepared batch metadata; the same
+request id with a different payload is a replay conflict. The first fresh
+prepare adds signature-map entries, refreshes certified data, and stores
+pending batch metadata.
 
-`canic_get_delegation_proof` is not separately replay-protected. It is a query
-over an existing pending proof. The caller must match the preparing caller, the
-requested `cert_hash` must match pending metadata, and
+`canic_get_delegation_proof_batch` is not separately replay-protected. It is a
+direct root query over existing pending batch metadata. The requested
+`batch_id`, issuer, and `cert_hash` must match pending metadata, and
 `now_ns < retrieval_expires_at_ns`.
+
+The retired single-proof root prepare/get endpoints are not part of the active
+protocol. Root proof retrieval must not be hidden behind issuer composite-query
+wrappers because root needs its direct query data certificate to assemble the
+canister-signature proof.
 
 The normal auth surface does not expose a one-shot fresh-proof `mint_token`
 path. Client/test helpers may choreograph the calls above, but they must not

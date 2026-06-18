@@ -1,3 +1,9 @@
+//! Module: workflow::config
+//!
+//! Responsibility: provide shared workflow scheduling constants and config export.
+//! Does not own: configuration storage, timer registration, or endpoint authorization.
+//! Boundary: delegates config serialization to ops and centralizes workflow cadences.
+
 use crate::{InternalError, ops::config::ConfigOps};
 use std::time::Duration;
 
@@ -22,6 +28,8 @@ pub const WORKFLOW_POOL_CHECK_INTERVAL: Duration = Duration::from_mins(30);
 
 ///
 /// ConfigWorkflow
+///
+/// Workflow facade for configuration export.
 ///
 
 pub struct ConfigWorkflow;

@@ -214,27 +214,32 @@ This is intentional: one semantic token must have one valid canonical encoding.
 Entrypoint path:
 
 ```text
-AuthApi::prepare_delegation_proof
-  -> root canic_prepare_delegation_proof update
-  -> AuthOps::prepare_delegation_proof
+AuthApi::prepare_delegation_proof_batch_root
+  -> root canic_prepare_delegation_proof_batch update
+  -> AuthOps::prepare_delegation_proof_batch
   -> SignatureMap.add_signature
   -> set_certified_data(labeled_hash("sig", signatures.root_hash()))
 
-canic_get_delegation_proof query
-  -> AuthOps::get_delegation_proof
+canic_get_delegation_proof_batch query
+  -> AuthOps::get_delegation_proof_batch
   -> SignatureMap.get_signature_as_cbor
-  -> DelegationProof
+  -> RootDelegationProofBatchGetResponse
+
+canic_install_delegation_proof_batch update
+  -> root broadcasts canic_install_active_delegation_proof to signers
 ```
 
 Root issuance steps:
 
 1. Require local canister is root.
-2. Load `auth.delegated_tokens` config.
-3. Bind the requested issuer canister to
+2. Require root-controller authorization for the MVP batch endpoints.
+3. Validate each issuer against the root issuer registry.
+4. Load `auth.delegated_tokens` config.
+5. Bind each requested issuer canister to
    `IssuerProofAlgorithm::IcCanisterSignatureV1` with seed
    `b"canic-issuer-delegated-token"`.
-4. Build `DelegationCert`.
-5. Enforce:
+6. Build each `DelegationCert`.
+7. Enforce:
    - `cert.root_pid == self`
    - `cert.not_before_ns < cert.expires_at_ns`
    - cert TTL does not exceed `auth.delegated_tokens.max_ttl_secs`
@@ -245,9 +250,13 @@ Root issuance steps:
    - `cert.issuer_pid` equals the requested issuer
    - `cert.issuer_proof_binding_hash` matches the issuer proof authority
      fields
-6. Add a canister-signature map entry for `cert_hash`.
-7. Commit certified data for the `"sig"` tree.
-8. Return `DelegationProofPrepareResponse`.
+8. Add a canister-signature map entry for each `cert_hash`.
+9. Commit certified data for the `"sig"` tree.
+10. Return `RootDelegationProofBatchPrepareResponse` metadata.
+11. In a direct root query, assemble `DelegationProof` values from the prepared
+    metadata and root data certificate.
+12. In a root update, validate submitted proofs against pending metadata and
+    broadcast signer installs.
 
 Root proof creation input:
 
@@ -270,14 +279,20 @@ That exact byte string is passed to
 
 ### Replay and Retrieval
 
-`canic_prepare_delegation_proof` is replay-protected. A repeated operation id
-for the same actor and payload returns the committed prepared response. The same
-operation id with a different actor or payload returns a replay conflict.
+`canic_prepare_delegation_proof_batch` is request-id keyed. Repeating the same
+batch provision request with the same request id returns the same batch
+metadata. Reusing the request id with a different payload returns a replay
+conflict.
 
-`canic_get_delegation_proof` is a query over an existing pending proof and is
-not separately replay-protected. The caller must match the preparing caller,
-the requested `cert_hash` must match a pending proof, and
+`canic_get_delegation_proof_batch` is a direct root query over existing pending
+batch metadata and is not separately replay-protected. The requested
+`batch_id`, issuer, and `cert_hash` must match pending metadata, and
 `now_ns < retrieval_expires_at_ns`.
+
+The retired single-proof `canic_prepare_delegation_proof` and
+`canic_get_delegation_proof` root endpoints are removed from the active
+protocol. Signers must not retrieve root proof material through composite-query
+wrappers.
 
 The pending retrieval window is one minute, matching the upstream
 `SignatureMap` retention period used by the root canister-signature map.

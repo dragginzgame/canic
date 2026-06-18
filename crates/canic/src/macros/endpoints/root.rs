@@ -71,20 +71,6 @@ macro_rules! canic_emit_root_admin_endpoints {
 #[macro_export]
 macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
-        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_prepare_delegation_proof(
-            request: ::canic::dto::auth::DelegationProofIssueRequest,
-        ) -> Result<::canic::dto::auth::DelegationProofPrepareResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::prepare_delegation_proof_root(request)
-        }
-
-        #[$crate::canic_query(internal, requires(caller::is_registered_to_subnet()))]
-        async fn canic_get_delegation_proof(
-            request: ::canic::dto::auth::DelegationProofGetRequest,
-        ) -> Result<::canic::dto::auth::DelegationProof, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::get_delegation_proof_root(request)
-        }
-
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_delegation_proof_batch(
             request: ::canic::dto::auth::RootDelegationProofBatchPrepareRequest,

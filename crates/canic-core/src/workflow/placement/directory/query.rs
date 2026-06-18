@@ -1,3 +1,9 @@
+//! Module: workflow::placement::directory::query
+//!
+//! Responsibility: expose read-only directory registry query projections.
+//! Does not own: directory mutation, child lifecycle, or endpoint authorization.
+//! Boundary: delegates storage reads and maps them into directory DTO responses.
+
 use crate::{
     cdk::types::Principal,
     dto::placement::directory::{DirectoryEntryStatusResponse, DirectoryRegistryResponse},
@@ -6,6 +12,8 @@ use crate::{
 
 ///
 /// DirectoryQuery
+///
+/// Read-only query facade for directory registry state.
 ///
 
 pub struct DirectoryQuery;

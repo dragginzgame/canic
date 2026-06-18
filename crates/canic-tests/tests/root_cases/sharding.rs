@@ -5,12 +5,11 @@ use canic::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
             DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
-            DelegationProof, DelegationProofGetRequest, DelegationProofIssueRequest,
-            DelegationProofPrepareResponse, RootDelegationProofBatchGetRequest,
-            RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
-            RootDelegationProofBatchInstallResponse, RootDelegationProofBatchPrepareEntry,
-            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-            RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
+            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
+            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
+            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
+            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
+            RootDelegationProofInstallOutcome,
         },
         error::ErrorCode,
         placement::sharding::ShardingRegistryResponse,
@@ -20,8 +19,7 @@ use canic::{
 };
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
-    CanicPicExt, create_user_shard, issue_delegated_token, issue_delegated_token_from_active_proof,
-    obtain_root_delegation_proof, role_grant, token_ttl_within_proof,
+    CanicPicExt, create_user_shard, issue_delegated_token_from_active_proof, role_grant,
 };
 use canic_tests::root::{
     RootSetupProfile,
@@ -89,46 +87,6 @@ fn user_hub_sharding_profile_prewarms_first_user_shard() {
             (canister::USER_SHARD, Some(user_hub_pid)),
         ],
     );
-}
-
-#[test]
-fn delegated_token_verification_uses_self_contained_root_proof() {
-    let setup = setup_cached_root(RootSetupProfile::Sharding);
-
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
-    let verifier_pid = setup
-        .subnet_index
-        .get(&canister::TEST)
-        .copied()
-        .expect("test verifier must exist in sharding profile");
-
-    let subject = Principal::from_slice(&[55; 29]);
-    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
-    let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, shard_pid, canister::TEST);
-    let token_ttl_ns = token_ttl_within_proof(&setup.pic, &proof);
-    let token = issue_delegated_token(
-        &setup.pic,
-        shard_pid,
-        proof,
-        subject,
-        DelegationAudience::Project("test".to_string()),
-        vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
-        token_ttl_ns,
-    );
-
-    let verified: Result<Result<(), Error>, _> = setup.pic.update_call_as(
-        verifier_pid,
-        subject,
-        "test_verify_delegated_token",
-        (token,),
-    );
-    verified
-        .expect("delegated token verifier transport failed")
-        .expect("delegated token verifier application failed");
 }
 
 #[test]
@@ -208,43 +166,6 @@ fn root_batch_install_reports_partial_failure_and_retry() {
         missing_signer_pid,
         RootDelegationProofInstallOutcome::CallFailed,
     );
-}
-
-#[test]
-fn issuer_nested_root_proof_retrieval_fails_for_missing_root_data_certificate() {
-    let setup = setup_cached_root(RootSetupProfile::Sharding);
-
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
-    let subject = Principal::from_slice(&[59; 29]);
-    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
-
-    let request = delegation_proof_issue_request(59, shard_pid);
-    let prepared: Result<DelegationProofPrepareResponse, Error> =
-        setup.pic.update_call_as_or_panic(
-            setup.root_id,
-            shard_pid,
-            protocol::CANIC_PREPARE_DELEGATION_PROOF,
-            (request,),
-        );
-    let prepared = prepared.expect("legacy root delegation proof prepare application failed");
-
-    let nested: Result<DelegationProof, Error> = setup.pic.query_call_or_panic(
-        shard_pid,
-        "user_shard_test_nested_root_get_delegation_proof",
-        (
-            setup.root_id,
-            DelegationProofGetRequest {
-                cert_hash: prepared.cert_hash,
-            },
-        ),
-    );
-    let err =
-        nested.expect_err("issuer nested root proof retrieval must fail before returning a proof");
-    assert_eq!(err.code, ErrorCode::RootDataCertificateUnavailable);
 }
 
 #[test]
@@ -367,16 +288,6 @@ fn batch_prepare_entry_with_ttl(
         aud: DelegationAudience::Project("test".to_string()),
         grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
         cert_ttl_ns,
-    }
-}
-
-fn delegation_proof_issue_request(id: u8, issuer_pid: Principal) -> DelegationProofIssueRequest {
-    DelegationProofIssueRequest {
-        metadata: Some(batch_metadata(id, issuer_pid)),
-        issuer_pid,
-        aud: DelegationAudience::Project("test".to_string()),
-        grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
-        cert_ttl_ns: 60_000_000_000,
     }
 }
 

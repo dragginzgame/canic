@@ -13,10 +13,7 @@ pub mod ttl;
 use crate::{
     cdk::types::Principal,
     dto::{
-        auth::{
-            DelegatedTokenPrepareResponse, DelegationProofPrepareResponse,
-            RoleAttestationPrepareResponse,
-        },
+        auth::{DelegatedTokenPrepareResponse, RoleAttestationPrepareResponse},
         icp_refill::IcpRefillResponse,
         pool::PoolAdminResponse,
         rpc::{CyclesResponse, Response},
@@ -31,7 +28,6 @@ use crate::{
 use candid::{decode_one, encode_one};
 
 pub const DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
-pub const DELEGATION_PROOF_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
@@ -195,33 +191,6 @@ pub fn decode_delegated_token_prepare_replay_response(
     decode_one(response_bytes).map_err(|err| {
         ReplayDecodeError::DecodeFailed(format!(
             "failed to decode delegated token prepare replay response: {err}"
-        ))
-    })
-}
-
-/// encode_delegation_proof_prepare_replay_response
-///
-/// Encode the delegation-proof prepare response payload stored in shared replay receipts.
-pub fn encode_delegation_proof_prepare_replay_response(
-    response: &DelegationProofPrepareResponse,
-) -> Result<Vec<u8>, ReplayCommitError> {
-    encode_one(response).map_err(|err| ReplayCommitError::EncodeFailed(err.to_string()))
-}
-
-/// decode_delegation_proof_prepare_replay_response
-///
-/// Decode a committed delegation-proof prepare response from shared replay receipts.
-pub fn decode_delegation_proof_prepare_replay_response(
-    receipt: &ReplayReceipt,
-) -> Result<DelegationProofPrepareResponse, ReplayDecodeError> {
-    let response_bytes = committed_response_bytes(
-        receipt,
-        DELEGATION_PROOF_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-        "delegation",
-    )?;
-    decode_one(response_bytes).map_err(|err| {
-        ReplayDecodeError::DecodeFailed(format!(
-            "failed to decode delegation proof prepare replay response: {err}"
         ))
     })
 }

@@ -3,7 +3,13 @@ use canic::{
     api::ic::network::NetworkApi,
     cdk::{types::Principal, utils::hash::wasm_hash},
     dto::{
-        auth::{DelegatedToken, DelegationAudience},
+        auth::{
+            AuthRequestMetadata, DelegatedToken, DelegationAudience,
+            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
+            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
+            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
+            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
+        },
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
@@ -31,8 +37,8 @@ use canic_control_plane::{
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, create_user_shard, install_audit_leaf_probe, install_audit_root_probe,
-    install_audit_scaling_probe, install_standalone_canister, issue_delegated_token,
-    obtain_root_delegation_proof, role_grant, token_ttl_within_proof,
+    install_audit_scaling_probe, install_standalone_canister,
+    issue_delegated_token_from_active_proof, role_grant,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
 use ic_testkit::pic::Pic;

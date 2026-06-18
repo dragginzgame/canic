@@ -1,7 +1,15 @@
+//! Module: workflow::http
+//!
+//! Responsibility: expose HTTP outcall workflow helpers.
+//! Does not own: HTTP request execution, endpoint authorization, or DTO schemas.
+//! Boundary: converts between boundary DTOs and IC HTTP ops.
+
 use crate::{InternalError, dto::http, ops::ic::http::HttpOps};
 
 ///
 /// HttpWorkflow
+///
+/// Workflow facade for HTTP outcalls.
 ///
 
 pub struct HttpWorkflow;

@@ -1,3 +1,9 @@
+//! Module: workflow::ic::mgmt
+//!
+//! Responsibility: expose management-canister status queries to workflow callers.
+//! Does not own: management call execution, endpoint authorization, or DTO schemas.
+//! Boundary: delegates management calls to ops and maps results into DTOs.
+
 use crate::{
     InternalError, dto::canister::CanisterStatusResponse, ops::ic::mgmt::MgmtOps,
     workflow::prelude::*,
@@ -5,6 +11,8 @@ use crate::{
 
 ///
 /// MgmtWorkflow
+///
+/// Workflow facade for management-canister operations.
 ///
 
 pub struct MgmtWorkflow;

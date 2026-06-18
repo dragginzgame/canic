@@ -1,3 +1,9 @@
+//! Module: workflow::placement::sharding::query
+//!
+//! Responsibility: expose read-only sharding registry query projections.
+//! Does not own: registry mutation, assignment policy, or endpoint authorization.
+//! Boundary: maps storage records into sharding DTO responses.
+
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -10,6 +16,11 @@ use crate::{
     },
 };
 
+///
+/// ShardingQuery
+///
+/// Read-only query facade for sharding registry state.
+///
 pub struct ShardingQuery;
 
 impl ShardingQuery {

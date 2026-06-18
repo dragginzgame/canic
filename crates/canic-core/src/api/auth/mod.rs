@@ -9,8 +9,7 @@ use crate::{
     dto::{
         auth::{
             ActiveDelegationProofStatusResponse, DelegatedToken, DelegatedTokenGetRequest,
-            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationProof,
-            DelegationProofGetRequest, DelegationProofIssueRequest, DelegationProofPrepareResponse,
+            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse,
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
             RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
@@ -55,7 +54,6 @@ impl AuthApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const DELEGATED_TOKEN_ISSUER_DISABLED: &str = "delegated token issuer disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_issuer=true in canic.toml";
-    const ROOT_DELEGATION_PROOF_SELF_PROVISIONING_DISABLED: &str = "issuer-initiated root delegation proof provisioning is unsupported; use root hard-cut provisioning";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
@@ -170,31 +168,6 @@ impl AuthApi {
         Ok(())
     }
 
-    /// Reject the issuer-initiated root delegation proof provisioning path.
-    pub fn prepare_delegation_proof(
-        _request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProofPrepareResponse, Error> {
-        Err(Error::forbidden(
-            Self::ROOT_DELEGATION_PROOF_SELF_PROVISIONING_DISABLED,
-        ))
-    }
-
-    /// Prepare a root-certified delegation proof from the local root update path.
-    pub fn prepare_delegation_proof_root(
-        request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProofPrepareResponse, Error> {
-        RuntimeAuthWorkflow::prepare_delegation_proof_root(request).map_err(Self::map_auth_error)
-    }
-
-    /// Retrieve a prepared self-contained delegation proof from the local root query path.
-    pub fn get_delegation_proof_root(
-        request: DelegationProofGetRequest,
-    ) -> Result<DelegationProof, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        let caller = IcOps::msg_caller();
-        AuthOps::get_delegation_proof(caller, request.cert_hash).map_err(Self::map_auth_error)
-    }
-
     /// Prepare root delegation proof batch metadata from the local root update path.
     pub fn prepare_delegation_proof_batch_root(
         request: RootDelegationProofBatchPrepareRequest,
@@ -286,48 +259,5 @@ fn root_delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> RootDelegated
     RootDelegatedRoleGrantPolicy {
         target: grant.target.clone(),
         scopes: grant.scopes.clone(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::AuthApi;
-    use crate::{
-        cdk::types::Principal,
-        dto::{
-            auth::{DelegatedRoleGrant, DelegationAudience, DelegationProofIssueRequest},
-            error::ErrorCode,
-        },
-        ids::CanisterRole,
-    };
-
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
-    fn delegation_request() -> DelegationProofIssueRequest {
-        DelegationProofIssueRequest {
-            metadata: None,
-            issuer_pid: p(2),
-            aud: DelegationAudience::Project("test".to_string()),
-            grants: vec![DelegatedRoleGrant {
-                target: CanisterRole::owned("user_shard".to_string()),
-                scopes: vec!["canic.issue".to_string()],
-            }],
-            cert_ttl_ns: 60_000_000_000,
-        }
-    }
-
-    #[test]
-    fn issuer_root_delegation_prepare_is_hard_cut() {
-        let err = AuthApi::prepare_delegation_proof(delegation_request())
-            .expect_err("issuer-initiated root proof prepare must be hard-cut");
-
-        assert_eq!(err.code, ErrorCode::Forbidden);
-        assert!(
-            err.message.contains("root hard-cut provisioning"),
-            "unexpected error message: {}",
-            err.message
-        );
     }
 }

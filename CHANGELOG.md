@@ -16,6 +16,14 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.17` removes the legacy single-proof root delegation prepare/get route,
+  leaving batch prepare, direct root query retrieval, and batch install as the
+  only active root proof provisioning contract.
+
+- `0.68.16` closes the root proof provisioning MVP regression loop by proving
+  issuer nested-query retrieval fails for the root certificate-context reason
+  and signer-local issuance survives root unavailability after proof install.
+
 - `0.68.15` maps root proof retrieval failures without a root data certificate
   to the stable `RootDataCertificateUnavailable` error, making direct-query
   context failures distinguishable from ACL failures.

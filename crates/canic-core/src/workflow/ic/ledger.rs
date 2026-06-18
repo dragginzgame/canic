@@ -1,3 +1,9 @@
+//! Module: workflow::ic::ledger
+//!
+//! Responsibility: coordinate ledger transfer workflows and allowance validation.
+//! Does not own: ledger call execution, account DTO schemas, or endpoint authorization.
+//! Boundary: delegates ledger reads/writes to ops and enforces workflow preconditions.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     ops::ic::{
@@ -9,6 +15,8 @@ use crate::{
 
 ///
 /// LedgerWorkflow
+///
+/// Workflow facade for ledger transfer orchestration.
 ///
 
 pub struct LedgerWorkflow;
@@ -33,6 +41,8 @@ impl LedgerWorkflow {
 
 ///
 /// LedgerRules
+///
+/// Workflow-level validation helpers for ledger operations.
 ///
 
 pub struct LedgerRules;

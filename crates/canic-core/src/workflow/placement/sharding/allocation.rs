@@ -1,4 +1,9 @@
-use super::ShardingWorkflow;
+//! Module: workflow::placement::sharding::allocation
+//!
+//! Responsibility: create shard canisters and admit them into sharding storage.
+//! Does not own: sharding policy, request endpoint authorization, or storage schema.
+//! Boundary: invokes request ops and records successful shard allocation.
+
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -17,8 +22,14 @@ use crate::{
             sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
         },
     },
+    workflow::placement::sharding::ShardingWorkflow,
 };
 
+///
+/// ShardAllocator
+///
+/// Internal helper for creating shard canisters before registry admission.
+///
 pub(super) struct ShardAllocator;
 
 impl ShardAllocator {

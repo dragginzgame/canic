@@ -1,4 +1,9 @@
-use super::ShardingWorkflow;
+//! Module: workflow::placement::sharding::registry
+//!
+//! Responsibility: project sharding registry state into policy input views.
+//! Does not own: storage mutation, policy evaluation, or endpoint DTOs.
+//! Boundary: filters storage records to routable child shard views.
+
 use crate::{
     cdk::types::Principal,
     ops::{
@@ -6,6 +11,7 @@ use crate::{
         storage::{children::CanisterChildrenOps, placement::sharding::ShardingRegistryOps},
     },
     view::placement::sharding::ShardPlacement,
+    workflow::placement::sharding::ShardingWorkflow,
 };
 use std::collections::BTreeSet;
 

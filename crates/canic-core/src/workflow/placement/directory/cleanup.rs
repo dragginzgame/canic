@@ -1,4 +1,9 @@
-use super::DirectoryWorkflow;
+//! Module: workflow::placement::directory::cleanup
+//!
+//! Responsibility: recycle abandoned directory children and release stale claims.
+//! Does not own: pool lifecycle rules, registry schemas, or recovery endpoint mapping.
+//! Boundary: delegates orphan disposal and performs claim-matching cleanup writes.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -17,6 +22,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
+    workflow::placement::directory::DirectoryWorkflow,
 };
 
 impl DirectoryWorkflow {

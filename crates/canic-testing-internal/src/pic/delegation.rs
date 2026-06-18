@@ -4,16 +4,11 @@ use canic::{
     dto::auth::{
         AuthRequestMetadata, DelegatedRoleGrant, DelegatedToken, DelegatedTokenGetRequest,
         DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
-        DelegationProof, DelegationProofGetRequest, DelegationProofIssueRequest,
-        DelegationProofPrepareResponse, InstallActiveDelegationProofRequest,
-        InstallActiveDelegationProofResponse,
     },
-    ids::{CanisterRole, cap},
+    ids::CanisterRole,
     protocol,
 };
 use ic_testkit::pic::Pic;
-
-const TOKEN_CERT_EXPIRY_MARGIN_NS: u64 = 1_000_000_000;
 
 // Create one user shard through the reference `user_hub` path.
 #[must_use]
@@ -21,27 +16,6 @@ pub fn create_user_shard(pic: &Pic, user_hub_pid: Principal, user_pid: Principal
     let created: Result<Principal, Error> =
         pic.update_call_or_panic(user_hub_pid, "create_account", (user_pid,));
     created.expect("create_account application failed")
-}
-
-// Issue one delegated token from a prepared shard with caller-selected claims.
-#[must_use]
-pub fn issue_delegated_token(
-    pic: &Pic,
-    issuer_pid: Principal,
-    proof: DelegationProof,
-    subject: Principal,
-    aud: DelegationAudience,
-    grants: Vec<DelegatedRoleGrant>,
-    token_ttl_ns: u64,
-) -> DelegatedToken {
-    let installed: Result<InstallActiveDelegationProofResponse, Error> = pic.update_call_or_panic(
-        issuer_pid,
-        protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
-        (InstallActiveDelegationProofRequest { proof },),
-    );
-    installed.expect("canic_install_active_delegation_proof application failed");
-
-    issue_delegated_token_from_active_proof(pic, issuer_pid, subject, aud, grants, token_ttl_ns)
 }
 
 // Issue one delegated token from the signer's already-installed active proof.
@@ -84,75 +58,6 @@ pub fn issue_delegated_token_from_active_proof(
         },),
     );
     issued.expect("canic_get_delegated_token application failed")
-}
-
-// Obtain one canonical root-issued proof through the prepare/update + get/query flow.
-#[must_use]
-pub fn obtain_root_delegation_proof(
-    pic: &Pic,
-    root_id: Principal,
-    issuer_pid: Principal,
-    verifier_role: CanisterRole,
-) -> DelegationProof {
-    let request = DelegationProofIssueRequest {
-        metadata: Some(root_delegation_request_metadata(issuer_pid, &verifier_role)),
-        issuer_pid,
-        aud: DelegationAudience::Project("test".to_string()),
-        grants: vec![role_grant(verifier_role, vec![cap::VERIFY.to_string()])],
-        cert_ttl_ns: 60_000_000_000,
-    };
-    let prepared: Result<DelegationProofPrepareResponse, Error> = pic.update_call_as_or_panic(
-        root_id,
-        issuer_pid,
-        protocol::CANIC_PREPARE_DELEGATION_PROOF,
-        (request,),
-    );
-    let prepared = prepared.expect("canic_prepare_delegation_proof application failed");
-    let response: Result<DelegationProof, Error> = pic.query_call_as_or_panic(
-        root_id,
-        issuer_pid,
-        protocol::CANIC_GET_DELEGATION_PROOF,
-        (DelegationProofGetRequest {
-            cert_hash: prepared.cert_hash,
-        },),
-    );
-    response.expect("canic_get_delegation_proof application failed")
-}
-
-/// Pick a reusable token TTL that stays inside the root-certified proof window.
-#[must_use]
-pub fn token_ttl_within_proof(pic: &Pic, proof: &DelegationProof) -> u64 {
-    let remaining_cert_ttl_ns = proof
-        .cert
-        .expires_at_ns
-        .saturating_sub(pic.current_time_nanos());
-    let bounded_ttl_ns = remaining_cert_ttl_ns
-        .saturating_sub(TOKEN_CERT_EXPIRY_MARGIN_NS)
-        .min(proof.cert.max_token_ttl_ns);
-
-    assert!(
-        bounded_ttl_ns > 0,
-        "delegation proof must have enough remaining lifetime for token issuance"
-    );
-
-    bounded_ttl_ns
-}
-
-fn root_delegation_request_metadata(
-    issuer_pid: Principal,
-    verifier_role: &CanisterRole,
-) -> AuthRequestMetadata {
-    let mut request_id = [0u8; 32];
-    for (index, byte) in issuer_pid.as_slice().iter().enumerate() {
-        request_id[index % request_id.len()] ^= *byte;
-    }
-    for (index, byte) in verifier_role.as_str().as_bytes().iter().enumerate() {
-        request_id[(index + 13) % request_id.len()] ^= *byte;
-    }
-    AuthRequestMetadata {
-        request_id,
-        ttl_ns: 60_000_000_000,
-    }
 }
 
 fn issue_token_request_metadata(

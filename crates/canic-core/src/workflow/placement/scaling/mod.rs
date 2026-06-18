@@ -1,11 +1,8 @@
-//! Scaling workflow.
+//! Module: workflow::placement::scaling
 //!
-//! This module performs scaling side effects:
-//! - evaluates scaling policy
-//! - creates canisters
-//! - mutates the scaling registry
-//!
-//! All async and IC interactions live here.
+//! Responsibility: create and bootstrap scaling workers from placement policy.
+//! Does not own: scaling policy rules, registry schemas, or endpoint authorization.
+//! Boundary: coordinates policy decisions, canister creation, and registry writes.
 
 pub mod query;
 
@@ -31,6 +28,8 @@ use crate::{
 
 ///
 /// ScalingWorkflow
+///
+/// Entry point for scaling placement orchestration.
 ///
 
 pub struct ScalingWorkflow;

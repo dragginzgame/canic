@@ -1,7 +1,15 @@
+//! Module: workflow::view::paginate
+//!
+//! Responsibility: clamp and apply page requests to in-memory view collections.
+//! Does not own: storage reads, query authorization, or DTO schema definitions.
+//! Boundary: maps existing vectors and page requests into bounded page responses.
+
 use crate::dto::page::{Page, PageRequest};
 
 ///
 /// Pagination
+///
+/// Shared page sizing helpers for workflow query projections.
 ///
 
 pub const PAGE_REQUEST_MAX_LIMIT: u64 = 1_000;

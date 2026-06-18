@@ -1,3 +1,9 @@
+//! Module: workflow::placement::directory
+//!
+//! Responsibility: resolve, create, repair, and recover directory-bound instances.
+//! Does not own: storage schemas, request endpoint authorization, or pool lifecycle policy.
+//! Boundary: coordinates directory storage, child creation, and stale-claim recovery.
+
 mod classification;
 mod cleanup;
 mod config;
@@ -5,6 +11,9 @@ mod create;
 pub mod query;
 mod state;
 
+use crate::workflow::placement::directory::state::{
+    DirectoryEntryClassification, validate_bind_target_with_reason,
+};
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -20,8 +29,12 @@ use crate::{
         storage::placement::directory::DirectoryRegistryOps,
     },
 };
-use state::{DirectoryEntryClassification, validate_bind_target_with_reason};
 
+///
+/// DirectoryWorkflow
+///
+/// Entry point for directory placement orchestration.
+///
 pub struct DirectoryWorkflow;
 
 impl DirectoryWorkflow {
