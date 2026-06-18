@@ -1,4 +1,3 @@
-#![expect(dead_code)]
 //! Module: ops::replay::receipt
 //!
 //! Responsibility: reserve, classify, and mutate shared replay receipts.
@@ -78,6 +77,7 @@ pub struct ReplayReceiptToken {
 
 impl ReplayReceiptToken {
     #[must_use]
+    #[cfg_attr(not(test), expect(dead_code))]
     pub const fn key(&self) -> ReplayReceiptSlotKey {
         self.key
     }
@@ -249,6 +249,7 @@ pub fn commit_receipt_response(
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
 }
 
+#[cfg_attr(not(test), expect(dead_code))]
 pub fn commit_terminal_failure(
     token: &ReplayReceiptToken,
     error_code: ReplayTerminalErrorCode,
