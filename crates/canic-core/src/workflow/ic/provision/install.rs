@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::install
+//!
+//! Responsibility: install approved WASM and initial state into provisioned canisters.
+//! Does not own: module source approval, registry policy rules, or install call internals.
+//! Boundary: registers before install, delegates module install, and rolls back on failure.
+
 use crate::{
     InternalError,
     ops::{

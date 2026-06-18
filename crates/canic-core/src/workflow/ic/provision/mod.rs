@@ -43,6 +43,8 @@ use crate::{
 ///
 /// ProvisionWorkflow
 ///
+/// Workflow facade for root canister provisioning and teardown.
+///
 
 pub struct ProvisionWorkflow;
 

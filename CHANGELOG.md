@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.19` aligns private root batch install workflow, test, and active-doc
+  wording around issuer-local active-proof installation while preserving the
+  public batch install protocol and outcome enum.
+
 - `0.68.18` cleans up root/issuer canister-signature proof internals by relying
   on caller-bound pending keys and aligning the root batch provisioning helper
   wording with root-proof terminology, without changing the public protocol.

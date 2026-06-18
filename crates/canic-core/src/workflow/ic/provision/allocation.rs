@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::allocation
+//!
+//! Responsibility: allocate canister IDs and initial cycles for provisioning.
+//! Does not own: install execution, registry schema, or placement policy rules.
+//! Boundary: reuses pool canisters or creates new managed canisters for provision flows.
+
 use crate::{
     InternalError,
     ops::{
@@ -27,6 +33,8 @@ use crate::{
 
 ///
 /// AllocationSource
+///
+/// Source of a canister ID selected for a provisioning operation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

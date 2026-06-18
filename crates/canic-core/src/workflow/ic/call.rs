@@ -1,3 +1,9 @@
+//! Module: workflow::ic::call
+//!
+//! Responsibility: orchestrate IC calls with optional intent reservation semantics.
+//! Does not own: low-level call execution, stable intent schema, or endpoint auth.
+//! Boundary: wraps IC call ops and coordinates workflow-level intent accounting.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     ids::{IntentId, IntentResourceKey},
@@ -20,6 +26,8 @@ use std::borrow::Cow;
 
 ///
 /// CallWorkflow
+///
+/// Workflow facade for constructing IC calls.
 ///
 
 pub struct CallWorkflow;
@@ -44,6 +52,7 @@ impl CallWorkflow {
 
 ///
 /// IntentSpec
+///
 /// Internal intent spec for call orchestration.
 ///
 
@@ -72,6 +81,8 @@ impl IntentSpec {
 
 ///
 /// CallBuilder (workflow)
+///
+/// Builder that carries call arguments, cycles, and optional intent metadata.
 ///
 
 pub struct CallBuilder<'a> {
@@ -334,6 +345,8 @@ fn next_in_flight_quantity(in_flight: u64, requested: u64) -> Result<u64, Intern
 
 ///
 /// CallResult (workflow)
+///
+/// Workflow wrapper around decoded IC call results.
 ///
 
 pub struct CallResult {

@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::payload
+//!
+//! Responsibility: build non-root canister initialization payloads.
+//! Does not own: environment storage, index schemas, or install execution.
+//! Boundary: snapshots current environment and indexes into init payload DTOs.
+
 use crate::{
     InternalError,
     dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},

@@ -1,3 +1,9 @@
+//! Module: workflow::ic::provision::indexes
+//!
+//! Responsibility: rebuild topology indexes after provisioning registry changes.
+//! Does not own: index storage schemas, registry mutation, or cascade sync execution.
+//! Boundary: imports rebuilt index snapshots and returns cascade sections to synchronize.
+
 use crate::{
     InternalError,
     ops::{

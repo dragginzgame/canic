@@ -226,7 +226,7 @@ canic_get_delegation_proof_batch query
   -> RootDelegationProofBatchGetResponse
 
 canic_install_delegation_proof_batch update
-  -> root broadcasts canic_install_active_delegation_proof to signers
+  -> root broadcasts canic_install_active_delegation_proof to issuers
 ```
 
 Root issuance steps:
@@ -256,7 +256,7 @@ Root issuance steps:
 11. In a direct root query, assemble `DelegationProof` values from the prepared
     metadata and root data certificate.
 12. In a root update, validate submitted proofs against pending metadata and
-    broadcast signer installs.
+    broadcast issuer installs.
 
 Root proof creation input:
 
