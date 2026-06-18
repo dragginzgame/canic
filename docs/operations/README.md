@@ -24,6 +24,12 @@ validation notes.
   close-out verdict and separates remaining RC/final-release validation from
   additional implementation slicing.
 
+## Auth Operations
+
+- [Root proof provisioning runbook](root-proof-provisioning.md)
+  records the explicit prepare -> direct root query -> install operating model
+  for the delegated-token root proof provisioning MVP.
+
 ## Release Probe Inventories
 
 - [0.56 v1 release probe inventory](0.56-v1-release-probes.md) records the

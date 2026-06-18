@@ -24,4 +24,5 @@ Historical/superseded notes:
 
 Operational runbooks:
 
+- [Root Proof Provisioning](../operations/root-proof-provisioning.md)
 - [0.55 V1 Local Smoke](../operations/0.55-v1-local-smoke.md)
