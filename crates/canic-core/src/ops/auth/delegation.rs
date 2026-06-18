@@ -29,17 +29,23 @@ use crate::{
             ActiveDelegationProofStatusResponse, AuthRequestMetadata, DelegatedRoleGrant,
             DelegationAudience, DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
             RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
-            RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareRequest,
-            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
-            RootDelegationProofInstallOutcome, RootProof,
+            RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareEntry,
+            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
+            RootDelegationProofBatchProof, RootDelegationProofInstallOutcome, RootProof,
         },
         error::Error,
     },
     ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
 use sha2::{Digest, Sha256};
-use std::{cell::RefCell, collections::BTreeMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+};
 
+const MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS: usize = 64;
+const MAX_PENDING_ROOT_DELEGATION_PROOF_BATCHES: usize = 128;
+const MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER: usize = 16;
 const MAX_ROOT_DELEGATION_PROOF_BATCH_REPLAY_TTL_NS: u64 = 60_000_000_000;
 const ROOT_DELEGATION_PROOF_BATCH_PREPARE_FINGERPRINT_DOMAIN: &[u8] =
     b"canic-root-delegation-proof-batch-prepare-v1";
@@ -79,6 +85,12 @@ struct PreparedRootDelegationProofBatchReplay {
     request_fingerprint: [u8; 32],
     response: RootDelegationProofBatchPrepareResponse,
     replay_expires_at_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PendingDelegationProofBatchCleanup {
+    pending_entries: usize,
+    replay_entries: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -153,6 +165,7 @@ impl AuthOps {
                 "root delegation proof batch must contain at least one issuer",
             )));
         }
+        ensure_root_delegation_proof_batch_entry_limit(request.entries.len())?;
 
         let mut decisions = Vec::with_capacity(request.entries.len());
         for entry in &request.entries {
@@ -237,6 +250,10 @@ impl AuthOps {
     ) {
         mark_delegation_proof_batch_installed(batch_id, issuer_pid, cert_hash);
     }
+
+    pub(crate) fn prune_expired_delegation_proof_batch_metadata(now_ns: u64) {
+        prune_expired_pending_delegation_proof_batch_metadata(now_ns);
+    }
 }
 
 fn prepare_delegation_proof_batch_with_root_proof_replay(
@@ -251,6 +268,7 @@ fn prepare_delegation_proof_batch_with_root_proof_replay(
     root_pid: impl FnOnce() -> Principal,
     prepare_root_proof: impl FnMut([u8; 32], [u8; 32]) -> Result<u64, InternalError>,
 ) -> Result<RootDelegationProofBatchPrepareResponse, InternalError> {
+    prune_expired_pending_delegation_proof_batch_metadata(context.issued_at_ns);
     let batch_id = context.metadata.request_id;
     let request_fingerprint = root_delegation_proof_batch_prepare_request_fingerprint(&request);
     if let Some(response) = pending_delegation_proof_batch_replay_response(
@@ -260,6 +278,7 @@ fn prepare_delegation_proof_batch_with_root_proof_replay(
     )? {
         return Ok(response);
     }
+    ensure_pending_delegation_proof_batch_quota(batch_id, &request.entries)?;
 
     let replay_expires_at_ns =
         root_delegation_proof_batch_replay_expires_at(context.metadata, context.issued_at_ns)?;
@@ -488,6 +507,38 @@ fn mark_delegation_proof_batch_installed(
     });
 }
 
+fn prune_expired_pending_delegation_proof_batch_metadata(
+    now_ns: u64,
+) -> PendingDelegationProofBatchCleanup {
+    PendingDelegationProofBatchCleanup {
+        pending_entries: prune_expired_pending_delegation_proof_batches(now_ns),
+        replay_entries: prune_expired_pending_delegation_proof_batch_replays(now_ns),
+    }
+}
+
+fn prune_expired_pending_delegation_proof_batches(now_ns: u64) -> usize {
+    PENDING_DELEGATION_PROOF_BATCHES.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        let before = pending.len();
+        pending.retain(|_, entry| {
+            if now_ns >= entry.prepared.cert.expires_at_ns {
+                return false;
+            }
+            entry.installed || now_ns < entry.prepared.retrieval_expires_at_ns
+        });
+        before.saturating_sub(pending.len())
+    })
+}
+
+fn prune_expired_pending_delegation_proof_batch_replays(now_ns: u64) -> usize {
+    PENDING_DELEGATION_PROOF_BATCH_REPLAYS.with(|replays| {
+        let mut replays = replays.borrow_mut();
+        let before = replays.len();
+        replays.retain(|_, replay| now_ns < replay.replay_expires_at_ns);
+        before.saturating_sub(replays.len())
+    })
+}
+
 fn pending_delegation_proof_batch_replay_response(
     batch_id: [u8; 32],
     request_fingerprint: [u8; 32],
@@ -615,6 +666,58 @@ fn hash_prepare_u64(hasher: &mut Sha256, value: u64) {
 fn hash_prepare_bytes(hasher: &mut Sha256, bytes: &[u8]) {
     hash_prepare_u64(hasher, bytes.len() as u64);
     hasher.update(bytes);
+}
+
+fn ensure_root_delegation_proof_batch_entry_limit(entry_count: usize) -> Result<(), InternalError> {
+    if entry_count > MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS {
+        return Err(InternalError::public(Error::exhausted(format!(
+            "root delegation proof batch issuer count {entry_count} exceeds max {MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS}",
+        ))));
+    }
+    Ok(())
+}
+
+fn ensure_pending_delegation_proof_batch_quota(
+    batch_id: [u8; 32],
+    entries: &[RootDelegationProofBatchPrepareEntry],
+) -> Result<(), InternalError> {
+    ensure_root_delegation_proof_batch_entry_limit(entries.len())?;
+    PENDING_DELEGATION_PROOF_BATCHES.with(|pending| {
+        let pending = pending.borrow();
+        let pending_batch_ids = pending
+            .keys()
+            .map(|key| key.batch_id)
+            .collect::<BTreeSet<_>>();
+        if !pending_batch_ids.contains(&batch_id)
+            && pending_batch_ids.len() >= MAX_PENDING_ROOT_DELEGATION_PROOF_BATCHES
+        {
+            return Err(InternalError::public(Error::exhausted(format!(
+                "root delegation proof pending batch count exceeds max {MAX_PENDING_ROOT_DELEGATION_PROOF_BATCHES}",
+            ))));
+        }
+
+        let mut requested_by_issuer: BTreeMap<Vec<u8>, usize> = BTreeMap::new();
+        for entry in entries {
+            *requested_by_issuer
+                .entry(entry.issuer_pid.as_slice().to_vec())
+                .or_default() += 1;
+        }
+        for (issuer_pid, requested_count) in requested_by_issuer {
+            let existing_count = pending
+                .keys()
+                .filter(|key| key.issuer_pid == issuer_pid)
+                .count();
+            if existing_count.saturating_add(requested_count)
+                > MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER
+            {
+                return Err(InternalError::public(Error::exhausted(format!(
+                    "root delegation proof pending issuer proof count exceeds max {MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER}",
+                ))));
+            }
+        }
+
+        Ok(())
+    })
 }
 
 fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError) -> InternalError {
@@ -983,6 +1086,39 @@ mod tests {
     }
 
     #[test]
+    fn batch_prepare_rejects_batch_size_above_mvp_limit() {
+        let request = RootDelegationProofBatchPrepareRequest {
+            metadata: Some(metadata(52, 60_000_000_000)),
+            entries: (0..=MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS)
+                .map(|index| batch_prepare_entry(p(index as u8), 60_000_000_000))
+                .collect(),
+        };
+
+        let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
+            .expect_err("oversized batch must fail before policy validation");
+        let public = err.public_error().expect("public quota error");
+
+        assert_eq!(public.code, ErrorCode::ResourceExhausted);
+    }
+
+    #[test]
+    fn batch_prepare_rejects_pending_issuer_quota_exhaustion() {
+        let issuer_pid = p(53);
+        for offset in 0..MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER {
+            let metadata_id = 80 + u8::try_from(offset).expect("test offset must fit in u8");
+            prepared_batch(issuer_pid, metadata_id, 120_000_000_000);
+        }
+        let mut request = batch_prepare_request(issuer_pid, 60_000_000_000);
+        request.metadata = Some(metadata(97, 60_000_000_000));
+
+        let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
+            .expect_err("pending issuer quota exhaustion must fail before preparing proof leaves");
+        let public = err.public_error().expect("public quota error");
+
+        assert_eq!(public.code, ErrorCode::ResourceExhausted);
+    }
+
+    #[test]
     fn batch_prepare_returns_metadata_for_registered_issuer() {
         AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(29)));
         let mut request = batch_prepare_request(p(29), 60_000_000_000);
@@ -1333,6 +1469,80 @@ mod tests {
         assert_eq!(
             preflight_delegation_proof_batch_install_proof(response.batch_id, proof, 80),
             Err(RootDelegationProofInstallOutcome::AlreadyInstalled)
+        );
+    }
+
+    #[test]
+    fn pending_batch_cleanup_prunes_uninstalled_expired_metadata_and_replays() {
+        let response = prepared_batch(p(50), 50, 70);
+        let replay_fingerprint = [5; 32];
+        cache_prepared_delegation_proof_batch_replay(
+            response.batch_id,
+            replay_fingerprint,
+            response.clone(),
+            70,
+        );
+
+        let cleanup = prune_expired_pending_delegation_proof_batch_metadata(70);
+        assert!(cleanup.pending_entries >= 1);
+        assert!(cleanup.replay_entries >= 1);
+
+        let err = get_delegation_proof_batch_with_root_proof(
+            batch_get_request(&response),
+            p(1),
+            70,
+            |_cert_hash| panic!("pruned pending metadata must not request a root proof"),
+        )
+        .expect_err("expired pending metadata should be pruned");
+        assert_eq!(err.class(), InternalErrorClass::Ops);
+
+        let replay = pending_delegation_proof_batch_replay_response(
+            response.batch_id,
+            replay_fingerprint,
+            70,
+        )
+        .expect("replay lookup should not fail");
+        assert_eq!(replay, None);
+    }
+
+    #[test]
+    fn pending_batch_cleanup_keeps_installed_metadata_until_cert_expiry() {
+        let response = prepared_batch(p(51), 51, 70);
+        let retrieved = get_delegation_proof_batch_with_root_proof(
+            batch_get_request(&response),
+            p(1),
+            60,
+            |_cert_hash| Ok(root_proof(15)),
+        )
+        .expect("prepared batch should retrieve proofs before expiry");
+        let proof = retrieved.proofs[0].clone();
+
+        mark_delegation_proof_batch_installed(response.batch_id, proof.issuer_pid, proof.cert_hash);
+        prune_expired_pending_delegation_proof_batch_metadata(80);
+
+        assert!(
+            pending_delegation_proof_batch_entry(
+                response.batch_id,
+                proof.issuer_pid,
+                proof.cert_hash,
+            )
+            .is_ok(),
+            "installed metadata should remain available for idempotent reinstall"
+        );
+        assert_eq!(
+            preflight_delegation_proof_batch_install_proof(response.batch_id, &proof, 80),
+            Err(RootDelegationProofInstallOutcome::AlreadyInstalled)
+        );
+
+        prune_expired_pending_delegation_proof_batch_metadata(response.entries[0].expires_at_ns);
+        assert!(
+            pending_delegation_proof_batch_entry(
+                response.batch_id,
+                proof.issuer_pid,
+                proof.cert_hash,
+            )
+            .is_err(),
+            "installed metadata should be removed once the certificate expires"
         );
     }
 }

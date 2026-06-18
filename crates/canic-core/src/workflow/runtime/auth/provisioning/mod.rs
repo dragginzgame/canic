@@ -91,6 +91,7 @@ where
             outcome,
         });
     }
+    AuthOps::prune_expired_delegation_proof_batch_metadata(now_ns);
 
     Ok(RootDelegationProofBatchInstallResponse {
         batch_id: request.batch_id,

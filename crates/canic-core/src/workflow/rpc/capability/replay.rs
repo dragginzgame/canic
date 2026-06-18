@@ -1,7 +1,16 @@
-use crate::dto::{
-    capability::CapabilityRequestMetadata,
-    error::Error,
-    rpc::{Request, RootRequestMetadata},
+//! Module: workflow::rpc::capability::replay
+//!
+//! Responsibility: project capability metadata into replay request metadata.
+//! Does not own: replay storage, request dispatch, or capability proof validation.
+//! Boundary: validates metadata freshness and derives replay request identifiers.
+
+use crate::{
+    dto::{
+        capability::CapabilityRequestMetadata,
+        error::Error,
+        rpc::{Request, RootRequestMetadata},
+    },
+    workflow::rpc::capability::{MAX_CAPABILITY_CLOCK_SKEW_NS, REPLAY_REQUEST_ID_DOMAIN_V1},
 };
 use sha2::{Digest, Sha256};
 
@@ -23,7 +32,7 @@ pub(super) fn project_replay_metadata(
     }
 
     let max_future_ns = now_ns
-        .checked_add(super::MAX_CAPABILITY_CLOCK_SKEW_NS)
+        .checked_add(MAX_CAPABILITY_CLOCK_SKEW_NS)
         .ok_or_else(|| Error::invalid("capability metadata clock skew overflow"))?;
     if metadata.issued_at_ns > max_future_ns {
         return Err(Error::invalid(
@@ -47,7 +56,7 @@ pub(super) fn project_replay_metadata(
 
 pub(super) fn replay_request_id(request_id: [u8; 16], nonce: [u8; 16]) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(super::REPLAY_REQUEST_ID_DOMAIN_V1);
+    hasher.update(REPLAY_REQUEST_ID_DOMAIN_V1);
     hasher.update(request_id);
     hasher.update(nonce);
     hasher.finalize().into()

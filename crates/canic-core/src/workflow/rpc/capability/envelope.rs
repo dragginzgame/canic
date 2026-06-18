@@ -1,9 +1,16 @@
-use crate::dto::{
-    capability::{CAPABILITY_VERSION_V1, CapabilityProof, CapabilityService},
-    error::Error,
-};
+//! Module: workflow::rpc::capability::envelope
+//!
+//! Responsibility: validate capability envelope wire headers.
+//! Does not own: proof verification, request dispatch, or replay metadata projection.
+//! Boundary: maps capability DTO header fields into typed proof views.
 
-use super::RootCapabilityProof;
+use crate::{
+    dto::{
+        capability::{CAPABILITY_VERSION_V1, CapabilityProof, CapabilityService},
+        error::Error,
+    },
+    workflow::rpc::capability::RootCapabilityProof,
+};
 
 pub(super) fn validate_root_capability_envelope(
     service: CapabilityService,

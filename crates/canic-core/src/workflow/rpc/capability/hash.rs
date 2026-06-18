@@ -1,6 +1,13 @@
+//! Module: workflow::rpc::capability::hash
+//!
+//! Responsibility: compute canonical root capability proof-binding hashes.
+//! Does not own: proof validation, request dispatch, or replay metadata.
+//! Boundary: encodes canonical capability payloads with capability hash domain separation.
+
 use crate::{
     cdk::types::Principal,
     dto::{capability::CapabilityService, error::Error, rpc::Request},
+    workflow::rpc::capability::CAPABILITY_HASH_DOMAIN_V1,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -19,7 +26,7 @@ pub(super) fn root_capability_hash(
     ))
     .map_err(|err| Error::internal(format!("failed to encode capability payload: {err}")))?;
     let mut hasher = Sha256::new();
-    hasher.update(super::CAPABILITY_HASH_DOMAIN_V1);
+    hasher.update(CAPABILITY_HASH_DOMAIN_V1);
     hasher.update(payload);
     Ok(hasher.finalize().into())
 }

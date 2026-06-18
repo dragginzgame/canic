@@ -1,8 +1,9 @@
-use super::{
-    RootCapabilityProofMode, project_replay_metadata, root_capability_family,
-    root_capability_metric_key, validate_root_capability_envelope, verify_root_capability_proof,
-    with_root_request_metadata,
-};
+//! Module: workflow::rpc::capability::root
+//!
+//! Responsibility: validate and dispatch root capability envelopes.
+//! Does not own: request execution, replay storage schema, or endpoint authentication.
+//! Boundary: coordinates envelope checks, proof verification, metrics, and root dispatch.
+
 use crate::{
     dto::{
         capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
@@ -14,7 +15,14 @@ use crate::{
         ic::IcOps,
         runtime::metrics::root_capability::{RootCapabilityMetricOutcome, RootCapabilityMetrics},
     },
-    workflow::rpc::request::handler::RootResponseWorkflow,
+    workflow::rpc::{
+        capability::{
+            RootCapabilityProofMode, project_replay_metadata, root_capability_family,
+            root_capability_metric_key, validate_root_capability_envelope,
+            verify_root_capability_proof, with_root_request_metadata,
+        },
+        request::handler::RootResponseWorkflow,
+    },
 };
 
 /// response_capability_v1_root

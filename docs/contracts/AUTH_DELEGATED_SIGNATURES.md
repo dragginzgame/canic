@@ -212,6 +212,13 @@ request id with a different payload is a replay conflict. The first fresh
 prepare adds signature-map entries, refreshes certified data, and stores
 pending batch metadata.
 
+Root batch provisioning is bounded in the MVP: 64 issuers per batch, 128
+pending batches, and 16 pending root delegation proofs per issuer. Expired
+pending metadata is pruned opportunistically during prepare and install.
+Uninstalled pending entries are removed after their retrieval window expires;
+installed entries remain available for idempotent reinstall until certificate
+expiry. Signature-map leaf pruning is not part of the 0.68 MVP.
+
 `canic_get_delegation_proof_batch` is not separately replay-protected. It is a
 direct root query over existing pending batch metadata. The requested
 `batch_id`, issuer, and `cert_hash` must match pending metadata, and
