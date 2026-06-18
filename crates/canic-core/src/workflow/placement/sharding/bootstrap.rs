@@ -1,4 +1,9 @@
-use super::ShardingWorkflow;
+//! Module: workflow::placement::sharding::bootstrap
+//!
+//! Responsibility: create initial shards for configured pools and empty active sets.
+//! Does not own: shard registry schema, endpoint authorization, or policy definitions.
+//! Boundary: bootstraps sharding workflow from configuration and records assignments.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -17,6 +22,7 @@ use crate::{
         },
         storage::placement::sharding::ShardingRegistryOps,
     },
+    workflow::placement::sharding::ShardingWorkflow,
 };
 
 impl ShardingWorkflow {

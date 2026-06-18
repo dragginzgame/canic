@@ -44,14 +44,6 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_RESERVE_V1),
     ),
     update_replay_protected(
-        "canic_prepare_delegation_proof",
-        "auth.prepare_delegation_proof.v1",
-        ReplayImplementationStatus::Implemented,
-        CostClass::RootCanisterSignaturePrepare,
-        Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1),
-        None,
-    ),
-    update_replay_protected(
         "canic_prepare_delegation_proof_batch",
         "auth.prepare_delegation_proof_batch.v1",
         ReplayImplementationStatus::Implemented,

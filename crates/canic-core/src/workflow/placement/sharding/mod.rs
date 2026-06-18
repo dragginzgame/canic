@@ -1,3 +1,9 @@
+//! Module: workflow::placement::sharding
+//!
+//! Responsibility: orchestrate shard assignment, lifecycle admission, and pool lookup.
+//! Does not own: storage schemas, placement policy decisions, or endpoint DTOs.
+//! Boundary: coordinates sharding policy and storage ops for workflow callers.
+
 mod allocation;
 mod assignment;
 mod bootstrap;
@@ -13,6 +19,11 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
+///
+/// ShardingWorkflowError
+///
+/// Workflow-level failures raised while coordinating sharding placement.
+///
 #[derive(Debug, ThisError)]
 pub enum ShardingWorkflowError {
     #[error(transparent)]
@@ -35,6 +46,11 @@ impl From<ShardingWorkflowError> for InternalError {
     }
 }
 
+///
+/// ShardingWorkflow
+///
+/// Entry point for sharding placement orchestration.
+///
 pub struct ShardingWorkflow;
 
 impl ShardingWorkflow {

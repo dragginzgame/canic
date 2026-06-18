@@ -20,9 +20,8 @@ pub use error::{
 };
 pub use types::{
     AuthProofVerifierConfig, PrepareDelegatedTokenIssuerProofInput,
-    PrepareRootDelegationProofInput, PrepareRootRoleAttestationInput,
-    PreparedDelegatedTokenIssuerProof, PreparedRootDelegationProof, PreparedRootRoleAttestation,
-    VerifyDelegatedTokenRuntimeInput,
+    PrepareRootRoleAttestationInput, PreparedDelegatedTokenIssuerProof,
+    PreparedRootDelegationProof, PreparedRootRoleAttestation, VerifyDelegatedTokenRuntimeInput,
 };
 
 const ROLE_ATTESTATION_PROOF_HASH_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";

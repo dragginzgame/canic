@@ -1,5 +1,5 @@
 use super::{
-    AuthOps, PrepareRootDelegationProofInput, PreparedRootDelegationProof,
+    AuthOps, PreparedRootDelegationProof,
     delegated::{
         active_proof::{
             InstallActiveDelegationProofError, InstallActiveDelegationProofInput,
@@ -45,27 +45,10 @@ const ROOT_DELEGATION_PROOF_BATCH_PREPARE_FINGERPRINT_DOMAIN: &[u8] =
     b"canic-root-delegation-proof-batch-prepare-v1";
 
 thread_local! {
-    static PENDING_DELEGATION_PROOFS: RefCell<BTreeMap<PendingDelegationProofKey, PreparedRootDelegationProof>> =
-        const { RefCell::new(BTreeMap::new()) };
     static PENDING_DELEGATION_PROOF_BATCHES: RefCell<BTreeMap<PendingDelegationProofBatchKey, PreparedRootDelegationProofBatchEntry>> =
         const { RefCell::new(BTreeMap::new()) };
     static PENDING_DELEGATION_PROOF_BATCH_REPLAYS: RefCell<BTreeMap<[u8; 32], PreparedRootDelegationProofBatchReplay>> =
         const { RefCell::new(BTreeMap::new()) };
-}
-
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct PendingDelegationProofKey {
-    cert_hash: [u8; 32],
-    prepared_by: Vec<u8>,
-}
-
-impl PendingDelegationProofKey {
-    fn new(cert_hash: [u8; 32], prepared_by: Principal) -> Self {
-        Self {
-            cert_hash,
-            prepared_by: prepared_by.as_slice().to_vec(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -88,7 +71,6 @@ impl PendingDelegationProofBatchKey {
 #[derive(Clone)]
 struct PreparedRootDelegationProofBatchEntry {
     prepared: PreparedRootDelegationProof,
-    _refresh_after_ns: u64,
     installed: bool,
 }
 
@@ -107,82 +89,6 @@ struct RootDelegationProofBatchPrepareContext {
 }
 
 impl AuthOps {
-    /// Prepare a canonical delegation proof certificate and certify its canister-signature path.
-    pub(crate) fn prepare_delegation_proof(
-        input: PrepareRootDelegationProofInput,
-    ) -> Result<PreparedRootDelegationProof, InternalError> {
-        let root_pid = IcOps::canister_self();
-        let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
-            seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
-        };
-
-        let prepared = prepare_delegation_cert(PrepareDelegationCertInput {
-            root_pid,
-            issuer_pid: input.issuer_pid,
-            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
-            issuer_proof_binding,
-            issued_at_ns: input.issued_at_ns,
-            cert_ttl_ns: input.cert_ttl_ns,
-            max_token_ttl_ns: input.max_token_ttl_ns,
-            audience: input.audience,
-            grants: input.grants,
-            ttl_limits: DelegatedAuthTtlLimits {
-                max_cert_ttl_ns: input.max_cert_ttl_ns,
-                max_token_ttl_ns: input.max_token_ttl_ns,
-            },
-        })
-        .map_err(map_prepare_delegation_cert_error)?;
-        let prepared_root_proof = Self::prepare_root_canister_signature(
-            RootPayloadKind::DelegationCert,
-            input.operation_id,
-            prepared.cert_hash,
-            input.issuer_pid,
-            input.issued_at_ns,
-        )?;
-        let prepared = PreparedRootDelegationProof {
-            cert: prepared.cert,
-            cert_hash: prepared.cert_hash,
-            retrieval_expires_at_ns: prepared_root_proof.retrieval_expires_at_ns,
-        };
-        cache_prepared_delegation_proof(input.issuer_pid, prepared.clone());
-
-        Ok(prepared)
-    }
-
-    /// Finish an already-prepared root delegation proof from query-only certificate material.
-    pub(crate) fn get_delegation_proof(
-        caller: Principal,
-        cert_hash: [u8; 32],
-    ) -> Result<DelegationProof, InternalError> {
-        let prepared = PENDING_DELEGATION_PROOFS
-            .with(|pending| {
-                pending
-                    .borrow()
-                    .get(&PendingDelegationProofKey::new(cert_hash, caller))
-                    .cloned()
-            })
-            .ok_or_else(|| {
-                AuthValidationError::Auth(
-                    "delegation proof was not prepared or has expired".to_string(),
-                )
-            })?;
-        let root_proof = Self::get_root_canister_signature_proof(
-            RootPayloadKind::DelegationCert,
-            prepared.cert_hash,
-            caller,
-            prepared.cert.root_pid,
-            IcOps::now_nanos(),
-        )?;
-        Ok(finish_delegation_proof(
-            super::delegated::delegation_cert::PreparedDelegationCert {
-                cert: prepared.cert,
-                cert_hash: prepared.cert_hash,
-            },
-            root_proof,
-        )
-        .proof)
-    }
-
     pub(crate) fn install_active_delegation_proof(
         proof: DelegationProof,
         installed_by: Principal,
@@ -418,12 +324,7 @@ fn prepare_delegation_proof_batch_with_root_signature(
             cert_hash: prepared.cert_hash,
             retrieval_expires_at_ns: entry_retrieval_expires_at_ns,
         };
-        cache_prepared_delegation_proof_batch(
-            batch_id,
-            entry.issuer_pid,
-            prepared.clone(),
-            decision.refresh_after_ns,
-        );
+        cache_prepared_delegation_proof_batch(batch_id, entry.issuer_pid, prepared.clone());
         response_entries.push(RootDelegationProofBatchEntry {
             issuer_pid: entry.issuer_pid,
             cert_hash: prepared.cert_hash,
@@ -439,27 +340,16 @@ fn prepare_delegation_proof_batch_with_root_signature(
     })
 }
 
-fn cache_prepared_delegation_proof(caller: Principal, prepared: PreparedRootDelegationProof) {
-    PENDING_DELEGATION_PROOFS.with(|pending| {
-        pending.borrow_mut().insert(
-            PendingDelegationProofKey::new(prepared.cert_hash, caller),
-            prepared,
-        );
-    });
-}
-
 fn cache_prepared_delegation_proof_batch(
     batch_id: [u8; 32],
     issuer_pid: Principal,
     prepared: PreparedRootDelegationProof,
-    refresh_after_ns: u64,
 ) {
     PENDING_DELEGATION_PROOF_BATCHES.with(|pending| {
         pending.borrow_mut().insert(
             PendingDelegationProofBatchKey::new(batch_id, issuer_pid, prepared.cert_hash),
             PreparedRootDelegationProofBatchEntry {
                 prepared,
-                _refresh_after_ns: refresh_after_ns,
                 installed: false,
             },
         );

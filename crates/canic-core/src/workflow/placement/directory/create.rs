@@ -1,5 +1,9 @@
-use super::DirectoryWorkflow;
-use super::state::new_claim_id;
+//! Module: workflow::placement::directory::create
+//!
+//! Responsibility: claim keys, create child instances, and bind successful claims.
+//! Does not own: registry schemas, canister request execution, or stale cleanup policy.
+//! Boundary: performs claim-matching writes around asynchronous child creation.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -18,6 +22,7 @@ use crate::{
             DirectoryClaimResult, DirectoryPendingClaim, DirectoryRegistryOps,
         },
     },
+    workflow::placement::directory::{DirectoryWorkflow, state::new_claim_id},
 };
 
 impl DirectoryWorkflow {

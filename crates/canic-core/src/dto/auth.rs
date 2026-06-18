@@ -195,40 +195,6 @@ pub struct AuthRequestMetadata {
 }
 
 //
-// DelegationProofIssueRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofIssueRequest {
-    #[serde(default)]
-    pub metadata: Option<AuthRequestMetadata>,
-    pub issuer_pid: Principal,
-    pub aud: DelegationAudience,
-    pub grants: Vec<DelegatedRoleGrant>,
-    pub cert_ttl_ns: u64,
-}
-
-//
-// DelegationProofPrepareResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofPrepareResponse {
-    pub cert: DelegationCert,
-    pub cert_hash: [u8; 32],
-    pub retrieval_expires_at_ns: u64,
-}
-
-//
-// DelegationProofGetRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegationProofGetRequest {
-    pub cert_hash: [u8; 32],
-}
-
-//
 // RootDelegationProofBatchPrepareRequest
 //
 

@@ -11,22 +11,18 @@ use crate::{
     dto::{
         auth::{
             AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationAudience, DelegationProofIssueRequest,
-            DelegationProofPrepareResponse, RoleAttestationPrepareResponse, RoleAttestationRequest,
+            DelegatedTokenPrepareResponse, DelegationAudience, RoleAttestationPrepareResponse,
+            RoleAttestationRequest,
         },
         error::Error,
         rpc::RootRequestMetadata,
     },
     ops::{
-        auth::{
-            AuthOps, PrepareDelegatedTokenIssuerProofInput, PrepareRootDelegationProofInput,
-            PrepareRootRoleAttestationInput,
-        },
+        auth::{AuthOps, PrepareDelegatedTokenIssuerProofInput, PrepareRootRoleAttestationInput},
         config::ConfigOps,
         ic::IcOps,
         replay::{
             self as replay_ops, DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-            DELEGATION_PROOF_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             guard::secs_to_ns,
             model::{
@@ -35,8 +31,8 @@ use crate::{
             },
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-                ReplayReceiptToken, abort_reserved_receipt, commit_receipt_response,
-                mark_recovery_required, reserve_or_replay_receipt,
+                abort_reserved_receipt, commit_receipt_response, mark_recovery_required,
+                reserve_or_replay_receipt,
             },
         },
         runtime::env::EnvOps,
@@ -45,11 +41,6 @@ use crate::{
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
-const DELEGATED_TOKENS_DISABLED: &str =
-    "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
-const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
-const DELEGATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_delegation_proof.v1";
-const MAX_DELEGATION_REPLAY_TTL_NS: u64 = 300_000_000_000;
 const ROLE_ATTESTATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_role_attestation.v1";
 const MAX_ROLE_ATTESTATION_REPLAY_TTL_NS: u64 = 300_000_000_000;
 const TOKEN_PREPARE_REPLAY_COMMAND_KIND: &str = "auth.prepare_delegated_token.v1";
@@ -130,39 +121,6 @@ impl RuntimeAuthWorkflow {
         Ok(response)
     }
 
-    /// Prepare a root-certified delegation proof from the local root update path.
-    pub fn prepare_delegation_proof_root(
-        request: DelegationProofIssueRequest,
-    ) -> Result<DelegationProofPrepareResponse, InternalError> {
-        EnvOps::require_root()?;
-        let caller = IcOps::msg_caller();
-        validate_delegation_request_caller(caller, request.issuer_pid)?;
-        let max_cert_ttl_ns = delegated_token_max_ttl_ns()?;
-        let metadata = delegation_replay_metadata(request.metadata)?;
-        let command_kind = delegation_replay_command_kind();
-        let actor = ReplayActor::direct_caller(caller);
-        let payload_hash = delegation_replay_payload_hash(&command_kind, &actor, &request);
-        let now_ns = IcOps::now_nanos();
-        let replay_input = replay_reserve_input(
-            command_kind,
-            metadata.request_id,
-            actor,
-            payload_hash,
-            now_ns,
-            metadata.ttl_ns,
-            "delegation proof replay metadata ttl_ns overflows nanoseconds",
-        )?;
-
-        let token = match reserve_or_replay_receipt(replay_input)
-            .map_err(map_delegation_replay_store_error)?
-        {
-            ReplayReceiptDecision::Fresh(token) => token,
-            decision => return map_delegation_replay_decision(decision),
-        };
-
-        prepare_fresh_delegation_proof(token, request, max_cert_ttl_ns)
-    }
-
     /// Prepare a root-certified role attestation from the local root update path.
     pub fn prepare_role_attestation_root(
         request: RoleAttestationRequest,
@@ -235,85 +193,6 @@ impl RuntimeAuthWorkflow {
         );
         Ok(response)
     }
-}
-
-fn prepare_fresh_delegation_proof(
-    token: ReplayReceiptToken,
-    request: DelegationProofIssueRequest,
-    max_cert_ttl_ns: u64,
-) -> Result<DelegationProofPrepareResponse, InternalError> {
-    let max_token_ttl_ns = request.cert_ttl_ns.min(max_cert_ttl_ns);
-    let prepared = match AuthOps::prepare_delegation_proof(PrepareRootDelegationProofInput {
-        operation_id: token.receipt().operation_id.into_bytes(),
-        audience: request.aud,
-        grants: request.grants,
-        issuer_pid: request.issuer_pid,
-        cert_ttl_ns: request.cert_ttl_ns,
-        max_token_ttl_ns,
-        max_cert_ttl_ns,
-        issued_at_ns: IcOps::now_nanos(),
-    }) {
-        Ok(prepared) => prepared,
-        Err(err) => {
-            abort_reserved_receipt(&token);
-            return Err(err);
-        }
-    };
-
-    let response = DelegationProofPrepareResponse {
-        cert: prepared.cert,
-        cert_hash: prepared.cert_hash,
-        retrieval_expires_at_ns: prepared.retrieval_expires_at_ns,
-    };
-
-    let response_bytes = match encode_delegation_prepare_response(&response) {
-        Ok(response_bytes) => response_bytes,
-        Err(err) => {
-            mark_recovery_required(
-                &token,
-                RecoveryReason::ResponseCommitFailed,
-                secs_to_ns(IcOps::now_secs()),
-            );
-            return Err(err);
-        }
-    };
-
-    commit_receipt_response(
-        &token,
-        DELEGATION_PROOF_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-        response_bytes,
-        secs_to_ns(IcOps::now_secs()),
-    );
-    Ok(response)
-}
-
-fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
-    let cfg = ConfigOps::delegated_tokens_config()?;
-    if !cfg.enabled {
-        return Err(InternalError::public(Error::forbidden(
-            DELEGATED_TOKENS_DISABLED,
-        )));
-    }
-
-    let max_ttl_secs = cfg.max_ttl_secs.unwrap_or(MAX_DELEGATED_SESSION_TTL_SECS);
-    max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
-        InternalError::public(Error::invalid(
-            "auth.delegated_tokens.max_ttl_secs overflows nanoseconds",
-        ))
-    })
-}
-
-fn validate_delegation_request_caller(
-    caller: Principal,
-    issuer_pid: Principal,
-) -> Result<(), InternalError> {
-    if caller == issuer_pid {
-        return Ok(());
-    }
-
-    Err(InternalError::public(Error::forbidden(format!(
-        "delegation request caller {caller} must match issuer_pid {issuer_pid}"
-    ))))
 }
 
 fn validate_role_attestation_request(
@@ -393,24 +272,6 @@ fn replay_reserve_input(
     .with_expires_at_ns(expires_at_ns))
 }
 
-fn delegation_replay_metadata(
-    metadata: Option<AuthRequestMetadata>,
-) -> Result<AuthRequestMetadata, InternalError> {
-    let metadata = metadata.ok_or_else(|| InternalError::public(Error::operation_id_required()))?;
-    if metadata.ttl_ns == 0 {
-        return Err(InternalError::public(Error::invalid(
-            "delegation proof replay metadata ttl_ns must be greater than zero",
-        )));
-    }
-    if metadata.ttl_ns > MAX_DELEGATION_REPLAY_TTL_NS {
-        return Err(InternalError::public(Error::invalid(format!(
-            "delegation proof replay metadata ttl_ns={} exceeds max {}",
-            metadata.ttl_ns, MAX_DELEGATION_REPLAY_TTL_NS
-        ))));
-    }
-    Ok(metadata)
-}
-
 fn role_attestation_replay_metadata(
     metadata: Option<RootRequestMetadata>,
 ) -> Result<RootRequestMetadata, InternalError> {
@@ -460,11 +321,6 @@ fn map_token_prepare_policy_error(err: AuthPolicyError) -> InternalError {
     InternalError::public(Error::forbidden(err.to_string()))
 }
 
-fn delegation_replay_command_kind() -> CommandKind {
-    CommandKind::new(DELEGATION_REPLAY_COMMAND_KIND)
-        .expect("delegation replay command kind is a valid static label")
-}
-
 fn role_attestation_replay_command_kind() -> CommandKind {
     CommandKind::new(ROLE_ATTESTATION_REPLAY_COMMAND_KIND)
         .expect("role attestation replay command kind is a valid static label")
@@ -473,19 +329,6 @@ fn role_attestation_replay_command_kind() -> CommandKind {
 fn token_prepare_replay_command_kind() -> CommandKind {
     CommandKind::new(TOKEN_PREPARE_REPLAY_COMMAND_KIND)
         .expect("delegated-token prepare replay command kind is a valid static label")
-}
-
-fn delegation_replay_payload_hash(
-    command_kind: &CommandKind,
-    actor: &ReplayActor,
-    request: &DelegationProofIssueRequest,
-) -> [u8; 32] {
-    let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
-    hasher.hash_principal(&request.issuer_pid);
-    hash_delegation_audience(&mut hasher, &request.aud);
-    hash_delegated_role_grants(&mut hasher, &request.grants);
-    hasher.hash_u64(request.cert_ttl_ns);
-    hasher.finish()
 }
 
 fn role_attestation_replay_payload_hash(
@@ -715,85 +558,6 @@ fn decode_role_attestation_prepare_response(
     })
 }
 
-fn map_delegation_replay_decision(
-    decision: ReplayReceiptDecision,
-) -> Result<DelegationProofPrepareResponse, InternalError> {
-    match decision {
-        ReplayReceiptDecision::Fresh(_) => Err(InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            "fresh delegation replay decision escaped",
-        )),
-        ReplayReceiptDecision::ReturnCommitted(receipt) => {
-            decode_delegation_prepare_response(&receipt)
-        }
-        ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
-            "delegation proof request is already in progress; retry later with the same request id",
-        ))),
-        ReplayReceiptDecision::ActorMismatch => Err(InternalError::public(Error::conflict(
-            "delegation proof request id was reused by a different caller",
-        ))),
-        ReplayReceiptDecision::PayloadMismatch => Err(InternalError::public(Error::conflict(
-            "delegation proof request id was reused with a different payload",
-        ))),
-        ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
-            "delegation proof replay receipt expired; retry with a new request id",
-        ))),
-        ReplayReceiptDecision::RecoveryRequired(reason) => {
-            Err(InternalError::public(Error::conflict(format!(
-                "delegation proof request requires recovery before replay: {reason:?}"
-            ))))
-        }
-        ReplayReceiptDecision::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        } => Err(InternalError::public(Error::conflict(format!(
-            "delegation proof request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
-            error_bytes.len()
-        )))),
-        ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
-            Err(InternalError::public(Error::exhausted(format!(
-                "delegation proof pending replay receipt quota exceeded for caller; max_pending={max_pending}"
-            ))))
-        }
-        ReplayReceiptDecision::PendingCommandQuotaExceeded { max_pending, .. } => {
-            Err(InternalError::public(Error::exhausted(format!(
-                "delegation proof pending replay receipt quota exceeded for command kind; max_pending={max_pending}"
-            ))))
-        }
-    }
-}
-
-fn map_delegation_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    match err {
-        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to decode delegation replay receipt: {message}"),
-        ),
-    }
-}
-
-fn encode_delegation_prepare_response(
-    response: &DelegationProofPrepareResponse,
-) -> Result<Vec<u8>, InternalError> {
-    replay_ops::encode_delegation_proof_prepare_replay_response(response).map_err(|err| match err {
-        replay_ops::ReplayCommitError::EncodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to encode delegation proof prepare replay response: {message}"),
-        ),
-    })
-}
-
-fn decode_delegation_prepare_response(
-    receipt: &ReplayReceipt,
-) -> Result<DelegationProofPrepareResponse, InternalError> {
-    replay_ops::decode_delegation_proof_prepare_replay_response(receipt).map_err(|err| match err {
-        replay_ops::ReplayDecodeError::DecodeFailed(message) => {
-            InternalError::workflow(InternalErrorOrigin::Workflow, message)
-        }
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -804,16 +568,6 @@ mod tests {
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
-    }
-
-    fn delegation_request(metadata_id: u8) -> DelegationProofIssueRequest {
-        DelegationProofIssueRequest {
-            metadata: Some(meta(metadata_id, 60_000_000_000)),
-            issuer_pid: p(2),
-            aud: DelegationAudience::Project("test".to_string()),
-            grants: vec![grant("project_instance", &["canic.verify"])],
-            cert_ttl_ns: 60_000_000_000,
-        }
     }
 
     fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
@@ -839,59 +593,6 @@ mod tests {
             ttl_ns: 30_000_000_000,
             ext: None,
         }
-    }
-
-    #[test]
-    fn delegation_request_caller_must_match_requested_issuer() {
-        validate_delegation_request_caller(p(2), p(2)).expect("matching issuer");
-
-        let err = validate_delegation_request_caller(p(1), p(2))
-            .expect_err("mismatched caller must fail");
-        let public = err.public_error().expect("public error");
-
-        assert_eq!(public.code, ErrorCode::Forbidden);
-    }
-
-    #[test]
-    fn delegation_replay_metadata_rejects_missing_or_invalid_ttl() {
-        let missing = delegation_replay_metadata(None).expect_err("metadata is required");
-        assert_eq!(
-            missing.public_error().expect("public error").code,
-            ErrorCode::OperationIdRequired
-        );
-
-        let zero = delegation_replay_metadata(Some(AuthRequestMetadata {
-            request_id: [1; 32],
-            ttl_ns: 0,
-        }))
-        .expect_err("zero ttl is invalid");
-        assert_eq!(
-            zero.public_error().expect("public error").code,
-            ErrorCode::InvalidInput
-        );
-
-        let too_large = delegation_replay_metadata(Some(AuthRequestMetadata {
-            request_id: [1; 32],
-            ttl_ns: MAX_DELEGATION_REPLAY_TTL_NS + 1,
-        }))
-        .expect_err("oversized ttl is invalid");
-        assert_eq!(
-            too_large.public_error().expect("public error").code,
-            ErrorCode::InvalidInput
-        );
-    }
-
-    #[test]
-    fn delegation_replay_payload_hash_ignores_metadata() {
-        let command_kind = delegation_replay_command_kind();
-        let actor = ReplayActor::direct_caller(p(2));
-        let a = delegation_request(1);
-        let b = delegation_request(9);
-
-        assert_eq!(
-            delegation_replay_payload_hash(&command_kind, &actor, &a),
-            delegation_replay_payload_hash(&command_kind, &actor, &b)
-        );
     }
 
     #[test]
@@ -958,20 +659,6 @@ mod tests {
         ];
 
         validate_token_prepare_public_request(p(8), &request).expect("login scopes");
-    }
-
-    #[test]
-    fn delegation_replay_payload_hash_binds_authoritative_payload() {
-        let command_kind = delegation_replay_command_kind();
-        let actor = ReplayActor::direct_caller(p(2));
-        let a = delegation_request(1);
-        let mut b = a.clone();
-        b.cert_ttl_ns += 1;
-
-        assert_ne!(
-            delegation_replay_payload_hash(&command_kind, &actor, &a),
-            delegation_replay_payload_hash(&command_kind, &actor, &b)
-        );
     }
 
     #[test]

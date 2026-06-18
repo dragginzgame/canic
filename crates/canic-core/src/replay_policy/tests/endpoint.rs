@@ -1,11 +1,11 @@
 use super::*;
 
 #[test]
-fn delegation_proof_prepare_is_manifested_as_implemented() {
+fn delegation_proof_batch_prepare_is_manifested_as_implemented() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
-        .find(|entry| entry.endpoint == "canic_prepare_delegation_proof")
-        .expect("delegation prepare endpoint policy entry");
+        .find(|entry| entry.endpoint == "canic_prepare_delegation_proof_batch")
+        .expect("delegation batch prepare endpoint policy entry");
 
     assert_eq!(
         entry.implementation_status,
@@ -20,7 +20,7 @@ fn delegation_proof_prepare_is_manifested_as_implemented() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::ReplayProtected {
-            command_kind: "auth.prepare_delegation_proof.v1",
+            command_kind: "auth.prepare_delegation_proof_batch.v1",
             requires_operation_id: true,
         }
     );

@@ -13,7 +13,7 @@ fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
         "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
             setup_root(RootSetupProfile::Topology)
         }
-        "root:canic_prepare_delegation_proof:fresh-shard"
+        "root:canic_prepare_delegation_proof_batch:fresh-shard"
         | "test:test_verify_delegated_token:valid-delegated-token" => {
             setup_root(RootSetupProfile::Sharding)
         }
@@ -293,13 +293,14 @@ fn prepare_scenario(
                 delegated_token: None,
             }
         }
-        "root:canic_prepare_delegation_proof:fresh-shard" => {
+        "root:canic_prepare_delegation_proof_batch:fresh-shard" => {
             let user_hub_pid = *setup
                 .subnet_index
                 .get(&USER_HUB)
                 .expect("user_hub must exist for auth audit scenario");
             let issuer_pid =
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[43; 29]));
+            upsert_delegation_issuer(setup, issuer_pid);
             PreparedScenario {
                 target_pid,
                 caller_pid: Some(issuer_pid),
@@ -314,16 +315,15 @@ fn prepare_scenario(
             let issuer_pid =
                 create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
             let subject = Principal::from_slice(&[45; 29]);
-            let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, issuer_pid, TEST);
-            let token_ttl_ns = token_ttl_within_proof(&setup.pic, &proof);
-            let token = issue_delegated_token(
+            upsert_delegation_issuer(setup, issuer_pid);
+            install_root_batch_delegation_proof(setup, issuer_pid, [44u8; 32]);
+            let token = issue_delegated_token_from_active_proof(
                 &setup.pic,
                 issuer_pid,
-                proof,
                 subject,
                 DelegationAudience::Project("test".to_string()),
                 vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
-                token_ttl_ns,
+                10_000_000_000,
             );
             PreparedScenario {
                 target_pid,
@@ -347,8 +347,8 @@ fn execute_scenario(
 ) {
     let target_pid = prepared.target_pid;
     match scenario.key {
-        "root:canic_prepare_delegation_proof:fresh-shard" => {
-            execute_root_delegation_issue_scenario(setup, target_pid, prepared);
+        "root:canic_prepare_delegation_proof_batch:fresh-shard" => {
+            execute_root_delegation_batch_prepare_scenario(setup, target_pid, prepared);
         }
         "test:test:minimal-valid" => {
             let response: Result<(), Error> = setup
@@ -379,17 +379,27 @@ fn execute_scenario(
     }
 }
 
-// Execute the root-side delegated auth issuance scenario from a fresh shard.
-fn execute_root_delegation_issue_scenario(
+// Execute the root-side delegated auth batch prepare scenario from a fresh shard.
+fn execute_root_delegation_batch_prepare_scenario(
     setup: &root::harness::RootSetup,
-    _target_pid: Principal,
+    target_pid: Principal,
     prepared: &PreparedScenario,
 ) {
-    let caller = prepared
+    let issuer_pid = prepared
         .caller_pid
         .expect("auth audit scenario must resolve a shard caller");
-    let proof = obtain_root_delegation_proof(&setup.pic, setup.root_id, caller, TEST);
-    assert_eq!(proof.cert.issuer_pid, caller);
+    let request = batch_prepare_request(issuer_pid, [43u8; 32]);
+    let response: Result<RootDelegationProofBatchPrepareResponse, Error> = setup
+        .pic
+        .update_call(
+            target_pid,
+            protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
+            (request,),
+        )
+        .expect("batch delegation proof prepare transport failed");
+    let response = response.expect("batch delegation proof prepare application failed");
+    assert_eq!(response.entries.len(), 1);
+    assert_eq!(response.entries[0].issuer_pid, issuer_pid);
 }
 
 // Execute the verifier-side delegated token confirmation scenario.
@@ -412,6 +422,87 @@ fn execute_verifier_auth_scenario(
     response
         .expect("test_verify_delegated_token transport failed")
         .expect("test_verify_delegated_token application failed");
+}
+
+fn upsert_delegation_issuer(setup: &root::harness::RootSetup, issuer_pid: Principal) {
+    let registered: Result<(), Error> = setup
+        .pic
+        .update_call(
+            setup.root_id,
+            "root_test_upsert_delegation_issuer",
+            (issuer_pid,),
+        )
+        .expect("root issuer registration transport failed");
+    registered.expect("root issuer registration application failed");
+}
+
+fn install_root_batch_delegation_proof(
+    setup: &root::harness::RootSetup,
+    issuer_pid: Principal,
+    request_id: [u8; 32],
+) {
+    let prepared: Result<RootDelegationProofBatchPrepareResponse, Error> = setup
+        .pic
+        .update_call(
+            setup.root_id,
+            protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
+            (batch_prepare_request(issuer_pid, request_id),),
+        )
+        .expect("batch delegation proof prepare transport failed");
+    let prepared = prepared.expect("batch delegation proof prepare application failed");
+
+    let retrieved: Result<RootDelegationProofBatchGetResponse, Error> = setup
+        .pic
+        .query_call(
+            setup.root_id,
+            protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
+            (RootDelegationProofBatchGetRequest {
+                batch_id: prepared.batch_id,
+                entries: prepared
+                    .entries
+                    .iter()
+                    .map(|entry| RootDelegationProofBatchProofRef {
+                        issuer_pid: entry.issuer_pid,
+                        cert_hash: entry.cert_hash,
+                    })
+                    .collect(),
+            },),
+        )
+        .expect("batch delegation proof get transport failed");
+    let retrieved = retrieved.expect("batch delegation proof get application failed");
+
+    let installed: Result<RootDelegationProofBatchInstallResponse, Error> = setup
+        .pic
+        .update_call(
+            setup.root_id,
+            protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+            (RootDelegationProofBatchInstallRequest {
+                batch_id: retrieved.batch_id,
+                proofs: retrieved.proofs,
+            },),
+        )
+        .expect("batch delegation proof install transport failed");
+    let installed = installed.expect("batch delegation proof install application failed");
+    assert_eq!(installed.outcomes.len(), 1);
+    assert_eq!(installed.outcomes[0].issuer_pid, issuer_pid);
+}
+
+fn batch_prepare_request(
+    issuer_pid: Principal,
+    request_id: [u8; 32],
+) -> RootDelegationProofBatchPrepareRequest {
+    RootDelegationProofBatchPrepareRequest {
+        metadata: Some(AuthRequestMetadata {
+            request_id,
+            ttl_ns: 60_000_000_000,
+        }),
+        entries: vec![RootDelegationProofBatchPrepareEntry {
+            issuer_pid,
+            aud: DelegationAudience::Project("test".to_string()),
+            grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
+            cert_ttl_ns: 60_000_000_000,
+        }],
+    }
 }
 
 // Execute the fresh root cycles request scenario through the root dispatcher.

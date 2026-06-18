@@ -1,4 +1,9 @@
-use super::{ShardingWorkflow, ShardingWorkflowError};
+//! Module: workflow::placement::sharding::assignment
+//!
+//! Responsibility: assign partition keys to shards according to placement policy.
+//! Does not own: policy rules, stable registry records, or canister creation internals.
+//! Boundary: coordinates metrics, policy input mapping, allocation, and assignment writes.
+
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -24,6 +29,7 @@ use crate::{
             sharding::ShardingRegistryOps, sharding_lifecycle::ShardingLifecycleOps,
         },
     },
+    workflow::placement::sharding::{ShardingWorkflow, ShardingWorkflowError},
 };
 use std::collections::BTreeSet;
 

@@ -1,3 +1,9 @@
+//! Module: workflow::placement::directory::state
+//!
+//! Responsibility: hold directory workflow errors, classifications, and validators.
+//! Does not own: directory registry mutation, child creation, or endpoint DTOs.
+//! Boundary: provides workflow-local state helpers for directory orchestration.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -17,6 +23,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// DirectoryWorkflowError
+///
+/// Workflow-local failures raised while coordinating directory placement.
 ///
 
 #[derive(Debug, ThisError)]
@@ -52,6 +60,8 @@ impl From<DirectoryWorkflowError> for InternalError {
 
 ///
 /// DirectoryEntryClassification
+///
+/// Snapshot classification used to choose the next directory workflow step.
 ///
 
 #[derive(Debug, Eq, PartialEq)]

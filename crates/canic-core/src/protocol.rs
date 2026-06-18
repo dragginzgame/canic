@@ -3,8 +3,6 @@
 /// Keep these synchronized with the macro-defined endpoints.
 
 pub const CANIC_RESPONSE_CAPABILITY_V1: &str = "canic_response_capability_v1";
-pub const CANIC_PREPARE_DELEGATION_PROOF: &str = "canic_prepare_delegation_proof";
-pub const CANIC_GET_DELEGATION_PROOF: &str = "canic_get_delegation_proof";
 pub const CANIC_PREPARE_DELEGATION_PROOF_BATCH: &str = "canic_prepare_delegation_proof_batch";
 pub const CANIC_GET_DELEGATION_PROOF_BATCH: &str = "canic_get_delegation_proof_batch";
 pub const CANIC_INSTALL_DELEGATION_PROOF_BATCH: &str = "canic_install_delegation_proof_batch";

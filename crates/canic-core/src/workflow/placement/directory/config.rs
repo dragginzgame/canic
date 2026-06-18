@@ -1,8 +1,18 @@
-use super::{
-    DirectoryWorkflow,
-    state::{DirectoryWorkflowError, available_pool_names},
+//! Module: workflow::placement::directory::config
+//!
+//! Responsibility: resolve configured directory pool definitions.
+//! Does not own: configuration storage, directory mutation, or endpoint defaults.
+//! Boundary: maps missing directory configuration into workflow errors.
+
+use crate::{
+    InternalError,
+    config::schema::DirectoryPool,
+    ops::config::ConfigOps,
+    workflow::placement::directory::{
+        DirectoryWorkflow,
+        state::{DirectoryWorkflowError, available_pool_names},
+    },
 };
-use crate::{InternalError, config::schema::DirectoryPool, ops::config::ConfigOps};
 
 impl DirectoryWorkflow {
     // Resolve the configured pool definition for the current directory-bearing parent.

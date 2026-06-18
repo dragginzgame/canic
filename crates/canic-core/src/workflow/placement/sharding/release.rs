@@ -1,4 +1,9 @@
-use super::ShardingWorkflow;
+//! Module: workflow::placement::sharding::release
+//!
+//! Responsibility: release partition-key assignments from configured shard pools.
+//! Does not own: sharding configuration, registry schema, or cleanup scheduling.
+//! Boundary: validates pool configuration before mutating assignment storage.
+
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -12,6 +17,7 @@ use crate::{
         },
         storage::placement::sharding::ShardingRegistryOps,
     },
+    workflow::placement::sharding::ShardingWorkflow,
 };
 
 impl ShardingWorkflow {

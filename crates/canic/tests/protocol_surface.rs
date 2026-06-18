@@ -1,7 +1,24 @@
+use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use candid::{decode_one, encode_one};
 use candid_parser::utils::CandidSource;
+use canic::{
+    cdk::types::Principal,
+    dto::auth::{
+        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
+        IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
+        RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
+        RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
+        RootDelegationProofBatchInstallResponse, RootDelegationProofBatchInstallResult,
+        RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
+        RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
+        RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome, RootProof,
+    },
+    ids::CanisterRole,
+};
 
 // Returns the repository root so wire-surface fixtures can be read from disk.
 fn workspace_root() -> PathBuf {
@@ -17,6 +34,26 @@ fn workspace_root() -> PathBuf {
 fn read_text(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
+}
+
+fn assert_candid_roundtrip<T>(value: T)
+where
+    T: candid::CandidType + for<'de> candid::Deserialize<'de> + Eq + Debug,
+{
+    let encoded = encode_one(&value).expect("encode Candid value");
+    let decoded = decode_one::<T>(&encoded).expect("decode Candid value");
+    assert_eq!(decoded, value);
+}
+
+fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
+    source
+        .split(signature)
+        .next()
+        .unwrap_or_else(|| panic!("source should contain {signature}"))
+        .lines()
+        .rev()
+        .find(|line| line.trim_start().starts_with("#["))
+        .unwrap_or_else(|| panic!("{signature} should have a preceding attribute"))
 }
 
 #[test]
@@ -195,6 +232,33 @@ fn root_delegation_proof_batch_surface_is_pinned() {
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
     assert!(
+        !source.contains("fn canic_prepare_delegation_proof(")
+            && !source.contains("fn canic_get_delegation_proof("),
+        "legacy single-proof root delegation endpoints must stay removed"
+    );
+    let prepare_attr = preceding_attribute(&source, "fn canic_prepare_delegation_proof_batch(");
+    let get_attr = preceding_attribute(&source, "fn canic_get_delegation_proof_batch(");
+    let install_attr = preceding_attribute(&source, "fn canic_install_delegation_proof_batch(");
+    assert!(
+        prepare_attr.contains("canic_update")
+            && prepare_attr.contains("caller::is_controller()")
+            && !prepare_attr.contains("internal"),
+        "root batch prepare must remain a public controller-gated update"
+    );
+    assert!(
+        get_attr.contains("canic_query")
+            && get_attr.contains("caller::is_controller()")
+            && !get_attr.contains("internal")
+            && !get_attr.contains("caller::is_registered_to_subnet()"),
+        "root batch get must remain a direct controller-gated root query"
+    );
+    assert!(
+        install_attr.contains("canic_update")
+            && install_attr.contains("caller::is_controller()")
+            && !install_attr.contains("internal"),
+        "root batch install must remain a public controller-gated update"
+    );
+    assert!(
         source.contains("fn canic_prepare_delegation_proof_batch(")
             && source.contains("RootDelegationProofBatchPrepareRequest")
             && source.contains("RootDelegationProofBatchPrepareResponse")
@@ -215,6 +279,109 @@ fn root_delegation_proof_batch_surface_is_pinned() {
             && source.contains("AuthApi::install_delegation_proof_batch_root"),
         "root auth endpoint bundle must expose batch install"
     );
+}
+
+#[test]
+fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
+    let issuer_pid = Principal::from_slice(&[17; 29]);
+    let root_pid = Principal::from_slice(&[18; 29]);
+    let batch_id = [19; 32];
+    let cert_hash = [20; 32];
+    let grant = DelegatedRoleGrant {
+        target: CanisterRole::new("test"),
+        scopes: vec!["verify".to_string()],
+    };
+    let audience = DelegationAudience::Project("test".to_string());
+    let prepare_entry = RootDelegationProofBatchPrepareEntry {
+        issuer_pid,
+        aud: audience.clone(),
+        grants: vec![grant.clone()],
+        cert_ttl_ns: 60,
+    };
+    let prepare_request = RootDelegationProofBatchPrepareRequest {
+        metadata: Some(AuthRequestMetadata {
+            request_id: batch_id,
+            ttl_ns: 30,
+        }),
+        entries: vec![prepare_entry.clone()],
+    };
+    let prepare_response = RootDelegationProofBatchPrepareResponse {
+        batch_id,
+        entries: vec![RootDelegationProofBatchEntry {
+            issuer_pid,
+            cert_hash,
+            expires_at_ns: 90,
+            refresh_after_ns: 72,
+        }],
+        retrieval_expires_at_ns: 45,
+    };
+    let proof_ref = RootDelegationProofBatchProofRef {
+        issuer_pid,
+        cert_hash,
+    };
+    let get_request = RootDelegationProofBatchGetRequest {
+        batch_id,
+        entries: vec![proof_ref],
+    };
+    let proof = DelegationProof {
+        cert: DelegationCert {
+            root_pid,
+            issuer_pid,
+            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [21; 32],
+            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
+                seed_hash: [22; 32],
+            },
+            issued_at_ns: 1,
+            not_before_ns: 1,
+            expires_at_ns: 90,
+            max_token_ttl_ns: 10,
+            aud: audience,
+            grants: vec![grant],
+        },
+        root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![1, 2, 3],
+            public_key_der: vec![4, 5, 6],
+        }),
+    };
+    let batch_proof = RootDelegationProofBatchProof {
+        issuer_pid,
+        cert_hash,
+        proof,
+    };
+    let get_response = RootDelegationProofBatchGetResponse {
+        batch_id,
+        proofs: vec![batch_proof.clone()],
+    };
+    let install_request = RootDelegationProofBatchInstallRequest {
+        batch_id,
+        proofs: vec![batch_proof],
+    };
+    let install_response = RootDelegationProofBatchInstallResponse {
+        batch_id,
+        outcomes: vec![RootDelegationProofBatchInstallResult {
+            issuer_pid,
+            cert_hash,
+            outcome: RootDelegationProofInstallOutcome::Installed,
+        }],
+    };
+    let status = ActiveDelegationProofStatusResponse {
+        status: ActiveDelegationProofStatus::RefreshNeeded,
+        root_pid: Some(root_pid),
+        issuer_pid: Some(issuer_pid),
+        cert_hash: Some(cert_hash),
+        expires_at_ns: Some(90),
+        refresh_after_ns: Some(72),
+    };
+
+    assert_candid_roundtrip(prepare_entry);
+    assert_candid_roundtrip(prepare_request);
+    assert_candid_roundtrip(prepare_response);
+    assert_candid_roundtrip(get_request);
+    assert_candid_roundtrip(get_response);
+    assert_candid_roundtrip(install_request);
+    assert_candid_roundtrip(install_response);
+    assert_candid_roundtrip(status);
 }
 
 #[test]
