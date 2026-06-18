@@ -7,7 +7,9 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    domain::policy::auth::{AuthPolicyError, validate_public_delegated_token_prepare},
+    domain::policy::auth::{
+        AuthPolicyError, DelegatedRoleGrantPolicy, validate_public_delegated_token_prepare,
+    },
     dto::{
         auth::{
             AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenPrepareRequest,
@@ -313,8 +315,20 @@ fn validate_token_prepare_public_request(
     caller: Principal,
     request: &DelegatedTokenPrepareRequest,
 ) -> Result<(), InternalError> {
-    validate_public_delegated_token_prepare(caller, request.subject, &request.grants)
+    let grants = request
+        .grants
+        .iter()
+        .map(delegated_role_grant_policy)
+        .collect::<Vec<_>>();
+    validate_public_delegated_token_prepare(caller, request.subject, &grants)
         .map_err(map_token_prepare_policy_error)
+}
+
+fn delegated_role_grant_policy(grant: &DelegatedRoleGrant) -> DelegatedRoleGrantPolicy {
+    DelegatedRoleGrantPolicy {
+        target: grant.target.clone(),
+        scopes: grant.scopes.clone(),
+    }
 }
 
 fn map_token_prepare_policy_error(err: AuthPolicyError) -> InternalError {

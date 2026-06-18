@@ -6,7 +6,6 @@
 
 use crate::{
     cdk::types::Principal,
-    dto::auth::DelegatedRoleGrant,
     ids::{CanisterRole, cap},
 };
 use thiserror::Error as ThisError;
@@ -18,6 +17,16 @@ pub use root_provisioning::{
     RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
     RootIssuerPolicy, validate_root_delegation_proof_prepare_policy,
 };
+
+///
+/// DelegatedRoleGrantPolicy
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DelegatedRoleGrantPolicy {
+    pub target: CanisterRole,
+    pub scopes: Vec<String>,
+}
 
 ///
 /// AuthPolicyError
@@ -80,7 +89,7 @@ pub enum AuthPolicyError {
 pub fn validate_public_delegated_token_prepare(
     caller: Principal,
     subject: Principal,
-    grants: &[DelegatedRoleGrant],
+    grants: &[DelegatedRoleGrantPolicy],
 ) -> Result<(), AuthPolicyError> {
     if subject != caller {
         return Err(AuthPolicyError::SubjectCallerMismatch);
@@ -114,8 +123,8 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
-        DelegatedRoleGrant {
+    fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrantPolicy {
+        DelegatedRoleGrantPolicy {
             target: CanisterRole::owned(role.to_string()),
             scopes: scopes.iter().map(|scope| (*scope).to_string()).collect(),
         }

@@ -109,7 +109,7 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
 
     let (prepared, install_request) = install_root_batch_delegation_proof(&setup, shard_pid);
     let status = assert_active_delegation_proof_status(&setup, shard_pid, &prepared);
-    verify_signer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
+    verify_issuer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
     assert_repeated_batch_install_is_idempotent(&setup, install_request);
     assert_active_delegation_proof_refresh_and_expiry(&setup, shard_pid, subject, &status);
 }
@@ -170,7 +170,7 @@ fn root_batch_install_reports_partial_failure_and_retry() {
 }
 
 #[test]
-fn root_unavailable_after_batch_install_does_not_break_signer_local_issuance() {
+fn root_unavailable_after_batch_install_does_not_break_issuer_local_issuance() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     let user_hub_pid = setup
@@ -224,7 +224,7 @@ fn root_unavailable_after_batch_install_does_not_break_signer_local_issuance() {
         "root should not expose Canic endpoints after inert reinstall"
     );
 
-    verify_signer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
+    verify_issuer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
 }
 
 fn install_root_batch_delegation_proof(
@@ -376,7 +376,7 @@ fn assert_active_delegation_proof_status(
     status
 }
 
-fn verify_signer_local_delegated_token(
+fn verify_issuer_local_delegated_token(
     setup: &RootSetup,
     verifier_pid: Principal,
     shard_pid: Principal,

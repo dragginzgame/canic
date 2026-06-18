@@ -119,7 +119,7 @@ TMPDIR="$PWD/.tmp/test-runtime" ICP_ENVIRONMENT=local \
 
 TMPDIR="$PWD/.tmp/test-runtime" ICP_ENVIRONMENT=local \
   cargo test --locked -p canic-tests --test root_suite \
-  root_unavailable_after_batch_install_does_not_break_signer_local_issuance -- \
+  root_unavailable_after_batch_install_does_not_break_issuer_local_issuance -- \
   --test-threads=1 --nocapture
 ```
 

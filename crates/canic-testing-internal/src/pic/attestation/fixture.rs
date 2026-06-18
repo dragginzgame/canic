@@ -35,12 +35,6 @@ pub fn install_test_root_with_verifier_cached() -> CachedInstalledRoot {
     baseline::install_issuer_and_verifier_cached_root_fixture()
 }
 
-/// Restore or create the cached normal-build `root + issuer` baseline.
-#[must_use]
-pub fn install_test_root_without_test_material_cached() -> CachedInstalledRoot {
-    baseline::install_issuer_only_without_test_material_cached_root_fixture()
-}
-
 // Resolve the issuer canister from the root-managed subnet registry.
 #[must_use]
 pub fn issuer_pid(pic: &Pic, root_id: Principal) -> Principal {
