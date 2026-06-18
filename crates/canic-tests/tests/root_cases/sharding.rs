@@ -17,11 +17,13 @@ use canic::{
 };
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
-    CanicPicExt, create_user_shard, issue_delegated_token, obtain_root_delegation_proof,
-    role_grant, token_ttl_within_proof,
+    CanicPicExt, create_user_shard, issue_delegated_token, issue_delegated_token_from_active_proof,
+    obtain_root_delegation_proof, role_grant, token_ttl_within_proof,
 };
 use canic_tests::root::{
-    RootSetupProfile, assertions::assert_registry_parents, harness::setup_cached_root,
+    RootSetupProfile,
+    assertions::assert_registry_parents,
+    harness::{RootSetup, setup_cached_root},
 };
 
 #[test]
@@ -131,9 +133,27 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
         .get(&canister::USER_HUB)
         .copied()
         .expect("user_hub must exist in sharding profile");
+    let verifier_pid = setup
+        .subnet_index
+        .get(&canister::TEST)
+        .copied()
+        .expect("test verifier must exist in sharding profile");
     let subject = Principal::from_slice(&[56; 29]);
     let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
 
+    let (prepared, install_request) = install_root_batch_delegation_proof(&setup, shard_pid);
+    let status = assert_active_delegation_proof_status(&setup, shard_pid, &prepared);
+    verify_signer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
+    assert_repeated_batch_install_is_idempotent(&setup, install_request);
+}
+
+fn install_root_batch_delegation_proof(
+    setup: &RootSetup,
+    shard_pid: Principal,
+) -> (
+    RootDelegationProofBatchPrepareResponse,
+    RootDelegationProofBatchInstallRequest,
+) {
     let registered: Result<(), Error> = setup.pic.update_call_or_panic(
         setup.root_id,
         "root_test_upsert_delegation_issuer",
@@ -202,6 +222,14 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
         RootDelegationProofInstallOutcome::Installed
     );
 
+    (prepared, install_request)
+}
+
+fn assert_active_delegation_proof_status(
+    setup: &RootSetup,
+    shard_pid: Principal,
+    prepared: &RootDelegationProofBatchPrepareResponse,
+) -> ActiveDelegationProofStatusResponse {
     let status: Result<ActiveDelegationProofStatusResponse, Error> = setup.pic.query_call_or_panic(
         shard_pid,
         protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
@@ -212,7 +240,44 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
     assert_eq!(status.root_pid, Some(setup.root_id));
     assert_eq!(status.issuer_pid, Some(shard_pid));
     assert_eq!(status.cert_hash, Some(prepared.entries[0].cert_hash));
+    status
+}
 
+fn verify_signer_local_delegated_token(
+    setup: &RootSetup,
+    verifier_pid: Principal,
+    shard_pid: Principal,
+    subject: Principal,
+    status: &ActiveDelegationProofStatusResponse,
+) {
+    let token_ttl_ns = status
+        .expires_at_ns
+        .expect("valid active proof must expose expiry")
+        .saturating_sub(setup.pic.current_time_nanos())
+        .saturating_sub(1_000_000_000)
+        .min(10_000_000_000);
+    assert!(token_ttl_ns > 0, "active proof must have token lifetime");
+    let token = issue_delegated_token_from_active_proof(
+        &setup.pic,
+        shard_pid,
+        subject,
+        DelegationAudience::Project("test".to_string()),
+        vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
+        token_ttl_ns,
+    );
+    let verified: Result<(), Error> = setup.pic.update_call_as_or_panic(
+        verifier_pid,
+        subject,
+        "test_verify_delegated_token",
+        (token,),
+    );
+    verified.expect("delegated token verifier application failed");
+}
+
+fn assert_repeated_batch_install_is_idempotent(
+    setup: &RootSetup,
+    install_request: RootDelegationProofBatchInstallRequest,
+) {
     let repeated: Result<RootDelegationProofBatchInstallResponse, Error> =
         setup.pic.update_call_or_panic(
             setup.root_id,

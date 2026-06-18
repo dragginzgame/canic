@@ -37,14 +37,19 @@ use crate::{
     },
     ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
+use sha2::{Digest, Sha256};
 use std::{cell::RefCell, collections::BTreeMap};
 
 const MAX_ROOT_DELEGATION_PROOF_BATCH_REPLAY_TTL_NS: u64 = 60_000_000_000;
+const ROOT_DELEGATION_PROOF_BATCH_PREPARE_FINGERPRINT_DOMAIN: &[u8] =
+    b"canic-root-delegation-proof-batch-prepare-v1";
 
 thread_local! {
     static PENDING_DELEGATION_PROOFS: RefCell<BTreeMap<PendingDelegationProofKey, PreparedRootDelegationProof>> =
         const { RefCell::new(BTreeMap::new()) };
     static PENDING_DELEGATION_PROOF_BATCHES: RefCell<BTreeMap<PendingDelegationProofBatchKey, PreparedRootDelegationProofBatchEntry>> =
+        const { RefCell::new(BTreeMap::new()) };
+    static PENDING_DELEGATION_PROOF_BATCH_REPLAYS: RefCell<BTreeMap<[u8; 32], PreparedRootDelegationProofBatchReplay>> =
         const { RefCell::new(BTreeMap::new()) };
 }
 
@@ -85,6 +90,20 @@ struct PreparedRootDelegationProofBatchEntry {
     prepared: PreparedRootDelegationProof,
     _refresh_after_ns: u64,
     installed: bool,
+}
+
+#[derive(Clone)]
+struct PreparedRootDelegationProofBatchReplay {
+    request_fingerprint: [u8; 32],
+    response: RootDelegationProofBatchPrepareResponse,
+    replay_expires_at_ns: u64,
+}
+
+#[derive(Clone, Copy)]
+struct RootDelegationProofBatchPrepareContext {
+    metadata: AuthRequestMetadata,
+    max_cert_ttl_ns: u64,
+    issued_at_ns: u64,
 }
 
 impl AuthOps {
@@ -258,17 +277,17 @@ impl AuthOps {
         issued_at_ns: u64,
     ) -> Result<RootDelegationProofBatchPrepareResponse, InternalError> {
         let metadata = root_delegation_proof_batch_metadata(request.metadata)?;
-        let decisions =
-            Self::preflight_delegation_proof_batch_prepare_request(&request, issued_at_ns)?;
-        let root_pid = IcOps::canister_self();
-        prepare_delegation_proof_batch_with_root_signature(
+        prepare_delegation_proof_batch_with_root_signature_replay(
             request,
-            metadata.request_id,
-            decisions,
-            max_cert_ttl_ns,
-            issued_at_ns,
-            root_pid,
+            RootDelegationProofBatchPrepareContext {
+                metadata,
+                max_cert_ttl_ns,
+                issued_at_ns,
+            },
+            |request| Self::preflight_delegation_proof_batch_prepare_request(request, issued_at_ns),
+            IcOps::canister_self,
             |batch_id, cert_hash| {
+                let root_pid = IcOps::canister_self();
                 Self::prepare_root_canister_signature(
                     RootPayloadKind::DelegationCert,
                     batch_id,
@@ -312,6 +331,50 @@ impl AuthOps {
     ) {
         mark_delegation_proof_batch_installed(batch_id, issuer_pid, cert_hash);
     }
+}
+
+fn prepare_delegation_proof_batch_with_root_signature_replay(
+    request: RootDelegationProofBatchPrepareRequest,
+    context: RootDelegationProofBatchPrepareContext,
+    prepare_decisions: impl FnOnce(
+        &RootDelegationProofBatchPrepareRequest,
+    ) -> Result<
+        Vec<RootDelegationProofPreparePolicyDecision>,
+        InternalError,
+    >,
+    root_pid: impl FnOnce() -> Principal,
+    prepare_signature: impl FnMut([u8; 32], [u8; 32]) -> Result<u64, InternalError>,
+) -> Result<RootDelegationProofBatchPrepareResponse, InternalError> {
+    let batch_id = context.metadata.request_id;
+    let request_fingerprint = root_delegation_proof_batch_prepare_request_fingerprint(&request);
+    if let Some(response) = pending_delegation_proof_batch_replay_response(
+        batch_id,
+        request_fingerprint,
+        context.issued_at_ns,
+    )? {
+        return Ok(response);
+    }
+
+    let replay_expires_at_ns =
+        root_delegation_proof_batch_replay_expires_at(context.metadata, context.issued_at_ns)?;
+    let decisions = prepare_decisions(&request)?;
+    let root_pid = root_pid();
+    let response = prepare_delegation_proof_batch_with_root_signature(
+        request,
+        batch_id,
+        decisions,
+        context.max_cert_ttl_ns,
+        context.issued_at_ns,
+        root_pid,
+        prepare_signature,
+    )?;
+    cache_prepared_delegation_proof_batch_replay(
+        batch_id,
+        request_fingerprint,
+        response.clone(),
+        replay_expires_at_ns,
+    );
+    Ok(response)
 }
 
 fn prepare_delegation_proof_batch_with_root_signature(
@@ -535,6 +598,47 @@ fn mark_delegation_proof_batch_installed(
     });
 }
 
+fn pending_delegation_proof_batch_replay_response(
+    batch_id: [u8; 32],
+    request_fingerprint: [u8; 32],
+    now_ns: u64,
+) -> Result<Option<RootDelegationProofBatchPrepareResponse>, InternalError> {
+    PENDING_DELEGATION_PROOF_BATCH_REPLAYS.with(|replays| {
+        let mut replays = replays.borrow_mut();
+        let Some(replay) = replays.get(&batch_id).cloned() else {
+            return Ok(None);
+        };
+        if now_ns >= replay.replay_expires_at_ns {
+            replays.remove(&batch_id);
+            return Ok(None);
+        }
+        if replay.request_fingerprint != request_fingerprint {
+            return Err(InternalError::public(Error::invalid(
+                "root delegation proof batch request_id was already used for a different request",
+            )));
+        }
+        Ok(Some(replay.response))
+    })
+}
+
+fn cache_prepared_delegation_proof_batch_replay(
+    batch_id: [u8; 32],
+    request_fingerprint: [u8; 32],
+    response: RootDelegationProofBatchPrepareResponse,
+    replay_expires_at_ns: u64,
+) {
+    PENDING_DELEGATION_PROOF_BATCH_REPLAYS.with(|replays| {
+        replays.borrow_mut().insert(
+            batch_id,
+            PreparedRootDelegationProofBatchReplay {
+                request_fingerprint,
+                response,
+                replay_expires_at_ns,
+            },
+        );
+    });
+}
+
 fn root_delegation_proof_batch_metadata(
     metadata: Option<AuthRequestMetadata>,
 ) -> Result<AuthRequestMetadata, InternalError> {
@@ -551,6 +655,76 @@ fn root_delegation_proof_batch_metadata(
         ))));
     }
     Ok(metadata)
+}
+
+fn root_delegation_proof_batch_replay_expires_at(
+    metadata: AuthRequestMetadata,
+    issued_at_ns: u64,
+) -> Result<u64, InternalError> {
+    issued_at_ns.checked_add(metadata.ttl_ns).ok_or_else(|| {
+        InternalError::public(Error::invalid(
+            "root delegation proof batch replay metadata ttl_ns overflows expiry",
+        ))
+    })
+}
+
+fn root_delegation_proof_batch_prepare_request_fingerprint(
+    request: &RootDelegationProofBatchPrepareRequest,
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hash_prepare_bytes(
+        &mut hasher,
+        ROOT_DELEGATION_PROOF_BATCH_PREPARE_FINGERPRINT_DOMAIN,
+    );
+    hash_prepare_u64(&mut hasher, request.entries.len() as u64);
+    for entry in &request.entries {
+        hash_prepare_principal(&mut hasher, entry.issuer_pid);
+        hash_prepare_audience(&mut hasher, &entry.aud);
+        hash_prepare_grants(&mut hasher, &entry.grants);
+        hash_prepare_u64(&mut hasher, entry.cert_ttl_ns);
+    }
+    hasher.finalize().into()
+}
+
+fn hash_prepare_audience(hasher: &mut Sha256, audience: &DelegationAudience) {
+    match audience {
+        DelegationAudience::Canister(canister) => {
+            hash_prepare_bytes(hasher, b"canister");
+            hash_prepare_principal(hasher, *canister);
+        }
+        DelegationAudience::CanicSubnet(subnet) => {
+            hash_prepare_bytes(hasher, b"canic_subnet");
+            hash_prepare_principal(hasher, *subnet);
+        }
+        DelegationAudience::Project(project) => {
+            hash_prepare_bytes(hasher, b"project");
+            hash_prepare_bytes(hasher, project.as_bytes());
+        }
+    }
+}
+
+fn hash_prepare_grants(hasher: &mut Sha256, grants: &[DelegatedRoleGrant]) {
+    hash_prepare_u64(hasher, grants.len() as u64);
+    for grant in grants {
+        hash_prepare_bytes(hasher, grant.target.as_str().as_bytes());
+        hash_prepare_u64(hasher, grant.scopes.len() as u64);
+        for scope in &grant.scopes {
+            hash_prepare_bytes(hasher, scope.as_bytes());
+        }
+    }
+}
+
+fn hash_prepare_principal(hasher: &mut Sha256, principal: Principal) {
+    hash_prepare_bytes(hasher, principal.as_slice());
+}
+
+fn hash_prepare_u64(hasher: &mut Sha256, value: u64) {
+    hasher.update(value.to_be_bytes());
+}
+
+fn hash_prepare_bytes(hasher: &mut Sha256, bytes: &[u8]) {
+    hash_prepare_u64(hasher, bytes.len() as u64);
+    hasher.update(bytes);
 }
 
 fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError) -> InternalError {
@@ -949,6 +1123,95 @@ mod tests {
         assert_eq!(response.entries[0].refresh_after_ns, 48_000_000_010);
         assert_eq!(response.retrieval_expires_at_ns, 70);
         assert_eq!(signed_hashes, vec![response.entries[0].cert_hash]);
+    }
+
+    #[test]
+    fn batch_prepare_replays_same_request_id_without_resigning() {
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(30)));
+        let mut request = batch_prepare_request(p(30), 60_000_000_000);
+        let metadata = metadata(30, 60_000_000_000);
+        request.metadata = Some(metadata);
+        let context = RootDelegationProofBatchPrepareContext {
+            metadata,
+            max_cert_ttl_ns: 120_000_000_000,
+            issued_at_ns: 10,
+        };
+        let mut sign_count = 0;
+
+        let first = prepare_delegation_proof_batch_with_root_signature_replay(
+            request.clone(),
+            context,
+            |request| AuthOps::preflight_delegation_proof_batch_prepare_request(request, 10),
+            || p(1),
+            |batch_id, _cert_hash| {
+                assert_eq!(batch_id, [30; 32]);
+                sign_count += 1;
+                Ok(70)
+            },
+        )
+        .expect("first batch prepare should produce metadata");
+
+        let replay = prepare_delegation_proof_batch_with_root_signature_replay(
+            request,
+            RootDelegationProofBatchPrepareContext {
+                issued_at_ns: 20,
+                ..context
+            },
+            |_request| -> Result<Vec<RootDelegationProofPreparePolicyDecision>, InternalError> {
+                panic!("cached replay must not rerun policy preflight")
+            },
+            || p(1),
+            |_batch_id, _cert_hash| -> Result<u64, InternalError> {
+                panic!("cached replay must not prepare a new signature")
+            },
+        )
+        .expect("same request id and payload should replay original metadata");
+
+        assert_eq!(replay, first);
+        assert_eq!(sign_count, 1);
+    }
+
+    #[test]
+    fn batch_prepare_rejects_conflicting_request_id_reuse() {
+        AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(31)));
+        let mut request = batch_prepare_request(p(31), 60_000_000_000);
+        let metadata = metadata(31, 60_000_000_000);
+        request.metadata = Some(metadata);
+        let context = RootDelegationProofBatchPrepareContext {
+            metadata,
+            max_cert_ttl_ns: 120_000_000_000,
+            issued_at_ns: 10,
+        };
+
+        prepare_delegation_proof_batch_with_root_signature_replay(
+            request.clone(),
+            context,
+            |request| AuthOps::preflight_delegation_proof_batch_prepare_request(request, 10),
+            || p(1),
+            |_batch_id, _cert_hash| Ok(70),
+        )
+        .expect("first batch prepare should produce metadata");
+
+        let mut conflicting = request;
+        conflicting.entries[0].cert_ttl_ns = 30_000_000_000;
+        let err = prepare_delegation_proof_batch_with_root_signature_replay(
+            conflicting,
+            RootDelegationProofBatchPrepareContext {
+                issued_at_ns: 20,
+                ..context
+            },
+            |_request| -> Result<Vec<RootDelegationProofPreparePolicyDecision>, InternalError> {
+                panic!("conflicting replay must fail before policy preflight")
+            },
+            || p(1),
+            |_batch_id, _cert_hash| -> Result<u64, InternalError> {
+                panic!("conflicting replay must fail before signature preparation")
+            },
+        )
+        .expect_err("request id reuse with a different payload must fail");
+        let public = err.public_error().expect("public replay conflict error");
+
+        assert_eq!(public.code, ErrorCode::InvalidInput);
     }
 
     #[test]

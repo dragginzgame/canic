@@ -12,14 +12,19 @@ present.
 
 ## Unreleased
 
-- Root delegation proof batch install now validates submitted proofs against
-  pending batch metadata and broadcasts valid proofs to signer install
-  endpoints with per-signer outcomes, including root-side `AlreadyInstalled`
-  idempotency for repeated successful installs.
-
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
+
+- `0.68.13` finalizes the controller-only root provisioning MVP by documenting
+  provisioner ACL as the later automation target, proving signer-local
+  delegated-token issuance after root proof install, and making batch prepare
+  request-id retries idempotent.
+
+- `0.68.12` enables root delegation proof batch install by validating
+  submitted proofs against pending batch metadata, broadcasting valid proofs to
+  signer install endpoints, and returning per-signer outcomes with
+  `AlreadyInstalled` idempotency.
 
 - `0.68.11` enables direct root query retrieval for root delegation proof
   batches, returning prepared proofs from pending metadata while keeping
