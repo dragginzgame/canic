@@ -327,6 +327,43 @@ pub enum RootDelegationProofInstallOutcome {
 }
 
 //
+// RootIssuerPolicyUpsertRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerPolicyUpsertRequest {
+    pub issuer_pid: Principal,
+    pub enabled: bool,
+    pub allowed_audiences: Vec<DelegationAudience>,
+    pub allowed_grants: Vec<DelegatedRoleGrant>,
+    pub max_cert_ttl_ns: u64,
+    pub refresh_after_ratio_bps: u16,
+}
+
+//
+// RootIssuerPolicyView
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerPolicyView {
+    pub issuer_pid: Principal,
+    pub enabled: bool,
+    pub allowed_audiences: Vec<DelegationAudience>,
+    pub allowed_grants: Vec<DelegatedRoleGrant>,
+    pub max_cert_ttl_ns: u64,
+    pub refresh_after_ratio_bps: u16,
+}
+
+//
+// RootIssuerPolicyResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerPolicyResponse {
+    pub issuer: RootIssuerPolicyView,
+}
+
+//
 // DelegatedTokenPrepareRequest
 //
 

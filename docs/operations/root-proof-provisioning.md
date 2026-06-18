@@ -23,6 +23,7 @@ is operational guidance, not a new product surface.
 Provisioning is an explicit controller/operator action in the current MVP:
 
 ```text
+controller/provisioner -> root canic_upsert_root_issuer_policy update
 controller/provisioner -> root canic_prepare_delegation_proof_batch update
 controller/provisioner -> root canic_get_delegation_proof_batch direct query
 controller/provisioner -> root canic_install_delegation_proof_batch update
@@ -43,6 +44,7 @@ active proof expires.
 - Root verifies submitted install proofs against pending metadata before
   broadcasting them.
 - Issuers verify the root proof again before storing active proof state.
+- Root issuer policy registration is controller-only in the MVP.
 - Retrieval authorization is controller-only in the MVP.
 - Provisioner ACLs, root timers, issuer self-refresh, and retrieval tickets are
   deferred.
@@ -86,6 +88,7 @@ delegated-token prepare should fail until refresh succeeds.
 | Failure | Meaning |
 | --- | --- |
 | `RootDataCertificateUnavailable` | Retrieval did not run in a direct root query context. |
+| `Invalid` during policy upsert | Submitted root issuer policy is malformed. |
 | `Forbidden` during prepare | Issuer is unregistered, disabled, or outside root issuer policy. |
 | `ResourceExhausted` during prepare | Batch or pending metadata quota is exhausted. |
 | `ProofMismatch` during install | Submitted proof does not match pending root metadata. |

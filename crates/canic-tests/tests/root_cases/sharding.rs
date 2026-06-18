@@ -9,7 +9,8 @@ use canic::{
             RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
             RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
             RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
-            RootDelegationProofInstallOutcome,
+            RootDelegationProofInstallOutcome, RootIssuerPolicyResponse,
+            RootIssuerPolicyUpsertRequest,
         },
         error::ErrorCode,
         placement::sharding::ShardingRegistryResponse,
@@ -267,12 +268,21 @@ fn install_root_batch_delegation_proof(
 }
 
 fn upsert_delegation_issuer(setup: &RootSetup, issuer_pid: Principal) {
-    let registered: Result<(), Error> = setup.pic.update_call_or_panic(
+    let registered: Result<RootIssuerPolicyResponse, Error> = setup.pic.update_call_or_panic(
         setup.root_id,
-        "root_test_upsert_delegation_issuer",
-        (issuer_pid,),
+        protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
+        (RootIssuerPolicyUpsertRequest {
+            issuer_pid,
+            enabled: true,
+            allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
+            allowed_grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
+            max_cert_ttl_ns: 600_000_000_000,
+            refresh_after_ratio_bps: 8_000,
+        },),
     );
-    registered.expect("root test issuer registration application failed");
+    let registered = registered.expect("root issuer registration application failed");
+    assert_eq!(registered.issuer.issuer_pid, issuer_pid);
+    assert!(registered.issuer.enabled);
 }
 
 fn batch_prepare_entry(issuer_pid: Principal) -> RootDelegationProofBatchPrepareEntry {

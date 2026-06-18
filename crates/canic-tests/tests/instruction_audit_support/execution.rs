@@ -425,15 +425,23 @@ fn execute_verifier_auth_scenario(
 }
 
 fn upsert_delegation_issuer(setup: &root::harness::RootSetup, issuer_pid: Principal) {
-    let registered: Result<(), Error> = setup
+    let registered: Result<RootIssuerPolicyResponse, Error> = setup
         .pic
         .update_call(
             setup.root_id,
-            "root_test_upsert_delegation_issuer",
-            (issuer_pid,),
+            protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
+            (RootIssuerPolicyUpsertRequest {
+                issuer_pid,
+                enabled: true,
+                allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
+                allowed_grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
+                max_cert_ttl_ns: 60_000_000_000,
+                refresh_after_ratio_bps: 8_000,
+            },),
         )
         .expect("root issuer registration transport failed");
-    registered.expect("root issuer registration application failed");
+    let registered = registered.expect("root issuer registration application failed");
+    assert_eq!(registered.issuer.issuer_pid, issuer_pid);
 }
 
 fn install_root_batch_delegation_proof(

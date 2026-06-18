@@ -9,6 +9,7 @@ use canic::{
             RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
             RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
             RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
+            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
         },
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,

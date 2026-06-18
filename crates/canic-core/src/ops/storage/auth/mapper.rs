@@ -81,7 +81,6 @@ impl RootIssuerPolicyRecordMapper {
         }
     }
 
-    #[cfg(any(test, canic_test_delegation_material))]
     #[must_use]
     pub fn policy_to_record(policy: RootIssuerPolicy) -> RootIssuerRecord {
         RootIssuerRecord {
@@ -215,7 +214,6 @@ fn audience_record_to_policy(record: DelegationAudienceRecord) -> RootDelegation
     }
 }
 
-#[cfg(any(test, canic_test_delegation_material))]
 fn audience_policy_to_record(policy: RootDelegationAudiencePolicy) -> DelegationAudienceRecord {
     match policy {
         RootDelegationAudiencePolicy::Canister(canister) => {
@@ -237,7 +235,6 @@ fn grant_record_to_policy(record: DelegatedRoleGrantRecord) -> RootDelegatedRole
     }
 }
 
-#[cfg(any(test, canic_test_delegation_material))]
 fn grant_policy_to_record(policy: RootDelegatedRoleGrantPolicy) -> DelegatedRoleGrantRecord {
     DelegatedRoleGrantRecord {
         target: policy.target,
