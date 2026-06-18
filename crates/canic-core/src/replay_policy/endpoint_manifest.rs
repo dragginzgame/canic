@@ -43,6 +43,10 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    update_snapshot_convergent(
+        "canic_upsert_root_issuer_policy",
+        "auth.upsert_root_issuer_policy.v1",
+    ),
     update_replay_protected(
         "canic_prepare_delegation_proof_batch",
         "auth.prepare_delegation_proof_batch.v1",
