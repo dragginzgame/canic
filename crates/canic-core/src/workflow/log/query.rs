@@ -1,3 +1,9 @@
+//! Module: workflow::log::query
+//!
+//! Responsibility: expose filtered runtime log pages.
+//! Does not own: log storage mutation, endpoint authorization, or DTO schemas.
+//! Boundary: workflow query facade over runtime log ops.
+
 use crate::{
     dto::{
         log::LogEntry,

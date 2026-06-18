@@ -1,3 +1,9 @@
+//! Module: workflow::canister_lifecycle
+//!
+//! Responsibility: orchestrate canister create and upgrade lifecycle events.
+//! Does not own: endpoint authorization, stable registry schemas, or pure upgrade policy.
+//! Boundary: workflow layer coordinating cost guards, IC ops, registry ops, and cascades.
+
 mod propagation;
 
 use crate::{
@@ -97,7 +103,9 @@ impl CanisterLifecycleWorkflow {
         }
     }
 
-    // ───────────────────────── Creation ─────────────────────────
+    // -------------------------------------------------------------------------
+    // Creation
+    // -------------------------------------------------------------------------
 
     async fn apply_create(
         deployment_permit: &CostGuardPermit,

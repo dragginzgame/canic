@@ -5,7 +5,6 @@
 //! Boundary: root auth API calls this to validate pending proof batches and
 //! broadcast signer-local install requests.
 
-use super::RuntimeAuthWorkflow;
 use crate::{
     InternalError,
     dto::{
@@ -25,7 +24,7 @@ use crate::{
         runtime::env::EnvOps,
     },
     protocol,
-    workflow::prelude::*,
+    workflow::{prelude::*, runtime::auth::RuntimeAuthWorkflow},
 };
 use std::future::Future;
 

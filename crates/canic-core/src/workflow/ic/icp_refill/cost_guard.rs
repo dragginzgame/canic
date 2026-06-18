@@ -4,7 +4,6 @@
 //! Does not own: replay receipt state, storage records, or ledger/CMC calls.
 //! Boundary: guards external value-transfer effects before workflow invokes IC ops.
 
-use super::replay::{icp_refill_command_kind, operation_id_display};
 use crate::{
     InternalError, InternalErrorOrigin,
     ops::{
@@ -14,7 +13,14 @@ use crate::{
     },
     replay_policy::CostClass,
     view::icp_refill::IcpRefillOperation,
-    workflow::{cost_guard::map_cost_guard_reserve_error, prelude::*},
+    workflow::{
+        cost_guard::map_cost_guard_reserve_error,
+        ic::icp_refill::{
+            ICP_REFILL_REPLAY_COMMAND_KIND,
+            replay::{icp_refill_command_kind, operation_id_display},
+        },
+        prelude::*,
+    },
 };
 
 pub(super) const ICP_REFILL_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
@@ -109,7 +115,7 @@ fn log_icp_refill_cost_guard_reserved(operation: &IcpRefillOperation) {
         crate::log::Topic::Cycles,
         Info,
         "icp refill value-transfer cost guard reserved command_kind={} operation_id={} record_id={} source={} target={} amount_e8s={}",
-        super::ICP_REFILL_REPLAY_COMMAND_KIND,
+        ICP_REFILL_REPLAY_COMMAND_KIND,
         operation_id_display(operation.operation_id),
         operation.id,
         operation.source_canister,

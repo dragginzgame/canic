@@ -1,3 +1,9 @@
+//! Module: workflow::state
+//!
+//! Responsibility: orchestrate app-state mutations and downstream state cascades.
+//! Does not own: endpoint authorization, stable state records, or DTO schemas.
+//! Boundary: workflow layer between state API calls, storage ops, and cascade workflow.
+
 pub mod query;
 
 use crate::{

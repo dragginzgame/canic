@@ -1,17 +1,17 @@
-use super::{
-    IcpRefillWorkflow, IcpRefillWorkflowError, RateQueryMode, estimate_cycles,
-    execution::execute_fresh_manual_refill,
-    prepare_context,
-    replay::{
-        IcpRefillReplayReservation, icp_refill_replay_reserve_input,
-        log_icp_refill_committed_replay, log_icp_refill_fresh_reservation,
-        reserve_icp_refill_replay,
-    },
-};
 use crate::{
     InternalError,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillMode, IcpRefillRequest, IcpRefillResponse},
     ops::ic::IcOps,
+    workflow::ic::icp_refill::{
+        IcpRefillWorkflow, IcpRefillWorkflowError, RateQueryMode, estimate_cycles,
+        execution::execute_fresh_manual_refill,
+        prepare_context,
+        replay::{
+            IcpRefillReplayReservation, icp_refill_replay_reserve_input,
+            log_icp_refill_committed_replay, log_icp_refill_fresh_reservation,
+            reserve_icp_refill_replay,
+        },
+    },
 };
 
 impl IcpRefillWorkflow {

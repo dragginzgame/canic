@@ -1,3 +1,9 @@
+//! Module: workflow::icrc::query
+//!
+//! Responsibility: expose ICRC-10 supported standards and ICRC-21 consent-message queries.
+//! Does not own: endpoint authorization, dispatcher internals, or standards DTO schemas.
+//! Boundary: workflow query facade over ICRC registry and dispatcher services.
+
 use crate::{
     cdk::spec::standards::icrc::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
     config::Config,

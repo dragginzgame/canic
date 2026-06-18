@@ -5,11 +5,12 @@ use canic::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
             DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
-            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
-            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
-            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
-            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
-            RootDelegationProofInstallOutcome,
+            DelegationProof, DelegationProofGetRequest, DelegationProofIssueRequest,
+            DelegationProofPrepareResponse, RootDelegationProofBatchGetRequest,
+            RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
+            RootDelegationProofBatchInstallResponse, RootDelegationProofBatchPrepareEntry,
+            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
+            RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
         },
         error::ErrorCode,
         placement::sharding::ShardingRegistryResponse,
@@ -28,6 +29,9 @@ use canic_tests::root::{
     harness::{RootSetup, setup_cached_root},
 };
 use std::time::Duration;
+
+const INERT_WASM: &[u8] = b"\0asm\x01\0\0\0";
+const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 
 #[test]
 fn user_hub_sharding_profile_prewarms_first_user_shard() {
@@ -206,6 +210,101 @@ fn root_batch_install_reports_partial_failure_and_retry() {
     );
 }
 
+#[test]
+fn issuer_nested_root_proof_retrieval_fails_for_missing_root_data_certificate() {
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
+
+    let user_hub_pid = setup
+        .subnet_index
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in sharding profile");
+    let subject = Principal::from_slice(&[59; 29]);
+    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    let request = delegation_proof_issue_request(59, shard_pid);
+    let prepared: Result<DelegationProofPrepareResponse, Error> =
+        setup.pic.update_call_as_or_panic(
+            setup.root_id,
+            shard_pid,
+            protocol::CANIC_PREPARE_DELEGATION_PROOF,
+            (request,),
+        );
+    let prepared = prepared.expect("legacy root delegation proof prepare application failed");
+
+    let nested: Result<DelegationProof, Error> = setup.pic.query_call_or_panic(
+        shard_pid,
+        "user_shard_test_nested_root_get_delegation_proof",
+        (
+            setup.root_id,
+            DelegationProofGetRequest {
+                cert_hash: prepared.cert_hash,
+            },
+        ),
+    );
+    let err =
+        nested.expect_err("issuer nested root proof retrieval must fail before returning a proof");
+    assert_eq!(err.code, ErrorCode::RootDataCertificateUnavailable);
+}
+
+#[test]
+fn root_unavailable_after_batch_install_does_not_break_signer_local_issuance() {
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
+
+    let user_hub_pid = setup
+        .subnet_index
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in sharding profile");
+    let verifier_pid = setup
+        .subnet_index
+        .get(&canister::TEST)
+        .copied()
+        .expect("test verifier must exist in sharding profile");
+    let subject = Principal::from_slice(&[60; 29]);
+    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    upsert_delegation_issuer(&setup, shard_pid);
+
+    let request = RootDelegationProofBatchPrepareRequest {
+        metadata: Some(batch_metadata(60, shard_pid)),
+        entries: vec![batch_prepare_entry_with_ttl(shard_pid, 600_000_000_000)],
+    };
+    let prepared = prepare_root_delegation_proof_batch(&setup, request);
+    let retrieved = retrieve_root_delegation_proof_batch(&setup, &prepared);
+    let installed = install_root_delegation_proof_batch(
+        &setup,
+        RootDelegationProofBatchInstallRequest {
+            batch_id: retrieved.batch_id,
+            proofs: retrieved.proofs,
+        },
+    );
+    assert_install_outcome(
+        &installed,
+        shard_pid,
+        RootDelegationProofInstallOutcome::Installed,
+    );
+    let status = assert_active_delegation_proof_status(&setup, shard_pid, &prepared);
+
+    setup
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    setup
+        .pic
+        .reinstall_canister(setup.root_id, INERT_WASM.to_vec(), Vec::new(), None)
+        .expect("root canister must be replaceable with inert wasm");
+    setup.pic.tick();
+    let root_ready = setup
+        .pic
+        .query_call::<bool, _>(setup.root_id, protocol::CANIC_READY, ());
+    assert!(
+        root_ready.is_err(),
+        "root should not expose Canic endpoints after inert reinstall"
+    );
+
+    verify_signer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
+}
+
 fn install_root_batch_delegation_proof(
     setup: &RootSetup,
     shard_pid: Principal,
@@ -256,7 +355,24 @@ fn upsert_delegation_issuer(setup: &RootSetup, issuer_pid: Principal) {
 }
 
 fn batch_prepare_entry(issuer_pid: Principal) -> RootDelegationProofBatchPrepareEntry {
+    batch_prepare_entry_with_ttl(issuer_pid, 60_000_000_000)
+}
+
+fn batch_prepare_entry_with_ttl(
+    issuer_pid: Principal,
+    cert_ttl_ns: u64,
+) -> RootDelegationProofBatchPrepareEntry {
     RootDelegationProofBatchPrepareEntry {
+        issuer_pid,
+        aud: DelegationAudience::Project("test".to_string()),
+        grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
+        cert_ttl_ns,
+    }
+}
+
+fn delegation_proof_issue_request(id: u8, issuer_pid: Principal) -> DelegationProofIssueRequest {
+    DelegationProofIssueRequest {
+        metadata: Some(batch_metadata(id, issuer_pid)),
         issuer_pid,
         aud: DelegationAudience::Project("test".to_string()),
         grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],

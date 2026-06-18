@@ -1,3 +1,9 @@
+//! Module: workflow::topology::guard
+//!
+//! Responsibility: guard topology mutation sections against concurrent re-entry.
+//! Does not own: topology storage mutation, endpoint authorization, or DTO schemas.
+//! Boundary: workflow-local mutation guard used by topology orchestration.
+
 use crate::{InternalError, InternalErrorOrigin};
 use std::cell::Cell;
 

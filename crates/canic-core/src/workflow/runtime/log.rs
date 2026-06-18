@@ -1,3 +1,9 @@
+//! Module: workflow::runtime::log
+//!
+//! Responsibility: schedule and run runtime log retention sweeps.
+//! Does not own: log storage schemas, retention policy rules, or endpoint authorization.
+//! Boundary: runtime workflow timer coordinating log policy and log ops.
+
 use crate::{
     domain::policy,
     ops::{

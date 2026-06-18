@@ -1,3 +1,9 @@
+//! Module: workflow::runtime
+//!
+//! Responsibility: coordinate runtime startup services and memory initialization.
+//! Does not own: lifecycle adapters, endpoint authorization, or stable schemas.
+//! Boundary: lifecycle workflows call runtime startup after environment restore.
+
 pub mod auth;
 pub mod cycles;
 pub mod install;

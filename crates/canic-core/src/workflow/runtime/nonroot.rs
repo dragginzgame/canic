@@ -1,3 +1,9 @@
+//! Module: workflow::runtime::nonroot
+//!
+//! Responsibility: initialize and restore non-root canister runtime services.
+//! Does not own: IC lifecycle hooks, endpoint authorization, or config schemas.
+//! Boundary: lifecycle adapters call this after stable-memory restore or init input decode.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::abi::v1::CanisterInitPayload,
@@ -10,10 +16,12 @@ use crate::{
             state::app::AppStateOps,
         },
     },
-    workflow::{env::EnvWorkflow, prelude::*},
+    workflow::{
+        env::EnvWorkflow,
+        prelude::*,
+        runtime::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary},
+    },
 };
-
-use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 
 ///
 /// init_nonroot_canister

@@ -1,3 +1,9 @@
+//! Module: workflow::topology::index::query
+//!
+//! Responsibility: expose read-only app and subnet index pages and role lookups.
+//! Does not own: index storage mutation, endpoint authorization, or DTO schemas.
+//! Boundary: workflow query facade over index storage ops.
+
 use crate::{
     dto::{
         page::{Page, PageRequest},

@@ -1,3 +1,9 @@
+//! Module: workflow::runtime::intent
+//!
+//! Responsibility: schedule and run cleanup for expired pending intents.
+//! Does not own: intent storage schemas, business policy, or endpoint authorization.
+//! Boundary: runtime workflow timer coordinating intent storage cleanup and metrics.
+
 use crate::{
     ops::{
         ic::IcOps,
