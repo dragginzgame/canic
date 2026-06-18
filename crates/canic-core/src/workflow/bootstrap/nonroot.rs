@@ -1,36 +1,17 @@
-//! Non-root bootstrap phase.
+//! Module: workflow::bootstrap::nonroot
 //!
-//! This module defines the asynchronous bootstrap phase for non-root canisters.
-//! It runs *after* synchronous runtime initialization has completed successfully.
-//!
-//! Purpose:
-//! - Provide a dedicated lifecycle phase for non-root canisters to perform
-//!   local, asynchronous setup work.
-//! - Preserve symmetry with the root lifecycle without duplicating
-//!   cross-canister orchestration logic.
-//!
-//! Non-goals:
-//! - This module does **not** create topology.
-//! - This module does **not** self-register canisters.
-//! - This module does **not** coordinate with other canisters.
-//! - All cross-canister lifecycle orchestration is owned by the root canister.
-//!
-//! Current behavior:
-//! - Bootstrap configured placement workers.
-//! - Check delegated-token issuer canister-signature support when configured.
-//! - Mark the canister ready only after bootstrap work succeeds.
-//!
-//! Architectural note:
-//! This module exists to make the lifecycle boundary explicit and stable.
-//! It provides a well-defined extension point should non-root canisters
-//! later require asynchronous local bootstrap behavior.
+//! Responsibility: run asynchronous local bootstrap work for non-root canisters.
+//! Does not own: topology creation, self-registration, or cross-canister orchestration.
+//! Boundary: lifecycle schedules this after synchronous runtime initialization succeeds.
 
-use crate::{InternalError, ops::runtime::ready::ReadyOps, workflow::prelude::*};
-
-use crate::workflow::placement::scaling::ScalingWorkflow;
 #[cfg(feature = "sharding")]
 use crate::workflow::placement::sharding::ShardingWorkflow;
 use crate::workflow::runtime::auth::RuntimeAuthWorkflow;
+use crate::{
+    InternalError,
+    ops::runtime::ready::ReadyOps,
+    workflow::{placement::scaling::ScalingWorkflow, prelude::*},
+};
 
 ///
 /// Bootstrap workflow for non-root canisters during init.

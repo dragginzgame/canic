@@ -1,3 +1,9 @@
+//! Module: workflow::state::query
+//!
+//! Responsibility: expose read-only app and subnet state workflow snapshots.
+//! Does not own: state storage mutation, endpoint authorization, or DTO schemas.
+//! Boundary: workflow query facade over state storage ops.
+
 use crate::{
     dto::state::{AppStateResponse, SubnetStateResponse},
     ops::storage::state::{app::AppStateOps, subnet::SubnetStateOps},

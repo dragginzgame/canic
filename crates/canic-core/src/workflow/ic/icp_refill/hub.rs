@@ -4,11 +4,6 @@
 //! Does not own: refill policy evaluation, storage mutation, or IC ledger calls.
 //! Boundary: builds self-refill requests and delegates execution to manual refill flow.
 
-use super::{
-    IcpRefillWorkflow, RateQueryMode, build_network, configured_rate, current_topup_policy,
-    funding_cooldown_retry_after_secs, in_flight_for_request, policy_denied, policy_input,
-    refill_canister_overrides,
-};
 use crate::{
     InternalError,
     cdk::types::{Cycles, Principal},
@@ -17,6 +12,11 @@ use crate::{
     ops::{
         ic::{IcOps, icp_refill::IcpRefillOps},
         storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
+    },
+    workflow::ic::icp_refill::{
+        IcpRefillWorkflow, RateQueryMode, build_network, configured_rate, current_topup_policy,
+        funding_cooldown_retry_after_secs, in_flight_for_request, policy_denied, policy_input,
+        refill_canister_overrides,
     },
 };
 use sha2::{Digest, Sha256};

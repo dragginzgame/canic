@@ -4,10 +4,6 @@
 //! Does not own: ledger/CMC execution, stable records, or cost guard accounting.
 //! Boundary: maps generic replay ops into ICP refill workflow decisions.
 
-use super::{
-    ICP_REFILL_REPLAY_COMMAND_KIND,
-    cost_guard::{complete_icp_refill_cost_guard, recover_icp_refill_cost_guard},
-};
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::{
@@ -31,7 +27,13 @@ use crate::{
         storage::icp_refill::IcpRefillStoreOps,
     },
     view::icp_refill::IcpRefillOperation,
-    workflow::prelude::*,
+    workflow::{
+        ic::icp_refill::{
+            ICP_REFILL_REPLAY_COMMAND_KIND,
+            cost_guard::{complete_icp_refill_cost_guard, recover_icp_refill_cost_guard},
+        },
+        prelude::*,
+    },
 };
 
 ///

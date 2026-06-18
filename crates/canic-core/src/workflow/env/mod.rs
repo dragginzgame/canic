@@ -1,3 +1,9 @@
+//! Module: workflow::env
+//!
+//! Responsibility: validate and initialize runtime environment state from bootstrap args.
+//! Does not own: endpoint authorization, stable env storage, or env policy rules.
+//! Boundary: workflow layer between lifecycle bootstrap input, policy, and env ops.
+
 pub mod query;
 
 use crate::{

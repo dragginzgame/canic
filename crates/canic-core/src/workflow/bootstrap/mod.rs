@@ -1,13 +1,7 @@
-//! Bootstrap workflows.
+//! Module: workflow::bootstrap
 //!
-//! This module contains **async orchestration logic only**.
-//! It assumes the environment has already been initialized or restored
-//! by lifecycle adapters.
-//!
-//! It must NOT:
-//! - handle IC lifecycle hooks directly
-//! - depend on init payload presence
-//! - perform environment seeding or restoration
-//! - import index snapshots outside explicit bootstrap rebuilds
+//! Responsibility: group async bootstrap orchestration after lifecycle restore.
+//! Does not own: IC lifecycle hooks, environment seeding, or stable-memory restore.
+//! Boundary: lifecycle adapters schedule bootstrap work after runtime invariants hold.
 
 pub mod nonroot;

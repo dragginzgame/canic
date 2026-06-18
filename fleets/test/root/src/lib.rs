@@ -26,7 +26,7 @@ async fn root_test_upsert_delegation_issuer(issuer_pid: Principal) -> Result<(),
             target: CanisterRole::new("test"),
             scopes: vec![cap::VERIFY.to_string()],
         }],
-        120_000_000_000,
+        600_000_000_000,
         8_000,
     )
 }

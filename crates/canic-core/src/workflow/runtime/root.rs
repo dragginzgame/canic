@@ -1,3 +1,9 @@
+//! Module: workflow::runtime::root
+//!
+//! Responsibility: initialize and restore root canister runtime services.
+//! Does not own: IC lifecycle hooks, endpoint authorization, or config schemas.
+//! Boundary: lifecycle adapters call this after stable-memory restore or init input decode.
+
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
@@ -9,10 +15,11 @@ use crate::{
         runtime::{env::EnvOps, memory::MemoryRegistryOps},
         storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
     },
-    workflow::prelude::*,
+    workflow::{
+        prelude::*,
+        runtime::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary},
+    },
 };
-
-use super::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary};
 
 ///
 /// init_root_canister

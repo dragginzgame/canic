@@ -4,15 +4,6 @@
 //! Does not own: endpoint authorization, stable record schemas, or pure policy.
 //! Boundary: orchestrates ops/storage/replay after request preflight.
 
-use super::{
-    MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
-    cost_guard::{require_icp_refill_cost_permit, reserve_icp_refill_cost_guard_if_needed},
-    prepare_context,
-    replay::{
-        finish_icp_refill_replay, mark_icp_refill_notify_effect, mark_icp_refill_recovery_required,
-        mark_icp_refill_transfer_effect,
-    },
-};
 use crate::{
     InternalError,
     cdk::{candid::Nat, icrc_ledger_types::icrc1::transfer::TransferError, types::Principal},
@@ -30,6 +21,18 @@ use crate::{
         },
     },
     view::icp_refill::IcpRefillOperation,
+    workflow::ic::icp_refill::{
+        MAX_NOTIFY_ATTEMPTS, RateQueryMode, TX_WINDOW_NANOS,
+        cost_guard::{
+            recover_icp_refill_cost_guard, require_icp_refill_cost_permit,
+            reserve_icp_refill_cost_guard_if_needed,
+        },
+        prepare_context,
+        replay::{
+            finish_icp_refill_replay, mark_icp_refill_notify_effect,
+            mark_icp_refill_recovery_required, mark_icp_refill_transfer_effect,
+        },
+    },
 };
 
 pub(super) async fn execute_fresh_manual_refill(
@@ -43,7 +46,7 @@ pub(super) async fn execute_fresh_manual_refill(
         {
             Ok(operation) => operation,
             Err(err) => {
-                super::cost_guard::recover_icp_refill_cost_guard(cost_permit.as_ref());
+                recover_icp_refill_cost_guard(cost_permit.as_ref());
                 abort_reserved_receipt(token);
                 return Err(err);
             }
@@ -221,18 +224,20 @@ pub(super) fn apply_transfer_error(
 ) -> Result<IcpRefillOperation, InternalError> {
     match err {
         TransferError::BadFee { expected_fee } => {
-            let expected_fee_e8s =
-                match super::checked_nat_u64("bad_fee.expected_fee", expected_fee) {
-                    Ok(expected_fee_e8s) => expected_fee_e8s,
-                    Err(err) => {
-                        return IcpRefillStoreOps::mark_transfer_failed(
-                            record_id,
-                            IcpRefillErrorCode::BadFee,
-                            err.to_string(),
-                            IcOps::now_nanos(),
-                        );
-                    }
-                };
+            let expected_fee_e8s = match crate::workflow::ic::icp_refill::checked_nat_u64(
+                "bad_fee.expected_fee",
+                expected_fee,
+            ) {
+                Ok(expected_fee_e8s) => expected_fee_e8s,
+                Err(err) => {
+                    return IcpRefillStoreOps::mark_transfer_failed(
+                        record_id,
+                        IcpRefillErrorCode::BadFee,
+                        err.to_string(),
+                        IcOps::now_nanos(),
+                    );
+                }
+            };
             IcpRefillStoreOps::mark_bad_fee(
                 record_id,
                 expected_fee_e8s,

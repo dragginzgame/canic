@@ -1,3 +1,9 @@
+//! Module: workflow::metrics::query
+//!
+//! Responsibility: project, sort, and paginate read-only metrics snapshots.
+//! Does not own: metric recording, endpoint authorization, or DTO schemas.
+//! Boundary: workflow query facade over runtime metrics projections.
+
 use crate::{
     dto::{
         metrics::{MetricEntry, MetricsKind, QueryPerfSample},

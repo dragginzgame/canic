@@ -4,7 +4,6 @@
 //! Does not own: endpoint authorization, auth stable records, or crypto primitives.
 //! Boundary: runtime auth workflow delegates proof creation to auth ops and replay ops.
 
-use super::RuntimeAuthWorkflow;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
@@ -43,6 +42,7 @@ use crate::{
         runtime::env::EnvOps,
         storage::registry::subnet::SubnetRegistryOps,
     },
+    workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
 const DELEGATED_TOKENS_DISABLED: &str =

@@ -1,3 +1,9 @@
+//! Module: workflow::canister_lifecycle::propagation
+//!
+//! Responsibility: propagate topology and state after lifecycle mutations.
+//! Does not own: canister creation, stable registry schemas, or endpoint DTOs.
+//! Boundary: lifecycle workflow helper coordinating cascades and consistency checks.
+
 use crate::{
     InternalError,
     domain::policy::topology::TopologyPolicy,

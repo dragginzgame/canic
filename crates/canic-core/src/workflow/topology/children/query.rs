@@ -1,3 +1,9 @@
+//! Module: workflow::topology::children::query
+//!
+//! Responsibility: expose read-only child topology pages and role lookups.
+//! Does not own: child storage mutation, endpoint authorization, or DTO schemas.
+//! Boundary: workflow query facade over child storage ops and config lookups.
+
 use crate::{
     config::schema::CanisterKind,
     dto::{
