@@ -16,6 +16,10 @@ use std::{cell::RefCell, collections::BTreeMap};
 #[cfg(feature = "auth-root-canister-sig-create")]
 pub const ROOT_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
 
+#[cfg(feature = "auth-root-canister-sig-create")]
+const DATA_CERTIFICATE_UNAVAILABLE_FRAGMENT: &str =
+    "Data certificates (which are required to create canister signatures)";
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootPayloadKind {
     DelegationCert,
@@ -274,7 +278,7 @@ fn get_root_canister_signature_proof(
         signatures
             .borrow()
             .get_signature_as_cbor(&inputs, None)
-            .map_err(|err| AuthSignatureError::ProofInvalid(err.to_string()))
+            .map_err(root_canister_signature_cbor_error)
     })?;
     let public_key_der =
         CanisterSigPublicKey::new(root_pid, root_canister_sig_seed(kind).to_vec()).to_der();
@@ -285,6 +289,16 @@ fn get_root_canister_signature_proof(
             public_key_der,
         },
     ))
+}
+
+#[cfg(feature = "auth-root-canister-sig-create")]
+fn root_canister_signature_cbor_error(err: impl std::fmt::Display) -> AuthSignatureError {
+    let message = err.to_string();
+    if message.contains(DATA_CERTIFICATE_UNAVAILABLE_FRAGMENT) {
+        return AuthSignatureError::RootDataCertificateUnavailable;
+    }
+
+    AuthSignatureError::ProofInvalid(message)
 }
 
 #[cfg(not(feature = "auth-root-canister-sig-create"))]
@@ -388,5 +402,26 @@ mod tests {
             ic_root_public_key_raw_from_der_or_raw(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]).unwrap(),
             vec![8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]
         );
+    }
+
+    #[cfg(feature = "auth-root-canister-sig-create")]
+    #[test]
+    fn missing_data_certificate_maps_to_typed_root_error() {
+        let err = root_canister_signature_cbor_error(
+            "Data certificates (which are required to create canister signatures) are only available in query calls.",
+        );
+
+        assert!(matches!(
+            err,
+            AuthSignatureError::RootDataCertificateUnavailable
+        ));
+    }
+
+    #[cfg(feature = "auth-root-canister-sig-create")]
+    #[test]
+    fn non_certificate_signature_error_remains_invalid_proof() {
+        let err = root_canister_signature_cbor_error("signature map path not found");
+
+        assert!(matches!(err, AuthSignatureError::ProofInvalid(_)));
     }
 }

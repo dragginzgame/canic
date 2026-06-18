@@ -1,3 +1,9 @@
+//! Module: workflow::pool
+//!
+//! Responsibility: coordinate pool canister selection, reset, import, and admin flows.
+//! Does not own: endpoint authorization, stable pool records, or pool policy decisions.
+//! Boundary: workflow layer coordinating pool storage, policy, IC ops, and metrics.
+
 pub mod admin;
 pub mod admissibility;
 pub mod controllers;

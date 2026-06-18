@@ -1,25 +1,14 @@
-//! Pool admin command handling.
+//! Module: workflow::pool::admin
+//!
+//! Responsibility: route pool admin commands to pool workflow operations.
+//! Does not own: endpoint authorization, scheduling, or pool storage mechanics.
+//! Boundary: workflow command dispatcher returning admin response DTOs.
 
-use super::PoolWorkflow;
 use crate::{
     InternalError,
     dto::pool::{PoolAdminCommand, PoolAdminResponse},
+    workflow::pool::PoolWorkflow,
 };
-
-///
-/// PoolWorkflow
-///
-/// Entry point for pool admin commands.
-///
-/// Responsibilities:
-/// - Command routing
-/// - Response shaping
-///
-/// Non-responsibilities:
-/// - Authorization (handled in workflow / policy)
-/// - Scheduling
-/// - Pool mechanics
-///
 
 impl PoolWorkflow {
     pub async fn handle_admin(cmd: PoolAdminCommand) -> Result<PoolAdminResponse, InternalError> {

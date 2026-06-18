@@ -1,4 +1,9 @@
-use super::{PoolWorkflow, admissibility, query::PoolQuery, scheduler::PoolSchedulerWorkflow};
+//! Module: workflow::pool::import
+//!
+//! Responsibility: import external or queued canisters into the reset pool.
+//! Does not own: endpoint authorization, stable pool schemas, or pool policy rules.
+//! Boundary: workflow helper coordinating admission checks, intents, reset, storage, and metrics.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::pool::{CanisterPoolStatus, PoolBatchResult},
@@ -18,7 +23,11 @@ use crate::{
         },
         storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::{prelude::*, runtime::intent::IntentCleanupWorkflow},
+    workflow::{
+        pool::{PoolWorkflow, admissibility, query::PoolQuery, scheduler::PoolSchedulerWorkflow},
+        prelude::*,
+        runtime::intent::IntentCleanupWorkflow,
+    },
 };
 
 impl PoolWorkflow {

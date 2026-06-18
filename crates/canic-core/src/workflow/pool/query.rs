@@ -1,3 +1,9 @@
+//! Module: workflow::pool::query
+//!
+//! Responsibility: expose read-only pool workflow queries.
+//! Does not own: pool storage mutation, endpoint authorization, or DTO schemas.
+//! Boundary: workflow query facade over pool storage ops.
+
 use crate::{
     dto::pool::{CanisterPoolEntry, CanisterPoolResponse},
     ops::storage::pool::{

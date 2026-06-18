@@ -1,4 +1,9 @@
-use super::PoolWorkflow;
+//! Module: workflow::pool::reset
+//!
+//! Responsibility: reset one canister into parked pool state.
+//! Does not own: pool admission policy, stable pool records, or endpoint authorization.
+//! Boundary: workflow helper coordinating management calls and reset metrics.
+
 use crate::{
     InternalError,
     ops::{
@@ -8,6 +13,7 @@ use crate::{
             recording::PoolMetricEvent as MetricEvent,
         },
     },
+    workflow::pool::PoolWorkflow,
     workflow::prelude::*,
 };
 

@@ -1,4 +1,9 @@
-use super::{PoolWorkflow, query::PoolQuery, scheduler::PoolSchedulerWorkflow};
+//! Module: workflow::pool::recycle
+//!
+//! Responsibility: recycle registered canisters into the reset pool.
+//! Does not own: endpoint authorization, stable pool schemas, or pool policy rules.
+//! Boundary: workflow helper coordinating topology removal, reset, storage, scheduling, and metrics.
+
 use crate::{
     InternalError,
     dto::pool::CanisterPoolStatus,
@@ -13,7 +18,10 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::prelude::*,
+    workflow::{
+        pool::{PoolWorkflow, query::PoolQuery, scheduler::PoolSchedulerWorkflow},
+        prelude::*,
+    },
 };
 
 impl PoolWorkflow {
