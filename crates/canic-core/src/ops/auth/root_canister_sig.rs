@@ -36,23 +36,22 @@ pub struct PreparedRootCanisterSignature {
 struct PendingRootProof {
     operation_id: [u8; 32],
     retrieval_expires_at_ns: u64,
-    prepared_by: Principal,
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct PendingRootProofKey {
     kind: RootPayloadKind,
-    cert_hash: [u8; 32],
+    payload_hash: [u8; 32],
     prepared_by: Vec<u8>,
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 impl PendingRootProofKey {
-    fn new(kind: RootPayloadKind, cert_hash: [u8; 32], prepared_by: Principal) -> Self {
+    fn new(kind: RootPayloadKind, payload_hash: [u8; 32], prepared_by: Principal) -> Self {
         Self {
             kind,
-            cert_hash,
+            payload_hash,
             prepared_by: prepared_by.as_slice().to_vec(),
         }
     }
@@ -208,7 +207,6 @@ fn prepare_root_canister_signature(
             PendingRootProof {
                 operation_id,
                 retrieval_expires_at_ns,
-                prepared_by,
             },
         );
     });
@@ -252,19 +250,11 @@ fn get_root_canister_signature_proof(
     let key = PendingRootProofKey::new(kind, payload_hash, prepared_by);
     let pending = PENDING_ROOT_PROOFS.with(|pending| pending.borrow().get(&key).cloned());
     let pending = pending.ok_or_else(|| {
-        AuthValidationError::Auth(
-            "delegation proof was not prepared or has been pruned".to_string(),
-        )
+        AuthValidationError::Auth("root proof was not prepared or has been pruned".to_string())
     })?;
-    if pending.prepared_by != prepared_by {
-        return Err(AuthValidationError::Auth(
-            "delegation proof retrieval caller mismatch".to_string(),
-        )
-        .into());
-    }
     if now_ns >= pending.retrieval_expires_at_ns {
         return Err(AuthValidationError::Auth(format!(
-            "delegation proof retrieval window expired for operation {:?}",
+            "root proof retrieval window expired for operation {:?}",
             pending.operation_id
         ))
         .into());

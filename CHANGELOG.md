@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.18` cleans up root/issuer canister-signature proof internals by relying
+  on caller-bound pending keys and aligning the root batch provisioning helper
+  wording with root-proof terminology, without changing the public protocol.
+
 - `0.68.17` removes the legacy single-proof root delegation prepare/get route,
   leaving batch prepare, direct root query retrieval, and batch install as the
   only active root proof provisioning contract.

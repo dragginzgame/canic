@@ -30,23 +30,22 @@ pub struct PreparedIssuerCanisterSignature {
 struct PendingIssuerProof {
     operation_id: [u8; 32],
     retrieval_expires_at_ns: u64,
-    prepared_by: Principal,
 }
 
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct PendingIssuerProofKey {
     kind: IssuerPayloadKind,
-    claims_hash: [u8; 32],
+    payload_hash: [u8; 32],
     prepared_by: Vec<u8>,
 }
 
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 impl PendingIssuerProofKey {
-    fn new(kind: IssuerPayloadKind, claims_hash: [u8; 32], prepared_by: Principal) -> Self {
+    fn new(kind: IssuerPayloadKind, payload_hash: [u8; 32], prepared_by: Principal) -> Self {
         Self {
             kind,
-            claims_hash,
+            payload_hash,
             prepared_by: prepared_by.as_slice().to_vec(),
         }
     }
@@ -199,7 +198,6 @@ fn prepare_issuer_canister_signature(
             PendingIssuerProof {
                 operation_id,
                 retrieval_expires_at_ns,
-                prepared_by,
             },
         );
     });
@@ -243,19 +241,11 @@ fn get_issuer_canister_signature_proof(
     let key = PendingIssuerProofKey::new(kind, payload_hash, prepared_by);
     let pending = PENDING_ISSUER_PROOFS.with(|pending| pending.borrow().get(&key).cloned());
     let pending = pending.ok_or_else(|| {
-        AuthValidationError::Auth(
-            "issuer token proof was not prepared or has been pruned".to_string(),
-        )
+        AuthValidationError::Auth("issuer proof was not prepared or has been pruned".to_string())
     })?;
-    if pending.prepared_by != prepared_by {
-        return Err(AuthValidationError::Auth(
-            "issuer token proof retrieval caller mismatch".to_string(),
-        )
-        .into());
-    }
     if now_ns >= pending.retrieval_expires_at_ns {
         return Err(AuthValidationError::Auth(format!(
-            "issuer token proof retrieval window expired for operation {:?}",
+            "issuer proof retrieval window expired for operation {:?}",
             pending.operation_id
         ))
         .into());
