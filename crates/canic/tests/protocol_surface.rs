@@ -310,52 +310,17 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
     let root_pid = Principal::from_slice(&[18; 29]);
     let batch_id = [19; 32];
     let cert_hash = [20; 32];
-    let grant = DelegatedRoleGrant {
-        target: CanisterRole::new("test"),
-        scopes: vec!["verify".to_string()],
-    };
+    let grant = test_delegated_role_grant();
     let audience = DelegationAudience::Project("test".to_string());
-    let issuer_policy_request = RootIssuerPolicyUpsertRequest {
-        issuer_pid,
-        enabled: true,
-        allowed_audiences: vec![audience.clone()],
-        allowed_grants: vec![grant.clone()],
-        max_cert_ttl_ns: 60,
-        refresh_after_ratio_bps: 8_000,
-    };
-    let issuer_policy_response = RootIssuerPolicyResponse {
-        issuer: RootIssuerPolicyView {
-            issuer_pid,
-            enabled: true,
-            allowed_audiences: vec![audience.clone()],
-            allowed_grants: vec![grant.clone()],
-            max_cert_ttl_ns: 60,
-            refresh_after_ratio_bps: 8_000,
-        },
-    };
-    let prepare_entry = RootDelegationProofBatchPrepareEntry {
-        issuer_pid,
-        aud: audience.clone(),
-        grants: vec![grant.clone()],
-        cert_ttl_ns: 60,
-    };
-    let prepare_request = RootDelegationProofBatchPrepareRequest {
-        metadata: Some(AuthRequestMetadata {
-            request_id: batch_id,
-            ttl_ns: 30,
-        }),
-        entries: vec![prepare_entry.clone()],
-    };
-    let prepare_response = RootDelegationProofBatchPrepareResponse {
-        batch_id,
-        entries: vec![RootDelegationProofBatchEntry {
-            issuer_pid,
-            cert_hash,
-            expires_at_ns: 90,
-            refresh_after_ns: 72,
-        }],
-        retrieval_expires_at_ns: 45,
-    };
+    let issuer_policy_request =
+        root_issuer_policy_upsert_request(issuer_pid, audience.clone(), grant.clone());
+    let issuer_policy_response =
+        root_issuer_policy_response(issuer_pid, audience.clone(), grant.clone());
+    let prepare_entry =
+        root_delegation_proof_batch_prepare_entry(issuer_pid, audience.clone(), grant.clone());
+    let prepare_request = root_delegation_proof_batch_prepare_request(batch_id, &prepare_entry);
+    let prepare_response =
+        root_delegation_proof_batch_prepare_response(batch_id, issuer_pid, cert_hash);
     let proof_ref = RootDelegationProofBatchProofRef {
         issuer_pid,
         cert_hash,
@@ -364,27 +329,7 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
         batch_id,
         entries: vec![proof_ref],
     };
-    let proof = DelegationProof {
-        cert: DelegationCert {
-            root_pid,
-            issuer_pid,
-            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
-            issuer_proof_binding_hash: [21; 32],
-            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
-                seed_hash: [22; 32],
-            },
-            issued_at_ns: 1,
-            not_before_ns: 1,
-            expires_at_ns: 90,
-            max_token_ttl_ns: 10,
-            aud: audience,
-            grants: vec![grant],
-        },
-        root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![1, 2, 3],
-            public_key_der: vec![4, 5, 6],
-        }),
-    };
+    let proof = root_delegation_proof(root_pid, issuer_pid, audience, grant);
     let batch_proof = RootDelegationProofBatchProof {
         issuer_pid,
         cert_hash,
@@ -425,6 +370,117 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
     assert_candid_roundtrip(install_request);
     assert_candid_roundtrip(install_response);
     assert_candid_roundtrip(status);
+}
+
+fn test_delegated_role_grant() -> DelegatedRoleGrant {
+    DelegatedRoleGrant {
+        target: CanisterRole::new("test"),
+        scopes: vec!["verify".to_string()],
+    }
+}
+
+fn root_issuer_policy_upsert_request(
+    issuer_pid: Principal,
+    audience: DelegationAudience,
+    grant: DelegatedRoleGrant,
+) -> RootIssuerPolicyUpsertRequest {
+    RootIssuerPolicyUpsertRequest {
+        issuer_pid,
+        enabled: true,
+        allowed_audiences: vec![audience],
+        allowed_grants: vec![grant],
+        max_cert_ttl_ns: 60,
+        refresh_after_ratio_bps: 8_000,
+    }
+}
+
+fn root_issuer_policy_response(
+    issuer_pid: Principal,
+    audience: DelegationAudience,
+    grant: DelegatedRoleGrant,
+) -> RootIssuerPolicyResponse {
+    RootIssuerPolicyResponse {
+        issuer: RootIssuerPolicyView {
+            issuer_pid,
+            enabled: true,
+            allowed_audiences: vec![audience],
+            allowed_grants: vec![grant],
+            max_cert_ttl_ns: 60,
+            refresh_after_ratio_bps: 8_000,
+        },
+    }
+}
+
+fn root_delegation_proof_batch_prepare_entry(
+    issuer_pid: Principal,
+    audience: DelegationAudience,
+    grant: DelegatedRoleGrant,
+) -> RootDelegationProofBatchPrepareEntry {
+    RootDelegationProofBatchPrepareEntry {
+        issuer_pid,
+        aud: audience,
+        grants: vec![grant],
+        cert_ttl_ns: 60,
+    }
+}
+
+fn root_delegation_proof_batch_prepare_request(
+    batch_id: [u8; 32],
+    entry: &RootDelegationProofBatchPrepareEntry,
+) -> RootDelegationProofBatchPrepareRequest {
+    RootDelegationProofBatchPrepareRequest {
+        metadata: Some(AuthRequestMetadata {
+            request_id: batch_id,
+            ttl_ns: 30,
+        }),
+        entries: vec![entry.clone()],
+    }
+}
+
+fn root_delegation_proof_batch_prepare_response(
+    batch_id: [u8; 32],
+    issuer_pid: Principal,
+    cert_hash: [u8; 32],
+) -> RootDelegationProofBatchPrepareResponse {
+    RootDelegationProofBatchPrepareResponse {
+        batch_id,
+        entries: vec![RootDelegationProofBatchEntry {
+            issuer_pid,
+            cert_hash,
+            expires_at_ns: 90,
+            refresh_after_ns: 72,
+        }],
+        retrieval_expires_at_ns: 45,
+    }
+}
+
+fn root_delegation_proof(
+    root_pid: Principal,
+    issuer_pid: Principal,
+    audience: DelegationAudience,
+    grant: DelegatedRoleGrant,
+) -> DelegationProof {
+    DelegationProof {
+        cert: DelegationCert {
+            root_pid,
+            issuer_pid,
+            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [21; 32],
+            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
+                seed_hash: [22; 32],
+            },
+            issued_at_ns: 1,
+            not_before_ns: 1,
+            expires_at_ns: 90,
+            max_token_ttl_ns: 10,
+            aud: audience,
+            grants: vec![grant],
+        },
+        root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![1, 2, 3],
+            public_key_der: vec![4, 5, 6],
+        }),
+    }
 }
 
 #[test]
