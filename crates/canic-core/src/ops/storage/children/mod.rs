@@ -1,16 +1,24 @@
+//! Module: ops::storage::children
+//!
+//! Responsibility: expose deterministic direct-child cache reads and imports.
+//! Does not own: topology cascade workflow, subnet registry truth, or endpoint DTOs.
+//! Boundary: storage ops facade over child cache records.
+
 mod mapper;
 
 use crate::{
     dto::canister::CanisterInfo,
     ops::{
-        ic::IcOps, prelude::*, runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps,
+        ic::IcOps,
+        prelude::*,
+        runtime::env::EnvOps,
+        storage::{children::mapper::CanisterRecordMapper, registry::subnet::SubnetRegistryOps},
     },
     storage::{
         canister::CanisterRecord,
         stable::children::{CanisterChildren, CanisterChildrenRecord},
     },
 };
-use mapper::CanisterRecordMapper;
 
 ///
 /// CanisterChildrenOps
@@ -21,9 +29,9 @@ use mapper::CanisterRecordMapper;
 pub struct CanisterChildrenOps;
 
 impl CanisterChildrenOps {
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Lookup helpers
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterRecord> {
@@ -72,9 +80,9 @@ impl CanisterChildrenOps {
         Self::records().into_iter().map(|(pid, _)| pid).collect()
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Canonical data access
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn data() -> CanisterChildrenRecord {

@@ -135,10 +135,11 @@ macro_rules! log {
     }};
 }
 
-///
-/// Helpers
-/// (should remain public)
-///
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+//
+// These helper functions remain public for macro expansion.
 
 pub fn __append_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level, message: &str) {
     let created_at = IcOps::now_secs();

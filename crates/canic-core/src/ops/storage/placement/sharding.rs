@@ -1,3 +1,9 @@
+//! Module: ops::storage::placement::sharding
+//!
+//! Responsibility: provide deterministic sharding registry CRUD and queries.
+//! Does not own: shard placement policy, workflow orchestration, or endpoint DTOs.
+//! Boundary: storage ops facade over stable sharding registry records.
+
 use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
@@ -220,9 +226,9 @@ impl ShardingRegistryOps {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

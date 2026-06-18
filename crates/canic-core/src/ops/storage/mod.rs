@@ -1,3 +1,9 @@
+//! Module: ops::storage
+//!
+//! Responsibility: group deterministic storage operations and shared errors.
+//! Does not own: stable record schemas, workflow orchestration, or endpoint DTOs.
+//! Boundary: ops layer between workflows and stable storage facades.
+
 pub mod auth;
 pub mod children;
 pub mod cycles;

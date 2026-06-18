@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::http
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the http family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -118,9 +124,9 @@ pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

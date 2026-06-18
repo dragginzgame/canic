@@ -1,3 +1,9 @@
+//! Module: ops::storage::index::subnet
+//!
+//! Responsibility: provide deterministic access to the subnet index stable record.
+//! Does not own: stable schema, topology workflow, or endpoint DTOs.
+//! Boundary: storage ops facade used by topology workflows and queries.
+
 use crate::{
     InternalError,
     dto::topology::SubnetIndexArgs,
@@ -14,9 +20,9 @@ use crate::{
 pub struct SubnetIndexOps;
 
 impl SubnetIndexOps {
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Getters
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn get(role: &CanisterRole) -> Option<Principal> {
@@ -28,9 +34,9 @@ impl SubnetIndexOps {
             .find_map(|(r, pid)| (r == role).then_some(*pid))
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Snapshot
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub fn data() -> SubnetIndexRecord {
@@ -64,9 +70,9 @@ impl SubnetIndexOps {
         Ok(())
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Import
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     /// Import data into stable storage.
     pub fn import(data: SubnetIndexRecord) -> Result<(), InternalError> {

@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::tests
+//!
+//! Responsibility: validate metrics projection and reset behavior across metric families.
+//! Does not own: production metrics recording or workflow decisions.
+//! Boundary: test-only coverage for ops-layer metrics projection.
+
 use super::*;
 #[cfg(feature = "sharding")]
 use crate::ops::runtime::metrics::sharding::{

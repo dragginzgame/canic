@@ -1,38 +1,19 @@
+//! Module: access::metrics
+//!
+//! Responsibility: expose the approved access-layer metrics facade.
+//! Does not own: runtime metric backends, workflow decisions, or storage records.
+//! Boundary: access predicates and macro-expanded endpoints emit metrics here.
+//!
+//! This module intentionally sits at the access layer boundary. Access logic
+//! must not depend directly on ops/runtime metric backends; endpoint identity,
+//! metric kinds, and authority attribution are normalized here so internal
+//! metric schemas can evolve without touching callers.
+
 use crate::{
     cdk::types::Principal,
     ids::{AccessMetricKind, EndpointCall},
     ops,
 };
-
-///
-/// Access-layer metrics façade.
-///
-/// WHY THIS FILE EXISTS
-/// ---------------------
-/// This module intentionally sits at the *access layer* boundary and serves
-/// as the **only approved way** for access predicates and macro-expanded
-/// endpoints to emit metrics.
-///
-/// It exists to enforce the following architectural invariants:
-///
-/// 1. **Layering discipline**
-///    Access logic MUST NOT depend directly on ops/runtime metric backends.
-///    All metric emission from access control flows through this façade.
-///
-/// 2. **Stable call surface**
-///    Endpoint identity, metric kinds, and authority attribution are
-///    intentionally normalized here so internal metric schemas may evolve
-///    without touching callers.
-///
-/// 3. **Future-proofing**
-///    This layer is the designated place to introduce:
-///      - metric sampling or rate limiting
-///      - cardinality controls
-///      - backend changes (heap → stable → off-canister)
-///
-/// If this file appears "thin", that is by design.
-/// DO NOT bypass it by calling ops::runtime::metrics directly.
-///
 
 ///
 /// AccessMetrics

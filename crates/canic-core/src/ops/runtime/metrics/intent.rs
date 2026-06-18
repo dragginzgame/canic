@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::intent
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the intent family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -165,9 +171,9 @@ impl IntentMetrics {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

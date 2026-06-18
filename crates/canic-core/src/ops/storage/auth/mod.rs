@@ -1,14 +1,24 @@
+//! Module: ops::storage::auth
+//!
+//! Responsibility: provide the authorized access path to persisted auth state.
+//! Does not own: access policy, auth verification, or stable auth schemas.
+//! Boundary: storage ops facade between auth/access logic and stable auth records.
+//!
+//! This is a security-sensitive boundary for delegated sessions and
+//! role-attestation keys. Callers should use this facade instead of depending
+//! on stable storage implementation details.
+
 pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
     domain::policy::auth::RootIssuerPolicy,
     dto::auth::ActiveDelegationProof,
+    ops::storage::auth::mapper::{ActiveDelegationProofRecordMapper, RootIssuerPolicyRecordMapper},
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
     },
 };
-use mapper::{ActiveDelegationProofRecordMapper, RootIssuerPolicyRecordMapper};
 
 pub use crate::storage::stable::auth::DelegatedSessionUpsertResult;
 
@@ -41,22 +51,7 @@ pub struct DelegatedSessionBootstrapBinding {
 ///
 /// AuthStateOps
 ///
-/// WHY THIS FILE EXISTS
-/// --------------------
-/// This module defines the **only authorized access path** to persisted
-/// auth state stored in stable memory.
-///
-/// It intentionally sits between:
-///   - access / auth logic
-///   - stable storage implementation details
-///
-/// Responsibilities:
-/// - Provide a narrow, explicit API for auth state access
-/// - Prevent access-layer code from depending on storage internals
-/// - Serve as the choke point for schema and lifecycle changes
-///
-/// This is a **security-sensitive boundary**:
-/// auth state stores delegated sessions and role-attestation keys.
+/// Narrow storage-ops facade for delegated sessions and auth issuer state.
 ///
 
 pub struct AuthStateOps;

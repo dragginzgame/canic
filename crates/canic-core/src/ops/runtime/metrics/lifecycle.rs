@@ -1,3 +1,9 @@
+//! Module: ops::runtime::metrics::lifecycle
+//!
+//! Responsibility: record and snapshot low-cardinality runtime metrics for the lifecycle family.
+//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
+//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {

@@ -1,10 +1,18 @@
+//! Module: ops::storage::state::app
+//!
+//! Responsibility: execute deterministic app-state reads and mutations.
+//! Does not own: endpoint authorization, workflow orchestration, or DTO schemas.
+//! Boundary: storage ops facade over the stable app-state record.
+
 use crate::{
     dto::state::{
         AppCommand, AppCommandResponse, AppStateInput, AppStateResponse, AppStatus,
         SetStateResponse,
     },
-    ops::prelude::*,
-    ops::storage::state::mapper::{AppStateCommandMapper, AppStateMapper},
+    ops::{
+        prelude::*,
+        storage::state::mapper::{AppStateCommandMapper, AppStateMapper},
+    },
     storage::stable::state::app::{AppMode, AppState, AppStateRecord},
 };
 
@@ -25,9 +33,9 @@ pub enum AppStateCommand {
 pub struct AppStateOps;
 
 impl AppStateOps {
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Getters
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     #[must_use]
     pub(crate) fn get_mode() -> AppMode {
@@ -54,9 +62,9 @@ impl AppStateOps {
         AppState::cycles_funding_enabled()
     }
 
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
     // Commands
-    // -------------------------------------------------------------
+    // -------------------------------------------------------------------------
 
     pub fn execute_command(cmd: AppStateCommand) -> AppCommandResponse {
         match cmd {
@@ -161,9 +169,9 @@ const fn mode_to_status(mode: AppMode) -> AppStatus {
     }
 }
 
-///
-/// TESTS
-///
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
