@@ -1,6 +1,4 @@
-use crate::{
-    InternalError, InternalErrorOrigin, dto::error::Error, ids::CanisterRole, ops::prelude::*,
-};
+use crate::{InternalError, InternalErrorOrigin, ids::CanisterRole, ops::prelude::*};
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
@@ -173,7 +171,7 @@ impl From<AuthSignatureError> for InternalError {
     fn from(err: AuthSignatureError) -> Self {
         match err {
             AuthSignatureError::RootDataCertificateUnavailable => {
-                Self::public(Error::root_data_certificate_unavailable())
+                Self::root_data_certificate_unavailable()
             }
             _ => AuthOpsError::from(err).into(),
         }
@@ -195,7 +193,6 @@ impl From<AuthExpiryError> for InternalError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::error::ErrorCode;
 
     #[test]
     fn root_data_certificate_unavailable_maps_to_public_code() {
@@ -204,6 +201,9 @@ mod tests {
             .public_error()
             .expect("missing root data certificate must be public");
 
-        assert_eq!(public.code, ErrorCode::RootDataCertificateUnavailable);
+        assert_eq!(
+            format!("{:?}", public.code),
+            "RootDataCertificateUnavailable"
+        );
     }
 }

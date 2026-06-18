@@ -39,19 +39,17 @@ use crate::{
     domain::policy::auth::{
         AuthPolicyError, RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
         RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-        validate_root_delegation_proof_prepare_policy,
+        RootIssuerPolicy, validate_root_delegation_proof_prepare_policy,
     },
-    dto::{
-        auth::{
-            ActiveDelegationProof, ActiveDelegationProofStatus,
-            ActiveDelegationProofStatusResponse, AuthRequestMetadata, DelegatedRoleGrant,
-            DelegationAudience, DelegationProof, IssuerProofAlgorithm, IssuerProofBinding,
-            RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
-            RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareEntry,
-            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-            RootDelegationProofBatchProof, RootDelegationProofInstallOutcome, RootProof,
-        },
-        error::Error,
+    dto::auth::{
+        ActiveDelegationProof, ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
+        AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience, DelegationProof,
+        IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchEntry,
+        RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
+        RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
+        RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
+        RootDelegationProofInstallOutcome, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+        RootIssuerPolicyView, RootProof,
     },
     ops::{auth::AuthValidationError, ic::IcOps, storage::auth::AuthStateOps},
 };
@@ -174,14 +172,27 @@ impl AuthOps {
         AuthStateOps::set_active_delegation_proof(proof);
     }
 
+    pub(crate) fn upsert_root_issuer_policy(
+        request: RootIssuerPolicyUpsertRequest,
+    ) -> Result<RootIssuerPolicyResponse, InternalError> {
+        validate_root_issuer_policy_upsert_request(&request)?;
+
+        let policy = root_issuer_policy_from_request(request);
+        AuthStateOps::upsert_root_issuer_policy(policy.clone());
+
+        Ok(RootIssuerPolicyResponse {
+            issuer: root_issuer_policy_view(&policy),
+        })
+    }
+
     pub(crate) fn preflight_delegation_proof_batch_prepare_request(
         request: &RootDelegationProofBatchPrepareRequest,
         issued_at_ns: u64,
     ) -> Result<Vec<RootDelegationProofPreparePolicyDecision>, InternalError> {
         if request.entries.is_empty() {
-            return Err(InternalError::public(Error::invalid(
+            return Err(InternalError::invalid_input(
                 "root delegation proof batch must contain at least one issuer",
-            )));
+            ));
         }
         ensure_root_delegation_proof_batch_entry_limit(request.entries.len())?;
 
@@ -422,9 +433,9 @@ fn get_delegation_proof_batch_with_root_proof(
     mut get_root_proof: impl FnMut([u8; 32]) -> Result<RootProof, InternalError>,
 ) -> Result<RootDelegationProofBatchGetResponse, InternalError> {
     if request.entries.is_empty() {
-        return Err(InternalError::public(Error::invalid(
+        return Err(InternalError::invalid_input(
             "root delegation proof batch get must contain at least one proof reference",
-        )));
+        ));
     }
 
     let mut proofs = Vec::with_capacity(request.entries.len());
@@ -572,9 +583,9 @@ fn pending_delegation_proof_batch_replay_response(
             return Ok(None);
         }
         if replay.request_fingerprint != request_fingerprint {
-            return Err(InternalError::public(Error::invalid(
+            return Err(InternalError::invalid_input(
                 "root delegation proof batch request_id was already used for a different request",
-            )));
+            ));
         }
         Ok(Some(replay.response))
     })
@@ -601,17 +612,17 @@ fn cache_prepared_delegation_proof_batch_replay(
 fn root_delegation_proof_batch_metadata(
     metadata: Option<AuthRequestMetadata>,
 ) -> Result<AuthRequestMetadata, InternalError> {
-    let metadata = metadata.ok_or_else(|| InternalError::public(Error::operation_id_required()))?;
+    let metadata = metadata.ok_or_else(InternalError::operation_id_required)?;
     if metadata.ttl_ns == 0 {
-        return Err(InternalError::public(Error::invalid(
+        return Err(InternalError::invalid_input(
             "root delegation proof batch replay metadata ttl_ns must be greater than zero",
-        )));
+        ));
     }
     if metadata.ttl_ns > MAX_ROOT_DELEGATION_PROOF_BATCH_REPLAY_TTL_NS {
-        return Err(InternalError::public(Error::invalid(format!(
+        return Err(InternalError::invalid_input(format!(
             "root delegation proof batch replay metadata ttl_ns={} exceeds max {}",
             metadata.ttl_ns, MAX_ROOT_DELEGATION_PROOF_BATCH_REPLAY_TTL_NS
-        ))));
+        )));
     }
     Ok(metadata)
 }
@@ -621,9 +632,9 @@ fn root_delegation_proof_batch_replay_expires_at(
     issued_at_ns: u64,
 ) -> Result<u64, InternalError> {
     issued_at_ns.checked_add(metadata.ttl_ns).ok_or_else(|| {
-        InternalError::public(Error::invalid(
+        InternalError::invalid_input(
             "root delegation proof batch replay metadata ttl_ns overflows expiry",
-        ))
+        )
     })
 }
 
@@ -688,9 +699,9 @@ fn hash_prepare_bytes(hasher: &mut Sha256, bytes: &[u8]) {
 
 fn ensure_root_delegation_proof_batch_entry_limit(entry_count: usize) -> Result<(), InternalError> {
     if entry_count > MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS {
-        return Err(InternalError::public(Error::exhausted(format!(
+        return Err(InternalError::resource_exhausted(format!(
             "root delegation proof batch issuer count {entry_count} exceeds max {MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS}",
-        ))));
+        )));
     }
     Ok(())
 }
@@ -709,9 +720,9 @@ fn ensure_pending_delegation_proof_batch_quota(
         if !pending_batch_ids.contains(&batch_id)
             && pending_batch_ids.len() >= MAX_PENDING_ROOT_DELEGATION_PROOF_BATCHES
         {
-            return Err(InternalError::public(Error::exhausted(format!(
+            return Err(InternalError::resource_exhausted(format!(
                 "root delegation proof pending batch count exceeds max {MAX_PENDING_ROOT_DELEGATION_PROOF_BATCHES}",
-            ))));
+            )));
         }
 
         let mut requested_by_issuer: BTreeMap<Vec<u8>, usize> = BTreeMap::new();
@@ -728,9 +739,9 @@ fn ensure_pending_delegation_proof_batch_quota(
             if existing_count.saturating_add(requested_count)
                 > MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER
             {
-                return Err(InternalError::public(Error::exhausted(format!(
+                return Err(InternalError::resource_exhausted(format!(
                     "root delegation proof pending issuer proof count exceeds max {MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER}",
-                ))));
+                )));
             }
         }
 
@@ -749,7 +760,86 @@ fn map_install_active_delegation_proof_error(
 }
 
 fn map_root_provisioning_policy_error(err: AuthPolicyError) -> InternalError {
-    InternalError::public(Error::forbidden(err.to_string()))
+    InternalError::forbidden(err.to_string())
+}
+
+fn validate_root_issuer_policy_upsert_request(
+    request: &RootIssuerPolicyUpsertRequest,
+) -> Result<(), InternalError> {
+    if request.max_cert_ttl_ns == 0 {
+        return Err(InternalError::invalid_input(
+            "root issuer max certificate TTL must be greater than zero",
+        ));
+    }
+    if request.refresh_after_ratio_bps == 0 || request.refresh_after_ratio_bps >= 10_000 {
+        return Err(InternalError::invalid_input(
+            "root issuer refresh ratio must be between 1 and 9999 basis points",
+        ));
+    }
+    if request.enabled && request.allowed_audiences.is_empty() {
+        return Err(InternalError::invalid_input(
+            "enabled root issuer policy must allow at least one audience",
+        ));
+    }
+    if request.enabled && request.allowed_grants.is_empty() {
+        return Err(InternalError::invalid_input(
+            "enabled root issuer policy must allow at least one grant",
+        ));
+    }
+    Ok(())
+}
+
+fn root_issuer_policy_from_request(request: RootIssuerPolicyUpsertRequest) -> RootIssuerPolicy {
+    RootIssuerPolicy {
+        issuer_pid: request.issuer_pid,
+        enabled: request.enabled,
+        allowed_audiences: request
+            .allowed_audiences
+            .iter()
+            .map(audience_policy)
+            .collect(),
+        allowed_grants: request.allowed_grants.iter().map(grant_policy).collect(),
+        max_cert_ttl_ns: request.max_cert_ttl_ns,
+        refresh_after_ratio_bps: request.refresh_after_ratio_bps,
+    }
+}
+
+fn root_issuer_policy_view(policy: &RootIssuerPolicy) -> RootIssuerPolicyView {
+    RootIssuerPolicyView {
+        issuer_pid: policy.issuer_pid,
+        enabled: policy.enabled,
+        allowed_audiences: policy
+            .allowed_audiences
+            .iter()
+            .map(delegation_audience_view)
+            .collect(),
+        allowed_grants: policy
+            .allowed_grants
+            .iter()
+            .map(delegated_role_grant_view)
+            .collect(),
+        max_cert_ttl_ns: policy.max_cert_ttl_ns,
+        refresh_after_ratio_bps: policy.refresh_after_ratio_bps,
+    }
+}
+
+fn delegation_audience_view(policy: &RootDelegationAudiencePolicy) -> DelegationAudience {
+    match policy {
+        RootDelegationAudiencePolicy::Canister(canister) => DelegationAudience::Canister(*canister),
+        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
+            DelegationAudience::CanicSubnet(*subnet)
+        }
+        RootDelegationAudiencePolicy::Project(project) => {
+            DelegationAudience::Project(project.clone())
+        }
+    }
+}
+
+fn delegated_role_grant_view(policy: &RootDelegatedRoleGrantPolicy) -> DelegatedRoleGrant {
+    DelegatedRoleGrant {
+        target: policy.target.clone(),
+        scopes: policy.scopes.clone(),
+    }
 }
 
 fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
@@ -765,13 +855,14 @@ fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolic
 }
 
 fn grant_policies(grants: &[DelegatedRoleGrant]) -> Vec<RootDelegatedRoleGrantPolicy> {
-    grants
-        .iter()
-        .map(|grant| RootDelegatedRoleGrantPolicy {
-            target: grant.target.clone(),
-            scopes: grant.scopes.clone(),
-        })
-        .collect()
+    grants.iter().map(grant_policy).collect()
+}
+
+fn grant_policy(grant: &DelegatedRoleGrant) -> RootDelegatedRoleGrantPolicy {
+    RootDelegatedRoleGrantPolicy {
+        target: grant.target.clone(),
+        scopes: grant.scopes.clone(),
+    }
 }
 
 fn active_delegation_proof_status_response(
@@ -819,7 +910,6 @@ mod tests {
             RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
             RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef, RootProof,
         },
-        dto::error::ErrorCode,
         ids::{CanisterRole, cap},
     };
 
@@ -860,6 +950,11 @@ mod tests {
             installed_at_ns: 20,
             installed_by: p(11),
         }
+    }
+
+    fn assert_public_error_code(err: &InternalError, expected: &str) {
+        let public = err.public_error().expect("expected public error");
+        assert_eq!(format!("{:?}", public.code), expected);
     }
 
     fn batch_prepare_entry(
@@ -1011,9 +1106,7 @@ mod tests {
             10,
         )
         .expect_err("ttl above max must fail preflight");
-        let public = err.public_error().expect("public policy error");
-
-        assert_eq!(public.code, ErrorCode::Forbidden);
+        assert_public_error_code(&err, "Forbidden");
     }
 
     #[test]
@@ -1023,9 +1116,7 @@ mod tests {
             10,
         )
         .expect_err("unregistered issuer must fail preflight");
-        let public = err.public_error().expect("public policy error");
-
-        assert_eq!(public.code, ErrorCode::Forbidden);
+        assert_public_error_code(&err, "Forbidden");
     }
 
     #[test]
@@ -1039,9 +1130,7 @@ mod tests {
             10,
         )
         .expect_err("disabled issuer must fail preflight");
-        let public = err.public_error().expect("public policy error");
-
-        assert_eq!(public.code, ErrorCode::Forbidden);
+        assert_public_error_code(&err, "Forbidden");
     }
 
     #[test]
@@ -1055,9 +1144,7 @@ mod tests {
             10,
         )
         .expect_err("grant outside issuer policy must fail preflight");
-        let public = err.public_error().expect("public policy error");
-
-        assert_eq!(public.code, ErrorCode::Forbidden);
+        assert_public_error_code(&err, "Forbidden");
     }
 
     #[test]
@@ -1070,9 +1157,7 @@ mod tests {
             10,
         )
         .expect_err("batch prepare requires request id metadata");
-        let public = err.public_error().expect("public metadata error");
-
-        assert_eq!(public.code, ErrorCode::OperationIdRequired);
+        assert_public_error_code(&err, "OperationIdRequired");
     }
 
     #[test]
@@ -1084,9 +1169,7 @@ mod tests {
 
         let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
             .expect_err("empty batch must fail");
-        let public = err.public_error().expect("public batch error");
-
-        assert_eq!(public.code, ErrorCode::InvalidInput);
+        assert_public_error_code(&err, "InvalidInput");
     }
 
     #[test]
@@ -1098,9 +1181,7 @@ mod tests {
 
         let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
             .expect_err("zero metadata ttl must fail");
-        let public = err.public_error().expect("public metadata error");
-
-        assert_eq!(public.code, ErrorCode::InvalidInput);
+        assert_public_error_code(&err, "InvalidInput");
     }
 
     #[test]
@@ -1117,9 +1198,7 @@ mod tests {
 
         let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
             .expect_err("oversized batch must fail before policy validation");
-        let public = err.public_error().expect("public quota error");
-
-        assert_eq!(public.code, ErrorCode::ResourceExhausted);
+        assert_public_error_code(&err, "ResourceExhausted");
     }
 
     #[test]
@@ -1134,9 +1213,7 @@ mod tests {
 
         let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
             .expect_err("pending issuer quota exhaustion must fail before preparing proof leaves");
-        let public = err.public_error().expect("public quota error");
-
-        assert_eq!(public.code, ErrorCode::ResourceExhausted);
+        assert_public_error_code(&err, "ResourceExhausted");
     }
 
     #[test]
@@ -1256,9 +1333,7 @@ mod tests {
             },
         )
         .expect_err("request id reuse with a different payload must fail");
-        let public = err.public_error().expect("public replay conflict error");
-
-        assert_eq!(public.code, ErrorCode::InvalidInput);
+        assert_public_error_code(&err, "InvalidInput");
     }
 
     #[test]
@@ -1273,9 +1348,7 @@ mod tests {
             |_cert_hash| panic!("empty get request must not request a root proof"),
         )
         .expect_err("empty get request must fail");
-        let public = err.public_error().expect("public get error");
-
-        assert_eq!(public.code, ErrorCode::InvalidInput);
+        assert_public_error_code(&err, "InvalidInput");
     }
 
     #[test]

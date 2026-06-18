@@ -50,6 +50,28 @@ impl InternalError {
         }
     }
 
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::public(PublicError::forbidden(message))
+    }
+
+    pub fn invalid_input(message: impl Into<String>) -> Self {
+        Self::public(PublicError::invalid(message))
+    }
+
+    pub fn resource_exhausted(message: impl Into<String>) -> Self {
+        Self::public(PublicError::exhausted(message))
+    }
+
+    #[must_use]
+    pub fn operation_id_required() -> Self {
+        Self::public(PublicError::operation_id_required())
+    }
+
+    #[must_use]
+    pub fn root_data_certificate_unavailable() -> Self {
+        Self::public(PublicError::root_data_certificate_unavailable())
+    }
+
     pub fn domain(origin: InternalErrorOrigin, message: impl Into<String>) -> Self {
         Self::new(InternalErrorClass::Domain, origin, message)
     }

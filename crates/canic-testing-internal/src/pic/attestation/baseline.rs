@@ -9,7 +9,7 @@ use std::sync::{Mutex, OnceLock};
 use crate::pic::{role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister};
 
 use super::{
-    build::{build_normal_root_wasm, build_pic, build_test_root_wasm},
+    build::{build_pic, build_test_root_wasm},
     fixture::{CachedInstalledRoot, progress},
 };
 
@@ -19,9 +19,6 @@ static ROOT_ISSUER_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
 static ROOT_ISSUER_VERIFIER_BASELINE: OnceLock<
-    Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
-> = OnceLock::new();
-static ROOT_ISSUER_NO_TEST_HOOK_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
 
@@ -36,7 +33,6 @@ pub struct AttestationBaselineMetadata {
 enum RoleAttestationBaselineKind {
     IssuerOnly,
     IssuerAndVerifier,
-    IssuerOnlyWithoutTestMaterial,
 }
 
 struct InstalledRoot {
@@ -54,13 +50,6 @@ pub(super) fn install_issuer_only_cached_root_fixture() -> CachedInstalledRoot {
 #[must_use]
 pub(super) fn install_issuer_and_verifier_cached_root_fixture() -> CachedInstalledRoot {
     install_cached_root_fixture(RoleAttestationBaselineKind::IssuerAndVerifier)
-}
-
-// Restore or create the cached normal-build `root + issuer` baseline.
-#[must_use]
-pub(super) fn install_issuer_only_without_test_material_cached_root_fixture() -> CachedInstalledRoot
-{
-    install_cached_root_fixture(RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial)
 }
 
 // Resolve the issuer canister from the root-managed subnet registry.
@@ -81,9 +70,6 @@ fn install_cached_root_fixture(cache_kind: RoleAttestationBaselineKind) -> Cache
         RoleAttestationBaselineKind::IssuerOnly => "request cached root+issuer baseline",
         RoleAttestationBaselineKind::IssuerAndVerifier => {
             "request cached root+issuer+verifier baseline"
-        }
-        RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial => {
-            "request cached root+issuer normal-build baseline"
         }
     });
     let baseline_slot = baseline_slot(cache_kind).get_or_init(|| Mutex::new(None));
@@ -125,9 +111,6 @@ fn build_cached_baseline(
     let InstalledRoot { pic, root_id } = match cache_kind {
         RoleAttestationBaselineKind::IssuerOnly
         | RoleAttestationBaselineKind::IssuerAndVerifier => install_test_root(),
-        RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial => {
-            install_test_root_without_test_material()
-        }
     };
     progress("waiting for issuer registration");
     let issuer_id = issuer_pid(&pic, root_id);
@@ -185,14 +168,9 @@ fn restore_cached_baseline(baseline: &CachedPicBaseline<AttestationBaselineMetad
     wait_for_ready_canister(baseline.pic(), baseline.metadata().root_id, 240);
 }
 
-// Install the test root with delegation-material hooks into a fresh PocketIC instance.
+// Install the test root into a fresh PocketIC instance.
 fn install_test_root() -> InstalledRoot {
     install_root_fixture(build_test_root_wasm())
-}
-
-// Install the test root without delegation-material hooks into a fresh PocketIC instance.
-fn install_test_root_without_test_material() -> InstalledRoot {
-    install_root_fixture(build_normal_root_wasm())
 }
 
 // Install one root wasm into a fresh serialized PocketIC instance.
@@ -210,9 +188,6 @@ const fn baseline_slot(
     match cache_kind {
         RoleAttestationBaselineKind::IssuerOnly => &ROOT_ISSUER_BASELINE,
         RoleAttestationBaselineKind::IssuerAndVerifier => &ROOT_ISSUER_VERIFIER_BASELINE,
-        RoleAttestationBaselineKind::IssuerOnlyWithoutTestMaterial => {
-            &ROOT_ISSUER_NO_TEST_HOOK_BASELINE
-        }
     }
 }
 

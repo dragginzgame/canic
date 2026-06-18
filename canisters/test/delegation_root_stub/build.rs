@@ -15,14 +15,9 @@ fn main() {
     emit_rerun_inputs(&workspace_root);
 }
 
-// Register the test-only cfg passthroughs used by this build script and nested builds.
+// Register build-script inputs used by this build script and nested builds.
 fn configure_cfg() {
-    println!("cargo:rerun-if-env-changed=CANIC_TEST_DELEGATION_MATERIAL");
     println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
-    println!("cargo:rustc-check-cfg=cfg(canic_test_delegation_material)");
-    if env::var_os("CANIC_TEST_DELEGATION_MATERIAL").is_some() {
-        println!("cargo:rustc-cfg=canic_test_delegation_material");
-    }
 }
 
 // Build the implicit bootstrap wasm_store artifact so root `build!` can embed it.
@@ -74,9 +69,6 @@ fn build_embedded_test_canisters(
     let mut cmd = cargo_command();
     cmd.current_dir(workspace_root);
     cmd.env("CARGO_TARGET_DIR", &target_dir);
-    if let Some(flag) = env::var_os("CANIC_TEST_DELEGATION_MATERIAL") {
-        cmd.env("CANIC_TEST_DELEGATION_MATERIAL", flag);
-    }
     cmd.args([
         "build",
         "--profile",

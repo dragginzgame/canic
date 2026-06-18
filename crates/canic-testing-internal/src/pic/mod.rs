@@ -11,8 +11,7 @@ mod root;
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 pub use attestation::{
     BaselinePicGuard, CachedInstalledRoot, install_test_root_cached,
-    install_test_root_with_verifier_cached, install_test_root_without_test_material_cached,
-    issuer_pid, wasm_store_pid,
+    install_test_root_with_verifier_cached, issuer_pid, wasm_store_pid,
 };
 pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,

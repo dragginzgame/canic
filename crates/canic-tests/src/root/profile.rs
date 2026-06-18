@@ -165,10 +165,6 @@ fn profile_build_extra_env(
                     .display()
                     .to_string(),
             ),
-            (
-                "CANIC_TEST_DELEGATION_MATERIAL".to_string(),
-                "1".to_string(),
-            ),
             test_fleet_root_env(),
         ],
     }

@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.23` removes obsolete root issuer test-material provisioning hooks and
+  fixes root provisioning layer-boundary drift found by the audit.
+
 - `0.68.22` adds the controller-only root issuer policy upsert endpoint needed
   to register issuer canisters before root proof batch provisioning.
 
