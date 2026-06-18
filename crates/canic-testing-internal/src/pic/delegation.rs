@@ -41,6 +41,19 @@ pub fn issue_delegated_token(
     );
     installed.expect("canic_install_active_delegation_proof application failed");
 
+    issue_delegated_token_from_active_proof(pic, issuer_pid, subject, aud, grants, token_ttl_ns)
+}
+
+// Issue one delegated token from the signer's already-installed active proof.
+#[must_use]
+pub fn issue_delegated_token_from_active_proof(
+    pic: &Pic,
+    issuer_pid: Principal,
+    subject: Principal,
+    aud: DelegationAudience,
+    grants: Vec<DelegatedRoleGrant>,
+    token_ttl_ns: u64,
+) -> DelegatedToken {
     let request = DelegatedTokenPrepareRequest {
         metadata: Some(issue_token_request_metadata(
             issuer_pid,
