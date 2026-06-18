@@ -3,7 +3,7 @@
 //! Responsibility: define pure shared replay receipt identifiers and state.
 //! Does not own: storage mutation, replay reservation, or command execution.
 //! Boundary: consumed by replay ops and stable replay storage records.
-#![allow(dead_code)]
+#![expect(dead_code)]
 
 use crate::{cdk::types::Principal, ids::CanisterRole};
 use std::{fmt, str::FromStr};

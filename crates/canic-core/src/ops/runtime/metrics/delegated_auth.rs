@@ -88,7 +88,6 @@ pub enum DelegatedAuthMetricReason {
     Ok,
     RootKey,
     RootProofInvalid,
-    #[allow(dead_code)]
     RootProofPrepareFailed,
     ScopeRejected,
     TokenAudienceRejected,
@@ -177,7 +176,7 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that root proof preparation started.
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "auth-root-canister-sig-create"), expect(dead_code))]
     pub fn record_root_proof_prepare_started() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareRootProof,
@@ -187,7 +186,7 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that root proof preparation completed successfully.
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "auth-root-canister-sig-create"), expect(dead_code))]
     pub fn record_root_proof_prepare_completed() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareRootProof,
@@ -197,7 +196,7 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that root proof preparation failed.
-    #[allow(dead_code)]
+    #[cfg_attr(feature = "auth-root-canister-sig-create", expect(dead_code))]
     pub fn record_root_proof_prepare_failed() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareRootProof,
@@ -207,7 +206,7 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that issuer proof preparation started.
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "auth-issuer-canister-sig-create"), expect(dead_code))]
     pub fn record_issuer_proof_prepare_started() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareIssuerProof,
@@ -217,7 +216,7 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that issuer proof preparation completed successfully.
-    #[allow(dead_code)]
+    #[cfg_attr(not(feature = "auth-issuer-canister-sig-create"), expect(dead_code))]
     pub fn record_issuer_proof_prepare_completed() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareIssuerProof,
@@ -227,7 +226,7 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that issuer proof preparation failed.
-    #[allow(dead_code)]
+    #[cfg_attr(feature = "auth-issuer-canister-sig-create", expect(dead_code))]
     pub fn record_issuer_proof_prepare_failed() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareIssuerProof,

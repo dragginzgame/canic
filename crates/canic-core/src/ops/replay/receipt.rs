@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![expect(dead_code)]
 //! Module: ops::replay::receipt
 //!
 //! Responsibility: reserve, classify, and mutate shared replay receipts.

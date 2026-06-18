@@ -1,3 +1,9 @@
+//! Module: storage::stable::sharding::lifecycle
+//!
+//! Responsibility: persist the active shard set in stable memory.
+//! Does not own: sharding placement policy, workflow orchestration, or DTOs.
+//! Boundary: stable-memory schema and mutation primitives for shard lifecycle state.
+
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::placement::SHARDING_ACTIVE_SET_ID},
@@ -20,6 +26,8 @@ eager_static! {
 
 ///
 /// ShardingLifecycle
+///
+/// Stable storage accessor for the active shard set.
 ///
 
 pub struct ShardingLifecycle;
@@ -57,21 +65,12 @@ impl ShardingLifecycle {
             core.active.insert(pid, PRESENT);
         });
     }
-
-    // ---------------------------------------------------------------------
-    // Lifecycle
-    // ---------------------------------------------------------------------
-
-    #[cfg(test)]
-    pub(crate) fn clear() {
-        Self::with_mut(|core| {
-            core.active.clear_new();
-        });
-    }
 }
 
 ///
 /// ShardingActiveSet
+///
+/// Stable-memory marker type for the active shard set memory region.
 ///
 
 pub struct ShardingActiveSet;
@@ -82,6 +81,8 @@ pub struct ShardingActiveSet;
 
 ///
 /// ShardingLifecycleCore
+///
+/// Stable-memory core containing active shard records.
 ///
 
 pub struct ShardingLifecycleCore<M: Memory> {

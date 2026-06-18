@@ -242,13 +242,13 @@ Violations:
 Suggested scans:
 
 ```bash
-rg -n 'crate::dto::|use crate::dto' crates/canic-core/src/domain -g '*.rs'
-rg -n 'crate::dto::|use crate::dto' crates/canic-core/src/storage -g '*.rs'
+rg -n 'crate::dto::|use crate::dto|\bdto::' crates/canic-core/src/domain crates/canic-core/src/storage crates/canic-core/src/model -g '*.rs'
 test ! -d crates/canic-core/src/policy || rg -n 'crate::dto::|use crate::dto' crates/canic-core/src/policy -g '*.rs'
 ```
 
 - [ ] `domain` does not depend on DTOs
 - [ ] `storage` does not depend on DTOs
+- [ ] `model` does not depend on DTOs
 - [ ] Violations listed below
 
 Violations:
@@ -294,6 +294,7 @@ rg -n 'use crate::storage|crate::storage::|use crate::infra|crate::infra::' crat
 rg -n 'crate::ops::|use crate::ops' crates/canic-core/src/api -g '*.rs'
 rg -n 'crate::api::|use crate::api' crates/canic-core/src/api -g '*.rs'
 rg -n 'IcOps::|MgmtOps::|Root.*Workflow|response_replay_first|verify_.*proof|validate_.*envelope' crates/canic-core/src/api -g '*.rs'
+rg -n 'RootDelegatedRoleGrantPolicy|RootDelegationAudiencePolicy|\bRootIssuerPolicy\b|AuthStateOps::upsert_root_issuer_policy|fn root_issuer_policy_|fn validate_root_issuer_policy_upsert_request' crates/canic-core/src/api -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Findings:
@@ -429,6 +430,7 @@ rg -n 'dto::error::Error|ErrorCode' crates/canic-core/src/{ops,storage,workflow,
 rg -n 'dto::error::Error|ErrorCode' crates/canic-core/src/ops -g '*.rs'
 rg -n 'Result<[^>]+, Error>|Result<[^>]+, crate::dto::error::Error>' crates/canic-core/src/ops crates/canic-core/src/workflow -g '*.rs'
 rg -n 'InternalError::public\\(' crates/canic-core/src/{ops,workflow,storage,domain} -g '*.rs'
+rg -n 'dto::error::Error|crate::dto::error|ErrorCode|InternalError::public\\(' crates/canic-core/src/ops/auth -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Findings:

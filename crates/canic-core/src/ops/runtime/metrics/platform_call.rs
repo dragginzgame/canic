@@ -22,7 +22,6 @@ pub enum PlatformCallMetricSurface {
     Http,
     Ledger,
     Management,
-    Xrc,
 }
 
 impl PlatformCallMetricSurface {
@@ -34,7 +33,6 @@ impl PlatformCallMetricSurface {
             Self::Http => "http",
             Self::Ledger => "ledger",
             Self::Management => "management",
-            Self::Xrc => "xrc",
         }
     }
 }
@@ -92,7 +90,6 @@ impl PlatformCallMetricOutcome {
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[allow(dead_code)]
 #[remain::sorted]
 pub enum PlatformCallMetricReason {
     CandidDecode,
@@ -101,8 +98,6 @@ pub enum PlatformCallMetricReason {
     Infra,
     LedgerRejected,
     Ok,
-    Rejected,
-    Unavailable,
 }
 
 impl PlatformCallMetricReason {
@@ -116,8 +111,6 @@ impl PlatformCallMetricReason {
             Self::Infra => "infra",
             Self::LedgerRejected => "ledger_rejected",
             Self::Ok => "ok",
-            Self::Rejected => "rejected",
-            Self::Unavailable => "unavailable",
         }
     }
 }

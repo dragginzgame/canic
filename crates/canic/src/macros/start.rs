@@ -333,7 +333,7 @@ macro_rules! __canic_require_finish {
 macro_rules! finish {
     () => {
         #[doc(hidden)]
-        #[allow(dead_code)]
+        #[expect(dead_code)]
         fn __canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints() {}
 
         #[cfg(debug_assertions)]

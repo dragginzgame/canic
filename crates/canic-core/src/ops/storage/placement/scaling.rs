@@ -7,7 +7,7 @@
 use crate::{
     dto::placement::scaling::{ScalingRegistryEntry, ScalingRegistryResponse},
     ops::{placement::scaling::mapper::WorkerEntryRecordMapper, prelude::*},
-    storage::stable::scaling::{ScalingRegistry, ScalingRegistryRecord, WorkerEntryRecord},
+    storage::stable::scaling::ScalingRegistry,
     view::placement::scaling::ScalingWorkerPlanEntry,
 };
 
@@ -19,36 +19,14 @@ use crate::{
 pub struct ScalingRegistryOps;
 
 impl ScalingRegistryOps {
-    #[expect(dead_code)]
-    pub fn upsert(pid: Principal, entry: WorkerEntryRecord) {
-        ScalingRegistry::upsert(pid, entry);
-    }
-
     pub fn upsert_from_plan(pid: Principal, plan: ScalingWorkerPlanEntry, created_at_secs: u64) {
         let entry = WorkerEntryRecordMapper::validated_to_record(plan, created_at_secs);
         ScalingRegistry::upsert(pid, entry);
     }
 
-    /// Lookup all workers in a given pool
-    #[must_use]
-    #[expect(dead_code)]
-    pub fn find_by_pool(pool: &str) -> Vec<(Principal, WorkerEntryRecord)> {
-        ScalingRegistry::export()
-            .entries
-            .into_iter()
-            .filter(|(_, entry)| entry.pool.as_ref() == pool)
-            .collect()
-    }
-
     #[must_use]
     pub fn count_by_pool(pool: &str) -> u32 {
         ScalingRegistry::count_by_pool(pool)
-    }
-
-    #[must_use]
-    #[expect(dead_code)]
-    pub fn export() -> ScalingRegistryRecord {
-        ScalingRegistry::export()
     }
 
     #[must_use]
