@@ -1090,7 +1090,10 @@ mod tests {
         let request = RootDelegationProofBatchPrepareRequest {
             metadata: Some(metadata(52, 60_000_000_000)),
             entries: (0..=MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS)
-                .map(|index| batch_prepare_entry(p(index as u8), 60_000_000_000))
+                .map(|index| {
+                    let issuer_id = u8::try_from(index).expect("test issuer index must fit in u8");
+                    batch_prepare_entry(p(issuer_id), 60_000_000_000)
+                })
                 .collect(),
         };
 

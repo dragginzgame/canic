@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.20` bounds root proof batch pending metadata with MVP quotas, prunes
+  expired provisioning state opportunistically, and documents the retained
+  signature-map leaf behavior.
+
 - `0.68.19` aligns private root batch install workflow, test, and active-doc
   wording around issuer-local active-proof installation while preserving the
   public batch install protocol and outcome enum.
