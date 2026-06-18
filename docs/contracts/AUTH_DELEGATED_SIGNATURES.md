@@ -206,11 +206,17 @@ application scopes such as `read`, `write`, `admin`, or application-specific
 admin labels must be issued by a separate caller-authorized path instead of
 being accepted from open caller-supplied prepare payloads.
 
+`canic_upsert_root_issuer_policy` is a root controller update that registers
+or updates the issuer policy used by batch prepare. It records the issuer
+principal, enabled state, allowed audiences, allowed grants, maximum
+certificate TTL, and refresh-after ratio.
+
 `canic_prepare_delegation_proof_batch` is request-id keyed. The same provision
 request id and payload returns the same prepared batch metadata; the same
 request id with a different payload is a replay conflict. The first fresh
 prepare adds signature-map entries, refreshes certified data, and stores
-pending batch metadata.
+pending batch metadata. Prepare rejects issuers that have not first been
+registered through root issuer policy.
 
 Root batch provisioning is bounded in the MVP: 64 issuers per batch, 128
 pending batches, and 16 pending root delegation proofs per issuer. Expired

@@ -215,6 +215,7 @@ Entrypoint path:
 
 ```text
 AuthApi::prepare_delegation_proof_batch_root
+  <- root canic_upsert_root_issuer_policy update registers issuer policy
   -> root canic_prepare_delegation_proof_batch update
   -> AuthOps::prepare_delegation_proof_batch
   -> SignatureMap.add_signature
@@ -232,14 +233,17 @@ canic_install_delegation_proof_batch update
 Root issuance steps:
 
 1. Require local canister is root.
-2. Require root-controller authorization for the MVP batch endpoints.
-3. Validate each issuer against the root issuer registry.
-4. Load `auth.delegated_tokens` config.
-5. Bind each requested issuer canister to
+2. Require root-controller authorization for the MVP policy upsert and batch
+   endpoints.
+3. Register each issuer policy through `canic_upsert_root_issuer_policy`
+   before preparing root proof material.
+4. Validate each issuer against the root issuer registry.
+5. Load `auth.delegated_tokens` config.
+6. Bind each requested issuer canister to
    `IssuerProofAlgorithm::IcCanisterSignatureV1` with seed
    `b"canic-issuer-delegated-token"`.
-6. Build each `DelegationCert`.
-7. Enforce:
+7. Build each `DelegationCert`.
+8. Enforce:
    - `cert.root_pid == self`
    - `cert.not_before_ns < cert.expires_at_ns`
    - cert TTL does not exceed `auth.delegated_tokens.max_ttl_secs`
@@ -250,12 +254,12 @@ Root issuance steps:
    - `cert.issuer_pid` equals the requested issuer
    - `cert.issuer_proof_binding_hash` matches the issuer proof authority
      fields
-8. Add a canister-signature map entry for each `cert_hash`.
-9. Commit certified data for the `"sig"` tree.
-10. Return `RootDelegationProofBatchPrepareResponse` metadata.
-11. In a direct root query, assemble `DelegationProof` values from the prepared
+9. Add a canister-signature map entry for each `cert_hash`.
+10. Commit certified data for the `"sig"` tree.
+11. Return `RootDelegationProofBatchPrepareResponse` metadata.
+12. In a direct root query, assemble `DelegationProof` values from the prepared
     metadata and root data certificate.
-12. In a root update, validate submitted proofs against pending metadata and
+13. In a root update, validate submitted proofs against pending metadata and
     broadcast issuer installs.
 
 Root proof creation input:

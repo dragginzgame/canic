@@ -72,6 +72,13 @@ macro_rules! canic_emit_root_admin_endpoints {
 macro_rules! canic_emit_root_auth_attestation_endpoints {
     () => {
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_upsert_root_issuer_policy(
+            request: ::canic::dto::auth::RootIssuerPolicyUpsertRequest,
+        ) -> Result<::canic::dto::auth::RootIssuerPolicyResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_policy_root(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_delegation_proof_batch(
             request: ::canic::dto::auth::RootDelegationProofBatchPrepareRequest,
         ) -> Result<::canic::dto::auth::RootDelegationProofBatchPrepareResponse, ::canic::Error> {

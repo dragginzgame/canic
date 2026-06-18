@@ -16,6 +16,9 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.22` adds the controller-only root issuer policy upsert endpoint needed
+  to register issuer canisters before root proof batch provisioning.
+
 - `0.68.21` documents the implemented root proof provisioning MVP with a
   versionless operator runbook, source-map handoff notes, and issuer-canister
   terminology alignment for developer validation.

@@ -15,7 +15,8 @@ use canic::{
         RootDelegationProofBatchInstallResponse, RootDelegationProofBatchInstallResult,
         RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
         RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
-        RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome, RootProof,
+        RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
+        RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootProof,
     },
     ids::CanisterRole,
 };
@@ -205,6 +206,10 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
 #[test]
 fn root_delegation_proof_batch_surface_is_pinned() {
     assert_eq!(
+        canic::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
+        canic_core::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY
+    );
+    assert_eq!(
         canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
         canic_core::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH
     );
@@ -215,6 +220,10 @@ fn root_delegation_proof_batch_surface_is_pinned() {
     assert_eq!(
         canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
         canic_core::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH
+    );
+    assert_eq!(
+        canic::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
+        "canic_upsert_root_issuer_policy"
     );
     assert_eq!(
         canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
@@ -236,9 +245,16 @@ fn root_delegation_proof_batch_surface_is_pinned() {
             && !source.contains("fn canic_get_delegation_proof("),
         "legacy single-proof root delegation endpoints must stay removed"
     );
+    let upsert_attr = preceding_attribute(&source, "fn canic_upsert_root_issuer_policy(");
     let prepare_attr = preceding_attribute(&source, "fn canic_prepare_delegation_proof_batch(");
     let get_attr = preceding_attribute(&source, "fn canic_get_delegation_proof_batch(");
     let install_attr = preceding_attribute(&source, "fn canic_install_delegation_proof_batch(");
+    assert!(
+        upsert_attr.contains("canic_update")
+            && upsert_attr.contains("caller::is_controller()")
+            && !upsert_attr.contains("internal"),
+        "root issuer policy upsert must remain a public controller-gated update"
+    );
     assert!(
         prepare_attr.contains("canic_update")
             && prepare_attr.contains("caller::is_controller()")
@@ -257,6 +273,13 @@ fn root_delegation_proof_batch_surface_is_pinned() {
             && install_attr.contains("caller::is_controller()")
             && !install_attr.contains("internal"),
         "root batch install must remain a public controller-gated update"
+    );
+    assert!(
+        source.contains("fn canic_upsert_root_issuer_policy(")
+            && source.contains("RootIssuerPolicyUpsertRequest")
+            && source.contains("RootIssuerPolicyResponse")
+            && source.contains("AuthApi::upsert_root_issuer_policy_root"),
+        "root auth endpoint bundle must expose issuer policy upsert"
     );
     assert!(
         source.contains("fn canic_prepare_delegation_proof_batch(")
@@ -292,6 +315,24 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
         scopes: vec!["verify".to_string()],
     };
     let audience = DelegationAudience::Project("test".to_string());
+    let issuer_policy_request = RootIssuerPolicyUpsertRequest {
+        issuer_pid,
+        enabled: true,
+        allowed_audiences: vec![audience.clone()],
+        allowed_grants: vec![grant.clone()],
+        max_cert_ttl_ns: 60,
+        refresh_after_ratio_bps: 8_000,
+    };
+    let issuer_policy_response = RootIssuerPolicyResponse {
+        issuer: RootIssuerPolicyView {
+            issuer_pid,
+            enabled: true,
+            allowed_audiences: vec![audience.clone()],
+            allowed_grants: vec![grant.clone()],
+            max_cert_ttl_ns: 60,
+            refresh_after_ratio_bps: 8_000,
+        },
+    };
     let prepare_entry = RootDelegationProofBatchPrepareEntry {
         issuer_pid,
         aud: audience.clone(),
@@ -374,6 +415,8 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
         refresh_after_ns: Some(72),
     };
 
+    assert_candid_roundtrip(issuer_policy_request);
+    assert_candid_roundtrip(issuer_policy_response);
     assert_candid_roundtrip(prepare_entry);
     assert_candid_roundtrip(prepare_request);
     assert_candid_roundtrip(prepare_response);
