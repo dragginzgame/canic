@@ -18,6 +18,8 @@ thread_local! {
 ///
 /// CanisterOpsMetricOperation
 ///
+/// Canister operation metric dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -50,6 +52,8 @@ impl CanisterOpsMetricOperation {
 ///
 /// CanisterOpsMetricOutcome
 ///
+/// Canister operation outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -75,6 +79,8 @@ impl CanisterOpsMetricOutcome {
 
 ///
 /// CanisterOpsMetricReason
+///
+/// Bounded canister operation reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -142,6 +148,8 @@ impl CanisterOpsMetricReason {
 ///
 /// CanisterOpsMetricKey
 ///
+/// Composite key for one low-cardinality canister operation counter.
+///
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct CanisterOpsMetricKey {
@@ -153,6 +161,8 @@ pub struct CanisterOpsMetricKey {
 
 ///
 /// CanisterOpsMetrics
+///
+/// Operations-layer recorder for canister operation counters.
 ///
 
 pub struct CanisterOpsMetrics;

@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// ReplayMetricOperation
 ///
+/// Replay metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -42,6 +44,8 @@ impl ReplayMetricOperation {
 ///
 /// ReplayMetricOutcome
 ///
+/// Replay metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -63,6 +67,8 @@ impl ReplayMetricOutcome {
 
 ///
 /// ReplayMetricReason
+///
+/// Bounded replay reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -104,6 +110,8 @@ impl ReplayMetricReason {
 ///
 /// ReplayMetricKey
 ///
+/// Composite key for one low-cardinality replay counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ReplayMetricKey {
@@ -114,6 +122,8 @@ pub struct ReplayMetricKey {
 
 ///
 /// ReplayMetrics
+///
+/// Operations-layer recorder for replay safety counters.
 ///
 
 pub struct ReplayMetrics;

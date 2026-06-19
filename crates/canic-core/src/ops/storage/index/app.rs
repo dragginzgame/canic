@@ -21,6 +21,8 @@ use crate::{
 ///
 /// AppIndexOps
 ///
+/// Storage-ops facade for the app index stable record.
+///
 
 pub struct AppIndexOps;
 

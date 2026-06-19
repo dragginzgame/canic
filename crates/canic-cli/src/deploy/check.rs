@@ -228,7 +228,7 @@ fn deployment_check_command_provenance(
         &mut argv_normalized,
         &mut argv_redactions,
         BUILD_PROVENANCE_FLAG,
-        options.build_provenance.as_ref(),
+        options.build_provenance.as_deref(),
         config_root,
     );
 

@@ -17,6 +17,8 @@ use thiserror::Error as ThisError;
 ///
 /// IndexOpsError
 ///
+/// Typed storage failure for app and subnet index validation.
+///
 
 #[derive(Debug, ThisError)]
 pub enum IndexOpsError {

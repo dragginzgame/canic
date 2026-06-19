@@ -1,3 +1,9 @@
+//! Module: ops::runtime::timer
+//!
+//! Responsibility: schedule, measure, and clear runtime timers.
+//! Does not own: lifecycle policy, task semantics, or metric rendering.
+//! Boundary: wraps CDK timers with guarded slots and perf/metric recording.
+
 use crate::{
     cdk::timers::{
         clear_timer as cdk_clear_timer, set_timer as cdk_set_timer,
@@ -13,7 +19,8 @@ use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duratio
 
 ///
 /// TimerId
-/// Opaque ops-owned timer handle
+///
+/// Opaque ops-owned timer handle.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,6 +28,8 @@ pub struct TimerId(crate::cdk::timers::TimerId);
 
 ///
 /// TimerOps
+///
+/// Operations-layer facade for measured runtime timer scheduling.
 ///
 
 pub struct TimerOps;

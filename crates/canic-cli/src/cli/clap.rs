@@ -126,10 +126,6 @@ pub fn parse_positive_u64(value: &str) -> Result<u64, String> {
         .ok_or_else(|| "must be a positive integer".to_string())
 }
 
-pub fn render_help(mut command: Command) -> String {
-    command.render_help().to_string()
-}
-
 pub fn render_usage(command: impl FnOnce() -> Command) -> String {
-    render_help(command())
+    command().render_help().to_string()
 }

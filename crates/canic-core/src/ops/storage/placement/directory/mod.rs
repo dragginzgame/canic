@@ -4,6 +4,9 @@
 //! Does not own: placement policy, provisioning workflow, or endpoint DTOs.
 //! Boundary: storage ops facade over stable directory registry records.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     InternalError,
     dto::placement::directory::{
@@ -16,6 +19,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// DirectoryRegistryOpsError
+///
+/// Typed storage failure for directory registry claim and binding operations.
 ///
 
 #[derive(Debug, ThisError)]
@@ -50,11 +55,15 @@ impl From<DirectoryRegistryOpsError> for InternalError {
 ///
 /// DirectoryRegistryOps
 ///
+/// Storage-ops facade for directory registry claim and binding operations.
+///
 
 pub struct DirectoryRegistryOps;
 
 ///
 /// DirectoryEntryState
+///
+/// Internal directory registry state view used by placement workflows.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -74,6 +83,8 @@ pub enum DirectoryEntryState {
 ///
 /// DirectoryPendingClaim
 ///
+/// Pending directory claim returned when a caller owns a logical key reservation.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DirectoryPendingClaim {
@@ -84,6 +95,8 @@ pub struct DirectoryPendingClaim {
 
 ///
 /// DirectoryClaimResult
+///
+/// Result of attempting to claim one logical directory key.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -103,6 +116,8 @@ pub enum DirectoryClaimResult {
 
 ///
 /// DirectoryReleaseResult
+///
+/// Result of attempting to release a stale pending directory claim.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -458,6 +473,3 @@ const fn entry_to_state(entry: DirectoryEntryRecord) -> DirectoryEntryState {
         },
     }
 }
-
-#[cfg(test)]
-mod tests;

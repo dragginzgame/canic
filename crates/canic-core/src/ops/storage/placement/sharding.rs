@@ -16,6 +16,7 @@ use thiserror::Error as ThisError;
 
 ///
 /// ShardingRegistryOpsError
+///
 /// Storage-layer errors for sharding registry CRUD and consistency checks.
 ///
 
@@ -53,6 +54,8 @@ impl From<ShardingRegistryOpsError> for InternalError {
 
 ///
 /// ShardingRegistryOps
+///
+/// Storage-ops facade for sharding registry CRUD and queries.
 ///
 
 pub struct ShardingRegistryOps;
@@ -214,7 +217,7 @@ impl ShardingRegistryOps {
         ShardingRegistry::entries_for_pool(pool)
     }
 
-    /// Export all shard entries
+    /// Export all shard entries.
     #[must_use]
     pub fn export() -> ShardingRegistryRecord {
         ShardingRegistry::export()

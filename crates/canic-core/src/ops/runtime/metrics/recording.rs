@@ -26,6 +26,8 @@ use crate::ops::runtime::metrics::sharding::{
 ///
 /// DirectoryMetricEvent
 ///
+/// Typed recording adapter for directory metric events.
+///
 
 pub struct DirectoryMetricEvent;
 
@@ -76,6 +78,8 @@ impl DirectoryMetricEvent {
 ///
 /// PoolMetricEvent
 ///
+/// Typed recording adapter for pool metric events.
+///
 
 pub struct PoolMetricEvent;
 
@@ -116,6 +120,8 @@ impl PoolMetricEvent {
 
 ///
 /// ScalingMetricEvent
+///
+/// Typed recording adapter for scaling metric events.
 ///
 
 pub struct ScalingMetricEvent;
@@ -166,6 +172,8 @@ impl ScalingMetricEvent {
 
 ///
 /// ShardingMetricEvent
+///
+/// Typed recording adapter for sharding metric events.
 ///
 
 #[cfg(feature = "sharding")]

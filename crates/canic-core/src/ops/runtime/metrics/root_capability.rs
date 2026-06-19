@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// RootCapabilityMetricKey
 ///
+/// Root capability dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
@@ -38,6 +40,8 @@ impl RootCapabilityMetricKey {
 
 ///
 /// RootCapabilityMetricEventType
+///
+/// Root capability validation phase dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -65,6 +69,8 @@ impl RootCapabilityMetricEventType {
 
 ///
 /// RootCapabilityMetricOutcome
+///
+/// Root capability outcome dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -101,6 +107,8 @@ impl RootCapabilityMetricOutcome {
 ///
 /// RootCapabilityMetricProofMode
 ///
+/// Root capability proof-mode dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
@@ -122,6 +130,8 @@ impl RootCapabilityMetricProofMode {
 ///
 /// RootCapabilityMetricStorageKey
 ///
+/// Composite key for one low-cardinality root capability counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 struct RootCapabilityMetricStorageKey {
@@ -134,12 +144,12 @@ struct RootCapabilityMetricStorageKey {
 ///
 /// RootCapabilityMetrics
 ///
+/// Operations-layer recorder for root capability counters.
+///
 
 pub struct RootCapabilityMetrics;
 
 impl RootCapabilityMetrics {
-    /// record
-    ///
     /// Record a root capability metric point using the flattened metric key.
     fn record(
         capability: RootCapabilityMetricKey,
@@ -159,8 +169,6 @@ impl RootCapabilityMetrics {
         });
     }
 
-    /// record_envelope
-    ///
     /// Record envelope-stage metric events with envelope-specific outcomes.
     pub fn record_envelope(
         capability: RootCapabilityMetricKey,
@@ -175,8 +183,6 @@ impl RootCapabilityMetrics {
         );
     }
 
-    /// record_proof
-    ///
     /// Record proof-stage metric events with proof-specific outcomes.
     pub fn record_proof(
         capability: RootCapabilityMetricKey,

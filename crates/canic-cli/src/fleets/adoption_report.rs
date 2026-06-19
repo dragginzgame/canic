@@ -341,42 +341,42 @@ fn adoption_report_command_provenance(
         &mut argv_normalized,
         &mut argv_redactions,
         "--deployment-check",
-        options.deployment_check.as_ref(),
+        options.deployment_check.as_deref(),
         config_root,
     );
     evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
         "--inventory",
-        options.inventory.as_ref(),
+        options.inventory.as_deref(),
         config_root,
     );
     evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
         "--artifact-manifest",
-        options.artifact_manifest.as_ref(),
+        options.artifact_manifest.as_deref(),
         config_root,
     );
     evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
         "--cargo-metadata",
-        options.cargo_metadata.as_ref(),
+        options.cargo_metadata.as_deref(),
         config_root,
     );
     evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
         "--package-metadata",
-        options.package_metadata.as_ref(),
+        options.package_metadata.as_deref(),
         config_root,
     );
     evidence_support::push_optional_path_arg(
         &mut argv_normalized,
         &mut argv_redactions,
         "--build-provenance",
-        options.build_provenance.as_ref(),
+        options.build_provenance.as_deref(),
         config_root,
     );
 

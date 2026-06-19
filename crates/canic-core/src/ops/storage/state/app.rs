@@ -19,6 +19,8 @@ use crate::{
 ///
 /// AppStateCommand
 ///
+/// Storage-ops command applied to the stable app-state record.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppStateCommand {
@@ -28,6 +30,8 @@ pub enum AppStateCommand {
 
 ///
 /// AppStateOps
+///
+/// Storage-ops facade for app-state reads, mutations, and snapshots.
 ///
 
 pub struct AppStateOps;

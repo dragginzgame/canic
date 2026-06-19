@@ -19,6 +19,8 @@ use thiserror::Error as ThisError;
 ///
 /// SubnetRegistryOpsError
 ///
+/// Typed storage failure for subnet registry mutation and parent-chain checks.
+///
 
 #[derive(Debug, ThisError)]
 pub enum SubnetRegistryOpsError {
@@ -98,6 +100,8 @@ impl SubnetRegistryRecord {
 
 ///
 /// SubnetRegistryOps
+///
+/// Storage-ops facade for subnet canister registry records.
 ///
 
 pub struct SubnetRegistryOps;

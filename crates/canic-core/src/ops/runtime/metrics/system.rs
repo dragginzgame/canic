@@ -13,7 +13,8 @@ thread_local! {
 
 ///
 /// SystemMetrics
-/// Thin facade over the action metrics counters.
+///
+/// Operations-layer recorder for coarse system action counters.
 ///
 
 pub struct SystemMetrics;

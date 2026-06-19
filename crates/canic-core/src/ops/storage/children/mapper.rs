@@ -11,6 +11,8 @@ use crate::{
 ///
 /// CanisterRecordMapper
 ///
+/// Storage-ops mapper for child cache records and canister info views.
+///
 
 pub struct CanisterRecordMapper;
 

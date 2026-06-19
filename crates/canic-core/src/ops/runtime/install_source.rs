@@ -1,3 +1,9 @@
+//! Module: ops::runtime::install_source
+//!
+//! Responsibility: resolve approved wasm module sources for install workflows.
+//! Does not own: control-plane publication, wasm-store storage, or install execution.
+//! Boundary: mediates embedded sources and registered resolver-backed sources.
+
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::{types::Principal, utils::hash::wasm_hash},
@@ -18,6 +24,8 @@ use std::{
 ///
 /// ApprovedModulePayload
 ///
+/// Runtime representation of the installable wasm payload backing one source.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApprovedModulePayload {
@@ -32,6 +40,8 @@ pub enum ApprovedModulePayload {
 
 ///
 /// ApprovedModuleSource
+///
+/// Approved install source metadata and payload for one canister role.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -121,6 +131,8 @@ impl ApprovedModuleSource {
 ///
 /// ModuleSourceResolver
 ///
+/// Driver interface for resolving approved install sources outside the runtime.
+///
 
 #[async_trait]
 pub trait ModuleSourceResolver: Send + Sync {
@@ -137,6 +149,8 @@ static EMBEDDED_MODULE_SOURCES: OnceLock<Mutex<BTreeMap<CanisterRole, ApprovedMo
 
 ///
 /// ModuleSourceRuntimeApi
+///
+/// Process-local registry and resolver facade for approved module sources.
 ///
 
 pub struct ModuleSourceRuntimeApi;

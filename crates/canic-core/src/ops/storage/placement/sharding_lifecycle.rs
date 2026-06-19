@@ -9,7 +9,7 @@ use crate::{cdk::types::Principal, storage::stable::sharding::lifecycle::Shardin
 ///
 /// ShardingLifecycleOps
 ///
-/// Storage ops facade for the sharding active-set lifecycle.
+/// Storage-ops facade for the sharding active-set lifecycle.
 ///
 
 pub struct ShardingLifecycleOps;

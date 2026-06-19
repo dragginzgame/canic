@@ -1,18 +1,27 @@
+//! Module: ops::runtime::env
+//!
+//! Responsibility: read, validate, import, and restore runtime environment state.
+//! Does not own: lifecycle scheduling, DTO schema, or stable record storage.
+//! Boundary: converts storage records into validated environment projections.
+
 pub mod mapper;
 
 use crate::{
     InternalError,
     cdk::api::canister_self,
+    dto::env::EnvSnapshotResponse,
     ids::SubnetRole,
+    ops::runtime::env::mapper::EnvRecordMapper,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvRecord},
     view::env::ValidatedEnv,
 };
-use crate::{dto::env::EnvSnapshotResponse, ops::runtime::env::mapper::EnvRecordMapper};
 use thiserror::Error as ThisError;
 
 ///
 /// EnvOpsError
+///
+/// Typed failure surface for environment runtime operations.
 ///
 
 #[derive(Debug, ThisError)]
@@ -62,10 +71,8 @@ impl From<EnvOpsError> for InternalError {
 
 ///
 /// EnvOps
-/// NOTE:
-/// - Non-`try_*` getters assume the environment has been fully initialized
-///   during canister startup and will return errors if called earlier.
-/// - After initialization, absence of environment fields is a programmer error.
+///
+/// Operations-layer facade for initialized runtime environment metadata.
 ///
 
 pub struct EnvOps;

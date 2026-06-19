@@ -17,6 +17,8 @@ thread_local! {
 ///
 /// PoolMetricOperation
 ///
+/// Pool metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -49,6 +51,8 @@ impl PoolMetricOperation {
 ///
 /// PoolMetricOutcome
 ///
+/// Pool metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -78,6 +82,8 @@ impl PoolMetricOutcome {
 
 ///
 /// PoolMetricReason
+///
+/// Bounded pool reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -148,6 +154,8 @@ impl PoolMetricReason {
 ///
 /// PoolMetricKey
 ///
+/// Composite key for one low-cardinality pool counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PoolMetricKey {
@@ -158,6 +166,8 @@ pub struct PoolMetricKey {
 
 ///
 /// PoolMetrics
+///
+/// Operations-layer recorder for pool workflow counters.
 ///
 
 pub struct PoolMetrics;

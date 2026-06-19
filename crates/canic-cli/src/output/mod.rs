@@ -65,7 +65,9 @@ fn ensure_parent_dir<E>(path: &Path) -> Result<(), E>
 where
     E: From<io::Error>,
 {
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
         fs::create_dir_all(parent)?;
     }
     Ok(())

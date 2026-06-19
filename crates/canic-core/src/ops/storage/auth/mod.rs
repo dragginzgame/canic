@@ -25,6 +25,8 @@ pub use crate::storage::stable::auth::DelegatedSessionUpsertResult;
 ///
 /// DelegatedSession
 ///
+/// Storage-ops view of an active delegated session record.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DelegatedSession {
@@ -37,6 +39,8 @@ pub struct DelegatedSession {
 
 ///
 /// DelegatedSessionBootstrapBinding
+///
+/// Storage-ops view binding a bootstrap token fingerprint to one delegated session.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,7 +55,7 @@ pub struct DelegatedSessionBootstrapBinding {
 ///
 /// AuthStateOps
 ///
-/// Narrow storage-ops facade for delegated sessions and auth issuer state.
+/// Storage-ops facade for delegated sessions and auth issuer state.
 ///
 
 pub struct AuthStateOps;
@@ -198,6 +202,10 @@ const fn delegated_session_bootstrap_binding_view_to_record(
         expires_at: view.expires_at,
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,9 @@
+//! Module: ops::runtime
+//!
+//! Responsibility: group runtime operations used by workflow and API layers.
+//! Does not own: domain policy, endpoint authorization, or stable schemas.
+//! Boundary: exposes ops-layer runtime facades and their typed error surface.
+
 pub mod bootstrap;
 pub mod cycles_funding;
 pub mod env;
@@ -13,6 +19,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// RuntimeOpsError
+///
+/// Typed failure surface for runtime operation facades.
 ///
 
 #[derive(Debug, ThisError)]

@@ -7,14 +7,21 @@
 use crate::{
     InternalError,
     dto::topology::SubnetIndexArgs,
-    ops::storage::index::mapper::SubnetIndexRecordMapper,
-    ops::storage::index::{ensure_allowed_roles, ensure_required_roles, ensure_unique_roles},
-    ops::{config::ConfigOps, prelude::*},
+    ops::{
+        config::ConfigOps,
+        prelude::*,
+        storage::index::{
+            ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
+            mapper::SubnetIndexRecordMapper,
+        },
+    },
     storage::stable::index::subnet::{SubnetIndex, SubnetIndexRecord},
 };
 
 ///
 /// SubnetIndexOps
+///
+/// Storage-ops facade for the subnet index stable record.
 ///
 
 pub struct SubnetIndexOps;
