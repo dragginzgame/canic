@@ -13,6 +13,8 @@ thread_local! {
 ///
 /// HttpMetricKey
 ///
+/// Composite key for one low-cardinality HTTP outcall counter.
+///
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct HttpMetricKey {
@@ -23,6 +25,8 @@ pub struct HttpMetricKey {
 ///
 /// HttpMetricsSnapshot
 ///
+/// Point-in-time HTTP metric rows collected from the runtime counter table.
+///
 
 #[derive(Clone)]
 pub struct HttpMetricsSnapshot {
@@ -31,6 +35,8 @@ pub struct HttpMetricsSnapshot {
 
 ///
 /// HttpMethod
+///
+/// HTTP method dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -54,6 +60,7 @@ impl HttpMethod {
 
 ///
 /// HttpMetrics
+///
 /// Volatile counters for HTTP outcalls keyed by method + low-cardinality label.
 /// Explicit labels are preferred; URL-derived fallback labels strip query/fragment only.
 ///

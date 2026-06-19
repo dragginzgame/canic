@@ -1,3 +1,9 @@
+//! Module: ops::runtime::ready
+//!
+//! Responsibility: own the runtime readiness barrier.
+//! Does not own: bootstrap orchestration, lifecycle adapters, or public status DTOs.
+//! Boundary: records the single transition from not-ready to ready.
+
 use super::bootstrap::BootstrapStatusOps;
 use std::cell::Cell;
 
@@ -11,12 +17,7 @@ thread_local! {
 ///
 /// ReadyOps
 ///
-/// Internal readiness barrier for bootstrap synchronization.
-///
-/// Semantics:
-/// - Starts as false on each fresh runtime (init or post-upgrade).
-/// - Transitions to true exactly once after successful bootstrap.
-/// - Never transitions back to false within the same runtime.
+/// Operations-layer facade for the bootstrap readiness barrier.
 ///
 
 pub struct ReadyOps;

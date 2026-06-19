@@ -17,6 +17,8 @@ thread_local! {
 ///
 /// DelegatedAuthMetricOperation
 ///
+/// Delegated auth metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -41,6 +43,8 @@ impl DelegatedAuthMetricOperation {
 ///
 /// DelegatedAuthMetricOutcome
 ///
+/// Delegated auth metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -64,6 +68,8 @@ impl DelegatedAuthMetricOutcome {
 
 ///
 /// DelegatedAuthMetricReason
+///
+/// Bounded delegated auth reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -141,6 +147,8 @@ impl DelegatedAuthMetricReason {
 ///
 /// DelegatedAuthMetricKey
 ///
+/// Composite key for one low-cardinality delegated auth counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct DelegatedAuthMetricKey {
@@ -151,6 +159,7 @@ pub struct DelegatedAuthMetricKey {
 
 ///
 /// DelegatedAuthMetrics
+///
 /// Records verified delegation authorities by issuer/root authority principal.
 /// Cardinality is bounded by configured auth authorities, not request callers.
 ///

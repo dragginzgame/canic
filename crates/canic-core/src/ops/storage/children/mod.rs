@@ -23,8 +23,9 @@ use crate::{
 ///
 /// CanisterChildrenOps
 ///
-/// Invariant: the children cache is updated only via the topology cascade
-/// workflow.
+/// Storage-ops facade for the direct-child cache.
+///
+/// Invariant: the children cache is updated only via the topology cascade workflow.
 ///
 pub struct CanisterChildrenOps;
 

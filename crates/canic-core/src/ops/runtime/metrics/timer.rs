@@ -19,6 +19,8 @@ thread_local! {
 ///
 /// TimerMetricsSnapshot
 ///
+/// Point-in-time timer metric rows collected from the runtime counter table.
+///
 
 #[derive(Clone)]
 pub struct TimerMetricsSnapshot {
@@ -27,6 +29,8 @@ pub struct TimerMetricsSnapshot {
 
 ///
 /// TimerMode
+///
+/// Timer scheduling mode dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -39,6 +43,8 @@ pub enum TimerMode {
 ///
 /// TimerMetricKey
 ///
+/// Composite key for one low-cardinality timer execution counter.
+///
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct TimerMetricKey {
@@ -50,7 +56,7 @@ pub struct TimerMetricKey {
 ///
 /// TimerMetrics
 ///
-/// Volatile counters for timer executions keyed by `(mode, delay_ms, label)`.
+/// Operations-layer recorder for timer execution counters.
 ///
 /// ## What this measures
 ///

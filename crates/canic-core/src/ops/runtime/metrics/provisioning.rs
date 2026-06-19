@@ -17,6 +17,8 @@ thread_local! {
 ///
 /// ProvisioningMetricOperation
 ///
+/// Provisioning metric operation dimension used by test metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -33,6 +35,8 @@ pub enum ProvisioningMetricOperation {
 ///
 /// ProvisioningMetricOutcome
 ///
+/// Provisioning metric outcome dimension used by test metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -45,6 +49,8 @@ pub enum ProvisioningMetricOutcome {
 
 ///
 /// ProvisioningMetricReason
+///
+/// Bounded provisioning reason dimension used by test metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -89,6 +95,8 @@ impl ProvisioningMetricReason {
 ///
 /// ProvisioningMetricKey
 ///
+/// Composite key for one low-cardinality provisioning counter.
+///
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct ProvisioningMetricKey {
@@ -100,6 +108,8 @@ pub struct ProvisioningMetricKey {
 
 ///
 /// ProvisioningMetrics
+///
+/// Operations-layer recorder for provisioning workflow counters.
 ///
 
 pub struct ProvisioningMetrics;

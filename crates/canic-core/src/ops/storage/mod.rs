@@ -21,7 +21,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// StorageOpsError
-/// InternalError envelope shared across operations submodules
+///
+/// Typed failure surface shared across storage operation submodules.
 ///
 
 #[derive(Debug, ThisError)]

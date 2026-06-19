@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 ///
 /// IcpRefillMetrics
 ///
+/// Operations-layer projector for persisted ICP refill records.
+///
 
 pub struct IcpRefillMetrics;
 

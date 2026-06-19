@@ -15,6 +15,8 @@ use crate::{
 ///
 /// CanisterPoolEntryMapper
 ///
+/// Storage-ops mapper for pool records and pool entry response views.
+///
 
 pub struct CanisterPoolEntryMapper;
 
@@ -41,6 +43,8 @@ impl CanisterPoolEntryMapper {
 
 ///
 /// CanisterPoolResponseMapper
+///
+/// Storage-ops mapper for full pool snapshots and response views.
 ///
 
 pub struct CanisterPoolResponseMapper;

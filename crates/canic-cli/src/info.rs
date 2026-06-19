@@ -30,6 +30,7 @@ Examples:
   canic info endpoints test app
   canic info medic test
   canic info env test";
+const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "medic", "env"];
 
 ///
 /// InfoCommandError
@@ -69,45 +70,32 @@ where
         return Ok(());
     }
 
-    match parse_info_command(args)? {
-        ("list", tail) => list::run_info(tail).map_err(InfoCommandError::from),
-        ("cycles", tail) => cycles::run_info(tail).map_err(InfoCommandError::from),
-        ("metrics", tail) => metrics::run_info(tail).map_err(InfoCommandError::from),
-        ("endpoints", tail) => endpoints::run_info(tail).map_err(InfoCommandError::from),
-        ("medic", tail) => medic::run_info(tail).map_err(InfoCommandError::from),
-        ("env", tail) => info_env::run(tail).map_err(InfoCommandError::from),
+    let (command, tail) = parse_info_command(args)?;
+    match command.as_str() {
+        "list" => list::run_info(tail).map_err(InfoCommandError::from),
+        "cycles" => cycles::run_info(tail).map_err(InfoCommandError::from),
+        "metrics" => metrics::run_info(tail).map_err(InfoCommandError::from),
+        "endpoints" => endpoints::run_info(tail).map_err(InfoCommandError::from),
+        "medic" => medic::run_info(tail).map_err(InfoCommandError::from),
+        "env" => info_env::run(tail).map_err(InfoCommandError::from),
         _ => unreachable!("clap restricts info subcommands"),
     }
 }
 
-fn parse_info_command(
-    args: Vec<OsString>,
-) -> Result<(&'static str, Vec<OsString>), InfoCommandError> {
-    let (command, tail) = parse_subcommand(command(), args)
+fn parse_info_command(args: Vec<OsString>) -> Result<(String, Vec<OsString>), InfoCommandError> {
+    parse_subcommand(command(), args)
         .map_err(|_| InfoCommandError::Usage(usage()))?
-        .ok_or_else(|| InfoCommandError::Usage(usage()))?;
-    match command.as_str() {
-        "list" => Ok(("list", tail)),
-        "cycles" => Ok(("cycles", tail)),
-        "metrics" => Ok(("metrics", tail)),
-        "endpoints" => Ok(("endpoints", tail)),
-        "medic" => Ok(("medic", tail)),
-        "env" => Ok(("env", tail)),
-        _ => unreachable!("clap restricts info subcommands"),
-    }
+        .ok_or_else(|| InfoCommandError::Usage(usage()))
 }
 
 fn command() -> ClapCommand {
-    ClapCommand::new("info")
+    let command = ClapCommand::new("info")
         .bin_name("canic info")
         .about("Group read-only installed-deployment information commands")
-        .disable_help_flag(true)
-        .subcommand(passthrough_subcommand(ClapCommand::new("list")))
-        .subcommand(passthrough_subcommand(ClapCommand::new("cycles")))
-        .subcommand(passthrough_subcommand(ClapCommand::new("metrics")))
-        .subcommand(passthrough_subcommand(ClapCommand::new("endpoints")))
-        .subcommand(passthrough_subcommand(ClapCommand::new("medic")))
-        .subcommand(passthrough_subcommand(ClapCommand::new("env")))
+        .disable_help_flag(true);
+    INFO_SUBCOMMANDS.iter().fold(command, |command, name| {
+        command.subcommand(passthrough_subcommand(ClapCommand::new(*name)))
+    })
 }
 
 #[must_use]

@@ -21,6 +21,8 @@ thread_local! {
 ///
 /// InterCanisterCallMetricsSnapshot
 ///
+/// Point-in-time inter-canister call metric rows from the runtime counter table.
+///
 
 #[derive(Clone)]
 pub struct InterCanisterCallMetricsSnapshot {
@@ -29,6 +31,7 @@ pub struct InterCanisterCallMetricsSnapshot {
 
 ///
 /// InterCanisterCallMetricKey
+///
 /// Cardinality is bounded by observed canister targets and static method names.
 ///
 
@@ -40,6 +43,7 @@ pub struct InterCanisterCallMetricKey {
 
 ///
 /// InterCanisterCallMetrics
+///
 /// Volatile counters for inter-canister calls keyed by target + method.
 /// Targets may grow with topology size; methods must remain low-cardinality.
 ///

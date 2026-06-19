@@ -15,6 +15,8 @@ thread_local! {
 ///
 /// DirectoryMetricOperation
 ///
+/// Directory metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -53,6 +55,8 @@ impl DirectoryMetricOperation {
 ///
 /// DirectoryMetricOutcome
 ///
+/// Directory metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -78,6 +82,8 @@ impl DirectoryMetricOutcome {
 
 ///
 /// DirectoryMetricReason
+///
+/// Bounded directory reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -145,6 +151,8 @@ impl DirectoryMetricReason {
 ///
 /// DirectoryMetricKey
 ///
+/// Composite key for one low-cardinality directory counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct DirectoryMetricKey {
@@ -155,6 +163,8 @@ pub struct DirectoryMetricKey {
 
 ///
 /// DirectoryMetrics
+///
+/// Operations-layer recorder for directory placement counters.
 ///
 
 pub struct DirectoryMetrics;

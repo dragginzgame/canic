@@ -32,6 +32,8 @@ const fn app_mode_to_dto(mode: StorageAppMode) -> AppModeDto {
 ///
 /// AppStateMapper
 ///
+/// Storage-ops mapper for app-state records and boundary state shapes.
+///
 
 pub struct AppStateMapper;
 
@@ -72,6 +74,8 @@ impl AppStateMapper {
 ///
 /// AppStateCommandMapper
 ///
+/// Storage-ops mapper for app-state commands.
+///
 
 pub struct AppStateCommandMapper;
 
@@ -89,6 +93,8 @@ impl AppStateCommandMapper {
 
 ///
 /// SubnetStateMapper
+///
+/// Storage-ops mapper for subnet-state records and boundary state shapes.
 ///
 
 pub struct SubnetStateMapper;

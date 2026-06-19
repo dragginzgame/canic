@@ -14,6 +14,8 @@ use crate::{
 ///
 /// AppRegistryResponseMapper
 ///
+/// Storage-ops mapper for app registry records and response views.
+///
 
 pub struct AppRegistryResponseMapper;
 
@@ -35,6 +37,8 @@ impl AppRegistryResponseMapper {
 
 ///
 /// SubnetRegistryResponseMapper
+///
+/// Storage-ops mapper for subnet registry records and response views.
 ///
 
 pub struct SubnetRegistryResponseMapper;

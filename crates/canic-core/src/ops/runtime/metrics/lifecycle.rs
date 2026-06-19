@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// LifecycleMetricPhase
 ///
+/// Lifecycle phase dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -34,6 +36,8 @@ impl LifecycleMetricPhase {
 
 ///
 /// LifecycleMetricRole
+///
+/// Lifecycle canister role dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -56,6 +60,8 @@ impl LifecycleMetricRole {
 ///
 /// LifecycleMetricStage
 ///
+/// Lifecycle stage dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -76,6 +82,8 @@ impl LifecycleMetricStage {
 
 ///
 /// LifecycleMetricOutcome
+///
+/// Lifecycle outcome dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -106,6 +114,8 @@ impl LifecycleMetricOutcome {
 ///
 /// LifecycleMetricKey
 ///
+/// Composite key for one low-cardinality lifecycle counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct LifecycleMetricKey {
@@ -117,6 +127,8 @@ pub struct LifecycleMetricKey {
 
 ///
 /// LifecycleMetrics
+///
+/// Operations-layer recorder for lifecycle runtime counters.
 ///
 
 pub struct LifecycleMetrics;

@@ -4,6 +4,9 @@
 //! Does not own: business policy, workflow orchestration, or endpoint DTOs.
 //! Boundary: storage ops facade over stable intent records.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     InternalError,
     ids::{IntentId, IntentResourceKey},
@@ -18,6 +21,12 @@ use thiserror::Error as ThisError;
 // -----------------------------------------------------------------------------
 // Errors
 // -----------------------------------------------------------------------------
+
+///
+/// IntentStoreOpsError
+///
+/// Typed storage failure for mechanical intent store operations.
+///
 
 #[derive(Debug, ThisError)]
 pub enum IntentStoreOpsError {
@@ -79,6 +88,12 @@ impl From<IntentStoreOpsError> for InternalError {
 // -----------------------------------------------------------------------------
 // Ops
 // -----------------------------------------------------------------------------
+
+///
+/// IntentStoreOps
+///
+/// Storage-ops facade for intent reservation, commit, abort, and cleanup.
+///
 
 pub struct IntentStoreOps;
 
@@ -468,6 +483,3 @@ fn is_record_expired(now: u64, record: &IntentRecord) -> bool {
 fn is_pending_entry_expired(now: u64, entry: &IntentPendingEntryRecord) -> bool {
     is_expired(now, entry.created_at, entry.ttl_secs)
 }
-
-#[cfg(test)]
-mod tests;

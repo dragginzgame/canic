@@ -15,6 +15,8 @@ thread_local! {
 ///
 /// CascadeMetricOperation
 ///
+/// Cascade metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -43,6 +45,8 @@ impl CascadeMetricOperation {
 ///
 /// CascadeMetricSnapshot
 ///
+/// Cascade metric snapshot dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -64,6 +68,8 @@ impl CascadeMetricSnapshot {
 
 ///
 /// CascadeMetricOutcome
+///
+/// Cascade metric outcome dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -90,6 +96,8 @@ impl CascadeMetricOutcome {
 
 ///
 /// CascadeMetricReason
+///
+/// Bounded cascade reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -145,6 +153,8 @@ impl CascadeMetricReason {
 ///
 /// CascadeMetricKey
 ///
+/// Composite key for one low-cardinality cascade counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct CascadeMetricKey {
@@ -156,6 +166,8 @@ pub struct CascadeMetricKey {
 
 ///
 /// CascadeMetrics
+///
+/// Operations-layer recorder for cascade workflow counters.
 ///
 
 pub struct CascadeMetrics;

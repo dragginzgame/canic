@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// PlatformCallMetricSurface
 ///
+/// Platform call surface dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -40,6 +42,8 @@ impl PlatformCallMetricSurface {
 ///
 /// PlatformCallMetricMode
 ///
+/// Platform call mode dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -64,6 +68,8 @@ impl PlatformCallMetricMode {
 ///
 /// PlatformCallMetricOutcome
 ///
+/// Platform call outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -87,6 +93,8 @@ impl PlatformCallMetricOutcome {
 
 ///
 /// PlatformCallMetricReason
+///
+/// Bounded platform call reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -118,6 +126,8 @@ impl PlatformCallMetricReason {
 ///
 /// PlatformCallMetricKey
 ///
+/// Composite key for one low-cardinality platform call counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PlatformCallMetricKey {
@@ -129,6 +139,8 @@ pub struct PlatformCallMetricKey {
 
 ///
 /// PlatformCallMetrics
+///
+/// Operations-layer recorder for platform call counters.
 ///
 
 pub struct PlatformCallMetrics;

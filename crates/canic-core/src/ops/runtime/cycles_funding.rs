@@ -1,3 +1,9 @@
+//! Module: ops::runtime::cycles_funding
+//!
+//! Responsibility: track process-local child cycles funding ledger snapshots.
+//! Does not own: cycles funding policy, grant execution, or stable accounting.
+//! Boundary: stores runtime grant totals used by funding policy decisions.
+
 use crate::{cdk::types::Principal, domain::policy::cycles_funding::FundingLedgerSnapshot};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -8,6 +14,8 @@ thread_local! {
 
 ///
 /// CyclesFundingLedgerOps
+///
+/// Operations-layer facade for runtime child funding ledger snapshots.
 ///
 
 pub struct CyclesFundingLedgerOps;

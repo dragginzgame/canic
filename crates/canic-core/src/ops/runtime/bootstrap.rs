@@ -1,3 +1,9 @@
+//! Module: ops::runtime::bootstrap
+//!
+//! Responsibility: track runtime bootstrap readiness diagnostics.
+//! Does not own: lifecycle orchestration, readiness policy, or status DTO schema.
+//! Boundary: stores process-local bootstrap status for query projection.
+
 use crate::dto::state::BootstrapStatusResponse;
 use std::cell::RefCell;
 
@@ -18,6 +24,8 @@ thread_local! {
 
 ///
 /// BootstrapStatusOps
+///
+/// Operations-layer facade for process-local bootstrap status diagnostics.
 ///
 
 pub struct BootstrapStatusOps;
@@ -60,6 +68,10 @@ impl BootstrapStatusOps {
         });
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

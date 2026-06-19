@@ -1,5 +1,8 @@
-//! Runtime memory registry primitives.
-//! Owns TLS setup for memory registry initialization.
+//! Module: ops::runtime::memory
+//!
+//! Responsibility: bootstrap memory registry TLS and expose memory diagnostics.
+//! Does not own: memory schema declarations, stable records, or DTO schema.
+//! Boundary: maps memory runtime diagnostics into ops query responses.
 
 use crate::{
     InternalError,
@@ -21,6 +24,8 @@ use thiserror::Error as ThisError;
 ///
 /// MemoryRegistryOpsError
 ///
+/// Typed failure surface for memory registry bootstrap and diagnostics.
+///
 
 #[derive(Debug, ThisError)]
 pub enum MemoryRegistryOpsError {
@@ -40,6 +45,8 @@ impl From<MemoryRegistryOpsError> for InternalError {
 
 ///
 /// MemoryRegistryOps
+///
+/// Operations-layer facade for memory registry bootstrap and diagnostics.
 ///
 
 pub struct MemoryRegistryOps;

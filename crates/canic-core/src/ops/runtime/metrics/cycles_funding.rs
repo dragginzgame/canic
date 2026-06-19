@@ -15,6 +15,8 @@ thread_local! {
 ///
 /// CyclesFundingMetricKey
 ///
+/// Cycles funding metric dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
@@ -46,6 +48,8 @@ impl CyclesFundingMetricKey {
 ///
 /// CyclesFundingDeniedReason
 ///
+/// Bounded cycles funding denial reason dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
@@ -76,6 +80,7 @@ impl CyclesFundingDeniedReason {
 
 ///
 /// CyclesFundingMetricStorageKey
+///
 /// Child-principal cardinality is intentional and bounded by registered children.
 /// Reason and metric dimensions are fixed enums.
 ///
@@ -89,6 +94,8 @@ struct CyclesFundingMetricStorageKey {
 
 ///
 /// CyclesFundingMetrics
+///
+/// Operations-layer recorder for child cycles funding counters.
 ///
 
 pub struct CyclesFundingMetrics;

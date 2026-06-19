@@ -18,6 +18,8 @@ thread_local! {
 ///
 /// ScalingMetricOperation
 ///
+/// Scaling metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -46,6 +48,8 @@ impl ScalingMetricOperation {
 ///
 /// ScalingMetricOutcome
 ///
+/// Scaling metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -71,6 +75,8 @@ impl ScalingMetricOutcome {
 
 ///
 /// ScalingMetricReason
+///
+/// Bounded scaling reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -140,6 +146,8 @@ impl ScalingMetricReason {
 ///
 /// ScalingMetricKey
 ///
+/// Composite key for one low-cardinality scaling counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ScalingMetricKey {
@@ -150,6 +158,8 @@ pub struct ScalingMetricKey {
 
 ///
 /// ScalingMetrics
+///
+/// Operations-layer recorder for scaling workflow counters.
 ///
 
 pub struct ScalingMetrics;

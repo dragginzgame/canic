@@ -13,6 +13,8 @@ use crate::{
 ///
 /// SubnetStateOps
 ///
+/// Storage-ops facade for subnet-state imports and snapshots.
+///
 
 pub struct SubnetStateOps;
 

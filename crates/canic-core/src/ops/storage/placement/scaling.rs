@@ -13,7 +13,8 @@ use crate::{
 
 ///
 /// ScalingRegistryOps
-/// Stable storage wrapper for the scaling worker registry.
+///
+/// Storage-ops facade for the scaling worker registry.
 ///
 
 pub struct ScalingRegistryOps;

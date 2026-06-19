@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// AccessMetricsSnapshot
 ///
+/// Point-in-time access metric rows collected from the runtime counter table.
+///
 
 #[derive(Clone)]
 pub struct AccessMetricsSnapshot {
@@ -22,6 +24,7 @@ pub struct AccessMetricsSnapshot {
 
 ///
 /// AccessMetricKey
+///
 /// Uniquely identifies a rejected access attempt by endpoint + kind + predicate.
 /// Cardinality is bounded by macro-generated endpoint names and static predicate names.
 ///
@@ -35,7 +38,8 @@ pub struct AccessMetricKey {
 
 ///
 /// AccessMetrics
-/// Volatile counters for unsuccessful access attempts by endpoint + kind.
+///
+/// Operations-layer recorder for unsuccessful access attempts by endpoint + kind.
 ///
 
 pub struct AccessMetrics;

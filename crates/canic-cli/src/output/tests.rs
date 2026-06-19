@@ -16,3 +16,9 @@ fn write_pretty_json_creates_parent_directories() {
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(value["ok"], true);
 }
+
+// Ensure current-directory output names do not try to create an empty parent.
+#[test]
+fn ensure_parent_dir_accepts_plain_relative_file_names() {
+    ensure_parent_dir::<io::Error>(Path::new("summary.json")).expect("plain output path");
+}

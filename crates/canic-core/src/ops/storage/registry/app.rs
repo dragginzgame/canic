@@ -12,6 +12,8 @@ use crate::{
 ///
 /// AppRegistryOps
 ///
+/// Storage-ops facade for app registry bindings.
+///
 
 pub struct AppRegistryOps;
 

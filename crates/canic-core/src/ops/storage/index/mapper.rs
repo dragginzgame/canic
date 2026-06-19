@@ -45,6 +45,8 @@ fn input_entries_to_record(entries: Vec<IndexEntryInput>) -> Vec<(CanisterRole, 
 ///
 /// AppIndexRecordMapper
 ///
+/// Storage-ops mapper for app index records and boundary input shapes.
+///
 
 pub struct AppIndexRecordMapper;
 
@@ -65,6 +67,8 @@ impl AppIndexRecordMapper {
 ///
 /// SubnetIndexRecordMapper
 ///
+/// Storage-ops mapper for subnet index records and boundary input shapes.
+///
 
 pub struct SubnetIndexRecordMapper;
 
@@ -84,6 +88,8 @@ impl SubnetIndexRecordMapper {
 
 ///
 /// IndexResponseMapper
+///
+/// Storage-ops mapper for index record pages and response entries.
 ///
 
 pub struct IndexResponseMapper;

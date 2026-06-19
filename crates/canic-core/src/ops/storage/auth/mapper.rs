@@ -23,6 +23,8 @@ use crate::{
 ///
 /// ActiveDelegationProofRecordMapper
 ///
+/// Storage-ops mapper for active delegation proof DTOs and records.
+///
 
 pub struct ActiveDelegationProofRecordMapper;
 
@@ -56,6 +58,8 @@ impl ActiveDelegationProofRecordMapper {
 
 ///
 /// RootIssuerPolicyRecordMapper
+///
+/// Storage-ops mapper for root issuer policy values and persisted records.
 ///
 
 pub struct RootIssuerPolicyRecordMapper;

@@ -1,3 +1,9 @@
+//! Module: ops::runtime::log
+//!
+//! Responsibility: append, retain, and page runtime log records.
+//! Does not own: log DTO schema, retention policy configuration, or domain state.
+//! Boundary: performs storage-backed log operations for workflow and API callers.
+
 use crate::{
     InternalError,
     dto::{
@@ -16,6 +22,8 @@ use thiserror::Error as ThisError;
 ///
 /// LogOpsError
 ///
+/// Typed failure surface for storage-backed runtime log operations.
+///
 
 #[derive(Debug, ThisError)]
 pub enum LogOpsError {
@@ -32,17 +40,7 @@ impl From<LogOpsError> for InternalError {
 ///
 /// LogOps
 ///
-/// Logging control operations.
-///
-/// Responsibilities:
-/// - Append runtime log entries
-/// - Apply retention policies
-/// - Expose a point-in-time read-only view of log entries
-///
-/// Notes:
-/// - Logs are **not authoritative domain state**
-/// - Logs are **never imported or cascaded**
-/// - Therefore, no `Snapshot` DTO exists for logs
+/// Operations-layer facade for runtime log mutation, retention, and query views.
 ///
 pub struct LogOps;
 

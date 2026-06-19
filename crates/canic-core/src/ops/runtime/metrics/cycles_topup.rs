@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// CyclesTopupMetricKey
 ///
+/// Auto top-up metric dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
@@ -44,6 +46,8 @@ impl CyclesTopupMetricKey {
 
 ///
 /// CyclesTopupMetrics
+///
+/// Operations-layer recorder for automatic cycles top-up counters.
 ///
 
 pub struct CyclesTopupMetrics;

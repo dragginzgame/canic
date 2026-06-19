@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// WasmStoreMetricOperation
 ///
+/// Wasm-store operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -46,6 +48,8 @@ impl WasmStoreMetricOperation {
 ///
 /// WasmStoreMetricSource
 ///
+/// Wasm-store source dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -76,6 +80,8 @@ impl WasmStoreMetricSource {
 ///
 /// WasmStoreMetricOutcome
 ///
+/// Wasm-store outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -101,6 +107,8 @@ impl WasmStoreMetricOutcome {
 
 ///
 /// WasmStoreMetricReason
+///
+/// Bounded wasm-store reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -142,6 +150,8 @@ impl WasmStoreMetricReason {
 ///
 /// WasmStoreMetricKey
 ///
+/// Composite key for one low-cardinality wasm-store counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct WasmStoreMetricKey {
@@ -153,6 +163,8 @@ pub struct WasmStoreMetricKey {
 
 ///
 /// WasmStoreMetrics
+///
+/// Operations-layer recorder for wasm-store workflow counters.
 ///
 
 pub struct WasmStoreMetrics;

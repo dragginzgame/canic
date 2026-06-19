@@ -18,6 +18,8 @@ thread_local! {
 ///
 /// ShardingMetricOperation
 ///
+/// Sharding metric operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -52,6 +54,8 @@ impl ShardingMetricOperation {
 ///
 /// ShardingMetricOutcome
 ///
+/// Sharding metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -77,6 +81,8 @@ impl ShardingMetricOutcome {
 
 ///
 /// ShardingMetricReason
+///
+/// Bounded sharding reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -150,6 +156,8 @@ impl ShardingMetricReason {
 ///
 /// ShardingMetricKey
 ///
+/// Composite key for one low-cardinality sharding counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ShardingMetricKey {
@@ -160,6 +168,8 @@ pub struct ShardingMetricKey {
 
 ///
 /// ShardingMetrics
+///
+/// Operations-layer recorder for sharding placement counters.
 ///
 
 pub struct ShardingMetrics;

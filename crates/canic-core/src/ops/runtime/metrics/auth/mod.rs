@@ -46,6 +46,8 @@ thread_local! {
 ///
 /// AuthMetricSurface
 ///
+/// Auth metric surface dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -67,6 +69,8 @@ impl AuthMetricSurface {
 
 ///
 /// AuthMetricOperation
+///
+/// Auth metric operation dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -94,6 +98,8 @@ impl AuthMetricOperation {
 ///
 /// AuthMetricOutcome
 ///
+/// Auth metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -119,6 +125,8 @@ impl AuthMetricOutcome {
 
 ///
 /// AuthMetricReason
+///
+/// Auth metric reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -174,6 +182,8 @@ impl AuthMetricReason {
 ///
 /// AuthMetricKey
 ///
+/// Composite key for one low-cardinality auth metric counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct AuthMetricKey {
@@ -185,6 +195,8 @@ pub struct AuthMetricKey {
 
 ///
 /// AuthMetrics
+///
+/// Operations-layer recorder for auth runtime counters.
 ///
 
 pub struct AuthMetrics;

@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// ManagementCallMetricOperation
 ///
+/// Management canister operation dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -39,6 +41,8 @@ pub enum ManagementCallMetricOperation {
 ///
 /// ManagementCallMetricOutcome
 ///
+/// Management canister outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -51,6 +55,8 @@ pub enum ManagementCallMetricOutcome {
 ///
 /// ManagementCallMetricReason
 ///
+/// Bounded management canister reason dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -62,6 +68,8 @@ pub enum ManagementCallMetricReason {
 ///
 /// ManagementCallMetricKey
 ///
+/// Composite key for one low-cardinality management canister counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ManagementCallMetricKey {
@@ -72,6 +80,8 @@ pub struct ManagementCallMetricKey {
 
 ///
 /// ManagementCallMetrics
+///
+/// Operations-layer recorder for management canister call counters.
 ///
 
 pub struct ManagementCallMetrics;

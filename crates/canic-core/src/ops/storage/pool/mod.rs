@@ -18,6 +18,8 @@ use crate::{
 ///
 /// PoolRegistrationMetadata
 ///
+/// Stable canister metadata carried into pool registration updates.
+///
 
 pub struct PoolRegistrationMetadata {
     role: Option<CanisterRole>,
@@ -43,7 +45,8 @@ impl PoolRegistrationMetadata {
 
 ///
 /// PoolOps
-/// Operational façade over pool storage.
+///
+/// Storage-ops facade over pool records.
 ///
 
 pub struct PoolOps;

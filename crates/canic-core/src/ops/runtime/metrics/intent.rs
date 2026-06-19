@@ -14,6 +14,8 @@ thread_local! {
 ///
 /// IntentMetricSurface
 ///
+/// Intent metric surface dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -37,6 +39,8 @@ impl IntentMetricSurface {
 
 ///
 /// IntentMetricOperation
+///
+/// Intent metric operation dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -66,6 +70,8 @@ impl IntentMetricOperation {
 ///
 /// IntentMetricOutcome
 ///
+/// Intent metric outcome dimension used by public metrics projection.
+///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
@@ -87,6 +93,8 @@ impl IntentMetricOutcome {
 
 ///
 /// IntentMetricReason
+///
+/// Bounded intent reason dimension used by public metrics projection.
 ///
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -120,6 +128,8 @@ impl IntentMetricReason {
 ///
 /// IntentMetricKey
 ///
+/// Composite key for one low-cardinality intent counter.
+///
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct IntentMetricKey {
@@ -131,6 +141,8 @@ pub struct IntentMetricKey {
 
 ///
 /// IntentMetrics
+///
+/// Operations-layer recorder for intent reservation counters.
 ///
 
 pub struct IntentMetrics;

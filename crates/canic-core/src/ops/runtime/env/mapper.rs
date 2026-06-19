@@ -1,3 +1,9 @@
+//! Module: ops::runtime::env::mapper
+//!
+//! Responsibility: convert environment records into runtime views.
+//! Does not own: environment validation, stable storage, or DTO schema.
+//! Boundary: keeps env record and DTO projections explicit for ops callers.
+
 use crate::{
     dto::env::EnvSnapshotResponse, storage::stable::env::EnvRecord, view::env::ValidatedEnv,
 };
@@ -5,8 +11,8 @@ use crate::{
 ///
 /// EnvRecordMapper
 ///
-/// EnvRecord remains the canonical shape; this mapper exists to keep DTO
-/// projections explicit and consistent with other record mappers.
+/// Operations-layer mapper for environment storage records and runtime views.
+///
 
 pub struct EnvRecordMapper;
 
