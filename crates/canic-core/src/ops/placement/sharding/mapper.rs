@@ -1,3 +1,9 @@
+//! Module: ops::placement::sharding::mapper
+//!
+//! Responsibility: convert sharding records and plan states into policy/view shapes.
+//! Does not own: sharding policy, registry mutation, or endpoint DTO schemas.
+//! Boundary: ops mapper used by sharding workflows and storage facades.
+
 use crate::{
     cdk::types::Principal,
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
@@ -7,6 +13,8 @@ use crate::{
 
 ///
 /// ShardPlacementPolicyInputMapper
+///
+/// Operations-layer mapper for shard entries and placement policy inputs.
 ///
 
 pub struct ShardPlacementPolicyInputMapper;
@@ -32,6 +40,8 @@ impl ShardPlacementPolicyInputMapper {
 ///
 /// ShardPartitionKeyAssignmentPolicyInputMapper
 ///
+/// Operations-layer mapper for shard assignment records and policy inputs.
+///
 
 pub struct ShardPartitionKeyAssignmentPolicyInputMapper;
 
@@ -47,6 +57,8 @@ impl ShardPartitionKeyAssignmentPolicyInputMapper {
 
 ///
 /// ShardEntryMapper
+///
+/// Operations-layer mapper for shard records and public views.
 ///
 
 pub struct ShardEntryMapper;
@@ -67,6 +79,8 @@ impl ShardEntryMapper {
 
 ///
 /// ShardingPlanStateResponseMapper
+///
+/// Operations-layer mapper for sharding plan states and response views.
 ///
 
 pub struct ShardingPlanStateResponseMapper;

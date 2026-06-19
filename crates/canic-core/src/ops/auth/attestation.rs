@@ -1,3 +1,9 @@
+//! Module: ops::auth::attestation
+//!
+//! Responsibility: prepare, retrieve, and verify root role attestation proofs.
+//! Does not own: endpoint authorization, role policy, or public DTO schemas.
+//! Boundary: auth ops bridge role-attestation workflows and root proof helpers.
+
 use super::{
     AuthOps, PrepareRootRoleAttestationInput, PreparedRootRoleAttestation, crypto,
     root_canister_sig::RootPayloadKind, verify,
@@ -135,6 +141,10 @@ impl AuthOps {
         Ok(attestation.payload.clone())
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

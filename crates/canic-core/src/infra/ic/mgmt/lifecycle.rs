@@ -1,3 +1,9 @@
+//! Module: infra::ic::mgmt::lifecycle
+//!
+//! Responsibility: perform raw management canister lifecycle and code-install calls.
+//! Does not own: deployment workflow, placement policy, or artifact validation.
+//! Boundary: extends `MgmtInfra` with lifecycle management effects.
+
 use crate::{
     cdk::{
         api,
@@ -18,7 +24,7 @@ use super::{
 };
 
 impl MgmtInfra {
-    // Create a canister with explicit controllers and an initial cycle balance.
+    /// Create a canister with explicit controllers and an initial cycle balance.
     pub async fn create_canister(
         controllers: Vec<Principal>,
         cycles: Cycles,
@@ -42,7 +48,7 @@ impl MgmtInfra {
         Ok(created.canister_id)
     }
 
-    // Upload one wasm chunk into a canister's chunk store.
+    /// Upload one wasm chunk into a canister's chunk store.
     pub async fn upload_chunk(
         canister_pid: Principal,
         chunk: Vec<u8>,
@@ -61,7 +67,7 @@ impl MgmtInfra {
         Ok(hash.hash)
     }
 
-    // List the chunk hashes currently stored in one canister's chunk store.
+    /// List the chunk hashes currently stored in one canister's chunk store.
     pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
@@ -75,7 +81,7 @@ impl MgmtInfra {
         Ok(hashes.into_iter().map(|hash| hash.hash).collect())
     }
 
-    // Clear the chunk store of one canister.
+    /// Clear the chunk store of one canister.
     pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraClearChunkStoreArgs {
             canister_id: canister_pid,
@@ -89,7 +95,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    // Install or upgrade a canister from chunks stored in a same-subnet store canister.
+    /// Install or upgrade a canister from chunks stored in a same-subnet store canister.
     pub async fn install_chunked_code<T: ArgumentEncoder>(
         mode: InfraCanisterInstallMode,
         target_canister: Principal,
@@ -120,7 +126,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    // Install or upgrade a canister from an embedded wasm payload.
+    /// Install or upgrade a canister from an embedded wasm payload.
     pub async fn install_code<T: ArgumentEncoder>(
         mode: InfraCanisterInstallMode,
         canister_id: Principal,
@@ -144,7 +150,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    // Uninstalls code from a canister.
+    /// Uninstall code from a canister.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecordExtended {
             canister_id: canister_pid,
@@ -158,7 +164,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    // Stops a canister.
+    /// Stop a canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
@@ -171,7 +177,7 @@ impl MgmtInfra {
         Ok(())
     }
 
-    // Deletes a canister (code + controllers) via the management canister.
+    /// Delete a canister through the management canister.
     pub async fn delete_canister(canister_pid: Principal) -> Result<(), InfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,

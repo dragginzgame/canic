@@ -16,6 +16,10 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.25` restores full workspace clippy compliance after enabling
+  missing-panic documentation, documenting intentional panic contracts and
+  removing avoidable backup preflight panics.
+
 - `0.68.24` hardens the layer-boundary guard for root provisioning drift and
   normalizes ops-layer module hygiene around runtime and storage boundaries.
 

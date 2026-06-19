@@ -1,7 +1,8 @@
 //! Module: replay_policy::pool_admin_manifest
 //!
 //! Responsibility: record replay policy for pool-admin command variants.
-//! Boundary: owns manifest data only; pool workflow dispatch stays elsewhere.
+//! Does not own: pool workflow dispatch, canister management, or replay storage.
+//! Boundary: command manifest rows consumed by replay policy tests and workflows.
 
 use crate::replay_policy::{
     quota::{DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1},

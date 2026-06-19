@@ -1,3 +1,9 @@
+//! Module: ops::auth::canister_sig_key
+//!
+//! Responsibility: parse IC canister-signature public key DER wrappers.
+//! Does not own: proof verification, trust-anchor selection, or endpoint DTOs.
+//! Boundary: private auth helper for extracting canister id and seed bytes.
+
 use crate::cdk::types::Principal;
 
 const CANISTER_SIG_PK_DER_PREFIX_LENGTH: usize = 19;

@@ -28,6 +28,11 @@ fn query_subnet_registry(
 }
 
 /// Assert that the registry contains the expected roles with the expected parents.
+///
+/// # Panics
+///
+/// Panics if the registry query fails, if an expected role is missing, or if a
+/// registry parent does not match the expected parent.
 pub fn assert_registry_parents(
     pic: &Pic,
     root_id: Principal,
@@ -49,6 +54,11 @@ pub fn assert_registry_parents(
 }
 
 /// Assert that a child canister exposes a correct EnvSnapshotResponse.
+///
+/// # Panics
+///
+/// Panics if the env query fails or if the returned environment fields do not
+/// match the expected role, parent, root, prime root, or subnet data.
 pub fn assert_child_env(
     pic: &Pic,
     child_pid: Principal,
@@ -88,6 +98,11 @@ pub fn assert_child_env(
 }
 
 /// Assert that every registered child exposes env fields matching the registry.
+///
+/// # Panics
+///
+/// Panics if the registry query fails, if a registered non-root child has no
+/// parent, or if any child environment does not match the registry.
 pub fn assert_child_envs_match_registry(pic: &Pic, root_id: Principal) {
     let registry = query_subnet_registry(pic, root_id);
 
@@ -108,6 +123,11 @@ pub fn assert_child_envs_match_registry(pic: &Pic, root_id: Principal) {
 }
 
 /// Assert that the CANIC_CANISTER_CHILDREN endpoint matches the registry.
+///
+/// # Panics
+///
+/// Panics if registry or child-list queries fail, if the registry has no root
+/// children, or if the endpoint response differs from the registry projection.
 pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     // 1. Query authoritative registry
     let registry = query_subnet_registry(pic, root_id);
@@ -161,6 +181,11 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
 }
 
 /// Assert that root serves state snapshots and ordinary children do not export them.
+///
+/// # Panics
+///
+/// Panics if root state queries fail, if non-controller root state queries are
+/// accepted, or if ordinary children expose root-only state endpoints.
 pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child_pid: Principal) {
     let app_state: Result<AppStateResponse, canic::Error> =
         pic.query_call_or_panic(root_id, protocol::CANIC_APP_STATE, ());
@@ -201,6 +226,12 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
 }
 
 /// Assert default root diagnostic endpoint exposure and controller gating.
+///
+/// # Panics
+///
+/// Panics if expected root diagnostic queries fail, if non-controller
+/// diagnostic queries are accepted, or if the default memory-ledger endpoint is
+/// present.
 pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principal) {
     let app_registry: Result<AppRegistryResponse, canic::Error> =
         pic.query_call_or_panic(root_id, protocol::CANIC_APP_REGISTRY, ());

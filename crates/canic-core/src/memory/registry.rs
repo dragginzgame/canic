@@ -1,3 +1,9 @@
+//! Module: memory::registry
+//!
+//! Responsibility: define memory registry bootstrap and validation errors.
+//! Does not own: allocation policy, stable schemas, or memory-manager storage.
+//! Boundary: memory bootstrap maps `ic-memory` validation failures into this type.
+
 use thiserror::Error as ThisError;
 
 ///
@@ -5,6 +11,8 @@ use thiserror::Error as ThisError;
 ///
 /// Canic-facing errors returned while bootstrapping or reading the
 /// `ic-memory` allocation ledger.
+/// Owned by memory registry and returned to lifecycle/bootstrap callers.
+///
 
 #[derive(Debug, ThisError)]
 pub enum MemoryRegistryError {

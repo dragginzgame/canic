@@ -1,16 +1,8 @@
-//! Auth access checks.
+//! Module: access::auth
 //!
-//! This bucket includes:
-//! - caller identity checks (controller/whitelist)
-//! - topology checks (parent/child/root/same canister)
-//! - registry-based role checks
-//! - delegated token verification
-//!
-//! Security invariants for delegated tokens:
-//! - Delegated tokens are self-validating and must not require verifier-local proof cache state.
-//! - All temporal validation (iat/exp/now) is enforced before access is granted.
-//! - Endpoint-required scopes are enforced against delegated token claims.
-//! - Token nonces are entropy only; domain replay safety belongs to operation receipts.
+//! Responsibility: resolve endpoint caller identity and enforce auth predicates.
+//! Does not own: endpoint response mapping, operation replay safety, or storage schema.
+//! Boundary: access expressions call auth predicates before endpoint workflow execution.
 
 mod identity;
 mod predicates;
@@ -27,6 +19,9 @@ use std::fmt;
 ///
 /// AuthenticatedIdentitySource
 ///
+/// Source used to resolve the authenticated endpoint subject.
+/// Owned by access auth and stored in access evaluation context.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthenticatedIdentitySource {
@@ -36,6 +31,9 @@ pub enum AuthenticatedIdentitySource {
 
 ///
 /// ResolvedAuthenticatedIdentity
+///
+/// Transport caller plus resolved authenticated subject for access evaluation.
+/// Owned by access auth and returned to endpoint access plumbing.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,6 +45,9 @@ pub struct ResolvedAuthenticatedIdentity {
 
 ///
 /// DelegatedSessionSubjectRejection
+///
+/// Reason a delegated session subject cannot be accepted as a user identity.
+/// Owned by access auth and used to reject infrastructure principals.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -186,6 +187,10 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
          canic_subnet_registry state"
     ))
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

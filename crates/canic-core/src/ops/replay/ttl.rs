@@ -9,6 +9,7 @@
 ///
 /// Validation error emitted by replay TTL checks.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReplayTtlError {
     InvalidTtl { ttl_ns: u64, max_ttl_ns: u64 },

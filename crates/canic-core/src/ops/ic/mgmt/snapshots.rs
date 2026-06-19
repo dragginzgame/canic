@@ -1,3 +1,9 @@
+//! Module: ops::ic::mgmt::snapshots
+//!
+//! Responsibility: expose management-canister snapshot creation and restore calls.
+//! Does not own: backup policy, recovery workflow, or snapshot persistence.
+//! Boundary: `MgmtOps` extension for canister snapshot management calls.
+
 use super::*;
 
 impl MgmtOps {

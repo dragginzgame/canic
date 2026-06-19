@@ -1,8 +1,8 @@
-//! IC-related infra helpers.
+//! Module: infra::ic
 //!
-//! This module groups low-level IC concerns (management canister calls, ICC call
-//! wrappers, HTTP outcalls, timers) under a single namespace to keep `infra/`
-//! navigable.
+//! Responsibility: group raw IC call, ledger, HTTP, NNS, and management adapters.
+//! Does not own: ops conversion, workflow policy, or endpoint DTO shaping.
+//! Boundary: ops calls this namespace for low-level IC platform interactions.
 
 pub mod call;
 pub mod http;
@@ -21,6 +21,9 @@ use thiserror::Error as ThisError;
 
 ///
 /// IcInfraError
+///
+/// IC infra failure wrapper for raw IC transport and protocol adapters.
+/// Owned by `infra::ic` and converted into `InfraError`.
 ///
 
 #[derive(Debug, ThisError)]

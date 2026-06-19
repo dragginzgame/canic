@@ -27,6 +27,7 @@ use crate::{
 ///
 /// Invariant: the children cache is updated only via the topology cascade workflow.
 ///
+
 pub struct CanisterChildrenOps;
 
 impl CanisterChildrenOps {

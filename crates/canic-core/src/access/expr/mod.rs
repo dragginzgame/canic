@@ -1,7 +1,8 @@
-//! Access expression model and evaluator.
+//! Module: access::expr
 //!
-//! This module defines the expression tree and async predicate interface
-//! used to compose access control without changing existing semantics.
+//! Responsibility: define and evaluate composable endpoint access expressions.
+//! Does not own: concrete predicate storage, endpoint response mapping, or workflow policy.
+//! Boundary: endpoint macros build expressions here and receive access-layer denials.
 
 mod evaluators;
 
@@ -17,6 +18,9 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 ///
 /// AccessContext
+///
+/// Runtime context available to access predicates during endpoint evaluation.
+/// Owned by access expression evaluation and supplied by endpoint macros.
 ///
 
 #[derive(Clone, Debug)]
@@ -46,7 +50,9 @@ impl AccessContext {
 /// DefaultAppGuard
 ///
 /// Synchronous app-mode guards used for implicit gating.
+/// Owned by access expressions and evaluated before custom predicate trees.
 ///
+
 pub enum DefaultAppGuard {
     AllowsUpdates,
     IsQueryable,
@@ -54,6 +60,9 @@ pub enum DefaultAppGuard {
 
 ///
 /// AccessExpr
+///
+/// Composable access expression tree for endpoint guards.
+/// Owned by access expressions and evaluated by endpoint access plumbing.
 ///
 
 #[derive(Clone)]
@@ -67,6 +76,9 @@ pub enum AccessExpr {
 ///
 /// AccessPredicate
 ///
+/// Leaf access predicate backed by a builtin guard or custom async predicate.
+/// Owned by access expressions and evaluated by the expression interpreter.
+///
 
 #[derive(Clone)]
 pub enum AccessPredicate {
@@ -76,6 +88,9 @@ pub enum AccessPredicate {
 
 ///
 /// BuiltinPredicate
+///
+/// Builtin predicate selector for app, caller, environment, and auth checks.
+/// Owned by access expressions and mapped to concrete access modules.
 ///
 
 #[derive(Clone, Debug)]
@@ -107,6 +122,9 @@ impl BuiltinPredicate {
 ///
 /// AppPredicate
 ///
+/// Application-mode predicate selector.
+/// Owned by access expressions and evaluated by `access::app`.
+///
 
 #[derive(Clone, Copy, Debug)]
 pub enum AppPredicate {
@@ -116,6 +134,9 @@ pub enum AppPredicate {
 
 ///
 /// CallerPredicate
+///
+/// Caller and topology predicate selector.
+/// Owned by access expressions and evaluated by `access::auth`.
 ///
 
 #[derive(Clone, Debug)]
@@ -131,6 +152,9 @@ pub enum CallerPredicate {
 
 ///
 /// EnvironmentPredicate
+///
+/// Environment and build-network predicate selector.
+/// Owned by access expressions and evaluated by `access::env`.
 ///
 
 #[derive(Clone, Copy, Debug)]
@@ -153,6 +177,9 @@ pub trait AsyncAccessPredicate: Send + Sync {
     fn name(&self) -> &'static str;
 }
 
+/// all
+///
+/// Build an expression that requires all nested predicates to pass.
 pub fn all<I>(exprs: I) -> AccessExpr
 where
     I: IntoIterator<Item = AccessExpr>,
@@ -160,6 +187,9 @@ where
     AccessExpr::All(exprs.into_iter().collect())
 }
 
+/// any
+///
+/// Build an expression that allows any nested predicate to pass.
 pub fn any<I>(exprs: I) -> AccessExpr
 where
     I: IntoIterator<Item = AccessExpr>,
@@ -167,11 +197,17 @@ where
     AccessExpr::Any(exprs.into_iter().collect())
 }
 
+/// not
+///
+/// Build an expression that denies access when the nested predicate passes.
 #[must_use]
 pub fn not(expr: AccessExpr) -> AccessExpr {
     AccessExpr::Not(Box::new(expr))
 }
 
+/// requires
+///
+/// Alias for `all` used by endpoint declarations.
 pub fn requires<I>(exprs: I) -> AccessExpr
 where
     I: IntoIterator<Item = AccessExpr>,
@@ -179,6 +215,9 @@ where
     all(exprs)
 }
 
+/// custom
+///
+/// Wrap a custom async predicate as an access expression leaf.
 pub fn custom<P>(pred: P) -> AccessExpr
 where
     P: AsyncAccessPredicate + 'static,
@@ -287,6 +326,9 @@ pub mod auth {
     }
 }
 
+/// eval_access
+///
+/// Evaluate an access expression and record a normalized denial on failure.
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
     match eval_access_inner(expr, ctx).await {
         Ok(()) => Ok(()),
@@ -296,6 +338,9 @@ pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), A
 
 type AccessEvalFuture<'a> = Pin<Box<dyn Future<Output = Result<(), AccessFailure>> + Send + 'a>>;
 
+/// eval_default_app_guard
+///
+/// Evaluate an implicit app guard and record a normalized denial on failure.
 pub fn eval_default_app_guard(
     guard: DefaultAppGuard,
     ctx: &AccessContext,

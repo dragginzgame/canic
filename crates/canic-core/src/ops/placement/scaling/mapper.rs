@@ -1,3 +1,9 @@
+//! Module: ops::placement::scaling::mapper
+//!
+//! Responsibility: convert scaling worker records and plans into boundary views.
+//! Does not own: scaling policy, worker registry mutation, or endpoint DTO schemas.
+//! Boundary: ops mapper used by scaling workflows and storage facades.
+
 use crate::{
     dto::placement::scaling::WorkerEntry, storage::stable::scaling::WorkerEntryRecord,
     view::placement::scaling::ScalingWorkerPlanEntry,
@@ -5,6 +11,8 @@ use crate::{
 
 ///
 /// WorkerEntryRecordMapper
+///
+/// Operations-layer mapper for scaling worker entries.
 ///
 
 pub struct WorkerEntryRecordMapper;

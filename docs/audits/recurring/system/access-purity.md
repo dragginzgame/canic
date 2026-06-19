@@ -76,7 +76,8 @@ Expected:
 Access must not call workflow or coordinate multi-step workflows.
 
 ```bash
-rg -n 'crate::workflow|workflow::|retry|retries|loop\s*\{|while\s|join_all|spawn\(|sleep|backoff|orchestr|phase|step|transition' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs'
+rg -n 'crate::workflow|workflow::|retry|retries|loop\s*\{|while\s|join_all|spawn\(|sleep|backoff|orchestr|phase|step|transition' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs' \
+  | rg -v ':\s*//'
 ```
 
 Expected:
@@ -123,14 +124,14 @@ Access may call narrow auth/session/replay ops and emit normalized access
 metrics through the access metrics facade.
 
 ```bash
-rg -n 'AuthStateOps|clear_delegated_session|Metrics::|metrics::|ops::runtime::metrics' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs'
+rg -n 'AuthStateOps|delegated_session|upsert_delegated_session|clear_delegated_session|consume_delegated|consume_update|_token_use|_token_once|Metrics::|metrics::|ops::runtime::metrics' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
 - direct runtime metric backend calls should stay isolated in
   `access/metrics.rs`;
-- auth state changes should stay narrow and endpoint-boundary related.
+- auth state reads/writes should stay narrow and endpoint-boundary related;
 - delegated-token authentication must not write verifier-local token-use state.
 
 ### 6. Endpoint Macro Lowering

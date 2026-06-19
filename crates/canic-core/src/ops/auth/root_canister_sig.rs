@@ -1,3 +1,9 @@
+//! Module: ops::auth::root_canister_sig
+//!
+//! Responsibility: prepare, retrieve, and verify root canister-signature proofs.
+//! Does not own: root delegation certificate construction or endpoint DTOs.
+//! Boundary: auth ops helper for root canister-signature proof material.
+
 use super::AuthOps;
 #[cfg(feature = "auth-root-canister-sig-verify")]
 use super::canister_sig_key::parse_canister_sig_public_key_der;
@@ -20,11 +26,23 @@ pub const ROOT_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
 const DATA_CERTIFICATE_UNAVAILABLE_FRAGMENT: &str =
     "Data certificates (which are required to create canister signatures)";
 
+///
+/// RootPayloadKind
+///
+/// Root canister-signature payload family used for domain-separated proofs.
+///
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootPayloadKind {
     DelegationCert,
     RoleAttestation,
 }
+
+///
+/// PreparedRootCanisterSignature
+///
+/// Prepared root canister-signature metadata returned after leaf creation.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedRootCanisterSignature {

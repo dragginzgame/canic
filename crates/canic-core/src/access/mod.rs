@@ -1,13 +1,9 @@
-//! Access predicate composition and evaluation.
+//! Module: access
 //!
-//! External semantics:
-//! - Access failures are mapped to `ErrorCode::Unauthorized` at the API boundary.
-//! - Access denial metrics are emitted by the endpoint macro, not by predicate helpers.
+//! Responsibility: compose endpoint access predicates and normalize access denial errors.
+//! Does not own: endpoint response mapping, workflow authorization, or runtime metrics storage.
+//! Boundary: endpoint macros call access predicates before delegating to workflow.
 
-/// Access-layer errors returned by user-defined access predicates.
-///
-/// These errors are framework-agnostic and are converted into InternalError
-/// immediately at the framework boundary.
 pub mod app;
 pub mod auth;
 pub mod env;
@@ -19,6 +15,9 @@ use thiserror::Error as ThisError;
 
 ///
 /// AccessError
+///
+/// Framework-agnostic access-layer error returned by endpoint access predicates.
+/// Endpoint boundaries convert this into the public unauthorized error shape.
 ///
 
 #[derive(Debug, ThisError)]

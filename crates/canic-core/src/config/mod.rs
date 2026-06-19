@@ -1,3 +1,9 @@
+//! Module: config
+//!
+//! Responsibility: own runtime installation and host parsing of Canic configuration.
+//! Does not own: schema field definitions, validation rules, or endpoint DTOs.
+//! Boundary: bootstrap installs validated config here before ops/workflow reads it.
+
 pub mod schema;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod validation;
@@ -11,18 +17,6 @@ pub use schema::ConfigModel;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 use schema::Validate;
 
-//
-// CONFIG
-//
-// Even though a canister executes single-threaded, there are a few practical reasons to favor Arc:
-// APIs & trait bounds: Lots of ecosystem code (caches, services, executors, middleware) takes
-// Arc<T> or requires Send + Sync. Rc<T> is neither Send nor Sync, so it won’t fit.
-//
-// Host-side tests & tools: The crate also builds for host targets (integration tests, benches,
-// build scripts). Arc works across targets without cfg gymnastics.
-//
-// Globals need Sync: If config storage ever moves away from thread_local!, Arc<T> can participate.
-
 struct InstalledConfig {
     model: Arc<ConfigModel>,
     source_toml: Arc<str>,
@@ -32,7 +26,13 @@ thread_local! {
     static CONFIG: RefCell<Option<InstalledConfig>> = const { RefCell::new(None) };
 }
 
-/// Errors related to configuration lifecycle and parsing.
+///
+/// ConfigError
+///
+/// Configuration lifecycle, parsing, validation, and runtime injection error.
+/// Owned by config and converted into `InternalError` at config boundaries.
+///
+
 #[derive(Debug, ThisError)]
 pub enum ConfigError {
     #[error("config has already been initialized")]
@@ -63,11 +63,14 @@ impl From<ConfigError> for InternalError {
 ///
 /// Config
 ///
+/// Runtime config installation and lookup facade.
+/// Owned by config and used by bootstrap, ops, and tests.
+///
 
 pub struct Config {}
 
 impl Config {
-    // Return the installed configuration model or initialize a test default when allowed.
+    /// Return the installed configuration model or initialize a test default when allowed.
     pub(crate) fn get() -> Result<Arc<ConfigModel>, InternalError> {
         CONFIG.with(|cfg| {
             if let Some(config) = cfg.borrow().as_ref() {
@@ -86,7 +89,7 @@ impl Config {
         })
     }
 
-    // Return the installed configuration model when available.
+    /// Return the installed configuration model when available.
     #[must_use]
     pub(crate) fn try_get() -> Option<Arc<ConfigModel>> {
         CONFIG.with(|cfg| {
@@ -106,7 +109,7 @@ impl Config {
         })
     }
 
-    // Parse and validate a TOML configuration document on host targets.
+    /// Parse and validate a TOML configuration document on host targets.
     #[cfg(any(not(target_arch = "wasm32"), test))]
     pub fn parse_toml(config_str: &str) -> Result<ConfigModel, ConfigError> {
         let config: ConfigModel =
@@ -116,7 +119,7 @@ impl Config {
         Ok(config)
     }
 
-    // Install a trusted configuration model plus its canonical TOML source.
+    /// Install a trusted configuration model plus its canonical TOML source.
     pub(crate) fn init_from_model(
         config: ConfigModel,
         source_toml: &str,
@@ -137,7 +140,7 @@ impl Config {
         })
     }
 
-    // Test-only: initialize the global configuration from an in-memory model.
+    /// Initialize the global configuration from an in-memory model for tests.
     #[cfg(test)]
     pub fn init_from_model_for_tests(config: ConfigModel) -> Result<Arc<ConfigModel>, ConfigError> {
         config.validate().map_err(ConfigError::from)?;
@@ -148,7 +151,7 @@ impl Config {
         Self::init_from_model(config, &source_toml)
     }
 
-    // Return the canonical TOML source embedded for the current configuration.
+    /// Return the canonical TOML source embedded for the current configuration.
     pub(crate) fn to_toml() -> Result<String, InternalError> {
         CONFIG.with(|cfg| {
             cfg.borrow()
@@ -158,7 +161,7 @@ impl Config {
         })
     }
 
-    // Test-only: reset the global config so tests can reinitialize with a fresh model.
+    /// Reset the global config so tests can reinitialize with a fresh model.
     #[cfg(test)]
     pub fn reset_for_tests() {
         CONFIG.with(|cfg| {
@@ -166,7 +169,7 @@ impl Config {
         });
     }
 
-    // Test-only: ensure a minimal validated config is available.
+    /// Ensure a minimal validated config is available for tests.
     #[cfg(test)]
     #[must_use]
     pub fn init_for_tests() -> Arc<ConfigModel> {

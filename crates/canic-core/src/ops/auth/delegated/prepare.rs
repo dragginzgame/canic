@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::prepare
+//!
+//! Responsibility: prepare delegated-token claims before issuer proof creation.
+//! Does not own: issuer proof retrieval, endpoint authorization, or active proof storage.
+//! Boundary: pure token construction helper used by issuer-local auth ops.
+
 use super::{
     audience::{
         AudienceError, audience_subset, role_grants_subset, validate_audience_shape,
@@ -17,6 +23,12 @@ use thiserror::Error;
 
 const TOKEN_NONCE_DOMAIN: &[u8] = b"canic-token-nonce-v1";
 
+///
+/// PrepareDelegatedTokenInput
+///
+/// Input for preparing delegated-token claims from an active delegation proof.
+///
+
 pub struct PrepareDelegatedTokenInput<'a> {
     pub proof: &'a DelegationProof,
     pub operation_id: [u8; 32],
@@ -29,12 +41,24 @@ pub struct PrepareDelegatedTokenInput<'a> {
     pub now_ns: u64,
 }
 
+///
+/// PreparedDelegatedToken
+///
+/// Prepared delegated-token claims paired with their canonical hash and proof.
+///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedDelegatedToken {
     pub claims: DelegatedTokenClaims,
     pub claims_hash: [u8; 32],
     pub proof: DelegationProof,
 }
+
+///
+/// PrepareDelegatedTokenError
+///
+/// Typed failure surface for delegated-token preparation.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum PrepareDelegatedTokenError {
@@ -176,6 +200,10 @@ pub fn finish_delegated_token(
         issuer_proof,
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

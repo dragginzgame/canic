@@ -1,3 +1,9 @@
+//! Module: replay_policy::tests::cost
+//!
+//! Responsibility: verify costed replay-policy entries declare guard labels.
+//! Does not own: cost policy enforcement or manifest construction.
+//! Boundary: test-only checks over manifest rows.
+
 use super::*;
 use std::collections::BTreeSet;
 

@@ -1,3 +1,9 @@
+//! Module: config::schema::subnet::tests
+//!
+//! Responsibility: verify subnet schema defaults, parsing, and validation behavior.
+//! Does not own: production subnet schemas or placement workflows.
+//! Boundary: test-only checks over subnet config data shapes.
+
 use super::*;
 use crate::cdk::types::TC;
 use crate::config::schema::{NAME_MAX_BYTES, Validate};

@@ -468,7 +468,7 @@ pub(super) fn resolve_deployment(
         },
         root,
     )
-    .map_err(super::cycles_installed_deployment_error)
+    .map_err(crate::cycles::cycles_installed_deployment_error)
 }
 
 fn resolve_role_principal(
@@ -476,12 +476,20 @@ fn resolve_role_principal(
     role: &str,
     registry: &[RegistryEntry],
 ) -> Result<String, CyclesCommandError> {
+    resolve_role_entry(deployment, role, registry).map(|entry| entry.pid.clone())
+}
+
+fn resolve_role_entry<'a>(
+    deployment: &str,
+    role: &str,
+    registry: &'a [RegistryEntry],
+) -> Result<&'a RegistryEntry, CyclesCommandError> {
     let matches = registry
         .iter()
         .filter(|entry| entry.role.as_deref() == Some(role))
         .collect::<Vec<_>>();
     match matches.as_slice() {
-        [entry] => Ok(entry.pid.clone()),
+        [entry] => Ok(entry),
         [] => Err(CyclesCommandError::UnknownTarget {
             deployment: deployment.to_string(),
             target: role.to_string(),
@@ -508,11 +516,7 @@ pub(super) fn resolve_canister_target(
     if let Some(entry) = registry.iter().find(|entry| entry.pid == target) {
         return Ok(resolved_target_from_entry(entry));
     }
-    let pid = resolve_role_principal(deployment, target, registry)?;
-    let entry = registry
-        .iter()
-        .find(|entry| entry.pid == pid)
-        .expect("role principal came from registry");
+    let entry = resolve_role_entry(deployment, target, registry)?;
     Ok(resolved_target_from_entry(entry))
 }
 

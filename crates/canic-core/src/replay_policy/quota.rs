@@ -1,7 +1,8 @@
 //! Module: replay_policy::quota
 //!
 //! Responsibility: name quota and cycle-reserve policy labels used by manifests.
-//! Boundary: owns labels only; enforcement remains in cost/replay guard ops.
+//! Does not own: cost guard enforcement, replay guard execution, or storage.
+//! Boundary: label constants referenced by replay-policy manifest rows.
 
 pub(super) const ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: &str =
     "root_canister_signature_prepare.quota.v1";

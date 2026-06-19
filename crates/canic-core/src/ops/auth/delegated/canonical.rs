@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::canonical
+//!
+//! Responsibility: encode delegated auth material into canonical hash inputs.
+//! Does not own: proof verification, storage, or endpoint authorization.
+//! Boundary: pure canonicalization helper for delegated certs, tokens, and proofs.
+
 use crate::{
     cdk::types::Principal,
     dto::auth::{
@@ -13,6 +19,12 @@ const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
 const ISSUER_PROOF_BINDING_HASH_DOMAIN: &[u8] = b"canic-issuer-proof-binding-v1";
 pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
 
+///
+/// CanonicalDomain
+///
+/// Domain byte assigned to one delegated auth canonical payload family.
+///
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CanonicalDomain {
@@ -22,6 +34,12 @@ pub enum CanonicalDomain {
     RoleHash = 4,
     IssuerProof = 6,
 }
+
+///
+/// CanonicalAuthError
+///
+/// Typed failure surface for delegated auth canonicalization.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum CanonicalAuthError {

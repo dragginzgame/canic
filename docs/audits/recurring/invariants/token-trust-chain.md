@@ -2,38 +2,42 @@
 
 ## Purpose
 
-Ensure token acceptance requires a valid issuer trust chain from root authority
-to shard authority to the delegated-token claims.
+Ensure delegated-token acceptance requires a complete verified chain from the
+configured root authority to an issuer canister to the delegated-token claims.
 
 ## Risk Model / Invariant
 
-A token must be rejected unless the complete issuer trust chain validates from
-root authority to shard authority to token claims.
+A delegated token must be rejected unless the complete chain validates:
 
-Chain validation must verify:
+```text
+configured IC root key + configured root canister id
+  -> root canister signature over canonical delegation cert hash
+  -> cert issuer and issuer-proof binding
+  -> issuer canister signature over canonical claims hash
+  -> claims bound to the certified delegation cert
+```
 
-- root authority identity
-- root public key trust anchor sourced from verifier-local state
-- shard authority certification by root signature over canonical cert hash
-- delegated-token claims bound to the signed cert
-- token claims signature under the certified shard key
-- shard key binding to Canic's configured signing key and derivation path
-
-Freshness checks are verified by the Expiry / Replay / Single-Use Invariant.
-This audit may cite freshness/replay checks as evidence only where they are
-part of the delegated-token acceptance path; do not score a freshness-only
-finding here unless it also lets an invalid trust chain pass.
+Freshness, replay, subject binding, and audience binding have dedicated
+invariant audits. This audit may cite those checks where they are part of token
+acceptance, but a finding is scored here only when an invalid trust chain can
+pass or when trust-chain evidence is ambiguous.
 
 ## Why This Matters
 
-Subject binding alone is insufficient if untrusted issuers can mint tokens that pass verification.
+Subject binding and freshness are insufficient if an untrusted issuer, wrong
+root canister, wrong IC root key, noncanonical certificate, or forged issuer
+proof can produce an accepted delegated token.
 
 ## Run This Audit After
 
-- root/shard trust model changes
-- issuer/certificate format changes
-- token verification pipeline updates
-- trust cache or key refresh changes
+- root or issuer proof format changes
+- canister-signature verification changes
+- canonical cert/claims encoding changes
+- active root delegation proof install/status changes
+- delegated-token verifier or positive-cache changes
+- delegated-token config or root-key handling changes
+- endpoint macro or access guard ordering changes
+- role-attestation proof verification changes
 
 ## Report Preamble (Required)
 
@@ -49,94 +53,167 @@ Every report generated from this audit must include:
 
 ### 1. Identify Trust Anchors
 
-Locate root and shard verification code and confirm trust anchors are explicitly defined and not derived from untrusted input or dynamic request context.
-
-Current expected hotspots:
-
-- `crates/canic-core/src/ops/auth/token.rs`
-- `crates/canic-core/src/ops/auth/delegated/verify.rs`
-- `crates/canic-core/src/ops/auth/delegated/root_key.rs`
-- `crates/canic-core/src/access/auth/token.rs`
-- `crates/canic-core/src/ops/auth/attestation.rs`
-
-### 2. Verify Chain Validation
-
 Search terms:
 
 ```text
-verify_root
-verify_shard
-issuer
-signature
-certificate
-cert_hash
-root_sig
-shard_sig
-RootTrustAnchor
-verify_delegated_token
-verify_token
+AuthProofVerifierConfig
+auth_proof_verifier_config
+root_canister_id
+ic_root_public_key_raw
+DelegatedAuthNetwork
+MAINNET_IC_ROOT_PUBLIC_KEY_RAW
+validate_network_root_key_pair
 ```
 
 Confirm:
 
-- each trust layer is verified before token acceptance
-- verifier-local trust objects retain cryptographic integrity and do not bypass required verification steps
-- issuer identity is bound to expected authority
-- root key identity checks cover root pid, key id, key hash, algorithm, and time window
-- claims bind issuer shard pid and cert hash back to the signed cert
-- shard key binding matches configured key name and shard derivation path
-- endpoint guard code verifies the token before subject binding, required-scope
-  checks, and update-call replay consumption
-- role-attestation verification uses cached trusted keys and only refreshes on
-  unknown key id
+- the verifier uses explicit configured root canister id and raw IC root public
+  key material
+- mainnet requires the known mainnet IC root public key
+- local, PocketIC, and testnet require explicit non-mainnet root keys
+- no protected verification path implicitly falls back to `cdk::api::root_key()`
+- runtime root-key injection remains a bootstrap/config step, not a verifier
+  shortcut
 
-Record the chain evidence as an ordered stage table. At minimum it must show:
+### 2. Verify Root Proof Chain
 
-1. runtime config gate
-2. shard key binding
-3. verifier-local root trust anchor
-4. root key identity/window resolution
-5. canonical certificate hash
-6. root signature
-7. claims-to-cert binding
-8. canonical claims hash
-9. shard signature
-10. endpoint subject/scope/replay boundary
+Search terms:
 
-### 3. Verify Negative Cases
+```text
+RootProof::IcCanisterSignatureV1
+verify_root_canister_signature_proof
+root_canister_sig_seed
+root_canister_sig_domain
+root_canister_sig_verification_message
+RootPayloadKind::DelegationCert
+RootPayloadKind::RoleAttestation
+cert_hash
+```
+
+Confirm:
+
+- delegation cert hash is canonical and recomputed by the verifier
+- `cert.root_pid` matches the configured root canister id before proof acceptance
+- root canister-signature public key DER names the expected root canister id
+- root proof seed/domain match the payload kind
+- root proof verification uses the configured raw IC root public key
+- role attestation uses a distinct root payload seed/domain
+
+### 3. Verify Issuer Proof Chain
+
+Search terms:
+
+```text
+IssuerProof::IcCanisterSignatureV1
+verify_issuer_canister_signature_proof
+issuer_canister_sig_seed
+issuer_canister_sig_seed_hash
+issuer_canister_sig_domain
+IssuerPayloadKind::DelegatedTokenClaims
+issuer_proof_binding_hash
+claims_hash
+IssuerPidMismatch
+```
+
+Confirm:
+
+- certificate issuer proof binding hash is recomputed and checked
+- claims issuer matches the certified issuer
+- claims cert hash matches the canonical certificate hash
+- issuer canister-signature public key DER names the expected issuer canister id
+- issuer proof seed/domain match delegated-token claims
+- issuer proof verifies over the canonical claims hash with the configured raw
+  IC root public key
+
+### 4. Verify Token Acceptance Ordering
+
+Search terms:
+
+```text
+AuthOps::verify_token
+verify_delegated_token
+verify_delegated_token_cached_proof_identity
+positive_cache_get
+delegated_token_verified
+enforce_subject_binding
+enforce_required_scope
+```
+
+Confirm:
+
+- delegated-token verifier config and verifier-canister gate run before proof
+  acceptance
+- positive cache keys bind proof hash, claims hash, issuer proof hash, and caller
+- positive cache hits still rerun canonical token checks, local audience/grant
+  checks, and required-scope checks
+- endpoint access guard verifies token material before subject binding and scope
+  authorization
+
+### 5. Verify Active Proof Install Chain
+
+Search terms:
+
+```text
+install_active_delegation_proof
+ActiveDelegationProof
+InstallActiveDelegationProofInput
+InvalidRootAuthority
+IssuerMismatch
+```
+
+Confirm:
+
+- signer/issuer active proof install verifies the root proof before storing
+  active proof state
+- installed delegation certificate names the local issuer canister
+- installed proof cert hash is canonical and stored with active proof state
+- wrong-root and wrong-issuer proofs fail closed
+
+### 6. Verify Negative Cases
 
 Confirm rejection for:
 
-- invalid root
-- invalid shard
-- invalid token signature
-- unexpected issuer relationship
-- expired or revoked issuer certificate
+- invalid root proof
+- invalid issuer proof
+- root canister id mismatch
+- missing or wrong root key for the configured network
 - cert hash drift
-- noncanonical certificate or claims data
-- missing root or shard signature
+- issuer pid mismatch
+- issuer proof binding hash drift
+- noncanonical cert or claims data
+- missing proof bytes outside explicit positive-cache identity checks
+- role-attestation subject, audience, epoch, expiry, and proof failures
 
-### 4. Test Expectations
+### 7. Test Expectations
 
-- self-contained delegated token with valid root and shard signatures => acceptance
-- invalid root signature => rejection
-- invalid shard signature => rejection
+Focused evidence should include:
+
+- self-contained delegated token with valid root and issuer proof => acceptance
+- invalid root proof => rejection
+- invalid issuer proof => rejection
 - cert hash drift => rejection
-- noncanonical cert or claims vectors => rejection
-- root pid mismatch => rejection
-- runtime root-key propagation path => acceptance
-- role-attestation subject/audience/epoch/expiry/signature rejection paths => rejection
-- stale proof-store/current-proof trace helpers are absent unless the verifier
-  model has deliberately changed again
+- noncanonical cert/claims vectors => rejection
+- configured root-key/network validation
+- root and issuer canister-signature seed/domain/payload message checks
+- active proof install rejects wrong issuer/root proof failure
+- endpoint guard ordering check
+- local root batch provisioning installs active proof and verifies signer-local
+  delegated token
+- role-attestation proof and claim rejection paths
 
 Current suggested commands:
 
 ```bash
-cargo test -p canic-core --lib verify_delegated_token -- --nocapture
-cargo test -p canic-core --lib resolve_root_key -- --nocapture
-cargo test -p canic-tests --test root_suite delegated_token_verification_uses_cascaded_subnet_state_root_key -- --nocapture
-cargo test -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
-rg "trace_token_trust_chain|token_chain|proof_state|verify_delegation_signature|verify_token_sig|authenticated_guard_checks_current_proof" crates -n
+cargo test --locked -p canic-core --lib verify_delegated_token -- --nocapture
+cargo test --locked -p canic-core --lib auth_proof_verifier_config -- --nocapture
+cargo test --locked -p canic-core --lib root_canister_sig -- --nocapture
+cargo test --locked -p canic-core --lib issuer_canister_sig -- --nocapture
+cargo test --locked -p canic-core --lib cert_rules -- --nocapture
+cargo test --locked -p canic-core --lib install_active_delegation_proof -- --nocapture
+cargo test --locked -p canic-core --lib delegated_auth_guard_preserves_verify_bind_scope_order -- --nocapture
+cargo test --locked -p canic-tests --test root_suite root_batch_provisioning_installs_active_proof_on_user_shard -- --nocapture
+cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+rg -n 'trace_token_trust_chain|token_chain|proof_state|current_proof|verify_delegation_signature|verify_token_sig|authenticated_guard_checks_current_proof|root_sig|shard_sig|shard_key|resolve_root_key' crates canisters fleets -g '*.rs'
 ```
 
 ## Structural Hotspots
@@ -146,25 +223,31 @@ List concrete files/modules/structs that carry trust-chain validation risk.
 Detection commands (run and record output references):
 
 ```bash
-rg '^use ' crates/ -g '*.rs'
-rg 'crate::workflow|crate::ops|crate::api|crate::policy' crates/ -g '*.rs'
-rg 'pub struct|impl ' crates/ -g '*.rs'
-git log --name-only -n 20 -- crates/
+rg -n 'AuthProofVerifierConfig|auth_proof_verifier_config|validate_network_root_key_pair|ic_root_public_key_raw|root_canister_id' crates/canic-core/src -g '*.rs'
+rg -n 'verify_root_canister_signature_proof|root_canister_sig_seed|root_canister_sig_domain|RootPayloadKind|RootProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
+rg -n 'verify_issuer_canister_signature_proof|issuer_canister_sig_seed|issuer_canister_sig_seed_hash|IssuerPayloadKind|IssuerProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
+rg -n 'cert_hash|claims_hash|issuer_proof_binding_hash|VerifyDelegatedTokenError|IssuerPidMismatch|CertHashMismatch' crates/canic-core/src/ops/auth -g '*.rs'
+git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/src/api/auth crates/canic-core/src/config/validation/auth.rs crates/canic-core/src/domain/auth.rs crates/canic-tests/tests/root_cases crates/canic-tests/tests/pic_role_attestation_cases
 ```
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `ops/auth/token.rs` | `verify_token`, `root_trust_anchor`, `verify_shard_key_binding` | runtime trust-chain orchestration entrypoint | High |
-| `ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_claims` | pure root/shard/token verification order | High |
-| `ops/auth/delegated/root_key.rs` | `resolve_root_key` | root trust-anchor identity and validity checks | High |
-| `access/auth/token.rs` | `delegated_token_verified`, `enforce_subject_binding` | endpoint guard integration | Medium |
-| `ops/auth/attestation.rs` | `verify_role_attestation_cached` | role-attestation key and signature verification | Medium |
+| `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token`, `auth_proof_verifier_config_from`, `verify_with_embedded_proofs` | runtime config, root key, root proof, and issuer proof orchestration | High |
+| `crates/canic-core/src/ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_claims` | pure cert/claims/root/issuer verification ordering | High |
+| `crates/canic-core/src/ops/auth/root_canister_sig.rs` | `verify_root_canister_signature_proof` | root proof canister id, seed/domain, message, and IC root-key verification | High |
+| `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` | `verify_issuer_canister_signature_proof` | issuer proof canister id, seed/domain, message, and IC root-key verification | High |
+| `crates/canic-core/src/ops/auth/delegated/cert_rules.rs` | `validate_cert_issuance_rules` | root pid, TTL, audience/grant shape, and issuer binding hash checks | High |
+| `crates/canic-core/src/ops/auth/delegated/canonical.rs` | `cert_hash`, `claims_hash`, `issuer_proof_binding_hash` | canonical hash material for root and issuer signatures | High |
+| `crates/canic-core/src/ops/auth/delegated/active_proof.rs` | `install_active_delegation_proof` | issuer-local active proof validation before storage | Medium |
+| `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint guard integration after trust-chain verification | Medium |
+| `crates/canic-core/src/ops/auth/attestation.rs` | `verify_role_attestation_cached` | role-attestation root proof verification uses the same trust-anchor config | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
 ## Hub Module Pressure
 
-Detect modules trending toward gravity-well behavior from import fan-in, cross-layer coupling, and edit frequency.
+Detect modules trending toward gravity-well behavior from import fan-in,
+cross-layer coupling, and edit frequency.
 
 Treat DTO fan-in differently from verifier fan-in:
 
@@ -187,14 +270,17 @@ Pressure score guidance:
 
 ## Red Flags
 
-- trust chain step skipped on an internal path
-- token signature accepted without issuer-root linkage
-- verifier-local trust anchor bypassed by token-provided key material
-- shard key accepted without checking configured key name and derivation path
-- claims accepted without matching issuer shard pid and cert hash
-- trust anchor loaded from runtime configuration without validation
-- passive DTOs gaining behavior or validation methods
-- role-attestation refresh paths retrying on errors other than unknown key id
+- root proof skipped or accepted after token acceptance
+- issuer proof skipped or accepted after token acceptance
+- token-provided root key material replaces configured verifier trust anchors
+- protected verification path calls `cdk::api::root_key()` directly
+- canister-signature public key DER is not checked for expected canister id
+- root or issuer seed/domain mismatch is ignored
+- claims accepted without matching issuer pid and cert hash
+- issuer proof binding hash drift is accepted
+- canonical cert/claims encoding accepts unsorted or malformed data
+- positive cache bypasses local canonical, audience, grant, or scope checks
+- passive DTOs gain behavior or validation methods
 
 ## Severity
 
@@ -202,15 +288,17 @@ Critical: untrusted issuers may mint accepted identities.
 
 ## Early Warning Signals
 
-Detect predictive architecture-decay patterns before they appear as friction or failures.
+Detect predictive architecture-decay patterns before they appear as friction or
+failures.
 
 Detection scans (run and record output references):
 
 ```bash
-rg 'enum ' crates/ -g '*.rs'
-rg 'pub struct|pub fn' crates/ -g '*.rs'
-rg '^use ' crates/ -g '*.rs'
-git log --name-only -n 20 -- crates/
+rg -l 'AuthProofVerifierConfig|auth_proof_verifier_config|ic_root_public_key_raw|validate_network_root_key_pair' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'verify_root_canister_signature_proof|RootPayloadKind|RootProof::IcCanisterSignatureV1|root_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'verify_issuer_canister_signature_proof|IssuerPayloadKind|IssuerProof::IcCanisterSignatureV1|issuer_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'cert_hash|claims_hash|issuer_proof_binding_hash|DelegationCert|DelegatedTokenClaims' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'DelegatedToken|DelegationProof|RootProof|IssuerProof|ActiveDelegationProof|SignedRoleAttestation' crates canisters fleets -g '*.rs' | wc -l
 ```
 
 | Signal | Location | Evidence | Risk |
@@ -258,14 +346,15 @@ If no predictive signals are detected, state: No predictive architectural signal
 
 ## Dependency Fan-In Pressure
 
-Detect modules and structs becoming architectural gravity wells before friction increases.
+Detect modules and structs becoming architectural gravity wells before friction
+increases.
 
 Detection scans (run and record output references):
 
 ```bash
 rg "use crate::" crates/ -g "*.rs"
 rg "pub struct" crates/ -g "*.rs"
-# then: rg "<StructName>" crates/ -g "*.rs"
+rg "<StructName>" crates/ -g "*.rs"
 ```
 
 ### Module Fan-In
@@ -316,7 +405,7 @@ evidence. Separate the security verdict from structural watchpoints: a PASS can
 still have structural pressure, but passive DTO fan-in alone must not dominate
 the score.
 
-Derivation guidance (deterministic):
+Derivation guidance:
 
 - start at `0`
 - add `+4` for any confirmed trust-chain validation break
@@ -324,8 +413,8 @@ Derivation guidance (deterministic):
   acceptance or endpoint execution
 - add `+2` if verifier-local trust-anchor evidence is missing or ambiguous
 - add `+2` if required unit verifier/root-key tests are not run or are blocked
-- add `+2` if the runtime root-key cascade or role-attestation PocketIC path is
-  not run or is blocked
+- add `+2` if the local root batch provisioning or role-attestation PocketIC
+  path is not run or is blocked
 - add `+1` per medium/high verifier or endpoint-guard hotspot contribution
   (max `+2`)
 - add `+1` if any verifier/guard hub module pressure score is `>= 7`
@@ -351,7 +440,8 @@ Use command outcomes with normalized statuses:
 
 ## Follow-up Actions
 
-If result is `FAIL`/`PARTIAL` or risk score is `>= 5`, include owner, action, and target report run.
+If result is `FAIL`/`PARTIAL` or risk score is `>= 5`, include owner, action,
+and target report run.
 
 If no action is needed, state: `No follow-up actions required.`
 

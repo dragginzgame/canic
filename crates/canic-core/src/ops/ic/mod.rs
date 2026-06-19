@@ -1,30 +1,8 @@
-//! Ops layer: approved execution surface and coordination boundary.
+//! Module: ops::ic
 //!
-//! The `ops` layer defines the **sanctioned capabilities** that higher layers
-//! (workflow, API, macros) are allowed to use. It sits between application logic
-//! and low-level infrastructure, providing a stable execution façade.
-//!
-//! Responsibilities:
-//! - Expose approved primitives and subsystems (IC access, runtime context,
-//!   metrics, logging, registries).
-//! - Add cross-cutting concerns such as metrics, logging, and normalization.
-//! - Aggregate infra errors into ops-scoped error types.
-//!
-//! Non-responsibilities:
-//! - No business policy or workflow orchestration.
-//! - No domain decisions or lifecycle management.
-//!
-//! Infra interaction:
-//! - `infra` owns **raw mechanical implementations** (IC calls, encoding,
-//!   decoding, management canister interactions).
-//! - `ops` may either wrap infra or call the CDK directly when the CDK API
-//!   already represents the desired primitive (e.g. ambient runtime context).
-//!
-//! Naming conventions:
-//! - Plain nouns (e.g. `Call`, `Runtime`, `Env`) represent approved execution
-//!   primitives.
-//! - `*Ops` types represent orchestration or aggregation roles (typically error
-//!   or coordination objects), not primitives themselves.
+//! Responsibility: expose approved IC runtime and platform-call operations.
+//! Does not own: business policy, workflow orchestration, or lifecycle decisions.
+//! Boundary: ops layer between workflows and raw infra/CDK IC primitives.
 
 pub mod call;
 pub mod http;
@@ -44,6 +22,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// IcOpsError
+///
+/// Typed failure surface for IC operation facades.
 ///
 
 #[derive(Debug, ThisError)]
@@ -72,7 +52,8 @@ impl From<IcOpsError> for InternalError {
 
 ///
 /// IcOps
-/// Ambient IC execution primitives
+///
+/// Operations-layer facade for ambient IC execution primitives.
 ///
 
 pub struct IcOps;

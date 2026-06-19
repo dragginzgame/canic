@@ -1,3 +1,9 @@
+//! Module: ops::auth::verify::attestation
+//!
+//! Responsibility: verify role-attestation claims after proof verification succeeds.
+//! Does not own: root proof verification, attestation preparation, or endpoint DTOs.
+//! Boundary: private auth-ops semantic verifier for signed role attestations.
+
 use crate::{
     cdk::types::Principal,
     dto::auth::RoleAttestation,
@@ -88,6 +94,10 @@ fn verify_attestation_time_window(
 
     Ok(())
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

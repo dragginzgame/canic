@@ -1,3 +1,9 @@
+//! Module: ops::ic::mgmt::lifecycle
+//!
+//! Responsibility: expose management-canister lifecycle and code-install calls.
+//! Does not own: placement policy, upgrade planning, or lifecycle orchestration.
+//! Boundary: `MgmtOps` extension for canister lifecycle management calls.
+
 use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
 use candid::utils::ArgumentEncoder;

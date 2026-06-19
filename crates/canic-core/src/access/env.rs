@@ -1,7 +1,8 @@
-//! Environment (self) access checks.
+//! Module: access::env
 //!
-//! This bucket is strictly about the canister's own environment state
-//! (prime subnet/root status) and build-time structural rules.
+//! Responsibility: gate endpoint access by canister environment and build network.
+//! Does not own: caller identity, app mode, or endpoint response mapping.
+//! Boundary: access expressions call this for self/environment predicates.
 
 use crate::{
     access::AccessError,
@@ -13,6 +14,9 @@ use crate::{
 // Env Checks
 // -----------------------------------------------------------------------------
 
+/// is_prime_root
+///
+/// Permit access only from the configured prime root canister.
 pub fn is_prime_root() -> Result<(), AccessError> {
     if EnvOps::is_prime_root() {
         Ok(())
@@ -23,6 +27,9 @@ pub fn is_prime_root() -> Result<(), AccessError> {
     }
 }
 
+/// is_prime_subnet
+///
+/// Permit access only from a canister on the configured prime subnet.
 pub fn is_prime_subnet() -> Result<(), AccessError> {
     if EnvOps::is_prime_subnet() {
         Ok(())
@@ -34,12 +41,14 @@ pub fn is_prime_subnet() -> Result<(), AccessError> {
 }
 
 /// build_network_ic
+///
 /// Permits access only when `ICP_ENVIRONMENT=ic` was set at build time.
 pub fn build_network_ic() -> Result<(), AccessError> {
     check_build_network(BuildNetwork::Ic)
 }
 
 /// build_network_local
+///
 /// Permits access only when `ICP_ENVIRONMENT=local` was set at build time.
 pub fn build_network_local() -> Result<(), AccessError> {
     check_build_network(BuildNetwork::Local)
@@ -49,6 +58,9 @@ pub fn build_network_local() -> Result<(), AccessError> {
 // Helpers
 // -----------------------------------------------------------------------------
 
+/// check_build_network
+///
+/// Permit access only when the build-time network matches the expected network.
 pub fn check_build_network(expected: BuildNetwork) -> Result<(), AccessError> {
     let actual = NetworkOps::build_network();
 

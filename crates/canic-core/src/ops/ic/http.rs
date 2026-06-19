@@ -1,3 +1,9 @@
+//! Module: ops::ic::http
+//!
+//! Responsibility: perform observable IC HTTP outcalls through approved ops APIs.
+//! Does not own: request policy, retry workflow, or public endpoint DTOs.
+//! Boundary: converts DTO shapes, records metrics, and delegates mechanics to infra.
+
 use crate::{
     InternalError,
     dto::http,
@@ -18,16 +24,13 @@ use crate::{
 use candid::Nat;
 use thiserror::Error as ThisError;
 
-///
-/// Http
-/// Approved, observable HTTP helpers over the IC management API.
-///
-
 /// Maximum allowed response size for HTTP outcalls.
 pub const MAX_RESPONSE_BYTES: u64 = 200_000;
 
 ///
 /// HttpHeader
+///
+/// Operations-layer HTTP header shape for management HTTP outcalls.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,6 +42,8 @@ pub struct HttpHeader {
 ///
 /// HttpMethod
 ///
+/// Operations-layer HTTP method shape for management HTTP outcalls.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HttpMethod {
@@ -49,6 +54,8 @@ pub enum HttpMethod {
 
 ///
 /// HttpRequestArgs
+///
+/// Operations-layer request shape for IC HTTP outcalls.
 ///
 
 #[derive(Clone, Debug)]
@@ -77,6 +84,8 @@ impl Default for HttpRequestArgs {
 ///
 /// HttpRequestResult
 ///
+/// Operations-layer response shape for IC HTTP outcalls.
+///
 
 #[derive(Clone, Debug)]
 pub struct HttpRequestResult {
@@ -87,6 +96,8 @@ pub struct HttpRequestResult {
 
 ///
 /// HttpOpsError
+///
+/// Typed failure surface for IC HTTP outcall operations.
 ///
 
 #[derive(Debug, ThisError)]
@@ -106,6 +117,8 @@ impl From<HttpOpsError> for InternalError {
 
 ///
 /// HttpOps
+///
+/// Operations-layer facade for observable IC HTTP outcalls.
 ///
 
 pub struct HttpOps;
@@ -228,10 +241,6 @@ impl HttpOps {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
         HttpMetrics::record_http_request(metrics_method(method), url, label);
     }
-
-    ///
-    /// helpers
-    ///
 
     fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<HttpHeader> {
         headers

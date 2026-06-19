@@ -1,3 +1,9 @@
+//! Module: memory::policy
+//!
+//! Responsibility: enforce Canic memory-manager namespace and ID-range ownership.
+//! Does not own: memory-manager storage, stable schemas, or diagnostics rendering.
+//! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
+
 use super::registry::MemoryRegistryError;
 use ic_memory::{
     AllocationPolicy, AllocationSlotDescriptor, MemoryManagerAuthorityRecord, MemoryManagerIdRange,
@@ -19,6 +25,8 @@ pub const CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE: &str = "Canic control-plane all
 ///
 /// Canic policy adapter for the `ic-memory` MemoryManager substrate
 /// allocation slots.
+/// Owned by memory policy and supplied to memory-manager bootstrap.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct CanicMemoryManagerPolicy;
@@ -68,6 +76,7 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
     }
 }
 
+/// Return the canonical memory-manager authority records for diagnostics.
 #[must_use]
 pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
     vec![

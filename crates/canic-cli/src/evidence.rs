@@ -63,35 +63,41 @@ where
         .map_err(|_| EvidenceCommandError::Usage(usage()))?;
 
     match command.as_str() {
-        "compare" => {
-            if print_help_or_version(&args, compare_usage, version_text()) {
-                return Ok(());
-            }
-            let options = EvidenceCompareOptions::parse(args)?;
-            let report = compare_envelope_files(&options)?;
-            write_compare_report(&options, &report)?;
-            if report.status == EvidenceCompareStatus::Different {
-                return Err(EvidenceCommandError::EnvelopesDiffer(
-                    render_compare_differences(&report),
-                ));
-            }
-            Ok(())
-        }
-        "gate" => {
-            if print_help_or_version(&args, gate_usage, version_text()) {
-                return Ok(());
-            }
-            let options = EvidenceGateOptions::parse(args)?;
-            let report = evaluate_gate_files(&options)?;
-            write_gate_report(&options, &report)?;
-            if !is_success_exit_class(report.gate_exit_class()) {
-                return Err(EvidenceCommandError::PolicyGateFailed {
-                    exit_class: report.gate_exit_class(),
-                    findings: render_gate_findings(&report),
-                });
-            }
-            Ok(())
-        }
+        "compare" => run_compare(args),
+        "gate" => run_gate(args),
         _ => unreachable!("evidence dispatch command only defines known commands"),
     }
+}
+
+fn run_compare(args: Vec<OsString>) -> Result<(), EvidenceCommandError> {
+    if print_help_or_version(&args, compare_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = EvidenceCompareOptions::parse(args)?;
+    let report = compare_envelope_files(&options)?;
+    write_compare_report(&options, &report)?;
+    if report.status == EvidenceCompareStatus::Different {
+        return Err(EvidenceCommandError::EnvelopesDiffer(
+            render_compare_differences(&report),
+        ));
+    }
+    Ok(())
+}
+
+fn run_gate(args: Vec<OsString>) -> Result<(), EvidenceCommandError> {
+    if print_help_or_version(&args, gate_usage, version_text()) {
+        return Ok(());
+    }
+
+    let options = EvidenceGateOptions::parse(args)?;
+    let report = evaluate_gate_files(&options)?;
+    write_gate_report(&options, &report)?;
+    if !is_success_exit_class(report.gate_exit_class()) {
+        return Err(EvidenceCommandError::PolicyGateFailed {
+            exit_class: report.gate_exit_class(),
+            findings: render_gate_findings(&report),
+        });
+    }
+    Ok(())
 }

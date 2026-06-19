@@ -4,13 +4,17 @@
 
 Ensure every authenticated request enters through one canonical verification boundary.
 
-This audit distinguishes two current auth boundaries:
+This audit distinguishes the current auth boundaries:
 
 - public delegated-token endpoint auth through `auth::authenticated(...)`,
   which must run the full endpoint pipeline below;
-- protected internal caller-role predicates through `caller::has_role(...)` /
-  `caller::has_any_role(...)`, which must lower through the root-signed
-  internal invocation proof path, not through weaker endpoint-local checks.
+- signed role-attestation verification through explicit
+  `SignedRoleAttestation` verification helpers/endpoints, which must verify
+  the embedded root canister-signature proof and must not be treated as
+  delegated-token endpoint auth;
+- root proof provisioning and issuer-local delegated-token issuance endpoints,
+  which must remain explicit provisioning/issuer surfaces and must not become
+  alternate endpoint-auth verifier paths.
 
 ## Risk Model / Invariant
 
@@ -60,7 +64,9 @@ Other invariants verify the correctness of individual verification stages:
 
 - endpoint or dispatcher changes
 - macro / DSL auth wiring changes
-- protected internal role predicate changes
+- signed role-attestation verification changes
+- reintroduction of protected internal role predicates or internal-invocation
+  proof paths
 - internal/admin endpoint additions
 - migration or recovery auth-flow updates
 - delegated-token audience DTO changes
@@ -88,6 +94,8 @@ Identify all authenticated start points:
 - migration/recovery entrypoints
 - macro-generated authenticated handlers
 - delegated-session bootstrap ingress
+- root proof provisioning endpoints
+- role-attestation prepare/get/verify endpoints or helpers
 
 ### 2. Verify Convergence
 
@@ -104,11 +112,14 @@ Current primary paths to inspect:
 rg -n 'access_stage|resolve_authenticated_identity|eval_access|auth::authenticated' \
   crates/canic-macros/src/endpoint -g '*.rs'
 
-rg -n 'protected_internal|verify_internal_invocation_proof|caller::has_role|caller::has_any_role' \
+rg -n 'SignedRoleAttestation|verify_role_attestation|canic_prepare_role_attestation|canic_get_role_attestation|RoleAttestation' \
   crates/canic-macros/src/endpoint crates/canic-core/src/api crates/canic/src/macros/endpoints -g '*.rs'
 
 rg -n 'delegated_token_verified|AuthOps::verify_token|enforce_subject_binding|enforce_required_scope' \
   crates/canic-core/src/access/auth crates/canic-core/src/ops/auth -g '*.rs'
+
+rg -n 'verify_internal_invocation_proof|InternalInvocationProof|caller::has_role|caller::has_any_role' \
+  crates/canic-core/src crates/canic-macros/src crates/canic/src canisters -g '*.rs'
 ```
 
 Confirm:
@@ -123,8 +134,10 @@ Confirm:
   use state
 - no endpoint path accepts role/principal audience DTOs or compatibility shims
   as delegated-token endpoint audience
-- protected internal role predicates require root-signed internal invocation
-  proof verification before handler execution
+- signed role-attestation helpers verify root canister-signature proof
+  material before accepting role claims
+- retired internal-invocation proof and protected caller-role predicate paths do
+  not reappear as active endpoint-auth bypasses
 
 ### 3. Verify Ordering
 
@@ -160,12 +173,13 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `crates/canic-macros/src/endpoint/expand.rs` | `access_stage`, `build_access_plan` | macro entrypoint convergence wiring | High |
+| `crates/canic-macros/src/endpoint/expand/access.rs` | `access_stage`, `build_access_plan` | macro entrypoint convergence wiring | High |
 | `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | central auth dispatch boundary | High |
 | `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | routes authenticated predicates into delegated-token verification | High |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint auth ordering owner | High |
 | `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token` | token-material verification | High |
 | `crates/canic-core/src/api/auth/mod.rs` | `verify_token_material` | private partial verifier for delegated-session bootstrap only | Medium |
+| `crates/canic-core/src/api/auth/mod.rs` | `verify_role_attestation` | explicit signed role-attestation verification helper | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -191,7 +205,7 @@ Pressure score guidance:
 - endpoint performs authorization without calling canonical verifier
 - internal service path trusts upstream verification without proof
 - public `AuthApi::verify_token`-style helper returning verified-token
-  semantics without caller binding and update replay consumption
+  semantics without endpoint caller binding and required-scope enforcement
 - `verify_token_material` becoming public or being used as endpoint
   authorization
 - endpoint macro accepting authenticated endpoints without a first
@@ -201,8 +215,10 @@ Pressure score guidance:
   role/principal token audience as canonical delegated-token audience
 - endpoint auth authorizing from audience without checking the signed local-role
   grant
-- protected internal `caller::has_role(...)` / `caller::has_any_role(...)`
-  endpoints reaching handlers without `verify_internal_invocation_proof`
+- retired `caller::has_role(...)`, `caller::has_any_role(...)`, or
+  internal-invocation proof paths reappearing as active endpoint-auth bypasses
+- signed role-attestation acceptance paths reaching role claims without
+  `verify_role_attestation` or equivalent root-proof verification
 
 ## Severity
 
@@ -354,8 +370,8 @@ cargo test -p canic-core --lib verify_delegated_token -- --nocapture
 cargo test -p canic-core --lib resolve_authenticated_identity -- --nocapture
 cargo test -p canic-core --lib caller_predicates_use_transport_caller_not_authenticated_subject -- --nocapture
 cargo test -p canic-core --lib required_scope_rejects_when_scope_missing -- --nocapture
-cargo test -p canic-core --lib update_token_consume_rejects_active_replay -- --nocapture
 cargo test -p canic-core --lib subject_binding_rejects_mismatched_subject_and_caller -- --nocapture
+cargo test -p canic-core --lib role_attestation -- --nocapture
 ```
 
 ## Follow-up Actions

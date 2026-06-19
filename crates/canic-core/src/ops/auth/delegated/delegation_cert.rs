@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::delegation_cert
+//!
+//! Responsibility: prepare delegated auth certificates and finalize delegation proofs.
+//! Does not own: root proof creation, policy admission, or active proof storage.
+//! Boundary: pure certificate construction helper used by root provisioning flows.
+
 use super::{
     audience::{AudienceError, validate_audience_shape, validate_role_grants},
     canonical::{CanonicalAuthError, cert_hash, issuer_proof_binding_hash},
@@ -12,6 +18,12 @@ use crate::{
 };
 use thiserror::Error;
 
+///
+/// PrepareDelegationCertInput
+///
+/// Input for constructing one delegated auth certificate before root proof creation.
+///
+
 pub struct PrepareDelegationCertInput {
     pub root_pid: Principal,
     pub issuer_pid: Principal,
@@ -25,17 +37,35 @@ pub struct PrepareDelegationCertInput {
     pub ttl_limits: DelegatedAuthTtlLimits,
 }
 
+///
+/// FinalizedDelegationProof
+///
+/// Delegation proof paired with its canonical certificate hash.
+///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FinalizedDelegationProof {
     pub proof: DelegationProof,
     pub cert_hash: [u8; 32],
 }
 
+///
+/// PreparedDelegationCert
+///
+/// Prepared delegation certificate paired with its canonical hash.
+///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedDelegationCert {
     pub cert: DelegationCert,
     pub cert_hash: [u8; 32],
 }
+
+///
+/// PrepareDelegationCertError
+///
+/// Typed failure surface for delegated auth certificate preparation.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum PrepareDelegationCertError {
@@ -123,6 +153,10 @@ fn validate_cert_issuance_rules_for_built_cert(
 ) -> Result<(), CertRuleError> {
     super::cert_rules::validate_cert_issuance_rules(cert, ttl_limits, cert.root_pid)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

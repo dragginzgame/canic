@@ -1,3 +1,9 @@
+//! Module: ops::auth::issuer_canister_sig
+//!
+//! Responsibility: prepare, retrieve, and verify issuer canister-signature proofs.
+//! Does not own: delegated-token claims, root proof provisioning, or endpoint DTOs.
+//! Boundary: auth ops helper for issuer-local canister-signature proof material.
+
 use super::AuthOps;
 #[cfg(feature = "auth-issuer-canister-sig-verify")]
 use super::canister_sig_key::parse_canister_sig_public_key_der;
@@ -15,10 +21,22 @@ use std::{cell::RefCell, collections::BTreeMap};
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 pub const ISSUER_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
 
+///
+/// IssuerPayloadKind
+///
+/// Issuer canister-signature payload family used for domain-separated proofs.
+///
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum IssuerPayloadKind {
     DelegatedTokenClaims,
 }
+
+///
+/// PreparedIssuerCanisterSignature
+///
+/// Prepared issuer canister-signature metadata returned after leaf creation.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedIssuerCanisterSignature {

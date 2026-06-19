@@ -13,6 +13,12 @@ pub struct PackageCanicMetadata {
 }
 
 /// Read a Canic config source, or generate a minimal standalone config when allowed.
+///
+/// # Panics
+///
+/// Panics when the config file is missing and no default role is available,
+/// when an explicitly requested config file is missing, or when reading an
+/// existing config file fails.
 #[must_use]
 pub fn read_config_source_or_default(
     config_path: &Path,
@@ -60,6 +66,11 @@ pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
 }
 
 /// Read the required Canic metadata declared in package manifest metadata.
+///
+/// # Panics
+///
+/// Panics when `Cargo.toml` does not declare `[package.metadata.canic]` with
+/// both `fleet` and `role`.
 #[must_use]
 pub fn required_package_metadata(manifest_dir: &Path) -> PackageCanicMetadata {
     let manifest_path = manifest_dir.join("Cargo.toml");
@@ -111,6 +122,10 @@ pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
 }
 
 /// Render the minimal declared-only config needed by a standalone non-root canister.
+///
+/// # Panics
+///
+/// Panics when `role` is empty or names the root canister.
 #[must_use]
 pub fn standalone_config_source(role: &str) -> String {
     assert!(

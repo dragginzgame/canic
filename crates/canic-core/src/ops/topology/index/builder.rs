@@ -1,3 +1,9 @@
+//! Module: ops::topology::index::builder
+//!
+//! Responsibility: build root-derived app and subnet indexes from registry state.
+//! Does not own: registry storage, index import, or endpoint DTO schemas.
+//! Boundary: deterministic ops helper used by root index resolvers.
+
 use crate::{
     InternalError,
     ids::CanisterRole,
@@ -12,6 +18,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 ///
 /// RootAppIndexBuilder
+///
+/// Operations-layer builder for root-derived app indexes.
 ///
 
 pub struct RootAppIndexBuilder;
@@ -46,6 +54,8 @@ impl RootAppIndexBuilder {
 
 ///
 /// RootSubnetIndexBuilder
+///
+/// Operations-layer builder for root-derived subnet indexes.
 ///
 
 pub struct RootSubnetIndexBuilder;
@@ -89,6 +99,10 @@ fn root_pid(registry: &SubnetRegistryRecord) -> Option<crate::cdk::candid::Princ
 fn is_direct_root_child(registry: &SubnetRegistryRecord, entry: &CanisterRecord) -> bool {
     root_pid(registry).is_some_and(|root| entry.parent_pid == Some(root))
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

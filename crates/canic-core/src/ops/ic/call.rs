@@ -1,3 +1,9 @@
+//! Module: ops::ic::call
+//!
+//! Responsibility: wrap inter-canister call construction, execution, and decoding.
+//! Does not own: call policy, workflow routing, or raw transport mechanics.
+//! Boundary: records metrics and delegates call mechanics to infra.
+
 use crate::{
     InternalError,
     infra::{
@@ -29,6 +35,8 @@ use thiserror::Error as ThisError;
 ///
 /// CallError
 ///
+/// Typed IC call failure wrapper around infra errors.
+///
 
 #[derive(Debug, ThisError)]
 #[error(transparent)]
@@ -43,13 +51,7 @@ impl From<CallError> for InternalError {
 ///
 /// CallOps
 ///
-/// Ops-level platform call façade.
-///
-/// This type:
-/// - records call metrics
-/// - delegates all mechanics to infra
-/// - imposes no policy
-/// - exposes the approved platform call surface
+/// Operations-layer facade for approved platform call construction.
 ///
 
 pub struct CallOps;
@@ -79,6 +81,8 @@ impl CallOps {
 }
 ///
 /// CallBuilder (ops)
+///
+/// Operations-layer inter-canister call builder with metric context.
 ///
 
 pub struct CallBuilder<'a> {
@@ -175,6 +179,8 @@ impl CallBuilder<'_> {
 
 ///
 /// CallResult
+///
+/// Operations-layer inter-canister call result with metric context.
 ///
 
 pub struct CallResult {

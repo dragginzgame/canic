@@ -1,7 +1,8 @@
 //! Module: replay_policy::endpoint_manifest
 //!
 //! Responsibility: record replay policy for Canic-owned endpoint surfaces.
-//! Boundary: owns manifest data only; endpoint routing and execution stay elsewhere.
+//! Does not own: endpoint routing, workflow execution, or replay receipt storage.
+//! Boundary: endpoint manifest rows consumed by replay policy tests and workflows.
 
 use crate::replay_policy::{
     quota::{

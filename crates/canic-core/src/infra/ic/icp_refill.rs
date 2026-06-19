@@ -1,8 +1,8 @@
-//! ICP-to-cycles refill IC helpers.
+//! Module: infra::ic::icp_refill
 //!
-//! This module owns raw CMC/ICP-ledger mechanics only. It performs no policy
-//! checks and intentionally returns ledger/CMC result variants losslessly so
-//! workflow can apply recovery rules.
+//! Responsibility: perform raw ICP ledger and cycles minting canister refill calls.
+//! Does not own: refill policy, replay recovery, or endpoint error mapping.
+//! Boundary: ops calls this after policy approves an ICP-to-cycles refill attempt.
 
 use crate::{
     cdk::{
@@ -32,6 +32,9 @@ const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 ///
 /// IcpRefillInfraError
 ///
+/// Mechanical ICP refill failure returned by ledger and CMC helpers.
+/// Owned by ICP refill infra and converted into `InfraError`.
+///
 
 #[derive(Debug, ThisError)]
 pub enum IcpRefillInfraError {
@@ -54,6 +57,9 @@ impl From<IcpRefillInfraError> for InfraError {
 ///
 /// IcpRefillCanisterOverrides
 ///
+/// Optional ledger and CMC canister overrides for non-mainnet refill tests.
+/// Owned by ICP refill infra and resolved before raw calls are issued.
+///
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct IcpRefillCanisterOverrides {
@@ -65,6 +71,9 @@ pub struct IcpRefillCanisterOverrides {
 ///
 /// IcpRefillCanisters
 ///
+/// Resolved ledger and CMC canisters used for one refill flow.
+/// Owned by ICP refill infra and consumed by ops refill orchestration.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct IcpRefillCanisters {
@@ -75,6 +84,9 @@ pub struct IcpRefillCanisters {
 ///
 /// NotifyTopUpArg
 ///
+/// CMC `notify_top_up` request payload.
+/// Owned by ICP refill infra and sent to the cycles minting canister.
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NotifyTopUpArg {
@@ -84,6 +96,9 @@ pub struct NotifyTopUpArg {
 
 ///
 /// NotifyTopUpError
+///
+/// Lossless CMC `notify_top_up` error payload.
+/// Owned by ICP refill infra and returned to ops for recovery classification.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -104,6 +119,9 @@ pub enum NotifyTopUpError {
 ///
 /// IcpXdrConversionRate
 ///
+/// ICP/XDR conversion rate returned by the cycles minting canister.
+/// Owned by ICP refill infra and consumed by refill policy checks.
+///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IcpXdrConversionRate {
@@ -113,6 +131,9 @@ pub struct IcpXdrConversionRate {
 
 ///
 /// IcpXdrConversionRateResponse
+///
+/// Certified ICP/XDR conversion rate response returned by the CMC.
+/// Owned by ICP refill infra and decoded without policy interpretation.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -125,15 +146,20 @@ pub struct IcpXdrConversionRateResponse {
 ///
 /// IcpRefillInfra
 ///
+/// Raw ICP refill adapter for ledger and cycles minting canister calls.
+/// Owned by IC infra and consumed by ops refill adapters.
+///
 
 pub struct IcpRefillInfra;
 
 impl IcpRefillInfra {
+    /// Return the CMC top-up memo bytes.
     #[must_use]
     pub fn topup_memo() -> Vec<u8> {
         CMC_TOPUP_MEMO_BYTES.to_vec()
     }
 
+    /// Build the CMC top-up subaccount for a target canister.
     pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<Subaccount, InfraError> {
         let bytes = target_canister.as_slice();
         if bytes.len() > CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES {
@@ -159,6 +185,7 @@ impl IcpRefillInfra {
         })
     }
 
+    /// Build an ICRC-1 transfer argument for a refill transfer.
     #[must_use]
     pub fn transfer_arg(
         from_subaccount: Option<Subaccount>,
@@ -178,12 +205,14 @@ impl IcpRefillInfra {
         }
     }
 
+    /// Convert a ledger block index into `u64` with overflow detection.
     pub fn checked_block_index(block_index: Nat) -> Result<u64, InfraError> {
         u64::try_from(block_index.0.clone()).map_err(|_| {
             IcpRefillInfraError::LedgerBlockIndexOverflow { value: block_index }.into()
         })
     }
 
+    /// Resolve refill canister IDs while enforcing mainnet override rules.
     pub fn resolve_canisters(
         network: BuildNetwork,
         overrides: IcpRefillCanisterOverrides,
@@ -203,6 +232,7 @@ impl IcpRefillInfra {
         })
     }
 
+    /// Query `icrc1_fee` on the selected ICP ledger.
     pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, InfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_fee")
             .execute()
@@ -210,6 +240,7 @@ impl IcpRefillInfra {
             .candid()
     }
 
+    /// Query `icrc1_decimals` on the selected ICP ledger.
     pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, InfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_decimals")
             .execute()
@@ -217,6 +248,7 @@ impl IcpRefillInfra {
             .candid()
     }
 
+    /// Execute `icrc1_transfer` and return the raw ledger result.
     pub async fn icrc1_transfer(
         ledger_id: Principal,
         args: TransferArg,
@@ -228,6 +260,7 @@ impl IcpRefillInfra {
             .candid()
     }
 
+    /// Notify the cycles minting canister about a top-up transfer.
     pub async fn notify_top_up(
         cmc_id: Principal,
         args: NotifyTopUpArg,
@@ -239,6 +272,7 @@ impl IcpRefillInfra {
             .candid()
     }
 
+    /// Query the cycles minting canister for the current ICP/XDR conversion rate.
     pub async fn get_icp_xdr_conversion_rate(
         cmc_id: Principal,
     ) -> Result<IcpXdrConversionRateResponse, InfraError> {
@@ -248,6 +282,10 @@ impl IcpRefillInfra {
             .candid()
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

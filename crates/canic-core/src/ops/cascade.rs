@@ -1,3 +1,9 @@
+//! Module: ops::cascade
+//!
+//! Responsibility: send state and topology cascade snapshots through RPC.
+//! Does not own: cascade workflow decisions, snapshot construction, or endpoint auth.
+//! Boundary: ops wrapper around the RPC transport for cascade message names.
+
 use crate::{
     InternalError,
     ops::{prelude::*, rpc::RpcOps},
@@ -6,6 +12,8 @@ use crate::{
 
 ///
 /// CascadeOps
+///
+/// Operations-layer facade for cascade snapshot RPC sends.
 ///
 
 pub struct CascadeOps;

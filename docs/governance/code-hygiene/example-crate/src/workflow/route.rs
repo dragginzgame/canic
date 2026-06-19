@@ -68,9 +68,7 @@ impl WorkflowStep {
     }
 }
 
-///
-/// TESTS
-///
+// Tests
 
 #[cfg(test)]
 mod tests {

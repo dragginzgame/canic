@@ -1,3 +1,9 @@
+//! Module: infra::ic::mgmt::types
+//!
+//! Responsibility: define Candid payload shapes for management canister calls.
+//! Does not own: lifecycle orchestration, deployment policy, or public DTO schemas.
+//! Boundary: management infra leaves encode and decode these raw payloads.
+
 use crate::cdk::candid::{CandidType, Nat, Principal};
 use serde::Deserialize;
 

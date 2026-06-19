@@ -81,6 +81,28 @@ This audit exists to catch that drift before it hardens.
 * introduction of a new support crate
 * major `pub use` additions at crate roots
 * movement of files across top-level subsystem roots
+* new auth/proof provisioning endpoint, DTO, ops, or workflow surfaces
+* module-layout policy changes, including directory-module and `#[path]` rules
+
+---
+
+## Current Focus Questions
+
+For the current root proof provisioning and code-hygiene tree, this audit must
+explicitly check:
+
+* root proof provisioning surfaces remain contained in their intended owners:
+  DTO boundary data, API contract methods, ops conversion/state helpers,
+  workflow orchestration, and endpoint macros.
+* root proof provisioning DTOs remain passive boundary data and do not become
+  policy, workflow, storage, or side-effect owners.
+* `ops/auth/delegation/mod.rs` and delegated-auth support modules are pressure
+  candidates only unless they expose public internals, create upward
+  dependencies, or bypass workflow/ops separation.
+* endpoint macro modules marshal and delegate; they must not accumulate root
+  proof provisioning policy.
+* the directory-module invariant still holds: no `foo.rs` plus `foo/mod.rs`
+  pairs, and no production `#[path = "..."]` module layout escapes.
 
 ---
 
@@ -108,6 +130,25 @@ Required fields:
   * `non-comparable: <reason>`
 * **Exclusions applied**: explicit list, or `none`
 * **Notable methodology changes vs baseline**: explicit list, or `none`
+
+---
+
+## Standard Recurring Report Headings
+
+Every report must use the standard recurring-report headings in addition to
+the module-structure-specific sections below:
+
+* `## Report Preamble`
+* `## Structural Hotspots`
+* `## Hub Module Pressure`
+* `## Dependency Fan-In Pressure`
+* `## Early Warning Signals`
+* `## Risk Score`
+* `## Verification Readout`
+
+The historical numbered sections may still be included as substructure, but
+these standard headings must be present so summary tooling and reviewers can
+compare recurring audit output consistently.
 
 ---
 

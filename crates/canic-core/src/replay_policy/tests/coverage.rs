@@ -1,3 +1,9 @@
+//! Module: replay_policy::tests::coverage
+//!
+//! Responsibility: verify replay-policy manifest uniqueness and endpoint coverage.
+//! Does not own: manifest data or endpoint declarations.
+//! Boundary: test-only coverage checks against compiled source fixtures.
+
 use super::*;
 use std::collections::BTreeSet;
 

@@ -22,6 +22,7 @@ use crate::{
 ///
 /// Mechanical replay input context used by the root replay guard.
 ///
+
 #[derive(Clone, Debug)]
 pub struct RootReplayGuardInput {
     pub caller: Principal,
@@ -39,6 +40,7 @@ pub struct RootReplayGuardInput {
 ///
 /// Fresh replay reservation metadata for later commit.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayPending {
     pub caller: Principal,
@@ -53,6 +55,7 @@ pub struct ReplayPending {
 ///
 /// Pure replay outcome independent from auth/policy decisions.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayDecision {
     Fresh(ReplayPending),
@@ -68,6 +71,7 @@ pub enum ReplayDecision {
 ///
 /// Canonical cached replay payload bytes for identical replay requests.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayCached {
     pub response_bytes: Vec<u8>,
@@ -78,6 +82,7 @@ pub struct ReplayCached {
 ///
 /// Mechanical guard failures emitted before decision classification.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayGuardError {
     InvalidTtl { ttl_ns: u64, max_ttl_ns: u64 },

@@ -42,6 +42,7 @@ const ROOT_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 /// Mechanical replay-reservation failures surfaced by ops replay reservation APIs.
 /// Owned by replay ops and mapped by workflow callers into public errors.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReserveError {
     CapacityReached {
@@ -59,6 +60,7 @@ pub enum ReplayReserveError {
 /// Mechanical replay-commit failures surfaced by ops replay commit APIs.
 /// Owned by replay ops and returned when response serialization fails.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayCommitError {
     EncodeFailed(String),
@@ -70,6 +72,7 @@ pub enum ReplayCommitError {
 /// Mechanical replay-decode failures surfaced by cached replay readers.
 /// Owned by replay ops and mapped by workflow replay adapters.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayDecodeError {
     DecodeFailed(String),

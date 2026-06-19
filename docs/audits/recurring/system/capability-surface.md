@@ -51,6 +51,8 @@ This audit verifies:
 - new admin/operator APIs
 - RPC/capability DTO changes
 - auth/delegation/attestation feature work
+- root proof provisioning endpoint changes
+- issuer-local delegated-token prepare/get/install/status changes
 - topology/bootstrap/template control-plane changes
 - parent/child capability routing changes
 
@@ -214,7 +216,7 @@ Suggested scans:
 
 ```bash
 rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_delegation_' crates/canic/src/macros/endpoints -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^  canic_.*_admin :' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
 ```
@@ -224,6 +226,8 @@ Required checks:
 - admin/controller-only endpoints are not exposed outside intended bundles
 - shared parent/cycles receiver surface exists where expected
 - root-only families are not present on non-root canisters unless explicitly intended
+- root proof provisioning endpoints are root-only and controller-gated
+- issuer-local delegated-token endpoints are not present on root unless explicitly intended
 - protocol constant removals/renames are called out in compatibility notes
 
 Record as:
@@ -304,9 +308,9 @@ roles.
 Suggested scans:
 
 ```bash
-rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```
 
 For each notable endpoint family, record:
@@ -315,6 +319,19 @@ For each notable endpoint family, record:
 - roles known to require it
 - bundling mode
 - risk if it grows further
+
+At minimum, classify these auth/provisioning families when present:
+
+- root proof provisioning: `canic_upsert_root_issuer_policy`,
+  `canic_prepare_delegation_proof_batch`,
+  `canic_get_delegation_proof_batch`,
+  `canic_install_delegation_proof_batch`
+- issuer-local delegated token: `canic_prepare_delegated_token`,
+  `canic_get_delegated_token`, `canic_install_active_delegation_proof`,
+  `canic_active_delegation_proof_status`
+- role-attestation: `canic_prepare_role_attestation`,
+  `canic_get_role_attestation`
+- retired compatibility guard: `canic_delegation_set_*`
 
 ### 6. Surface Utilization (Mandatory)
 
@@ -486,6 +503,8 @@ git log --name-only -n 20 -- crates/
 | global endpoint family growth | `<path>` | `<count / diff evidence>` | `<Low/Medium/High>` |
 | shared DTO fan-out | `<type/path>` | `<did or import spread>` | `<Low/Medium/High>` |
 | admin surface clustering | `<path>` | `<count / growth evidence>` | `<Low/Medium/High>` |
+| root proof provisioning surface growth | `<path>` | `<count / DID evidence>` | `<Low/Medium/High>` |
+| issuer-local auth surface growth | `<path>` | `<count / DID evidence>` | `<Low/Medium/High>` |
 | latent global surface | `<path>` | `<defined/exposed/used mismatch>` | `<Low/Medium/High>` |
 
 ### 14. Endpoint / RPC Alignment
@@ -548,7 +567,7 @@ rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^pub const ' crates/canic-core/src/protocol.rs
 rg -n '^pub const ' crates/canic/src/protocol.rs
 rg -n '^  canic_' .icp/local/canisters -g '*.did'
-rg -n 'canic_response_capability_v1|canic_delegation_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 

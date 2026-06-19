@@ -1,19 +1,8 @@
-//! ICRC ledger helpers (infra / IC edge).
+//! Module: infra::ic::ledger
 //!
-//! This module provides **raw, mechanical access** to ICRC-2 ledger calls.
-//! It performs no policy checks, no validation, and no orchestration.
-//!
-//! Responsibilities:
-//! - Construct IC arguments
-//! - Execute ledger calls
-//! - Decode responses
-//! - Surface lossless, mechanical failures
-//!
-//! Non-responsibilities:
-//! - Allowance sufficiency checks
-//! - Expiry validation
-//! - Business or access rules
-//! - Metrics or logging
+//! Responsibility: execute raw ICRC ledger calls and decode responses.
+//! Does not own: allowance policy, expiry validation, business rules, or metrics.
+//! Boundary: ops calls this after workflow/policy approve ledger interactions.
 
 use crate::{
     cdk::{
@@ -35,6 +24,7 @@ use thiserror::Error as ThisError;
 
 ///
 /// LedgerInfraError
+///
 /// Mechanical failures returned by ICRC ledger calls.
 ///
 
@@ -55,7 +45,9 @@ impl From<LedgerInfraError> for InfraError {
 
 ///
 /// LedgerMeta
+///
 /// Best-effort static metadata for known ledgers.
+/// Owned by ledger infra and used for diagnostics around rejected calls.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,12 +60,14 @@ pub struct LedgerMeta {
 ///
 /// LedgerInfra
 ///
+/// Raw ICRC ledger adapter.
+/// Owned by IC infra and consumed by ops ledger flows.
+///
 
 pub struct LedgerInfra;
 
 impl LedgerInfra {
-    /// ledger_meta
-    /// Returns best-effort metadata for a ledger canister.
+    /// Return best-effort metadata for a ledger canister.
     #[must_use]
     pub fn ledger_meta(ledger_id: Principal) -> LedgerMeta {
         if ledger_id == *CKUSDC_LEDGER_CANISTER {
@@ -99,8 +93,7 @@ impl LedgerInfra {
         }
     }
 
-    /// icrc2_allowance
-    /// Calls `icrc2_allowance` on the given ledger and returns the raw allowance.
+    /// Call `icrc2_allowance` on the given ledger and return the raw allowance.
     pub async fn icrc2_allowance(
         ledger_id: Principal,
         account: Account,
@@ -117,8 +110,7 @@ impl LedgerInfra {
         Ok(allowance)
     }
 
-    /// icrc2_transfer_from
-    /// Executes `icrc2_transfer_from` and returns the raw result.
+    /// Execute `icrc2_transfer_from` and return the raw result.
     pub async fn icrc2_transfer_from(
         ledger_id: Principal,
         args: TransferFromArgs,

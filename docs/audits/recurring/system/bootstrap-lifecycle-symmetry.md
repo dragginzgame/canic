@@ -210,7 +210,7 @@ rg -n '\.await|async fn|spawn\(' crates/canic-core/src/lifecycle -g '*.rs'
 #### Restore-before-bootstrap ordering
 
 ```bash
-rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|TimerOps::set|TimerWorkflow::set' \
+rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|TimerOps::set|TimerWorkflow::set|TimerApi::set_lifecycle_timer' \
   crates/canic-core/src/lifecycle crates/canic-core/src/workflow/runtime \
   crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
@@ -218,15 +218,22 @@ rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::ini
 #### Layering discipline
 
 ```bash
-rg -n 'crate::ops::|crate::domain::policy|crate::storage::stable::' \
+rg -n '\bops::|\bdomain::policy|\bstorage::stable::' \
   crates/canic-core/src/lifecycle crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
+
+Expected:
+
+* runtime environment restoration through `ops::runtime::env::EnvOps` is
+  allowed inside post-upgrade lifecycle adapters
+* direct stable-storage mutation, storage-schema imports, and domain policy
+  imports are not allowed in lifecycle adapters
 
 #### Test coverage
 
 ```bash
 rg -n 'lifecycle|post_upgrade|init|bootstrap|Timer' \
-  crates/canic-tests/tests crates/canic-core/tests -g '*.rs'
+  crates/canic-tests/tests crates/canic-core/tests crates/canic/tests -g '*.rs'
 ```
 
 #### Root fixture coverage

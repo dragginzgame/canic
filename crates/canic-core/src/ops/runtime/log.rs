@@ -42,6 +42,7 @@ impl From<LogOpsError> for InternalError {
 ///
 /// Operations-layer facade for runtime log mutation, retention, and query views.
 ///
+
 pub struct LogOps;
 
 impl LogOps {

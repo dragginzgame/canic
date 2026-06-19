@@ -1,3 +1,9 @@
+//! Module: replay_policy::tests::pool_admin
+//!
+//! Responsibility: verify pool-admin replay-policy command coverage.
+//! Does not own: pool workflow dispatch or manifest construction.
+//! Boundary: test-only checks comparing source variants to manifest rows.
+
 use super::*;
 use std::collections::BTreeSet;
 

@@ -18,6 +18,9 @@ const WASM_STORE_ROLE: &str = "wasm_store";
 ///
 /// CanisterRole
 ///
+/// Stable bounded canister role identifier.
+/// Owned by ids and shared across config, storage, DTOs, and workflows.
+///
 
 #[derive(
     CandidType, Clone, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq, Hash,
@@ -29,31 +32,37 @@ impl CanisterRole {
     pub const ROOT: Self = Self(Cow::Borrowed(ROOT_ROLE));
     pub const WASM_STORE: Self = Self(Cow::Borrowed(WASM_STORE_ROLE));
 
+    /// Create a borrowed static canister role.
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
         Self(Cow::Borrowed(s))
     }
 
+    /// Create an owned canister role.
     #[must_use]
     pub const fn owned(s: String) -> Self {
         Self(Cow::Owned(s))
     }
 
+    /// Return the canister role as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Return whether this role is the built-in root role.
     #[must_use]
     pub fn is_root(&self) -> bool {
         self.0.as_ref() == ROOT_ROLE
     }
 
+    /// Return whether this role is the built-in wasm-store role.
     #[must_use]
     pub fn is_wasm_store(&self) -> bool {
         self.0.as_ref() == WASM_STORE_ROLE
     }
 
+    /// Convert the role into an owned string.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0.into_owned()

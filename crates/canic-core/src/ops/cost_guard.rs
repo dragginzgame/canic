@@ -25,6 +25,7 @@ const INTENT_TTL_SECONDS: u64 = 60 * 60;
 /// Durable permit proving a new costed operation reserved quota and cycle
 /// budget before crossing an expensive external-effect boundary.
 ///
+
 #[derive(Debug)]
 pub struct CostGuardPermit {
     _cost_class: CostClass,
@@ -41,6 +42,7 @@ pub struct CostGuardPermit {
 /// Input for reserving quota and cycle budget for a costed command.
 /// Owned by ops and supplied by workflows before external effects.
 ///
+
 #[derive(Clone, Debug)]
 pub struct CostGuardRequest {
     pub cost_class: CostClass,
@@ -113,6 +115,9 @@ pub enum CostGuardReserveError {
 }
 
 impl CostGuardReserveError {
+    /// public_kind
+    ///
+    /// Return the boundary-safe class for reservation failures that callers may expose.
     #[must_use]
     pub const fn public_kind(&self) -> Option<CostGuardReservePublicKind> {
         match self {
@@ -145,9 +150,13 @@ impl From<CostGuardReserveError> for InternalError {
 /// Mechanical quota and cycle-reservation facade.
 /// Owned by ops and consumed by workflows crossing expensive side effects.
 ///
+
 pub struct CostGuardOps;
 
 impl CostGuardOps {
+    /// reserve
+    ///
+    /// Reserve quota and cycle budget before a workflow crosses an expensive side-effect boundary.
     pub fn reserve(request: CostGuardRequest) -> Result<CostGuardPermit, CostGuardReserveError> {
         validate_request(&request)?;
 
@@ -199,18 +208,27 @@ impl CostGuardOps {
         })
     }
 
+    /// complete
+    ///
+    /// Commit both quota and cycle reservation intents after the protected operation succeeds.
     pub fn complete(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
         IntentStoreOps::commit_at(permit.quota_intent_id, now_secs)?;
         IntentStoreOps::commit_at(permit.reservation_id, now_secs)?;
         Ok(())
     }
 
+    /// recover
+    ///
+    /// Commit quota while releasing cycle reservation after uncertain external effects.
     pub fn recover(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
         IntentStoreOps::commit_at(permit.quota_intent_id, now_secs)?;
         let _ = IntentStoreOps::abort_intent_if_pending(permit.reservation_id)?;
         Ok(())
     }
 
+    /// abort
+    ///
+    /// Release all pending cost guard intents for tests that stop before commit/recovery.
     #[cfg(test)]
     pub fn abort(permit: &CostGuardPermit) -> Result<(), InternalError> {
         let _ = IntentStoreOps::abort_intent_if_pending(permit.quota_intent_id)?;
@@ -332,6 +350,10 @@ fn hash_bytes(value: &[u8]) -> String {
             output
         })
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

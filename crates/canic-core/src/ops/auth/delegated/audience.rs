@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::audience
+//!
+//! Responsibility: validate delegated auth audience and role-grant shapes.
+//! Does not own: token verification, storage, or endpoint authorization.
+//! Boundary: pure delegated auth helper used by cert and token validation.
+
 use super::canonical::{CanonicalAuthError, role_hash, validate_scope_label};
 use crate::{
     cdk::types::Principal,
@@ -9,12 +15,24 @@ use thiserror::Error;
 pub const MAX_DELEGATED_ROLE_GRANTS: usize = 16;
 pub const MAX_SCOPES_PER_ROLE_GRANT: usize = 32;
 
+///
+/// AudienceAcceptanceContext
+///
+/// Local verifier context used when deciding whether an audience applies here.
+///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AudienceAcceptanceContext<'a> {
     pub local_canister: Principal,
     pub local_canic_subnet: Option<Principal>,
     pub local_project: Option<&'a str>,
 }
+
+///
+/// AudienceError
+///
+/// Typed failure surface for delegated audience and role-grant validation.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum AudienceError {
@@ -169,6 +187,10 @@ fn scopes_subset(child: &[String], parent: &[String]) -> bool {
 const fn is_canonical_label_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b':' | b'-' | b'.')
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

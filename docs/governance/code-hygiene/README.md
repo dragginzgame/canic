@@ -163,6 +163,33 @@ Use item documentation when a function:
 4. can panic through a public contract
 5. performs non-obvious orchestration or policy work
 
+Function documentation uses idiomatic Rust rustdoc prose. Do not use the
+scan-friendly type documentation block for functions, and do not add a rustdoc
+line that only repeats the function name.
+
+Preferred:
+
+```rust
+/// Format a byte size using IEC units with two decimal places.
+///
+/// Examples: `512.00 B`, `720.79 KiB`, `13.61 MiB`.
+pub fn byte_size(bytes: u64) -> String {
+    // ...
+}
+```
+
+Avoid:
+
+```rust
+/// byte_size
+///
+/// Format a byte size using IEC units with two decimal places.
+///
+pub fn byte_size(bytes: u64) -> String {
+    // ...
+}
+```
+
 Avoid comments that restate the next line or describe stale implementation
 history. Private helpers do not need comments when the name and local context
 are clear.
@@ -184,8 +211,9 @@ false positives where the lint may legitimately stop firing.
 
 ## 5. Section Banners
 
-Use section banners only when grouping multiple related functions in a large
-module.
+Use section banners when grouping multiple related functions in a large module.
+Also use a test section banner in any file that contains both non-test code and
+inline tests.
 
 Section banners are navigation comments, not item documentation. Use normal
 `//` comments for them, including test section banners; do not use `///`
@@ -212,8 +240,11 @@ mod tests {
 }
 ```
 
-Do not add banners to small files where the type and function order is already
-obvious.
+Do not add non-test banners to small files where the type and function order is
+already obvious.
+
+When a file contains both non-test code and inline tests, keep the test module
+at the bottom behind a `// Tests` banner, even if the file is otherwise small.
 
 ## 6. Function Ordering
 
@@ -223,7 +254,8 @@ Prefer stable ordering:
 2. constructors/builders
 3. core logic
 4. helpers/utilities
-5. tests
+5. tests, at the bottom behind a `// Tests` banner when the file also contains
+   non-test code
 
 When a type and its impls live in the same file:
 

@@ -1,3 +1,9 @@
+//! Module: infra::ic::nns::registry
+//!
+//! Responsibility: query raw NNS registry topology methods.
+//! Does not own: topology policy, subnet storage, or endpoint response mapping.
+//! Boundary: ops topology uses this to discover canister subnet placement.
+
 use crate::{
     cdk::types::Principal,
     infra::{
@@ -14,6 +20,9 @@ use thiserror::Error as ThisError;
 ///
 /// GetSubnetForCanisterRequest
 ///
+/// NNS registry request for canister subnet lookup.
+/// Owned by NNS registry infra and sent to the registry canister.
+///
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct GetSubnetForCanisterRequest {
@@ -23,11 +32,17 @@ pub struct GetSubnetForCanisterRequest {
 ///
 /// GetSubnetForCanisterResponse
 ///
+/// Raw NNS registry subnet lookup result.
+/// Owned by NNS registry infra and normalized by the adapter.
+///
 
 pub type GetSubnetForCanisterResponse = Result<GetSubnetForCanisterPayload, String>;
 
 ///
 /// GetSubnetForCanisterPayload
+///
+/// Successful NNS registry subnet lookup payload.
+/// Owned by NNS registry infra and decoded from registry responses.
 ///
 
 #[derive(CandidType, Debug, Deserialize)]
@@ -37,6 +52,9 @@ pub struct GetSubnetForCanisterPayload {
 
 ///
 /// NnsRegistryInfraError
+///
+/// Raw NNS registry adapter failure.
+/// Owned by NNS registry infra and converted into `InfraError`.
 ///
 
 #[derive(Debug, ThisError)]
@@ -54,6 +72,9 @@ impl From<NnsRegistryInfraError> for InfraError {
 
 ///
 /// NnsRegistryInfra
+///
+/// Raw NNS registry adapter.
+/// Owned by NNS infra and consumed by ops topology adapters.
 ///
 
 pub struct NnsRegistryInfra;

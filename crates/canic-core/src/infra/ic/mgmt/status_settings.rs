@@ -1,3 +1,9 @@
+//! Module: infra::ic::mgmt::status_settings
+//!
+//! Responsibility: perform raw canister status and settings management calls.
+//! Does not own: status policy, deployment orchestration, or public DTO shaping.
+//! Boundary: extends `MgmtInfra` with status and settings effects.
+
 use crate::{
     cdk::candid::Principal,
     infra::{InfraError, ic::call::Call},
@@ -9,7 +15,7 @@ use super::{
 };
 
 impl MgmtInfra {
-    // Query the management canister for a canister's status.
+    /// Query the management canister for a canister's status.
     pub async fn canister_status(
         canister_pid: Principal,
     ) -> Result<InfraCanisterStatusResult, InfraError> {
@@ -25,7 +31,7 @@ impl MgmtInfra {
         Ok(status)
     }
 
-    // Updates canister settings via the management canister.
+    /// Update canister settings through the management canister.
     pub async fn update_settings(args: &InfraUpdateSettingsArgs) -> Result<(), InfraError> {
         Call::bounded_wait(Principal::management_canister(), "update_settings")
             .with_arg(args.clone())?

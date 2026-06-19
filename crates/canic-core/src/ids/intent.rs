@@ -12,6 +12,7 @@ use std::fmt::{self, Display};
 /// IntentId
 ///
 /// Numeric identifier for one recorded or replayable intent.
+/// Owned by ids and consumed by intent storage and replay/cost guards.
 ///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -27,6 +28,7 @@ impl Display for IntentId {
 /// IntentResourceKey
 ///
 /// Bounded resource key associated with an intent.
+/// Owned by ids and consumed by intent storage and cost guard accounting.
 ///
 
 pub type IntentResourceKey = BoundedString128;

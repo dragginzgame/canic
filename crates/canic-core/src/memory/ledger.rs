@@ -1,3 +1,9 @@
+//! Module: memory::ledger
+//!
+//! Responsibility: read and validate the native `ic-memory` allocation ledger.
+//! Does not own: allocation policy, stable data schemas, or storage API snapshots.
+//! Boundary: diagnostics call this to export memory-manager allocation state.
+
 #[cfg(target_arch = "wasm32")]
 use super::manager;
 use super::{manager::MEMORY_MANAGER, policy, registry::MemoryRegistryError};
@@ -31,12 +37,16 @@ thread_local! {
 ///
 /// NativeMemoryLedgerSnapshot
 ///
+/// Diagnostic snapshot of the native memory allocation ledger and authorities.
+/// Owned by memory ledger and consumed by diagnostics/status surfaces.
+///
 
 pub struct NativeMemoryLedgerSnapshot {
     pub export: DiagnosticExport,
     pub authorities: Vec<MemoryManagerAuthorityRecord>,
 }
 
+/// Read the wasm stable-memory ledger after classifying raw stable memory.
 #[cfg(target_arch = "wasm32")]
 pub fn try_diagnostic_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError> {
     match manager::classify_raw_stable_memory() {
@@ -56,6 +66,7 @@ pub fn try_diagnostic_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryReg
     }
 }
 
+/// Read the host memory ledger snapshot.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn try_snapshot() -> Result<NativeMemoryLedgerSnapshot, MemoryRegistryError> {
     MEMORY_LAYOUT_LEDGER.with_borrow(|cell| snapshot_from_record(cell.get()))

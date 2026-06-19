@@ -23,20 +23,24 @@ const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"canic-replay-payload-hash:v1";
 /// Stable operation identifier shared by replay-protected commands.
 /// Owned by the replay model and serialized into stable replay receipts.
 ///
+
 #[derive(Clone, Copy, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct OperationId([u8; 32]);
 
 impl OperationId {
+    /// Build an operation id from its canonical 32-byte representation.
     #[must_use]
     pub const fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
+    /// Return the canonical 32-byte operation id representation.
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
+    /// Consume the operation id and return its canonical bytes.
     #[must_use]
     pub const fn into_bytes(self) -> [u8; 32] {
         self.0
@@ -110,6 +114,7 @@ impl FromStr for OperationId {
 /// Typed parse failure for operation id byte and hex conversions.
 /// Owned by the replay model and returned by `OperationId` constructors.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OperationIdParseError {
     InvalidByteLength { actual: usize },
@@ -123,10 +128,12 @@ pub enum OperationIdParseError {
 /// Validated replay command namespace.
 /// Owned by the replay model and used to partition replay receipts.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct CommandKind(String);
 
 impl CommandKind {
+    /// Validate and create a replay command namespace.
     pub fn new(value: impl Into<String>) -> Result<Self, CommandKindError> {
         let value = value.into();
         if value.is_empty() {
@@ -141,6 +148,7 @@ impl CommandKind {
         Ok(Self(value))
     }
 
+    /// Return the validated command namespace as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -153,6 +161,7 @@ impl CommandKind {
 /// Typed validation failure for replay command namespaces.
 /// Owned by the replay model and returned by `CommandKind::new`.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandKindError {
     Empty,
@@ -165,6 +174,7 @@ pub enum CommandKindError {
 /// Authentication class bound into replay actor identity.
 /// Owned by the replay model and included in payload hashes.
 ///
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AuthKind {
     DirectCaller,
@@ -178,6 +188,7 @@ pub enum AuthKind {
 /// Effective actor identity bound to replay receipts and payload hashes.
 /// Owned by the replay model and consumed by replay guards.
 ///
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReplayActor {
     pub effective_principal: Principal,
@@ -185,6 +196,7 @@ pub struct ReplayActor {
 }
 
 impl ReplayActor {
+    /// Build a replay actor for direct caller authentication.
     #[must_use]
     pub const fn direct_caller(caller: Principal) -> Self {
         Self {
@@ -200,6 +212,7 @@ impl ReplayActor {
 /// Logical replay receipt key before storage-specific hashing.
 /// Owned by the replay model and used by replay storage adapters.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReplayReceiptKey {
     pub command_kind: CommandKind,
@@ -212,6 +225,7 @@ pub struct ReplayReceiptKey {
 /// Canonical replay receipt state independent of stable-memory encoding.
 /// Owned by the replay model and persisted through storage record adapters.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReplayReceipt {
     pub schema_version: u32,
@@ -235,6 +249,7 @@ pub struct ReplayReceipt {
 /// Lifecycle state for a replay receipt.
 /// Owned by the replay model and interpreted by replay guards.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ReplayReceiptStatus {
     Reserved,
@@ -256,6 +271,7 @@ pub enum ReplayReceiptStatus {
 /// Stable terminal replay failure classification.
 /// Owned by the replay model and stored with bounded error bytes.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ReplayTerminalErrorCode {
     ValidationRejected,
@@ -270,6 +286,7 @@ pub enum ReplayTerminalErrorCode {
 /// Stable replay recovery reason after uncertain external effects.
 /// Owned by the replay model and exposed through replay decisions.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RecoveryReason {
     ExternalEffectStatusUnknown,
@@ -283,6 +300,7 @@ pub enum RecoveryReason {
 /// Replay-visible description of an external side effect boundary.
 /// Owned by the replay model and persisted while effects are in flight.
 ///
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ExternalEffectDescriptor {
     ManagementCreateCanister { command_kind: CommandKind },
@@ -296,6 +314,7 @@ pub enum ExternalEffectDescriptor {
 /// Shared replay-domain error classification.
 /// Owned by the replay model and used by higher-level replay workflows.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayError {
     OperationIdRequired,
@@ -314,11 +333,13 @@ pub enum ReplayError {
 /// Deterministic hasher for replay command payloads.
 /// Owned by the replay model and used by workflow replay adapters.
 ///
+
 pub struct ReplayPayloadHasher {
     inner: Sha256,
 }
 
 impl ReplayPayloadHasher {
+    /// Start a deterministic replay payload hash for a command and actor.
     #[must_use]
     pub fn new(command_kind: &CommandKind, actor: &ReplayActor) -> Self {
         let mut inner = Sha256::new();
@@ -329,30 +350,37 @@ impl ReplayPayloadHasher {
         Self { inner }
     }
 
+    /// Add a boolean field to the replay payload hash.
     pub fn hash_bool(&mut self, value: bool) {
         hash_bool(&mut self.inner, value);
     }
 
+    /// Add a `u64` field to the replay payload hash.
     pub fn hash_u64(&mut self, value: u64) {
         hash_u64(&mut self.inner, value);
     }
 
+    /// Add a `u128` field to the replay payload hash.
     pub fn hash_u128(&mut self, value: u128) {
         hash_u128(&mut self.inner, value);
     }
 
+    /// Add byte string data to the replay payload hash.
     pub fn hash_bytes(&mut self, value: &[u8]) {
         hash_bytes(&mut self.inner, value);
     }
 
+    /// Add UTF-8 string data to the replay payload hash.
     pub fn hash_str(&mut self, value: &str) {
         hash_str(&mut self.inner, value);
     }
 
+    /// Add a principal to the replay payload hash.
     pub fn hash_principal(&mut self, value: &Principal) {
         hash_principal(&mut self.inner, value);
     }
 
+    /// Add an optional principal to the replay payload hash.
     pub fn hash_optional_principal(&mut self, value: Option<Principal>) {
         hash_bool(&mut self.inner, value.is_some());
         if let Some(value) = value {
@@ -360,10 +388,12 @@ impl ReplayPayloadHasher {
         }
     }
 
+    /// Add a canister role to the replay payload hash.
     pub fn hash_role(&mut self, value: &CanisterRole) {
         hash_str(&mut self.inner, value.as_str());
     }
 
+    /// Finish and return the canonical replay payload hash.
     #[must_use]
     pub fn finish(self) -> [u8; 32] {
         self.inner.finalize().into()
@@ -376,12 +406,14 @@ impl ReplayPayloadHasher {
 /// Bounded terminal replay error bytes plus truncation metadata.
 /// Owned by the replay model and produced before receipt persistence.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BoundedTerminalError {
     pub bytes: Vec<u8>,
     pub truncated: bool,
 }
 
+/// Bound terminal replay error bytes to the stable receipt limit.
 #[must_use]
 pub fn bounded_terminal_error_bytes(bytes: &[u8]) -> BoundedTerminalError {
     if bytes.len() <= MAX_REPLAY_TERMINAL_ERROR_BYTES {
@@ -448,6 +480,10 @@ fn hash_str(hasher: &mut Sha256, value: &str) {
 fn hash_principal(hasher: &mut Sha256, principal: &Principal) {
     hash_bytes(hasher, principal.as_slice());
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

@@ -99,6 +99,27 @@ This audit exists to catch that drift before it becomes release surface.
 
 ---
 
+## Current Focus Questions
+
+For the current tree, this audit must explicitly check:
+
+* `canic` default features stay narrow and do not enable control-plane,
+  sharding, or delegated-auth proof creation/verification surfaces by default.
+* `canic` facade feature aliases map cleanly to `canic-core` feature ownership.
+* optional canister-signature creation, certification, and verification
+  dependencies in `canic-core` remain gated by the feature that owns the
+  behavior.
+* fleet, test, sandbox, and audit canisters that enable runtime auth or
+  provisioning features remain `publish = false` and do not become reusable
+  package surfaces.
+* operator support crates (`canic-cli`, `canic-host`, and `canic-backup`) stay
+  facade-free unless a report identifies and justifies an explicit package
+  boundary change.
+* internal harness crates remain dependency sinks; they must not become runtime
+  dependencies of published crates.
+
+---
+
 ## Report Preamble (Required)
 
 Every report generated from this audit must include:
@@ -126,6 +147,75 @@ Required fields:
 
 If any workspace crates are excluded, the report must state whether that
 prevents judgment on public/internal seams or publish containment.
+
+---
+
+## Report Sections (Required)
+
+Every report generated from this audit must include the standard recurring
+audit sections below. For this dependency audit, shared recurring-audit language
+such as "module" means Cargo crate, manifest, package, feature, or dependency
+edge when Rust module evidence is not relevant.
+
+Required top-level sections:
+
+* `## Report Preamble`
+* `## Structural Hotspots`
+* `## Hub Module Pressure`
+* `## Dependency Fan-In Pressure`
+* `## Early Warning Signals`
+* `## Risk Score`
+* `## Verification Readout`
+
+`## Structural Hotspots` must name concrete manifests, features, build scripts,
+workspace dependency aliases, or package fields that concentrate dependency
+authority or publish risk.
+
+Produce:
+
+| Hotspot | Manifest / Field Evidence | Why It Matters | Risk |
+| ------- | ------------------------- | -------------- | ---- |
+
+`## Hub Module Pressure` must use normalized `0-10` scoring for crate/package
+hubs. Score package hubs by dependency fan-in, sibling workspace fan-out,
+feature fan-out, build/proc-macro reach, and whether the hub is public,
+publishable, or internal-only.
+
+Produce:
+
+| Crate / Package Hub | Fan-In Signal | Fan-Out / Feature Signal | Pressure Score | Basis |
+| ------------------- | ------------- | ------------------------ | -------------: | ----- |
+
+`## Dependency Fan-In Pressure` must list crates or features whose incoming
+dependency edges would amplify future changes. Use `cargo metadata`,
+`cargo tree -i`, manifest scans, or direct manifest inspection as evidence.
+
+Produce:
+
+| Crate / Feature | Incoming Edge Signal | Evidence | Pressure or Violation | Risk |
+| --------------- | -------------------- | -------- | --------------------- | ---- |
+
+`## Early Warning Signals` must capture predictive dependency drift even when
+there is no current violation.
+
+At minimum, check:
+
+* default-feature widening
+* public feature aliases that merely expose internal layout
+* optional dependencies that become effectively always-on
+* new path-only package assumptions
+* new build-script or proc-macro workspace coupling
+* internal harness dependencies appearing in published or publishable packages
+* support crates accumulating facade-like breadth
+
+Produce:
+
+| Signal | Evidence | Status | Trigger to Revisit |
+| ------ | -------- | ------ | ------------------ |
+
+`## Risk Score` must include the category table from STEP 8 and one normalized
+overall score. Keep the score comparable with prior runs unless the scope,
+counting model, or severity model changed.
 
 ---
 
@@ -521,6 +611,12 @@ Rule:
 
 Score each category and include a short basis explanation.
 
+The report section heading for this step must be:
+
+```markdown
+## Risk Score
+```
+
 Produce:
 
 | Category                        | Risk Index (1-10, lower is better) | Basis |
@@ -533,7 +629,7 @@ Produce:
 
 Then provide:
 
-## Overall Dependency Hygiene Risk Index (1-10, lower is better)
+### Overall Dependency Hygiene Risk Index (1-10, lower is better)
 
 Rule:
 

@@ -3,11 +3,16 @@ mod options;
 mod pending;
 mod request;
 
-use super::wallet::{
-    ResolvedCanisterTarget, cycles_icp_error, resolve_canister_target, resolve_deployment,
-    target_label,
+use crate::{
+    cycles::{
+        CyclesCommandError,
+        wallet::{
+            ResolvedCanisterTarget, cycles_icp_error, resolve_canister_target, resolve_deployment,
+            target_label,
+        },
+    },
+    support::candid::role_candid_path,
 };
-use crate::{cycles::CyclesCommandError, support::candid::role_candid_path};
 use canic_core::cdk::utils::hash::hex_bytes;
 use canic_host::{format::cycles_tc, icp::IcpCli, icp_config::resolve_current_canic_icp_root};
 use operation::{
@@ -57,19 +62,14 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         return run_fabricate(options, &icp, &target);
     }
 
-    let source_selector = options
-        .source_canister_or_role
-        .as_deref()
-        .expect("convert validation requires source");
+    let source_selector = required_source_selector(options)?;
     let source = resolve_canister_target(
         &options.deployment,
         source_selector,
         &installed.state.root_canister_id,
         &installed.registry.entries,
     )?;
-    let amount_e8s = options
-        .amount_e8s
-        .expect("convert validation requires ICP e8s amount");
+    let amount_e8s = required_amount_e8s(options)?;
     let now_nanos = current_unix_nanos();
     let pending_input =
         pending_operation_input(&root, options, &source, &target, amount_e8s, now_nanos);
@@ -103,6 +103,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
             &target,
             operation_id,
             operation_id_source,
+            amount_e8s,
             &command,
         );
         return Ok(());
@@ -158,9 +159,7 @@ fn run_fabricate(
     target: &ResolvedCanisterTarget,
 ) -> Result<(), CyclesCommandError> {
     ensure_fabricate_local_network(&options.target.network)?;
-    let amount_cycles = options
-        .cycles_amount
-        .expect("convert validation requires cycles amount for fabrication");
+    let amount_cycles = required_cycles_amount(options)?;
     let request_arg = provisional_top_up_arg(&target.canister_id, amount_cycles);
     let command = icp.canister_call_arg_output_display(
         MANAGEMENT_CANISTER_ID,
@@ -218,12 +217,32 @@ fn ensure_fabricate_local_network(network: &str) -> Result<(), CyclesCommandErro
     }
 }
 
+fn required_source_selector(options: &ConvertOptions) -> Result<&str, CyclesCommandError> {
+    options
+        .source_canister_or_role
+        .as_deref()
+        .ok_or_else(|| CyclesCommandError::Usage(usage()))
+}
+
+fn required_amount_e8s(options: &ConvertOptions) -> Result<u64, CyclesCommandError> {
+    options
+        .amount_e8s
+        .ok_or_else(|| CyclesCommandError::Usage(usage()))
+}
+
+fn required_cycles_amount(options: &ConvertOptions) -> Result<u128, CyclesCommandError> {
+    options
+        .cycles_amount
+        .ok_or_else(|| CyclesCommandError::Usage(usage()))
+}
+
 fn write_canister_dry_run(
     options: &ConvertOptions,
     source: &ResolvedCanisterTarget,
     target: &ResolvedCanisterTarget,
     operation_id: [u8; 32],
     operation_id_source: OperationIdSource,
+    amount_e8s: u64,
     command: &str,
 ) {
     if options.json {
@@ -237,7 +256,7 @@ fn write_canister_dry_run(
                 "source_subaccount": options.source_subaccount.map(hex_bytes),
                 "target": target.role.as_deref(),
                 "target_canister_id": target.canister_id,
-                "amount_e8s": options.amount_e8s.expect("convert validation requires ICP e8s amount"),
+                "amount_e8s": amount_e8s,
                 "operation_id": hex_bytes(operation_id),
                 "dry_run": true,
                 "command": command,

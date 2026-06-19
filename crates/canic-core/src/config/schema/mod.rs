@@ -30,6 +30,7 @@ use thiserror::Error as ThisError;
 /// Errors produced during schema validation.
 /// These represent *configuration mistakes*, not runtime failures.
 ///
+
 #[derive(Debug, ThisError)]
 pub enum ConfigSchemaError {
     #[error("validation error: {0}")]
@@ -44,6 +45,7 @@ pub enum ConfigSchemaError {
 /// - Keeps stable storage keys predictable
 /// - Avoids accidental abuse via extremely long role names
 ///
+
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub const NAME_MAX_BYTES: usize = 40;
 
@@ -67,6 +69,7 @@ impl From<ConfigSchemaError> for InternalError {
 /// - Non-recursive unless explicitly called
 /// - Guaranteed to run before config is used
 ///
+
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub trait Validate {
     fn validate(&self) -> Result<(), ConfigSchemaError>;
@@ -86,6 +89,7 @@ pub trait Validate {
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigModel {
@@ -257,6 +261,9 @@ impl ConfigModel {
 ///
 /// FleetConfig
 ///
+/// Operator-facing fleet identity configuration.
+/// Owned by config schema and validated before install-state paths use it.
+///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -267,6 +274,9 @@ pub struct FleetConfig {
 
 ///
 /// AppConfig
+///
+/// Application startup mode and optional whitelist configuration.
+/// Owned by config schema and consumed by access/app-state setup.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -297,6 +307,7 @@ impl Default for AppConfig {
 /// AppInitMode
 ///
 /// Configurable initial app state.
+/// Owned by config schema and mapped into app runtime state during bootstrap.
 ///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
@@ -312,6 +323,7 @@ pub enum AppInitMode {
 /// AuthConfig
 ///
 /// Groups authentication-related configuration.
+/// Owned by config schema and consumed by auth/runtime setup.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -336,6 +348,8 @@ pub struct AuthConfig {
 ///   this build verifies delegated tokens or role attestations
 /// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
+///
+/// Owned by config schema and validated before delegated auth is enabled.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -381,6 +395,7 @@ impl Default for DelegatedTokenConfig {
 /// RoleAttestationConfig
 ///
 /// Controls root-signed role attestation issuance/verification defaults.
+/// Owned by config schema and validated before role attestation is enabled.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -411,7 +426,9 @@ impl Default for RoleAttestationConfig {
 ///
 /// Stores principals as text to allow validation at config load time.
 /// Text representation is treated as canonical.
+/// Owned by config schema and consumed by access whitelist checks.
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Whitelist {
@@ -423,7 +440,9 @@ pub struct Whitelist {
 /// Standards
 ///
 /// Feature flags for supported standards.
+/// Owned by config schema and consumed by standards dispatch.
 ///
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Standards {
@@ -433,6 +452,10 @@ pub struct Standards {
     #[serde(default)]
     pub icrc103: bool,
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests;

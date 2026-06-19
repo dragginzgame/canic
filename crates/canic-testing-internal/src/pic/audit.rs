@@ -32,7 +32,13 @@ pub fn install_audit_scaling_probe(profile: CanicWasmBuildProfile) -> Standalone
     install_standalone_canister("scaling_probe", SCALE_HUB, profile)
 }
 
-// Build one standalone internal root probe for root-only query audits.
+/// Build one standalone internal root probe for root-only query audits.
+///
+/// # Panics
+///
+/// Panics if the probe wasm cannot be built/read, the PocketIC instance cannot
+/// install the root probe canister, or the probe does not become ready within
+/// the configured tick limit.
 #[must_use]
 pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProbeFixture {
     let workspace_root = workspace_root();

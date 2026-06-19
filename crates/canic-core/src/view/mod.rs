@@ -1,7 +1,9 @@
-//! Internal read-only projections over stored or runtime state.
+//! Module: view
 //!
-//! The term `view` is reserved for projections defined under `view/`.
-//! DTOs must not use `view` in type or function names.
+//! Responsibility: group internal read-only projections over stored or runtime state.
+//! Does not own: endpoint DTOs, stable records, or workflow decisions.
+//! Boundary: ops and workflow use views internally before endpoint DTO shaping.
+
 pub mod env;
 pub mod icp_refill;
 pub mod placement;

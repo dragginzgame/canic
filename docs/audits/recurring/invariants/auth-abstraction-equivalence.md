@@ -185,10 +185,12 @@ delegated session resolution tests.
 
 Audience-focused checks must also prove:
 
-- `DelegationAudience` is `Canic` or `Project(project_id)` only
+- `DelegationAudience` is limited to `Canister(canister_id)`,
+  `CanicSubnet(subnet_id)`, and `Project(project_id)`
 - no verifier-role, verifier-principal, `Roles`, `Principals`, or
   `RolesOrPrincipals` DTO remains
-- project audience verification uses the verifier-local project id
+- canister, subnet, and project audience verification uses the verifier-local
+  target identity
 - token audience must be a subset of cert audience
 - token grants must be a subset of cert grants
 - local canister role must be present in token grants before required-scope
@@ -215,13 +217,13 @@ git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access cr
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `crates/canic-macros/src/endpoint/expand.rs` | `access_stage`, `build_access_plan` | abstraction wiring into auth runtime | High |
-| `crates/canic-macros/src/endpoint/validate.rs` | `validate_authenticated_args` | compile-time shape guard for token-bearing endpoints | Medium |
+| `crates/canic-macros/src/endpoint/expand/access.rs` | `access_stage`, `build_access_plan` | abstraction wiring into auth runtime | High |
+| `crates/canic-macros/src/endpoint/validate/mod.rs` | `validate_authenticated_args` | compile-time shape guard for token-bearing endpoints | Medium |
 | `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | canonical predicate dispatch surface and caller-lane boundary | High |
 | `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | dispatch from abstraction evaluator to canonical auth verifier | High |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | canonical verifier behavior baseline | High |
 | `crates/canic-core/src/api/auth/session/mod.rs` | delegated session bootstrap | convenience path that must not replace endpoint auth semantics | Medium |
-| `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | Canic/project audience validation and local-role grant binding | High |
+| `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | canister/subnet/project audience validation and local-role grant binding | High |
 | `crates/canic-core/src/dto/auth.rs` | `DelegationAudience`, `DelegatedRoleGrant`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and grant-authorized | Medium |
 | `crates/canic/src/macros/endpoints/wasm_store.rs` | `caller::has_role("root")` protected endpoints | role-attestation endpoint policy that must not be confused with delegated-token audience | Medium |
 

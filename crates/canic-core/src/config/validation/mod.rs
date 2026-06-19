@@ -1,3 +1,9 @@
+//! Module: config::validation
+//!
+//! Responsibility: validate complete Canic configuration models on host/test targets.
+//! Does not own: config schema definitions, runtime config storage, or endpoint DTOs.
+//! Boundary: bootstrap calls validation before config models are installed.
+
 mod app;
 mod auth;
 mod fleet;

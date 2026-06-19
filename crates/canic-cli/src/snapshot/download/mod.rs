@@ -1,4 +1,16 @@
-use super::SnapshotCommandError;
+//! Module: canic_cli::snapshot::download
+//!
+//! Responsibility: resolve snapshot download CLI requests into backup driver
+//! calls.
+//! Does not own: backup traversal policy, artifact persistence semantics, or
+//! canister runtime state.
+//! Boundary: validates deployment selection, builds snapshot download config,
+//! and adapts ICP calls for the backup snapshot driver.
+
+#[cfg(test)]
+mod tests;
+
+use crate::snapshot::SnapshotCommandError;
 use crate::support::path_stamp::{current_backup_directory_stamp, file_safe_component};
 use crate::{
     cli::clap::{
@@ -528,6 +540,3 @@ fn backup_id(request: &ResolvedSnapshotDownload) -> String {
         .and_then(|name| name.to_str())
         .map_or_else(|| "snapshot-download".to_string(), str::to_string)
 }
-
-#[cfg(test)]
-mod tests;

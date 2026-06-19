@@ -1,3 +1,9 @@
+//! Module: ops::ic::mgmt::cycles
+//!
+//! Responsibility: expose management-canister cycle balance and deposit calls.
+//! Does not own: funding policy, cost guard admission, or cycle accounting records.
+//! Boundary: `MgmtOps` extension for cycle-related management calls.
+
 use super::*;
 use crate::ops::cost_guard::CostGuardPermit;
 

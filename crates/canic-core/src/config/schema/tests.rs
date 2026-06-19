@@ -1,3 +1,9 @@
+//! Module: config::schema::tests
+//!
+//! Responsibility: verify config schema validation and helper behavior.
+//! Does not own: production config schemas or runtime config storage.
+//! Boundary: test-only checks over schema models and validation implementations.
+
 use super::*;
 use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
 use std::collections::BTreeMap;

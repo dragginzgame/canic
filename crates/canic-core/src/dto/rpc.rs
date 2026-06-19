@@ -310,9 +310,7 @@ pub struct CyclesResponse {
     pub cycles_transferred: u128,
 }
 
-//
-// TESTS
-//
+// Tests
 
 #[cfg(test)]
 mod tests {

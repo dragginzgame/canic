@@ -41,6 +41,28 @@ The Token Trust Chain Invariant verifies issuer authenticity and chain validity.
 - clock skew policy changes
 - update/query authentication boundary changes
 - replay capacity or per-caller reservation limit changes
+- root proof provisioning prepare/get/install changes
+- active delegation proof install/status changes
+
+## Current Focus Questions
+
+For the current root proof provisioning and delegated-token tree, this audit
+must explicitly check:
+
+- delegated tokens remain TTL-bounded bearer credentials; verifier-local token
+  use state must not be reintroduced.
+- delegated-token certificate and claim expiry checks reject at
+  `now_ns >= expires_at_ns`.
+- active root delegation proofs reject not-yet-valid and expired certificates
+  during install, and status reports `RefreshNeeded`/`Expired` from explicit
+  `refresh_after_ns` and `expires_at_ns` boundaries.
+- root delegation proof batch prepare is replay/idempotency protected by
+  `AuthRequestMetadata.request_id`, request fingerprint, and bounded replay TTL.
+- root delegation proof batch get/install reject expired retrieval windows,
+  expired certificates, proof mismatches, and superseded pending metadata.
+- replay policy manifests classify update endpoints that mutate or prepare
+  scarce proof material, while direct root query retrieval remains read-only.
+- root replay capacity still checks per-caller capacity before global capacity.
 
 ## Report Preamble (Required)
 
@@ -64,8 +86,13 @@ nbf
 nonce
 replay
 operation_id
+request_id
 seen_jti
 issued_at
+expires_at_ns
+retrieval_expires_at_ns
+replay_expires_at_ns
+refresh_after_ns
 ```
 
 Confirm:
@@ -79,6 +106,8 @@ Confirm:
 - query and update delegated-token verification have the same bearer-token reuse
   semantics
 - freshness logic is not optional in production paths
+- root delegation proof batch prepare/get/install enforce request-id replay,
+  retrieval expiry, certificate expiry, and pending metadata cleanup semantics
 
 ### 2. Verify State Interaction
 
@@ -88,6 +117,12 @@ operation they guard.
 For delegated-token authentication, confirm endpoint verification does not write
 verifier-local token-use state. Replay-sensitive mutations must use domain
 operation receipts.
+
+For root proof provisioning, confirm `request_id` replay state is keyed to the
+prepare request fingerprint and expires on a bounded TTL. Query retrieval must
+not mutate or consume replay state; install must validate submitted proof
+freshness against pending metadata without assembling new proofs in the update
+call.
 
 For root capability requests, confirm per-caller replay reservation limits are
 checked before global capacity so one caller cannot fill the shared replay
@@ -112,7 +147,10 @@ Current suggested commands:
 
 ```bash
 cargo test -p canic-core --lib delegated_auth_guard_has_no_verifier_local_use_store -- --nocapture
-cargo test -p canic-core --lib auth_state_decode_drops_legacy_delegated_token_use_markers -- --nocapture
+cargo test -p canic-core --lib verify_delegated_token_rejects_expired_token_at_boundary -- --nocapture
+cargo test -p canic-core --lib install_active_delegation_proof_rejects_time_bounds -- --nocapture
+cargo test -p canic-core --lib batch_prepare_replays_same_request_id_without_resigning -- --nocapture
+cargo test -p canic-core --lib batch_prepare_rejects_conflicting_request_id_reuse -- --nocapture
 cargo test -p canic-core --lib replay_policy -- --nocapture
 cargo test -p canic-core --lib reserve_root_replay_rejects_caller_capacity_before_global_capacity -- --nocapture
 ```
@@ -132,9 +170,11 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `ops/auth/verify.rs` | `verify_time_bounds` | canonical expiry/nbf checks | High |
+| `ops/auth/delegated/verify.rs` | `verify_cert_time`, `verify_claims` | canonical delegated-token cert/claims expiry and nbf checks | High |
+| `ops/auth/delegated/active_proof.rs` | `install_active_delegation_proof` | active root proof install time-window gate | High |
+| `ops/auth/delegation/mod.rs` | batch prepare/get/install helpers | root proof batch replay, retrieval expiry, cert expiry, and pending cleanup | High |
 | `access/auth/token.rs` | `delegated_token_verified`, `verify_token` | delegated-token bearer verification boundary | High |
-| `replay_policy.rs` | `ENDPOINT_REPLAY_POLICY_MANIFEST` | endpoint replay classification inventory | High |
+| `replay_policy/endpoint_manifest.rs` | `ENDPOINT_REPLAY_POLICY_MANIFEST` | endpoint replay classification inventory | High |
 | `ops/replay/guard.rs` | replay guard decision surface | duplicate/conflict/ttl handling | High |
 | `ops/replay/mod.rs` | reserve/commit/abort replay markers and per-caller cap | root replay freshness state transitions | Medium |
 | `workflow/rpc/request/handler/replay.rs` | replay preflight orchestration | replay gate integration point | Medium |

@@ -1,3 +1,9 @@
+//! Module: config::validation::auth
+//!
+//! Responsibility: validate delegated-token and role-attestation configuration.
+//! Does not own: auth runtime state, token verification, or schema definitions.
+//! Boundary: config validation calls this before runtime installation.
+
 use crate::config::schema::{
     AuthConfig, ConfigSchemaError, DelegatedTokenConfig, RoleAttestationConfig, Validate,
 };

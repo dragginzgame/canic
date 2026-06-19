@@ -1,3 +1,9 @@
+//! Module: ops::config
+//!
+//! Responsibility: expose fallible configuration lookups for ops and workflows.
+//! Does not own: config parsing, environment initialization, or endpoint DTOs.
+//! Boundary: ops layer between runtime context and immutable configuration model.
+
 use crate::{
     InternalError,
     config::{
@@ -16,6 +22,8 @@ use thiserror::Error as ThisError;
 
 ///
 /// ConfigOpsError
+///
+/// Typed failure surface for configuration lookup operations.
 ///
 
 #[derive(Debug, ThisError)]
@@ -39,12 +47,7 @@ impl From<ConfigOpsError> for InternalError {
 ///
 /// ConfigOps
 ///
-/// Ops-layer façade for configuration access.
-///
-/// Responsibilities:
-/// - Provide fallible lookups over the configuration model (`try_get_*`)
-/// - Provide infallible access to the *current* subnet/canister context,
-///   assuming environment initialization has completed
+/// Operations-layer facade for configuration access.
 ///
 
 pub struct ConfigOps;
