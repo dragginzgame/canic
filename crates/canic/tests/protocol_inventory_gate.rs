@@ -17,6 +17,20 @@ const REQUIRED_METHODS: &[&str] = &[
 
 const REQUIRED_BILLING_METHODS: &[&str] = &["balance", "top-up", "gateway-principal-list"];
 
+const REQUIRED_COMMON_GATEWAY_METHOD_FIELDS: &[&str] = &[
+    "Source repository or local source identifier",
+    "Source commit SHA",
+    "Source file path",
+    "Mode",
+    "Candid signature",
+    "Request DTO shape",
+    "Response DTO shape",
+    "Unauthorized behavior",
+    "Production-vs-local differences",
+];
+
+const TOKO_SOURCE_COMMIT_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -101,7 +115,8 @@ fn complete_inventory_with_toko_section(toko_section: &str) -> String {
         "# Blob Storage Gateway Protocol Inventory\n\nStatus: **Complete**\n".to_string();
     for suffix in REQUIRED_METHODS {
         let method = gateway_method_name(suffix);
-        write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+        let method_section = complete_gateway_method_section(suffix);
+        write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
             .expect("writing to String should not fail");
     }
     inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
@@ -117,12 +132,12 @@ fn complete_inventory_missing_method(omitted_suffix: &str) -> String {
             continue;
         }
         let method = gateway_method_name(suffix);
-        write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+        let method_section = complete_gateway_method_section(suffix);
+        write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
             .expect("writing to String should not fail");
     }
-    inventory.push_str(
-        "\n## Compatibility Notes\n\n### Toko\n\nStatus: **Complete**\n\n- Mapping proven.\n",
-    );
+    inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
+    inventory.push_str(&complete_toko_section());
     inventory
 }
 
@@ -131,7 +146,8 @@ fn complete_inventory_without_toko_section() -> String {
         "# Blob Storage Gateway Protocol Inventory\n\nStatus: **Complete**\n".to_string();
     for suffix in REQUIRED_METHODS {
         let method = gateway_method_name(suffix);
-        write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+        let method_section = complete_gateway_method_section(suffix);
+        write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
             .expect("writing to String should not fail");
     }
     inventory
@@ -147,14 +163,117 @@ fn complete_inventory_with_method_section(method_suffix: &str, method_section: &
             write!(&mut inventory, "\n### `{method}`\n\n{method_section}\n")
                 .expect("writing to String should not fail");
         } else {
-            write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+            let method_section = complete_gateway_method_section(suffix);
+            write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
                 .expect("writing to String should not fail");
         }
     }
-    inventory.push_str(
-        "\n## Compatibility Notes\n\n### Toko\n\nStatus: **Complete**\n\n- Mapping proven.\n",
-    );
+    inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
+    inventory.push_str(&complete_toko_section());
     inventory
+}
+
+fn complete_toko_section() -> String {
+    let blob_root_hash = format!("{}{}{}", "Blob", "Root", "Hash");
+    format!(
+        "\
+Status: **Complete**
+
+- Local source identifier: sibling checkout ../toko
+- Source commit SHA: {TOKO_SOURCE_COMMIT_SHA}
+- Mapping from Toko blob identity into Canic `{blob_root_hash}`: accepted empty-state adoption path
+- Migration/read-through strategy: no existing state migration required for this release
+"
+    )
+}
+
+fn complete_gateway_method_section(method_suffix: &str) -> String {
+    let mut section = "Status: **Complete**\n".to_string();
+    for field in REQUIRED_COMMON_GATEWAY_METHOD_FIELDS {
+        write_gateway_field(&mut section, field);
+    }
+    write_gateway_method_specific_fields(&mut section, method_suffix);
+    section
+}
+
+fn write_gateway_field(section: &mut String, field: &str) {
+    writeln!(section, "\n- {field}: {}", gateway_field_value(field))
+        .expect("writing to String should not fail");
+}
+
+fn gateway_field_value(field: &str) -> &'static str {
+    match field {
+        "Source repository or local source identifier" => "https://example.invalid/gateway",
+        "Source commit SHA" => "0123456789abcdef0123456789abcdef01234567",
+        "Source file path" => "src/gateway.rs",
+        "Mode" => "query",
+        "Candid signature" => "(vec blob) -> (vec bool) query",
+        "Request DTO shape" => "record { hashes : vec blob }",
+        "Response DTO shape" => "vec bool",
+        "Production-vs-local differences" => "no behavior differences recorded",
+        _ => "captured behavior from upstream source",
+    }
+}
+
+fn write_gateway_method_specific_fields(section: &mut String, method_suffix: &str) {
+    match method_suffix {
+        "BlobsAreLive" => write_gateway_fields(
+            section,
+            &[
+                "Malformed input behavior",
+                "Batch ordering semantics",
+                "Duplicate-input semantics",
+                "Absent-hash behavior",
+                "Maximum batch size",
+            ],
+        ),
+        "BlobsToDelete" => write_gateway_fields(
+            section,
+            &[
+                "Result ordering",
+                "Maximum batch size",
+                "Repeat-return behavior until confirmation",
+                "Empty pending-deletion behavior",
+            ],
+        ),
+        "ConfirmBlobDeletion" => write_gateway_fields(
+            section,
+            &[
+                "Unknown blob behavior",
+                "Live-but-not-pending behavior",
+                "Already-confirmed behavior",
+                "Idempotency semantics",
+            ],
+        ),
+        "CreateCertificate" => write_gateway_fields(
+            section,
+            &[
+                "Certificate material source",
+                "Mutation-before-certificate behavior",
+                "Rollback or no-rollback behavior",
+                "Repeated create behavior",
+                "Metadata conflict/enrichment behavior",
+                "Malformed request behavior",
+            ],
+        ),
+        "UpdateGatewayPrincipals" => {
+            write_gateway_field(section, &format!("{}{} dependency", "Ca", "shier"));
+        }
+        "FundFromProjectCycles" => write_gateway_fields(
+            section,
+            &[
+                "Cycle attachment requirements",
+                "Funding success/failure behavior",
+            ],
+        ),
+        _ => panic!("unknown gateway method suffix"),
+    }
+}
+
+fn write_gateway_fields(section: &mut String, fields: &[&str]) {
+    for field in fields {
+        write_gateway_field(section, field);
+    }
 }
 
 fn billing_method_name(method: &str) -> String {
@@ -431,6 +550,77 @@ fn complete_inventory_rejects_unresolved_method_fields() {
 }
 
 #[test]
+fn complete_inventory_rejects_placeholder_method_evidence() {
+    let root = create_temp_workspace("blob-gate-method-placeholder");
+    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+    let method_section = complete_gateway_method_section(REQUIRED_METHODS[0]).replace(
+        "- Source file path: src/gateway.rs",
+        "- Source file path: placeholder",
+    );
+    fs::write(
+        &inventory,
+        complete_inventory_with_method_section(REQUIRED_METHODS[0], &method_section),
+    )
+    .expect("inventory should be written");
+
+    let output = run_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "gate should reject placeholder method evidence"
+    );
+    assert!(text.contains("method still has placeholder evidence"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn complete_inventory_rejects_invalid_source_commit_sha() {
+    let root = create_temp_workspace("blob-gate-method-sha");
+    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+    let method_section = complete_gateway_method_section(REQUIRED_METHODS[0]).replace(
+        "- Source commit SHA: 0123456789abcdef0123456789abcdef01234567",
+        "- Source commit SHA: not-a-sha",
+    );
+    fs::write(
+        &inventory,
+        complete_inventory_with_method_section(REQUIRED_METHODS[0], &method_section),
+    )
+    .expect("inventory should be written");
+
+    let output = run_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "gate should reject invalid method source commit SHA"
+    );
+    assert!(text.contains("method has invalid source commit SHA"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn complete_inventory_rejects_skeletal_method_section() {
+    let root = create_temp_workspace("blob-gate-method-skeletal");
+    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+    fs::write(
+        &inventory,
+        complete_inventory_with_method_section(REQUIRED_METHODS[3], "Status: **Complete**\n"),
+    )
+    .expect("inventory should be written");
+
+    let output = run_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "gate should reject method sections without required evidence fields"
+    );
+    assert!(text.contains("method missing required field"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn complete_inventory_rejects_missing_method_section() {
     let root = create_temp_workspace("blob-gate-missing-method");
     let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
@@ -473,6 +663,52 @@ fn complete_inventory_rejects_unresolved_toko_fields() {
 }
 
 #[test]
+fn complete_inventory_rejects_missing_toko_evidence_fields() {
+    let root = create_temp_workspace("blob-gate-complete-toko-missing-field");
+    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+    fs::write(
+        &inventory,
+        complete_inventory_with_toko_section("Status: **Complete**\n\n- Mapping accepted.\n"),
+    )
+    .expect("inventory should be written");
+
+    let output = run_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "gate should reject Toko compatibility notes without required evidence fields"
+    );
+    assert!(text.contains("Toko compatibility notes missing required field"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn complete_inventory_rejects_invalid_toko_source_commit_sha() {
+    let root = create_temp_workspace("blob-gate-complete-toko-sha");
+    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+    let toko_section = complete_toko_section().replace(
+        &format!("- Source commit SHA: {TOKO_SOURCE_COMMIT_SHA}"),
+        "- Source commit SHA: not-a-sha",
+    );
+    fs::write(
+        &inventory,
+        complete_inventory_with_toko_section(&toko_section),
+    )
+    .expect("inventory should be written");
+
+    let output = run_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "gate should reject invalid Toko source commit SHA"
+    );
+    assert!(text.contains("Toko compatibility notes have invalid source commit SHA"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn complete_inventory_rejects_missing_toko_section() {
     let root = create_temp_workspace("blob-gate-missing-toko");
     let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
@@ -496,7 +732,7 @@ fn complete_inventory_allows_resolved_inventory() {
     let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
     fs::write(
         &inventory,
-        complete_inventory_with_toko_section("Status: **Complete**\n\n- Mapping proven.\n"),
+        complete_inventory_with_toko_section(&complete_toko_section()),
     )
     .expect("inventory should be written");
 

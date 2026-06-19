@@ -34,6 +34,70 @@ Initial exact-match searches in the local tree found only Canic design notes for
 No Candid signature, source repository URL, source commit SHA, deployed `.did`,
 or upstream implementation file has been recorded yet.
 
+## Protocol Source Search Log
+
+### 2026-06-19 Local Workspace Search
+
+Search scope:
+
+- `/home/adam/projects/canic`
+- `/home/adam/projects/toko`
+- `/home/adam/projects/icydb` Candid artifact paths discovered by local file
+  search
+
+Search terms:
+
+```text
+_immutableObjectStorage
+immutableObjectStorage
+BlobRootHash
+storage_gateway_principal
+account_balance_get
+account_top_up
+Caffeine
+caffeine
+```
+
+Candidate interface files searched:
+
+- `*.did`
+- `*.candid`
+- `dfx.json`
+- `canic.toml`
+
+Result:
+
+- No upstream immutable object-storage gateway implementation was found.
+- No generated or deployed gateway `.did` was found.
+- No source-backed Candid signatures were found for the six
+  `_immutableObjectStorage*` methods.
+- Matches for `_immutableObjectStorage*`, `BlobRootHash`, Cashier method names,
+  and Caffeine wording were limited to Canic design notes, inventory files,
+  changelog notes, guard scripts, and inventory-gate tests.
+- The only sibling checkout matching the local project search was
+  `/home/adam/projects/toko`, which remains useful for first-consumer
+  compatibility evidence but does not contain the gateway protocol source or
+  method literals.
+- Candid files discovered under `/home/adam/projects/icydb/artifacts` are
+  unrelated local wasm-size artifacts and are not gateway protocol evidence.
+
+Inventory effect:
+
+- Every gateway method remains `Missing source`.
+- No method section may move to `Source identified`, `Snapshot captured`, or
+  `Complete` from this local search alone.
+- The implementation gate remains closed.
+
+Next required evidence:
+
+- Upstream source repository URL or local source identifier for the immutable
+  object-storage gateway, plus immutable commit/provenance.
+- Generated or deployed `.did` for the gateway interface.
+- Per-method source file path and source-backed behavior evidence.
+- Maintainer-approved answer for the Toko `BlobRootHash` mapping: proven
+  source mapping, accepted empty-state adoption, accepted bulk registration, or
+  accepted external-mapping migration path.
+
 ## Completion Criteria
 
 This inventory is complete only when every required field below is filled from
@@ -373,8 +437,11 @@ paths, gateway method literals, public blob-storage API/model names, and
 premature blob-storage billing/Cashier implementation surfaces outside this
 protocol inventory/design documentation. When this inventory is marked
 `Complete`, the same guard verifies that all six method sections are present and
-individually complete, have no `TBD` fields, and that the Toko compatibility
-section is also complete.
+individually complete, have no `TBD` fields, include required common and
+method-specific evidence labels, reject placeholder field values, validate
+method source commit SHA shape, and confirm that the Toko compatibility section
+is also complete with local source, commit, blob-root mapping, and
+migration/read-through strategy evidence.
 
 The only safe next steps are:
 
