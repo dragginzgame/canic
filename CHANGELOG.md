@@ -12,6 +12,15 @@ present.
 
 ## Unreleased
 
+## [0.69.x] - 2026-06-19 - Blob Storage Protocol Preflight
+
+Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)
+
+- `0.69.0` starts the blob-storage line as a protocol-preflight release by
+  recording the source-backed gateway inventory requirement, documenting the
+  current no-source finding, and hardening CI gates so implementation remains
+  blocked until gateway and Toko compatibility evidence is complete.
+
 ## [0.68.x] - 2026-06-17 - Canister Signatures & Provisioning Gates
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
