@@ -5,7 +5,6 @@
 //! Boundary: maps capability DTOs into proof checks, replay metadata, and handler calls.
 
 mod envelope;
-mod hash;
 mod nonroot;
 mod proof;
 mod replay;
@@ -26,12 +25,14 @@ use crate::{
         error::Error,
         rpc::{Request, RequestFamily, RootRequestMetadata},
     },
-    ops::runtime::metrics::root_capability::{
-        RootCapabilityMetricKey, RootCapabilityMetricProofMode,
+    ops::{
+        rpc::capability::root_capability_hash as compute_root_capability_hash,
+        runtime::metrics::root_capability::{
+            RootCapabilityMetricKey, RootCapabilityMetricProofMode,
+        },
     },
 };
 
-const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
 
@@ -186,7 +187,7 @@ pub fn root_capability_hash(
     capability_version: u16,
     capability: &Request,
 ) -> Result<[u8; 32], Error> {
-    hash::root_capability_hash(target_canister, capability_version, capability)
+    compute_root_capability_hash(target_canister, capability_version, capability)
 }
 
 const fn with_root_request_metadata(request: Request, metadata: RootRequestMetadata) -> Request {

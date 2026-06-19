@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 
 ## Purpose
 
@@ -9,15 +9,14 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.68.24` is prepared as the root proof provisioning guard-hardening slice.
-  It adds CI layer guards for DTO leakage in domain/model/storage, auth-ops
-  public-error DTO construction, and root issuer policy upsert handling
-  drifting back into the API layer. The 0.68 MVP is now at:
+- `0.68.26` is prepared as the root proof provisioning audit closeout and
+  blob-storage handoff point. The 0.68 MVP remains:
   root issuer policy upsert -> root batch prepare -> direct root query get ->
   root batch install -> issuer-local active proof status -> issuer-local
-  delegated-token prepare/get.
-
-  *** WAITING FDOR DEV FEEDBACK ***
+  delegated-token prepare/get. The latest pass refreshed the oldest recurring
+  audit definitions and recorded passing audience-target-binding,
+  capability-scope-enforcement, and change-friction reports. Root proof
+  provisioning is ready to hand focus back to the deferred blob-storage line.
 
 - `0.66.8` is pushed as the current post-0.65 feedback baseline. Pause broad
   cleanup until real Canic usage reports concrete regressions or patch-worthy

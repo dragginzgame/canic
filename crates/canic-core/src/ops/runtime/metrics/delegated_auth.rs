@@ -185,7 +185,10 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that root proof preparation started.
-    #[cfg_attr(not(feature = "auth-root-canister-sig-create"), expect(dead_code))]
+    #[cfg_attr(
+        all(not(test), not(feature = "auth-root-canister-sig-create")),
+        expect(dead_code)
+    )]
     pub fn record_root_proof_prepare_started() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareRootProof,
@@ -195,7 +198,10 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that root proof preparation completed successfully.
-    #[cfg_attr(not(feature = "auth-root-canister-sig-create"), expect(dead_code))]
+    #[cfg_attr(
+        all(not(test), not(feature = "auth-root-canister-sig-create")),
+        expect(dead_code)
+    )]
     pub fn record_root_proof_prepare_completed() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareRootProof,
@@ -218,7 +224,10 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that issuer proof preparation started.
-    #[cfg_attr(not(feature = "auth-issuer-canister-sig-create"), expect(dead_code))]
+    #[cfg_attr(
+        all(not(test), not(feature = "auth-issuer-canister-sig-create")),
+        expect(dead_code)
+    )]
     pub fn record_issuer_proof_prepare_started() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareIssuerProof,
@@ -228,7 +237,10 @@ impl DelegatedAuthMetrics {
     }
 
     /// Record that issuer proof preparation completed successfully.
-    #[cfg_attr(not(feature = "auth-issuer-canister-sig-create"), expect(dead_code))]
+    #[cfg_attr(
+        all(not(test), not(feature = "auth-issuer-canister-sig-create")),
+        expect(dead_code)
+    )]
     pub fn record_issuer_proof_prepare_completed() {
         Self::record(
             DelegatedAuthMetricOperation::PrepareIssuerProof,

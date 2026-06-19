@@ -1,3 +1,9 @@
+//! Module: canic_cli::info
+//!
+//! Responsibility: dispatch read-only installed-deployment information subcommands.
+//! Does not own: deployment state, registry state, canister lifecycle, or output formats.
+//! Boundary: parses the `canic info` group and delegates to leaf command modules.
+
 use crate::{
     cli::{
         clap::{parse_subcommand, passthrough_subcommand},
@@ -34,6 +40,9 @@ const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "m
 
 ///
 /// InfoCommandError
+///
+/// CLI boundary error for the `canic info` command group and delegated
+/// read-only information subcommands.
 ///
 
 #[derive(Debug, ThisError)]
@@ -102,6 +111,9 @@ fn command() -> ClapCommand {
 fn usage() -> String {
     INFO_USAGE.to_string()
 }
+
+// -----------------------------------------------------------------------------
+// Tests
 
 #[cfg(test)]
 mod tests {

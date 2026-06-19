@@ -174,7 +174,7 @@ fn plan_restore(options: &RestorePlanOptions) -> Result<RestorePlan, RestoreComm
     verify_backup_layout_if_required(options)?;
 
     let manifest = read_manifest_source(options)?;
-    let mapping = options.mapping.as_ref().map(read_mapping).transpose()?;
+    let mapping = options.mapping.as_deref().map(read_mapping).transpose()?;
 
     RestorePlanner::plan(&manifest, mapping.as_ref()).map_err(RestoreCommandError::from)
 }

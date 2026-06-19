@@ -83,8 +83,8 @@ const FLOW_GAPS: &[(&str, &str)] = &[
         "crates/canic-core/src/workflow/rpc/request/handler/mod.rs",
     ),
     (
-        "delegated auth issuance/verification",
-        "crates/canic-core/src/workflow/auth.rs",
+        "root proof provisioning and issuer delegated-token issuance/verification",
+        "crates/canic-core/src/workflow/runtime/auth",
     ),
     (
         "replay/cached-response path",
@@ -92,7 +92,7 @@ const FLOW_GAPS: &[(&str, &str)] = &[
     ),
     (
         "sharding assignment/query flow",
-        "crates/canic-core/src/workflow/placement/sharding/mod.rs",
+        "crates/canic-core/src/workflow/placement/sharding",
     ),
     (
         "scaling/provisioning flow",

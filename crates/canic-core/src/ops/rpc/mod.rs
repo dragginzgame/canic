@@ -4,6 +4,7 @@
 //! Does not own: workflow authorization, endpoint DTO definitions, or replay policy.
 //! Boundary: wraps IC call ops and preserves wire-level public errors.
 
+pub(crate) mod capability;
 pub mod request;
 
 use crate::{

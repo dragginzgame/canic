@@ -1,0 +1,10 @@
+{
+  "method_tag": "Method V2",
+  "counter_id": 1,
+  "counter_source": "performance_counter(1)",
+  "measured_unit": "local_instructions",
+  "counter_semantics": "Local WebAssembly instruction counter for the current call context; excludes other canisters and is not a cycle-charge measurement.",
+  "normalization": "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only QueryPerfSample probe endpoints because query-side perf rows are not committed, so the probe returns the measured local instruction counter alongside the real query result.",
+  "freshness_rule": "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.",
+  "checkpoint_rule": "Checkpoint deltas are diffed from `MetricsKind::Runtime` perf rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation."
+}

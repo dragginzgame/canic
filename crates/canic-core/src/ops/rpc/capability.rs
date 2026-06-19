@@ -1,18 +1,20 @@
-//! Module: workflow::rpc::capability::hash
+//! Module: ops::rpc::capability
 //!
-//! Responsibility: compute canonical root capability proof-binding hashes.
-//! Does not own: proof validation, request dispatch, or replay metadata.
-//! Boundary: encodes canonical capability payloads with capability hash domain separation.
+//! Responsibility: compute protocol-level RPC capability hashes.
+//! Does not own: workflow proof validation, replay orchestration, or request dispatch.
+//! Boundary: owns canonical wire encoding used for capability proof binding.
 
 use crate::{
     cdk::types::Principal,
     dto::{capability::CapabilityService, error::Error, rpc::Request},
-    workflow::rpc::capability::CAPABILITY_HASH_DOMAIN_V1,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
 
-pub(super) fn root_capability_hash(
+const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
+
+/// Compute the canonical root capability hash for proof binding.
+pub(crate) fn root_capability_hash(
     target_canister: Principal,
     capability_version: u16,
     capability: &Request,

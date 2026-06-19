@@ -379,7 +379,7 @@ fn execute_scenario(
     }
 }
 
-// Execute the root-side delegated auth batch prepare scenario from a fresh shard.
+// Execute the root-side delegation batch prepare scenario from a fresh issuer.
 fn execute_root_delegation_batch_prepare_scenario(
     setup: &root::harness::RootSetup,
     target_pid: Principal,
@@ -387,7 +387,7 @@ fn execute_root_delegation_batch_prepare_scenario(
 ) {
     let issuer_pid = prepared
         .caller_pid
-        .expect("auth audit scenario must resolve a shard caller");
+        .expect("auth audit scenario must resolve an issuer caller");
     let request = batch_prepare_request(issuer_pid, [43u8; 32]);
     let response: Result<RootDelegationProofBatchPrepareResponse, Error> = setup
         .pic
@@ -608,7 +608,7 @@ fn audit_template_fixture(scenario: &AuditScenario) -> AuditTemplateFixture {
     let payload_hash = wasm_hash(&bytes);
     let chunk_hashes = vec![wasm_hash(&bytes)];
     let template_id = TemplateId::from(format!("audit:{slug}"));
-    let version = TemplateVersion::from(format!("0.20-audit-{slug}"));
+    let version = TemplateVersion::from(format!("instruction-audit-{slug}"));
 
     AuditTemplateFixture {
         manifest: TemplateManifestInput {

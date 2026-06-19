@@ -1,3 +1,9 @@
+//! Module: canic_cli::evidence_support
+//!
+//! Responsibility: share command-provenance helpers for evidence envelopes.
+//! Does not own: evidence schemas, policy evaluation, or report rendering.
+//! Boundary: normalizes optional path arguments for stable command provenance.
+
 use canic_host::evidence_envelope::command_path_for_root;
 use std::path::Path;
 
@@ -17,6 +23,9 @@ pub fn push_optional_path_arg(
         args.push(display_path);
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
 
 #[cfg(test)]
 mod tests {

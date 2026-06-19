@@ -1,12 +1,21 @@
+//! Module: canic_cli::output
+//!
+//! Responsibility: share small CLI output file/stdout helpers.
+//! Does not own: command-specific report formats, serialization schema, or diagnostics.
+//! Boundary: writes caller-provided text/JSON payloads to stdout or filesystem paths.
+
+#[cfg(test)]
+mod tests;
+
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-// Write a pretty JSON payload to a requested file or stdout.
-pub fn write_pretty_json<T, E>(out: Option<&PathBuf>, value: &T) -> Result<(), E>
+/// Write a pretty JSON payload to a requested file or stdout.
+pub fn write_pretty_json<T, E>(out: Option<&Path>, value: &T) -> Result<(), E>
 where
     T: Serialize,
     E: From<io::Error> + From<serde_json::Error>,
@@ -25,8 +34,8 @@ where
     Ok(())
 }
 
-// Write a pretty JSON artifact file, creating its parent directory when needed.
-pub fn write_pretty_json_file<T, E>(path: &PathBuf, value: &T) -> Result<(), E>
+/// Write a pretty JSON artifact file, creating its parent directory when needed.
+pub fn write_pretty_json_file<T, E>(path: &Path, value: &T) -> Result<(), E>
 where
     T: Serialize,
     E: From<io::Error> + From<serde_json::Error>,
@@ -37,8 +46,8 @@ where
     Ok(())
 }
 
-// Write a plain text payload to a requested file or stdout.
-pub fn write_text<E>(out: Option<&PathBuf>, text: &str) -> Result<(), E>
+/// Write a plain text payload to a requested file or stdout.
+pub fn write_text<E>(out: Option<&Path>, text: &str) -> Result<(), E>
 where
     E: From<io::Error>,
 {
@@ -51,8 +60,8 @@ where
     Ok(())
 }
 
-// Read and decode one JSON file.
-pub fn read_json_file<T, E>(path: &PathBuf) -> Result<T, E>
+/// Read and decode one JSON file.
+pub fn read_json_file<T, E>(path: &Path) -> Result<T, E>
 where
     T: DeserializeOwned,
     E: From<io::Error> + From<serde_json::Error>,
@@ -72,6 +81,3 @@ where
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

@@ -1,5 +1,7 @@
 # Audit: Audience Target Binding Invariant
 
+Method: `audience-target-binding-current`
+
 ## Purpose
 
 Ensure tokens and grants are accepted only in their intended audience/target execution context.
@@ -133,13 +135,16 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_subset`, `verifier_is_in_audience` | delegated-token audience shape, subset, and verifier membership checks | High |
-| `ops/auth/delegated/verify.rs` | `verify_audience` | delegated-token cert/claim audience and local verifier checks | High |
+| `ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_subset`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | delegated-token audience shape, subset, local runtime matching, grant subset, and local-role grant lookup | High |
+| `ops/auth/delegated/verify.rs` | `verify_audience_and_grants` | delegated-token cert/claim audience, local verifier, grant subset, and scope checks | High |
+| `ops/auth/delegated/prepare.rs` | `prepare_delegated_token` | rejects delegated-token audience expansion against the active issuer certificate | High |
+| `domain/policy/auth/root_provisioning.rs` | `validate_root_delegation_proof_prepare_policy` | root issuer registry policy enforces issuer, enabled state, allowed audiences, allowed grants, TTL, and refresh policy before root proof batch prepare | High |
+| `ops/auth/delegation/batch.rs` | `preflight_delegation_proof_batch_prepare_request` | maps root proof batch prepare DTOs into root issuer policy decisions before preparing proof metadata | High |
 | `ops/auth/verify/attestation.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
-| `api/rpc/capability/proof.rs` | `verify_capability_hash_binding` | root capability hash binding to target canister and canonical payload | High |
-| `api/rpc/capability/verifier.rs` | `verify_root_capability_proof` | proof-mode routing and target-binding verification before proof-specific checks | High |
-| `api/rpc/capability/grant.rs` | delegated grant claim verifier | target/issuer/subject binding enforcement | High |
-| `ops/rpc/mod.rs` | outbound root-attestation request/cache helpers | request-time target audience selection and cache audience matching | Medium |
+| `ops/rpc/capability.rs` | `root_capability_hash` | canonical root capability hash binding to target canister, capability version, service, and canonical payload | High |
+| `workflow/rpc/capability/proof.rs` | `verify_capability_hash_binding`, structural proof helpers | test-visible target hash verification and runtime structural proof checks | Medium |
+| `workflow/rpc/capability/verifier.rs` | `verify_root_capability_proof` | active proof-mode routing; current runtime accepts structural proof mode only | Medium |
+| `workflow/rpc/capability/root.rs` | `response_capability_v1_root` | validates envelopes, verifies structural proof mode, then dispatches root capability requests | Medium |
 | `dto/auth.rs`, `dto/capability/proof.rs` | delegated claim structs | audience and target field definitions | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
@@ -230,12 +235,16 @@ If no predictive signals are detected, state: No predictive architectural signal
 Use current targeted tests rather than historical test names from older reports.
 
 ```bash
-cargo test -p canic-core --lib verify_root_delegated_grant_claims_rejects_audience_mismatch -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_audience_subset_drift -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_missing_local_role_for_role_audience -- --nocapture
-cargo test -p canic-core --lib mint_delegated_token_rejects_audience_expansion -- --nocapture
-cargo test -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
-cargo test -p canic-tests --test pic_role_attestation capability_endpoint_role_attestation_proof_paths -- --test-threads=1 --nocapture
+cargo test --locked -p canic-core --lib audience -- --nocapture
+cargo test --locked -p canic-core --lib local_role -- --nocapture
+cargo test --locked -p canic-core --lib prepare_delegated_token_rejects_audience_expansion -- --nocapture
+cargo test --locked -p canic-core --lib root_prepare_policy_rejects_audience_or_grant_outside_policy -- --nocapture
+cargo test --locked -p canic-core --lib batch_prepare_preflight_rejects_grant_outside_issuer_policy -- --nocapture
+cargo test --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
+cargo test --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
+cargo test --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture
+cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
 ```
 
 ## Dependency Fan-In Pressure

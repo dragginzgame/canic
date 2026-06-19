@@ -1,11 +1,23 @@
+//! Module: canic_cli::cli::globals
+//!
+//! Responsibility: define top-level global options and forward them to eligible commands.
+//! Does not own: command-specific option semantics, command execution, or help rendering.
+//! Boundary: translates public global flags into hidden per-command arguments.
+
 use crate::cli::{clap::value_arg, help::COMMAND_SPECS};
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 
+/// Captured passthrough tail argument id for top-level command dispatch.
 pub const DISPATCH_ARGS: &str = "args";
+
+/// Hidden per-command ICP executable option injected from top-level `--icp`.
 pub const INTERNAL_ICP_OPTION: &str = "--__canic-icp";
+
+/// Hidden per-command network option injected from top-level `--network`.
 pub const INTERNAL_NETWORK_OPTION: &str = "--__canic-network";
 
+/// Build the public top-level ICP executable option.
 pub fn icp_arg() -> Arg {
     value_arg("icp")
         .long("icp")
@@ -13,10 +25,12 @@ pub fn icp_arg() -> Arg {
         .help("Path to the icp executable for ICP-backed commands")
 }
 
+/// Build the hidden per-command ICP executable option.
 pub fn internal_icp_arg() -> Arg {
     value_arg("icp").long("__canic-icp").hide(true)
 }
 
+/// Build the public top-level ICP network option.
 pub fn network_arg() -> Arg {
     value_arg("network")
         .long("network")
@@ -24,10 +38,12 @@ pub fn network_arg() -> Arg {
         .help("ICP CLI network for networked commands")
 }
 
+/// Build the hidden per-command ICP network option.
 pub fn internal_network_arg() -> Arg {
     value_arg("network").long("__canic-network").hide(true)
 }
 
+/// Build the top-level dispatch parser used before command-specific parsing.
 pub fn top_level_dispatch_command() -> Command {
     let command = Command::new("canic")
         .disable_help_flag(true)
@@ -57,6 +73,7 @@ fn dispatch_subcommand(name: &'static str) -> Command {
     )
 }
 
+/// Return a misplaced public global option after a subcommand, if present.
 pub fn command_local_global_option(args: &[OsString]) -> Option<&'static str> {
     let mut index = 0;
     while index < args.len() {
@@ -86,6 +103,7 @@ fn global_option_name(arg: &str) -> Option<&'static str> {
     }
 }
 
+/// Inject top-level `--icp` into commands that accept ICP CLI selection.
 pub fn apply_global_icp(command: &str, tail: &mut Vec<OsString>, global_icp: Option<String>) {
     let Some(global_icp) = global_icp else {
         return;
@@ -101,6 +119,7 @@ pub fn apply_global_icp(command: &str, tail: &mut Vec<OsString>, global_icp: Opt
     tail.push(OsString::from(global_icp));
 }
 
+/// Inject top-level `--network` into commands that accept network selection.
 pub fn apply_global_network(
     command: &str,
     tail: &mut Vec<OsString>,
@@ -179,4 +198,46 @@ fn deploy_leaf_accepts_global_network(tail: &[OsString]) -> bool {
 
 fn tail_has_option(tail: &[OsString], name: &str) -> bool {
     tail.iter().any(|arg| arg.to_str() == Some(name))
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_global_option_detects_command_tail_flags() {
+        assert_eq!(
+            command_local_global_option(&[
+                OsString::from("status"),
+                OsString::from("--network"),
+                OsString::from("ic")
+            ]),
+            Some("--network")
+        );
+        assert_eq!(
+            command_local_global_option(&[OsString::from("status"), OsString::from("--icp=icp")]),
+            Some("--icp")
+        );
+    }
+
+    #[test]
+    fn global_forwarding_does_not_duplicate_hidden_options() {
+        let mut tail = vec![
+            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from("ic"),
+        ];
+
+        apply_global_network("status", &mut tail, Some("local".to_string()));
+
+        assert_eq!(
+            tail,
+            [
+                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from("ic")
+            ]
+        );
+    }
 }

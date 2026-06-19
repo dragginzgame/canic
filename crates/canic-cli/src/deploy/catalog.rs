@@ -147,12 +147,12 @@ pub(super) fn write_report(
 ) -> Result<(), DeployCommandError> {
     match options.format {
         CatalogOutputFormat::Text => output::write_text::<Box<dyn std::error::Error>>(
-            options.output.as_ref(),
+            options.output.as_deref(),
             &deployment_catalog_report_text(report),
         )
         .map_err(DeployCommandError::from),
         CatalogOutputFormat::Json => output::write_pretty_json::<_, Box<dyn std::error::Error>>(
-            options.output.as_ref(),
+            options.output.as_deref(),
             report,
         )
         .map_err(DeployCommandError::from),

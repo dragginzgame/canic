@@ -188,8 +188,7 @@ pub(super) fn verify_selected_journal_backup_root(
     backup_dir: &Path,
     journal_path: &Path,
 ) -> Result<(), RestoreCommandError> {
-    let journal_path = journal_path.to_path_buf();
-    let journal = read_apply_journal(&journal_path)?;
+    let journal = read_apply_journal(journal_path)?;
     let Some(actual) = journal.backup_root.as_deref() else {
         return Err(RestoreCommandError::PreparedJournalBackupRootMissing {
             backup_ref: backup_ref.to_string(),
@@ -222,21 +221,21 @@ fn restore_backup_dir(
 }
 
 // Read and decode a backup manifest from disk.
-fn read_manifest(path: &PathBuf) -> Result<DeploymentBackupManifest, RestoreCommandError> {
+fn read_manifest(path: &Path) -> Result<DeploymentBackupManifest, RestoreCommandError> {
     output::read_json_file::<DeploymentBackupManifest, RestoreCommandError>(path)
 }
 
 // Read and decode an optional source-to-target restore mapping from disk.
-pub(super) fn read_mapping(path: &PathBuf) -> Result<RestoreMapping, RestoreCommandError> {
+pub(super) fn read_mapping(path: &Path) -> Result<RestoreMapping, RestoreCommandError> {
     output::read_json_file::<RestoreMapping, RestoreCommandError>(path)
 }
 
 // Read and decode a restore plan from disk.
-pub(super) fn read_plan(path: &PathBuf) -> Result<RestorePlan, RestoreCommandError> {
+pub(super) fn read_plan(path: &Path) -> Result<RestorePlan, RestoreCommandError> {
     output::read_json_file::<RestorePlan, RestoreCommandError>(path)
 }
 
-fn read_apply_journal(path: &PathBuf) -> Result<RestoreApplyJournal, RestoreCommandError> {
+fn read_apply_journal(path: &Path) -> Result<RestoreApplyJournal, RestoreCommandError> {
     output::read_json_file::<RestoreApplyJournal, RestoreCommandError>(path)
 }
 
@@ -248,15 +247,12 @@ fn comparable_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-pub(super) fn write_plan_file(
-    path: &PathBuf,
-    plan: &RestorePlan,
-) -> Result<(), RestoreCommandError> {
+pub(super) fn write_plan_file(path: &Path, plan: &RestorePlan) -> Result<(), RestoreCommandError> {
     output::write_pretty_json_file(path, plan)
 }
 
 pub(super) fn write_apply_journal_file(
-    path: &PathBuf,
+    path: &Path,
     dry_run: &RestoreApplyDryRun,
 ) -> Result<(), RestoreCommandError> {
     output::write_pretty_json_file(path, &RestoreApplyJournal::from_dry_run(dry_run))
@@ -266,7 +262,7 @@ pub(super) fn write_prepare_report(
     options: &RestorePrepareOptions,
     report: &RestorePrepareReport,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_ref(), report)
+    output::write_pretty_json(options.out.as_deref(), report)
 }
 
 // Write the computed plan to stdout or a requested output file.
@@ -274,7 +270,7 @@ pub(super) fn write_plan(
     options: &RestorePlanOptions,
     plan: &RestorePlan,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_ref(), plan)
+    output::write_pretty_json(options.out.as_deref(), plan)
 }
 
 // Write the computed apply dry-run to stdout or a requested output file.
@@ -282,7 +278,7 @@ pub(super) fn write_apply_dry_run(
     options: &RestoreApplyOptions,
     dry_run: &RestoreApplyDryRun,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_ref(), dry_run)
+    output::write_pretty_json(options.out.as_deref(), dry_run)
 }
 
 // Write the initial apply journal when the caller requests one.
@@ -302,12 +298,12 @@ pub(super) fn write_restore_run(
     options: &RestoreRunOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_ref(), run)
+    output::write_pretty_json(options.out.as_deref(), run)
 }
 
 pub(super) fn write_restore_status(
     options: &RestoreStatusOptions,
     run: &RestoreRunResponse,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_ref(), run)
+    output::write_pretty_json(options.out.as_deref(), run)
 }

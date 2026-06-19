@@ -1,3 +1,9 @@
+//! Module: canic_cli::token
+//!
+//! Responsibility: wrap ICP token commands with Canic deployment-target recipient resolution.
+//! Does not own: ledger semantics, ICP CLI execution, registry persistence, or token accounting.
+//! Boundary: parses token command options and delegates resolved commands to the configured ICP CLI.
+
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, render_usage, required_string, string_option,
@@ -41,6 +47,9 @@ Examples:
 ///
 /// TokenCommandError
 ///
+/// CLI boundary error for token command parsing, deployment target lookup, and
+/// delegated ICP CLI execution.
+///
 
 #[derive(Debug, ThisError)]
 pub enum TokenCommandError {
@@ -79,9 +88,7 @@ pub enum TokenCommandError {
     Registry(#[from] RegistryParseError),
 }
 
-///
-/// IcpTargetOptions
-///
+/// Parsed ICP CLI target context shared by token subcommands.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct IcpTargetOptions {
@@ -89,9 +96,7 @@ struct IcpTargetOptions {
     icp: String,
 }
 
-///
-/// TokenCommandRequest
-///
+/// Split token command request with optional token symbol prefix.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TokenCommandRequest {
@@ -100,9 +105,7 @@ struct TokenCommandRequest {
     args: Vec<OsString>,
 }
 
-///
-/// TokenBalanceOptions
-///
+/// Parsed `canic token balance` options.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TokenBalanceOptions {
@@ -114,9 +117,7 @@ struct TokenBalanceOptions {
     of_principal: Option<String>,
 }
 
-///
-/// TokenTransferOptions
-///
+/// Parsed `canic token transfer` options.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TokenTransferOptions {
@@ -493,6 +494,9 @@ fn token_icp_error(error: IcpCommandError) -> TokenCommandError {
         },
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
 
 #[cfg(test)]
 mod tests {

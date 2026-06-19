@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-METHOD_TAG="Method V1"
+METHOD_TAG="Method V2"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
 DEFAULT_PROFILE="release"
@@ -25,6 +25,10 @@ declare -A BUILT_WASM_BYTES=()
 declare -A BUILT_WASM_GZ_BYTES=()
 declare -A SHRUNK_WASM_BYTES=()
 declare -A SHRUNK_WASM_GZ_BYTES=()
+declare -A DEBUG_BUILT_WASM_BYTES=()
+declare -A DEBUG_BUILT_WASM_GZ_BYTES=()
+declare -A DEBUG_VS_PROFILE_DELTA_BYTES=()
+declare -A DEBUG_VS_PROFILE_DELTA_PCT=()
 declare -A SHRINK_DELTA_BYTES=()
 declare -A SHRINK_DELTA_PCT=()
 declare -A BUILT_FUNCTIONS=()
@@ -42,7 +46,9 @@ declare -A HOTSPOT_SHALLOW=()
 declare -A HOTSPOT_RETAINED=()
 declare -A CANISTER_KIND=()
 declare -A BUILT_ALREADY=()
+declare -A DEBUG_BUILT_ALREADY=()
 declare -i BASELINE_GROWTH_COUNT=0
+declare -i DEBUG_CAPTURED=0
 
 has_cmd() {
     command -v "$1" >/dev/null 2>&1
@@ -186,6 +192,19 @@ has_selected_canister() {
     return 1
 }
 
+format_canister_list() {
+    local first=1
+    local canister
+
+    for canister in "${CANISTERS[@]}"; do
+        if [ "$first" -eq 0 ]; then
+            printf ' '
+        fi
+        first=0
+        printf '`%s`' "$canister"
+    done
+}
+
 capture_info_metrics() {
     local canister="$1"
     local kind="$2"
@@ -274,6 +293,30 @@ ensure_raw_canister() {
     BUILT_ALREADY["$canister"]=1
 }
 
+ensure_debug_raw_canister() {
+    local canister="$1"
+    local package_name
+    local package_target
+
+    if [ -n "${DEBUG_BUILT_ALREADY[$canister]:-}" ]; then
+        return
+    fi
+
+    package_name="$(cargo_package_name_for_role "$canister")"
+    package_target="${package_name//-/_}"
+
+    cargo build --target wasm32-unknown-unknown -p "$package_name" --locked
+
+    local source_wasm="target/wasm32-unknown-unknown/debug/$package_target.wasm"
+    local raw_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
+    local raw_gz="$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
+
+    cp -f "$source_wasm" "$raw_wasm"
+    gzip_deterministic "$raw_wasm" "$raw_gz"
+
+    DEBUG_BUILT_ALREADY["$canister"]=1
+}
+
 build_and_cache_artifacts() {
     mkdir -p "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
     mkdir -p .icp/local/canisters
@@ -318,6 +361,40 @@ build_and_cache_artifacts() {
     done
 }
 
+capture_debug_artifacts() {
+    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
+        return
+    fi
+
+    mkdir -p "$DEBUG_CACHE_RAW_DIR"
+
+    local include_root=0
+    local canister
+    for canister in "${CANISTERS[@]}"; do
+        if [ "$canister" = "root" ]; then
+            include_root=1
+        fi
+    done
+
+    if [ "$include_root" -eq 1 ]; then
+        for canister in "${DEFAULT_RELEASE_SET_CANISTERS[@]}"; do
+            ensure_debug_raw_canister "$canister"
+        done
+    fi
+
+    for canister in "${CANISTERS[@]}"; do
+        if [ "$canister" != "root" ]; then
+            ensure_debug_raw_canister "$canister"
+        fi
+    done
+
+    if [ "$include_root" -eq 1 ]; then
+        ensure_debug_raw_canister root
+    fi
+
+    DEBUG_CAPTURED=1
+}
+
 validate_cached_artifacts() {
     local canister
     for canister in "${CANISTERS[@]}"; do
@@ -340,6 +417,28 @@ validate_cached_artifacts() {
             cp -f "$raw_wasm" "$analysis_wasm"
         fi
     done
+}
+
+validate_cached_debug_artifacts() {
+    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
+        return
+    fi
+
+    local canister
+    for canister in "${CANISTERS[@]}"; do
+        local raw_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
+
+        if [ ! -f "$raw_wasm" ]; then
+            DEBUG_CAPTURED=0
+            return
+        fi
+
+        if [ ! -f "$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz" ]; then
+            gzip_deterministic "$raw_wasm" "$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
+        fi
+    done
+
+    DEBUG_CAPTURED=1
 }
 
 write_per_canister_json() {
@@ -367,6 +466,12 @@ write_per_canister_json() {
     "data_bytes": ${SHRUNK_DATA_BYTES[$canister]},
     "exports": ${SHRUNK_EXPORTS[$canister]}
   },
+  "wasm_debug_built": {
+    "wasm_bytes": ${DEBUG_BUILT_WASM_BYTES[$canister]},
+    "wasm_gz_bytes": ${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}
+  },
+  "debug_vs_profile_delta_bytes": "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}",
+  "debug_vs_profile_delta_percent": "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}",
   "shrink_delta_bytes": ${SHRINK_DELTA_BYTES[$canister]},
   "shrink_delta_percent": ${SHRINK_DELTA_PCT[$canister]},
   "baseline_delta_bytes": "${BASELINE_DELTA_BYTES[$canister]}",
@@ -391,6 +496,10 @@ write_per_canister_markdown() {
 | Built wasm.gz bytes | ${BUILT_WASM_GZ_BYTES[$canister]} |
 | Shrunk wasm bytes | ${SHRUNK_WASM_BYTES[$canister]} |
 | Shrunk wasm.gz bytes | ${SHRUNK_WASM_GZ_BYTES[$canister]} |
+| wasm-debug built wasm bytes | ${DEBUG_BUILT_WASM_BYTES[$canister]} |
+| wasm-debug built wasm.gz bytes | ${DEBUG_BUILT_WASM_GZ_BYTES[$canister]} |
+| wasm-debug vs profile built delta bytes | ${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]} |
+| wasm-debug vs profile built delta percent | ${DEBUG_VS_PROFILE_DELTA_PCT[$canister]} |
 | Shrink delta bytes | ${SHRINK_DELTA_BYTES[$canister]} |
 | Shrink delta percent | ${SHRINK_DELTA_PCT[$canister]}% |
 | Baseline delta bytes | ${BASELINE_DELTA_BYTES[$canister]} |
@@ -446,6 +555,10 @@ write_aggregate_json() {
             printf '      "built_wasm_gz_bytes": %s,\n' "${BUILT_WASM_GZ_BYTES[$canister]}"
             printf '      "shrunk_wasm_bytes": %s,\n' "${SHRUNK_WASM_BYTES[$canister]}"
             printf '      "shrunk_wasm_gz_bytes": %s,\n' "${SHRUNK_WASM_GZ_BYTES[$canister]}"
+            printf '      "debug_built_wasm_bytes": %s,\n' "${DEBUG_BUILT_WASM_BYTES[$canister]}"
+            printf '      "debug_built_wasm_gz_bytes": %s,\n' "${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}"
+            printf '      "debug_vs_profile_delta_bytes": "%s",\n' "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}"
+            printf '      "debug_vs_profile_delta_percent": "%s",\n' "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}"
             printf '      "shrink_delta_bytes": %s,\n' "${SHRINK_DELTA_BYTES[$canister]}"
             printf '      "shrink_delta_percent": %s,\n' "${SHRINK_DELTA_PCT[$canister]}"
             printf '      "baseline_delta_bytes": "%s"\n' "${BASELINE_DELTA_BYTES[$canister]}"
@@ -574,9 +687,6 @@ determine_risk_score() {
             RISK_SCORE=$((RISK_SCORE + 2))
         fi
     fi
-    if [ "${#CANISTERS[@]}" -ge 2 ]; then
-        RISK_SCORE=$((RISK_SCORE + 1))
-    fi
     if [ "$RISK_SCORE" -gt 10 ]; then
         RISK_SCORE=10
     fi
@@ -607,6 +717,8 @@ render_report() {
     local checklist_monos
     local checklist_baseline
     local checklist_delta
+    local checklist_debug
+    local checklist_debug_delta
     local canister
 
     checklist_artifacts="PASS"
@@ -616,6 +728,8 @@ render_report() {
     checklist_monos="PASS"
     checklist_baseline="PASS"
     checklist_delta="PASS"
+    checklist_debug="PASS"
+    checklist_debug_delta="PASS"
 
     if [ "$BASELINE_PATH" = "N/A" ]; then
         checklist_delta="PARTIAL"
@@ -624,6 +738,13 @@ render_report() {
         checklist_top="PARTIAL"
         checklist_dominators="PARTIAL"
         checklist_monos="PARTIAL"
+    fi
+    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
+        checklist_debug="N/A"
+        checklist_debug_delta="N/A"
+    elif [ "$DEBUG_CAPTURED" -eq 0 ]; then
+        checklist_debug="BLOCKED"
+        checklist_debug_delta="BLOCKED"
     fi
 
     cat >"$report_path" <<EOF
@@ -642,20 +763,22 @@ render_report() {
 - Branch: \`$BRANCH\`
 - Worktree: \`$WORKTREE\`
 - Profile: \`$PROFILE_NAME\`
-- Target canisters in scope: $(printf '`%s` ' "${CANISTERS[@]}")
+- Target canisters in scope: $(format_canister_list)
 - Analysis artifact note: \`twiggy\` ran against cached raw Cargo wasm to preserve readable symbol names; built/shrunk byte metrics still use the canonical built and \`icp\`-shrunk artifacts.
 
 ## Findings / Checklist
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Wasm artifacts captured for scope | $checklist_artifacts | Cached raw artifacts under \`artifacts/wasm-size/$PROFILE_NAME/raw/\` and shrunk artifacts under \`artifacts/wasm-size/$PROFILE_NAME/shrunk/\` were recorded for $(printf '`%s` ' "${CANISTERS[@]}"). |
+| Wasm artifacts captured for scope | $checklist_artifacts | Cached raw artifacts under \`artifacts/wasm-size/$PROFILE_NAME/raw/\` and shrunk artifacts under \`artifacts/wasm-size/$PROFILE_NAME/shrunk/\` were recorded for $(format_canister_list). |
 | Artifact sizes recorded in machine-readable artifact | $checklist_json | [size-report.json]($ARTIFACT_LINK_PREFIX/size-report.json) plus per-canister \`*.size-report.json\` files. |
 | Twiggy top captured | $checklist_top | \`*.twiggy-top.txt\` and \`*.twiggy-top.csv\` emitted for each canister when \`twiggy\` is available. |
 | Twiggy dominators captured | $checklist_dominators | \`*.twiggy-dominators.txt\` emitted for each canister when \`twiggy\` is available. |
 | Twiggy monos captured | $checklist_monos | \`*.twiggy-monos.txt\` emitted for each canister when \`twiggy\` is available. |
 | Baseline path selected by daily baseline discipline | $checklist_baseline | Current run stem is \`$SCOPE_STEM\`; baseline path resolves to \`$BASELINE_PATH\`. |
-| Size deltas versus baseline recorded when baseline exists | $checklist_delta | $( [ "$BASELINE_PATH" = "N/A" ] && printf 'First run of day; baseline deltas are \`N/A\`.' || printf 'Baseline deltas were calculated from \`%s\`.' "$BASELINE_PATH" ) |
+| Size deltas versus baseline recorded when baseline exists | $checklist_delta | $( [ "$BASELINE_PATH" = "N/A" ] && printf 'First run of day; baseline deltas are `N/A`.' || printf 'Baseline deltas were calculated from `%s`.' "$BASELINE_PATH" ) |
+| \`wasm-debug\` built artifacts captured | $checklist_debug | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug raw artifacts under `artifacts/wasm-size/wasm-debug/raw/` were recorded for %s.' "$(format_canister_list)"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
+| Debug-vs-audit size deltas recorded | $checklist_debug_delta | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug-vs-`%s` built wasm deltas were recorded in the report and machine-readable artifacts.' "$PROFILE_NAME"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
 | Verification readout captured | PASS | Command outcomes are recorded in the Verification Readout section. |
 
 ## Comparison to Previous Relevant Run
@@ -793,6 +916,27 @@ EOF
             >>"$report_path"
     done
 
+    if [ "$PROFILE_NAME" != "wasm-debug" ]; then
+        cat >>"$report_path" <<EOF
+
+## Debug-vs-Audit Profile Snapshot
+
+| Canister | wasm-debug built wasm | $PROFILE_NAME built wasm | Delta | Delta percent | wasm-debug built gz |
+| --- | ---: | ---: | ---: | --- | ---: |
+EOF
+
+        for canister in "${CANISTERS[@]}"; do
+            printf '| `%s` | %s | %s | %s | %s | %s |\n' \
+                "$canister" \
+                "${DEBUG_BUILT_WASM_BYTES[$canister]}" \
+                "${BUILT_WASM_BYTES[$canister]}" \
+                "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}" \
+                "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}" \
+                "${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}" \
+                >>"$report_path"
+        done
+    fi
+
     cat >>"$report_path" <<EOF
 
 ## Risk Score
@@ -819,28 +963,28 @@ EOF
         cat >>"$report_path" <<EOF
 1. Owner boundary: \`tooling\`
    Action: install \`twiggy\` before the next wasm footprint run so retained-size and monomorphization evidence is not \`BLOCKED\`.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
 EOF
     elif [ "$BASELINE_PATH" != "N/A" ] && [ "$BASELINE_GROWTH_COUNT" -gt 0 ]; then
         cat >>"$report_path" <<EOF
 1. Owner boundary: \`wasm drift follow-through\`
    Action: investigate the canisters with positive same-day baseline deltas first and decide whether the added bytes are intentional or should come back down in the next rerun.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
 2. Owner boundary: \`shared runtime baseline\`
    Action: $( if has_selected_canister minimal; then printf 'compare `minimal` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.'; else printf 'decide whether a dedicated audit baseline role should be attached, or keep using repeated leaf hotspots as the shared-runtime signal.'; fi )
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
 3. Owner boundary: \`bundle canister root\`
    Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
 EOF
     else
         cat >>"$report_path" <<EOF
 1. Owner boundary: \`shared runtime baseline\`
    Action: $( if has_selected_canister minimal; then printf 'compare `minimal` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.'; else printf 'decide whether a dedicated audit baseline role should be attached, or keep using repeated leaf hotspots as the shared-runtime signal.'; fi )
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
 2. Owner boundary: \`bundle canister root\`
    Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md\`
+   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
 EOF
     fi
 
@@ -884,6 +1028,8 @@ CACHE_ROOT="artifacts/wasm-size/$PROFILE_NAME"
 CACHE_RAW_DIR="$CACHE_ROOT/raw"
 CACHE_SHRUNK_DIR="$CACHE_ROOT/shrunk"
 CACHE_ANALYSIS_DIR="$CACHE_ROOT/analysis"
+DEBUG_CACHE_ROOT="artifacts/wasm-size/wasm-debug"
+DEBUG_CACHE_RAW_DIR="$DEBUG_CACHE_ROOT/raw"
 mkdir -p "$CACHE_ROOT" "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
 
 TWIGGY_AVAILABLE=0
@@ -902,7 +1048,13 @@ COMPARABILITY="comparable"
 
 if [ "${WASM_AUDIT_SKIP_BUILD:-0}" = "1" ]; then
     validate_cached_artifacts
+    validate_cached_debug_artifacts
     record_verification "WASM_AUDIT_SKIP_BUILD=1 cache reuse" "PASS" "reused cached artifacts from \`$CACHE_ROOT\`"
+    if [ "$PROFILE_NAME" != "wasm-debug" ] && [ "$DEBUG_CAPTURED" -eq 1 ]; then
+        record_verification "wasm-debug cache reuse" "PASS" "reused cached debug artifacts from \`$DEBUG_CACHE_ROOT\`"
+    elif [ "$PROFILE_NAME" != "wasm-debug" ]; then
+        record_verification "wasm-debug cache reuse" "BLOCKED" "debug artifacts not found under \`$DEBUG_CACHE_ROOT\`"
+    fi
 else
     if ! has_cmd cargo; then
         echo "cargo is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
@@ -910,7 +1062,11 @@ else
     fi
     require_icp_tools
     build_and_cache_artifacts
+    capture_debug_artifacts
     record_verification "cargo build --target wasm32-unknown-unknown ... && cargo run -p canic-host --example build_artifact ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
+    if [ "$PROFILE_NAME" != "wasm-debug" ]; then
+        record_verification "cargo build --target wasm32-unknown-unknown -p <package> --locked" "PASS" "built and cached wasm-debug raw artifacts for profile comparison"
+    fi
 fi
 
 if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then
@@ -927,7 +1083,7 @@ fi
 
 SIZE_METRICS_TSV="$ARTIFACTS_DIR/size-metrics.tsv"
 {
-    printf 'canister\tkind\tbuilt_wasm_bytes\tbuilt_wasm_gz_bytes\tshrunk_wasm_bytes\tshrunk_wasm_gz_bytes\tshrink_delta_bytes\tshrink_delta_percent\tbuilt_functions\tshrunk_functions\tbuilt_exports\tshrunk_exports\n'
+    printf 'canister\tkind\tbuilt_wasm_bytes\tbuilt_wasm_gz_bytes\tshrunk_wasm_bytes\tshrunk_wasm_gz_bytes\tdebug_built_wasm_bytes\tdebug_built_wasm_gz_bytes\tdebug_vs_profile_delta_bytes\tdebug_vs_profile_delta_percent\tshrink_delta_bytes\tshrink_delta_percent\tbuilt_functions\tshrunk_functions\tbuilt_exports\tshrunk_exports\n'
 } >"$SIZE_METRICS_TSV"
 
 for canister in "${CANISTERS[@]}"; do
@@ -949,6 +1105,26 @@ for canister in "${CANISTERS[@]}"; do
     SHRUNK_WASM_GZ_BYTES["$canister"]="$(byte_size "$shrunk_gz")"
     SHRINK_DELTA_BYTES["$canister"]="$(( ${BUILT_WASM_BYTES[$canister]} - ${SHRUNK_WASM_BYTES[$canister]} ))"
     SHRINK_DELTA_PCT["$canister"]="$(normalize_delta_pct "${BUILT_WASM_BYTES[$canister]}" "${SHRUNK_WASM_BYTES[$canister]}")"
+
+    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
+        DEBUG_BUILT_WASM_BYTES["$canister"]="${BUILT_WASM_BYTES[$canister]}"
+        DEBUG_BUILT_WASM_GZ_BYTES["$canister"]="${BUILT_WASM_GZ_BYTES[$canister]}"
+        DEBUG_VS_PROFILE_DELTA_BYTES["$canister"]="0"
+        DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="0.00%"
+    elif [ "$DEBUG_CAPTURED" -eq 1 ]; then
+        debug_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
+        debug_gz="$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
+        DEBUG_BUILT_WASM_BYTES["$canister"]="$(byte_size "$debug_wasm")"
+        DEBUG_BUILT_WASM_GZ_BYTES["$canister"]="$(byte_size "$debug_gz")"
+        debug_delta="$(( ${DEBUG_BUILT_WASM_BYTES[$canister]} - ${BUILT_WASM_BYTES[$canister]} ))"
+        DEBUG_VS_PROFILE_DELTA_BYTES["$canister"]="$(signed_bytes "$debug_delta")"
+        DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="$(normalize_baseline_delta_pct "${BUILT_WASM_BYTES[$canister]}" "${DEBUG_BUILT_WASM_BYTES[$canister]}")"
+    else
+        DEBUG_BUILT_WASM_BYTES["$canister"]="0"
+        DEBUG_BUILT_WASM_GZ_BYTES["$canister"]="0"
+        DEBUG_VS_PROFILE_DELTA_BYTES["$canister"]="N/A"
+        DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="N/A"
+    fi
 
     built_info_out="$ARTIFACTS_DIR/$canister.built.ic-wasm-info.txt"
     shrunk_info_out="$ARTIFACTS_DIR/$canister.shrunk.ic-wasm-info.txt"
@@ -998,13 +1174,17 @@ for canister in "${CANISTERS[@]}"; do
     BASELINE_DELTA_BYTES["$canister"]="N/A"
     BASELINE_DELTA_PCT["$canister"]="N/A"
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$canister" \
         "${CANISTER_KIND[$canister]}" \
         "${BUILT_WASM_BYTES[$canister]}" \
         "${BUILT_WASM_GZ_BYTES[$canister]}" \
         "${SHRUNK_WASM_BYTES[$canister]}" \
         "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
+        "${DEBUG_BUILT_WASM_BYTES[$canister]}" \
+        "${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}" \
+        "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}" \
+        "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}" \
         "${SHRINK_DELTA_BYTES[$canister]}" \
         "${SHRINK_DELTA_PCT[$canister]}" \
         "${BUILT_FUNCTIONS[$canister]}" \

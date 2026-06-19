@@ -69,7 +69,8 @@ Invariant:
 ## Run This Audit After
 
 - endpoint bundle changes
-- auth, replay, or capability pipeline refactors
+- root proof provisioning, delegated-token auth, replay, or capability pipeline
+  refactors
 - sharding, scaling, or pool orchestration changes
 - lifecycle/bootstrap changes
 - changes to `perf!`, `canic_metrics`, or `canic-core::perf`
@@ -353,6 +354,7 @@ Measure and report:
 
 - shared query/update endpoint instruction totals
 - root-only admin and capability paths
+- root proof provisioning and issuer-local delegated-token auth paths
 - representative non-root endpoints
 - timer rows when relevant
 - available `perf!` checkpoints inside multi-step flows
@@ -405,7 +407,7 @@ For each canister in scope, sample what exists:
 
 - observability endpoints (`canic_metrics`, `canic_log_page`, directory/state)
 - role-specific business endpoints
-- auth/capability endpoints
+- root proof, delegated-token auth, and capability endpoints
 - scaling/sharding endpoints
 - store/template publication endpoints
 - lifecycle-adjacent admin endpoints where callable in tests
@@ -429,8 +431,10 @@ If timer activity cannot be isolated cleanly, mark timer comparability
 For recurring runs, include at least one representative flow from each active
 subsystem:
 
-- root capability dispatch (`create`, `upgrade`, `cycles`, attestation/delegation)
-- delegated auth issuance/verification
+- root capability dispatch (`create`, `upgrade`, `cycles`)
+- root proof provisioning prepare/install and direct-query retrieval, where
+  measurable in the maintained runner
+- issuer-local delegated-token prepare/get/verification
 - replay/cached-response path
 - sharding assignment/query flow
 - scaling/provisioning flow

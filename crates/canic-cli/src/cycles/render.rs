@@ -16,11 +16,11 @@ pub(super) fn write_cycles_report(
     report: &CyclesReport,
 ) -> Result<(), CyclesCommandError> {
     if options.json {
-        return output::write_pretty_json::<_, CyclesCommandError>(options.out.as_ref(), report);
+        return output::write_pretty_json::<_, CyclesCommandError>(options.out.as_deref(), report);
     }
 
     output::write_text::<CyclesCommandError>(
-        options.out.as_ref(),
+        options.out.as_deref(),
         &render_cycles_report(report, options.verbose),
     )
 }

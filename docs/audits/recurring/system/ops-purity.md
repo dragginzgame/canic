@@ -19,6 +19,9 @@ Ops may own:
 - platform calls;
 - atomic mutations;
 - narrow operational semantics.
+- auth proof material verification, root/issuer canister-signature proof
+  preparation/retrieval, and issuer-local active proof state installation when
+  each operation is a single bounded step.
 
 Ops must not own:
 
@@ -31,10 +34,13 @@ Ops must not own:
 - endpoint semantics;
 - auth endpoint decisions;
 - business state machines.
+- root proof batch broadcast orchestration or external provisioning loops.
 
-Ops mapper names may contain `PolicyInputMapper` when they only convert storage
-records into pure `domain/policy` input views. Ops must not define a `policy`
-module or policy decision types.
+Ops mapper names may contain `PolicyInputMapper`, `RootIssuerPolicyRecordMapper`,
+or root-issuer-policy mapping helpers when they only convert storage records,
+boundary DTOs, or request material into pure `domain/policy` input views or
+records. Ops must not define a generic `policy` module or policy decision
+types.
 
 ## Scope
 
@@ -58,6 +64,8 @@ Boundary comparison scope:
 - changing endpoint auth/access lowering.
 - changing build/evidence/provenance host commands only when those changes
   affect `canic-core/src/ops/**`.
+- changing root proof provisioning prepare/get/install, active proof install,
+  or root issuer policy mapping.
 
 ## Checklist
 
@@ -102,27 +110,67 @@ rg -n 'struct .*Policy|enum .*Policy|impl .*Policy|mod policy|policy::|/policy/'
 Expected:
 
 - pure policy definitions live in `domain/policy`;
-- mapper names ending in `PolicyInputMapper` are conversion helpers, not policy;
+- mapper names ending in `PolicyInputMapper` and root issuer policy record/DTO
+  mappers are conversion helpers, not policy decision owners;
 - ops topology/placement mappers should live under `input` or `mapper` modules,
   not an ops-owned `policy` module;
+- local modules named for a boundary shape such as `root_issuer_policy` may
+  map or validate boundary DTO shape, but must delegate policy decisions to
+  `domain/policy`;
 - ops metric labels may reference policy error types only for bounded reporting.
 
 ### 4. Endpoint/Auth Semantics
 
-Ops may verify token material, consume replay state, and perform key/platform
-operations. Ops must not own endpoint subject binding or generated endpoint
-authorization semantics.
+Ops may verify token material, prepare/retrieve canister-signature proof
+material, consume replay state, and perform key/platform operations. Ops must
+not own endpoint subject binding, generated endpoint authorization semantics,
+or root proof install broadcast orchestration.
 
 ```bash
-rg -n 'verify_caller|authenticated_with_scope|requires\(|canic_update|canic_query|endpoint|DelegatedToken|verify_delegated_token' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
+rg -n 'verify_caller|authenticated_with_scope|requires\(|canic_update|canic_query|endpoint|DelegatedToken|verify_delegated_token|install_delegation_proof_batch|CallOps::|unbounded_wait' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
 
 - endpoint auth semantics stay in access/macros/API guard paths;
-- ops auth remains token-material verification, key resolution, and bounded
-  metrics. Domain replay protection belongs to replay receipt ops, not
-  delegated-token verification.
+- ops auth remains token-material verification, proof material
+  prepare/retrieve/verify, key resolution, pending metadata, and bounded
+  metrics;
+- root proof batch install broadcast stays in workflow;
+- domain replay protection belongs to replay receipt ops, not delegated-token
+  verification.
+
+### 4a. Root Proof Provisioning Split
+
+```bash
+rg -n 'prepare_delegation_proof_batch|get_delegation_proof_batch|install_delegation_proof_batch|install_active_delegation_proof|mark_delegation_proof_batch_installed|CallOps::|unbounded_wait|root_issuer_policy|validate_root_delegation_proof_prepare_policy' crates/canic-core/src/ops/auth crates/canic-core/src/workflow/runtime/auth crates/canic-core/src/api/auth -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- ops owns root proof batch metadata validation, root canister-signature proof
+  prepare/retrieve, pending metadata mutation, and issuer-local active proof
+  verification/storage;
+- `workflow/runtime/auth/provisioning` owns cross-canister install broadcast
+  and per-signer outcome orchestration;
+- `api/auth` owns endpoint-facing guards and public error mapping;
+- pure issuer policy decisions stay in `domain/policy/auth`.
+
+### 4b. Public Error Boundary
+
+```bash
+rg -n 'crate::dto::error|dto::error::Error|InternalError::public|Self::public|root_data_certificate_unavailable' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- ops does not construct public DTO errors directly;
+- explicitly typed public `InternalError` constructors are allowed only when
+  the operation itself must preserve a public protocol error code, such as
+  root data-certificate unavailability;
+- RPC ops may preserve a remote canister's wire-level public `Error` through
+  `InternalError::public`, but must not invent endpoint/API public errors;
+- endpoint/API layers remain responsible for general public error DTO mapping.
 
 ### 5. Metrics Coordination
 

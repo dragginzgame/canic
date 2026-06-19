@@ -1,3 +1,12 @@
+//! Module: canic_cli::replica
+//!
+//! Responsibility: manage local ICP replica start, stop, and status commands.
+//! Does not own: ICP process supervision, project config schema, or replica HTTP probing internals.
+//! Boundary: validates local project context and delegates lifecycle operations to ICP CLI helpers.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
@@ -47,6 +56,9 @@ Examples:
 ///
 /// ReplicaCommandError
 ///
+/// CLI boundary error for local replica command parsing, project config checks,
+/// ownership diagnostics, and delegated ICP CLI execution.
+///
 
 #[derive(Debug, ThisError)]
 pub enum ReplicaCommandError {
@@ -94,9 +106,7 @@ pub enum ReplicaCommandError {
     Io(#[from] std::io::Error),
 }
 
-///
-/// ReplicaOptions
-///
+/// Parsed options shared by local replica lifecycle subcommands.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ReplicaOptions {
@@ -154,9 +164,7 @@ impl ReplicaOptions {
     }
 }
 
-///
-/// ReplicaStatusJsonReport
-///
+/// JSON status report for local replica state and the source of that state.
 
 #[derive(Serialize)]
 struct ReplicaStatusJsonReport {
@@ -484,9 +492,7 @@ fn probe_reachable_local_replica_owner(
     }
 }
 
-///
-/// LocalReplicaOwner
-///
+/// Project/network owner parsed from ICP CLI local-port conflict diagnostics.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct LocalReplicaOwner {
@@ -605,6 +611,3 @@ fn status_usage() -> String {
 fn stop_usage() -> String {
     render_usage(replica_stop_command)
 }
-
-#[cfg(test)]
-mod tests;

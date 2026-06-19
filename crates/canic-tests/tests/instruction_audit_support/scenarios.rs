@@ -1,6 +1,6 @@
 use super::*;
 
-// Build the fixed scenario manifest for the first 0.20 instruction baseline.
+// Build the fixed scenario manifest for the instruction-footprint baseline.
 #[expect(clippy::too_many_lines)]
 pub(super) fn scenarios() -> Vec<AuditScenario> {
     let mut scenarios = vec![
@@ -114,7 +114,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             cache_state: "cold",
             topology_state: "root_bootstrapped+fresh-user-shard",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Root delegation batch provisioning request for a freshly created shard to exercise delegated auth issuance and root canister-signature checkpoints.",
+            notes: "Root delegation batch provisioning request for a freshly created issuer canister to exercise root proof provisioning and root canister-signature checkpoints.",
         },
         AuditScenario {
             key: "test:test:minimal-valid",
@@ -213,7 +213,7 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             cache_state: "cold",
             topology_state: "root_bootstrapped+fresh-user-shard+verifier-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Verifier-side delegated token confirmation on the shared test canister using a freshly issued token from a newly created user shard.",
+            notes: "Verifier-side delegated-token confirmation on the shared test canister using a freshly issued token from a newly created issuer canister.",
         });
     }
 

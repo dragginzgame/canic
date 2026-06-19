@@ -6,6 +6,7 @@
 
 use crate::{
     InternalError,
+    cdk::types::Principal,
     ids::CanisterRole,
     ops::storage::index::IndexOpsError,
     storage::canister::CanisterRecord,
@@ -88,7 +89,7 @@ impl RootSubnetIndexBuilder {
     }
 }
 
-fn root_pid(registry: &SubnetRegistryRecord) -> Option<crate::cdk::candid::Principal> {
+fn root_pid(registry: &SubnetRegistryRecord) -> Option<Principal> {
     registry
         .entries
         .iter()
@@ -107,7 +108,7 @@ fn is_direct_root_child(registry: &SubnetRegistryRecord, entry: &CanisterRecord)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cdk::candid::Principal, storage::canister::CanisterRecord};
+    use crate::storage::canister::CanisterRecord;
 
     fn p(n: u8) -> Principal {
         Principal::from_slice(&[n])

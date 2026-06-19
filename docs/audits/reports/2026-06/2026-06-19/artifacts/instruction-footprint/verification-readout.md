@@ -1,0 +1,13 @@
+| Command | Status | Notes |
+| --- | --- | --- |
+| `cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture` | PASS | PocketIC runner completed and wrote the report plus normalized artifacts. |
+| `fresh root harness profile per scenario` | PASS | Each scenario used a fresh smallest-profile root bootstrap instead of sharing one cumulative perf table. |
+| `canic_metrics(MetricsKind::Runtime, PageRequest { limit=512, offset=0 })` | PASS | Update scenarios were sampled before/after through persisted perf rows, and query scenarios used local-only `QueryPerfSample` probe endpoints because query-side perf rows are not committed; normalized rows saved under `/home/adam/projects/canic/docs/audits/reports/2026-06/2026-06-19/artifacts/instruction-footprint/perf-rows.json`. |
+| `repo checkpoint scan` | PASS | Found 57 checkpoint call sites. |
+| `checkpoint delta capture` | PASS | 4 non-zero checkpoint delta rows were captured under `/home/adam/projects/canic/docs/audits/reports/2026-06/2026-06-19/artifacts/instruction-footprint/checkpoint-deltas.json`. |
+| `query perf visibility` | PASS | All sampled query scenarios returned `QueryPerfSample` local instruction counters through the local-only probe endpoints, which avoids relying on non-persisted query-side perf state. |
+| `baseline comparison` | PARTIAL | Latest prior `instruction-footprint` report selected as baseline: `docs/audits/reports/2026-06/2026-06-04/instruction-footprint.md`. |
+| `bash scripts/ci/install-ic-query.sh` | PASS | Reinstalled pinned `icq 0.2.23` after the first runner attempt found local `icq 0.2.26`. |
+| `cargo test --locked -p canic-tests --test instruction_audit --no-run` | PASS | Recompiled instruction-audit support after audit-definition and runner wording fixes. |
+| `cargo fmt --all -- --check` | PASS | Formatting check passed after support-code cleanup. |
+| `git diff --check` | PASS | Whitespace check passed after report and artifact updates. |

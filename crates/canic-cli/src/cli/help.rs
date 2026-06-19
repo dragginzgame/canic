@@ -1,3 +1,9 @@
+//! Module: canic_cli::cli::help
+//!
+//! Responsibility: render top-level CLI help and detect help/version requests.
+//! Does not own: command execution, command-specific help text, or global option forwarding.
+//! Boundary: defines the top-level command catalog shared by help and dispatch.
+
 use crate::cli::globals::{icp_arg, network_arg};
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
@@ -9,9 +15,7 @@ const COLOR_GROUP: &str = "\x1b[38;5;245m";
 const COLOR_COMMAND: &str = "\x1b[38;5;109m";
 const COLOR_TIP: &str = "\x1b[38;5;245m";
 
-///
-/// CommandScope
-///
+/// Top-level help grouping for commands.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CommandScope {
@@ -32,9 +36,7 @@ impl CommandScope {
     }
 }
 
-///
-/// CommandSpec
-///
+/// One top-level command shown in help and accepted by dispatch.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct CommandSpec {
@@ -126,6 +128,7 @@ fn is_version_arg(arg: &OsString) -> bool {
         .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
 }
 
+/// Return whether the first CLI argument requests help.
 pub fn first_arg_is_help(args: &[OsString]) -> bool {
     args.first().is_some_and(is_help_arg)
 }
@@ -134,6 +137,9 @@ fn first_arg_is_version(args: &[OsString]) -> bool {
     args.first().is_some_and(is_version_arg)
 }
 
+/// Print help or version text when the first CLI argument requests it.
+///
+/// Returns `true` when the caller should stop command execution.
 pub fn print_help_or_version(
     args: &[OsString],
     usage: impl FnOnce() -> String,
@@ -151,6 +157,7 @@ pub fn print_help_or_version(
 }
 
 #[must_use]
+/// Build the top-level Clap command used for public help rendering.
 pub fn top_level_command() -> Command {
     let command = Command::new("canic")
         .version(env!("CARGO_PKG_VERSION"))
@@ -175,6 +182,7 @@ pub fn top_level_command() -> Command {
     })
 }
 
+/// Render Canic's custom colorized top-level usage text.
 pub fn usage() -> String {
     let mut lines = vec![
         color(
@@ -241,6 +249,9 @@ fn color(code: &str, text: &str) -> String {
     format!("{code}{text}{COLOR_RESET}")
 }
 
+// -----------------------------------------------------------------------------
+// Tests
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +264,15 @@ mod tests {
         assert!(text.contains(COLOR_HEADING));
         assert!(text.contains(COLOR_GROUP));
         assert!(text.contains(COLOR_COMMAND));
+    }
+
+    #[test]
+    fn first_arg_help_and_version_detection_accepts_aliases() {
+        assert!(first_arg_is_help(&[OsString::from("help")]));
+        assert!(first_arg_is_help(&[OsString::from("--help")]));
+        assert!(first_arg_is_help(&[OsString::from("-h")]));
+        assert!(first_arg_is_version(&[OsString::from("version")]));
+        assert!(first_arg_is_version(&[OsString::from("--version")]));
+        assert!(first_arg_is_version(&[OsString::from("-V")]));
     }
 }
