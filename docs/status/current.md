@@ -9,6 +9,23 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.69.0` planning is active for the blob-storage protocol line. The design
+  now treats inventory unlock as the first release milestone: complete
+  `docs/contracts/BLOB_STORAGE_INVENTORY.md` from source-backed protocol
+  evidence before adding the `blob-storage` feature, source modules, endpoint
+  literals, DTOs, stable records, macros, or protocol-behavior tests. After
+  the inventory is complete, the implementation sequence is protocol DTOs and
+  Candid snapshots -> internal model/storage -> ops/workflow -> four
+  non-billing gateway endpoints -> mocked/PocketIC lifecycle coverage. A
+  2026-06-19 local workspace search found no upstream gateway source or
+  generated/deployed `.did`; the result is recorded in the inventory search
+  log. The inventory gate now rejects skeletal `Complete` method sections by
+  requiring source, Candid, DTO, auth, production/local, and method-specific
+  evidence labels, non-placeholder values, and valid method source commit SHA
+  shapes. It also requires the Toko compatibility section to carry local
+  source, commit, blob-root mapping, and migration/read-through strategy
+  evidence. 0.70 billing remains out of scope.
+
 - `0.68.26` is prepared as the root proof provisioning audit closeout and
   blob-storage handoff point. The 0.68 MVP remains:
   root issuer policy upsert -> root batch prepare -> direct root query get ->
