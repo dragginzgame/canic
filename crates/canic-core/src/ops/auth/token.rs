@@ -1,3 +1,9 @@
+//! Module: ops::auth::token
+//!
+//! Responsibility: prepare issuer-local delegated tokens and verify delegated tokens.
+//! Does not own: endpoint authorization, active-proof storage, or auth policy records.
+//! Boundary: auth ops bridge delegated-token workflows, config, metrics, and proof helpers.
+
 use super::{
     AuthOps, AuthProofVerifierConfig, PrepareDelegatedTokenIssuerProofInput,
     PreparedDelegatedTokenIssuerProof, VerifyDelegatedTokenRuntimeInput,

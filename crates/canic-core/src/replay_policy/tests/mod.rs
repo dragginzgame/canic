@@ -1,3 +1,9 @@
+//! Module: replay_policy::tests
+//!
+//! Responsibility: verify replay-policy manifest coverage and release readiness.
+//! Does not own: production replay policy data or workflow behavior.
+//! Boundary: test-only checks comparing manifests to source-declared surfaces.
+
 mod cost;
 mod coverage;
 mod endpoint;

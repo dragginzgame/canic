@@ -1,3 +1,9 @@
+//! Module: ops::topology::input::mapper
+//!
+//! Responsibility: convert topology records into policy input views.
+//! Does not own: topology policy, storage mutation, or endpoint DTO schemas.
+//! Boundary: ops mapper used by topology workflows.
+
 use crate::{
     cdk::types::Principal,
     storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistryRecord},
@@ -6,6 +12,8 @@ use crate::{
 
 ///
 /// TopologyPolicyInputMapper
+///
+/// Operations-layer mapper for canister records and topology policy inputs.
 ///
 
 pub struct TopologyPolicyInputMapper;
@@ -24,6 +32,8 @@ impl TopologyPolicyInputMapper {
 
 ///
 /// RegistryPolicyInputMapper
+///
+/// Operations-layer mapper for subnet registry snapshots and policy inputs.
 ///
 
 pub struct RegistryPolicyInputMapper;

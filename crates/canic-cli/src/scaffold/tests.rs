@@ -8,7 +8,6 @@ fn parses_scaffold_options() {
         ScaffoldOptions::parse([OsString::from("my_app")]).expect("parse scaffold options");
 
     assert_eq!(options.name, "my_app");
-    assert_eq!(options.project_root, None);
     assert!(!options.yes);
 }
 
@@ -29,7 +28,6 @@ fn parses_canister_scaffold_options() {
 
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.role, "store");
-    assert_eq!(options.project_root, None);
 }
 
 // Ensure confirmation accepts an explicit yes response.
@@ -38,12 +36,12 @@ fn confirm_scaffold_accepts_yes() {
     let root = temp_dir("canic-cli-scaffold-confirm-yes");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        project_root: Some(root),
         yes: false,
     };
     let mut output = Vec::new();
 
-    confirm_scaffold(&options, io::Cursor::new(b"y\n"), &mut output).expect("confirm scaffold");
+    confirm_scaffold(&options, &root, io::Cursor::new(b"y\n"), &mut output)
+        .expect("confirm scaffold");
 
     let output = String::from_utf8(output).expect("utf8 prompt");
     assert!(output.contains("target:"));
@@ -57,12 +55,11 @@ fn confirm_scaffold_rejects_empty_response() {
     let root = temp_dir("canic-cli-scaffold-confirm-no");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        project_root: Some(root),
         yes: false,
     };
     let mut output = Vec::new();
 
-    let err = confirm_scaffold(&options, io::Cursor::new(b"\n"), &mut output)
+    let err = confirm_scaffold(&options, &root, io::Cursor::new(b"\n"), &mut output)
         .expect_err("empty response should cancel");
 
     std::assert_matches!(err, ScaffoldCommandError::Cancelled);
@@ -103,11 +100,10 @@ fn scaffold_project_writes_root_and_app_files() {
     let root = temp_dir("canic-cli-scaffold");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        project_root: Some(root.clone()),
         yes: true,
     };
 
-    let result = scaffold_project(&options).expect("scaffold project");
+    let result = scaffold_project_at(&root, &options).expect("scaffold project");
     let config = fs::read_to_string(&result.config_path).expect("read config");
     let root_lib = fs::read_to_string(result.root_dir.join("src/lib.rs")).expect("read root lib");
     let root_manifest =
@@ -166,10 +162,9 @@ fn scaffold_canister_writes_declared_only_role_files() {
     let options = CanisterScaffoldOptions {
         fleet: "demo".to_string(),
         role: "store".to_string(),
-        project_root: Some(root.clone()),
     };
 
-    let result = scaffold_canister(&options).expect("scaffold canister");
+    let result = scaffold_canister_at(&root, &options).expect("scaffold canister");
     let config = fs::read_to_string(fleet_dir.join("canic.toml")).expect("read config");
     let workspace_manifest = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace");
     let manifest = fs::read_to_string(fleet_dir.join("store/Cargo.toml")).expect("read manifest");
@@ -221,10 +216,9 @@ fn scaffold_canister_rejects_existing_target() {
     let options = CanisterScaffoldOptions {
         fleet: "demo".to_string(),
         role: "store".to_string(),
-        project_root: Some(root.clone()),
     };
 
-    let err = scaffold_canister(&options).expect_err("existing scaffold should fail");
+    let err = scaffold_canister_at(&root, &options).expect_err("existing scaffold should fail");
 
     fs::remove_dir_all(root).expect("remove scaffold temp root");
     std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));
@@ -240,10 +234,9 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
     let options = CanisterScaffoldOptions {
         fleet: "demo".to_string(),
         role: "app".to_string(),
-        project_root: Some(root.clone()),
     };
 
-    let err = scaffold_canister(&options).expect_err("declared role should fail");
+    let err = scaffold_canister_at(&root, &options).expect_err("declared role should fail");
 
     std::assert_matches!(err, ScaffoldCommandError::Usage(_));
     assert!(!fleet_dir.join("app").exists());
@@ -266,12 +259,11 @@ fn scaffold_project_rejects_existing_target() {
     let root = temp_dir("canic-cli-scaffold-existing");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
-        project_root: Some(root.clone()),
         yes: true,
     };
     fs::create_dir_all(root.join("fleets/my_app")).expect("create existing target");
 
-    let err = scaffold_project(&options).expect_err("existing scaffold should fail");
+    let err = scaffold_project_at(&root, &options).expect_err("existing scaffold should fail");
 
     fs::remove_dir_all(root).expect("remove scaffold temp root");
     std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));

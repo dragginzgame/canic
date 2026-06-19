@@ -157,6 +157,11 @@ pub struct ModuleSourceRuntimeApi;
 
 impl ModuleSourceRuntimeApi {
     /// Register one built-in module source override for the current process.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the same role has already been registered with a different
+    /// embedded module source in this process.
     pub fn register_embedded_module_source(role: CanisterRole, source: ApprovedModuleSource) {
         let sources = EMBEDDED_MODULE_SOURCES.get_or_init(|| Mutex::new(BTreeMap::new()));
         let mut sources = sources

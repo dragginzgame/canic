@@ -80,7 +80,7 @@ static ROOT_CAPABILITY_METADATA_NONCE: AtomicU64 = AtomicU64::new(1);
 ///
 /// RpcOps
 ///
-/// Ops facade for executing protocol-level RPC requests.
+/// Operations-layer facade for executing protocol-level RPC requests.
 ///
 
 pub struct RpcOps;

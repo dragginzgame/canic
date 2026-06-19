@@ -1,3 +1,9 @@
+//! Module: infra::ic::call
+//!
+//! Responsibility: wrap low-level IC calls with Candid argument/result helpers.
+//! Does not own: retry policy, workflow decisions, or endpoint error mapping.
+//! Boundary: infra adapters use this before returning raw decoded results to ops.
+
 use crate::{
     cdk::{
         call::Response,
@@ -18,6 +24,9 @@ const EMPTY_ARGS: &[u8] = b"DIDL\0\0";
 ///
 /// Call
 ///
+/// Factory for bounded and unbounded IC call builders.
+/// Owned by IC infra and used by low-level adapter modules.
+///
 
 pub struct Call;
 
@@ -35,6 +44,9 @@ impl Call {
 
 ///
 /// CallBuilder
+///
+/// Builder for one IC call request, including wait mode, cycles, and Candid bytes.
+/// Owned by IC infra and consumed by `execute`.
 ///
 
 pub struct CallBuilder<'a> {
@@ -96,12 +108,14 @@ impl CallBuilder<'_> {
         Ok(builder)
     }
 
+    /// Attach cycles to the call request.
     #[must_use]
     pub const fn with_cycles(mut self, cycles: u128) -> Self {
         self.cycles = cycles;
         self
     }
 
+    /// Execute the configured IC call and return the raw response wrapper.
     pub async fn execute(self) -> Result<CallResult, InfraError> {
         let mut call = match self.wait {
             WaitMode::Bounded => {
@@ -124,16 +138,21 @@ impl CallBuilder<'_> {
 ///
 /// CallResult
 ///
+/// Raw IC call response wrapper with Candid decoding helpers.
+/// Owned by IC infra and returned by `CallBuilder::execute`.
+///
 
 pub struct CallResult {
     inner: Response,
 }
 
 impl CallResult {
+    /// Return whether the raw response bytes exactly match `expected`.
     pub fn raw_equals(&self, expected: &[u8]) -> bool {
         self.inner == expected
     }
 
+    /// Decode the response as a single Candid value.
     pub fn candid<R>(&self) -> Result<R, InfraError>
     where
         R: CandidType + DeserializeOwned,
@@ -144,7 +163,7 @@ impl CallResult {
             .map_err(InfraError::from)
     }
 
-    // Optional: parity with IC Response::candid_tuple
+    /// Decode the response as a Candid tuple.
     pub fn candid_tuple<R>(&self) -> Result<R, InfraError>
     where
         R: for<'de> ArgumentDecoder<'de>,
@@ -161,6 +180,10 @@ enum WaitMode {
     Bounded,
     Unbounded,
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,9 @@
+//! Module: ops::auth::types
+//!
+//! Responsibility: define auth operation input and prepared-result shapes.
+//! Does not own: boundary DTO schemas, storage records, or verification policy.
+//! Boundary: names cross-helper data passed through auth ops.
+
 use crate::{
     cdk::types::Principal,
     domain::auth::DelegatedAuthNetwork,
@@ -8,9 +14,11 @@ use crate::{
     ops::auth::delegated::prepare::PreparedDelegatedToken,
 };
 
-//
-// PrepareDelegatedTokenIssuerProofInput
-//
+///
+/// PrepareDelegatedTokenIssuerProofInput
+///
+/// Auth-ops input for preparing an issuer-local delegated token proof.
+///
 
 pub struct PrepareDelegatedTokenIssuerProofInput {
     pub subject: Principal,
@@ -20,9 +28,11 @@ pub struct PrepareDelegatedTokenIssuerProofInput {
     pub ext: Option<Vec<u8>>,
 }
 
-//
-// PrepareRootRoleAttestationInput
-//
+///
+/// PrepareRootRoleAttestationInput
+///
+/// Auth-ops input for preparing a root role attestation proof.
+///
 
 pub struct PrepareRootRoleAttestationInput {
     pub operation_id: [u8; 32],
@@ -35,9 +45,11 @@ pub struct PrepareRootRoleAttestationInput {
     pub issued_at_ns: u64,
 }
 
-//
-// PreparedRootDelegationProof
-//
+///
+/// PreparedRootDelegationProof
+///
+/// Prepared root delegation proof material and retrieval expiry.
+///
 
 #[derive(Clone)]
 pub struct PreparedRootDelegationProof {
@@ -46,9 +58,11 @@ pub struct PreparedRootDelegationProof {
     pub retrieval_expires_at_ns: u64,
 }
 
-//
-// PreparedRootRoleAttestation
-//
+///
+/// PreparedRootRoleAttestation
+///
+/// Prepared role attestation material and retrieval expiry.
+///
 
 #[derive(Clone)]
 pub struct PreparedRootRoleAttestation {
@@ -57,9 +71,11 @@ pub struct PreparedRootRoleAttestation {
     pub retrieval_expires_at_ns: u64,
 }
 
-//
-// PreparedDelegatedTokenIssuerProof
-//
+///
+/// PreparedDelegatedTokenIssuerProof
+///
+/// Prepared issuer-local delegated token material and retrieval expiry.
+///
 
 pub struct PreparedDelegatedTokenIssuerProof {
     pub prepared: PreparedDelegatedToken,
@@ -67,9 +83,11 @@ pub struct PreparedDelegatedTokenIssuerProof {
     pub retrieval_expires_at_ns: u64,
 }
 
-//
-// AuthProofVerifierConfig
-//
+///
+/// AuthProofVerifierConfig
+///
+/// Runtime verifier trust-anchor configuration for canister-signature proofs.
+///
 
 #[derive(Debug)]
 pub struct AuthProofVerifierConfig {
@@ -78,9 +96,11 @@ pub struct AuthProofVerifierConfig {
     pub ic_root_public_key_raw: Vec<u8>,
 }
 
-//
-// VerifyDelegatedTokenRuntimeInput
-//
+///
+/// VerifyDelegatedTokenRuntimeInput
+///
+/// Auth-ops input for local delegated-token verification.
+///
 
 pub struct VerifyDelegatedTokenRuntimeInput<'a> {
     pub token: &'a DelegatedToken,

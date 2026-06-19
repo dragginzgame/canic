@@ -51,6 +51,10 @@ impl LifecycleBoundaryFixture {
     }
 
     /// Install one fresh non-Canic authority canister for negative upgrade cases.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the authority init argument cannot be encoded.
     #[must_use]
     pub fn install_authority_canister(&self) -> Principal {
         let canister_id = self.pic.create_canister();
@@ -108,6 +112,10 @@ pub fn invalid_init_args() -> Vec<u8> {
 }
 
 /// Encode the empty tuple argument used for no-payload upgrades.
+///
+/// # Panics
+///
+/// Panics if the empty tuple upgrade argument cannot be encoded.
 #[must_use]
 pub fn upgrade_args() -> Vec<u8> {
     encode_one(()).expect("encode upgrade")

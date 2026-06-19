@@ -1,3 +1,9 @@
+//! Module: access::auth::identity
+//!
+//! Responsibility: resolve authenticated subjects from raw callers and sessions.
+//! Does not own: token verification, endpoint predicates, or public error mapping.
+//! Boundary: `access::auth` calls this before evaluating caller predicates.
+
 use super::{
     AuthenticatedIdentitySource, DelegatedSessionSubjectRejection, ResolvedAuthenticatedIdentity,
 };

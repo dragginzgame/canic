@@ -85,6 +85,12 @@ impl ConfigTestBuilder {
         self.model
     }
 
+    /// Install this builder's model as the process-local test config.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the constructed test configuration fails runtime
+    /// initialization.
     #[must_use]
     pub fn install(self) -> Arc<ConfigModel> {
         Config::reset_for_tests();

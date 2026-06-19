@@ -1,3 +1,9 @@
+//! Module: ops::topology::index
+//!
+//! Responsibility: resolve app and subnet index snapshots for the current role.
+//! Does not own: index storage, topology policy, or endpoint DTO schemas.
+//! Boundary: ops resolver between workflow queries and storage/root registry state.
+
 pub mod builder;
 
 use crate::{
@@ -23,6 +29,8 @@ use self::builder::{RootAppIndexBuilder, RootSubnetIndexBuilder};
 ///
 /// AppIndexResolver
 ///
+/// Operations-layer resolver for app index snapshots.
+///
 
 pub struct AppIndexResolver;
 
@@ -45,6 +53,8 @@ impl AppIndexResolver {
 
 ///
 /// SubnetIndexResolver
+///
+/// Operations-layer resolver for subnet index snapshots.
 ///
 
 pub struct SubnetIndexResolver;

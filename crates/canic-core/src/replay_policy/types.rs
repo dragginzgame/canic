@@ -1,13 +1,16 @@
 //! Module: replay_policy::types
 //!
 //! Responsibility: define the public replay-policy manifest data shapes.
-//! Boundary: owns passive policy metadata types, not endpoint execution.
+//! Does not own: endpoint execution, replay storage, or workflow guards.
+//! Boundary: passive policy metadata consumed by manifests and release checks.
 
 ///
 /// EndpointKind
 ///
 /// Boundary classification for a manifested Canic endpoint.
+/// Owned by replay policy and used by endpoint manifest rows.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EndpointKind {
     Query,
@@ -18,7 +21,9 @@ pub enum EndpointKind {
 /// ReplayPolicy
 ///
 /// Replay behavior classification recorded for endpoint and command surfaces.
+/// Owned by replay policy and consumed by release checks and replay workflows.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReplayPolicy {
     QueryOrReadOnly,
@@ -49,7 +54,9 @@ pub enum ReplayPolicy {
 /// CostClass
 ///
 /// Cost and quota family attached to a replay-policy entry.
+/// Owned by replay policy and mapped into cost guard configuration.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CostClass {
     None,
@@ -64,7 +71,9 @@ pub enum CostClass {
 /// ReplayImplementationStatus
 ///
 /// Release-readiness state for a manifest entry.
+/// Owned by replay policy and consumed by release-blocker tests.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReplayImplementationStatus {
     Implemented,
@@ -75,7 +84,9 @@ pub enum ReplayImplementationStatus {
 /// EndpointReplayPolicy
 ///
 /// Replay manifest row for a Canic endpoint.
+/// Owned by replay policy and stored in the endpoint replay manifest.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EndpointReplayPolicy {
     pub endpoint: &'static str,
@@ -91,7 +102,9 @@ pub struct EndpointReplayPolicy {
 /// PoolAdminCommandReplayPolicy
 ///
 /// Replay manifest row for a `PoolAdminCommand` variant.
+/// Owned by replay policy and stored in the pool-admin command manifest.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PoolAdminCommandReplayPolicy {
     pub variant: &'static str,
@@ -106,7 +119,9 @@ pub struct PoolAdminCommandReplayPolicy {
 /// RootCapabilityCommandReplayPolicy
 ///
 /// Replay manifest row for a `RootCapabilityCommand` variant.
+/// Owned by replay policy and stored in the root-capability command manifest.
 ///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RootCapabilityCommandReplayPolicy {
     pub variant: &'static str,

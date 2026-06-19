@@ -111,6 +111,11 @@ impl CanicPicExt for Pic {
 }
 
 /// Wait until one Canic canister reports `canic_ready`.
+///
+/// # Panics
+///
+/// Panics if the canister does not report ready within `tick_limit` ticks, or
+/// if querying readiness traps.
 pub fn wait_until_ready(pic: &Pic, canister_id: Principal, tick_limit: usize) {
     for _ in 0..tick_limit {
         if let Ok(ready) = pic.query_call_as::<bool, _>(
@@ -129,6 +134,11 @@ pub fn wait_until_ready(pic: &Pic, canister_id: Principal, tick_limit: usize) {
 }
 
 /// Resolve one role principal from root's subnet registry, polling until present.
+///
+/// # Panics
+///
+/// Panics if the requested role is not present in root's subnet registry within
+/// `tick_limit` ticks.
 #[must_use]
 pub fn role_pid(pic: &Pic, root_id: Principal, role: &'static str, tick_limit: usize) -> Principal {
     for _ in 0..tick_limit {
@@ -155,9 +165,17 @@ pub fn role_pid(pic: &Pic, root_id: Principal, role: &'static str, tick_limit: u
     panic!("{role} canister must be registered");
 }
 
-// Install one non-root Canic canister into a fresh PocketIC instance with
-// explicit local env bootstrap fields, empty topology indexes, and the
-// internal test endpoint surface enabled for that test build.
+/// Install one non-root Canic canister into a fresh PocketIC instance.
+///
+/// The installed canister receives explicit local env bootstrap fields, empty
+/// topology indexes, and the internal test endpoint surface for that test
+/// build.
+///
+/// # Panics
+///
+/// Panics if `role` is root, the canister wasm cannot be built/read, the
+/// canister install fails, or the canister does not report ready within the
+/// configured tick limit.
 #[must_use]
 pub fn install_standalone_canister(
     crate_name: &str,

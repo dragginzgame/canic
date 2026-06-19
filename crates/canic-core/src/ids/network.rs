@@ -10,6 +10,7 @@ use std::fmt::{self, Display};
 /// BuildNetwork
 ///
 /// Identifies the environment the canister believes it runs in.
+/// Owned by ids and consumed by build-network config and access checks.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,6 +20,7 @@ pub enum BuildNetwork {
 }
 
 impl BuildNetwork {
+    /// Return the stable build-network label.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {

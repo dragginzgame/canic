@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 /// Access metrics are emitted only on denial.
 /// Custom predicates report AccessMetricKind::Custom.
 /// Predicate names are recorded separately alongside the kind.
+/// Owned by ids and consumed by access metrics adapters.
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -26,6 +27,7 @@ pub enum AccessMetricKind {
 }
 
 impl AccessMetricKind {
+    /// Return the stable metric label for this access metric kind.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -42,6 +44,7 @@ impl AccessMetricKind {
 /// SystemMetricKind
 ///
 /// Enumerates platform operation families recorded by system metrics.
+/// Owned by ids and consumed by runtime metrics adapters.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

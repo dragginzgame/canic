@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::cert_rules
+//!
+//! Responsibility: validate delegated auth certificate issuance invariants.
+//! Does not own: certificate construction, proof verification, or storage.
+//! Boundary: pure delegated auth helper shared by root and issuer flows.
+
 use super::{
     audience::{AudienceError, validate_audience_shape, validate_role_grants},
     canonical::issuer_proof_binding_hash,
@@ -5,11 +11,23 @@ use super::{
 use crate::{cdk::types::Principal, dto::auth::DelegationCert};
 use thiserror::Error;
 
+///
+/// DelegatedAuthTtlLimits
+///
+/// Root-configured TTL limits applied to delegated auth certificates and tokens.
+///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DelegatedAuthTtlLimits {
     pub max_cert_ttl_ns: u64,
     pub max_token_ttl_ns: u64,
 }
+
+///
+/// CertRuleError
+///
+/// Typed failure surface for delegated auth certificate rule validation.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum CertRuleError {
@@ -98,6 +116,10 @@ pub fn validate_cert_issuance_rules(
 
     Ok(())
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

@@ -1,10 +1,14 @@
-//! App mode gating for endpoints.
+//! Module: access::app
 //!
-//! The app bucket only inspects the application mode and does not
-//! evaluate caller identity or environment predicates.
+//! Responsibility: gate endpoint access by application mode.
+//! Does not own: caller identity, environment predicates, or endpoint error mapping.
+//! Boundary: access expressions call this before endpoint workflow execution.
 
 use crate::{access::AccessError, ops::storage::state::app::AppStateOps};
 
+///
+/// guard_app_query
+///
 /// Validate access for query calls.
 ///
 /// Behavior:
@@ -18,6 +22,9 @@ pub fn guard_app_query() -> Result<(), AccessError> {
     }
 }
 
+///
+/// guard_app_update
+///
 /// Validate access for update calls.
 ///
 /// Behavior:

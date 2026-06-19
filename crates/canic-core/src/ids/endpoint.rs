@@ -8,6 +8,7 @@
 /// EndpointCall
 ///
 /// One named endpoint invocation and its IC call mode.
+/// Owned by ids and consumed by access, replay, and observability code.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -20,6 +21,7 @@ pub struct EndpointCall {
 /// EndpointCallKind
 ///
 /// IC endpoint call mode used for replay and metrics labels.
+/// Owned by ids and consumed by access, replay, and observability code.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -30,6 +32,7 @@ pub enum EndpointCallKind {
 }
 
 impl EndpointCallKind {
+    /// Return the stable metrics label for this endpoint call mode.
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
@@ -44,6 +47,7 @@ impl EndpointCallKind {
 /// EndpointId
 ///
 /// Static endpoint name carried through replay and observability paths.
+/// Owned by ids and constructed by endpoint macros and tests.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -52,6 +56,7 @@ pub struct EndpointId {
 }
 
 impl EndpointId {
+    /// Create an endpoint id from a static endpoint name.
     #[must_use]
     pub const fn new(name: &'static str) -> Self {
         Self { name }

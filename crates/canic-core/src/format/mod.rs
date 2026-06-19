@@ -10,6 +10,7 @@ use std::fmt::{self, Display, Formatter};
 /// OptionalDisplay
 ///
 /// Display adapter that renders `None` explicitly for operator-facing output.
+/// Owned by format helpers and used by logs/status views that need stable text.
 ///
 
 pub struct OptionalDisplay<T>(pub Option<T>);
@@ -26,11 +27,9 @@ where
     }
 }
 
-///
 /// Truncate a string to at most `max_chars` Unicode scalar values.
 ///
 /// Returns the original string when it already fits.
-///
 #[must_use]
 pub fn truncate(s: &str, max_chars: usize) -> String {
     let mut chars = s.chars();
@@ -43,11 +42,9 @@ pub fn truncate(s: &str, max_chars: usize) -> String {
     }
 }
 
-///
 /// Format a byte size using IEC units with two decimal places.
 ///
 /// Examples: `512.00 B`, `720.79 KiB`, `13.61 MiB`.
-///
 #[must_use]
 #[expect(clippy::cast_precision_loss)]
 pub fn byte_size(bytes: u64) -> String {
@@ -64,11 +61,9 @@ pub fn byte_size(bytes: u64) -> String {
     format!("{value:.2} {}", UNITS[unit_index])
 }
 
-///
 /// Format a cycle balance in trillions with two decimal places.
 ///
 /// Examples: `4.49 TC`, `12.35 TC`.
-///
 #[must_use]
 pub fn cycles_tc(cycles: u128) -> String {
     const HUNDREDTH_TC: u128 = 10_000_000_000;
@@ -77,9 +72,7 @@ pub fn cycles_tc(cycles: u128) -> String {
     format!("{}.{:02} TC", hundredths / 100, hundredths % 100)
 }
 
-///
 /// Format one optional display value for logs and status output.
-///
 #[must_use]
 pub const fn display_optional<T>(value: Option<T>) -> OptionalDisplay<T>
 where

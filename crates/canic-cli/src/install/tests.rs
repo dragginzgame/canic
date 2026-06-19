@@ -4,7 +4,9 @@ use super::*;
 #[test]
 fn install_defaults_to_root_target() {
     let options = InstallOptions::parse([OsString::from("demo")]).expect("parse defaults");
-    let install = options.clone().into_install_root_options();
+    let install = options
+        .clone()
+        .into_install_root_options_with_icp_root(None);
 
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.network, local_network());
@@ -42,7 +44,7 @@ fn install_accepts_build_profile() {
         OsString::from("demo"),
     ])
     .expect("parse profile");
-    let install = options.into_install_root_options();
+    let install = options.into_install_root_options_with_icp_root(None);
 
     assert_eq!(install.build_profile, Some(CanisterBuildProfile::Fast));
 }

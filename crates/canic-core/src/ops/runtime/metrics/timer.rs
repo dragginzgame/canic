@@ -85,6 +85,7 @@ pub struct TimerMetricKey {
 /// Uses `thread_local!` storage. On the IC, this is the standard pattern
 /// for maintaining mutable global state without `unsafe`.
 ///
+
 pub struct TimerMetrics;
 
 impl TimerMetrics {

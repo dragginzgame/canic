@@ -1,3 +1,9 @@
+//! Module: infra::ic::mgmt::randomness
+//!
+//! Responsibility: perform raw management canister randomness calls.
+//! Does not own: randomness policy, entropy expansion, or workflow usage.
+//! Boundary: extends `MgmtInfra` with `raw_rand`.
+
 use crate::{
     cdk::candid::Principal,
     infra::{InfraError, ic::IcInfraError, ic::call::Call},
@@ -6,7 +12,7 @@ use crate::{
 use super::{MgmtInfra, MgmtInfraError};
 
 impl MgmtInfra {
-    // Query the management canister for raw randomness.
+    /// Query the management canister for raw randomness.
     pub async fn raw_rand() -> Result<[u8; 32], InfraError> {
         let response = Call::unbounded_wait(Principal::management_canister(), "raw_rand")
             .execute()

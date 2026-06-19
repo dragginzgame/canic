@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::active_proof
+//!
+//! Responsibility: validate and materialize issuer-local active delegation proof state.
+//! Does not own: active proof storage, root proof construction, or endpoint guards.
+//! Boundary: pure installation helper called before auth storage mutation.
+
 use super::canonical::{CanonicalAuthError, cert_hash};
 use crate::{
     cdk::types::Principal,
@@ -5,12 +11,24 @@ use crate::{
 };
 use thiserror::Error;
 
+///
+/// InstallActiveDelegationProofInput
+///
+/// Input for validating and materializing one active delegation proof.
+///
+
 pub struct InstallActiveDelegationProofInput {
     pub proof: DelegationProof,
     pub installed_by: Principal,
     pub this_canister: Principal,
     pub now_ns: u64,
 }
+
+///
+/// InstallActiveDelegationProofError
+///
+/// Typed failure surface for active delegation proof installation.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum InstallActiveDelegationProofError {
@@ -67,6 +85,10 @@ const fn refresh_after_ns(now_ns: u64, expires_at_ns: u64) -> u64 {
     let remaining_ns = expires_at_ns.saturating_sub(now_ns);
     now_ns + remaining_ns.saturating_sub(remaining_ns / 5)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

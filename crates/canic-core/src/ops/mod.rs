@@ -1,17 +1,8 @@
-//! Operations layer.
+//! Module: ops
 //!
-//! Ops functions are fallible and must not trap.
-//! All unrecoverable failures are handled at lifecycle boundaries.
-//!
-//! This module contains operational primitives and snapshots:
-//! - Mutate state and perform single-step platform side effects
-//! - Read and export internal state as snapshots
-//!
-//! Ops may project stored/runtime state into internal views or DTO-ready
-//! snapshots, but endpoint-specific pagination and boundary shaping stay in the
-//! API/workflow layers.
-//!
-//! ## Naming and structure
+//! Responsibility: expose deterministic state access and approved single-step platform effects.
+//! Does not own: endpoint authentication, workflow orchestration, or pure policy decisions.
+//! Boundary: workflow calls ops after authorization and before model/storage effects.
 //!
 //! Ops APIs are exposed via lightweight `*Ops` structs with associated
 //! functions. This is a deliberate namespacing choice to keep imports stable
@@ -36,6 +27,8 @@ pub mod topology;
 
 ///
 /// Prelude
+///
+/// Common ops imports for modules that need boundary and diagnostic types.
 ///
 
 pub mod prelude {

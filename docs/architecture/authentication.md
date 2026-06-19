@@ -457,8 +457,8 @@ Session storage is not delegated-token proof storage.
 
 ## 9. Role Attestation
 
-Role attestation is separate from delegated-token proof validation. In 0.65,
-role attestations use root canister signatures with the same update-then-query
+Role attestation is separate from delegated-token proof validation. Role
+attestations use root canister signatures with the same update-then-query
 shape as root delegation proofs.
 
 Data:
@@ -505,8 +505,11 @@ Verifier behavior:
 
 Current issuance rule:
 
-- `canic_request_role_attestation` is not exposed in normal 0.65 auth
-- `canic_request_internal_invocation_proof` is not exposed in normal 0.65 auth
+- `canic_prepare_role_attestation` / `canic_get_role_attestation` are the
+  active root role-attestation endpoints
+- retired request-style endpoints such as `canic_request_role_attestation` and
+  `canic_request_internal_invocation_proof` are not part of the active
+  protocol
 - standalone capability proof DTOs are not part of the active protocol
 - delegated tokens are the supported reusable endpoint-auth path
 

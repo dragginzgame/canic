@@ -1,3 +1,9 @@
+//! Module: access::auth::token
+//!
+//! Responsibility: decode and verify delegated tokens for endpoint access.
+//! Does not own: replay receipts, endpoint payload decoding, or public response mapping.
+//! Boundary: `access::auth` calls this after resolving the authenticated subject.
+
 use super::dependency_unavailable;
 use crate::{
     access::AccessError,
@@ -143,6 +149,10 @@ fn delegated_token_max_ttl_ns() -> Result<u64, AccessError> {
         AccessError::Denied("auth.delegated_tokens.max_ttl_secs overflows nanoseconds".to_string())
     })
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

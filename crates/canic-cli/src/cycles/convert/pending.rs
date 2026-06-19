@@ -226,9 +226,12 @@ fn write_pending_operation_log(
     path: &Path,
     log: &PendingOperationLog,
 ) -> Result<(), PendingOperationLogError> {
-    let parent = path
-        .parent()
-        .expect("pending operation log path always has parent");
+    let Some(parent) = path.parent() else {
+        return Err(PendingOperationLogError::new(
+            path.to_path_buf(),
+            "pending operation log path has no parent",
+        ));
+    };
     fs::create_dir_all(parent).map_err(|err| {
         PendingOperationLogError::new(
             parent.to_path_buf(),

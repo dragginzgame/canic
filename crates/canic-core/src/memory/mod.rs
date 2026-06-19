@@ -1,7 +1,8 @@
-//! Canic-managed stable-memory runtime boundary.
+//! Module: memory
 //!
-//! This module is the Canic-owned adapter around `ic-memory` bootstrap and
-//! Canic-specific stable-memory policy.
+//! Responsibility: adapt Canic stable-memory declarations to `ic-memory` bootstrap.
+//! Does not own: stable data schemas, ops storage APIs, or lifecycle orchestration.
+//! Boundary: lifecycle initializes this before stable structures are accessed.
 
 pub(crate) mod ledger;
 mod manager;

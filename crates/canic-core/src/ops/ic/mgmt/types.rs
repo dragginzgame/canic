@@ -1,3 +1,9 @@
+//! Module: ops::ic::mgmt::types
+//!
+//! Responsibility: map management infra types into ops-owned boundary shapes.
+//! Does not own: management call execution, endpoint DTOs, or lifecycle policy.
+//! Boundary: type conversion layer for `ops::ic::mgmt`.
+
 use crate::{
     cdk,
     infra::ic::mgmt::{
@@ -13,6 +19,8 @@ use candid::Nat;
 ///
 /// CanisterInstallMode
 ///
+/// Operations-layer install mode for management canister code installation.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CanisterInstallMode {
@@ -24,6 +32,8 @@ pub enum CanisterInstallMode {
 ///
 /// UpgradeFlags
 ///
+/// Operations-layer upgrade flags for management canister code installation.
+///
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct UpgradeFlags {
@@ -32,6 +42,7 @@ pub struct UpgradeFlags {
 
 ///
 /// LogVisibility
+///
 /// If a type exists to represent a foreign contract or infra boundary,
 /// dead-code warnings on its variants are acceptable.
 ///
@@ -46,6 +57,8 @@ pub enum LogVisibility {
 ///
 /// EnvironmentVariable
 ///
+/// Operations-layer environment variable setting for canister settings updates.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnvironmentVariable {
@@ -55,6 +68,8 @@ pub struct EnvironmentVariable {
 
 ///
 /// CanisterSettings
+///
+/// Operations-layer canister settings update shape.
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -74,6 +89,8 @@ pub struct CanisterSettings {
 ///
 /// UpdateSettingsArgs
 ///
+/// Operations-layer arguments for management canister settings updates.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdateSettingsArgs {
@@ -85,6 +102,8 @@ pub struct UpdateSettingsArgs {
 ///
 /// CanisterSnapshot
 ///
+/// Operations-layer canister snapshot metadata.
+///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CanisterSnapshot {
@@ -95,6 +114,8 @@ pub struct CanisterSnapshot {
 
 ///
 /// CanisterStatus
+///
+/// Operations-layer canister status snapshot.
 ///
 
 #[derive(Clone, Debug)]
@@ -113,6 +134,8 @@ pub struct CanisterStatus {
 ///
 /// CanisterStatusType
 ///
+/// Operations-layer canister execution status.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CanisterStatusType {
@@ -123,6 +146,8 @@ pub enum CanisterStatusType {
 
 ///
 /// CanisterSettingsSnapshot
+///
+/// Operations-layer canister settings snapshot returned by status calls.
 ///
 
 #[derive(Clone, Debug)]
@@ -142,6 +167,8 @@ pub struct CanisterSettingsSnapshot {
 ///
 /// MemoryMetricsSnapshot
 ///
+/// Operations-layer canister memory metrics snapshot returned by status calls.
+///
 
 #[derive(Clone, Debug)]
 pub struct MemoryMetricsSnapshot {
@@ -157,6 +184,8 @@ pub struct MemoryMetricsSnapshot {
 
 ///
 /// QueryStatsSnapshot
+///
+/// Operations-layer canister query stats snapshot returned by status calls.
 ///
 
 #[derive(Clone, Debug)]

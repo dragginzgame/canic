@@ -19,6 +19,7 @@ use std::{
 ///
 /// Stored as `Cow<'static, str>` so known constants can be zero-copy while
 /// dynamic values allocate only when needed.
+/// Owned by ids and shared across config, storage, DTOs, and workflows.
 ///
 
 const PRIME_ROLE: &str = "prime";
@@ -32,22 +33,25 @@ pub struct SubnetRole(pub Cow<'static, str>);
 impl SubnetRole {
     pub const PRIME: Self = Self(Cow::Borrowed(PRIME_ROLE));
 
+    /// Create a borrowed static subnet role.
     #[must_use]
     pub const fn new(s: &'static str) -> Self {
         Self(Cow::Borrowed(s))
     }
 
+    /// Create an owned subnet role.
     #[must_use]
     pub const fn owned(s: String) -> Self {
         Self(Cow::Owned(s))
     }
 
+    /// Return the subnet role as text.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Returns true if this type represents the built-in PRIME subnet
+    /// Return whether this role is the built-in prime subnet role.
     #[must_use]
     pub fn is_prime(&self) -> bool {
         self.0.as_ref() == PRIME_ROLE

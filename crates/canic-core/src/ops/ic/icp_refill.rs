@@ -1,3 +1,9 @@
+//! Module: ops::ic::icp_refill
+//!
+//! Responsibility: expose ICP refill ledger and CMC calls through approved ops APIs.
+//! Does not own: refill policy, durable refill records, or cost-guard decisions.
+//! Boundary: delegates refill mechanics to infra under workflow-owned permits.
+
 use crate::{
     InternalError,
     cdk::{
@@ -20,6 +26,8 @@ use thiserror::Error as ThisError;
 ///
 /// IcpRefillOpsError
 ///
+/// Typed failure surface for ICP refill IC operations.
+///
 
 #[derive(Debug, ThisError)]
 pub enum IcpRefillOpsError {
@@ -35,6 +43,8 @@ impl From<IcpRefillOpsError> for InternalError {
 
 ///
 /// IcpRefillOps
+///
+/// Operations-layer facade for ICP refill ledger and CMC interactions.
 ///
 
 pub struct IcpRefillOps;

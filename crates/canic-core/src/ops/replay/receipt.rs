@@ -25,6 +25,7 @@ pub const MAX_PENDING_REPLAY_RECEIPTS_PER_COMMAND_KIND: usize = 512;
 /// Input used to reserve or replay a shared receipt.
 /// Owned by replay ops and supplied by workflow replay adapters.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayReceiptReserveInput {
     pub command_kind: CommandKind,
@@ -69,6 +70,7 @@ impl ReplayReceiptReserveInput {
 /// Capability proving a fresh replay receipt reservation.
 /// Owned by replay ops and passed to commit/abort/effect helpers.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReplayReceiptToken {
     key: ReplayReceiptSlotKey,
@@ -94,6 +96,7 @@ impl ReplayReceiptToken {
 /// Mechanical replay decision for one shared receipt lookup.
 /// Owned by replay ops and mapped by workflow into command-specific outcomes.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReceiptDecision {
     Fresh(ReplayReceiptToken),
@@ -124,6 +127,7 @@ pub enum ReplayReceiptDecision {
 /// Storage adapter failure while decoding shared replay receipts.
 /// Owned by replay ops and mapped by callers into workflow errors.
 ///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayReceiptStoreError {
     ReceiptDecodeFailed(String),

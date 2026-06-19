@@ -1,3 +1,9 @@
+//! Module: ops::ic::mgmt::status_settings
+//!
+//! Responsibility: expose canister status and settings management calls.
+//! Does not own: settings policy, endpoint DTO schema, or lifecycle workflow.
+//! Boundary: `MgmtOps` extension for status/settings calls and DTO projection.
+
 use super::*;
 
 impl MgmtOps {

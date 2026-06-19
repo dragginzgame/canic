@@ -12,6 +12,12 @@ use std::{
 use crate::pic::CanicPicExt;
 
 /// Install root, stage one ordinary release profile, resume bootstrap, and fetch the subnet map.
+///
+/// # Panics
+///
+/// Panics if PocketIC cannot be started after the configured retry attempts, if
+/// root install/bootstrap fails, if release staging or bootstrap resume fails,
+/// or if required root/child registry queries fail.
 #[must_use]
 pub fn setup_root_topology(
     spec: &RootBaselineSpec<'_>,

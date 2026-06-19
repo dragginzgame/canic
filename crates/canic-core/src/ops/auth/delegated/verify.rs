@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::verify
+//!
+//! Responsibility: verify delegated-token proofs, claims, audience, and scopes.
+//! Does not own: runtime config, positive cache storage, or endpoint authorization.
+//! Boundary: pure verifier helper called by auth ops after runtime context is resolved.
+
 use super::{
     audience::{
         AudienceAcceptanceContext, AudienceError, audience_accepted, audience_subset,
@@ -14,6 +20,12 @@ use crate::{
 };
 use thiserror::Error;
 
+///
+/// VerifyDelegatedTokenInput
+///
+/// Input for local delegated-token semantic and proof verification.
+///
+
 pub struct VerifyDelegatedTokenInput<'a> {
     pub token: &'a DelegatedToken,
     pub local_canister: Principal,
@@ -25,6 +37,12 @@ pub struct VerifyDelegatedTokenInput<'a> {
     pub now_ns: u64,
 }
 
+///
+/// VerifiedDelegatedToken
+///
+/// Verified delegated-token subject, issuer, scopes, and certificate hash.
+///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedDelegatedToken {
     pub subject: Principal,
@@ -32,6 +50,12 @@ pub struct VerifiedDelegatedToken {
     pub scopes: Vec<String>,
     pub cert_hash: [u8; 32],
 }
+
+///
+/// VerifyDelegatedTokenError
+///
+/// Typed failure surface for delegated-token verification.
+///
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum VerifyDelegatedTokenError {
@@ -260,6 +284,10 @@ fn verify_scopes(subset: &[String], superset: &[String]) -> Result<(), VerifyDel
     }
     Ok(())
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

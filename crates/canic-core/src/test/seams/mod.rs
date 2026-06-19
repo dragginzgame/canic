@@ -11,6 +11,11 @@ use std::sync::{Mutex, MutexGuard};
 
 static SEAM_LOCK: Mutex<()> = Mutex::new(());
 
+/// Acquire the global seam-test lock.
+///
+/// # Panics
+///
+/// Panics if a prior seam test poisoned the global seam-test mutex.
 pub fn lock() -> MutexGuard<'static, ()> {
     SEAM_LOCK.lock().expect("seam tests lock")
 }

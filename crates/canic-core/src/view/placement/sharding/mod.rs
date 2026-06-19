@@ -1,7 +1,16 @@
+//! Module: view::placement::sharding
+//!
+//! Responsibility: define sharding placement read-only projections.
+//! Does not own: sharding policy, shard records, or endpoint DTOs.
+//! Boundary: ops mappers produce these views for sharding workflows.
+
 use crate::cdk::candid::Principal;
 
 ///
 /// ShardPlacement
+///
+/// Read-only projection of one shard placement slot.
+/// Owned by view and produced by sharding placement ops mappers.
 ///
 
 #[derive(Clone, Debug)]
@@ -19,6 +28,9 @@ impl ShardPlacement {
 ///
 /// ShardPartitionKeyAssignment
 ///
+/// Read-only projection of one partition key assignment.
+/// Owned by view and produced by sharding placement ops mappers.
+///
 
 #[derive(Clone, Debug)]
 pub struct ShardPartitionKeyAssignment {
@@ -28,7 +40,9 @@ pub struct ShardPartitionKeyAssignment {
 
 ///
 /// ShardingPlanState
+///
 /// Outcome variants of a shard plan.
+/// Owned by view and consumed by sharding workflow orchestration.
 ///
 
 #[derive(Clone, Debug)]
@@ -41,6 +55,9 @@ pub enum ShardingPlanState {
 
 ///
 /// CreateBlockedReason
+///
+/// Reason a shard creation plan cannot proceed.
+/// Owned by view and surfaced through sharding plan state.
 ///
 
 #[derive(Clone, Debug, Eq, thiserror::Error, PartialEq)]

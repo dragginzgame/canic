@@ -1,3 +1,9 @@
+//! Module: replay_policy::tests::root_capability
+//!
+//! Responsibility: verify root-capability replay-policy command coverage.
+//! Does not own: capability RPC execution or manifest construction.
+//! Boundary: test-only checks comparing source variants to manifest rows.
+
 use super::*;
 use std::collections::BTreeSet;
 

@@ -1,37 +1,30 @@
+//! Module: infra::ic::network
+//!
+//! Responsibility: expose build-time IC network selection.
+//! Does not own: runtime network detection, config validation, or endpoint policy.
+//! Boundary: ops and access predicates call this for baked-in build network state.
+
 use crate::ids::BuildNetwork;
 
 ///
 /// NetworkInfra
 ///
+/// Build-time IC network facade.
+/// Owned by IC infra and used where compiled network identity is required.
+///
 
 pub struct NetworkInfra;
 
 impl NetworkInfra {
+    /// Return the network inferred at build time from `ICP_ENVIRONMENT`.
     ///
-    /// build_network
-    /// Returns the network inferred at *build time* from `ICP_ENVIRONMENT`.
     /// This value is baked into the Wasm and does not reflect runtime state.
-    ///
-    /// ChatGPT 5.2 Final, Precise Verdict
-    ///
-    /// ✅ Yes, this works exactly as you say
-    /// ✅ It is valid IC/Wasm code
-    /// ❌ It is not runtime detection
-    /// ⚠️ The danger is semantic, not technical
-    /// ✅ Safe if treated as a build-time constant
-    /// ❌ Dangerous if treated as authoritative runtime truth
-    ///
-
     #[must_use]
     pub fn build_network() -> Option<BuildNetwork> {
         Self::build_network_from_icp_environment(option_env!("ICP_ENVIRONMENT"))
     }
 
-    ///
-    /// build_network_from_icp_environment
-    /// Pure helper for `build_network()`
-    ///
-
+    /// Parse the build-time `ICP_ENVIRONMENT` value used by `build_network`.
     #[must_use]
     pub fn build_network_from_icp_environment(
         icp_environment: Option<&'static str>,

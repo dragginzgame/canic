@@ -1,3 +1,9 @@
+//! Module: config::validation::subnet
+//!
+//! Responsibility: validate subnet topology, placement, and refill configuration.
+//! Does not own: topology workflow, placement policy execution, or schema definitions.
+//! Boundary: config validation calls this before runtime installation.
+
 use crate::{
     config::schema::{
         CanisterConfig, CanisterKind, ConfigSchemaError, NAME_MAX_BYTES, SubnetConfig, TopupPolicy,

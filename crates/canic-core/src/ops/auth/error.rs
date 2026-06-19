@@ -1,5 +1,17 @@
+//! Module: ops::auth::error
+//!
+//! Responsibility: define typed auth operation failure surfaces.
+//! Does not own: public error DTOs, endpoint mapping, or verification logic.
+//! Boundary: converts auth-local failures into internal errors.
+
 use crate::{InternalError, InternalErrorOrigin, ids::CanisterRole, ops::prelude::*};
 use thiserror::Error as ThisError;
+
+///
+/// AuthOpsError
+///
+/// Aggregate typed failure surface for auth operations.
+///
 
 #[derive(Debug, ThisError)]
 pub enum AuthOpsError {
@@ -15,6 +27,12 @@ pub enum AuthOpsError {
     #[error(transparent)]
     Expiry(#[from] AuthExpiryError),
 }
+
+///
+/// AuthValidationError
+///
+/// Typed failure surface for auth input and canonical encoding validation.
+///
 
 #[derive(Debug, ThisError)]
 pub enum AuthValidationError {
@@ -53,6 +71,12 @@ pub enum AuthValidationError {
     Auth(String),
 }
 
+///
+/// AuthSignatureError
+///
+/// Typed failure surface for auth proof availability and signature validation.
+///
+
 #[derive(Debug, ThisError)]
 pub enum AuthSignatureError {
     #[error("auth proof unavailable")]
@@ -67,6 +91,12 @@ pub enum AuthSignatureError {
     #[error("attestation proof invalid: {0}")]
     AttestationProofInvalid(String),
 }
+
+///
+/// AuthScopeError
+///
+/// Typed failure surface for delegated auth audience, issuer, and scope checks.
+///
 
 #[derive(Debug, ThisError)]
 pub enum AuthScopeError {
@@ -121,6 +151,12 @@ pub enum AuthScopeError {
         found: Principal,
     },
 }
+
+///
+/// AuthExpiryError
+///
+/// Typed failure surface for auth proof and token time-window checks.
+///
 
 #[derive(Debug, ThisError)]
 pub enum AuthExpiryError {
@@ -189,6 +225,10 @@ impl From<AuthExpiryError> for InternalError {
         AuthOpsError::from(err).into()
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

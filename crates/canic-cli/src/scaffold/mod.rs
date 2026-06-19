@@ -1,3 +1,13 @@
+//! Module: canic_cli::scaffold
+//!
+//! Responsibility: create local fleet and declared canister source scaffolds.
+//! Does not own: deployment execution, canister install/upgrade, or runtime
+//! state mutation.
+//! Boundary: validates CLI input and writes new local source/config files only.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     cli::clap::{
         flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
@@ -76,8 +86,6 @@ pub enum ScaffoldCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ScaffoldOptions {
     name: String,
-    #[cfg(test)]
-    project_root: Option<PathBuf>,
     yes: bool,
 }
 
@@ -89,8 +97,6 @@ struct ScaffoldOptions {
 struct CanisterScaffoldOptions {
     fleet: String,
     role: String,
-    #[cfg(test)]
-    project_root: Option<PathBuf>,
 }
 
 impl ScaffoldOptions {
@@ -114,8 +120,6 @@ impl ScaffoldOptions {
             parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
         Ok(Self {
             name: required_string(&matches, "name"),
-            #[cfg(test)]
-            project_root: None,
             yes: matches.get_flag("yes"),
         })
     }
@@ -143,8 +147,6 @@ impl CanisterScaffoldOptions {
         Ok(Self {
             fleet: required_string(&matches, "fleet"),
             role: required_string(&matches, "role"),
-            #[cfg(test)]
-            project_root: None,
         })
     }
 }
@@ -219,11 +221,12 @@ where
 }
 
 fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
+    let project_root = scaffold_project_root()?;
     if !options.yes {
-        confirm_scaffold(&options, io::stdin().lock(), io::stdout())?;
+        confirm_scaffold(&options, &project_root, io::stdin().lock(), io::stdout())?;
     }
 
-    let result = scaffold_project(&options)?;
+    let result = scaffold_project_at(&project_root, &options)?;
     println!("Created Canic fleet:");
     println!("  {}", result.project_dir.display());
     println!("  {}", result.root_dir.display());
@@ -263,11 +266,11 @@ struct ScaffoldResult {
     config_path: PathBuf,
 }
 
-/// Create a minimal root plus app canister fleet scaffold.
-fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, ScaffoldCommandError> {
-    let project_dir = scaffold_project_root(options)?
-        .join("fleets")
-        .join(&options.name);
+fn scaffold_project_at(
+    project_root: &Path,
+    options: &ScaffoldOptions,
+) -> Result<ScaffoldResult, ScaffoldCommandError> {
+    let project_dir = project_root.join("fleets").join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -303,8 +306,14 @@ fn scaffold_project(options: &ScaffoldOptions) -> Result<ScaffoldResult, Scaffol
 fn scaffold_canister(
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
-    let project_root = scaffold_canister_project_root(options)?;
-    let config_path = selected_fleet_config_path(&project_root, &options.fleet)?;
+    scaffold_canister_at(&scaffold_project_root()?, options)
+}
+
+fn scaffold_canister_at(
+    project_root: &Path,
+    options: &CanisterScaffoldOptions,
+) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
+    let config_path = selected_fleet_config_path(project_root, &options.fleet)?;
     let fleet_dir = config_path
         .parent()
         .ok_or_else(|| ScaffoldCommandError::MissingFleetDirectory(options.fleet.clone()))?;
@@ -320,14 +329,14 @@ fn scaffold_canister(
 
     let package = options.role.clone();
     let package_name = canister_package_name(&options.fleet, &options.role);
-    let workspace_member = display_workspace_path(&project_root, &canister_dir);
+    let workspace_member = display_workspace_path(project_root, &canister_dir);
     write_new_file(
         &canister_dir.join("Cargo.toml"),
         &canister_cargo_toml(&options.fleet, &options.role),
     )?;
     write_new_file(&canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
     write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
-    append_workspace_member(&project_root, &workspace_member)?;
+    append_workspace_member(project_root, &workspace_member)?;
     declare_fleet_role(&config_path, &options.fleet, &options.role, &package)?;
 
     Ok(CanisterScaffoldResult {
@@ -335,8 +344,8 @@ fn scaffold_canister(
         role: options.role.clone(),
         package,
         package_name,
-        canister_dir: display_path(&project_root, &canister_dir),
-        config_path: display_path(&project_root, &config_path),
+        canister_dir: display_path(project_root, &canister_dir),
+        config_path: display_path(project_root, &config_path),
     })
 }
 
@@ -536,7 +545,7 @@ fn scaffold_canister_command() -> ClapCommand {
         .after_help(SCAFFOLD_CANISTER_HELP_AFTER)
 }
 
-pub fn usage() -> String {
+fn usage() -> String {
     render_usage(scaffold_command)
 }
 
@@ -544,12 +553,13 @@ pub fn fleet_create_usage() -> String {
     render_usage(fleet_create_command)
 }
 
-pub fn scaffold_canister_usage() -> String {
+fn scaffold_canister_usage() -> String {
     render_usage(scaffold_canister_command)
 }
 
 fn confirm_scaffold<R, W>(
     options: &ScaffoldOptions,
+    project_root: &Path,
     mut reader: R,
     mut writer: W,
 ) -> Result<(), ScaffoldCommandError>
@@ -557,9 +567,7 @@ where
     R: BufRead,
     W: Write,
 {
-    let project_dir = scaffold_project_root(options)?
-        .join("fleets")
-        .join(&options.name);
+    let project_dir = project_root.join("fleets").join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -582,29 +590,7 @@ where
     Err(ScaffoldCommandError::Cancelled)
 }
 
-fn scaffold_project_root(options: &ScaffoldOptions) -> Result<PathBuf, ScaffoldCommandError> {
-    #[cfg(not(test))]
-    let _ = options;
-
-    #[cfg(test)]
-    if let Some(root) = &options.project_root {
-        return Ok(root.clone());
-    }
-
-    current_canic_project_root().map_err(|err| ScaffoldCommandError::Usage(err.to_string()))
-}
-
-fn scaffold_canister_project_root(
-    options: &CanisterScaffoldOptions,
-) -> Result<PathBuf, ScaffoldCommandError> {
-    #[cfg(not(test))]
-    let _ = options;
-
-    #[cfg(test)]
-    if let Some(root) = &options.project_root {
-        return Ok(root.clone());
-    }
-
+fn scaffold_project_root() -> Result<PathBuf, ScaffoldCommandError> {
     current_canic_project_root().map_err(|err| ScaffoldCommandError::Usage(err.to_string()))
 }
 
@@ -862,6 +848,3 @@ pub async fn canic_upgrade() {}
 
 canic::finish!();
 ";
-
-#[cfg(test)]
-mod tests;

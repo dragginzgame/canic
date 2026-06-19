@@ -1,3 +1,9 @@
+//! Module: access::expr::evaluators
+//!
+//! Responsibility: map builtin access predicates to names, metrics, and checks.
+//! Does not own: expression tree construction, custom predicates, or metrics storage.
+//! Boundary: `access::expr` calls this while interpreting builtin predicate leaves.
+
 use super::{AccessContext, AppPredicate, BuiltinPredicate, CallerPredicate, EnvironmentPredicate};
 use crate::{
     access::{self, AccessError, metrics::DelegatedAuthMetrics},

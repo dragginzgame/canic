@@ -1,3 +1,9 @@
+//! Module: config::schema::subnet
+//!
+//! Responsibility: define subnet, canister, placement, and refill config shapes.
+//! Does not own: topology validation, placement execution, or runtime canister state.
+//! Boundary: config schema re-exports these data shapes for validated models.
+
 use crate::{
     cdk::{candid::Principal, types::Cycles},
     ids::CanisterRole,
@@ -29,6 +35,9 @@ const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 
 ///
 /// SubnetConfig
+///
+/// Configuration for one subnet role and its declared canisters.
+/// Owned by config schema and validated before topology workflows use it.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -81,7 +90,9 @@ impl SubnetConfig {
 
 ///
 /// PoolImport
+///
 /// Per-environment import lists for canister pools.
+/// Owned by config schema and consumed by pool import workflows.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -100,7 +111,9 @@ pub struct PoolImport {
 
 ///
 /// CanisterPool
-/// defaults to a minimum size of 0
+///
+/// Pool sizing and import configuration for root-managed canister pools.
+/// Owned by config schema and validated before pool workflows use it.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -112,11 +125,10 @@ pub struct CanisterPool {
 }
 
 ///
-/// CanisterConfig
-///
-
-///
 /// CanisterAuthConfig
+///
+/// Canister-local auth feature flags.
+/// Owned by config schema and consumed by auth/cache setup.
 ///
 
 // Build the implicit canister configuration for the mandatory store role.
@@ -152,6 +164,9 @@ pub struct CanisterAuthConfig {
 ///
 /// StandardsCanisterConfig
 ///
+/// Canister-local standards feature flags.
+/// Owned by config schema and consumed by standards dispatch.
+///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -163,6 +178,9 @@ pub struct StandardsCanisterConfig {
 ///
 /// DiagnosticsCanisterConfig
 ///
+/// Canister-local diagnostics feature flags.
+/// Owned by config schema and consumed by diagnostics endpoints.
+///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -173,6 +191,9 @@ pub struct DiagnosticsCanisterConfig {
 
 ///
 /// CanisterConfig
+///
+/// Configuration for one declared canister role.
+/// Owned by config schema and consumed by bootstrap and topology workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -216,6 +237,7 @@ pub struct CanisterConfig {
 }
 
 impl CanisterConfig {
+    /// Resolve the effective metrics profile for a canister role.
     #[must_use]
     pub fn resolved_metrics_profile(&self, role: &CanisterRole) -> MetricsProfile {
         if let Some(profile) = self.metrics.profile {
@@ -263,6 +285,9 @@ impl CanisterConfig {
 ///
 /// MetricsCanisterConfig
 ///
+/// Canister-local metrics profile override.
+/// Owned by config schema and consumed by metrics setup.
+///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -273,6 +298,9 @@ pub struct MetricsCanisterConfig {
 
 ///
 /// MetricsProfile
+///
+/// Metrics collection profile for a configured canister role.
+/// Owned by config schema and consumed by metrics setup.
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -287,6 +315,7 @@ pub enum MetricsProfile {
 
 ///
 /// CanisterKind
+///
 /// Kind semantics for canister roles within the topology.
 ///
 /// Do not encode parent relationships here; this is role-level intent only.
@@ -321,6 +350,9 @@ impl fmt::Display for CanisterKind {
 ///
 /// TopupPolicy
 ///
+/// Cycle top-up policy for one configured canister role.
+/// Owned by config schema and consumed by funding workflows.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -354,6 +386,9 @@ impl Default for TopupPolicy {
 ///
 /// IcpRefillPolicy
 ///
+/// ICP-funded cycle refill policy for one configured canister role.
+/// Owned by config schema and consumed by ICP refill workflows.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -386,6 +421,9 @@ const fn default_enabled() -> bool {
 ///
 /// RandomnessConfig
 ///
+/// Randomness behavior configuration for one canister role.
+/// Owned by config schema and consumed by runtime randomness setup.
+///
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, default)]
@@ -408,6 +446,9 @@ impl Default for RandomnessConfig {
 ///
 /// RandomnessSource
 ///
+/// Randomness source selected for one canister role.
+/// Owned by config schema and consumed by runtime randomness setup.
+///
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -419,12 +460,9 @@ pub enum RandomnessSource {
 
 ///
 /// ScalingConfig
-/// (stateless, scaling)
 ///
-/// * Organizes canisters into **replica groups** (e.g. "oracle").
-/// * Replicas are interchangeable and handle transient tasks (no stable instance assignment).
-/// * Scaling is about throughput, not capacity.
-/// * Hence: `ReplicaManager → pools → ReplicaSpec → ReplicaPolicy`.
+/// Stateless replica-group placement configuration.
+/// Owned by config schema and consumed by scaling placement workflows.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -436,7 +474,9 @@ pub struct ScalingConfig {
 
 ///
 /// ScalePool
-/// One stateless replica group (e.g. "oracle").
+///
+/// One stateless replica group.
+/// Owned by config schema and consumed by scaling placement workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -450,6 +490,9 @@ pub struct ScalePool {
 
 ///
 /// ScalePoolPolicy
+///
+/// Worker bounds for one stateless replica group.
+/// Owned by config schema and consumed by scaling placement policy.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -477,12 +520,9 @@ impl Default for ScalePoolPolicy {
 
 ///
 /// ShardingConfig
-/// (stateful, partitioned)
 ///
-/// * Organizes canisters into named **pools**.
-/// * Each pool manages a set of **shards**, and each shard owns a partition of state.
-/// * Stable logical keys are assigned to shards via HRW and stay there.
-/// * Hence: `ShardManager → pools → ShardPoolSpec → ShardPoolPolicy`.
+/// Stateful partitioned shard-pool configuration.
+/// Owned by config schema and consumed by sharding placement workflows.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -494,12 +534,9 @@ pub struct ShardingConfig {
 
 ///
 /// DirectoryConfig
-/// (keyed instance placement)
 ///
-/// * Organizes canisters into named **pools**.
-/// * Each pool maps one configured key name to at most one dedicated instance root.
-/// * The resolved instance identity is stable and usually owns a recursive subtree.
-/// * Hence: `DirectoryManager → pools → DirectoryPool`.
+/// Keyed instance placement configuration.
+/// Owned by config schema and consumed by directory placement workflows.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -512,6 +549,9 @@ pub struct DirectoryConfig {
 ///
 /// DirectoryPool
 ///
+/// One keyed instance placement pool.
+/// Owned by config schema and consumed by directory placement workflows.
+///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -522,6 +562,9 @@ pub struct DirectoryPool {
 
 ///
 /// ShardPool
+///
+/// One stateful shard placement pool.
+/// Owned by config schema and consumed by sharding placement workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -535,6 +578,9 @@ pub struct ShardPool {
 
 ///
 /// ShardPoolPolicy
+///
+/// Capacity and shard-count bounds for one shard pool.
+/// Owned by config schema and consumed by sharding placement policy.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -554,6 +600,10 @@ impl Default for ShardPoolPolicy {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests;

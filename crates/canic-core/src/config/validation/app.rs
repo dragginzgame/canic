@@ -1,3 +1,9 @@
+//! Module: config::validation::app
+//!
+//! Responsibility: validate app-mode and whitelist configuration.
+//! Does not own: app runtime state, access checks, or schema definitions.
+//! Boundary: config validation calls this before runtime installation.
+
 use crate::{
     cdk::candid::Principal,
     config::schema::{AppConfig, ConfigSchemaError, Validate, Whitelist},

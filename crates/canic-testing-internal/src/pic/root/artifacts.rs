@@ -37,6 +37,11 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
 }
 
 /// Load the built `root.wasm.gz` artifact used for PocketIC root installs.
+///
+/// # Panics
+///
+/// Panics if the root wasm artifact exists but cannot be read, or if it exceeds
+/// the configured PocketIC chunk-store size limit.
 #[must_use]
 pub fn load_root_wasm(spec: &RootBaselineSpec<'_>) -> Option<Vec<u8>> {
     match fs::read(&spec.root_wasm_path) {

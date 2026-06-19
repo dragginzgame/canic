@@ -1,3 +1,9 @@
+//! Module: memory::manager
+//!
+//! Responsibility: own the shared `ic-memory` memory manager and raw memory classifier.
+//! Does not own: allocation policy, stable schema records, or lifecycle bootstrap order.
+//! Boundary: memory macros and ledger helpers use this after bootstrap validation.
+
 #[cfg(any(test, target_arch = "wasm32"))]
 use ic_memory::stable_structures::Memory;
 use ic_memory::stable_structures::{DefaultMemoryImpl, memory_manager::MemoryManager};
@@ -11,6 +17,8 @@ const MEMORY_MANAGER_MAGIC: &[u8; 3] = b"MGR";
 ///
 /// Classification of the underlying raw stable memory before `MemoryManager`
 /// is allowed to initialize or repair its own metadata.
+/// Owned by memory manager and used during wasm bootstrap validation.
+///
 
 #[cfg(any(test, target_arch = "wasm32"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +42,7 @@ thread_local! {
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 }
 
+/// Classify the raw stable memory state before memory-manager bootstrap.
 #[cfg(target_arch = "wasm32")]
 pub fn classify_raw_stable_memory() -> RawStableMemoryState {
     classify_stable_memory(&DefaultMemoryImpl::default())

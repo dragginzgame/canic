@@ -1,3 +1,10 @@
+//! Module: canic_cli::snapshot
+//!
+//! Responsibility: dispatch snapshot operator commands.
+//! Does not own: backup artifact planning, ICP snapshot execution, or registry
+//! traversal.
+//! Boundary: parses the snapshot command family and delegates leaf behavior.
+
 mod download;
 
 use crate::{

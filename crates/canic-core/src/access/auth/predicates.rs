@@ -1,3 +1,9 @@
+//! Module: access::auth::predicates
+//!
+//! Responsibility: enforce caller and topology auth predicates.
+//! Does not own: delegated token verification, app mode, or environment predicates.
+//! Boundary: `access::auth` exposes these checks to access expressions.
+
 use super::{
     caller_not_registered_denial, dependency_unavailable, non_root_subnet_registry_predicate_denial,
 };

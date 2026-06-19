@@ -1,3 +1,12 @@
+//! Module: bootstrap
+//!
+//! Responsibility: install compiled configuration and expose bootstrap artifacts.
+//! Does not own: config schema validation rules, runtime lifecycle ordering, or artifact builds.
+//! Boundary: lifecycle and build tooling call bootstrap after config generation.
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+mod render;
+
 use crate::config::{Config, ConfigError, schema::ConfigModel};
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::domain::auth::{
@@ -6,9 +15,6 @@ use crate::domain::auth::{
 #[cfg(any(target_arch = "wasm32", test))]
 use std::fmt::Write as _;
 use std::sync::Arc;
-
-#[cfg(any(not(target_arch = "wasm32"), test))]
-mod render;
 
 #[doc(hidden)]
 pub mod compiled {
@@ -29,6 +35,9 @@ pub mod compiled {
 
 /// EmbeddedRootBootstrapEntry
 ///
+/// Metadata and bytes for a root bootstrap artifact embedded at build time.
+/// Owned by bootstrap and consumed during generated install/start flows.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EmbeddedRootBootstrapEntry {
@@ -43,7 +52,9 @@ pub struct EmbeddedRootBootstrapEntry {
     pub decompressed_sha256_hex: Option<&'static str>,
 }
 
-// Install a build-produced configuration model and its canonical TOML source.
+/// init_compiled_config
+///
+/// Install a build-produced configuration model and its canonical TOML source.
 pub fn init_compiled_config(
     config: ConfigModel,
     source_toml: &str,
@@ -57,13 +68,17 @@ pub fn init_compiled_config(
     Config::init_from_model(config, source_toml)
 }
 
-// Parse and validate the source TOML into a configuration model on host targets.
+/// parse_config_model
+///
+/// Parse and validate the source TOML into a configuration model on host targets.
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub fn parse_config_model(toml: &str) -> Result<ConfigModel, ConfigError> {
     Config::parse_toml(toml)
 }
 
-// Compact a validated Canic TOML source without changing value encodings.
+/// compact_config_source
+///
+/// Compact a validated Canic TOML source without changing value encodings.
 #[cfg(any(not(target_arch = "wasm32"), test))]
 #[must_use]
 pub fn compact_config_source(toml: &str) -> String {
@@ -83,7 +98,9 @@ pub fn compact_config_source(toml: &str) -> String {
     compact
 }
 
-// Render the validated configuration model as Rust source for `include!` at runtime.
+/// emit_config_model_source
+///
+/// Render the validated configuration model as Rust source for `include!` at runtime.
 #[cfg(any(not(target_arch = "wasm32"), test))]
 #[must_use]
 pub fn emit_config_model_source(config: &ConfigModel) -> String {
@@ -147,6 +164,10 @@ fn hex_bytes(bytes: &[u8]) -> String {
     }
     hex
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

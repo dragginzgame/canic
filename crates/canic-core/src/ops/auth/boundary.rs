@@ -1,4 +1,16 @@
+//! Module: ops::auth::boundary
+//!
+//! Responsibility: clamp auth boundary values before session storage.
+//! Does not own: session storage, delegated-token verification, or endpoint DTOs.
+//! Boundary: small auth-ops helpers used by API/workflow session handling.
+
 use super::AuthOps;
+
+///
+/// DelegatedSessionExpiryClamp
+///
+/// Result of clamping delegated-session expiry against token and config bounds.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DelegatedSessionExpiryClamp {

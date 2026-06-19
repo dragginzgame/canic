@@ -3,6 +3,8 @@ mod model;
 mod options;
 mod parse;
 mod render;
+#[cfg(test)]
+mod tests;
 mod transport;
 mod wallet;
 
@@ -134,6 +136,3 @@ fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesC
         InstalledDeploymentError::Io(error) => CyclesCommandError::Io(error),
     }
 }
-
-#[cfg(test)]
-mod tests;

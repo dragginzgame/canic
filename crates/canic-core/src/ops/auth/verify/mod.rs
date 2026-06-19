@@ -1,3 +1,9 @@
+//! Module: ops::auth::verify
+//!
+//! Responsibility: route auth claim verification to focused verifier helpers.
+//! Does not own: proof preparation, storage, or endpoint authorization.
+//! Boundary: private auth-ops verification dispatch.
+
 mod attestation;
 
 use crate::{cdk::types::Principal, dto::auth::RoleAttestation, ops::auth::AuthOpsError};

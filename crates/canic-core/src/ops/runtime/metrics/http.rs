@@ -103,14 +103,12 @@ impl HttpMetrics {
     }
 }
 
-///
 /// Normalize an HTTP label from a URL.
 ///
 /// - Removes fragments (`#...`)
 /// - Removes query strings (`?...`)
 /// - Trims whitespace
 /// - Falls back to the original URL if normalization yields an empty string
-///
 #[must_use]
 pub fn normalize_http_label(url: &str, label: Option<&str>) -> String {
     if let Some(label) = label {

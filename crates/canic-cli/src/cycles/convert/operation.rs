@@ -1,11 +1,14 @@
-use super::{
-    options::ConvertOptions,
-    pending::{
-        PendingIcpRefillOperationInput, PendingOperationLogError,
-        complete_pending_icp_refill_operation, reserve_pending_icp_refill_operation,
+use crate::cycles::{
+    CyclesCommandError,
+    convert::{
+        options::ConvertOptions,
+        pending::{
+            PendingIcpRefillOperationInput, PendingOperationLogError,
+            complete_pending_icp_refill_operation, reserve_pending_icp_refill_operation,
+        },
     },
+    wallet::ResolvedCanisterTarget,
 };
-use crate::cycles::{CyclesCommandError, wallet::ResolvedCanisterTarget};
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_bytes};
 use std::{
     path::Path,

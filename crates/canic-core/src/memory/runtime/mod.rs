@@ -1,7 +1,13 @@
+//! Module: memory::runtime
+//!
+//! Responsibility: coordinate eager TLS initialization and memory bootstrap readiness.
+//! Does not own: stable schema definitions, allocation policy, or lifecycle hooks.
+//! Boundary: macros and lifecycle call this before stable-memory-backed statics are used.
+
 use std::sync::Mutex;
 
 // -----------------------------------------------------------------------------
-// CANIC_EAGER_TLS
+// Eager TLS
 // -----------------------------------------------------------------------------
 // Internal registry of "TLS touch" functions.
 //
@@ -33,6 +39,10 @@ static TEST_BOOTSTRAP_HOOK: Mutex<Option<fn()>> = Mutex::new(None);
 /// This should be invoked before any IC canister lifecycle hooks (init, update,
 /// heartbeat, etc.) so that thread-local caches are in a fully-initialized state
 /// before the canister performs memory-dependent work.
+///
+/// # Panics
+///
+/// Panics if the process-local eager TLS registry mutex is poisoned.
 pub fn init_eager_tls() {
     let funcs = {
         let mut funcs = CANIC_EAGER_TLS.lock().expect("eager tls queue poisoned");
@@ -59,6 +69,13 @@ pub fn is_memory_bootstrap_ready() -> bool {
 }
 
 /// Panic if a stable-memory slot is touched before memory bootstrap is ready.
+///
+/// # Panics
+///
+/// Panics when the default memory manager has not been bootstrapped before the
+/// stable-memory slot identified by `label` and `id` is accessed. In tests and
+/// debug builds, an installed bootstrap hook is run first and the function only
+/// panics if memory remains unbootstrapped after that hook.
 pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
     if is_memory_bootstrap_ready() {
         return;
@@ -82,6 +99,10 @@ pub fn assert_memory_bootstrap_ready(label: &str, id: u8) {
 /// This is called by the `eager_static!` macro. The function pointer `f`
 /// must be a zero-argument function (`fn()`) that performs a `.with(|_| {})`
 /// on the thread-local static it is meant to initialize.
+///
+/// # Panics
+///
+/// Panics if the process-local eager TLS registry mutex is poisoned.
 pub fn defer_tls_initializer(f: fn()) {
     CANIC_EAGER_TLS
         .lock()
@@ -91,6 +112,10 @@ pub fn defer_tls_initializer(f: fn()) {
 
 /// Install a test-only hook that can run the crate's normal memory bootstrap
 /// before host unit tests first touch macro-backed stable memory.
+///
+/// # Panics
+///
+/// Panics if the process-local test bootstrap hook mutex is poisoned.
 #[cfg(any(test, debug_assertions))]
 pub fn install_test_bootstrap_hook(hook: fn()) {
     *TEST_BOOTSTRAP_HOOK
@@ -99,6 +124,10 @@ pub fn install_test_bootstrap_hook(hook: fn()) {
 }
 
 /// Return whether a test bootstrap hook has been installed.
+///
+/// # Panics
+///
+/// Panics if the process-local test bootstrap hook mutex is poisoned.
 #[cfg(any(test, debug_assertions))]
 #[must_use]
 pub fn has_test_bootstrap_hook() -> bool {

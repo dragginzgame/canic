@@ -1,8 +1,8 @@
-//! ICRC ledger helpers (ops / approved IC surface).
+//! Module: ops::ic::ledger
 //!
-//! This module provides the approved, metrics-ready façade for interacting with
-//! ICRC ledgers. It deliberately contains **no policy** (e.g. allowance
-//! sufficiency checks). Policy belongs in access/rules or workflow.
+//! Responsibility: provide observable ICRC ledger calls through approved ops APIs.
+//! Does not own: allowance policy, funding workflow, or ledger DTO definitions.
+//! Boundary: records ledger metrics and delegates ledger call mechanics to infra.
 
 use crate::{
     InternalError,
@@ -22,6 +22,8 @@ use thiserror::Error as ThisError;
 ///
 /// LedgerOpsError
 ///
+/// Typed failure surface for ledger operations.
+///
 
 #[derive(Debug, ThisError)]
 pub enum LedgerOpsError {
@@ -39,6 +41,8 @@ impl From<LedgerOpsError> for InternalError {
 ///
 /// LedgerMeta
 ///
+/// Best-effort ledger metadata returned through the ops facade.
+///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LedgerMeta {
@@ -49,6 +53,8 @@ pub struct LedgerMeta {
 
 ///
 /// LedgerOps
+///
+/// Operations-layer facade for observable ICRC ledger calls.
 ///
 
 pub struct LedgerOps;

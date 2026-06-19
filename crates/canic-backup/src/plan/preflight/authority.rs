@@ -38,7 +38,7 @@ impl BackupPlan {
         let mut receipts =
             control_receipt_map(&self.plan_id, preflight_id, as_of, &self.targets, receipts)?;
         let mut updates = Vec::with_capacity(self.targets.len());
-        for target in &self.targets {
+        for (index, target) in self.targets.iter().enumerate() {
             let receipt = receipts.remove(&target.canister_id).ok_or_else(|| {
                 BackupPlanError::MissingControlAuthorityReceipt(target.canister_id.clone())
             })?;
@@ -55,16 +55,11 @@ impl BackupPlan {
                     target.canister_id.clone(),
                 ));
             }
-            updates.push((target.canister_id.clone(), receipt.authority));
+            updates.push((index, receipt.authority));
         }
 
-        for (target_id, authority) in updates {
-            let target = self
-                .targets
-                .iter_mut()
-                .find(|target| target.canister_id == target_id)
-                .expect("validated update target should exist");
-            target.control_authority = authority;
+        for (index, authority) in updates {
+            self.targets[index].control_authority = authority;
         }
         Ok(())
     }
@@ -79,7 +74,7 @@ impl BackupPlan {
         let mut receipts =
             snapshot_read_receipt_map(&self.plan_id, preflight_id, as_of, &self.targets, receipts)?;
         let mut updates = Vec::with_capacity(self.targets.len());
-        for target in &self.targets {
+        for (index, target) in self.targets.iter().enumerate() {
             let receipt = receipts.remove(&target.canister_id).ok_or_else(|| {
                 BackupPlanError::MissingSnapshotReadAuthorityReceipt(target.canister_id.clone())
             })?;
@@ -88,16 +83,11 @@ impl BackupPlan {
                     target.canister_id.clone(),
                 ));
             }
-            updates.push((target.canister_id.clone(), receipt.authority));
+            updates.push((index, receipt.authority));
         }
 
-        for (target_id, authority) in updates {
-            let target = self
-                .targets
-                .iter_mut()
-                .find(|target| target.canister_id == target_id)
-                .expect("validated update target should exist");
-            target.snapshot_read_authority = authority;
+        for (index, authority) in updates {
+            self.targets[index].snapshot_read_authority = authority;
         }
         Ok(())
     }

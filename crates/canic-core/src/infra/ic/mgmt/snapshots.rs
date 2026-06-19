@@ -1,3 +1,9 @@
+//! Module: infra::ic::mgmt::snapshots
+//!
+//! Responsibility: perform raw management canister snapshot calls.
+//! Does not own: retention policy, backup workflow, or snapshot scheduling.
+//! Boundary: extends `MgmtInfra` with canister snapshot effects.
+
 use crate::{
     cdk::{api, candid::Principal},
     infra::{InfraError, ic::call::Call},
@@ -9,7 +15,7 @@ use super::{
 };
 
 impl MgmtInfra {
-    // Creates one canister snapshot through the management canister.
+    /// Create one canister snapshot through the management canister.
     pub async fn take_canister_snapshot(
         canister_pid: Principal,
         replace_snapshot: Option<Vec<u8>>,
@@ -31,7 +37,7 @@ impl MgmtInfra {
         Ok(snapshot)
     }
 
-    // Loads one canister snapshot through the management canister.
+    /// Load one canister snapshot through the management canister.
     pub async fn load_canister_snapshot(
         canister_pid: Principal,
         snapshot_id: Vec<u8>,

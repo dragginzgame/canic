@@ -126,6 +126,10 @@ fn issuer_install_outcome(call: CallResult) -> RootDelegationProofInstallOutcome
     }
 }
 
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;

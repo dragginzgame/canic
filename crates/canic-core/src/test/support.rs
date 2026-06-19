@@ -82,6 +82,10 @@ pub fn init_sharding_test_config() {
 }
 
 /// Imports a synthetic runtime env for unit tests.
+///
+/// # Panics
+///
+/// Panics if the synthetic environment snapshot fails runtime import.
 pub fn import_test_env(
     canister_role: impl Into<CanisterRole>,
     subnet_role: impl Into<SubnetRole>,

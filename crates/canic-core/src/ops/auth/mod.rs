@@ -1,3 +1,9 @@
+//! Module: ops::auth
+//!
+//! Responsibility: provide auth proof preparation, verification, and validation ops.
+//! Does not own: endpoint authorization, storage schemas, or pure auth policy.
+//! Boundary: ops layer between auth workflows, policy, storage, and crypto helpers.
+
 mod attestation;
 mod boundary;
 #[cfg(any(
@@ -29,6 +35,8 @@ pub const AUTH_TIME_SKEW_ALLOWANCE_NS: u64 = 60_000_000_000;
 
 ///
 /// AuthOps
+///
+/// Operations-layer facade for auth proof preparation and verification.
 ///
 
 pub struct AuthOps;

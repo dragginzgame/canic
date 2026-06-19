@@ -26,6 +26,7 @@ use crate::{
 /// - Cardinality is bounded by endpoint name + kind + predicate name.
 /// - Custom predicates are attributed to AccessMetricKind::Custom.
 ///
+
 pub struct AccessMetrics;
 
 impl AccessMetrics {
@@ -59,6 +60,7 @@ impl AccessMetrics {
 /// - Must not be called on denied or partially-verified tokens.
 /// - Cardinality is bounded by active delegation authorities.
 ///
+
 pub struct DelegatedAuthMetrics;
 
 impl DelegatedAuthMetrics {

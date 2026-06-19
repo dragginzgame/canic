@@ -1,7 +1,8 @@
 //! Module: replay_policy::root_capability_manifest
 //!
 //! Responsibility: record replay policy for root-capability command variants.
-//! Boundary: owns manifest data only; capability RPC execution stays elsewhere.
+//! Does not own: capability RPC execution, root workflow dispatch, or replay storage.
+//! Boundary: command manifest rows consumed by replay policy tests and workflows.
 
 use crate::replay_policy::{
     quota::{

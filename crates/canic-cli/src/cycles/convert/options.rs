@@ -1,4 +1,3 @@
-use super::super::wallet::{IcpTargetOptions, parse_cycle_amount};
 use crate::{
     cli::{
         clap::{
@@ -7,7 +6,10 @@ use crate::{
         },
         globals::{internal_icp_arg, internal_network_arg},
     },
-    cycles::CyclesCommandError,
+    cycles::{
+        CyclesCommandError,
+        wallet::{IcpTargetOptions, parse_cycle_amount},
+    },
 };
 use canic_core::cdk::utils::hash::decode_hex;
 use clap::{ArgGroup, Command as ClapCommand};

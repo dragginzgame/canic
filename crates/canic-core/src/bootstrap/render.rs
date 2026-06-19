@@ -1,3 +1,9 @@
+//! Module: bootstrap::render
+//!
+//! Responsibility: render validated config models as generated Rust expressions.
+//! Does not own: config validation, schema definitions, or runtime config install.
+//! Boundary: host-side bootstrap tooling calls this before embedding generated source.
+
 use crate::{
     cdk::candid::Principal,
     config::schema::{
@@ -14,7 +20,9 @@ use crate::{
 use proc_macro2::TokenStream;
 use quote::quote;
 
-// Render the validated config model into a Rust expression string.
+/// config_model
+///
+/// Render the validated config model into a Rust expression string.
 pub fn config_model(config: &ConfigModel) -> String {
     let mut source = render_config_model(config).to_string();
     source.push('\n');
@@ -697,6 +705,10 @@ fn render_directory_pool(pool: &DirectoryPool) -> TokenStream {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,9 @@
+//! Module: replay_policy::tests::endpoint
+//!
+//! Responsibility: verify endpoint replay-policy classifications for key surfaces.
+//! Does not own: endpoint implementations or manifest construction.
+//! Boundary: test-only checks over endpoint manifest rows.
+
 use super::*;
 
 #[test]

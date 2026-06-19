@@ -1,3 +1,9 @@
+//! Module: ops::auth::crypto
+//!
+//! Responsibility: encode and hash auth payloads with stable domain separation.
+//! Does not own: proof verification, storage, or endpoint authorization.
+//! Boundary: private auth helper for canonical payload hashing.
+
 use super::ROLE_ATTESTATION_PROOF_HASH_DOMAIN;
 use crate::{
     InternalError,

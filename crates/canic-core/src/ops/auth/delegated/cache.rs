@@ -1,3 +1,9 @@
+//! Module: ops::auth::delegated::cache
+//!
+//! Responsibility: cache positive delegated-token proof verification results.
+//! Does not own: token semantic checks, proof verification, or persistent storage.
+//! Boundary: heap-only verifier acceleration used after canonical token checks.
+
 use super::canonical::{CanonicalAuthError, claims_hash, issuer_proof_hash, proof_hash};
 use crate::{cdk::types::Principal, dto::auth::DelegatedToken};
 use sha2::{Digest, Sha256};
@@ -9,6 +15,9 @@ const MAX_DELEGATED_TOKEN_PROOF_CACHE_ENTRIES: usize = 1024;
 ///
 /// CachedDelegatedTokenProofValidity
 ///
+/// Positive delegated-token proof cache value with bounded validity metadata.
+///
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CachedDelegatedTokenProofValidity {
     pub valid_until_ns: u64,
@@ -116,6 +125,10 @@ pub fn positive_cache_clear_for_tests() {
 pub fn positive_cache_len_for_tests() -> usize {
     DELEGATED_TOKEN_PROOF_CACHE.with_borrow(BTreeMap::len)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

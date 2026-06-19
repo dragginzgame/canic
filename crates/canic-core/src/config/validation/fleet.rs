@@ -1,3 +1,9 @@
+//! Module: config::validation::fleet
+//!
+//! Responsibility: validate operator-facing fleet identity configuration.
+//! Does not own: install manifests, filesystem layout, or schema definitions.
+//! Boundary: config validation calls this before runtime installation.
+
 use crate::config::schema::{ConfigSchemaError, FleetConfig, Validate};
 
 impl Validate for FleetConfig {

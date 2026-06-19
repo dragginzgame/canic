@@ -1,3 +1,14 @@
+//! Module: canic_cli::medic
+//!
+//! Responsibility: diagnose local installed-deployment setup for operators.
+//! Does not own: deployment mutation, recovery, install state persistence, or
+//! canister control-plane changes.
+//! Boundary: reads local deployment state, checks local CLI readiness, and
+//! queries root readiness for display.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     cli::clap::{parse_matches, render_usage, required_string, string_option_or_else, value_arg},
     cli::defaults::{default_icp, local_network},
@@ -52,19 +63,8 @@ impl MedicOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        Self::parse_with(args, info_medic_command, info_usage)
-    }
-
-    fn parse_with<I>(
-        args: I,
-        command: impl FnOnce() -> ClapCommand,
-        usage: fn() -> String,
-    ) -> Result<Self, MedicCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches =
-            parse_matches(command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
+        let matches = parse_matches(info_medic_command(), args)
+            .map_err(|_| MedicCommandError::Usage(info_usage()))?;
 
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
@@ -93,12 +93,8 @@ fn run_options(options: &MedicOptions) {
 }
 
 fn info_medic_command() -> ClapCommand {
-    medic_command_with_bin_name("canic info medic", INFO_MEDIC_HELP_AFTER)
-}
-
-fn medic_command_with_bin_name(bin_name: &'static str, help_after: &'static str) -> ClapCommand {
     ClapCommand::new("medic")
-        .bin_name(bin_name)
+        .bin_name("canic info medic")
         .about("Diagnose local Canic deployment target setup")
         .disable_help_flag(true)
         .arg(
@@ -109,7 +105,7 @@ fn medic_command_with_bin_name(bin_name: &'static str, help_after: &'static str)
         )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
-        .after_help(help_after)
+        .after_help(INFO_MEDIC_HELP_AFTER)
 }
 
 fn info_usage() -> String {
@@ -306,6 +302,3 @@ enum MedicStatus {
     Warn,
     Error,
 }
-
-#[cfg(test)]
-mod tests;

@@ -1,7 +1,8 @@
-//! Infra-scoped IC management canister helpers.
+//! Module: infra::ic::mgmt
 //!
-//! These wrappers provide low-level management canister calls without workflow
-//! or policy layering concerns.
+//! Responsibility: group raw IC management canister adapters.
+//! Does not own: deployment workflow, lifecycle policy, or endpoint DTO shaping.
+//! Boundary: ops calls this namespace for approved management canister effects.
 
 mod cycles;
 mod lifecycle;
@@ -22,6 +23,9 @@ use thiserror::Error as ThisError;
 ///
 /// MgmtInfraError
 ///
+/// Management canister adapter failure.
+/// Owned by management infra and returned to IC infra callers.
+///
 
 #[derive(Debug, ThisError)]
 pub enum MgmtInfraError {
@@ -31,6 +35,9 @@ pub enum MgmtInfraError {
 
 ///
 /// MgmtInfra
+///
+/// Raw management canister adapter facade.
+/// Owned by IC infra and extended by management adapter leaves.
 ///
 
 pub struct MgmtInfra;

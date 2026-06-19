@@ -1,7 +1,8 @@
-//! ops::ic::mgmt
+//! Module: ops::ic::mgmt
 //!
-//! Ops-level wrappers over IC management canister calls.
-//! Adds metrics, logging, and normalizes errors into `InternalError`.
+//! Responsibility: expose observable IC management canister calls.
+//! Does not own: canister lifecycle policy, placement decisions, or endpoint DTOs.
+//! Boundary: records metrics and delegates management call mechanics to infra.
 
 mod cycles;
 mod lifecycle;
@@ -58,6 +59,8 @@ use types::{
 
 ///
 /// MgmtOps
+///
+/// Operations-layer facade for IC management canister calls.
 ///
 
 pub struct MgmtOps;

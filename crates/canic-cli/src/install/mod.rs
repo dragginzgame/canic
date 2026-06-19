@@ -1,3 +1,15 @@
+//! Module: canic_cli::install
+//!
+//! Responsibility: parse `canic install` and delegate fleet bootstrap to the
+//! host install runner.
+//! Does not own: install planning, controller mutation, canister lifecycle
+//! side effects, or deployment state persistence.
+//! Boundary: resolves local project context, builds host install options, and
+//! adds CLI-facing diagnostics.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     cli::clap::{
         parse_matches, render_usage, required_string, string_option_or_else, typed_option,
@@ -76,12 +88,6 @@ impl InstallOptions {
             network: string_option_or_else(&matches, "network", local_network),
             profile: typed_option(&matches, "profile"),
         })
-    }
-
-    #[must_use]
-    #[cfg(test)]
-    fn into_install_root_options(self) -> InstallRootOptions {
-        self.into_install_root_options_with_icp_root(None)
     }
 
     fn into_install_root_options_with_icp_root(
@@ -189,6 +195,3 @@ fn install_error_needs_existing_deployment_hint(message: &str) -> bool {
                 || lower.contains("installed")
                 || lower.contains("canister")))
 }
-
-#[cfg(test)]
-mod tests;

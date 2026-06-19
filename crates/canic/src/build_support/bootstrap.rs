@@ -21,6 +21,14 @@ struct EmbeddedArtifactMetadata {
     decompressed_sha256_hex: Option<String>,
 }
 
+/// Emit the root wasm-store bootstrap release-set source when its artifact exists.
+///
+/// # Panics
+///
+/// Panics when Cargo does not provide `CARGO_MANIFEST_DIR` or `OUT_DIR`, when
+/// strict embedded artifacts are required but the wasm-store artifact is
+/// missing, or when the build-produced artifact cannot be canonicalized,
+/// copied, inspected, validated, or written to the generated release-set file.
 #[must_use]
 pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
     let manifest_dir = PathBuf::from(
