@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 const CAPABILITY_HASH_DOMAIN_V1: &[u8] = b"CANIC_CAPABILITY_V1";
 
 /// Compute the canonical root capability hash for proof binding.
-pub(crate) fn root_capability_hash(
+pub fn root_capability_hash(
     target_canister: Principal,
     capability_version: u16,
     capability: &Request,
