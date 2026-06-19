@@ -1,14 +1,36 @@
-use super::*;
+use super::{
+    active::active_delegation_proof_status_response,
+    batch::{
+        RootDelegationProofBatchPrepareContext, get_delegation_proof_batch_with_root_proof,
+        preflight_delegation_proof_batch_install_proof,
+        preflight_delegation_proof_batch_prepare_request,
+        prepare_delegation_proof_batch_with_root_proof,
+        prepare_delegation_proof_batch_with_root_proof_replay,
+    },
+    pending::{
+        MAX_PENDING_ROOT_DELEGATION_PROOFS_PER_ISSUER, MAX_ROOT_DELEGATION_PROOF_BATCH_ISSUERS,
+        cache_prepared_delegation_proof_batch_replay, mark_delegation_proof_batch_installed,
+        pending_delegation_proof_batch_entry, pending_delegation_proof_batch_replay_response,
+        prune_expired_pending_delegation_proof_batch_metadata,
+    },
+};
 use crate::{
-    InternalErrorClass,
-    domain::policy::auth::RootIssuerPolicy,
+    InternalError, InternalErrorClass,
+    cdk::types::Principal,
+    domain::policy::auth::{
+        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
+        RootDelegationProofPreparePolicyDecision, RootIssuerPolicy,
+    },
     dto::auth::{
-        AuthRequestMetadata, DelegatedRoleGrant, DelegationAudience, DelegationCert,
-        IcCanisterSignatureProofV1, RootDelegationProofBatchGetRequest,
-        RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
-        RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef, RootProof,
+        ActiveDelegationProof, ActiveDelegationProofStatus, AuthRequestMetadata,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
+        IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
+        RootDelegationProofBatchGetRequest, RootDelegationProofBatchPrepareEntry,
+        RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
+        RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome, RootProof,
     },
     ids::{CanisterRole, cap},
+    ops::{auth::AuthOps, storage::auth::AuthStateOps},
 };
 
 fn p(id: u8) -> Principal {
@@ -116,8 +138,7 @@ fn prepared_batch(
     AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(issuer_pid));
     let mut request = batch_prepare_request(issuer_pid, 60_000_000_000);
     request.metadata = Some(metadata(metadata_id, 60_000_000_000));
-    let decisions =
-        AuthOps::preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
+    let decisions = preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
 
     prepare_delegation_proof_batch_with_root_proof(
         request,
@@ -180,7 +201,7 @@ fn active_delegation_proof_status_reports_lifecycle_states() {
 fn batch_prepare_preflight_accepts_registered_issuer_policy() {
     AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(21)));
 
-    let decisions = AuthOps::preflight_delegation_proof_batch_prepare_request(
+    let decisions = preflight_delegation_proof_batch_prepare_request(
         &batch_prepare_request(p(21), 60_000_000_000),
         10,
     )
@@ -199,7 +220,7 @@ fn batch_prepare_preflight_accepts_registered_issuer_policy() {
 fn batch_prepare_preflight_rejects_ttl_above_max() {
     AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(22)));
 
-    let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+    let err = preflight_delegation_proof_batch_prepare_request(
         &batch_prepare_request(p(22), 121_000_000_000),
         10,
     )
@@ -209,7 +230,7 @@ fn batch_prepare_preflight_rejects_ttl_above_max() {
 
 #[test]
 fn batch_prepare_preflight_rejects_unregistered_issuer() {
-    let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+    let err = preflight_delegation_proof_batch_prepare_request(
         &batch_prepare_request(p(23), 60_000_000_000),
         10,
     )
@@ -223,7 +244,7 @@ fn batch_prepare_preflight_rejects_disabled_issuer() {
     policy.enabled = false;
     AuthStateOps::upsert_root_issuer_policy(policy);
 
-    let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+    let err = preflight_delegation_proof_batch_prepare_request(
         &batch_prepare_request(p(24), 60_000_000_000),
         10,
     )
@@ -237,7 +258,7 @@ fn batch_prepare_preflight_rejects_grant_outside_issuer_policy() {
     policy.allowed_grants[0].scopes = vec!["canic.read".to_string()];
     AuthStateOps::upsert_root_issuer_policy(policy);
 
-    let err = AuthOps::preflight_delegation_proof_batch_prepare_request(
+    let err = preflight_delegation_proof_batch_prepare_request(
         &batch_prepare_request(p(25), 60_000_000_000),
         10,
     )
@@ -319,8 +340,7 @@ fn batch_prepare_returns_metadata_for_registered_issuer() {
     AuthStateOps::upsert_root_issuer_policy(root_issuer_policy(p(29)));
     let mut request = batch_prepare_request(p(29), 60_000_000_000);
     request.metadata = Some(metadata(29, 60_000_000_000));
-    let decisions =
-        AuthOps::preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
+    let decisions = preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
     let mut prepared_hashes = Vec::new();
 
     let response = prepare_delegation_proof_batch_with_root_proof(
@@ -363,7 +383,7 @@ fn batch_prepare_replays_same_request_id_without_resigning() {
     let first = prepare_delegation_proof_batch_with_root_proof_replay(
         request.clone(),
         context,
-        |request| AuthOps::preflight_delegation_proof_batch_prepare_request(request, 10),
+        |request| preflight_delegation_proof_batch_prepare_request(request, 10),
         || p(1),
         |batch_id, _cert_hash| {
             assert_eq!(batch_id, [30; 32]);
@@ -408,7 +428,7 @@ fn batch_prepare_rejects_conflicting_request_id_reuse() {
     prepare_delegation_proof_batch_with_root_proof_replay(
         request.clone(),
         context,
-        |request| AuthOps::preflight_delegation_proof_batch_prepare_request(request, 10),
+        |request| preflight_delegation_proof_batch_prepare_request(request, 10),
         || p(1),
         |_batch_id, _cert_hash| Ok(70),
     )
@@ -519,8 +539,7 @@ fn batch_get_preserves_requested_entry_order() {
             batch_prepare_entry(p(45), 60_000_000_000),
         ],
     };
-    let decisions =
-        AuthOps::preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
+    let decisions = preflight_delegation_proof_batch_prepare_request(&request, 10).unwrap();
     let response = prepare_delegation_proof_batch_with_root_proof(
         request,
         [44; 32],

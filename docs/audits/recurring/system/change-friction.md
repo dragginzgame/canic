@@ -2,6 +2,8 @@
 
 `canic-core`
 
+Method: `change-friction-current-root-proof-provisioning`
+
 ## Purpose
 
 Evaluate whether the current architecture still supports rapid and contained feature evolution:
@@ -536,10 +538,33 @@ git log --name-only -n 20 -- crates/
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
 | `workflow/rpc/request/handler/*` | request handler modules | cross-layer orchestration surface | High |
-| `access/expr.rs` | auth/access expression evaluator | central dispatch coupling | Medium |
+| `workflow/runtime/auth/provisioning/*` | root proof provisioning broadcast workflow | root proof lifecycle changes cross workflow, ops, DTO, endpoint, and test surfaces | High |
+| `ops/auth/delegation/*` | active, batch, pending, issuer-policy, and error modules | root proof provisioning state/proof operations are split but still high-friction auth lifecycle owners | Medium |
+| `access/expr/*` | auth/access expression evaluator | central dispatch coupling | Medium |
+| `ops/rpc/capability.rs` | root capability hash helpers | capability hash ownership is ops-local and changes ripple into workflow and tests | Medium |
 | `ops/runtime/metrics/*` | capability/replay metric mapping | cross-domain observability coupling | Medium |
+| `crates/canic-host/src/deployment_truth/*` | deployment truth families | host-owned deployment-truth report and lifecycle changes remain broad | Medium |
+| `crates/canic-host/src/install_root/*` | install-root orchestration families | root install flow touches plan, readiness, truth gate, activation, receipts, and CLI-adjacent outputs | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
+
+## Recommended Verification Commands
+
+Use current source scans and targeted tests rather than historical feature
+slice names alone.
+
+```bash
+git log --name-only -n 30 -- crates/canic-core/src crates/canic-cli/src crates/canic-host/src crates/canic-tests/tests docs/audits docs/design docs/changelog
+rg 'crate::storage|crate::model|canic_core::storage|canic_core::model' crates/canic/src crates/canic-core/src/workflow crates/canic-core/src/access crates/canic-core/src/api -g '*.rs'
+rg 'crate::workflow|canic_core::workflow' crates/canic-core/src/ops crates/canic-core/src/storage crates/canic-core/src/access -g '*.rs'
+rg '^use ' crates/canic-core/src crates/canic-cli/src crates/canic-host/src -g '*.rs'
+find crates/canic-core/src crates/canic-cli/src crates/canic-host/src -type f -name '*.rs' -exec wc -l {} + | sort -nr
+rg -n 'enum Request|enum Response|enum CapabilityProof|enum BuiltinPredicate|enum RootCapability|enum ReplayPreflight|enum RootPreflight' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -l 'RootCapabilityEnvelopeV1|NonrootCyclesCapabilityEnvelopeV1|RootCapabilityResponseV1|NonrootCyclesCapabilityResponseV1|CapabilityProof|CapabilityService' crates canisters fleets -g '*.rs'
+cargo test --locked -p canic-core --lib workflow::rpc::request::handler -- --nocapture
+cargo test --locked -p canic-core --lib workflow::rpc::capability -- --nocapture
+cargo test --locked -p canic-core --lib ops::auth::delegation -- --nocapture
+```
 
 ## Hub Module Pressure
 

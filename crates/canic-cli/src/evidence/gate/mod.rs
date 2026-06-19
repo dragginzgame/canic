@@ -84,20 +84,20 @@ pub(super) fn write_gate_report(
 ) -> Result<(), EvidenceCommandError> {
     match options.format {
         EvidenceGateFormat::Text => output::write_text::<EvidenceCommandError>(
-            options.output.as_ref(),
+            options.output.as_deref(),
             &render_gate_report(report),
         ),
         EvidenceGateFormat::Json => match report {
             EvidenceGateReport::Envelope(report) => {
-                output::write_pretty_json(options.output.as_ref(), report)
+                output::write_pretty_json(options.output.as_deref(), report)
             }
             EvidenceGateReport::Manifest(report) => {
-                output::write_pretty_json(options.output.as_ref(), report)
+                output::write_pretty_json(options.output.as_deref(), report)
             }
         },
         EvidenceGateFormat::EnvelopeJson => {
             let envelope = policy_gate_envelope(options, report)?;
-            output::write_pretty_json(options.output.as_ref(), &envelope)
+            output::write_pretty_json(options.output.as_deref(), &envelope)
         }
     }
 }

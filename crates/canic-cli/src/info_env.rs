@@ -1,3 +1,9 @@
+//! Module: canic_cli::info_env
+//!
+//! Responsibility: render sourceable installed-deployment canister ID exports.
+//! Does not own: deployment state persistence, registry authority, or canister lifecycle changes.
+//! Boundary: reads installed deployment state and renders shell or JSON output.
+
 use crate::{
     cli::{
         clap::{
@@ -36,6 +42,9 @@ Examples:
 ///
 /// InfoEnvCommandError
 ///
+/// CLI boundary error for resolving installed deployment state and rendering
+/// `canic info env` output.
+///
 
 #[derive(Debug, ThisError)]
 pub enum InfoEnvCommandError {
@@ -69,9 +78,7 @@ pub enum InfoEnvCommandError {
     Registry(#[from] RegistryParseError),
 }
 
-///
-/// InfoEnvReport
-///
+/// Renderable installed-deployment canister ID export payload.
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct InfoEnvReport {
@@ -80,9 +87,7 @@ struct InfoEnvReport {
     bindings: Vec<InfoEnvBinding>,
 }
 
-///
-/// InfoEnvBinding
-///
+/// One sourceable canister ID binding derived from registry state.
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct InfoEnvBinding {
@@ -93,9 +98,7 @@ struct InfoEnvBinding {
     parent_pid: Option<String>,
 }
 
-///
-/// InfoEnvOptions
-///
+/// Parsed `canic info env` command options.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InfoEnvOptions {
@@ -308,10 +311,10 @@ fn write_env_report(
     report: &InfoEnvReport,
 ) -> Result<(), InfoEnvCommandError> {
     if options.json {
-        return output::write_pretty_json::<_, InfoEnvCommandError>(options.out.as_ref(), report);
+        return output::write_pretty_json::<_, InfoEnvCommandError>(options.out.as_deref(), report);
     }
 
-    output::write_text::<InfoEnvCommandError>(options.out.as_ref(), &render_shell_exports(report))
+    output::write_text::<InfoEnvCommandError>(options.out.as_deref(), &render_shell_exports(report))
 }
 
 fn render_shell_exports(report: &InfoEnvReport) -> String {
@@ -354,6 +357,9 @@ fn info_env_command() -> ClapCommand {
         .arg(internal_icp_arg())
         .after_help(HELP_AFTER)
 }
+
+// -----------------------------------------------------------------------------
+// Tests
 
 #[cfg(test)]
 mod tests {

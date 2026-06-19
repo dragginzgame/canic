@@ -24,6 +24,8 @@ logic, not local formatting or tests that intentionally keep setup nearby.
 - evidence envelope, provenance, policy-gate, or catalog output changes
 - packaged or installed release-proof script changes
 - large module splits or follow-up cleanup passes
+- root proof provisioning prepare/get/install, active proof status, or
+  delegated-token proof lifecycle changes
 
 ## Report Preamble
 
@@ -102,6 +104,12 @@ Release proof script shape:
 rg -n "target/debug/canic|CARGO_HOME|CARGO_TARGET_DIR|TMPDIR|mktemp|cargo package|path dependency|patch.crates-io|package root" scripts/ci docs/operations -g '*.sh' -g '*.md'
 ```
 
+Root proof provisioning and delegated-auth lifecycle ownership:
+
+```bash
+rg -n "RootDelegationProofBatch|DelegationProofBatch|ActiveDelegationProof|RootIssuerPolicy|prepare_delegation_proof_batch|get_delegation_proof_batch|install_delegation_proof_batch|install_active_delegation_proof|active_delegation_proof_status|AuthProofVerifierConfig" crates/canic-core/src crates/canic/src crates/canic-control-plane/src -g '*.rs'
+```
+
 ## Evaluation Checklist
 
 ### Ownership Duplication
@@ -120,6 +128,8 @@ command family:
   construction
 - output-file behavior for text, raw JSON, and envelope JSON report commands
 - v1 release proof script setup/isolation/package-root behavior
+- root proof batch DTO, pending metadata, install outcome, active proof status,
+  and verifier config ownership
 
 ### Consolidation Quality
 
@@ -152,6 +162,9 @@ ownership around:
 - local-state-only deployment catalog construction;
 - retained installed/packaged proof scripts with clear, separate release
   questions.
+- root proof provisioning split with distinct owners for API guards, workflow
+  broadcast, ops metadata/proof operations, storage records, and DTO boundary
+  shapes.
 
 ## Findings Format
 

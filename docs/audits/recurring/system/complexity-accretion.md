@@ -108,7 +108,9 @@ Subsystem ownership for this audit:
 | ingress | `ingress/**` |
 | lifecycle | `lifecycle/**` |
 | memory | `memory/**` |
+| model | `model/**` |
 | ops | `ops/**` |
+| replay-policy | `replay_policy/**` |
 | root | root-level `*.rs` files under `crates/canic-core/src/` |
 | storage | `storage/**` |
 | test-support | `test/**`, `tests/**`, `test.rs`, `tests.rs`, `test_support.rs` |
@@ -141,7 +143,7 @@ Module counts are file-level counts.
 
 Use this fixed set when counting domain spread:
 
-* auth/attestation/delegation
+* auth/attestation/delegation/root-proof provisioning
 * capability/replay
 * rpc/request-dispatch
 * policy/topology constraints
@@ -261,7 +263,10 @@ Identify high-branch-density functions and compare against previous run.
 Axis families to detect:
 
 * capability family
-* proof mode (`Structural`, `RoleAttestation`, `DelegatedGrant`)
+* capability proof mode (`Structural`; retired delegated-grant and
+  role-attestation capability-proof variants must not reappear)
+* auth proof lifecycle (`root delegation batch`, `active proof install`,
+  `issuer token proof`, `signed role attestation`)
 * replay state (miss/hit/conflict/expired)
 * caller topology relation (root/child/registered-to-subnet)
 * policy outcome (allow/deny)
@@ -308,7 +313,18 @@ Flag:
 
 ### STEP 3 — Execution Path Multiplicity (Effective Flows)
 
-For each core operation (`response_capability_v1`, `create_canister`, `upgrade_canister`, `cycles`, `issue_delegation`, `issue_role_attestation`), compute flow count via decision axes.
+For each core operation, compute flow count via decision axes.
+
+Current core operation set:
+
+* `response_capability_v1`
+* `create_canister`
+* `upgrade_canister`
+* `cycles`
+* `prepare_delegated_token`
+* `role_attestation_prepare/get`
+* `root_delegation_proof_batch_prepare/get/install`
+* `active_delegation_proof_install/status`
 
 Model:
 
@@ -319,7 +335,7 @@ Model:
 Required axis set (add/remove only with explicit note):
 
 * capability family
-* proof mode
+* proof mode or auth-proof lifecycle phase
 * replay status
 * policy decision
 * key/material availability
@@ -357,7 +373,9 @@ Target concepts:
 * capability hash binding
 * replay key + payload hash semantics
 * role attestation verification + key-set refresh behavior
-* delegated grant verification path
+* root delegation proof batch prepare/get/install
+* active delegation proof install/status
+* delegated-token issuer proof verification
 * error origin mapping (`InfraError` / `InternalError` / boundary `Error`)
 
 | Concept | Decision Owners | Execution Consumers | Plumbing Modules | Total Modules | Semantic Layers | Transport Layers | Decision Concentration | Concept Fragmentation | Risk |
@@ -428,7 +446,7 @@ Flag:
 Axis families allowed in this audit:
 
 * capability family
-* proof mode
+* proof mode or auth-proof lifecycle phase
 * replay state
 * policy outcome
 * caller topology
@@ -554,10 +572,11 @@ Runtime hotspots are production complexity signals and should drive primary risk
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `access/expr.rs` | auth predicate evaluators | dense branch and predicate dispatch surface | Medium |
+| `access/expr/*` | auth predicate evaluators | dense branch and predicate dispatch surface | Medium |
 | `workflow/rpc/request/handler/*` | request/capability handlers | multi-axis decision branching | High |
 | `ops/replay/guard.rs` | replay decision path | axis coupling between ttl/request-id/payload state | Medium |
-| `ops/auth/*` | delegation error and verifier flows | auth variant expansion and branching | Medium |
+| `ops/auth/delegation/mod.rs` | root proof batch provisioning | prepare/get/install branching and pending metadata lifecycle | Medium |
+| `ops/auth/delegated/*` | delegated-token verifier flows | auth variant expansion and branching | Medium |
 
 ### Test Complexity Hotspots
 
@@ -578,9 +597,9 @@ Detect central control surfaces that multiply downstream complexity and change i
 | Control Surface | File | Responsibility | Risk |
 | --- | --- | --- | --- |
 | `<function/module>` | `<path>` | `<decision/coordination boundary>` | `<Low/Medium/High>` |
-| `eval_access` | `access/expr.rs` | capability/auth evaluation engine | Medium |
+| `eval_access` | `access/expr/mod.rs` | capability/auth evaluation engine | Medium |
 | `runtime bootstrap` | `workflow/runtime/mod.rs` | system initialization coordination | Medium |
-| `intent aggregation` | `ops/storage/intent.rs` | state transition aggregation boundary | Medium |
+| `intent aggregation` | `ops/storage/intent/mod.rs` | state transition aggregation boundary | Medium |
 
 ## Branching Density
 

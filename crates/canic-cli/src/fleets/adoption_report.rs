@@ -269,12 +269,12 @@ pub(super) fn write_adoption_report(
 ) -> Result<(), FleetCommandError> {
     match options.format {
         AdoptionReportFormat::Text => {
-            output::write_text(options.output.as_ref(), &render_adoption_report(report))
+            output::write_text(options.output.as_deref(), &render_adoption_report(report))
         }
-        AdoptionReportFormat::Json => output::write_pretty_json(options.output.as_ref(), report),
+        AdoptionReportFormat::Json => output::write_pretty_json(options.output.as_deref(), report),
         AdoptionReportFormat::EnvelopeJson => {
             let envelope = build_adoption_report_envelope(config_path, options, report)?;
-            output::write_pretty_json(options.output.as_ref(), &envelope)
+            output::write_pretty_json(options.output.as_deref(), &envelope)
         }
     }
 }

@@ -13,10 +13,13 @@ pub(super) fn write_metrics_report(
     report: &MetricsReport,
 ) -> Result<(), MetricsCommandError> {
     if options.json {
-        return output::write_pretty_json::<_, MetricsCommandError>(options.out.as_ref(), report);
+        return output::write_pretty_json::<_, MetricsCommandError>(options.out.as_deref(), report);
     }
 
-    output::write_text::<MetricsCommandError>(options.out.as_ref(), &render_metrics_report(report))
+    output::write_text::<MetricsCommandError>(
+        options.out.as_deref(),
+        &render_metrics_report(report),
+    )
 }
 
 fn render_metrics_report(report: &MetricsReport) -> String {

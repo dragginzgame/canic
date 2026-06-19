@@ -96,6 +96,8 @@ This audit exists to catch that drift before it becomes release confusion.
 * changing package metadata fields that affect downstream discovery
 * changing installed CLI, packaged downstream, or generated bootstrap-wrapper
   proof scripts
+* changing release package/install validation docs or release-validation
+  matrix entries that describe packaged or installed public surfaces
 
 ---
 
@@ -426,6 +428,9 @@ Inspect retained release proofs when present:
 * `scripts/ci/verify-installed-canic-cli.sh`
 * `scripts/ci/verify-packaged-downstream-cli.sh`
 * `scripts/ci/verify-packaged-downstream-wasm-store.sh`
+* `docs/operations/release-package-install-validation.md`
+* `docs/operations/release-validation-matrix.md`
+* `docs/operations/README.md`
 * `docs/operations/0.56-v1-release-probes.md`
 * corresponding operation runbooks
 
@@ -447,6 +452,9 @@ Rules:
 * A proof script is publish-surface evidence only when docs, package metadata,
   or release process point users or maintainers at that packaged/installed
   contract.
+* Non-versioned release validation docs are the current entry point; retained
+  versioned probe docs are supporting historical inventories unless a current
+  checklist points users or maintainers at them.
 
 ---
 

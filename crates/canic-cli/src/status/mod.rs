@@ -1,3 +1,12 @@
+//! Module: canic_cli::status
+//!
+//! Responsibility: render the quick local Canic project status summary.
+//! Does not own: installed deployment state, replica lifecycle, or fleet config parsing.
+//! Boundary: reads host/project state and formats the operator-facing status view.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     cli::clap::{parse_matches, render_usage, string_option_or_else},
     cli::defaults::{default_icp, local_network},
@@ -46,6 +55,8 @@ Note:
 ///
 /// StatusCommandError
 ///
+/// CLI boundary error for status option parsing and host/project status reads.
+///
 
 #[derive(Debug, ThisError)]
 pub enum StatusCommandError {
@@ -56,9 +67,7 @@ pub enum StatusCommandError {
     Host(#[from] Box<dyn std::error::Error>),
 }
 
-///
-/// StatusOptions
-///
+/// Parsed `canic status` command options.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusOptions {
@@ -66,9 +75,7 @@ struct StatusOptions {
     icp: String,
 }
 
-///
-/// StatusReport
-///
+/// Render-ready snapshot of local project and deployment status.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusReport {
@@ -80,9 +87,7 @@ struct StatusReport {
     deployments: Vec<StatusDeploymentRow>,
 }
 
-///
-/// ReplicaStatus
-///
+/// Local replica state as observed through ICP CLI and HTTP fallback probing.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ReplicaStatus {
@@ -92,9 +97,7 @@ enum ReplicaStatus {
     Error(String),
 }
 
-///
-/// StatusDeploymentRow
-///
+/// One fleet config row in the status deployment table.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusDeploymentRow {
@@ -405,6 +408,3 @@ fn status_command() -> ClapCommand {
 fn usage() -> String {
     render_usage(status_command)
 }
-
-#[cfg(test)]
-mod tests;

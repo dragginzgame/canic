@@ -1,8 +1,8 @@
-//! Module: evidence
+//! Module: canic_cli::evidence
 //!
 //! Responsibility: dispatch `canic evidence` subcommands and surface command errors.
 //! Does not own: option parsing, report rendering, or policy evaluation.
-//! Boundary: facade between top-level CLI dispatch and evidence submodules.
+//! Boundary: top-level CLI dispatcher for passive evidence comparison and policy-gate checks.
 
 mod command;
 mod compare;
@@ -24,6 +24,9 @@ use thiserror::Error as ThisError;
 
 ///
 /// EvidenceCommandError
+///
+/// CLI boundary error for evidence dispatch, envelope comparison, and policy
+/// gate evaluation.
 ///
 #[derive(Debug, ThisError)]
 pub enum EvidenceCommandError {

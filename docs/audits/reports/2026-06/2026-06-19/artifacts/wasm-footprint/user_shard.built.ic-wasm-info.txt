@@ -1,0 +1,79 @@
+Number of types: 84
+Number of globals: 3
+
+Number of data sections: 3
+Size of data sections: 177016 bytes
+
+Number of functions: 5928
+Number of callbacks: 1
+Start function: None
+Exported methods: [
+    "canister_init (func_5905)",
+    "canister_inspect_message (func_5906)",
+    "canister_post_upgrade (func_5907)",
+    "canister_query canic_active_delegation_proof_status (func_5908)",
+    "canister_query canic_bootstrap_status (func_5909)",
+    "canister_query canic_canister_children (func_5910)",
+    "canister_query canic_cycle_balance (func_5911)",
+    "canister_query canic_cycle_topups (func_5912)",
+    "canister_query canic_cycle_tracker (func_5913)",
+    "canister_query canic_get_delegated_token (func_5914)",
+    "canister_query canic_log (func_5915)",
+    "canister_query canic_metadata (func_5916)",
+    "canister_query canic_metrics (func_5917)",
+    "canister_query canic_ready (func_5918)",
+    "canister_query hello (func_5919)",
+    "canister_query icrc10_supported_standards (func_5920)",
+    "canister_update canic_install_active_delegation_proof (func_5921)",
+    "canister_update canic_prepare_delegated_token (func_5922)",
+    "canister_update canic_response_capability_v1 (func_5923)",
+    "canister_update canic_sync_state (func_5924)",
+    "canister_update canic_sync_topology (func_5925)",
+    "canister_global_timer (func_5926)",
+    "canister_update <ic-cdk internal> timer_executor (func_5927)",
+]
+
+Imported IC0 System API: [
+    "msg_reply_data_append",
+    "msg_reply",
+    "time",
+    "data_certificate_present",
+    "data_certificate_size",
+    "data_certificate_copy",
+    "msg_method_name_size",
+    "msg_method_name_copy",
+    "accept_message",
+    "canister_version",
+    "certified_data_set",
+    "root_key_size",
+    "root_key_copy",
+    "debug_print",
+    "trap",
+    "performance_counter",
+    "is_controller",
+    "msg_caller_size",
+    "msg_caller_copy",
+    "msg_arg_data_size",
+    "msg_arg_data_copy",
+    "canister_self_size",
+    "canister_self_copy",
+    "canister_cycle_balance128",
+    "msg_reject_code",
+    "msg_reject_msg_size",
+    "msg_reject_msg_copy",
+    "cost_call",
+    "canister_liquid_cycle_balance128",
+    "call_new",
+    "call_on_cleanup",
+    "call_data_append",
+    "call_cycles_add128",
+    "call_with_best_effort_response",
+    "call_perform",
+    "global_timer_set",
+    "stable64_read",
+    "stable64_size",
+    "stable64_grow",
+    "stable64_write",
+]
+
+Custom sections with size: []

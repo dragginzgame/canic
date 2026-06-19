@@ -1,5 +1,7 @@
 # Audit: Capability Scope Enforcement Invariant
 
+Method: `capability-scope-enforcement-current`
+
 ## Purpose
 
 Ensure capabilities and scopes restrict authenticated rights without acting as substitutes for identity verification.
@@ -99,8 +101,13 @@ git log --name-only -n 20 -- crates/
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
 | `access/auth/token.rs` | `verify_token`, `enforce_subject_binding`, `enforce_required_scope` | subject/scope ordering enforcement | High |
-| `api/rpc/capability/grant.rs` | delegated grant claim checks | capability claim validation path | Medium |
+| `ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_audience_and_grants`, `verify_scopes` | delegated-token claim, audience, local-role grant, freshness, and scope verifier | High |
+| `workflow/rpc/capability/envelope.rs` | `validate_root_capability_envelope` | root capability service/version/proof validation before dispatch | Medium |
+| `workflow/rpc/capability/verifier.rs` | `verify_root_capability_proof` | active runtime proof-mode routing; current root proof mode is structural-only | Medium |
+| `workflow/rpc/capability/proof.rs` | `verify_root_structural_proof`, `verify_nonroot_structural_cycles_proof` | structural proof constraints that must not become identity substitutes | Medium |
 | `workflow/rpc/request/handler/authorize.rs` | `authorize` | authorization decision surface | Medium |
+| `workflow/rpc/request/handler/mod.rs` | `preflight`, replay/authorization pipeline | replay reservation, authorization denial, execution, and replay commit ordering | Medium |
+| `dto/capability/mod.rs` | `CapabilityProof`, `CapabilityService`, capability envelopes | broad capability wire surface shared by API, workflow, ops, and tests | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -185,6 +192,19 @@ Thresholds:
 - `20+` = risk
 
 If no predictive signals are detected, state: No predictive architectural signals detected in this run.
+
+## Recommended Verification Commands
+
+Use current targeted tests rather than historical proof-mode names from older reports.
+
+```bash
+cargo test --locked -p canic-core --lib access::auth -- --nocapture
+cargo test --locked -p canic-core --lib ops::auth::delegated::verify -- --nocapture
+cargo test --locked -p canic-core --lib workflow::rpc::capability -- --nocapture
+cargo test --locked -p canic-core --lib workflow::rpc::request::handler -- --nocapture
+cargo test --locked -p canic-tests --test root_suite unauthorized_caller_is_denied_for_each_root_capability_variant -- --test-threads=1 --nocapture
+cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
+```
 
 ## Dependency Fan-In Pressure
 

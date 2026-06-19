@@ -1,6 +1,6 @@
 # Audit: Workflow Purity
 
-Method: `workflow-purity-v2`
+Method: `workflow-purity-v3`
 
 ## Purpose
 
@@ -32,15 +32,21 @@ Workflow must not:
 - implement persistence policy;
 - own replay/cost/intent ledger schemas or codecs.
 
-Recent 0.61 replay-protection work expanded workflow orchestration around
-replay receipts, cost guards, pending-reset recovery, and management effects.
-This audit must therefore distinguish allowed sequencing from ownership leaks:
+Recent replay-protection and root-proof provisioning work expanded workflow
+orchestration around replay receipts, cost guards, pending-reset recovery,
+management effects, and delegated-auth proof lifecycle operations. This audit
+must therefore distinguish allowed sequencing from ownership leaks:
 
 - Allowed: workflow reserves, aborts, marks, commits, or recovers through
   `ops::*` facades while ordering side effects.
 - Not allowed: workflow defines persisted receipt schemas, encodes stored replay
   responses itself, mutates stable records, or implements quota/replay/intent
   policies directly.
+- Allowed: workflow orchestrates root proof batch install by asking auth ops to
+  validate pending metadata and call ops to broadcast issuer-local installs.
+- Not allowed: workflow assembles canister-signature proofs, calls
+  `data_certificate()`, verifies delegated-token material, or invents issuer
+  policy/retrieval authorization.
 
 ## Scope
 
@@ -51,6 +57,8 @@ Primary scope:
 Boundary comparison scope:
 
 - `crates/canic-core/src/domain/policy/**`
+- `crates/canic-core/src/dto/**`
+- `crates/canic-core/src/model/**`
 - `crates/canic-core/src/ops/**`
 - `crates/canic-core/src/replay_policy.rs`
 - `crates/canic-core/src/storage/**`
@@ -64,6 +72,8 @@ Boundary comparison scope:
 - adding retry, replay, funding, lifecycle, or install orchestration;
 - adding cost guards, durable intents, replay receipts, pending-reset recovery,
   or management-effect recovery;
+- changing delegated-token prepare, root proof batch prepare/get/install, active
+  proof status, or issuer proof verification flows;
 - changing persisted record shapes consumed by workflow;
 - changing endpoint macro auth/access lowering.
 
@@ -77,7 +87,7 @@ and is a finding when workflow stores, transforms, or passes the record around
 as its own state carrier.
 
 ```bash
-rg -n 'storage::.*Record|storage::stable|stable::|CanisterRecord|EnvRecord|StateRecord|RootReplayRecord|ReplayReceipt|IcpRefillRecord|PoolRecord|CanisterRecord' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'storage::.*Record|storage::stable|stable::|CanisterRecord|EnvRecord|StateRecord|RootReplayRecord|ReplayReceipt|IcpRefillRecord|PoolRecord|CanisterRecord|ActiveDelegationProofRecord|RootIssuerRecord|PendingDelegationProofBatchRecord' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -87,6 +97,8 @@ Expected:
 - no workflow-owned state machines that carry persisted records where ops-owned
   transition DTOs would work;
 - no direct stable structure access;
+- root-proof workflows use ops-owned pending/active proof command and view
+  types, not storage records;
 - test-only storage fixtures are allowed in `tests.rs`.
 
 ### 2. Serialization / Transport Parsing
@@ -94,7 +106,7 @@ Expected:
 Workflow must not own persistence serialization or transport parsing.
 
 ```bash
-rg -n 'serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder|encode_one|decode_one|encode_|decode_|from_str|parse\(|IDLDeserialize|IDLBuilder|to_bytes|from_bytes' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder|encode_one|decode_one|encode_|decode_|from_str|parse\(|IDLDeserialize|IDLBuilder|to_bytes|from_bytes|signature_cbor|data_certificate' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Classify matches:
@@ -106,6 +118,9 @@ Classify matches:
 - Workflow wrappers named `encode_*` or `decode_*` are allowed only when they
   delegate actual encoding/decoding to ops.
 - Any JSON/text/YAML parsing in workflow is a violation.
+- Root proof retrieval and canister-signature proof assembly must stay outside
+  workflow update paths; workflow must not call certificate/proof assembly
+  helpers that require direct query context.
 
 ### 3. Conversion Ownership
 
@@ -113,7 +128,7 @@ Workflow must not own DTO, record, infra, policy-input, or view conversion
 logic.
 
 ```bash
-rg -n 'struct .*Adapter|from_dto|to_dto|request_args_from_dto|result_to_dto|record_to|to_response|record_to_response|record_to_policy_input|impl From|impl TryFrom|mapper::' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'struct .*Adapter|from_dto|to_dto|request_args_from_dto|result_to_dto|record_to|to_response|record_to_response|record_to_policy_input|impl From|impl TryFrom|mapper::|RootDelegationProofBatch.*Response|InstallActiveDelegationProof.*Response' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -124,6 +139,9 @@ Expected:
 - workflow-local `impl From`/`TryFrom` is allowed only for workflow-local error
   wrapping or workflow-owned internal enums; DTO/proof/blob conversions are
   findings.
+- workflow may construct final boundary responses from ops outputs when endpoint
+  API ownership already fixes the DTO shape, but record/DTO mapping helpers
+  belong outside workflow.
 
 ### 4. Platform Calls
 
@@ -132,7 +150,7 @@ ops-owned platform effects, but destructive or expensive effects must be paired
 with the appropriate replay, intent, or cost-guard preconditions.
 
 ```bash
-rg -n 'ic_cdk|crate::cdk::api|cdk::api|HttpInfra|MgmtInfra|call_raw|set_timer|set_certified_data|data_certificate|sign_with_ecdsa|ecdsa_public_key|create_canister|install_code|uninstall_code|update_settings|transfer|notify' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'ic_cdk|crate::cdk::api|cdk::api|HttpInfra|MgmtInfra|call_raw|set_timer|set_certified_data|data_certificate|sign_with_ecdsa|ecdsa_public_key|create_canister|install_code|uninstall_code|update_settings|transfer|notify|unbounded_wait|bounded_wait|CANIC_INSTALL_ACTIVE_DELEGATION_PROOF' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -140,6 +158,8 @@ Expected:
 - no direct infra/CDK calls;
 - ops calls such as `IcOps`, `MgmtOps`, `RequestOps`, and `HttpOps` are
   allowed.
+- root-proof install may broadcast through `CallOps`, but proof retrieval must
+  not be attempted from workflow or through nested canister calls.
 - management create/install/reset/transfer flows have explicit replay, intent,
   recovery, or cost-guard ordering where duplicate execution would be harmful.
 
@@ -148,7 +168,7 @@ Expected:
 Workflow must not own endpoint auth semantics.
 
 ```bash
-rg -n 'verify_caller|DelegatedToken|resolve_authenticated_identity|authenticated_with_scope|token_material|verify_delegated_token|subject|scope|audience' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'verify_caller|DelegatedToken|resolve_authenticated_identity|authenticated_with_scope|token_material|verify_delegated_token|subject|scope|audience|issuer_pid|RootIssuerPolicy|RootDelegationProof|InstallActiveDelegationProof' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -158,6 +178,13 @@ Expected:
 - workflow capability authorization may compare already-authenticated callers
   with request subjects, but it must not verify delegated-token material or
   resolve endpoint identity.
+- delegated-token prepare workflow may validate the public self-prepare policy
+  through `domain::policy` and request issuer proof material from `AuthOps`.
+  It must not verify inbound endpoint tokens.
+- root proof provisioning workflow may require root through env ops and ask
+  auth ops to validate pending batch metadata; issuer registry policy,
+  certificate hash verification, active proof verification, and retrieval ACLs
+  remain outside workflow.
 
 ### 6. Policy / Persistence Policy Ownership
 
@@ -182,7 +209,7 @@ Workflow may orchestrate replay, cost guards, and durable intents, but ownership
 of replay/cost/intent state and codec behavior must remain below workflow.
 
 ```bash
-rg -n 'ReplayReceipt|ReplayReceiptDecision|ReplayReceiptToken|reserve_or_replay|commit_receipt|abort_reserved|mark_recovery_required|CostGuardOps|CostGuardRequest|CostGuardPermit|IntentStoreOps|try_reserve|commit_at|abort\\(' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'ReplayReceipt|ReplayReceiptDecision|ReplayReceiptToken|reserve_or_replay|commit_receipt|abort_reserved|mark_recovery_required|CostGuardOps|CostGuardRequest|CostGuardPermit|IntentStoreOps|try_reserve|commit_at|abort\\(|request_id|prepare_delegation_proof_batch|install_delegation_proof_batch|preflight_delegation_proof_batch_install_proof' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -195,6 +222,9 @@ Expected:
   effects;
 - intent store operations are invoked through ops, with workflow limited to
   sequencing and metric/error handling.
+- root proof batch prepare idempotency and install metadata validation are
+  ops/model responsibilities; workflow only sequences install calls and records
+  per-issuer outcomes.
 
 ### 8. Recovery / Idempotence Surface
 
@@ -203,7 +233,7 @@ purity risk. Workflow may decide sequence, but recovery state must be ops-owned
 and duplicate requests must stop before repeated destructive effects.
 
 ```bash
-rg -n 'PendingReset|RecoveryRequired|schedule\\(|AlreadyPresent|mark_pending_reset|mark_ready|mark_failed|register_pending_reset|register_ready|remove\\(&pid\\)|reset_into_pool|reset path|duplicate|idempotent' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'PendingReset|RecoveryRequired|schedule\\(|AlreadyPresent|mark_pending_reset|mark_ready|mark_failed|register_pending_reset|register_ready|remove\\(&pid\\)|reset_into_pool|reset path|duplicate|idempotent|AlreadyInstalled|ProofMismatch|ExpiredOrSuperseded|RejectedBySigner' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:

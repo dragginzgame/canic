@@ -16,6 +16,11 @@ present.
 
 Detailed patch breakdown: [docs/changelog/0.68.md](docs/changelog/0.68.md)
 
+- `0.68.26` closes the root-proof provisioning audit/hygiene pass by
+  refreshing the oldest recurring audit definitions, recording clean
+  invariant/change-friction reports, and marking the 0.68 line ready to hand
+  focus back to blob-storage work.
+
 - `0.68.25` restores full workspace clippy compliance after enabling
   missing-panic documentation, documenting intentional panic contracts and
   removing avoidable backup preflight panics.

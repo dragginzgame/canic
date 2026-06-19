@@ -1,5 +1,7 @@
 # Audit: Wasm Footprint
 
+Method: `wasm-footprint-v2`
+
 ## Purpose
 
 Track wasm footprint drift over time and identify size drivers in Canic canister
@@ -239,7 +241,8 @@ Compatibility note:
 Recurring-run rule:
 
 - a normal dated audit run must audit `release`
-- the same dated run must also capture `wasm-debug` built artifacts for profile comparison
+- the same dated run must also capture `wasm-debug` built artifacts for profile
+  comparison; `scripts/ci/wasm-audit-report.sh` reports this as `Method V2`
 - a report that lacks `wasm-debug` comparison must call that out explicitly as `PARTIAL` or `BLOCKED`
 
 Optional scope note:
@@ -304,6 +307,11 @@ Suggested interpretation for this audit:
 - `5-6`: moderate drift, shared baseline or bundle pressure rising
 - `7-8`: high drift, large unowned hotspots or root/install risk emerging
 - `9-10`: severe drift, artifact growth is blocking release posture
+
+Default multi-canister scope is normal for Canic and must not raise the risk
+score by itself. Raise risk for observed drift signals such as leaf spread,
+same-day growth, missing required evidence, or root bundle growth that crosses
+the configured outlier threshold.
 
 ## Early Warning Signals (Required)
 

@@ -1,3 +1,9 @@
+//! Module: canic_cli::build
+//!
+//! Responsibility: build one role artifact and optionally emit build provenance.
+//! Does not own: canister build execution, fleet config schema, or evidence envelope schemas.
+//! Boundary: resolves CLI build context, validates attached roles, and delegates artifact creation.
+
 use crate::{
     cli::{
         clap::{
@@ -48,6 +54,9 @@ containing canic.build_provenance.v1.";
 ///
 /// BuildCommandError
 ///
+/// CLI boundary error for build option parsing, config selection, artifact
+/// creation, and provenance output.
+///
 
 #[derive(Debug, ThisError)]
 pub enum BuildCommandError {
@@ -75,9 +84,7 @@ pub enum BuildCommandError {
     Json(#[from] serde_json::Error),
 }
 
-///
-/// BuildOptions
-///
+/// Parsed `canic build` command options.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BuildOptions {
@@ -302,14 +309,14 @@ fn current_build_generated_at() -> Result<String, Box<dyn std::error::Error>> {
 
 fn resolve_build_config_path(options: &BuildOptions) -> Result<PathBuf, BuildCommandError> {
     if let Some(config) = &options.config {
-        let path = normalize_build_path(config);
+        let path = normalize_build_path(config)?;
         validate_config_fleet(&path, &options.fleet)?;
         return Ok(path);
     }
 
     let project_root = options.workspace.as_ref().map_or_else(
         || current_canic_project_root().map_err(BuildCommandError::from),
-        |workspace| Ok(normalize_build_path(workspace)),
+        |workspace| normalize_build_path(workspace),
     )?;
     let choices = discover_project_canic_config_choices(&project_root)?;
     if choices.is_empty() {
@@ -337,14 +344,14 @@ fn validate_config_fleet(
     Ok(())
 }
 
-fn normalize_build_path(path: &str) -> PathBuf {
+fn normalize_build_path(path: &str) -> Result<PathBuf, BuildCommandError> {
     let path = PathBuf::from(path);
     if path.is_absolute() {
-        path
+        Ok(path)
     } else {
         env::current_dir()
-            .expect("current directory must be available")
-            .join(path)
+            .map(|current_dir| current_dir.join(path))
+            .map_err(BuildCommandError::from)
     }
 }
 
@@ -408,6 +415,9 @@ fn restore_env(key: &str, value: Option<OsString>) {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
 
 #[cfg(test)]
 mod tests {

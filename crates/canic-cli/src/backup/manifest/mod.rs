@@ -114,7 +114,7 @@ fn write_validation_summary(
 ) -> Result<(), ManifestCommandError> {
     let summary = manifest_validation_summary(manifest);
 
-    output::write_pretty_json(options.out.as_ref(), &summary)
+    output::write_pretty_json(options.out.as_deref(), &summary)
 }
 
 fn usage() -> String {
