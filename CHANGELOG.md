@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)
 
+- `0.69.3` prepares the non-billing blob-storage MVP for downstream validation
+  with an integration runbook, updated design/handoff status, local status
+  counters, and gateway-principal revocation coverage while keeping
+  Cashier/billing surfaces deferred.
+
 - `0.69.2` continues the non-billing blob-storage backend by adding the
   gateway endpoint macro, standalone probe canister, and PocketIC lifecycle
   coverage for live roots, pending deletion, gateway filtering, and deletion

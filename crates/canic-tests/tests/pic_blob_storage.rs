@@ -71,6 +71,8 @@ fn assert_create_certificate_registers_live_blob(fixture: &StandaloneCanisterFix
     assert_eq!(dto.method, "upload");
     assert_eq!(dto.blob_hash, ROOT_HASH);
 
+    assert_probe_counts(fixture, 1, 0, 0);
+
     let live = blobs_are_live(fixture);
     assert_eq!(live, vec![true, false]);
 }
@@ -81,15 +83,14 @@ fn assert_pending_deletion_is_gateway_filtered(
     gateway: Principal,
     non_gateway: Principal,
 ) {
-    let added: Result<(), Error> =
-        fixture.update_call_or_panic("blob_storage_probe_add_gateway", (gateway,));
-    added.expect("gateway principal should be added");
+    add_gateway(fixture, gateway);
 
     let marked: Result<bool, Error> = fixture.update_call_or_panic(
         "blob_storage_probe_mark_pending_delete",
         (ROOT_HASH.to_string(),),
     );
     assert!(marked.expect("live blob should be marked pending deletion"));
+    assert_probe_counts(fixture, 1, 1, 1);
 
     let denied: Vec<String> =
         fixture.query_call_as_or_panic(non_gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
@@ -105,6 +106,7 @@ fn assert_pending_deletion_is_gateway_filtered(
         (SECOND_PENDING_ROOT_HASH.to_string(),),
     );
     assert!(marked_second.expect("second live blob should be marked pending deletion"));
+    assert_probe_counts(fixture, 2, 2, 1);
 
     let pending: Vec<String> =
         fixture.query_call_as_or_panic(gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
@@ -116,15 +118,60 @@ fn assert_pending_deletion_is_gateway_filtered(
     let repeated_pending: Vec<String> =
         fixture.query_call_as_or_panic(gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
     assert_eq!(repeated_pending, pending);
+
+    assert_gateway_principal_removal_revokes_scrubber_access(fixture, gateway, &repeated_pending);
+    add_gateway(fixture, gateway);
+    let restored_pending: Vec<String> =
+        fixture.query_call_as_or_panic(gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
+    assert_eq!(restored_pending, repeated_pending);
+}
+
+// Assert removing a gateway principal revokes pending-list and confirm access.
+fn assert_gateway_principal_removal_revokes_scrubber_access(
+    fixture: &StandaloneCanisterFixture,
+    gateway: Principal,
+    expected_pending: &[String],
+) {
+    let removed: Result<bool, Error> =
+        fixture.update_call_or_panic("blob_storage_probe_remove_gateway", (gateway,));
+    assert!(removed.expect("gateway principal should be removed"));
+    assert_probe_counts(fixture, 2, 2, 0);
+
+    let removed_again: Result<bool, Error> =
+        fixture.update_call_or_panic("blob_storage_probe_remove_gateway", (gateway,));
+    assert!(!removed_again.expect("repeated gateway removal should be idempotent"));
+
+    let denied_after_removal: Vec<String> =
+        fixture.query_call_as_or_panic(gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
+    assert!(denied_after_removal.is_empty());
+
+    fixture.update_call_as_or_panic::<(), _>(
+        gateway,
+        BLOB_STORAGE_CONFIRM_BLOB_DELETION,
+        (vec![ROOT_HASH_BYTES.to_vec()],),
+    );
+
+    add_gateway(fixture, gateway);
+    assert_probe_counts(fixture, 2, 2, 1);
+    let still_pending: Vec<String> =
+        fixture.query_call_as_or_panic(gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
+    assert_eq!(still_pending, expected_pending);
+
+    let removed_after_check: Result<bool, Error> =
+        fixture.update_call_or_panic("blob_storage_probe_remove_gateway", (gateway,));
+    assert!(removed_after_check.expect("gateway principal should be removable again"));
+    assert_probe_counts(fixture, 2, 2, 0);
 }
 
 // Assert live blobs, pending deletion, and gateway principals persist across upgrade.
 fn assert_stable_state_survives_upgrade(fixture: &StandaloneCanisterFixture, gateway: Principal) {
     create_certificate(fixture, LIVE_ONLY_ROOT_HASH);
     assert!(blob_is_live(fixture, LIVE_ONLY_ROOT_HASH_BYTES));
+    assert_probe_counts(fixture, 3, 2, 1);
 
     upgrade_probe_canister(fixture);
 
+    assert_probe_counts(fixture, 3, 2, 1);
     assert!(blob_is_live(fixture, LIVE_ONLY_ROOT_HASH_BYTES));
     assert!(!blob_is_live(fixture, ROOT_HASH_BYTES));
     assert_liveness_ordering_and_duplicates(fixture);
@@ -192,6 +239,7 @@ fn assert_gateway_confirm_deletion_removes_live_blob(
     let pending_after_gateway_confirmation: Vec<String> =
         fixture.query_call_as_or_panic(gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
     assert!(pending_after_gateway_confirmation.is_empty());
+    assert_probe_counts(fixture, 1, 0, 1);
 
     let live_status: Result<bool, Error> =
         fixture.query_call_or_panic("blob_storage_probe_is_live", (ROOT_HASH.to_string(),));
@@ -218,11 +266,34 @@ fn blob_is_live(fixture: &StandaloneCanisterFixture, root_hash_bytes: [u8; 32]) 
     live[0]
 }
 
+// Assert local blob-storage state counters exposed by the test probe.
+fn assert_probe_counts(
+    fixture: &StandaloneCanisterFixture,
+    stored_blobs: u64,
+    pending_deletions: u64,
+    gateway_principals: u64,
+) {
+    let counts: Result<(u64, u64, u64), Error> =
+        fixture.query_call_or_panic("blob_storage_probe_counts", ());
+
+    assert_eq!(
+        counts.expect("probe counts query should succeed"),
+        (stored_blobs, pending_deletions, gateway_principals)
+    );
+}
+
 // Register one canonical root hash through the gateway create-certificate endpoint.
 fn create_certificate(fixture: &StandaloneCanisterFixture, root_hash: &str) {
     let result: Result<CreateCertificateResult, Error> =
         fixture.update_call_or_panic(BLOB_STORAGE_CREATE_CERTIFICATE, (root_hash.to_string(),));
     result.expect("create certificate should register live blob");
+}
+
+// Register one gateway principal through the test probe helper.
+fn add_gateway(fixture: &StandaloneCanisterFixture, gateway: Principal) {
+    let added: Result<(), Error> =
+        fixture.update_call_or_panic("blob_storage_probe_add_gateway", (gateway,));
+    added.expect("gateway principal should be added");
 }
 
 // Upgrade the probe with the same compiled wasm artifact used for install.

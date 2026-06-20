@@ -30,6 +30,14 @@ validation notes.
   records the explicit prepare -> direct root query -> install operating model
   for the delegated-token root proof provisioning MVP.
 
+## Blob Storage Operations
+
+- [Blob storage integration](blob-storage-integration.md) documents the 0.69
+  non-billing gateway endpoint wiring, lifecycle API contract, gateway
+  principal handling, and focused validation commands for downstream canisters.
+- [Blob storage source handoff](blob-storage-source-handoff.md) records the
+  source and inventory evidence used to unlock the 0.69 implementation line.
+
 ## Release Probe Inventories
 
 - [0.56 v1 release probe inventory](0.56-v1-release-probes.md) records the

@@ -86,6 +86,18 @@ impl BlobStorageLifecycleOps {
         BlobStorageStore::remove_stored_blob(hash);
     }
 
+    /// Return the number of stored blob records, including pending-deletion records.
+    #[must_use]
+    pub fn stored_blob_count() -> u64 {
+        BlobStorageStore::stored_blob_count()
+    }
+
+    /// Return the number of pending gateway-deletion records.
+    #[must_use]
+    pub fn pending_deletion_count() -> u64 {
+        BlobStorageStore::pending_deletion_count()
+    }
+
     /// Return pending-deletion root hashes in stable key order.
     #[must_use]
     pub fn pending_deletion_hashes() -> Vec<String> {
@@ -106,6 +118,12 @@ impl BlobStorageLifecycleOps {
     /// Remove an authorized storage gateway principal.
     pub fn remove_gateway_principal(principal: Principal) -> bool {
         BlobStorageStore::remove_gateway_principal(principal).is_some()
+    }
+
+    /// Return the number of authorized storage gateway principals.
+    #[must_use]
+    pub fn gateway_principal_count() -> u64 {
+        BlobStorageStore::gateway_principal_count()
     }
 
     /// Return whether the principal is an authorized storage gateway.
@@ -240,7 +258,12 @@ mod tests {
         let hash = h1();
 
         BlobStorageLifecycleOps::register_live(&hash, 10).expect("register");
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 1);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
+
         BlobStorageLifecycleOps::mark_pending_delete(&hash, 20).expect("mark pending");
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 1);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 1);
         assert_eq!(
             BlobStorageLifecycleOps::pending_deletion_hashes(),
             vec![hash.as_str().to_string()]
@@ -249,6 +272,8 @@ mod tests {
         BlobStorageLifecycleOps::confirm_deleted_by_gateway(&hash);
 
         assert!(!BlobStorageLifecycleOps::is_live(&hash));
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 0);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
         assert!(BlobStorageLifecycleOps::pending_deletion_hashes().is_empty());
         BlobStorageLifecycleOps::confirm_deleted_by_gateway(&hash);
     }
@@ -259,12 +284,15 @@ mod tests {
         let gateway = p(42);
 
         assert!(!BlobStorageLifecycleOps::is_gateway_principal(gateway));
+        assert_eq!(BlobStorageLifecycleOps::gateway_principal_count(), 0);
         BlobStorageLifecycleOps::upsert_gateway_principal(gateway, 10);
         BlobStorageLifecycleOps::upsert_gateway_principal(gateway, 20);
         assert!(BlobStorageLifecycleOps::is_gateway_principal(gateway));
+        assert_eq!(BlobStorageLifecycleOps::gateway_principal_count(), 1);
 
         assert!(BlobStorageLifecycleOps::remove_gateway_principal(gateway));
         assert!(!BlobStorageLifecycleOps::remove_gateway_principal(gateway));
         assert!(!BlobStorageLifecycleOps::is_gateway_principal(gateway));
+        assert_eq!(BlobStorageLifecycleOps::gateway_principal_count(), 0);
     }
 }
