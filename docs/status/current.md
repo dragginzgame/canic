@@ -9,7 +9,7 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.69.4` is in progress as a blob-storage developer-readiness cleanup slice.
+- `0.69.4` is prepared as a blob-storage developer-readiness cleanup slice.
   Current work replaces tuple-shaped local count plumbing with a named passive
   `BlobStorageLocalCounters` DTO and `BlobStorageApi::local_counters()` helper.
   The `blob_storage_probe` count query now returns the named DTO so downstream
@@ -18,7 +18,8 @@ inspect only the files needed for the current task.
   runbook now includes a guarded host-status wrapper example for
   `local_counters()`. The slice also pins `create_certificate` compatibility:
   the returned DTO echoes the request hash for the gateway contract while
-  internal live state stores the canonical normalized hash.
+  internal live state stores the canonical normalized hash. The root and
+  detailed 0.69 changelogs are finalized for this slice.
   Focused validation passing for this slice:
   ```text
   cargo fmt --all -- --check
