@@ -217,6 +217,11 @@ impl BlobStorageStore {
     }
 
     #[must_use]
+    pub(crate) fn stored_blob_count() -> u64 {
+        STORED_BLOBS.with_borrow(StableBtreeMap::len)
+    }
+
+    #[must_use]
     #[cfg(test)]
     pub(crate) fn stored_blobs() -> Vec<(BlobRootHashKey, StoredBlobRecord)> {
         STORED_BLOBS.with_borrow(|map| {
@@ -246,6 +251,11 @@ impl BlobStorageStore {
     }
 
     #[must_use]
+    pub(crate) fn pending_deletion_count() -> u64 {
+        BLOB_DELETION_PENDING.with_borrow(StableBtreeMap::len)
+    }
+
+    #[must_use]
     pub(crate) fn pending_deletions() -> Vec<(BlobRootHashKey, BlobDeletionPendingRecord)> {
         BLOB_DELETION_PENDING.with_borrow(|map| {
             map.iter()
@@ -272,6 +282,11 @@ impl BlobStorageStore {
         principal: Principal,
     ) -> Option<StorageGatewayPrincipalRecord> {
         STORAGE_GATEWAY_PRINCIPALS.with_borrow_mut(|map| map.remove(&principal))
+    }
+
+    #[must_use]
+    pub(crate) fn gateway_principal_count() -> u64 {
+        STORAGE_GATEWAY_PRINCIPALS.with_borrow(StableBtreeMap::len)
     }
 
     #[must_use]
@@ -372,13 +387,23 @@ mod tests {
             StorageGatewayPrincipalRecord::new(gateway, 40),
         );
 
+        assert_eq!(BlobStorageStore::stored_blob_count(), 2);
+        assert_eq!(BlobStorageStore::pending_deletion_count(), 1);
+        assert_eq!(BlobStorageStore::gateway_principal_count(), 1);
+
         let exported = BlobStorageStore::export();
         BlobStorageStore::clear();
         assert_eq!(BlobStorageStore::export(), BlobStorageData::default());
+        assert_eq!(BlobStorageStore::stored_blob_count(), 0);
+        assert_eq!(BlobStorageStore::pending_deletion_count(), 0);
+        assert_eq!(BlobStorageStore::gateway_principal_count(), 0);
 
         BlobStorageStore::import(exported.clone());
 
         assert_eq!(BlobStorageStore::export(), exported);
+        assert_eq!(BlobStorageStore::stored_blob_count(), 2);
+        assert_eq!(BlobStorageStore::pending_deletion_count(), 1);
+        assert_eq!(BlobStorageStore::gateway_principal_count(), 1);
         assert_eq!(
             BlobStorageStore::get_stored_blob(&h1),
             Some(StoredBlobRecord::new(&h1, 10))

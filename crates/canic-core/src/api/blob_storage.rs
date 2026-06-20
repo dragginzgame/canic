@@ -110,6 +110,18 @@ impl BlobStorageApi {
         Ok(())
     }
 
+    /// Return the number of stored blob records, including pending-deletion records.
+    #[must_use]
+    pub fn stored_blob_count() -> u64 {
+        BlobStorageLifecycleOps::stored_blob_count()
+    }
+
+    /// Return the number of pending gateway-deletion records.
+    #[must_use]
+    pub fn pending_deletion_count() -> u64 {
+        BlobStorageLifecycleOps::pending_deletion_count()
+    }
+
     /// Return pending-deletion root hashes in stable key order.
     #[must_use]
     pub fn pending_deletion_hashes() -> Vec<String> {
@@ -152,6 +164,12 @@ impl BlobStorageApi {
     #[must_use]
     pub fn remove_gateway_principal(principal: crate::cdk::types::Principal) -> bool {
         BlobStorageLifecycleOps::remove_gateway_principal(principal)
+    }
+
+    /// Return the number of authorized storage gateway principals.
+    #[must_use]
+    pub fn gateway_principal_count() -> u64 {
+        BlobStorageLifecycleOps::gateway_principal_count()
     }
 
     /// Return whether the principal is an authorized storage gateway.
@@ -219,12 +237,18 @@ mod tests {
         let hash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
         assert!(!BlobStorageApi::is_live(hash).expect("live check"));
+        assert_eq!(BlobStorageApi::stored_blob_count(), 0);
+        assert_eq!(BlobStorageApi::pending_deletion_count(), 0);
         assert!(BlobStorageApi::register_live(hash, 10).expect("register"));
         assert!(!BlobStorageApi::register_live(hash, 20).expect("register again"));
         assert!(BlobStorageApi::is_live(hash).expect("live check"));
+        assert_eq!(BlobStorageApi::stored_blob_count(), 1);
+        assert_eq!(BlobStorageApi::pending_deletion_count(), 0);
         BlobStorageApi::require_live(hash).expect("require live");
 
         assert!(BlobStorageApi::mark_pending_delete(hash, 30).expect("mark pending"));
+        assert_eq!(BlobStorageApi::stored_blob_count(), 1);
+        assert_eq!(BlobStorageApi::pending_deletion_count(), 1);
         assert_eq!(
             BlobStorageApi::require_live(hash)
                 .expect_err("pending is not live")
@@ -258,11 +282,14 @@ mod tests {
 
         crate::storage::stable::blob_storage::BlobStorageStore::clear();
         assert!(!BlobStorageApi::is_gateway_principal(principal));
+        assert_eq!(BlobStorageApi::gateway_principal_count(), 0);
 
         BlobStorageApi::upsert_gateway_principal(principal, 10);
         assert!(BlobStorageApi::is_gateway_principal(principal));
+        assert_eq!(BlobStorageApi::gateway_principal_count(), 1);
         assert!(BlobStorageApi::remove_gateway_principal(principal));
         assert!(!BlobStorageApi::remove_gateway_principal(principal));
+        assert_eq!(BlobStorageApi::gateway_principal_count(), 0);
     }
 
     #[test]

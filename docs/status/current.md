@@ -9,18 +9,39 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.69.1` is pushed as the ICP CLI 1.0 compatibility patch. Local
-  `icp --version` reports `icp 1.0.0`. The official release notes call out the
-  default gateway-domain change to `icp.net`, password-protected identity
-  session caching, and removal of `--set-controller`. The active Canic codebase
-  has no `--set-controller` or `icp0.io` dependency, `tool-versions.env`
-  already pins `CANIC_ICP_CLI_VERSION=1.0.0`, and the host/CLI compatibility
-  gate has been updated from the old 0.3.x line to `>=1.0.0, <2.0.0`.
-  Operator ergonomics now document `icp settings session-length` /
-  `icp identity reauth`, and `canic info medic` reports those commands as a
-  non-failing hint; no release-critical flow depends on session caching.
+- `0.69.3` is prepared as a blob-storage developer-readiness cleanup slice.
+  Current work adds the downstream integration runbook, aligns the 0.69 design
+  and handoff with the completed non-billing M0-M5 MVP, and extends the
+  `blob_storage_probe` test canister with a controller-only gateway-principal
+  removal helper and local count query. `BlobStorageApi` now exposes local
+  stored-blob, pending-deletion, and gateway-principal count helpers for
+  host-owned guarded status endpoints. PocketIC coverage now proves that
+  removing a gateway principal revokes pending-deletion listing and makes
+  deletion confirmation a no-op until the principal is re-added, while the
+  counters stay consistent across pending deletion, revocation, re-add,
+  confirmation, and upgrade. This remains test/developer surface only; 0.69
+  still does not add a production Cashier sync endpoint or billing surface.
+  The root and detailed 0.69 changelogs are finalized for this slice.
+  Focused validation for this slice:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  cargo check --locked -p canic --features blob-storage
+  cargo clippy --locked -p canic --lib --features blob-storage -- -D warnings
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --features blob-storage --test blob_storage_endpoint_macro -- --nocapture
+  cargo check --locked -p blob_storage_probe
+  cargo clippy --locked -p blob_storage_probe -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  bash scripts/ci/check-blob-storage-inventory-gate.sh
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  git diff --check
+  ```
 
-- `0.69.2` is prepared as the non-billing blob-storage backend lifecycle
+- `0.69.2` is pushed as the non-billing blob-storage backend lifecycle
   slice. Current Toko `boss` is
   clean at commit `9ca150b396a2bde42f2b8977a04a7ca2c6172b56` and is accepted
   as the 0.69 project-side protocol source. The gateway inventory records all
@@ -30,20 +51,20 @@ inspect only the files needed for the current task.
   `PostRemoteAsset.blob_root_hash` and `RemoteAsset.blob_root_hash`, requires
   production assets to reference registered live blobs, marks that same root
   hash pending deletion on remote-asset deletion, and intentionally permits
-  placeholder hashes only in local builds. M1 has started with the
-  off-by-default `blob-storage` feature, four non-billing gateway protocol
-  constants/Candid fixture coverage, and passive `CreateCertificateResult`
-  DTO. M2 has started with Toko-compatible canonical `BlobRootHash`
-  validation/conversion and `BlobStorageApi` helpers for `sha256:<64-hex>`
-  strings and 32-byte gateway inputs. Stable live-blob, pending-deletion, and
-  gateway-principal maps now exist behind the feature, with lifecycle/API
-  helpers for register-live, check/require-live, mark-pending-delete,
-  gateway-confirm-delete, pending-deletion listing, and gateway-principal
-  membership. Endpoint emission has started with
-  `canic_emit_blob_storage_endpoints!(guard = ...)`, exporting exactly the
-  four 0.69 non-billing `_immutableObjectStorage*` methods with exact method
-  names, create-certificate guard wiring, gateway-principal filtering for
-  scrubber endpoints, and no deferred billing/sync method emission. A
+  placeholder hashes only in local builds. M1-M5 are complete for the current
+  non-billing MVP: the off-by-default `blob-storage` feature, four non-billing
+  gateway protocol constants/Candid fixture coverage, passive
+  `CreateCertificateResult` DTO, Toko-compatible canonical `BlobRootHash`
+  validation/conversion, and `BlobStorageApi` helpers for `sha256:<64-hex>`
+  strings and 32-byte gateway inputs are in place. Stable live-blob,
+  pending-deletion, and gateway-principal maps exist behind the feature, with
+  lifecycle/API helpers for register-live, check/require-live,
+  mark-pending-delete, gateway-confirm-delete, pending-deletion listing, and
+  gateway-principal membership. `canic_emit_blob_storage_endpoints!(guard =
+  ...)` exports exactly the four 0.69 non-billing `_immutableObjectStorage*`
+  methods with exact method names, create-certificate guard wiring,
+  gateway-principal filtering for scrubber endpoints, and no deferred
+  billing/sync method emission. A
   standalone `blob_storage_probe` canister now proves the non-billing lifecycle
   under PocketIC: create-certificate registers a live root, liveness queries use
   32-byte gateway inputs, pending deletion is gateway-filtered, non-gateway
@@ -57,8 +78,9 @@ inspect only the files needed for the current task.
   the Cashier inventory records Toko call-site DTO/wrapper expectations only,
   and actual Cashier implementation or generated/deployed Cashier `.did`
   remains missing. The source-inspection handoff is
-  `docs/operations/blob-storage-source-handoff.md`.
-  Focused validation for this prepared slice:
+  `docs/operations/blob-storage-source-handoff.md`. The downstream integration
+  runbook is `docs/operations/blob-storage-integration.md`.
+  Focused validation for this pushed slice:
   ```text
   cargo fmt --all -- --check
   cargo check --locked -p canic-core --features blob-storage
@@ -80,6 +102,17 @@ inspect only the files needed for the current task.
   rg -n 'account_top_up_v1|storage_gateway_principal_list_v1|get_blob_storage_status|_immutableObjectStorageUpdateGatewayPrincipals|_immutableObjectStorageFundFromProjectCycles|Cashier|BlobProjectCyclesTopUpReport|BlobStorageBilling|GatewayPrincipalSync' crates canisters fleets -g '*.rs' -g '*.did' -g '*.toml'
   git diff --check
   ```
+
+- `0.69.1` is pushed as the ICP CLI 1.0 compatibility patch. Local
+  `icp --version` reports `icp 1.0.0`. The official release notes call out the
+  default gateway-domain change to `icp.net`, password-protected identity
+  session caching, and removal of `--set-controller`. The active Canic codebase
+  has no `--set-controller` or `icp0.io` dependency, `tool-versions.env`
+  already pins `CANIC_ICP_CLI_VERSION=1.0.0`, and the host/CLI compatibility
+  gate has been updated from the old 0.3.x line to `>=1.0.0, <2.0.0`.
+  Operator ergonomics now document `icp settings session-length` /
+  `icp identity reauth`, and `canic info medic` reports those commands as a
+  non-failing hint; no release-critical flow depends on session caching.
 
 - `0.68.26` is prepared as the root proof provisioning audit closeout and
   blob-storage handoff point. The 0.68 MVP remains:
