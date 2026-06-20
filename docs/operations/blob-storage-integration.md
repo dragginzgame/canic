@@ -71,7 +71,8 @@ internal lifecycle work instead of calling `_immutableObjectStorage*` endpoints.
 Use these helpers for the 0.69 lifecycle:
 
 - `create_certificate(root_hash)` registers a live root and returns the
-  gateway-compatible certificate DTO.
+  gateway-compatible certificate DTO. The DTO echoes the request hash to match
+  the gateway protocol; Canic stores the canonical normalized hash internally.
 - `register_live(root_hash, now_ns)` registers a root when certificate creation
   happens outside the endpoint path.
 - `require_live(root_hash)` enforces that a consumer record points at a
@@ -86,10 +87,32 @@ Use these helpers for the 0.69 lifecycle:
 - `stored_blob_count()`, `pending_deletion_count()`, and
   `gateway_principal_count()` return local operational counters that host
   canisters may expose through their own guarded status endpoint.
+- `local_counters()` returns the same values as a named
+  `BlobStorageLocalCounters` DTO for downstream status wrappers.
 
 `upsert_gateway_principal` should be exposed only through an operator,
 controller, deployment, or test-only path chosen by the host canister. 0.69 does
 not add a production Cashier sync endpoint.
+
+Host canisters that need local operational status can expose their own guarded
+query around `local_counters()`:
+
+```rust
+use canic::{
+    Error,
+    dto::blob_storage::BlobStorageLocalCounters,
+    prelude::*,
+};
+
+#[canic_query(requires(caller::is_controller()))]
+fn blob_storage_local_counters() -> Result<BlobStorageLocalCounters, Error> {
+    Ok(canic::api::blob_storage::BlobStorageApi::local_counters())
+}
+```
+
+This is a host-owned status wrapper. It is not emitted by
+`canic_emit_blob_storage_endpoints!`, and it is not a Cashier billing/status
+endpoint.
 
 ## Root Hash Contract
 
@@ -157,9 +180,10 @@ POCKET_IC_BIN=<path-to-pocket-ic> cargo test --locked -p canic-tests --test pic_
 ```
 
 The `blob_storage_probe` test canister exposes controller-only helpers to add
-and remove local gateway principals, plus a local count query for integration
-assertions. They are for integration testing and downstream wrapper examples
-only, not a production Cashier sync path.
+and remove local gateway principals, plus a local count query returning
+`BlobStorageLocalCounters` for integration assertions. They are for integration
+testing and downstream wrapper examples only, not a production Cashier sync
+path.
 
 ## References
 

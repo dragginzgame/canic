@@ -1,7 +1,10 @@
 use candid::Principal;
 use canic::{
     Error,
-    dto::{blob_storage::CreateCertificateResult, error::ErrorCode},
+    dto::{
+        blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
+        error::ErrorCode,
+    },
     ids::CanisterRole,
     protocol::{
         BLOB_STORAGE_BLOBS_ARE_LIVE, BLOB_STORAGE_BLOBS_TO_DELETE,
@@ -273,12 +276,12 @@ fn assert_probe_counts(
     pending_deletions: u64,
     gateway_principals: u64,
 ) {
-    let counts: Result<(u64, u64, u64), Error> =
+    let counts: Result<BlobStorageLocalCounters, Error> =
         fixture.query_call_or_panic("blob_storage_probe_counts", ());
 
     assert_eq!(
         counts.expect("probe counts query should succeed"),
-        (stored_blobs, pending_deletions, gateway_principals)
+        BlobStorageLocalCounters::new(stored_blobs, pending_deletions, gateway_principals)
     );
 }
 

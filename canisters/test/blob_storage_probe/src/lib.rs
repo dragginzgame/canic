@@ -1,6 +1,8 @@
 #![expect(clippy::unused_async)]
 
-use canic::{Error, cdk::types::Principal, prelude::*};
+use canic::{
+    Error, cdk::types::Principal, dto::blob_storage::BlobStorageLocalCounters, prelude::*,
+};
 
 canic::start!();
 
@@ -33,12 +35,8 @@ async fn blob_storage_probe_remove_gateway(principal: Principal) -> Result<bool,
 
 /// Return stored, pending-deletion, and gateway-principal counts for local tests.
 #[canic_query]
-fn blob_storage_probe_counts() -> Result<(u64, u64, u64), Error> {
-    Ok((
-        canic::api::blob_storage::BlobStorageApi::stored_blob_count(),
-        canic::api::blob_storage::BlobStorageApi::pending_deletion_count(),
-        canic::api::blob_storage::BlobStorageApi::gateway_principal_count(),
-    ))
+fn blob_storage_probe_counts() -> Result<BlobStorageLocalCounters, Error> {
+    Ok(canic::api::blob_storage::BlobStorageApi::local_counters())
 }
 
 /// Mark a live blob as pending object storage gateway deletion.

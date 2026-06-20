@@ -5,7 +5,11 @@
 //! Boundary: maps public endpoint inputs into ops/model validation and public errors.
 
 use crate::{
-    dto::{blob_storage::CreateCertificateResult, error::Error},
+    cdk::types::Principal,
+    dto::{
+        blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
+        error::Error,
+    },
     ops::{
         blob_storage::{
             conversion::{BlobStorageConversionError, BlobStorageConversionOps},
@@ -51,6 +55,9 @@ impl BlobStorageApi {
     }
 
     /// Register an upload certificate request and return the gateway-compatible DTO.
+    ///
+    /// The gateway contract echoes the request hash in the response; Canic stores
+    /// the canonical normalized hash internally.
     pub fn create_certificate(root_hash: String) -> Result<CreateCertificateResult, Error> {
         let hash = BlobStorageConversionOps::root_hash_from_text(&root_hash)
             .map_err(Self::map_conversion_error)?;
@@ -122,6 +129,16 @@ impl BlobStorageApi {
         BlobStorageLifecycleOps::pending_deletion_count()
     }
 
+    /// Return local operational counters for host-owned guarded status endpoints.
+    #[must_use]
+    pub fn local_counters() -> BlobStorageLocalCounters {
+        BlobStorageLocalCounters::new(
+            Self::stored_blob_count(),
+            Self::pending_deletion_count(),
+            Self::gateway_principal_count(),
+        )
+    }
+
     /// Return pending-deletion root hashes in stable key order.
     #[must_use]
     pub fn pending_deletion_hashes() -> Vec<String> {
@@ -130,9 +147,7 @@ impl BlobStorageApi {
 
     /// Return pending-deletion roots only to registered storage gateways.
     #[must_use]
-    pub fn pending_deletion_hashes_for_gateway(
-        caller: crate::cdk::types::Principal,
-    ) -> Vec<String> {
+    pub fn pending_deletion_hashes_for_gateway(caller: Principal) -> Vec<String> {
         if !BlobStorageLifecycleOps::is_gateway_principal(caller) {
             return Vec::new();
         }
@@ -141,7 +156,7 @@ impl BlobStorageApi {
 
     /// Confirm gateway deletion for valid 32-byte roots when caller is a registered gateway.
     pub fn confirm_deleted_by_gateway_hash_bytes_batch(
-        caller: crate::cdk::types::Principal,
+        caller: Principal,
         hash_bytes_list: Vec<Vec<u8>>,
     ) {
         if !BlobStorageLifecycleOps::is_gateway_principal(caller) {
@@ -156,13 +171,13 @@ impl BlobStorageApi {
     }
 
     /// Insert or update an authorized storage gateway principal.
-    pub fn upsert_gateway_principal(principal: crate::cdk::types::Principal, now_ns: u64) {
+    pub fn upsert_gateway_principal(principal: Principal, now_ns: u64) {
         BlobStorageLifecycleOps::upsert_gateway_principal(principal, now_ns);
     }
 
     /// Remove an authorized storage gateway principal.
     #[must_use]
-    pub fn remove_gateway_principal(principal: crate::cdk::types::Principal) -> bool {
+    pub fn remove_gateway_principal(principal: Principal) -> bool {
         BlobStorageLifecycleOps::remove_gateway_principal(principal)
     }
 
@@ -174,7 +189,7 @@ impl BlobStorageApi {
 
     /// Return whether the principal is an authorized storage gateway.
     #[must_use]
-    pub fn is_gateway_principal(principal: crate::cdk::types::Principal) -> bool {
+    pub fn is_gateway_principal(principal: Principal) -> bool {
         BlobStorageLifecycleOps::is_gateway_principal(principal)
     }
 
@@ -232,6 +247,31 @@ mod tests {
     }
 
     #[test]
+    fn create_certificate_echoes_request_hash_and_registers_canonical_root() {
+        crate::storage::stable::blob_storage::BlobStorageStore::clear();
+        let request_hash =
+            "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string();
+        let canonical_hash =
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let result = BlobStorageApi::create_certificate(request_hash.clone())
+            .expect("create certificate succeeds");
+
+        assert_eq!(
+            result,
+            CreateCertificateResult {
+                method: "upload".to_string(),
+                blob_hash: request_hash
+            }
+        );
+        assert!(BlobStorageApi::is_live(canonical_hash).expect("canonical live check"));
+        assert_eq!(
+            BlobStorageApi::blobs_are_live(vec![vec![0xaau8; 32]]),
+            vec![true]
+        );
+    }
+
+    #[test]
     fn live_blob_lifecycle_maps_to_public_api() {
         crate::storage::stable::blob_storage::BlobStorageStore::clear();
         let hash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -249,6 +289,10 @@ mod tests {
         assert!(BlobStorageApi::mark_pending_delete(hash, 30).expect("mark pending"));
         assert_eq!(BlobStorageApi::stored_blob_count(), 1);
         assert_eq!(BlobStorageApi::pending_deletion_count(), 1);
+        assert_eq!(
+            BlobStorageApi::local_counters(),
+            BlobStorageLocalCounters::new(1, 1, 0)
+        );
         assert_eq!(
             BlobStorageApi::require_live(hash)
                 .expect_err("pending is not live")
@@ -278,7 +322,7 @@ mod tests {
 
     #[test]
     fn gateway_principal_api_is_idempotent() {
-        let principal = crate::cdk::types::Principal::from_slice(&[99; 29]);
+        let principal = Principal::from_slice(&[99; 29]);
 
         crate::storage::stable::blob_storage::BlobStorageStore::clear();
         assert!(!BlobStorageApi::is_gateway_principal(principal));
@@ -287,6 +331,10 @@ mod tests {
         BlobStorageApi::upsert_gateway_principal(principal, 10);
         assert!(BlobStorageApi::is_gateway_principal(principal));
         assert_eq!(BlobStorageApi::gateway_principal_count(), 1);
+        assert_eq!(
+            BlobStorageApi::local_counters(),
+            BlobStorageLocalCounters::new(0, 0, 1)
+        );
         assert!(BlobStorageApi::remove_gateway_principal(principal));
         assert!(!BlobStorageApi::remove_gateway_principal(principal));
         assert_eq!(BlobStorageApi::gateway_principal_count(), 0);
@@ -297,7 +345,7 @@ mod tests {
         crate::storage::stable::blob_storage::BlobStorageStore::clear();
         let hash = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
         let bytes = [0xeeu8; 32];
-        let gateway = crate::cdk::types::Principal::from_slice(&[11; 29]);
+        let gateway = Principal::from_slice(&[11; 29]);
 
         assert_eq!(
             BlobStorageApi::blobs_are_live(vec![bytes.to_vec(), vec![1, 2, 3]]),
