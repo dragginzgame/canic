@@ -7,6 +7,7 @@ members = [
     "canisters/audit/root_probe",
     "canisters/audit/scaling_probe",
     "canisters/sandbox/blank",
+    "canisters/test/blob_storage_probe",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
     "canisters/test/intent_authority",

@@ -4,7 +4,7 @@ Status: **Incomplete - implementation blocked**
 
 Release line: 0.70
 
-Last updated: 2026-06-19
+Last updated: 2026-06-20
 
 ## Purpose
 
@@ -36,8 +36,8 @@ for:
 No Candid signature, source repository URL, source commit SHA, deployed `.did`,
 or upstream implementation file has been recorded yet.
 
-The local Toko `origin/development` commit
-`3ef01afc5f5eeefdb9471f3e010b6562d758c111` now provides inspected
+The local Toko `boss` commit
+`9ca150b396a2bde42f2b8977a04a7ca2c6172b56` now provides inspected
 consumer/wrapper evidence for the Cashier methods used by blob-storage status
 and funding. That evidence records Toko's expected DTOs and call flow, but it
 is not the Cashier implementation source and does not unlock billing work.
@@ -170,6 +170,46 @@ Inventory effect:
   missing.
 - The billing implementation gate remains closed.
 
+### 2026-06-20 Local Toko Boss Commit Inspection
+
+Search scope:
+
+- `/home/adam/projects/toko`
+
+Checkout state:
+
+- Checked-out branch: `boss`
+- Checked-out `HEAD` commit:
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
+- Worktree state: clean at inspection time.
+
+Exact source search:
+
+```text
+git grep -n "account_balance_get_v1\|account_top_up_v1\|storage_gateway_principal_list_v1\|get_blob_storage_status" HEAD -- .
+git grep -n "immutable_storage\|blob_storage" HEAD -- .
+find . -path './target' -prune -o -name '*.did' -print
+```
+
+Result:
+
+- Current `boss` contains Toko project-hub wrapper calls to
+  `account_balance_get_v1` at
+  `fleets/toko/project/hub/src/ops/blob_storage.rs`.
+- Current `boss` contains Toko project-instance wrapper calls to
+  `storage_gateway_principal_list_v1` and `account_top_up_v1` at
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`.
+- Current `boss` contains generated project-hub and project-instance Candid at:
+  - `fleets/toko/project/hub/project_hub.did`
+  - `fleets/toko/project/instance/project_instance.did`
+
+Inventory effect:
+
+- The stale local-`boss` no-source finding is superseded for Toko
+  consumer/wrapper evidence.
+- Cashier methods remain `Missing source` because no actual Cashier
+  implementation source or generated/deployed Cashier Candid was identified.
+
 ## Completion Criteria
 
 This inventory is complete only when every required field below is filled from
@@ -244,7 +284,7 @@ Known from design only:
 Toko call-site evidence only:
 
 - Toko source commit:
-  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
 - Toko wrapper path: `fleets/toko/project/hub/src/ops/blob_storage.rs`
 - Toko request shape: `{ account : principal }`.
 - Toko expected response shape:
@@ -287,7 +327,7 @@ Known from design only:
 Toko call-site evidence only:
 
 - Toko source commit:
-  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
 - Toko wrapper path:
   `fleets/toko/project/instance/src/ops/immutable_storage.rs`
 - Toko request shape:
@@ -331,7 +371,7 @@ Known from design only:
 Toko call-site evidence only:
 
 - Toko source commit:
-  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
 - Toko wrapper path:
   `fleets/toko/project/instance/src/ops/immutable_storage.rs`
 - Toko expected response shape: `Vec<Principal>`.

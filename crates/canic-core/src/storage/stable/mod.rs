@@ -1,4 +1,6 @@
 pub mod auth;
+#[cfg(feature = "blob-storage")]
+pub mod blob_storage;
 pub mod children;
 pub mod cycles;
 pub mod directory;
@@ -152,7 +154,20 @@ pub mod memory {
         // 57–61
     }
 
-    // 62-79 remain long-horizon Canic core reserve.
+    // ---------------------------------------------------------------------
+    // Blob storage gateway lifecycle state (62–64)
+    //
+    // Expected growth: medium
+    // ---------------------------------------------------------------------
+
+    #[cfg(feature = "blob-storage")]
+    pub mod blob_storage {
+        pub const STORED_BLOBS_ID: u8 = 62;
+        pub const BLOB_DELETION_PENDING_ID: u8 = 63;
+        pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 64;
+    }
+
+    // 65-79 remain long-horizon Canic core reserve.
 }
 
 use crate::{InternalError, storage::prelude::*};

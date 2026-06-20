@@ -13,6 +13,8 @@
 //! abstraction; they are zero-cost namespaces over free functions.
 
 pub mod auth;
+#[cfg(feature = "blob-storage")]
+pub mod blob_storage;
 pub mod cascade;
 pub mod config;
 pub mod cost_guard;
