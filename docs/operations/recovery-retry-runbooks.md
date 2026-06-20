@@ -7,8 +7,9 @@ They document existing behavior after the 0.61 replay-protection line. They
 are intentionally not named after a release line; release numbers belong in
 changelogs and status docs, not in the operational runbook entry point.
 
-Current release-line context: 0.62 is using these runbooks for operator
-recovery, release durability, and RC validation.
+Current release-line context comes from `docs/status/current.md`. These
+runbooks originated during the 0.62 release-durability line and remain the
+non-versioned operator recovery reference for current release work.
 
 ## Scope
 
@@ -297,8 +298,8 @@ validation environment when too expensive for an ordinary docs slice.
 
 Release blockers: none found in these runbooks.
 
-The runbooks are sufficient to continue 0.62 without opening another runtime
-implementation slice. Diagnostic consistency is covered by
+The runbooks remain sufficient for release-line accounting unless a new change
+touches these recovery surfaces. Diagnostic consistency is covered by
 [Diagnostic consistency audit](diagnostic-consistency-audit.md). Remaining work
 belongs to package/install validation, RC accounting, or focused defect
 handling if a concrete release blocker is found.

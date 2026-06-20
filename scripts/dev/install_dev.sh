@@ -36,6 +36,7 @@ CANIC_DEV_TOOLS=(
     cargo-get
     cargo-sort
     cargo-sort-derives
+    ripgrep
 )
 CANIC_WASM_TOOLS=(
     candid-extractor
@@ -67,6 +68,15 @@ cargo_toolchain() {
 
 resolved_cargo_bin_dir() {
     printf '%s/bin\n' "${CARGO_HOME:-$HOME/.cargo}"
+}
+
+ensure_cargo_bin_on_path() {
+    local cargo_bin_dir
+
+    cargo_bin_dir="$(resolved_cargo_bin_dir)"
+    mkdir -p "$cargo_bin_dir"
+    export PATH="$cargo_bin_dir:$PATH"
+    hash -r 2>/dev/null || true
 }
 
 require_command() {
@@ -289,6 +299,7 @@ main() {
 
     require_command rustup
     require_command cargo
+    ensure_cargo_bin_on_path
 
     yellow "Rust toolchain:"
     cyan_command "rustup toolchain install $CANIC_RUST_TOOLCHAIN"
@@ -305,6 +316,8 @@ main() {
     require_python
 
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
+    require_command rg
+    green "rg ready: $(rg --version 2>&1 | head -n 1)"
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_shellcheck
     install_or_update_actionlint

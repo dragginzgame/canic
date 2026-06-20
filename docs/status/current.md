@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-19
+Last updated: 2026-06-20
 
 ## Purpose
 
@@ -8,6 +8,17 @@ This file is the compact handoff for new agent sessions. Read it first, then
 inspect only the files needed for the current task.
 
 ## Current Line
+
+- `0.69.1` is prepared as the ICP CLI 1.0 compatibility patch. Local
+  `icp --version` reports `icp 1.0.0`. The official release notes call out the
+  default gateway-domain change to `icp.net`, password-protected identity
+  session caching, and removal of `--set-controller`. The active Canic codebase
+  has no `--set-controller` or `icp0.io` dependency, `tool-versions.env`
+  already pins `CANIC_ICP_CLI_VERSION=1.0.0`, and the host/CLI compatibility
+  gate has been updated from the old 0.3.x line to `>=1.0.0, <2.0.0`.
+  Operator ergonomics now document `icp settings session-length` /
+  `icp identity reauth`, and `canic info medic` reports those commands as a
+  non-failing hint; no release-critical flow depends on session caching.
 
 - `0.69.0` is prepared as a blob-storage protocol preflight release, not a
   backend implementation release. It records the source-backed inventory
@@ -21,7 +32,26 @@ inspect only the files needed for the current task.
   non-placeholder values, and valid method source commit SHA shapes. It also
   requires the Toko compatibility section to carry local source, commit,
   blob-root mapping, and migration/read-through strategy evidence. 0.70
-  billing remains out of scope and separately gated.
+  billing remains out of scope and separately gated. Post-0.69.0 GitHub code
+  search found candidate Toko consumer/wrapper evidence at commit
+  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`, including project-instance
+  `_immutableObjectStorage*` matches and project-hub billing/status matches.
+  After the maintainer pull, local Toko `HEAD` is `boss` at
+  `97aafee9eeb73ae0517f9788df688bb96ae0a9ff`; exact `git grep` on that
+  committed `HEAD` finds no blob-storage protocol literals. The Toko worktree
+  is user-managed and later showed unmerged pull/conflict entries, so do not
+  treat working-tree contents as canonical evidence. The candidate commit
+  exists locally on `origin/development` and has now been inspected with
+  read-only `git show` / `git grep`. The gateway inventory records the Toko
+  project-instance source, generated Candid signatures, `BlobRootHash` shape,
+  and frontend gateway upload flow as source-identified Toko evidence. The
+  Cashier inventory records Toko call-site DTO/wrapper expectations only; the
+  actual Cashier implementation or generated/deployed Cashier `.did` remains
+  missing. Next blocker: decide whether the Toko project-instance development
+  source is maintainer-approved protocol evidence for Canic, resolve the Toko
+  legacy asset-to-`BlobRootHash` migration/read-through strategy, and obtain
+  actual Cashier source/generated `.did` before billing unlocks. The
+  source-inspection handoff is `docs/operations/blob-storage-source-handoff.md`.
 
 - `0.68.26` is prepared as the root proof provisioning audit closeout and
   blob-storage handoff point. The 0.68 MVP remains:

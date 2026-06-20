@@ -92,6 +92,12 @@ For a full local development setup, including ICP CLI, helper tools, and the
 Some Canic workflows use external helper tools such as `icq`; their command
 surfaces are documented with those tools, not in `canic-cli`.
 
+For password-protected ICP CLI PEM identities, use
+`icp settings session-length <duration>` and
+`icp identity reauth <identity-name> --duration <duration>` to reduce repeated
+password prompts during operator sessions. This affects the local ICP CLI
+identity session only.
+
 ## Local Install And Registry Commands
 
 For local installed-fleet workflows, the CLI also exposes install, registry,

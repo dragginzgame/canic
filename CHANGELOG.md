@@ -6,15 +6,14 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-Root entries are concise release summaries. Detailed patch breakdowns live in
-`docs/changelog/<major>.<minor>.md` and are linked from each minor line when
-present.
-
 ## Unreleased
 
-## [0.69.x] - 2026-06-19 - Blob Storage Protocol Preflight
+## [0.69.x] - 2026-06-20 - Blob Storage Protocol Preflight
 
 Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)
+
+- `0.69.1` updates Canic's ICP CLI compatibility gate for the 1.x stable line
+  and makes `canic info medic` guidance readable for terminal operators.
 
 - `0.69.0` starts the blob-storage line as a protocol-preflight release by
   recording the source-backed gateway inventory requirement, documenting the

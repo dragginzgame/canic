@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub(super) const LOCAL_NETWORK: &str = "local";
-pub const REQUIRED_ICP_CLI_VERSION: &str = "0.3.2";
-pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=0.3.2, <0.4.0";
+pub const REQUIRED_ICP_CLI_VERSION: &str = "1.0.0";
+pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.0.0, <2.0.0";
 pub const CANIC_ICP_LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
 pub const CANIC_ICP_LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
 

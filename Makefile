@@ -35,8 +35,8 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query development environment"
+	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/IC query/Canic toolchain"
+	@echo "  update-dev       Update the local Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/IC query development environment"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -88,11 +88,11 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query/Canic toolchain.
+# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/IC query/Canic toolchain.
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/ShellCheck/actionlint/ICP CLI/IC query development environment.
+# Update the local Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/IC query development environment.
 update-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	rustup update
@@ -101,6 +101,7 @@ update-dev:
 		cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
 		ripgrep \
 		candid-extractor
+	rg --version
 	icp --version
 	icq --version
 	ic-wasm --version

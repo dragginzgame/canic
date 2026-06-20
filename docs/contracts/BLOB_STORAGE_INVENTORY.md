@@ -4,7 +4,7 @@ Status: **Incomplete - implementation blocked**
 
 Release line: 0.69
 
-Last updated: 2026-06-17
+Last updated: 2026-06-19
 
 ## Purpose
 
@@ -20,9 +20,17 @@ though only four non-billing methods are emitted in 0.69.
 
 ## Current Finding
 
-The protocol source has not yet been identified in this repository.
+The local Toko `origin/development` commit
+`3ef01afc5f5eeefdb9471f3e010b6562d758c111` now provides inspected,
+source-backed Toko project-instance evidence for the
+`_immutableObjectStorage*` canister endpoints and generated Toko Candid.
 
-Initial exact-match searches in the local tree found only Canic design notes for:
+The current Toko `boss` `HEAD` does not contain that blob-storage surface, and
+no separate immutable object-storage gateway implementation or deployed gateway
+`.did` has been identified.
+
+Initial exact-match searches in the local Canic tree found only design notes
+for:
 
 - `_immutableObjectStorageBlobsAreLive`
 - `_immutableObjectStorageBlobsToDelete`
@@ -31,12 +39,20 @@ Initial exact-match searches in the local tree found only Canic design notes for
 - `_immutableObjectStorageUpdateGatewayPrincipals`
 - `_immutableObjectStorageFundFromProjectCycles`
 
-No Candid signature, source repository URL, source commit SHA, deployed `.did`,
-or upstream implementation file has been recorded yet.
+The Toko development-commit evidence is enough to replace the earlier
+no-source finding for the project-side canister endpoints. It is not enough by
+itself to complete this inventory until the maintainer accepts Toko's
+project-instance implementation as the protocol source, the Toko
+compatibility/migration answer is resolved, and the billing/Cashier source
+remains separated into the 0.70 inventory.
 
 ## Protocol Source Search Log
 
-### 2026-06-19 Local Workspace Search
+### 2026-06-19 Initial Local Workspace Search
+
+This result is historical. It remains useful for the Canic/local-`boss` search
+record, but the later Toko `origin/development` inspection supersedes its
+no-source conclusion for the project-instance endpoint source.
 
 Search scope:
 
@@ -97,6 +113,138 @@ Next required evidence:
 - Maintainer-approved answer for the Toko `BlobRootHash` mapping: proven
   source mapping, accepted empty-state adoption, accepted bulk registration, or
   accepted external-mapping migration path.
+
+### 2026-06-19 GitHub Installed Repository Code Search
+
+Search scope:
+
+- GitHub App installed repositories visible to this session:
+  `dragginzgame/canic` and `dragginzgame/toko`
+
+Search terms:
+
+```text
+_immutableObjectStorage
+_immutableObjectStorageBlobsAreLive
+_immutableObjectStorageBlobsToDelete
+_immutableObjectStorageConfirmBlobDeletion
+_immutableObjectStorageCreateCertificate
+blob_storage
+```
+
+Result:
+
+- No separate Caffeine or immutable object-storage gateway source repository
+  was visible through the installed GitHub repositories.
+- GitHub code search found newer Toko consumer-side candidates at commit
+  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`.
+- Candidate project-instance gateway endpoint references were found in:
+  - `fleets/toko/project/instance/src/lib.rs`
+  - `fleets/toko/project/instance/project_instance.did`
+  - `frontend/src/generated/declarations/project_instance/project_instance.did.js`
+  - `frontend/src/generated/declarations/project_instance/project_instance.did.d.ts`
+- `_immutableObjectStorageCreateCertificate` also matched:
+  - `frontend/src/lib/storage/storage-client.ts`
+- Candidate project-hub blob-storage status/billing references were found in:
+  - `fleets/toko/project/hub/src/ops/blob_storage.rs`
+  - `backend/src/canisters/project/hub/src/ops/blob_storage.rs`
+  - `fleets/toko/project/hub/project_hub.did`
+  - `frontend/src/generated/declarations/project_hub/project_hub.did.js`
+  - `frontend/src/generated/declarations/project_hub/project_hub.did.d.ts`
+
+Local inspection limit, superseded by the later local Toko inspection below:
+
+- The local Toko checkout is at
+  `600dcfbe91c30311c5896f3ac0399d27e2e36ab6` on branch `boss`, with local
+  Cargo metadata edits, and does not contain GitHub-indexed commit
+  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`.
+- The local `gh` token is invalid in this session, so the indexed private Toko
+  files could not be fetched through `gh`.
+- The dirty local Toko checkout was not fetched or modified.
+
+Inventory effect:
+
+- These results are useful candidate Toko consumer evidence.
+- They are not authoritative gateway protocol source and do not satisfy
+  source-backed Candid, DTO, or behavior fields.
+- Every gateway method remains `Missing source`.
+- The implementation gate remains closed.
+
+Superseded next-step note:
+
+- The Toko candidate commit was later inspected locally; see
+  `2026-06-19 Local Toko Development Commit Inspection`.
+- Locate any separate immutable object-storage gateway implementation or
+  generated/deployed gateway `.did`, if that is required beyond the
+  project-instance endpoint source.
+- Continue to keep Toko compatibility evidence and Cashier/billing evidence
+  separate from the 0.69 project-side endpoint evidence.
+
+### 2026-06-19 Local Toko Development Commit Inspection
+
+Search scope:
+
+- `/home/adam/projects/toko`
+
+Checkout state:
+
+- Checked-out branch: `boss`
+- Checked-out `HEAD` commit:
+  `97aafee9eeb73ae0517f9788df688bb96ae0a9ff`
+- Worktree note: the Toko checkout is user-managed and later showed unmerged
+  pull state; do not treat worktree conflict contents as canonical evidence.
+- Exact `git grep` on checked-out `HEAD` for `_immutableObjectStorage*`,
+  `BlobRootHash`,
+  `account_balance_get_v1`, `account_top_up_v1`,
+  `storage_gateway_principal_list_v1`, `get_blob_storage_status`, and
+  `Cashier` returned no protocol matches.
+- Candidate commit
+  `3ef01afc5f5eeefdb9471f3e010b6562d758c111` exists locally on
+  `origin/development` and was inspected with `git show` / `git grep` without
+  checking it out.
+
+Source-backed Toko project-instance evidence at commit
+`3ef01afc5f5eeefdb9471f3e010b6562d758c111`:
+
+- `fleets/toko/project/instance/src/lib.rs` exposes all six
+  `_immutableObjectStorage*` endpoint methods.
+- `fleets/toko/project/instance/src/ops/immutable_storage.rs` implements the
+  project-side storage state, liveness, deletion, registration, gateway
+  principal sync, and project-cycle funding behavior.
+- `fleets/toko/project/instance/project_instance.did` contains generated
+  Candid signatures for the project-instance endpoints.
+- `backend/src/design/src/entity/project/instance/storage.rs` defines
+  `StoredBlob`, `BlobDeletionPending`, `StorageGatewayPrincipal`, and
+  `ProjectStorageConfig`.
+- `backend/src/design/src/app/asset/blob.rs` defines `BlobRootHash` as a
+  content-addressed `sha256:<64-hex>` text value.
+- `frontend/src/lib/storage/storage-client.ts` implements the Caffeine gateway
+  upload client: chunk hashes use the `icfs-chunk/` domain separator, metadata
+  hashes use `icfs-metadata/`, node hashes use `ynode/`, the blob tree type is
+  `DSBMTWH`, and uploads target `/v1/blob-tree/`, `/v1/chunk/`, and
+  `/v1/blob/`.
+
+Generated Toko Candid signatures captured from
+`fleets/toko/project/instance/project_instance.did`:
+
+- `_immutableObjectStorageBlobsAreLive : (vec blob) -> (vec bool) query`
+- `_immutableObjectStorageBlobsToDelete : () -> (vec text) query`
+- `_immutableObjectStorageConfirmBlobDeletion : (vec blob) -> ()`
+- `_immutableObjectStorageCreateCertificate : (text) -> (CreateCertificateResult)`
+- `_immutableObjectStorageFundFromProjectCycles : (nat) -> (BlobProjectCyclesTopUpReport)`
+- `_immutableObjectStorageUpdateGatewayPrincipals : () -> ()`
+
+Inventory effect:
+
+- The project-side `_immutableObjectStorage*` canister endpoint source and
+  generated Toko Candid are now inspected.
+- This does not prove the current `boss` branch carries the surface; it does
+  not.
+- This does not identify a separate gateway service implementation or deployed
+  gateway `.did`.
+- The inventory remains incomplete until the method sections are completed
+  from accepted protocol evidence and the Toko compatibility/migration answer
+  is resolved.
 
 ## Completion Criteria
 
@@ -161,196 +309,322 @@ deployed Candid source are recorded.
 
 ### `_immutableObjectStorageBlobsAreLive`
 
-Status: **Missing source**
+Status: **Source identified**
 
 Owning release: 0.69
 
 Emission in 0.69: yes
 
-Known from design only:
+Source-backed Toko evidence:
 
-- Non-billing liveness query backed by 0.69 live blob state.
-- Public/malformed behavior must match the upstream protocol.
-- External input encoding is unresolved. Implementers must not assume text
-  hashes or `sha256:<hex>` unless the source proves that shape.
+- Source repository or local source identifier: sibling checkout `../toko`
+- Source commit SHA: `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+- Source file path:
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`
+- Endpoint file path: `fleets/toko/project/instance/src/lib.rs`
+- Generated Candid source path:
+  `fleets/toko/project/instance/project_instance.did`
+- Mode: query
+- Candid signature: `(vec blob) -> (vec bool) query`
+- Request DTO shape: `Vec<Vec<u8>>`; each entry is expected to be a 32-byte
+  root hash and is converted to `sha256:<64-hex>`.
+- Response DTO shape: `Vec<bool>`.
+- Malformed input behavior: entries that are not exactly 32 bytes return
+  `false`; converted hashes that fail `sha256:<64-hex>` validation return
+  `false`.
+- Unauthorized behavior: public query; no auth guard in the inspected Toko
+  endpoint.
+- Batch ordering semantics: response order follows input order.
+- Duplicate-input semantics: duplicate hashes are evaluated independently and
+  return duplicate booleans.
+- Absent-hash behavior: `false`.
 
 Required fields:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Malformed input behavior: TBD
-- Unauthorized behavior: TBD
-- Batch ordering semantics: TBD
-- Duplicate-input semantics: TBD
-- Absent-hash behavior: TBD
+- Source repository or local source identifier: see source-backed Toko evidence
+- Source commit SHA: see source-backed Toko evidence
+- Source file path: see source-backed Toko evidence
+- Mode: see source-backed Toko evidence
+- Candid signature: see source-backed Toko evidence
+- Request DTO shape: see source-backed Toko evidence
+- Response DTO shape: see source-backed Toko evidence
+- Malformed input behavior: see source-backed Toko evidence
+- Unauthorized behavior: see source-backed Toko evidence
+- Batch ordering semantics: see source-backed Toko evidence
+- Duplicate-input semantics: see source-backed Toko evidence
+- Absent-hash behavior: see source-backed Toko evidence
 - Maximum batch size: TBD
 - Production-vs-local differences: TBD
 
 ### `_immutableObjectStorageBlobsToDelete`
 
-Status: **Missing source**
+Status: **Source identified**
 
 Owning release: 0.69
 
 Emission in 0.69: yes
 
-Known from design only:
+Source-backed Toko evidence:
 
-- Non-billing deletion coordination backed by 0.69 pending deletion state.
-- Caller authorization must be gateway-only against stored gateway principals.
-- Non-gateway behavior is unresolved and must not be invented.
+- Source repository or local source identifier: sibling checkout `../toko`
+- Source commit SHA: `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+- Source file path:
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`
+- Endpoint file path: `fleets/toko/project/instance/src/lib.rs`
+- Generated Candid source path:
+  `fleets/toko/project/instance/project_instance.did`
+- Mode: query
+- Candid signature: `() -> (vec text) query`
+- Request DTO shape: unit.
+- Response DTO shape: `Vec<String>` of pending `sha256:<64-hex>` root hashes.
+- Unauthorized behavior: callers not present in the stored gateway-principal
+  set receive an empty vector, not a trap or typed error.
+- Result ordering: Toko source returns database `all()` order; no stable
+  external ordering guarantee has been identified.
+- Repeat-return behavior until confirmation: pending hashes remain returned
+  until `_immutableObjectStorageConfirmBlobDeletion` clears them.
+- Empty pending-deletion behavior: empty vector.
 
 Required fields:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Unauthorized behavior: TBD
-- Result ordering: TBD
+- Source repository or local source identifier: see source-backed Toko evidence
+- Source commit SHA: see source-backed Toko evidence
+- Source file path: see source-backed Toko evidence
+- Mode: see source-backed Toko evidence
+- Candid signature: see source-backed Toko evidence
+- Request DTO shape: see source-backed Toko evidence
+- Response DTO shape: see source-backed Toko evidence
+- Unauthorized behavior: see source-backed Toko evidence
+- Result ordering: see source-backed Toko evidence
 - Maximum batch size: TBD
-- Repeat-return behavior until confirmation: TBD
-- Empty pending-deletion behavior: TBD
+- Repeat-return behavior until confirmation: see source-backed Toko evidence
+- Empty pending-deletion behavior: see source-backed Toko evidence
 - Production-vs-local differences: TBD
 
 ### `_immutableObjectStorageConfirmBlobDeletion`
 
-Status: **Missing source**
+Status: **Source identified**
 
 Owning release: 0.69
 
 Emission in 0.69: yes
 
-Known from design only:
+Source-backed Toko evidence:
 
-- Non-billing deletion confirmation backed by 0.69 lifecycle transitions.
-- Caller authorization must be gateway-only against stored gateway principals.
-- Unknown, already-confirmed, and live-but-not-pending behavior is unresolved.
+- Source repository or local source identifier: sibling checkout `../toko`
+- Source commit SHA: `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+- Source file path:
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`
+- Endpoint file path: `fleets/toko/project/instance/src/lib.rs`
+- Generated Candid source path:
+  `fleets/toko/project/instance/project_instance.did`
+- Mode: update
+- Candid signature: `(vec blob) -> ()`
+- Request DTO shape: `Vec<Vec<u8>>`; each entry is expected to be a 32-byte
+  root hash and is converted to `sha256:<64-hex>`.
+- Response DTO shape: unit.
+- Unauthorized behavior: callers not present in the stored gateway-principal
+  set are treated as a no-op and receive unit.
+- Unknown blob behavior: no-op.
+- Live-but-not-pending behavior: the inspected Toko source deletes the stored
+  blob row even if no pending-deletion row exists.
+- Already-confirmed behavior: no-op.
+- Idempotency semantics: repeated calls after deletion are no-ops.
 
 Required fields:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Unauthorized behavior: TBD
-- Unknown blob behavior: TBD
-- Live-but-not-pending behavior: TBD
-- Already-confirmed behavior: TBD
-- Idempotency semantics: TBD
+- Source repository or local source identifier: see source-backed Toko evidence
+- Source commit SHA: see source-backed Toko evidence
+- Source file path: see source-backed Toko evidence
+- Mode: see source-backed Toko evidence
+- Candid signature: see source-backed Toko evidence
+- Request DTO shape: see source-backed Toko evidence
+- Response DTO shape: see source-backed Toko evidence
+- Unauthorized behavior: see source-backed Toko evidence
+- Unknown blob behavior: see source-backed Toko evidence
+- Live-but-not-pending behavior: see source-backed Toko evidence
+- Already-confirmed behavior: see source-backed Toko evidence
+- Idempotency semantics: see source-backed Toko evidence
 - Production-vs-local differences: TBD
 
 ### `_immutableObjectStorageCreateCertificate`
 
-Status: **Missing source**
+Status: **Source identified**
 
 Owning release: 0.69
 
 Emission in 0.69: yes
 
-Known from design only:
+Source-backed Toko evidence:
 
-- Non-billing registration/certificate protocol entrypoint.
-- Macro `guard = <access expression>` protects this endpoint.
-- Certificate material source and mutation ordering are unresolved and must come
-  from the protocol source.
+- Source repository or local source identifier: sibling checkout `../toko`
+- Source commit SHA: `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+- Source file path:
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`
+- Endpoint file path: `fleets/toko/project/instance/src/lib.rs`
+- Generated Candid source path:
+  `fleets/toko/project/instance/project_instance.did`
+- Mode: update
+- Candid signature: `(text) -> (CreateCertificateResult)`
+- Request DTO shape: `String` containing `sha256:<64-hex>`.
+- Response DTO shape:
+  `CreateCertificateResult { method : text; blob_hash : text }`.
+- Certificate material source: the Candid response does not contain the upload
+  certificate; the frontend extracts the IC update response certificate from
+  the agent call and submits that to the gateway as `OwnerEgressSignature`.
+- Mutation-before-certificate behavior: the inspected source registers the
+  stored blob before returning the Candid response.
+- Rollback or no-rollback behavior: no explicit rollback behavior was found;
+  endpoint errors trap before a successful return.
+- Repeated create behavior: idempotent when the blob root is already stored.
+- Metadata conflict/enrichment behavior: no metadata enrichment or conflict
+  behavior was found in the inspected source.
+- Unauthorized behavior: caller must have Toko `AssetsManage`; failures trap.
+- Malformed request behavior: non-`sha256:<64-hex>` input fails validation and
+  traps.
 
 Required fields:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Certificate material source: TBD
-- Mutation-before-certificate behavior: TBD
-- Rollback or no-rollback behavior: TBD
-- Repeated create behavior: TBD
-- Metadata conflict/enrichment behavior: TBD
-- Unauthorized behavior: TBD
-- Malformed request behavior: TBD
+- Source repository or local source identifier: see source-backed Toko evidence
+- Source commit SHA: see source-backed Toko evidence
+- Source file path: see source-backed Toko evidence
+- Mode: see source-backed Toko evidence
+- Candid signature: see source-backed Toko evidence
+- Request DTO shape: see source-backed Toko evidence
+- Response DTO shape: see source-backed Toko evidence
+- Certificate material source: see source-backed Toko evidence
+- Mutation-before-certificate behavior: see source-backed Toko evidence
+- Rollback or no-rollback behavior: see source-backed Toko evidence
+- Repeated create behavior: see source-backed Toko evidence
+- Metadata conflict/enrichment behavior: see source-backed Toko evidence
+- Unauthorized behavior: see source-backed Toko evidence
+- Malformed request behavior: see source-backed Toko evidence
 - Production-vs-local differences: TBD
 
 ### `_immutableObjectStorageUpdateGatewayPrincipals`
 
-Status: **Missing source**
+Status: **Source identified**
 
 Owning release: 0.70
 
 Emission in 0.69: no
 
-Known from design only:
+Source-backed Toko evidence:
 
-- Deferred billing/sync endpoint.
-- 0.69 must inventory the exact signature so 0.70 consumes, rather than
-  invents, the gateway-facing protocol.
+- Source repository or local source identifier: sibling checkout `../toko`
+- Source commit SHA: `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+- Source file path:
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`
+- Endpoint file path: `fleets/toko/project/instance/src/lib.rs`
+- Generated Candid source path:
+  `fleets/toko/project/instance/project_instance.did`
+- Mode: update
+- Candid signature: `() -> ()`
+- Request DTO shape: unit.
+- Response DTO shape: unit.
+- Unauthorized behavior: no caller guard was found on the inspected Toko
+  endpoint; the endpoint traps only if Cashier sync or local storage mutation
+  fails.
+- Cashier dependency: calls `storage_gateway_principal_list_v1`, decodes a
+  `Vec<Principal>`, deletes all existing gateway principals, and inserts the
+  returned set.
 
 Required fields:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Unauthorized behavior: TBD
-- Cashier dependency: TBD
+- Source repository or local source identifier: see source-backed Toko evidence
+- Source commit SHA: see source-backed Toko evidence
+- Source file path: see source-backed Toko evidence
+- Mode: see source-backed Toko evidence
+- Candid signature: see source-backed Toko evidence
+- Request DTO shape: see source-backed Toko evidence
+- Response DTO shape: see source-backed Toko evidence
+- Unauthorized behavior: see source-backed Toko evidence
+- Cashier dependency: see source-backed Toko evidence
 - Production-vs-local differences: TBD
 
 ### `_immutableObjectStorageFundFromProjectCycles`
 
-Status: **Missing source**
+Status: **Source identified**
 
 Owning release: 0.70
 
 Emission in 0.69: no
 
-Known from design only:
+Source-backed Toko evidence:
 
-- Deferred billing/funding endpoint.
-- 0.69 must inventory the exact signature so 0.70 consumes, rather than
-  invents, the gateway-facing protocol.
+- Source repository or local source identifier: sibling checkout `../toko`
+- Source commit SHA: `3ef01afc5f5eeefdb9471f3e010b6562d758c111`
+- Source file path:
+  `fleets/toko/project/instance/src/ops/immutable_storage.rs`
+- Endpoint file path: `fleets/toko/project/instance/src/lib.rs`
+- Generated Candid source path:
+  `fleets/toko/project/instance/project_instance.did`
+- Mode: update
+- Candid signature: `(nat) -> (BlobProjectCyclesTopUpReport)`
+- Request DTO shape: `u128` / Candid `nat` requested cycles.
+- Response DTO shape:
+  `BlobProjectCyclesTopUpReport { requested_cycles : nat; attached_cycles : nat; project_cycles_before : nat; project_cycles_after : nat; reserve_cycles : nat; cashier_total_after : nat; skipped_reason : opt text }`.
+- Cycle attachment requirements: caller does not attach cycles to this endpoint;
+  the project canister attaches up to the requested amount to Cashier
+  `account_top_up_v1` while preserving a 2T project-cycle reserve.
+- Unauthorized behavior: caller must be the parent canister; failures trap.
+- Funding success/failure behavior: zero transferable cycles returns a skipped
+  report; Cashier success returns updated balances; Cashier or decode failures
+  trap through the endpoint wrapper.
 
 Required fields:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Cycle attachment requirements: TBD
-- Unauthorized behavior: TBD
-- Funding success/failure behavior: TBD
+- Source repository or local source identifier: see source-backed Toko evidence
+- Source commit SHA: see source-backed Toko evidence
+- Source file path: see source-backed Toko evidence
+- Mode: see source-backed Toko evidence
+- Candid signature: see source-backed Toko evidence
+- Request DTO shape: see source-backed Toko evidence
+- Response DTO shape: see source-backed Toko evidence
+- Cycle attachment requirements: see source-backed Toko evidence
+- Unauthorized behavior: see source-backed Toko evidence
+- Funding success/failure behavior: see source-backed Toko evidence
 - Production-vs-local differences: TBD
 
 ## Compatibility Notes
 
 ### Toko
 
-Status: **Incomplete - local Toko source captured, blob-root mapping unresolved**
+Status: **Incomplete - development source inspected, migration strategy unresolved**
 
 Source evidence captured:
 
 - Local source identifier: sibling checkout `../toko`
-- Source commit SHA: `600dcfbe91c30311c5896f3ac0399d27e2e36ab6`
-- Source checkout note: the local checkout had Cargo metadata edits, but the
-  source files cited below were not listed as dirty by `git status --short`.
+- Checked-out `boss` `HEAD` commit:
+  `97aafee9eeb73ae0517f9788df688bb96ae0a9ff`
+- Checked-out `boss` `HEAD` note: exact `git grep` found no
+  `_immutableObjectStorage*`, `BlobRootHash`, gateway status, or Cashier method
+  surface in the committed files. The worktree is user-managed and later showed
+  unmerged pull state, so inspect development evidence by commit rather than
+  by working tree contents.
+- Development evidence commit:
+  `3ef01afc5f5eeefdb9471f3e010b6562d758c111` on `origin/development`.
+- Development inspection note: inspected locally with `git show` / `git grep`
+  without checking out or mutating the Toko worktree.
+- Legacy asset/chunk compatibility evidence commit:
+  `600dcfbe91c30311c5896f3ac0399d27e2e36ab6`.
+
+Development Toko blob-storage source state:
+
+- `backend/src/design/src/app/asset/blob.rs` defines `BlobRootHash` as
+  `sha256:<64-hex>` text.
+- `backend/src/design/src/entity/project/instance/storage.rs` adds
+  `StoredBlob.root_hash`, `BlobDeletionPending.root_hash`,
+  `StorageGatewayPrincipal.gateway_principal`, and
+  `ProjectStorageConfig.cashier_canister_id`.
+- `fleets/toko/project/instance/src/ops/immutable_storage.rs` validates
+  `sha256:<64-hex>` root strings, registers stored blobs idempotently, marks
+  pending deletion rows, exposes gateway-only deletion queues, and confirms
+  deletion from gateway hash bytes.
+- `frontend/src/lib/storage/storage-client.ts` computes the blob root from the
+  Caffeine gateway hash tree and calls
+  `_immutableObjectStorageCreateCertificate` with the resulting
+  `sha256:<64-hex>` string.
 
 Existing Toko asset-canister source state:
 
@@ -399,12 +673,15 @@ Existing Toko deletion state:
 
 Compatibility findings:
 
-- Existing Toko live asset state is chunk-upload state, not the Caffeine
-  immutable object-storage gateway protocol.
-- Existing Toko pending deletion state shape: none found.
-- Existing Toko gateway-principal state shape: none found.
-- Mapping from Toko blob identity into Canic `BlobRootHash`: unresolved. Toko
-  currently has asset ULIDs, text references, optional unset file metadata
+- Development Toko live blob state uses `StoredBlob.root_hash` with the
+  Caffeine `sha256:<64-hex>` root string and therefore matches Canic's planned
+  `BlobRootHash` shape for newly registered blobs.
+- Existing legacy Toko live asset state is chunk-upload state, not the
+  Caffeine immutable object-storage gateway protocol.
+- Existing legacy Toko pending deletion state shape: none found.
+- Existing legacy Toko gateway-principal state shape: none found.
+- Mapping from legacy Toko asset identity into Canic `BlobRootHash`: unresolved.
+  Legacy Toko has asset ULIDs, text references, optional unset file metadata
   hashes, and per-chunk SHA-256 values. None of those are proven to be the
   gateway's canonical blob root hash.
 - Migration/read-through strategy: unresolved. A compatible path may require
