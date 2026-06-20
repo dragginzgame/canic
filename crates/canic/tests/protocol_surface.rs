@@ -19,7 +19,7 @@ use canic::{
         RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
         RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootProof,
     },
-    dto::blob_storage::CreateCertificateResult,
+    dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     ids::CanisterRole,
 };
 
@@ -188,6 +188,16 @@ fn blob_storage_gateway_dtos_roundtrip_through_candid() {
             && create_env.contains("method : text")
             && create_env.contains("blob_hash : text"),
         "CreateCertificateResult Candid changed:\n{create_env}"
+    );
+
+    assert_candid_roundtrip(BlobStorageLocalCounters::new(1, 2, 3));
+    let counters_env = candid_type_env::<BlobStorageLocalCounters>();
+    assert!(
+        counters_env.contains("type BlobStorageLocalCounters = record")
+            && counters_env.contains("stored_blobs : nat64")
+            && counters_env.contains("pending_deletions : nat64")
+            && counters_env.contains("gateway_principals : nat64"),
+        "BlobStorageLocalCounters Candid changed:\n{counters_env}"
     );
 }
 

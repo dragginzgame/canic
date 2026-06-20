@@ -9,7 +9,39 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.69.3` is prepared as a blob-storage developer-readiness cleanup slice.
+- `0.69.4` is in progress as a blob-storage developer-readiness cleanup slice.
+  Current work replaces tuple-shaped local count plumbing with a named passive
+  `BlobStorageLocalCounters` DTO and `BlobStorageApi::local_counters()` helper.
+  The `blob_storage_probe` count query now returns the named DTO so downstream
+  wrapper examples and local tests have stable, readable field names without
+  adding gateway, Cashier, billing, or public admin endpoints. The integration
+  runbook now includes a guarded host-status wrapper example for
+  `local_counters()`. The slice also pins `create_certificate` compatibility:
+  the returned DTO echoes the request hash for the gateway contract while
+  internal live state stores the canonical normalized hash.
+  Focused validation passing for this slice:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test protocol_surface blob_storage_gateway_dtos_roundtrip_through_candid -- --nocapture
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage -- --nocapture
+  cargo check --locked -p blob_storage_probe
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p canic --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p blob_storage_probe -- -D warnings
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --features blob-storage --test blob_storage_endpoint_macro -- --nocapture
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  bash scripts/ci/check-blob-storage-inventory-gate.sh
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  rg -n 'account_top_up_v1|storage_gateway_principal_list_v1|get_blob_storage_status|_immutableObjectStorageUpdateGatewayPrincipals|_immutableObjectStorageFundFromProjectCycles|Cashier|BlobProjectCyclesTopUpReport|BlobStorageBilling|GatewayPrincipalSync' crates canisters fleets -g '*.rs' -g '*.did' -g '*.toml'
+  git diff --check
+  ```
+  The billing-leak scan returns no matches; `rg` exits 1 for that expected
+  result.
+
+- `0.69.3` is pushed as a blob-storage developer-readiness cleanup slice.
   Current work adds the downstream integration runbook, aligns the 0.69 design
   and handoff with the completed non-billing M0-M5 MVP, and extends the
   `blob_storage_probe` test canister with a controller-only gateway-principal
