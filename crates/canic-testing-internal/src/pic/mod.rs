@@ -17,7 +17,10 @@ pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe,
 };
-pub use canic::{CanicPicExt, install_standalone_canister, role_pid, wait_until_ready};
+pub use canic::{
+    CanicPicExt, install_standalone_canister, install_standalone_canister_on_pic, role_pid,
+    wait_until_ready,
+};
 pub use delegation::{create_user_shard, issue_delegated_token_from_active_proof, role_grant};
 pub use lifecycle::{
     LifecycleBoundaryFixture, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,

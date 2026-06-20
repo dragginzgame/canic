@@ -15,6 +15,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "blob-storage-billing")]
+use crate::storage::stable::blob_storage::BlobStorageBillingConfigRecord;
+
 ///
 /// BlobStorageLifecycleOps
 ///
@@ -24,6 +27,28 @@ use crate::{
 pub struct BlobStorageLifecycleOps;
 
 impl BlobStorageLifecycleOps {
+    #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
+    pub fn billing_config() -> Option<BlobStorageBillingConfigRecord> {
+        BlobStorageStore::billing_config()
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    pub fn set_billing_config(config: BlobStorageBillingConfigRecord) {
+        BlobStorageStore::set_billing_config(config);
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    pub fn record_gateway_principal_sync(now_ns: u64) {
+        BlobStorageStore::set_last_gateway_principal_sync_at_ns(now_ns);
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
+    pub fn last_gateway_principal_sync_at_ns() -> Option<u64> {
+        BlobStorageStore::last_gateway_principal_sync_at_ns()
+    }
+
     /// Register a live blob, returning whether this call inserted new live state.
     pub fn register_live(
         hash: &BlobRootHash,
@@ -113,6 +138,25 @@ impl BlobStorageLifecycleOps {
             principal,
             StorageGatewayPrincipalRecord::new(principal, now_ns),
         );
+    }
+
+    /// Replace the authorized storage gateway principal set.
+    #[must_use]
+    pub fn replace_gateway_principals(principals: &[Principal], now_ns: u64) -> u64 {
+        for (principal, _) in BlobStorageStore::gateway_principals() {
+            if !principals.contains(&principal) {
+                BlobStorageStore::remove_gateway_principal(principal);
+            }
+        }
+
+        for principal in principals {
+            BlobStorageStore::upsert_gateway_principal(
+                *principal,
+                StorageGatewayPrincipalRecord::new(*principal, now_ns),
+            );
+        }
+
+        BlobStorageStore::gateway_principal_count()
     }
 
     /// Remove an authorized storage gateway principal.
@@ -342,5 +386,25 @@ mod tests {
         assert!(!BlobStorageLifecycleOps::remove_gateway_principal(gateway));
         assert!(!BlobStorageLifecycleOps::is_gateway_principal(gateway));
         assert_eq!(BlobStorageLifecycleOps::gateway_principal_count(), 0);
+    }
+
+    #[test]
+    fn replacing_gateway_principals_removes_absent_and_keeps_present_members() {
+        BlobStorageStore::clear();
+        let first = p(1);
+        let second = p(2);
+        let third = p(3);
+
+        BlobStorageLifecycleOps::upsert_gateway_principal(first, 10);
+        BlobStorageLifecycleOps::upsert_gateway_principal(second, 20);
+
+        assert_eq!(
+            BlobStorageLifecycleOps::replace_gateway_principals(&[second, third], 30),
+            2
+        );
+
+        assert!(!BlobStorageLifecycleOps::is_gateway_principal(first));
+        assert!(BlobStorageLifecycleOps::is_gateway_principal(second));
+        assert!(BlobStorageLifecycleOps::is_gateway_principal(third));
     }
 }

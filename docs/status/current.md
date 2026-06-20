@@ -9,7 +9,46 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.69.5` is prepared as a focused blob-storage malformed-input
+- `0.70.0` blob-storage billing is prepared as a Toko-compatible backend MVP.
+  The maintainer has approved current local Toko `boss` commit
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56` as the protocol source for
+  `account_balance_get_v1`, `account_top_up_v1`, and
+  `storage_gateway_principal_list_v1`; production Cashier still has no default
+  in tests or runtime config. The implementation now has the off-by-default
+  `blob-storage-billing` feature, Cashier DTO/Candid snapshots, typed Cashier
+  wrappers, stable billing config, configured gateway-principal sync, explicit
+  project-cycle funding, read-only `get_blob_storage_status`, a billing endpoint
+  macro with separate sync/funding/status guards, a standalone mock Cashier
+  canister, and PocketIC coverage through the probe canister. Important protocol
+  detail: `account_top_up_v1` takes an optional request record because Toko calls
+  it with `Some(request)`. Deferred hardening remains status-triggered gateway
+  sync, transient funding single-flight, broader failure matrices, and separate
+  payment-account linking.
+  Focused validation passing for this slice:
+  ```text
+  cargo fmt --all
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  bash scripts/ci/check-blob-storage-inventory-gate.sh
+  cargo check --locked -p canic-core --features blob-storage-billing
+  cargo check --locked -p canic --features blob-storage-billing
+  cargo check --locked -p blob_storage_probe
+  cargo check --locked -p blob_storage_cashier_mock
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test protocol_inventory_gate -- --nocapture
+  cargo test --locked -p canic --test workspace_manifest -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p blob_storage_probe -- -D warnings
+  cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  bash scripts/ci/check-release-validation-matrix.sh
+  git diff --check
+  ```
+
+- `0.69.5` is pushed as a focused blob-storage malformed-input
   regression cleanup. Current work closes the 0.69 design checklist gap for
   `BlobRootHash` malformed text coverage by explicitly testing missing
   prefixes, whitespace bytes, and control bytes, and expands gateway byte input
@@ -34,6 +73,37 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic-core storage::stable::blob_storage --lib --features blob-storage -- --nocapture
   cargo test --locked -p canic-core blob_storage --lib --features blob-storage -- --nocapture
   cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  git diff --check
+  ```
+  Post-push cleanup audit passing:
+  ```text
+  bash scripts/ci/check-blob-storage-inventory-gate.sh
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  bash scripts/ci/run-layering-guards.sh
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
+  bash scripts/ci/check-release-package-install-validation.sh
+  bash scripts/ci/check-rc-readiness-audit.sh
+  cargo check --locked -p canic-core --features blob-storage
+  cargo check --locked -p canic --features blob-storage
+  cargo check --locked -p blob_storage_probe
+  cargo test --locked -p canic --test protocol_inventory_gate -- --nocapture
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --features blob-storage --test blob_storage_endpoint_macro -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p canic --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p blob_storage_probe -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test workspace_manifest -- --nocapture
+  cargo test --locked -p canic --test release_index_guard -- --nocapture
+  cargo test --locked -p canic --test install_script_surface -- --nocapture
+  make fmt-check
+  make clippy
+  make test-unit
   git diff --check
   ```
 

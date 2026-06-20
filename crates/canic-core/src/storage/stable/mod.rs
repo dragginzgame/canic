@@ -165,9 +165,12 @@ pub mod memory {
         pub const STORED_BLOBS_ID: u8 = 62;
         pub const BLOB_DELETION_PENDING_ID: u8 = 63;
         pub const STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 64;
+
+        #[cfg(feature = "blob-storage-billing")]
+        pub const BLOB_STORAGE_BILLING_ID: u8 = 65;
     }
 
-    // 65-79 remain long-horizon Canic core reserve.
+    // 66-79 remain long-horizon Canic core reserve when blob-storage billing is enabled.
 }
 
 use crate::{InternalError, storage::prelude::*};
