@@ -5,6 +5,16 @@ use std::path::{Path, PathBuf};
 use candid::types::internal::TypeContainer;
 use candid::{decode_one, encode_one};
 use candid_parser::utils::CandidSource;
+#[cfg(feature = "blob-storage-billing")]
+use canic::dto::blob_storage::{
+    BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetOk,
+    BlobStorageCashierAccountBalanceGetRequest, BlobStorageCashierAccountBalanceGetResult,
+    BlobStorageCashierAccountCycleBalances, BlobStorageCashierAccountTopUpError,
+    BlobStorageCashierAccountTopUpOk, BlobStorageCashierAccountTopUpRequest,
+    BlobStorageCashierAccountTopUpResult, BlobStorageCashierDebtTarget, BlobStorageFundingStatus,
+    BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
+    BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
+};
 use canic::{
     cdk::types::Principal,
     dto::auth::{
@@ -176,6 +186,98 @@ fn blob_storage_gateway_protocol_surface_is_pinned() {
 }
 
 #[test]
+fn blob_storage_cashier_protocol_surface_is_pinned() {
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_CASHIER_ACCOUNT_BALANCE_GET_V1,
+        canic_core::protocol::BLOB_STORAGE_CASHIER_ACCOUNT_BALANCE_GET_V1
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_CASHIER_ACCOUNT_TOP_UP_V1,
+        canic_core::protocol::BLOB_STORAGE_CASHIER_ACCOUNT_TOP_UP_V1
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_CASHIER_STORAGE_GATEWAY_PRINCIPAL_LIST_V1,
+        canic_core::protocol::BLOB_STORAGE_CASHIER_STORAGE_GATEWAY_PRINCIPAL_LIST_V1
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_070_CASHIER_METHODS,
+        [
+            "account_balance_get_v1",
+            "account_top_up_v1",
+            "storage_gateway_principal_list_v1",
+        ]
+    );
+
+    let did_path = workspace_root().join("crates/canic/tests/fixtures/blob_storage_cashier.did");
+    let did = read_text(&did_path);
+    let (env, actor) = CandidSource::Text(&did)
+        .load()
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
+    let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
+    let service = env
+        .as_service(&actor)
+        .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
+
+    for method in canic::protocol::BLOB_STORAGE_070_CASHIER_METHODS {
+        assert!(
+            service.iter().any(|(name, _)| name == method),
+            "Cashier fixture missing method: {method}"
+        );
+    }
+    assert!(
+        did.contains("account_top_up_v1 : (\n      opt record")
+            && did.contains("storage_gateway_principal_list_v1 : () -> (vec principal);"),
+        "Cashier fixture must pin optional top-up request and gateway list response"
+    );
+}
+
+#[test]
+fn blob_storage_billing_gateway_protocol_names_are_pinned() {
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+        canic_core::protocol::BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+        canic_core::protocol::BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_STATUS,
+        canic_core::protocol::BLOB_STORAGE_STATUS
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_070_GATEWAY_METHODS,
+        [
+            "_immutableObjectStorageUpdateGatewayPrincipals",
+            "_immutableObjectStorageFundFromProjectCycles",
+        ]
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_STATUS,
+        "get_blob_storage_status"
+    );
+
+    let macro_path =
+        workspace_root().join("crates/canic/src/macros/endpoints/blob_storage_billing.rs");
+    let source = read_text(&macro_path);
+    assert!(
+        source.contains("macro_rules! canic_emit_blob_storage_billing_endpoints")
+            && source.contains("requires the canic facade feature")
+            && source.contains("blob-storage-billing"),
+        "blob-storage billing endpoint macro should be opt-in"
+    );
+    assert!(
+        source.contains("name = \"_immutableObjectStorageUpdateGatewayPrincipals\"")
+            && source.contains("requires($sync_guard)")
+            && source.contains("name = \"_immutableObjectStorageFundFromProjectCycles\"")
+            && source.contains("requires($fund_guard)")
+            && source.contains("name = \"get_blob_storage_status\"")
+            && source.contains("requires($status_guard)"),
+        "0.70 billing endpoints must stay update endpoints with separate guards"
+    );
+}
+
+#[test]
 fn blob_storage_gateway_dtos_roundtrip_through_candid() {
     assert_candid_roundtrip(CreateCertificateResult {
         method: "upload".to_string(),
@@ -198,6 +300,123 @@ fn blob_storage_gateway_dtos_roundtrip_through_candid() {
             && counters_env.contains("pending_deletions : nat64")
             && counters_env.contains("gateway_principals : nat64"),
         "BlobStorageLocalCounters Candid changed:\n{counters_env}"
+    );
+}
+
+#[cfg(feature = "blob-storage-billing")]
+fn cashier_balance(total: i64) -> BlobStorageCashierAccountCycleBalances {
+    BlobStorageCashierAccountCycleBalances {
+        total: candid::Int::from(total),
+        cycles_prepaid: candid::Int::from(total),
+        cycles_promo: candid::Int::from(0),
+        debt_target: BlobStorageCashierDebtTarget::Prepaid,
+        cycles_ledger: candid::Int::from(0),
+    }
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_cashier_dtos_roundtrip_through_candid() {
+    let account = Principal::from_slice(&[1, 2, 3]);
+    assert_candid_roundtrip(BlobStorageCashierAccountBalanceGetRequest { account });
+    assert_candid_roundtrip(BlobStorageCashierAccountBalanceGetResult::Ok(
+        BlobStorageCashierAccountBalanceGetOk {
+            account_cycle_balances: cashier_balance(10),
+            account,
+        },
+    ));
+    assert_candid_roundtrip(BlobStorageCashierAccountBalanceGetResult::Err(
+        BlobStorageCashierAccountBalanceGetError::AccountNotFound,
+    ));
+
+    assert_candid_roundtrip(Some(BlobStorageCashierAccountTopUpRequest {
+        target_balance: Some(candid::Nat::from(100_u64)),
+        account: Some(account),
+    }));
+    assert_candid_roundtrip(BlobStorageCashierAccountTopUpResult::Ok(
+        BlobStorageCashierAccountTopUpOk {
+            balance: cashier_balance(100),
+            message: "top-up accepted".to_string(),
+        },
+    ));
+    assert_candid_roundtrip(BlobStorageCashierAccountTopUpResult::Err(
+        BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
+    ));
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_cashier_dto_candid_shapes_are_pinned() {
+    let balance_env = candid_type_env::<BlobStorageCashierAccountCycleBalances>();
+    assert!(
+        balance_env.contains("total : int")
+            && balance_env.contains("cycles_prepaid : int")
+            && balance_env.contains("debt_target : BlobStorageCashierDebtTarget"),
+        "Cashier balance DTO Candid changed:\n{balance_env}"
+    );
+
+    let top_up_env = candid_type_env::<BlobStorageCashierAccountTopUpRequest>();
+    assert!(
+        top_up_env.contains("target_balance : opt nat")
+            && top_up_env.contains("account : opt principal"),
+        "Cashier top-up request DTO Candid changed:\n{top_up_env}"
+    );
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_status_dtos_roundtrip_through_candid() {
+    let cashier = Principal::from_slice(&[4, 5, 6]);
+    let project = Principal::from_slice(&[7, 8, 9]);
+
+    assert_candid_roundtrip(BlobStorageStatusRequest {
+        sync_gateway_principals: true,
+    });
+    assert_candid_roundtrip(BlobStorageStatusResponse {
+        payment_model: BlobStoragePaymentModelStatus::ProjectAsPaymentAccount,
+        cashier_canister_id: Some(cashier),
+        payment_account: Some(project),
+        cashier_balance: Some(candid::Nat::from(100_u64)),
+        min_upload_balance: Some(candid::Nat::from(10_u64)),
+        target_upload_balance: Some(candid::Nat::from(100_u64)),
+        project_cycles_reserve: Some(candid::Nat::from(1_u64)),
+        project_cycles_available: candid::Nat::from(1_000_u64),
+        gateway_principal_count: 1,
+        last_gateway_principal_sync_at_ns: Some(123),
+        gateway_principal_sync_action: BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus,
+        funding_status: BlobStorageFundingStatus::NotNeeded,
+        ready: true,
+        blockers: Vec::new(),
+        warnings: Vec::new(),
+    });
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_status_dto_candid_shapes_are_pinned() {
+    let status_env = candid_type_env::<BlobStorageStatusResponse>();
+    assert!(
+        status_env.contains("type BlobStorageStatusResponse = record")
+            && status_env.contains("payment_model : BlobStoragePaymentModelStatus")
+            && status_env
+                .contains("gateway_principal_sync_action : BlobStorageGatewayPrincipalSyncAction")
+            && status_env.contains("funding_status : BlobStorageFundingStatus")
+            && status_env.contains("blockers : vec BlobStorageReadinessBlocker"),
+        "blob-storage status response DTO Candid changed:\n{status_env}"
+    );
+
+    let request_env = candid_type_env::<BlobStorageStatusRequest>();
+    assert!(
+        request_env.contains("sync_gateway_principals : bool"),
+        "blob-storage status request DTO Candid changed:\n{request_env}"
+    );
+
+    let blocker_env = candid_type_env::<BlobStorageReadinessBlocker>();
+    assert!(
+        blocker_env.contains("NotConfigured")
+            && blocker_env.contains("GatewayPrincipalsMissing")
+            && blocker_env.contains("ReserveWouldBeViolated"),
+        "blob-storage readiness blocker DTO Candid changed:\n{blocker_env}"
     );
 }
 

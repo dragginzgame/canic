@@ -21,11 +21,19 @@ use crate::{
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
+#[cfg(feature = "blob-storage-billing")]
+use crate::cdk::structures::cell::Cell;
+
+#[cfg(feature = "blob-storage-billing")]
+use crate::storage::stable::memory::blob_storage::BLOB_STORAGE_BILLING_ID;
+
 pub const BLOB_STORAGE_SCHEMA_VERSION: u32 = 1;
 
 struct StoredBlobStore;
 struct BlobDeletionPendingStore;
 struct StorageGatewayPrincipalStore;
+#[cfg(feature = "blob-storage-billing")]
+struct BlobStorageBillingStore;
 
 eager_static! {
     static STORED_BLOBS: RefCell<
@@ -49,6 +57,16 @@ eager_static! {
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!("canic.core.blob_storage.gateway_principals.v1", StorageGatewayPrincipalStore, STORAGE_GATEWAY_PRINCIPALS_ID)),
     );
+}
+
+#[cfg(feature = "blob-storage-billing")]
+eager_static! {
+    static BLOB_STORAGE_BILLING: RefCell<
+        Cell<BlobStorageBillingStateRecord, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(Cell::init(
+        crate::ic_memory_key!("canic.core.blob_storage.billing.v1", BlobStorageBillingStore, BLOB_STORAGE_BILLING_ID),
+        BlobStorageBillingStateRecord::default(),
+    ));
 }
 
 ///
@@ -178,6 +196,92 @@ impl_storable_bounded!(
 );
 
 ///
+/// BlobStorageBillingConfigRecord
+///
+/// Stable blob-storage billing configuration record.
+///
+
+#[cfg(feature = "blob-storage-billing")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BlobStorageBillingConfigRecord {
+    pub schema_version: u32,
+    pub cashier_canister_id: Principal,
+    pub project_cycles_reserve: u128,
+    pub min_upload_balance: u128,
+    pub target_upload_balance: u128,
+    pub gateway_principal_limit: u64,
+    pub updated_at_ns: u64,
+}
+
+impl_storable_bounded!(
+    BlobStorageBillingConfigRecord,
+    BlobStorageBillingConfigRecord::STORABLE_MAX_SIZE,
+    false
+);
+
+#[cfg(feature = "blob-storage-billing")]
+impl BlobStorageBillingConfigRecord {
+    pub const STORABLE_MAX_SIZE: u32 = 192;
+
+    #[must_use]
+    pub const fn new(
+        cashier_canister_id: Principal,
+        project_cycles_reserve: u128,
+        min_upload_balance: u128,
+        target_upload_balance: u128,
+        gateway_principal_limit: u64,
+        updated_at_ns: u64,
+    ) -> Self {
+        Self {
+            schema_version: BLOB_STORAGE_SCHEMA_VERSION,
+            cashier_canister_id,
+            project_cycles_reserve,
+            min_upload_balance,
+            target_upload_balance,
+            gateway_principal_limit,
+            updated_at_ns,
+        }
+    }
+}
+
+///
+/// BlobStorageBillingStateRecord
+///
+/// Stable singleton state for blob-storage billing.
+///
+
+#[cfg(feature = "blob-storage-billing")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BlobStorageBillingStateRecord {
+    pub schema_version: u32,
+    pub config: Option<BlobStorageBillingConfigRecord>,
+    pub last_gateway_principal_sync_at_ns: Option<u64>,
+}
+
+#[cfg(feature = "blob-storage-billing")]
+impl Default for BlobStorageBillingStateRecord {
+    fn default() -> Self {
+        Self {
+            schema_version: BLOB_STORAGE_SCHEMA_VERSION,
+            config: None,
+            last_gateway_principal_sync_at_ns: None,
+        }
+    }
+}
+
+#[cfg(feature = "blob-storage-billing")]
+impl_storable_bounded!(
+    BlobStorageBillingStateRecord,
+    BlobStorageBillingStateRecord::STORABLE_MAX_SIZE,
+    false
+);
+
+#[cfg(feature = "blob-storage-billing")]
+impl BlobStorageBillingStateRecord {
+    pub const STORABLE_MAX_SIZE: u32 = 256;
+}
+
+///
 /// BlobStorageData
 ///
 /// Canonical stable snapshot for blob-storage lifecycle state.
@@ -200,6 +304,38 @@ pub struct BlobStorageData {
 pub struct BlobStorageStore;
 
 impl BlobStorageStore {
+    #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
+    pub(crate) fn billing_config() -> Option<BlobStorageBillingConfigRecord> {
+        BLOB_STORAGE_BILLING.with_borrow(|cell| cell.get().config.clone())
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    pub(crate) fn set_billing_config(config: BlobStorageBillingConfigRecord) {
+        BLOB_STORAGE_BILLING.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            state.schema_version = BLOB_STORAGE_SCHEMA_VERSION;
+            state.config = Some(config);
+            cell.set(state);
+        });
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    pub(crate) fn set_last_gateway_principal_sync_at_ns(now_ns: u64) {
+        BLOB_STORAGE_BILLING.with_borrow_mut(|cell| {
+            let mut state = cell.get().clone();
+            state.schema_version = BLOB_STORAGE_SCHEMA_VERSION;
+            state.last_gateway_principal_sync_at_ns = Some(now_ns);
+            cell.set(state);
+        });
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
+    pub(crate) fn last_gateway_principal_sync_at_ns() -> Option<u64> {
+        BLOB_STORAGE_BILLING.with_borrow(|cell| cell.get().last_gateway_principal_sync_at_ns)
+    }
+
     #[must_use]
     pub(crate) fn get_stored_blob(hash: &BlobRootHash) -> Option<StoredBlobRecord> {
         STORED_BLOBS.with_borrow(|map| map.get(&BlobRootHashKey::from_hash(hash)))
@@ -290,7 +426,6 @@ impl BlobStorageStore {
     }
 
     #[must_use]
-    #[cfg(test)]
     pub(crate) fn gateway_principals() -> Vec<(Principal, StorageGatewayPrincipalRecord)> {
         STORAGE_GATEWAY_PRINCIPALS.with_borrow(|map| {
             map.iter()

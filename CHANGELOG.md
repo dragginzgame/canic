@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.70.x] - 2026-06-20 - Blob Storage Billing MVP
+
+Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
+
+- `0.70.0` starts the blob-storage billing line with source-backed Cashier
+  DTOs, typed Cashier wrappers, stable billing config, gateway-principal sync,
+  project-cycle funding, read-only backend billing status, opt-in billing
+  endpoint emission, and mock-Cashier PocketIC coverage.
+
 ## [0.69.x] - 2026-06-20 - Blob Storage Protocol Preflight
 
 Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)

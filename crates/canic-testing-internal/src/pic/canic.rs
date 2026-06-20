@@ -208,6 +208,44 @@ pub fn install_standalone_canister(
     fixture
 }
 
+/// Install one non-root Canic canister into an existing PocketIC instance.
+///
+/// # Panics
+///
+/// Panics if `role` is root, the canister wasm cannot be built/read, the
+/// canister install fails, or the canister does not report ready within the
+/// configured tick limit.
+#[must_use]
+pub fn install_standalone_canister_on_pic(
+    pic: &Pic,
+    crate_name: &str,
+    role: CanisterRole,
+    profile: CanicWasmBuildProfile,
+    label: &str,
+) -> Principal {
+    assert!(
+        !role.is_root(),
+        "standalone helper is for non-root canisters"
+    );
+
+    let workspace_root = workspace_root();
+    let target_name = format!("standalone-{crate_name}");
+    let target_dir = test_target_dir(&workspace_root, &target_name);
+    ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
+
+    let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
+    let canister_id = pic.create_and_install(
+        InstallSpec::new(wasm, standalone_init_args(role), 0).label(label.to_string()),
+    );
+    pic.wait_for_ready(
+        canister_id,
+        STANDALONE_READY_TICK_LIMIT,
+        "standalone canister bootstrap",
+    );
+
+    canister_id
+}
+
 fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
     match pic.query_call(canister_id, protocol::CANIC_READY, ()) {
         Ok(ready) => ready,

@@ -1,6 +1,6 @@
 # Blob Storage Cashier Protocol Inventory
 
-Status: **Incomplete - implementation blocked**
+Status: **Complete**
 
 Release line: 0.70
 
@@ -14,17 +14,20 @@ Cashier integration.
 No `blob-storage-billing` feature, Cashier DTO, Cashier client wrapper, billing
 stable record, gateway-principal sync workflow, funding workflow, billing
 endpoint macro, billing Candid snapshot, or billing behavior test may merge
-until this inventory is complete and cites exact protocol sources.
+unless this inventory remains complete and cites exact protocol sources.
 
 This inventory does not replace the 0.69 gateway protocol inventory. The 0.70
-billing line remains blocked until both inventories are complete:
+billing line required both inventories to be complete before implementation:
 
 - `docs/contracts/BLOB_STORAGE_INVENTORY.md`
 - `docs/contracts/BLOB_STORAGE_CASHIER_INVENTORY.md`
 
 ## Current Finding
 
-The Cashier protocol source has not yet been identified in this repository.
+The actual Cashier canister implementation source has not been identified in
+this repository. For the 0.70 backend MVP, the maintainer has approved current
+Toko `boss` as the protocol source for the Cashier methods used by blob-storage
+billing.
 
 Initial exact-match searches in the local tree found only Canic design notes
 for:
@@ -33,14 +36,13 @@ for:
 - `account_top_up_v1`
 - `storage_gateway_principal_list_v1`
 
-No Candid signature, source repository URL, source commit SHA, deployed `.did`,
-or upstream implementation file has been recorded yet.
-
 The local Toko `boss` commit
 `9ca150b396a2bde42f2b8977a04a7ca2c6172b56` now provides inspected
-consumer/wrapper evidence for the Cashier methods used by blob-storage status
-and funding. That evidence records Toko's expected DTOs and call flow, but it
-is not the Cashier implementation source and does not unlock billing work.
+consumer/wrapper evidence for the Cashier methods used by blob-storage status,
+gateway-principal sync, and funding. That evidence records the accepted 0.70
+MVP Candid shapes, DTOs, and call flow. It is not Cashier implementation source;
+future Cashier source or deployed Candid may supersede this inventory if it
+contradicts the Toko-backed contract.
 
 ## Protocol Source Search Log
 
@@ -90,13 +92,13 @@ Local inspection limit, superseded by the later local Toko inspection below:
   files could not be fetched through `gh`.
 - The dirty local Toko checkout was not fetched or modified.
 
-Inventory effect:
+Historical inventory effect at the time:
 
-- These results are useful candidate Toko consumer/wrapper evidence.
-- They are not authoritative Cashier protocol source and do not satisfy
-  source-backed Candid, DTO, or behavior fields.
-- Every Cashier method remains `Missing source`.
-- The billing implementation gate remains closed.
+- These results were useful candidate Toko consumer/wrapper evidence.
+- They were not yet accepted as authoritative Cashier protocol source at this
+  stage.
+- The later local Toko `boss` inspection and maintainer approval supersede this
+  blocked finding.
 
 Superseded next-step note:
 
@@ -162,13 +164,12 @@ Toko call-site DTO evidence:
 - `storage_gateway_principal_list_v1` expected response:
   `Vec<Principal>`.
 
-Inventory effect:
+Historical inventory effect at the time:
 
-- This is enough to describe Toko's Cashier wrapper expectations.
-- It is not enough to mark any Cashier method `Source identified`, because the
-  actual Cashier implementation or generated/deployed Cashier `.did` is still
-  missing.
-- The billing implementation gate remains closed.
+- This was enough to describe Toko's Cashier wrapper expectations.
+- It was not accepted as an implementation unlock at this stage.
+- The later local Toko `boss` inspection and maintainer approval supersede this
+  blocked finding.
 
 ### 2026-06-20 Local Toko Boss Commit Inspection
 
@@ -205,15 +206,18 @@ Result:
 
 Inventory effect:
 
-- The stale local-`boss` no-source finding is superseded for Toko
-  consumer/wrapper evidence.
-- Cashier methods remain `Missing source` because no actual Cashier
-  implementation source or generated/deployed Cashier Candid was identified.
+- The stale local-`boss` no-source finding is superseded.
+- Maintainer-approved Toko wrapper evidence is accepted as the 0.70 MVP
+  protocol source for the three Cashier methods used by blob-storage billing.
+- Actual Cashier implementation source or deployed Cashier Candid remains
+  useful follow-up evidence, but is not required to begin the Toko-compatible
+  0.70 MVP.
 
 ## Completion Criteria
 
 This inventory is complete only when every required field below is filled from
 an upstream source, generated Candid artifact, deployed interface, or other
+maintainer-approved protocol source. For 0.70 MVP, current Toko `boss` is the
 maintainer-approved protocol source.
 
 Required source metadata:
@@ -248,7 +252,8 @@ Required behavior metadata:
 
 Method status values are intentionally narrow:
 
-- `Missing source`: no immutable protocol source has been identified.
+- `Missing source`: no immutable or maintainer-approved protocol source has
+  been identified.
 - `Source identified`: source repository or local source identifier, immutable
   provenance, and per-method source path are recorded, but Candid or behavior
   fields remain incomplete.
@@ -259,158 +264,274 @@ Method status values are intentionally narrow:
 
 Design-note statements may describe expected ownership or implementation
 direction, but they do not satisfy source, Candid, DTO, behavior, or
-compatibility fields. Keep unknown protocol facts as `TBD` instead of inferring
-them from the 0.70 design.
+compatibility fields. Keep unknown protocol facts unresolved instead of
+inferring them from the 0.70 design.
 
 ## Method Inventory
 
-Every method section must keep design-only facts separate from source-backed
-facts. Do not move a method out of `Missing source` until at least the source
-identifier, immutable provenance, per-method source path, and generated or
-deployed Candid source are recorded.
+Every method section must keep design-only facts separate from source-backed or
+maintainer-approved facts. Do not move a method out of `Missing source` until
+at least the source identifier, immutable provenance, per-method source path,
+and generated, deployed, or maintainer-approved protocol evidence are recorded.
 
 ### `account_balance_get_v1`
 
-Status: **Missing source**
+Status: **Complete**
 
 Owning release: 0.70
 
-Known from design only:
+Accepted protocol source:
 
-- Reads a Cashier account balance for blob-storage readiness/status.
-- Canic wrappers must not invent balance units, integer width, or result/error
-  variants.
-
-Toko call-site evidence only:
-
-- Toko source commit:
+- Source repository or local source identifier: sibling checkout
+  `/home/adam/projects/toko`
+- Source commit SHA:
   `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
-- Toko wrapper path: `fleets/toko/project/hub/src/ops/blob_storage.rs`
-- Toko request shape: `{ account : principal }`.
-- Toko expected response shape:
-  `Ok { account_cycle_balances; account }` or
-  `Err { AccountNotFound | InternalError(text) }`.
-- Toko expected balance record fields:
-  `total`, `cycles_prepaid`, `cycles_promo`, `debt_target`, and
-  `cycles_ledger`.
-- This is not Cashier implementation or generated Cashier Candid evidence.
+- Source file path: `fleets/toko/project/hub/src/ops/blob_storage.rs`
+- Source file commit SHA:
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
+- Production Cashier canister ID: `72ch2-fiaaa-aaaar-qbsvq-cai`
+- Generated Candid source path or command used to generate the Candid:
+  maintainer-approved Toko `CandidType` call-site DTOs in the source path
+  above.
 
-Required fields:
+Mode and Candid:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Balance units: TBD
-- Integer width: TBD
-- Result/error variants: TBD
-- Trap/reject behavior: TBD
-- Malformed request behavior: TBD
-- Malformed response behavior expected from Canic wrappers: TBD
-- Production-vs-local differences: TBD
+- Mode: update, used through `canic::api::ic::Call::bounded_wait`.
+- Candid signature:
+  ```did
+  account_balance_get_v1 : (
+    record { account : principal },
+  ) -> (
+    variant {
+      Ok : record {
+        account_cycle_balances : AccountCycleBalances;
+        account : principal;
+      };
+      Err : AccountBalanceGetError;
+    },
+  );
+  ```
+- Shared nested record:
+  ```did
+  type AccountCycleBalances = record {
+    total : int;
+    cycles_prepaid : int;
+    cycles_promo : int;
+    debt_target : DebtTarget;
+    cycles_ledger : int;
+  };
+  type DebtTarget = variant { Prepaid; Ledger };
+  ```
+- Error variant:
+  ```did
+  type AccountBalanceGetError = variant {
+    AccountNotFound;
+    InternalError : text;
+  };
+  ```
+
+Behavior:
+
+- Request DTO shape: record with `account : principal`.
+- Response DTO shape: `Ok` returns `account_cycle_balances` and `account`;
+  `Err` returns `AccountNotFound` or `InternalError(text)`.
+- Balance units: cycles.
+- Integer width: Cashier returns signed Candid `int`; Canic wrappers convert to
+  unsigned `u128`/`nat` for public status and reject negative or too-large
+  balances as malformed Cashier responses.
+- Result/error variant behavior: `AccountNotFound` maps to zero prepaid and
+  zero usable balance for project upload readiness; `InternalError(text)` maps
+  to a Cashier balance-read failure.
+- Trap/reject behavior: inter-canister call rejection, trap, timeout, or
+  transport failure maps to a Cashier balance-read failure.
+- Malformed request behavior: Canic produces only the typed request record; no
+  public Canic path accepts arbitrary Cashier request bytes.
+- Malformed response behavior expected from Canic wrappers: Candid decode
+  failure, unknown variants, missing fields, negative cycle balances, and
+  balances outside `u128` map to typed Cashier decode/unexpected-response
+  errors.
+- Production-vs-local differences: production defaults to
+  `72ch2-fiaaa-aaaar-qbsvq-cai` only when explicitly configured; tests must use
+  injected mock Cashier principals and must not call production Cashier.
 
 ### `account_top_up_v1`
 
-Status: **Missing source**
+Status: **Complete**
 
 Owning release: 0.70
 
-Known from design only:
+Accepted protocol source:
 
-- Receives attached cycles from the project-as-payment-account funding path.
-- Canic funding policy must not attach cycles until exact cycle attachment and
-  success/failure behavior is inventoried.
-
-Toko call-site evidence only:
-
-- Toko source commit:
+- Source repository or local source identifier: sibling checkout
+  `/home/adam/projects/toko`
+- Source commit SHA:
   `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
-- Toko wrapper path:
+- Source file path:
   `fleets/toko/project/instance/src/ops/immutable_storage.rs`
-- Toko request shape:
-  `{ target_balance : opt nat; account : opt principal }`.
-- Toko expected response shape:
-  `Ok { balance; message : text }` or
-  `Err { NotAuthorized(principal) | AccountBalanceOverflow | InternalError(text) | TopUpWithoutCycles }`.
-- Toko attaches project canister cycles to the Cashier call.
-- This is not Cashier implementation or generated Cashier Candid evidence.
+- Source file commit SHA:
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
+- Production Cashier canister ID: `72ch2-fiaaa-aaaar-qbsvq-cai`
+- Generated Candid source path or command used to generate the Candid:
+  maintainer-approved Toko `CandidType` call-site DTOs in the source path
+  above.
 
-Required fields:
+Mode and Candid:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Cycle attachment requirements: TBD
-- Balance mutation timing: TBD
-- Result/error variants: TBD
-- Trap/reject behavior: TBD
-- Malformed request behavior: TBD
-- Funding success/failure behavior: TBD
-- Production-vs-local differences: TBD
+- Mode: update, used through `canic::api::ic::Call::bounded_wait`.
+- Candid signature:
+  ```did
+  account_top_up_v1 : (
+    opt record {
+      target_balance : opt nat;
+      account : opt principal;
+    },
+  ) -> (
+    variant {
+      Ok : record {
+        balance : AccountCycleBalances;
+        message : text;
+      };
+      Err : AccountTopUpError;
+    },
+  );
+  ```
+- Shared nested record:
+  ```did
+  type AccountCycleBalances = record {
+    total : int;
+    cycles_prepaid : int;
+    cycles_promo : int;
+    debt_target : DebtTarget;
+    cycles_ledger : int;
+  };
+  type DebtTarget = variant { Prepaid; Ledger };
+  ```
+- Error variant:
+  ```did
+  type AccountTopUpError = variant {
+    NotAuthorized : principal;
+    AccountBalanceOverflow;
+    InternalError : text;
+    TopUpWithoutCycles;
+  };
+  ```
+
+Behavior:
+
+- Request DTO shape: optional record with `target_balance : opt nat` and
+  `account : opt principal`. Toko passes `Some(record { target_balance = None;
+  account = Some(project_pid) })` for project-as-payment-account funding.
+- Response DTO shape: `Ok` returns the resulting `balance` and a human-readable
+  `message`; `Err` returns one of the inventoried `AccountTopUpError` variants.
+- Cycle attachment requirements: caller attaches the exact top-up amount as
+  call cycles. Canic must not call this method without attached cycles when a
+  top-up is intended.
+- Balance mutation timing: success is represented by `Ok`; Canic treats the
+  returned `balance.total` as the post-top-up Cashier total observed by the
+  call.
+- Result/error variant behavior: all `Err` variants map to typed top-up failure
+  paths. `TopUpWithoutCycles` is the expected Cashier-side failure when cycles
+  are not attached.
+- Trap/reject behavior: inter-canister call rejection, trap, timeout, or
+  transport failure maps to a typed top-up call failure and releases any local
+  funding single-flight guard.
+- Malformed request behavior: Canic produces only the typed optional request
+  record; no public Canic path accepts arbitrary Cashier request bytes.
+- Malformed response behavior expected from Canic wrappers: Candid decode
+  failure, unknown variants, missing fields, negative balances, and balances
+  outside `u128` map to typed Cashier decode/unexpected-response errors.
+- Funding success/failure behavior: Canic reports success only after `Ok` is
+  decoded and the returned total balance is representable; all errors preserve
+  project reserve accounting and release the transient funding guard.
+- Production-vs-local differences: production defaults to
+  `72ch2-fiaaa-aaaar-qbsvq-cai` only when explicitly configured; tests must use
+  injected mock Cashier principals and must not call production Cashier.
 
 ### `storage_gateway_principal_list_v1`
 
-Status: **Missing source**
+Status: **Complete**
 
 Owning release: 0.70
 
-Known from design only:
+Accepted protocol source:
 
-- Provides the gateway principals that 0.70 syncs into the 0.69
-  gateway-principal store.
-- Canic must not invent empty-list, duplicate, anonymous-principal, or
-  management-canister-principal semantics.
-
-Toko call-site evidence only:
-
-- Toko source commit:
+- Source repository or local source identifier: sibling checkout
+  `/home/adam/projects/toko`
+- Source commit SHA:
   `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
-- Toko wrapper path:
+- Source file path:
   `fleets/toko/project/instance/src/ops/immutable_storage.rs`
-- Toko expected response shape: `Vec<Principal>`.
-- This is not Cashier implementation or generated Cashier Candid evidence.
+- Source file commit SHA:
+  `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`
+- Production Cashier canister ID: `72ch2-fiaaa-aaaar-qbsvq-cai`
+- Generated Candid source path or command used to generate the Candid:
+  maintainer-approved Toko `CandidType` call-site expectation in the source path
+  above.
 
-Required fields:
+Mode and Candid:
 
-- Source repository or local source identifier: TBD
-- Source commit SHA: TBD
-- Source file path: TBD
-- Mode: TBD
-- Candid signature: TBD
-- Request DTO shape: TBD
-- Response DTO shape: TBD
-- Empty-list behavior: TBD
-- Duplicate-principal behavior: TBD
-- Anonymous-principal behavior: TBD
-- Management-canister-principal behavior: TBD
-- Maximum principal count: TBD
-- Result/error variants: TBD
-- Trap/reject behavior: TBD
-- Malformed request behavior: TBD
-- Malformed response behavior expected from Canic wrappers: TBD
-- Production-vs-local differences: TBD
+- Mode: update, used through `canic::api::ic::Call::bounded_wait`.
+- Candid signature:
+  ```did
+  storage_gateway_principal_list_v1 : () -> (vec principal);
+  ```
+
+Behavior:
+
+- Request DTO shape: no arguments.
+- Response DTO shape: `vec principal`.
+- Empty-list behavior: accepted by the Toko contract. Canic sync treats an empty
+  successful response as an empty Cashier-sourced gateway set and atomically
+  replaces the previous Cashier-sourced set.
+- Duplicate-principal behavior: duplicates have no additional meaning. Canic
+  deduplicates before writing gateway-principal state.
+- Anonymous-principal behavior: Canic rejects anonymous principals as malformed
+  Cashier responses.
+- Management-canister-principal behavior: Canic rejects the management canister
+  principal as a malformed Cashier response.
+- Maximum principal count: Cashier does not expose a Toko-side limit. Canic
+  must enforce a local maximum before stable writes to bound memory and response
+  costs.
+- Result/error variants: no result wrapper in the accepted Candid; success is a
+  decoded vector, while call failure or malformed response maps to a typed sync
+  failure.
+- Trap/reject behavior: inter-canister call rejection, trap, timeout, or
+  transport failure preserves the previous gateway-principal set and reports a
+  sync failure.
+- Malformed request behavior: Canic sends no arguments; no public Canic path
+  accepts arbitrary Cashier request bytes.
+- Malformed response behavior expected from Canic wrappers: Candid decode
+  failure, invalid principals, and responses exceeding the configured maximum
+  preserve the previous gateway-principal set and report a typed sync failure.
+- Production-vs-local differences: production defaults to
+  `72ch2-fiaaa-aaaar-qbsvq-cai` only when explicitly configured; tests must use
+  injected mock Cashier principals and must not call production Cashier.
 
 ## Optional Cashier Methods
 
-Status: **Incomplete**
+Status: **Complete**
 
-Required before implementation:
+Accepted MVP scope:
 
-- Complete list of Cashier methods discovered in the source/deployed Candid.
-- For each omitted method, a reason why 0.70 does not need it.
-- Confirmation that no omitted method is required for balance reads,
+- Toko `boss` exposes exactly three Cashier method call sites needed by
+  blob-storage billing:
+  `account_balance_get_v1`, `account_top_up_v1`, and
+  `storage_gateway_principal_list_v1`.
+- No additional Cashier method is required for 0.70 MVP balance reads,
   project-as-payment-account top-up, or gateway-principal sync.
+- Toko project wrapper endpoints such as `get_blob_storage_status`,
+  `_immutableObjectStorageUpdateGatewayPrincipals`, and
+  `_immutableObjectStorageFundFromProjectCycles` are not Cashier methods. They
+  remain Canic/project-facing surfaces whose gateway Candid is sourced from the
+  0.69 gateway inventory.
+- Future Cashier source or deployed Candid may reveal additional Cashier
+  methods. Those methods are deferred unless they are required to preserve the
+  three accepted Toko-backed 0.70 flows.
 
 ## Implementation Gate
 
-The following actions are blocked while this document remains incomplete:
+The following actions were blocked while this document was incomplete and are
+now unblocked for the Toko-compatible 0.70 MVP:
 
 - Adding the `blob-storage-billing` feature.
 - Adding Cashier DTOs or Candid snapshots.
@@ -425,19 +546,22 @@ The following actions are blocked while this document remains incomplete:
   behavior tests that assert protocol behavior.
 
 This gate is enforced in CI and local Make test/release-bump paths by
-`scripts/ci/check-blob-storage-cashier-inventory-gate.sh`. While the status
-remains incomplete, the guard rejects blob-storage billing feature metadata,
+`scripts/ci/check-blob-storage-cashier-inventory-gate.sh`. While the status was
+incomplete, the guard rejected blob-storage billing feature metadata,
 source/module paths, Cashier method literals, billing status endpoint literals,
 and public Cashier/billing API/model names outside this protocol inventory and
-design documentation. When this inventory is marked `Complete`, the same guard
-verifies that all required method sections are present and individually
-complete, have no `TBD` fields, and that the optional Cashier methods section
-is also complete.
+design documentation. Now that this inventory is marked `Complete`, the same
+guard verifies that all required method sections are present and individually
+complete, have no unresolved fields, and that the optional Cashier methods
+section is also complete.
 
-The only safe next steps are:
+Implementation state:
 
-- Locate the upstream Cashier source or generated `.did`.
-- Fill the method inventory from immutable source references.
-- Add Candid snapshots copied or generated from the inventoried source.
-- Update the 0.70 design if the protocol source contradicts current design
-  assumptions.
+- The 0.70 backend MVP consumes this inventory through checked-in Candid
+  snapshots, typed Cashier DTOs/wrappers, explicit billing config, mock Cashier
+  tests, gateway-principal sync, project-cycle funding, and read-only backend
+  status.
+- Production Cashier stays disabled in tests and must be injected by explicit
+  configuration.
+- Update this inventory and the 0.70 design if actual Cashier source or
+  deployed Candid later contradicts the Toko-backed MVP contract.

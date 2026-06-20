@@ -117,6 +117,20 @@ fn lib_crate_types(manifest: &Value) -> BTreeSet<&str> {
         .collect()
 }
 
+// Returns the dependency entries declared by one feature.
+fn feature_entries<'a>(manifest: &'a Value, feature: &str) -> BTreeSet<&'a str> {
+    manifest["features"][feature]
+        .as_array()
+        .unwrap_or_else(|| panic!("feature {feature} must be declared"))
+        .iter()
+        .map(|entry| {
+            entry
+                .as_str()
+                .unwrap_or_else(|| panic!("feature {feature} entries must be strings"))
+        })
+        .collect()
+}
+
 // Walks a directory tree and collects files with the requested name.
 fn collect_named_files(root: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
     let entries = fs::read_dir(root).unwrap_or_else(|err| {
@@ -704,4 +718,36 @@ fn canic_package_metadata_resolves_to_declared_fleet_roles() {
             failures.join("\n")
         );
     }
+}
+
+// Verifies the 0.70 blob-storage billing feature stays opt-in and layered.
+#[test]
+fn blob_storage_billing_feature_is_opt_in_and_implies_blob_storage() {
+    let root = workspace_root();
+    let core_manifest = read_manifest(&root.join("crates/canic-core/Cargo.toml"));
+    let facade_manifest = read_manifest(&root.join("crates/canic/Cargo.toml"));
+
+    let core_default = feature_entries(&core_manifest, "default");
+    let core_billing = feature_entries(&core_manifest, "blob-storage-billing");
+    assert!(
+        core_default.is_empty(),
+        "canic-core default features changed"
+    );
+    assert_eq!(
+        core_billing,
+        BTreeSet::from(["blob-storage"]),
+        "canic-core blob-storage-billing feature must imply only blob-storage"
+    );
+
+    let facade_default = feature_entries(&facade_manifest, "default");
+    let facade_billing = feature_entries(&facade_manifest, "blob-storage-billing");
+    assert!(
+        !facade_default.contains("blob-storage-billing"),
+        "canic blob-storage-billing must stay off by default"
+    );
+    assert_eq!(
+        facade_billing,
+        BTreeSet::from(["blob-storage", "canic-core/blob-storage-billing"]),
+        "canic blob-storage-billing feature must imply facade and core blob storage"
+    );
 }

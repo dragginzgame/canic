@@ -2,23 +2,32 @@ use candid::Principal;
 use canic::{
     Error,
     dto::{
-        blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
+        blob_storage::{
+            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageFundingStatus,
+            BlobStorageGatewayPrincipalSyncAction, BlobStorageLocalCounters,
+            BlobStoragePaymentModelStatus, BlobStorageStatusRequest, BlobStorageStatusResponse,
+            CreateCertificateResult,
+        },
         error::ErrorCode,
     },
     ids::CanisterRole,
     protocol::{
         BLOB_STORAGE_BLOBS_ARE_LIVE, BLOB_STORAGE_BLOBS_TO_DELETE,
         BLOB_STORAGE_CONFIRM_BLOB_DELETION, BLOB_STORAGE_CREATE_CERTIFICATE,
+        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
+        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
     },
 };
 use canic_testing_internal::pic::{
-    CanicPicExt, CanicWasmBuildProfile, install_standalone_canister, upgrade_args,
+    CanicPicExt, CanicWasmBuildProfile, install_standalone_canister,
+    install_standalone_canister_on_pic, upgrade_args,
 };
 use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
-use ic_testkit::pic::StandaloneCanisterFixture;
+use ic_testkit::pic::{Pic, StandaloneCanisterFixture, acquire_pic_serial_guard, pic};
 use std::time::Duration;
 
 const PROBE_CRATE: &str = "blob_storage_probe";
+const CASHIER_MOCK_CRATE: &str = "blob_storage_cashier_mock";
 const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
 const ROOT_HASH: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ROOT_HASH_BYTES: [u8; 32] = [0xaa; 32];
@@ -35,6 +44,8 @@ const READY_TICK_LIMIT: usize = 60;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 
+type MockCashierLastTopUp = Option<(Option<Principal>, Option<candid::Nat>, candid::Nat)>;
+
 // Verify the non-billing blob-storage gateway lifecycle through a real canister.
 #[test]
 fn blob_storage_gateway_lifecycle_round_trips_under_pocketic() {
@@ -47,6 +58,127 @@ fn blob_storage_gateway_lifecycle_round_trips_under_pocketic() {
     assert_pending_deletion_is_gateway_filtered(&fixture, gateway, non_gateway);
     assert_stable_state_survives_upgrade(&fixture, gateway);
     assert_gateway_confirm_deletion_removes_live_blob(&fixture, gateway);
+}
+
+// Verify the 0.70 billing wrappers against a mock Cashier canister.
+#[test]
+fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
+    let _serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
+    let cashier_id = install_standalone_canister_on_pic(
+        &pic,
+        CASHIER_MOCK_CRATE,
+        PROBE_ROLE,
+        CanicWasmBuildProfile::Fast,
+        "blob-storage-cashier-mock",
+    );
+    let probe_id = install_standalone_canister_on_pic(
+        &pic,
+        PROBE_CRATE,
+        PROBE_ROLE,
+        CanicWasmBuildProfile::Fast,
+        "blob-storage-probe",
+    );
+    let gateway = principal(0x55);
+
+    let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_balance",
+        (probe_id, 123_u128),
+    );
+    seeded_balance.expect("mock Cashier balance seed should succeed");
+
+    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateways",
+        (vec![gateway, gateway],),
+    );
+    seeded_gateways.expect("mock Cashier gateway seed should succeed");
+
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_configure_billing",
+        (BlobStorageBillingConfig {
+            cashier_canister_id: cashier_id,
+            project_cycles_reserve: candid::Nat::from(1_u64),
+            min_upload_balance: candid::Nat::from(10_u64),
+            target_upload_balance: candid::Nat::from(100_u64),
+            gateway_principal_limit: 8,
+        },),
+    );
+    configured.expect("probe billing config should be accepted");
+
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    synced.expect("gateway sync should succeed");
+
+    let counts: Result<BlobStorageLocalCounters, Error> =
+        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
+    assert_eq!(
+        counts.expect("probe counts query should succeed"),
+        BlobStorageLocalCounters::new(0, 0, 1)
+    );
+
+    let balance: Result<u128, Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_cashier_total_balance",
+        (cashier_id, probe_id),
+    );
+    assert_eq!(balance.expect("balance read should succeed"), 123);
+
+    assert_billing_status_ready(&pic, probe_id);
+
+    pic.add_cycles(probe_id, 10_000);
+    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
+    assert_eq!(
+        top_up
+            .expect("funding endpoint should reach mock Cashier")
+            .attached_cycles,
+        candid::Nat::from(77_u64)
+    );
+
+    let balance_after: Result<u128, Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_cashier_total_balance",
+        (cashier_id, probe_id),
+    );
+    assert_eq!(
+        balance_after.expect("balance after top-up should decode"),
+        200
+    );
+
+    let last_top_up: Result<MockCashierLastTopUp, Error> =
+        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
+    let (account, target_balance, attached_cycles) = last_top_up
+        .expect("last top-up query should succeed")
+        .expect("mock should record top-up");
+    assert_eq!(account, Some(probe_id));
+    assert_eq!(target_balance, None);
+    assert_eq!(attached_cycles, candid::Nat::from(77_u64));
+}
+
+fn assert_billing_status_ready(pic: &Pic, probe_id: Principal) {
+    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_STATUS,
+        (BlobStorageStatusRequest {
+            sync_gateway_principals: true,
+        },),
+    );
+    let status = status.expect("status endpoint should succeed");
+    assert_eq!(
+        status.payment_model,
+        BlobStoragePaymentModelStatus::ProjectAsPaymentAccount
+    );
+    assert_eq!(
+        status.gateway_principal_sync_action,
+        BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus
+    );
+    assert_eq!(status.gateway_principal_count, 1);
+    assert_eq!(status.cashier_balance, Some(candid::Nat::from(123_u64)));
+    assert_eq!(status.funding_status, BlobStorageFundingStatus::NotNeeded);
+    assert!(status.ready);
 }
 
 // Assert create-certificate remains controlled by the host-supplied guard.

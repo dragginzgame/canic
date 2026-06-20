@@ -1,0 +1,44 @@
+type BlobStorageCashierDebtTarget = variant { Prepaid; Ledger };
+type BlobStorageCashierAccountCycleBalances = record {
+  total : int;
+  cycles_prepaid : int;
+  cycles_promo : int;
+  debt_target : BlobStorageCashierDebtTarget;
+  cycles_ledger : int;
+};
+type BlobStorageCashierAccountBalanceGetError = variant {
+  AccountNotFound;
+  InternalError : text;
+};
+type BlobStorageCashierAccountTopUpError = variant {
+  NotAuthorized : principal;
+  AccountBalanceOverflow;
+  InternalError : text;
+  TopUpWithoutCycles;
+};
+service : {
+  account_balance_get_v1 : (record { account : principal }) -> (
+      variant {
+        Ok : record {
+          account_cycle_balances : BlobStorageCashierAccountCycleBalances;
+          account : principal;
+        };
+        Err : BlobStorageCashierAccountBalanceGetError;
+      },
+    );
+  account_top_up_v1 : (
+      opt record {
+        target_balance : opt nat;
+        account : opt principal;
+      },
+    ) -> (
+      variant {
+        Ok : record {
+          balance : BlobStorageCashierAccountCycleBalances;
+          message : text;
+        };
+        Err : BlobStorageCashierAccountTopUpError;
+      },
+    );
+  storage_gateway_principal_list_v1 : () -> (vec principal);
+}
