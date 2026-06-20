@@ -1,0 +1,29 @@
+controllers = []
+app_index = []
+
+[fleet]
+name = "blob_storage_probe"
+
+[roles.root]
+kind = "root"
+package = "../../audit/root_probe"
+
+[roles.test]
+kind = "canister"
+package = "."
+
+[auth.delegated_tokens]
+enabled = false
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.test]
+kind = "service"
+
+[app]
+init_mode = "enabled"
+
+[app.whitelist]

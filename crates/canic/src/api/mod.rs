@@ -11,6 +11,12 @@ pub mod auth {
     pub use crate::__internal::core::api::auth::AuthApi;
 }
 
+/// Blob-storage protocol helpers.
+#[cfg(feature = "blob-storage")]
+pub mod blob_storage {
+    pub use crate::__internal::core::api::blob_storage::BlobStorageApi;
+}
+
 /// ICP-to-cycles refill endpoint helpers.
 #[cfg(feature = "icp-refill")]
 pub mod icp_refill {

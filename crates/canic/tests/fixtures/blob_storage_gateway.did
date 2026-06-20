@@ -1,0 +1,9 @@
+type CreateCertificateResult = record { method : text; blob_hash : text };
+service : {
+  _immutableObjectStorageBlobsAreLive : (vec blob) -> (vec bool) query;
+  _immutableObjectStorageBlobsToDelete : () -> (vec text) query;
+  _immutableObjectStorageConfirmBlobDeletion : (vec blob) -> ();
+  _immutableObjectStorageCreateCertificate : (text) -> (
+      CreateCertificateResult,
+    );
+}

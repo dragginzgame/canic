@@ -9,7 +9,7 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.69.1` is prepared as the ICP CLI 1.0 compatibility patch. Local
+- `0.69.1` is pushed as the ICP CLI 1.0 compatibility patch. Local
   `icp --version` reports `icp 1.0.0`. The official release notes call out the
   default gateway-domain change to `icp.net`, password-protected identity
   session caching, and removal of `--set-controller`. The active Canic codebase
@@ -20,38 +20,66 @@ inspect only the files needed for the current task.
   `icp identity reauth`, and `canic info medic` reports those commands as a
   non-failing hint; no release-critical flow depends on session caching.
 
-- `0.69.0` is prepared as a blob-storage protocol preflight release, not a
-  backend implementation release. It records the source-backed inventory
-  requirement, the 2026-06-19 local no-source search result, the ordered
-  post-inventory implementation milestones, and the hard implementation gate.
-  Blob-storage feature metadata, source modules, endpoint literals, DTOs,
-  stable records, macros, and protocol-behavior tests remain blocked until
-  `docs/contracts/BLOB_STORAGE_INVENTORY.md` is complete. The inventory gate
-  rejects skeletal `Complete` method sections by requiring source, Candid, DTO,
-  auth, production/local, and method-specific evidence labels,
-  non-placeholder values, and valid method source commit SHA shapes. It also
-  requires the Toko compatibility section to carry local source, commit,
-  blob-root mapping, and migration/read-through strategy evidence. 0.70
-  billing remains out of scope and separately gated. Post-0.69.0 GitHub code
-  search found candidate Toko consumer/wrapper evidence at commit
-  `3ef01afc5f5eeefdb9471f3e010b6562d758c111`, including project-instance
-  `_immutableObjectStorage*` matches and project-hub billing/status matches.
-  After the maintainer pull, local Toko `HEAD` is `boss` at
-  `97aafee9eeb73ae0517f9788df688bb96ae0a9ff`; exact `git grep` on that
-  committed `HEAD` finds no blob-storage protocol literals. The Toko worktree
-  is user-managed and later showed unmerged pull/conflict entries, so do not
-  treat working-tree contents as canonical evidence. The candidate commit
-  exists locally on `origin/development` and has now been inspected with
-  read-only `git show` / `git grep`. The gateway inventory records the Toko
-  project-instance source, generated Candid signatures, `BlobRootHash` shape,
-  and frontend gateway upload flow as source-identified Toko evidence. The
-  Cashier inventory records Toko call-site DTO/wrapper expectations only; the
-  actual Cashier implementation or generated/deployed Cashier `.did` remains
-  missing. Next blocker: decide whether the Toko project-instance development
-  source is maintainer-approved protocol evidence for Canic, resolve the Toko
-  legacy asset-to-`BlobRootHash` migration/read-through strategy, and obtain
-  actual Cashier source/generated `.did` before billing unlocks. The
-  source-inspection handoff is `docs/operations/blob-storage-source-handoff.md`.
+- `0.69.2` is prepared as the non-billing blob-storage backend lifecycle
+  slice. Current Toko `boss` is
+  clean at commit `9ca150b396a2bde42f2b8977a04a7ca2c6172b56` and is accepted
+  as the 0.69 project-side protocol source. The gateway inventory records all
+  six `_immutableObjectStorage*` method sections as complete Toko evidence,
+  and the 0.69 implementation gate now accepts the completed inventory.
+  Current Toko maps remote assets directly through
+  `PostRemoteAsset.blob_root_hash` and `RemoteAsset.blob_root_hash`, requires
+  production assets to reference registered live blobs, marks that same root
+  hash pending deletion on remote-asset deletion, and intentionally permits
+  placeholder hashes only in local builds. M1 has started with the
+  off-by-default `blob-storage` feature, four non-billing gateway protocol
+  constants/Candid fixture coverage, and passive `CreateCertificateResult`
+  DTO. M2 has started with Toko-compatible canonical `BlobRootHash`
+  validation/conversion and `BlobStorageApi` helpers for `sha256:<64-hex>`
+  strings and 32-byte gateway inputs. Stable live-blob, pending-deletion, and
+  gateway-principal maps now exist behind the feature, with lifecycle/API
+  helpers for register-live, check/require-live, mark-pending-delete,
+  gateway-confirm-delete, pending-deletion listing, and gateway-principal
+  membership. Endpoint emission has started with
+  `canic_emit_blob_storage_endpoints!(guard = ...)`, exporting exactly the
+  four 0.69 non-billing `_immutableObjectStorage*` methods with exact method
+  names, create-certificate guard wiring, gateway-principal filtering for
+  scrubber endpoints, and no deferred billing/sync method emission. A
+  standalone `blob_storage_probe` canister now proves the non-billing lifecycle
+  under PocketIC: create-certificate registers a live root, liveness queries use
+  32-byte gateway inputs, pending deletion is gateway-filtered, non-gateway
+  confirmation is ignored, gateway confirmation clears pending state, and live,
+  pending-deletion, and gateway-principal stable state survives a post-upgrade
+  round trip. The same test covers liveness batch duplicate and input-order
+  behavior plus multi-row pending-deletion repeat-return shape. Protocol
+  surface tests now pin that only create-certificate uses the host guard, while
+  scrubber methods remain gateway-principal scoped. 0.70 billing remains
+  separately gated:
+  the Cashier inventory records Toko call-site DTO/wrapper expectations only,
+  and actual Cashier implementation or generated/deployed Cashier `.did`
+  remains missing. The source-inspection handoff is
+  `docs/operations/blob-storage-source-handoff.md`.
+  Focused validation for this prepared slice:
+  ```text
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core --features blob-storage
+  cargo check --locked -p canic --features blob-storage
+  cargo check --locked -p blob_storage_probe
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --features blob-storage --test blob_storage_endpoint_macro -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p canic --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p canic --features blob-storage --test blob_storage_endpoint_macro -- -D warnings
+  cargo clippy --locked -p blob_storage_probe -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  cargo test --locked -p canic --test protocol_inventory_gate -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  bash scripts/ci/check-blob-storage-inventory-gate.sh
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  rg -n 'account_top_up_v1|storage_gateway_principal_list_v1|get_blob_storage_status|_immutableObjectStorageUpdateGatewayPrincipals|_immutableObjectStorageFundFromProjectCycles|Cashier|BlobProjectCyclesTopUpReport|BlobStorageBilling|GatewayPrincipalSync' crates canisters fleets -g '*.rs' -g '*.did' -g '*.toml'
+  git diff --check
+  ```
 
 - `0.68.26` is prepared as the root proof provisioning audit closeout and
   blob-storage handoff point. The 0.68 MVP remains:

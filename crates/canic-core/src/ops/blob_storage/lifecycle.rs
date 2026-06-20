@@ -1,0 +1,270 @@
+//! Module: ops::blob_storage::lifecycle
+//!
+//! Responsibility: enforce blob-storage lifecycle invariants over stable records.
+//! Does not own: endpoint guards, async gateway calls, or external principal synchronization.
+//! Boundary: API/workflow pass validated root hashes here before stable mutation.
+
+use std::{error::Error, fmt};
+
+use crate::{
+    cdk::types::Principal,
+    model::blob_storage::BlobRootHash,
+    storage::stable::blob_storage::{
+        BlobDeletionPendingRecord, BlobStorageStore, StorageGatewayPrincipalRecord,
+        StoredBlobRecord,
+    },
+};
+
+///
+/// BlobStorageLifecycleOps
+///
+/// Zero-cost namespace for non-billing blob-storage lifecycle operations.
+///
+
+pub struct BlobStorageLifecycleOps;
+
+impl BlobStorageLifecycleOps {
+    /// Register a live blob, returning whether this call inserted new live state.
+    pub fn register_live(
+        hash: &BlobRootHash,
+        now_ns: u64,
+    ) -> Result<BlobRegisterOutcome, BlobStorageLifecycleError> {
+        if BlobStorageStore::get_pending_deletion(hash).is_some() {
+            return Err(BlobStorageLifecycleError::BlobPendingDeletion);
+        }
+
+        if BlobStorageStore::get_stored_blob(hash).is_some() {
+            return Ok(BlobRegisterOutcome::AlreadyLive);
+        }
+
+        BlobStorageStore::upsert_stored_blob(hash, StoredBlobRecord::new(hash, now_ns));
+        Ok(BlobRegisterOutcome::Registered)
+    }
+
+    /// Return whether the blob is registered and not pending deletion.
+    #[must_use]
+    pub fn is_live(hash: &BlobRootHash) -> bool {
+        BlobStorageStore::get_stored_blob(hash).is_some()
+            && BlobStorageStore::get_pending_deletion(hash).is_none()
+    }
+
+    /// Require a live blob and return its stored record.
+    pub fn require_live(
+        hash: &BlobRootHash,
+    ) -> Result<StoredBlobRecord, BlobStorageLifecycleError> {
+        let Some(record) = BlobStorageStore::get_stored_blob(hash) else {
+            return Err(BlobStorageLifecycleError::BlobNotLive);
+        };
+        if BlobStorageStore::get_pending_deletion(hash).is_some() {
+            return Err(BlobStorageLifecycleError::BlobPendingDeletion);
+        }
+        Ok(record)
+    }
+
+    /// Mark a live blob as pending gateway deletion.
+    pub fn mark_pending_delete(
+        hash: &BlobRootHash,
+        now_ns: u64,
+    ) -> Result<BlobPendingDeletionOutcome, BlobStorageLifecycleError> {
+        if BlobStorageStore::get_stored_blob(hash).is_none() {
+            return Err(BlobStorageLifecycleError::BlobNotLive);
+        }
+        if BlobStorageStore::get_pending_deletion(hash).is_some() {
+            return Ok(BlobPendingDeletionOutcome::AlreadyPendingDeletion);
+        }
+
+        BlobStorageStore::upsert_pending_deletion(
+            hash,
+            BlobDeletionPendingRecord::new(hash, now_ns),
+        );
+        Ok(BlobPendingDeletionOutcome::MarkedPendingDeletion)
+    }
+
+    /// Confirm gateway deletion. Absent inputs are no-ops, matching Toko endpoint behavior.
+    pub fn confirm_deleted_by_gateway(hash: &BlobRootHash) {
+        BlobStorageStore::remove_pending_deletion(hash);
+        BlobStorageStore::remove_stored_blob(hash);
+    }
+
+    /// Return pending-deletion root hashes in stable key order.
+    #[must_use]
+    pub fn pending_deletion_hashes() -> Vec<String> {
+        BlobStorageStore::pending_deletions()
+            .into_iter()
+            .map(|(key, _)| key.as_str().to_string())
+            .collect()
+    }
+
+    /// Insert or update an authorized storage gateway principal.
+    pub fn upsert_gateway_principal(principal: Principal, now_ns: u64) {
+        BlobStorageStore::upsert_gateway_principal(
+            principal,
+            StorageGatewayPrincipalRecord::new(principal, now_ns),
+        );
+    }
+
+    /// Remove an authorized storage gateway principal.
+    pub fn remove_gateway_principal(principal: Principal) -> bool {
+        BlobStorageStore::remove_gateway_principal(principal).is_some()
+    }
+
+    /// Return whether the principal is an authorized storage gateway.
+    #[must_use]
+    pub fn is_gateway_principal(principal: Principal) -> bool {
+        BlobStorageStore::get_gateway_principal(principal).is_some()
+    }
+}
+
+///
+/// BlobRegisterOutcome
+///
+/// Result of idempotent live-blob registration.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlobRegisterOutcome {
+    Registered,
+    AlreadyLive,
+}
+
+impl BlobRegisterOutcome {
+    #[must_use]
+    pub const fn inserted(self) -> bool {
+        matches!(self, Self::Registered)
+    }
+}
+
+///
+/// BlobPendingDeletionOutcome
+///
+/// Result of idempotent pending-deletion marking.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlobPendingDeletionOutcome {
+    MarkedPendingDeletion,
+    AlreadyPendingDeletion,
+}
+
+impl BlobPendingDeletionOutcome {
+    #[must_use]
+    pub const fn inserted(self) -> bool {
+        matches!(self, Self::MarkedPendingDeletion)
+    }
+}
+
+///
+/// BlobStorageLifecycleError
+///
+/// Typed lifecycle failure for non-billing blob-storage operations.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BlobStorageLifecycleError {
+    BlobNotLive,
+    BlobPendingDeletion,
+}
+
+impl fmt::Display for BlobStorageLifecycleError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BlobNotLive => formatter.write_str("blob is not registered live"),
+            Self::BlobPendingDeletion => formatter.write_str("blob is pending deletion"),
+        }
+    }
+}
+
+impl Error for BlobStorageLifecycleError {}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        model::blob_storage::BlobRootHash, storage::stable::blob_storage::BlobStorageStore,
+    };
+
+    fn hash(value: &str) -> BlobRootHash {
+        BlobRootHash::try_from(value).expect("valid blob root hash")
+    }
+
+    fn h1() -> BlobRootHash {
+        hash("sha256:1111111111111111111111111111111111111111111111111111111111111111")
+    }
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn register_live_is_idempotent_until_pending_deletion() {
+        BlobStorageStore::clear();
+        let hash = h1();
+
+        assert_eq!(
+            BlobStorageLifecycleOps::register_live(&hash, 10).expect("register"),
+            BlobRegisterOutcome::Registered
+        );
+        assert_eq!(
+            BlobStorageLifecycleOps::register_live(&hash, 20).expect("register again"),
+            BlobRegisterOutcome::AlreadyLive
+        );
+        assert!(BlobStorageLifecycleOps::is_live(&hash));
+
+        BlobStorageLifecycleOps::mark_pending_delete(&hash, 30).expect("mark pending");
+
+        assert_eq!(
+            BlobStorageLifecycleOps::register_live(&hash, 40),
+            Err(BlobStorageLifecycleError::BlobPendingDeletion)
+        );
+        assert!(!BlobStorageLifecycleOps::is_live(&hash));
+    }
+
+    #[test]
+    fn mark_pending_delete_requires_live_blob() {
+        BlobStorageStore::clear();
+        let hash = h1();
+
+        assert_eq!(
+            BlobStorageLifecycleOps::mark_pending_delete(&hash, 10),
+            Err(BlobStorageLifecycleError::BlobNotLive)
+        );
+    }
+
+    #[test]
+    fn gateway_confirmation_removes_pending_and_live_state() {
+        BlobStorageStore::clear();
+        let hash = h1();
+
+        BlobStorageLifecycleOps::register_live(&hash, 10).expect("register");
+        BlobStorageLifecycleOps::mark_pending_delete(&hash, 20).expect("mark pending");
+        assert_eq!(
+            BlobStorageLifecycleOps::pending_deletion_hashes(),
+            vec![hash.as_str().to_string()]
+        );
+
+        BlobStorageLifecycleOps::confirm_deleted_by_gateway(&hash);
+
+        assert!(!BlobStorageLifecycleOps::is_live(&hash));
+        assert!(BlobStorageLifecycleOps::pending_deletion_hashes().is_empty());
+        BlobStorageLifecycleOps::confirm_deleted_by_gateway(&hash);
+    }
+
+    #[test]
+    fn gateway_principal_registry_is_idempotent() {
+        BlobStorageStore::clear();
+        let gateway = p(42);
+
+        assert!(!BlobStorageLifecycleOps::is_gateway_principal(gateway));
+        BlobStorageLifecycleOps::upsert_gateway_principal(gateway, 10);
+        BlobStorageLifecycleOps::upsert_gateway_principal(gateway, 20);
+        assert!(BlobStorageLifecycleOps::is_gateway_principal(gateway));
+
+        assert!(BlobStorageLifecycleOps::remove_gateway_principal(gateway));
+        assert!(!BlobStorageLifecycleOps::remove_gateway_principal(gateway));
+        assert!(!BlobStorageLifecycleOps::is_gateway_principal(gateway));
+    }
+}

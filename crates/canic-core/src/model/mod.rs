@@ -4,4 +4,6 @@
 //! Does not own: stable storage access, orchestration, or platform side effects.
 //! Boundary: model types are consumed by ops, workflow, storage, and views.
 
+#[cfg(feature = "blob-storage")]
+pub mod blob_storage;
 pub mod replay;

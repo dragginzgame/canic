@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)
 
+- `0.69.2` continues the non-billing blob-storage backend by adding the
+  gateway endpoint macro, standalone probe canister, and PocketIC lifecycle
+  coverage for live roots, pending deletion, gateway filtering, and deletion
+  confirmation across a post-upgrade round trip.
+
 - `0.69.1` updates Canic's ICP CLI compatibility gate for the 1.x stable line
   and makes `canic info medic` guidance readable for terminal operators.
 

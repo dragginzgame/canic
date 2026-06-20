@@ -35,6 +35,10 @@ pub const CANIC_WASM_STORE_OVERVIEW: &str = "canic_wasm_store_overview";
 pub const CANIC_TEMPLATE_PREPARE_ADMIN: &str = "canic_template_prepare_admin";
 pub const CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN: &str = "canic_template_publish_chunk_admin";
 pub const CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN: &str = "canic_template_stage_manifest_admin";
+pub const BLOB_STORAGE_BLOBS_ARE_LIVE: &str = "_immutableObjectStorageBlobsAreLive";
+pub const BLOB_STORAGE_BLOBS_TO_DELETE: &str = "_immutableObjectStorageBlobsToDelete";
+pub const BLOB_STORAGE_CONFIRM_BLOB_DELETION: &str = "_immutableObjectStorageConfirmBlobDeletion";
+pub const BLOB_STORAGE_CREATE_CERTIFICATE: &str = "_immutableObjectStorageCreateCertificate";
 
 pub const CANIC_SYNC_STATE: &str = "canic_sync_state";
 pub const CANIC_SYNC_TOPOLOGY: &str = "canic_sync_topology";
@@ -52,6 +56,13 @@ pub const CANIC_WASM_STORE_ROOT_UPDATE_METHODS: &[&str] = &[
 
 pub const CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS: &[&str] =
     &[CANIC_WASM_STORE_CATALOG, CANIC_WASM_STORE_STATUS];
+
+pub const BLOB_STORAGE_069_GATEWAY_METHODS: &[&str] = &[
+    BLOB_STORAGE_BLOBS_ARE_LIVE,
+    BLOB_STORAGE_BLOBS_TO_DELETE,
+    BLOB_STORAGE_CONFIRM_BLOB_DELETION,
+    BLOB_STORAGE_CREATE_CERTIFICATE,
+];
 
 #[must_use]
 pub const fn canic_wasm_store_method_requires_internal_proof(method: &str) -> bool {

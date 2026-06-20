@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use candid::types::internal::TypeContainer;
 use candid::{decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 use canic::{
@@ -18,6 +19,7 @@ use canic::{
         RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
         RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootProof,
     },
+    dto::blob_storage::CreateCertificateResult,
     ids::CanisterRole,
 };
 
@@ -44,6 +46,12 @@ where
     let encoded = encode_one(&value).expect("encode Candid value");
     let decoded = decode_one::<T>(&encoded).expect("decode Candid value");
     assert_eq!(decoded, value);
+}
+
+fn candid_type_env<T: candid::CandidType>() -> String {
+    let mut types = TypeContainer::new();
+    types.add::<T>();
+    types.env.to_string()
 }
 
 fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
@@ -132,6 +140,120 @@ fn public_protocol_reexports_wasm_store_root_update_manifest() {
     for method in canic::protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS {
         assert!(!canic::protocol::canic_wasm_store_method_requires_internal_proof(method));
     }
+}
+
+#[test]
+fn blob_storage_gateway_protocol_surface_is_pinned() {
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_BLOBS_ARE_LIVE,
+        canic_core::protocol::BLOB_STORAGE_BLOBS_ARE_LIVE
+    );
+    assert_eq!(
+        canic::protocol::BLOB_STORAGE_069_GATEWAY_METHODS,
+        [
+            "_immutableObjectStorageBlobsAreLive",
+            "_immutableObjectStorageBlobsToDelete",
+            "_immutableObjectStorageConfirmBlobDeletion",
+            "_immutableObjectStorageCreateCertificate",
+        ]
+    );
+    let did_path = workspace_root().join("crates/canic/tests/fixtures/blob_storage_gateway.did");
+    let did = read_text(&did_path);
+    let (env, actor) = CandidSource::Text(&did)
+        .load()
+        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
+    let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
+    let service = env
+        .as_service(&actor)
+        .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
+
+    for method in canic::protocol::BLOB_STORAGE_069_GATEWAY_METHODS {
+        assert!(
+            service.iter().any(|(name, _)| name == method),
+            "blob-storage fixture missing 0.69 method: {method}"
+        );
+    }
+}
+
+#[test]
+fn blob_storage_gateway_dtos_roundtrip_through_candid() {
+    assert_candid_roundtrip(CreateCertificateResult {
+        method: "upload".to_string(),
+        blob_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            .to_string(),
+    });
+    let create_env = candid_type_env::<CreateCertificateResult>();
+    assert!(
+        create_env.contains("type CreateCertificateResult = record")
+            && create_env.contains("method : text")
+            && create_env.contains("blob_hash : text"),
+        "CreateCertificateResult Candid changed:\n{create_env}"
+    );
+}
+
+#[test]
+fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
+    let endpoint_path = workspace_root().join("crates/canic/src/macros/endpoints/blob_storage.rs");
+    let source = read_text(&endpoint_path);
+
+    assert!(
+        source.contains("macro_rules! canic_emit_blob_storage_endpoints")
+            && source.contains("requires guard = <access expression>")
+            && source.contains("requires the canic facade feature")
+            && source.contains("blob-storage"),
+        "blob-storage endpoint macro should be opt-in and require an explicit guard"
+    );
+
+    for method in canic::protocol::BLOB_STORAGE_069_GATEWAY_METHODS {
+        assert!(
+            source.contains(&format!("name = \"{method}\"")),
+            "blob-storage macro must emit gateway method {method}"
+        );
+    }
+
+    assert!(
+        source.contains("canic_query(internal, name = \"_immutableObjectStorageBlobsAreLive\")")
+            && source
+                .contains("canic_query(internal, name = \"_immutableObjectStorageBlobsToDelete\")")
+            && source.contains(
+                "canic_update(internal, name = \"_immutableObjectStorageConfirmBlobDeletion\")"
+            )
+            && source.contains(
+                "canic_update(requires($guard), name = \"_immutableObjectStorageCreateCertificate\")"
+            ),
+        "blob-storage endpoint modes/guards must match the 0.69 gateway contract"
+    );
+
+    let live_attr = preceding_attribute(&source, "fn canic_blob_storage_blobs_are_live(");
+    let to_delete_attr = preceding_attribute(&source, "fn canic_blob_storage_blobs_to_delete(");
+    let confirm_attr = preceding_attribute(&source, "fn canic_blob_storage_confirm_blob_deletion(");
+    let create_attr = preceding_attribute(&source, "fn canic_blob_storage_create_certificate(");
+    assert!(
+        live_attr.contains("canic_query(internal")
+            && !live_attr.contains("requires")
+            && to_delete_attr.contains("canic_query(internal")
+            && !to_delete_attr.contains("requires")
+            && confirm_attr.contains("canic_update(internal")
+            && !confirm_attr.contains("requires"),
+        "liveness and gateway scrubber endpoints must not use the host create-certificate guard"
+    );
+    assert!(
+        create_attr.contains("canic_update(requires($guard)") && !create_attr.contains("internal"),
+        "create-certificate must remain the only host-guarded blob-storage endpoint"
+    );
+    assert!(
+        source.contains("pending_deletion_hashes_for_gateway")
+            && source.contains("confirm_deleted_by_gateway_hash_bytes_batch"),
+        "gateway scrubber endpoints must keep delegating through gateway-aware API helpers"
+    );
+
+    assert!(
+        !source.contains(concat!(
+            "_immutableObjectStorage",
+            "UpdateGatewayPrincipals"
+        )) && !source.contains(concat!("_immutableObjectStorage", "FundFromProjectCycles")),
+        "0.69 endpoint macro must not emit deferred billing/sync gateway methods"
+    );
 }
 
 #[test]

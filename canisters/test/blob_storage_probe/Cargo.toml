@@ -1,0 +1,31 @@
+[package]
+name = "blob_storage_probe"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+fleet = "blob_storage_probe"
+role = "test"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["blob-storage"]
+blob-storage = ["canic/blob-storage"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["blob-storage"] }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true }
+
+[lints]
+workspace = true
