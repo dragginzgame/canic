@@ -21,6 +21,18 @@ repo helper binaries:
 make install-dev
 ```
 
+Password-protected ICP CLI PEM identities can cache session delegations so
+operators do not re-enter the identity password for every command:
+
+```bash
+icp settings session-length 1h
+icp identity reauth <identity-name> --duration 1h
+```
+
+Use `icp settings session-length disabled` if you need to turn session caching
+off. These commands tune the operator's local ICP CLI identity session; they do
+not change Canic canister auth or delegated-token behavior.
+
 ## Install The Operator CLI
 
 Install the published operator binary with Cargo:
@@ -75,8 +87,8 @@ value is the fleet template name from `[fleet] name = "..."`, not a deployment
 target name.
 Root canisters also need the `control-plane` feature on their runtime `canic`
 dependency. When delegated-token material is enabled, root issuers also need
-`auth-root-canister-sig-create`; canisters that mint shard tokens need
-`auth-threshold-ecdsa-sign`; endpoint verifiers need
+`auth-root-canister-sig-create`; canisters that issue delegated tokens need
+`auth-issuer-canister-sig-create`; endpoint verifiers need
 `auth-delegated-token-verify`.
 
 For a path checkout:
@@ -362,7 +374,9 @@ Canic-owned methods.
 - If the root canister does not compile or bootstrap delegated-auth material,
   confirm the runtime dependency enables `control-plane` plus the delegated-auth
   features required by that role, such as `auth-root-canister-sig-create` for
-  root proof issuance and `auth-threshold-ecdsa-sign` for shard token signing.
+  root proof issuance, `auth-issuer-canister-sig-create` for delegated-token
+  issuance, and `auth-delegated-token-verify` for protected endpoint
+  verification.
 - Each canister crate must declare its fleet-scoped role with
   `[package.metadata.canic] fleet = "<fleet>"` and `role = "<role>"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not

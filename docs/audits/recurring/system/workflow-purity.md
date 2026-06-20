@@ -60,7 +60,7 @@ Boundary comparison scope:
 - `crates/canic-core/src/dto/**`
 - `crates/canic-core/src/model/**`
 - `crates/canic-core/src/ops/**`
-- `crates/canic-core/src/replay_policy.rs`
+- `crates/canic-core/src/replay_policy/mod.rs`
 - `crates/canic-core/src/storage/**`
 - `crates/canic-core/src/access/**`
 - `crates/canic-macros/src/endpoint/**`

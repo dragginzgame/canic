@@ -76,6 +76,17 @@ fn run_gate(root: &Path, inventory: &Path) -> Output {
         .expect("blob-storage inventory gate should run")
 }
 
+fn run_gate_without_ripgrep(root: &Path, inventory: &Path) -> Output {
+    let script = workspace_root().join("scripts/ci/check-blob-storage-inventory-gate.sh");
+    Command::new("/bin/bash")
+        .arg(script)
+        .current_dir(root)
+        .env("BLOB_STORAGE_INVENTORY", inventory)
+        .env("PATH", "")
+        .output()
+        .expect("blob-storage inventory gate should run")
+}
+
 fn run_billing_gate(root: &Path, inventory: &Path) -> Output {
     let script = workspace_root().join(format!(
         "scripts/ci/check-blob-storage-{}{}-inventory-gate.sh",
@@ -85,6 +96,20 @@ fn run_billing_gate(root: &Path, inventory: &Path) -> Output {
         .arg(script)
         .current_dir(root)
         .env("BLOB_STORAGE_CASHIER_INVENTORY", inventory)
+        .output()
+        .expect("blob-storage billing inventory gate should run")
+}
+
+fn run_billing_gate_without_ripgrep(root: &Path, inventory: &Path) -> Output {
+    let script = workspace_root().join(format!(
+        "scripts/ci/check-blob-storage-{}{}-inventory-gate.sh",
+        "ca", "shier"
+    ));
+    Command::new("/bin/bash")
+        .arg(script)
+        .current_dir(root)
+        .env("BLOB_STORAGE_CASHIER_INVENTORY", inventory)
+        .env("PATH", "")
         .output()
         .expect("blob-storage billing inventory gate should run")
 }
@@ -382,6 +407,26 @@ fn incomplete_inventory_allows_design_only_workspace() {
         "gate should allow no implementation surface while inventory is incomplete\n{}",
         output_text(&output)
     );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn incomplete_inventory_missing_ripgrep_reports_setup_action() {
+    let root = create_temp_workspace("blob-gate-missing-rg");
+    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+    fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
+
+    let output = run_gate_without_ripgrep(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "gate should fail with a setup hint when ripgrep is unavailable"
+    );
+    assert!(text.contains("missing required tool: rg"));
+    assert!(text.contains("make install-dev"));
+    assert!(text.contains("make update-dev"));
+    assert!(!text.contains("command not found"));
     let _ = fs::remove_dir_all(root);
 }
 
@@ -759,6 +804,26 @@ fn incomplete_billing_inventory_allows_design_only_workspace() {
         "billing gate should allow no implementation surface while inventory is incomplete\n{}",
         output_text(&output)
     );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn incomplete_billing_inventory_missing_ripgrep_reports_setup_action() {
+    let root = create_temp_workspace("billing-gate-missing-rg");
+    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
+    fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
+
+    let output = run_billing_gate_without_ripgrep(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "billing gate should fail with a setup hint when ripgrep is unavailable"
+    );
+    assert!(text.contains("missing required tool: rg"));
+    assert!(text.contains("make install-dev"));
+    assert!(text.contains("make update-dev"));
+    assert!(!text.contains("command not found"));
     let _ = fs::remove_dir_all(root);
 }
 

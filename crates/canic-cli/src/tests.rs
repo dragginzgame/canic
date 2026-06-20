@@ -176,16 +176,16 @@ fn info_help_uses_deployment_target_wording() {
 
 #[cfg(unix)]
 #[test]
-fn icp_backed_command_rejects_old_icp_cli_before_running_subcommand() {
+fn icp_backed_command_rejects_unparseable_icp_cli_before_running_subcommand() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
 
-    let root = temp_dir("canic-cli-old-icp");
+    let root = temp_dir("canic-cli-unsupported-icp");
     fs::create_dir_all(&root).expect("create temp dir");
     let icp_path = root.join("icp");
     fs::write(
         &icp_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 0.2.0'; exit 0; fi\necho 'old replica command ran' >&2\nexit 42\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp development build'; exit 0; fi\necho 'unsupported replica command ran' >&2\nexit 42\n",
     )
     .expect("write fake icp");
     fs::set_permissions(&icp_path, fs::Permissions::from_mode(0o755)).expect("chmod fake icp");
@@ -196,13 +196,13 @@ fn icp_backed_command_rejects_old_icp_cli_before_running_subcommand() {
         OsString::from("replica"),
         OsString::from("status"),
     ])
-    .expect_err("old icp rejected");
+    .expect_err("unsupported icp rejected");
     let text = err.to_string();
 
     assert!(text.contains("unsupported icp-cli version"));
-    assert!(text.contains("found: icp 0.2.0"));
-    assert!(text.contains("required: icp-cli >=0.3.2, <0.4.0"));
-    assert!(!text.contains("old replica command ran"));
+    assert!(text.contains("found: icp development build"));
+    assert!(text.contains("required: icp-cli >=1.0.0, <2.0.0"));
+    assert!(!text.contains("unsupported replica command ran"));
 
     fs::remove_dir_all(root).expect("remove temp dir");
 }

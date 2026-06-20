@@ -8,8 +8,9 @@ replay-protection line. It is intentionally not named after a release line;
 release numbers belong in changelogs and status docs, not in the operational
 audit entry point.
 
-Current release-line context: 0.62 is using this audit for upgrade confidence
-and release durability.
+Current release-line context comes from `docs/status/current.md`. This audit
+originated during the 0.62 release-durability line and remains the
+non-versioned upgrade/state compatibility inventory for current release work.
 
 ## Scope
 
@@ -42,7 +43,7 @@ Stable state compatibility is distinct from Candid compatibility.
 - CLI/JSON compatibility means operator-visible output and automation schemas
   remain stable.
 
-0.62.2 changes none of those surfaces.
+The 0.62.2 audit slice changed none of those surfaces.
 
 Old-state-to-new-binary compatibility is scoped to supported persisted state
 schemas. Downgrade behavior is a non-goal unless separately approved. Operations
@@ -59,7 +60,7 @@ Each area below uses one of these outcomes:
 
 | Outcome | Meaning |
 | --- | --- |
-| Covered by existing tests/docs | Existing code, tests, and docs are enough for current 0.62 release confidence. |
+| Covered by existing tests/docs | Existing code, tests, and docs are enough for current release confidence. |
 | Covered by this audit | This docs/CI slice makes the compatibility boundary explicit without runtime changes. |
 | Known gap, non-blocking for RC | The gap should be tracked in RC accounting but is not a release blocker by itself. |
 | Release blocker | The area must be fixed or proven before RC promotion. |
@@ -80,7 +81,7 @@ Each area below uses one of these outcomes:
 | Lifecycle post-upgrade ordering | Root and non-root post-upgrade code initializes compiled config, initializes the memory registry, restores env, then runs post-upgrade runtime hooks before bootstrap scheduling/user hooks. PocketIC lifecycle tests cover phase-correct traps and repeated non-root post-upgrade readiness. | Covered by existing tests/docs | Hook bodies stay synchronous until timers schedule async work. |
 | Durable-publication and wasm-store state | Replay-policy tests pin durable-publish entries to wasm-store/template publication surfaces. Control-plane subnet-state tests cover publication-store binding transitions. PocketIC root wasm-store reconcile tests prove post-upgrade preserves the current multi-store release binding. | Covered by existing tests/docs | The publication store is durable root-owned state and is already exercised by post-upgrade reconciliation coverage. |
 | Stable-memory ABI boundary | `crates/canic-core/tests/stable_memory_abi_guard.rs` prevents Canic-managed runtime crates from bypassing the managed explicit-key stable-memory ABI. | Covered by existing tests/docs | This protects migration risk by keeping stable memory ownership centralized. |
-| Candid, CLI, and JSON/output compatibility | 0.62.2 changes no Candid, CLI, JSON/output, or public API shape. | Covered by this audit | Any future stable output change requires separate approval, changelog/status coverage, and tests. |
+| Candid, CLI, and JSON/output compatibility | The audited slice changed no Candid, CLI, JSON/output, or public API shape. | Covered by this audit | Any future stable output change requires separate approval, changelog/status coverage, and tests. |
 
 ## State-Invariant Checklist
 
@@ -135,9 +136,10 @@ validation environment if too expensive for an ordinary docs slice.
 
 Release blockers: none found in this audit.
 
-The current evidence is sufficient to continue 0.62 without opening another
-runtime implementation slice. Recovery/runbook wording for pending or
-recovery-required states is documented in
+The current evidence remains sufficient for release-line accounting unless a
+new change touches these compatibility surfaces. Recovery/runbook wording for
+pending or recovery-required states is documented in
 [Recovery and retry runbooks](recovery-retry-runbooks.md). Remaining work
-belongs to diagnostic consistency review, package/install validation, or RC
-accounting.
+belongs to diagnostic consistency review, package/install validation, RC
+accounting, or focused defect handling if a concrete compatibility gap is
+found.

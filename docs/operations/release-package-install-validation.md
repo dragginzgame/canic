@@ -7,8 +7,9 @@ It documents existing repo targets and when they should run. It is
 intentionally not named after a release line; release numbers belong in
 changelogs and status docs, not in the operational validation entry point.
 
-Current release-line context: 0.62 is using this checklist for release
-durability and RC/final-release accounting.
+Current release-line context comes from `docs/status/current.md`. This
+checklist originated during the 0.62 release-durability line and remains the
+non-versioned package/install validation reference for current release work.
 
 ## Scope
 
@@ -158,8 +159,8 @@ slice.
 
 Release blockers: none found in this checklist.
 
-The current package/install validation inventory is sufficient to close 0.62
-implementation work after the [RC readiness audit](rc-readiness-audit.md)
-records its final verdict. Remaining work belongs to assigned package/install
-gate execution, final release accounting, or focused defect handling if a
-concrete release blocker is found.
+The current package/install validation inventory remains sufficient for
+release-line accounting unless package, install, artifact, or smoke-test
+behavior changes. Remaining work belongs to assigned package/install gate
+execution, final release accounting, or focused defect handling if a concrete
+release blocker is found.

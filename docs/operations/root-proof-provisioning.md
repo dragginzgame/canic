@@ -10,7 +10,7 @@ is operational guidance, not a new product surface.
 | Root endpoint macro surface | `crates/canic/src/macros/endpoints/root.rs` |
 | Issuer endpoint macro surface | `crates/canic/src/macros/endpoints/nonroot.rs` |
 | Public auth API adapters | `crates/canic-core/src/api/auth/mod.rs` |
-| Root batch prepare/get and pending metadata | `crates/canic-core/src/ops/auth/delegation.rs` |
+| Root batch prepare/get and pending metadata | `crates/canic-core/src/ops/auth/delegation/mod.rs` and child modules |
 | Root batch install broadcast workflow | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs` |
 | Issuer active proof verification | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` |
 | Root canister-signature proof assembly | `crates/canic-core/src/ops/auth/root_canister_sig.rs` |

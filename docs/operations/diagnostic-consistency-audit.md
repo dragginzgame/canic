@@ -9,8 +9,9 @@ replay-protection line. It is intentionally not named after a release line;
 release numbers belong in changelogs and status docs, not in the operational
 audit entry point.
 
-Current release-line context: 0.62 is using this audit for release durability,
-operator recovery, and RC validation.
+Current release-line context comes from `docs/status/current.md`. This audit
+originated during the 0.62 release-durability line and remains the
+non-versioned diagnostic inventory for current release work.
 
 ## Scope
 
@@ -51,7 +52,7 @@ Diagnostic surfaces have different compatibility weight:
 | Developer-only tool output | Requires changelog/status coverage when changed. |
 | CLI text output | Stable user-visible output; requires explicit approval, changelog/status coverage, and focused tests. |
 | JSON output | Stable automation surface; requires explicit approval, schema impact notes, changelog/status coverage, and focused tests. |
-| Candid/public API | Stable canister contract; no change expected in 0.62 without explicit approval. |
+| Candid/public API | Stable canister contract; no change expected without explicit approval. |
 | Metric label | Treat as stable operational output; changing or adding labels requires focused approval and tests. |
 | No public-output impact | Docs/test/CI-only clarification or existing-surface inventory. |
 
@@ -147,7 +148,7 @@ Stable or user-visible diagnostic changes require:
 
 Release blockers: none found in this audit.
 
-The current diagnostic evidence is sufficient to continue 0.62 without opening
-another runtime implementation slice. Remaining work belongs to package/install
-validation, RC accounting, or focused defect handling if a concrete
-release-blocking diagnostic gap is found.
+The current diagnostic evidence remains sufficient for release-line accounting
+unless a new change touches these diagnostic surfaces. Remaining work belongs
+to package/install validation, RC accounting, or focused defect handling if a
+concrete release-blocking diagnostic gap is found.

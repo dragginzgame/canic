@@ -65,7 +65,14 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks after Rust cache restore" --min-free-mib 3072
       - name: Install Rust helper tools
-        run: cargo install cargo-sort cargo-sort-derives candid-extractor --locked
+        run: cargo install cargo-sort cargo-sort-derives candid-extractor ripgrep --locked
+      - name: Check Rust helper tools
+        shell: bash
+        run: |
+          cargo sort --version
+          cargo sort-derives --version
+          candid-extractor --version
+          rg --version
       - name: Install wasm target
         shell: bash
         run: |

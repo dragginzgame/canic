@@ -179,9 +179,11 @@ Keep emoji usage consistent across releases.
 
 For root changelog references to detailed notes, links must be clickable Markdown links.
 
-Use:
+Use this source text in the root `CHANGELOG.md`:
 
-`[docs/changelog/0.33.md](docs/changelog/0.33.md)`
+```markdown
+[docs/changelog/0.33.md](docs/changelog/0.33.md)
+```
 
 Do not use plain backticked path text for detailed-breakdown links.
 

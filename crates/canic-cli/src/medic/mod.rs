@@ -18,21 +18,17 @@ use crate::{
     version_text,
 };
 use canic_host::{
-    canister_ready::query_canister_ready,
-    icp::IcpCli,
-    icp_config::resolve_current_canic_icp_root,
-    install_root::InstallState,
-    installed_deployment::read_installed_deployment_state_from_root,
-    table::{ColumnAlign, render_table},
+    canister_ready::query_canister_ready, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
+    install_root::InstallState, installed_deployment::read_installed_deployment_state_from_root,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, fs, path::Path};
 use thiserror::Error as ThisError;
 
-const CHECK_HEADER: &str = "CHECK";
-const STATUS_HEADER: &str = "STATUS";
-const DETAIL_HEADER: &str = "DETAIL";
-const NEXT_HEADER: &str = "NEXT";
+const MEDIC_REPORT_WIDTH: usize = 100;
+const ICP_SESSION_DETAIL: &str = "password-protected PEM identities can cache sessions";
+const ICP_SESSION_NEXT: &str =
+    "icp settings session-length 1h; icp identity reauth <name> --duration 1h";
 const INFO_MEDIC_HELP_AFTER: &str = "\
 Examples:
   canic info medic test";
@@ -121,6 +117,7 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         "override with top-level --network <name>",
     ));
     checks.push(check_icp_cli(options));
+    checks.push(check_icp_identity_session_cache_hint());
 
     let state = match icp_root.as_deref().map_or_else(
         || Err("could not resolve ICP project root".to_string()),
@@ -178,6 +175,10 @@ fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
     }
 }
 
+fn check_icp_identity_session_cache_hint() -> MedicCheck {
+    MedicCheck::ok("icp identity session", ICP_SESSION_DETAIL, ICP_SESSION_NEXT)
+}
+
 fn check_config_path(state: &InstallState) -> MedicCheck {
     if fs::metadata(&state.config_path).is_ok_and(|metadata| metadata.is_file()) {
         MedicCheck::ok("config", state.config_path.clone(), "-")
@@ -225,22 +226,79 @@ fn check_root_ready(
 }
 
 fn render_medic_report(checks: &[MedicCheck]) -> String {
-    let rows = checks
-        .iter()
-        .map(|check| {
-            [
-                check.name.clone(),
-                medic_status_label(check.status).to_string(),
-                check.detail.clone(),
-                check.next.clone(),
-            ]
-        })
+    let mut lines = Vec::new();
+    for (index, check) in checks.iter().enumerate() {
+        if index > 0 {
+            lines.push(String::new());
+        }
+        lines.push(format!(
+            "{} [{}]",
+            check.name,
+            medic_status_label(check.status)
+        ));
+        push_medic_field(&mut lines, "detail", &check.detail);
+        if check.next != "-" {
+            push_medic_field(&mut lines, "next", &check.next);
+        }
+    }
+    lines.join("\n")
+}
+
+fn push_medic_field(lines: &mut Vec<String>, label: &str, value: &str) {
+    let prefix = format!("  {label}: ");
+    let continuation_prefix = " ".repeat(prefix.chars().count());
+    let width = MEDIC_REPORT_WIDTH.saturating_sub(prefix.chars().count());
+
+    for (index, line) in wrap_medic_text(value, width).into_iter().enumerate() {
+        if index == 0 {
+            lines.push(format!("{prefix}{line}"));
+        } else if line.is_empty() {
+            lines.push(String::new());
+        } else {
+            lines.push(format!("{continuation_prefix}{line}"));
+        }
+    }
+}
+
+fn wrap_medic_text(value: &str, width: usize) -> Vec<String> {
+    let wrapped = value
+        .lines()
+        .flat_map(|line| wrap_medic_line(line, width))
         .collect::<Vec<_>>();
-    render_table(
-        &[CHECK_HEADER, STATUS_HEADER, DETAIL_HEADER, NEXT_HEADER],
-        &rows,
-        &[ColumnAlign::Left; 4],
-    )
+    if wrapped.is_empty() {
+        vec![String::new()]
+    } else {
+        wrapped
+    }
+}
+
+fn wrap_medic_line(line: &str, width: usize) -> Vec<String> {
+    if line.trim().is_empty() {
+        return vec![String::new()];
+    }
+
+    let width = width.max(1);
+    let mut lines = Vec::new();
+    let mut current = String::new();
+
+    for word in line.split_whitespace() {
+        let candidate_width =
+            current.chars().count() + usize::from(!current.is_empty()) + word.chars().count();
+        if current.is_empty() {
+            current.push_str(word);
+        } else if candidate_width <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(current);
+            current = word.to_string();
+        }
+    }
+
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
 }
 
 const fn medic_status_label(status: MedicStatus) -> &'static str {

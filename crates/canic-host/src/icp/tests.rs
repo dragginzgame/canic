@@ -4,70 +4,60 @@ use std::{path::Path, process::Command};
 #[test]
 fn parses_icp_cli_versions_from_common_output() {
     assert_eq!(
-        parse_icp_cli_version("icp 0.3.2"),
+        parse_icp_cli_version("icp 1.0.0"),
         Some(IcpCliVersion {
-            major: 0,
-            minor: 3,
-            patch: 2
+            major: 1,
+            minor: 0,
+            patch: 0
         })
     );
     assert_eq!(
-        parse_icp_cli_version("icp-cli v0.3.12"),
+        parse_icp_cli_version("icp-cli v1.2.3"),
         Some(IcpCliVersion {
-            major: 0,
-            minor: 3,
-            patch: 12
+            major: 1,
+            minor: 2,
+            patch: 3
         })
     );
     assert_eq!(parse_icp_cli_version("icp development build"), None);
 }
 
 #[test]
-fn icp_cli_version_range_requires_current_minimum() {
+fn icp_cli_version_range_accepts_supported_major_only() {
     assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 0,
-        minor: 3,
+        minor: 0,
         patch: 0
     }));
-    assert!(!is_supported_icp_cli_version(IcpCliVersion {
-        major: 0,
-        minor: 3,
-        patch: 1
+    assert!(is_supported_icp_cli_version(IcpCliVersion {
+        major: 1,
+        minor: 0,
+        patch: 0
     }));
     assert!(is_supported_icp_cli_version(IcpCliVersion {
-        major: 0,
-        minor: 3,
-        patch: 2
-    }));
-    assert!(is_supported_icp_cli_version(IcpCliVersion {
-        major: 0,
+        major: 1,
         minor: 3,
         patch: 9
     }));
     assert!(!is_supported_icp_cli_version(IcpCliVersion {
-        major: 0,
-        minor: 2,
-        patch: 99
-    }));
-    assert!(!is_supported_icp_cli_version(IcpCliVersion {
-        major: 0,
-        minor: 4,
+        major: 2,
+        minor: 0,
         patch: 0
     }));
 }
 
 #[cfg(unix)]
 #[test]
-fn command_runner_rejects_old_icp_cli_before_running_command() {
+fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
 
-    let root = unique_temp_dir("canic-old-icp-cli");
+    let root = unique_temp_dir("canic-unsupported-icp-cli");
     fs::create_dir_all(&root).expect("create temp dir");
     let icp_path = root.join("icp");
     fs::write(
         &icp_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 0.2.0'; exit 0; fi\necho 'old command ran' >&2\nexit 42\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp development build'; exit 0; fi\necho 'unsupported command ran' >&2\nexit 42\n",
     )
     .expect("write fake icp");
     fs::set_permissions(&icp_path, fs::Permissions::from_mode(0o755)).expect("chmod fake icp");
@@ -75,15 +65,16 @@ fn command_runner_rejects_old_icp_cli_before_running_command() {
     let mut command = Command::new(&icp_path);
     command.args(["canister", "status", "root"]);
 
-    let err = run_status(&mut command).expect_err("old icp rejected");
+    let err = run_status(&mut command).expect_err("unsupported icp rejected");
 
     assert!(matches!(
         err,
         IcpCommandError::IncompatibleCliVersion { .. }
     ));
+    assert!(err.to_string().contains("found: icp development build"));
     assert!(
         err.to_string()
-            .contains("required: icp-cli >=0.3.2, <0.4.0")
+            .contains("required: icp-cli >=1.0.0, <2.0.0")
     );
 
     fs::remove_dir_all(root).expect("remove temp dir");
@@ -154,7 +145,7 @@ fn renders_local_replica_commands() {
     );
 }
 
-// Keep environment-backed local replica commands aligned with ICP CLI 0.3 network selection.
+// Keep environment-backed local replica commands aligned with ICP CLI network selection.
 #[test]
 fn renders_environment_local_replica_commands() {
     let icp = IcpCli::new("icp", Some("staging".to_string()), None);
@@ -173,7 +164,7 @@ fn renders_environment_local_replica_commands() {
     );
 }
 
-// Keep explicit project roots visible to ICP CLI 0.3 instead of relying only on current_dir.
+// Keep explicit project roots visible instead of relying only on current_dir.
 #[test]
 fn renders_project_root_override_for_rooted_context() {
     let icp = IcpCli::new("icp", None, Some("ic".to_string())).with_cwd("/workspace/app");
@@ -210,7 +201,7 @@ fn renders_no_argument_query_call() {
     );
 }
 
-// Ensure ICP CLI 0.3.2 local Candid support is available to query helpers.
+// Ensure local Candid support is available to query helpers.
 #[test]
 fn renders_no_argument_query_call_with_local_candid() {
     let icp = IcpCli::new("icp", None, Some("local".to_string()));
@@ -242,7 +233,7 @@ fn renders_argument_update_call() {
     );
 }
 
-// Ensure ICP CLI 0.3.2 local Candid support is available to update-call helpers.
+// Ensure local Candid support is available to update-call helpers.
 #[test]
 fn renders_argument_update_call_with_local_candid() {
     let icp = IcpCli::new("icp", None, Some("local".to_string()));

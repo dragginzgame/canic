@@ -11,8 +11,9 @@ so it remains the active release-validation reference. The governance document
 remains the general policy for command tiers, git boundaries, versioning,
 release flow, network selection, and automation language rules.
 
-Current release-line context: 0.62 is using this matrix for release durability,
-upgrade confidence, operator recovery, and package/install validation work.
+Current release-line context comes from `docs/status/current.md`. This matrix
+originated during the 0.62 release-durability line and remains the
+non-versioned validation reference for current release work.
 
 ## Scope
 
@@ -130,8 +131,9 @@ Tag CI also runs workflow linting and helper-tool setup.
 
 ## Focused Replay, Auth, And Cost Gates
 
-These gates should be run during 0.62 close-out and before RC promotion because
-they directly protect the 0.61 replay/auth/cost boundary:
+These gates should be run during implementation close-out and before RC
+promotion when a release line touches or relies on the replay/auth/cost
+boundary:
 
 ```text
 cargo test --locked -p canic-core replay_policy --lib -- --nocapture

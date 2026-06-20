@@ -7,8 +7,9 @@ It distinguishes implementation close-out from RC promotion and final release.
 It is intentionally not named after a release line; release numbers belong in
 changelogs and status docs, not in the operational audit entry point.
 
-Current release-line context: 0.62 is using this audit to decide whether to
-stop release-durability implementation slicing and move to RC/full validation.
+Recorded close-out context: 0.62 used this audit to decide whether to stop
+release-durability implementation slicing and move to RC/full validation. The
+current release-line context comes from `docs/status/current.md`.
 
 ## A. Verdict
 

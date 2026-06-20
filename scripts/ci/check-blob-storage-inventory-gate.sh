@@ -21,17 +21,32 @@ required_common_method_fields=(
     "Unauthorized behavior"
     "Production-vs-local differences"
 )
+blob_root_hash_toko_field="Mapping from Toko blob identity into Canic \`BlobRootHash\`"
 required_toko_fields=(
     "Local source identifier"
     "Source commit SHA"
-    'Mapping from Toko blob identity into Canic `BlobRootHash`'
+    "$blob_root_hash_toko_field"
     "Migration/read-through strategy"
 )
+
+require_command() {
+    local command_name="$1"
+
+    if command -v "$command_name" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "missing required tool: $command_name" >&2
+    echo "run 'make install-dev' or 'make update-dev' to install the shared Canic toolchain" >&2
+    exit 1
+}
 
 if [[ ! -f "$inventory" ]]; then
     echo "blob-storage inventory is missing: $inventory" >&2
     exit 1
 fi
+
+require_command rg
 
 status="$(
     sed -n 's/^Status: \*\*\(.*\)\*\*$/\1/p' "$inventory" \
