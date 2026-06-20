@@ -272,6 +272,66 @@ mod tests {
     }
 
     #[test]
+    fn repeated_create_certificate_is_canonical_idempotent() {
+        crate::storage::stable::blob_storage::BlobStorageStore::clear();
+        let upper =
+            "sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string();
+        let lower =
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string();
+
+        let first = BlobStorageApi::create_certificate(upper.clone()).expect("first create");
+        let second = BlobStorageApi::create_certificate(lower.clone()).expect("second create");
+
+        assert_eq!(first.blob_hash, upper);
+        assert_eq!(second.blob_hash, lower);
+        assert_eq!(BlobStorageApi::stored_blob_count(), 1);
+        assert_eq!(BlobStorageApi::pending_deletion_count(), 0);
+        assert!(BlobStorageApi::is_live(&lower).expect("canonical live check"));
+    }
+
+    #[test]
+    fn malformed_api_inputs_do_not_mutate_blob_state() {
+        crate::storage::stable::blob_storage::BlobStorageStore::clear();
+        let malformed = "sha256:zz";
+
+        assert_eq!(
+            BlobStorageApi::create_certificate(malformed.to_string())
+                .expect_err("malformed create fails")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            BlobStorageApi::register_live(malformed, 10)
+                .expect_err("malformed register fails")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            BlobStorageApi::is_live(malformed)
+                .expect_err("malformed live check fails")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            BlobStorageApi::mark_pending_delete(malformed, 20)
+                .expect_err("malformed pending delete fails")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            BlobStorageApi::confirm_deleted_by_gateway_hash_bytes(&[0u8; 31])
+                .expect_err("malformed gateway confirm fails")
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            BlobStorageApi::local_counters(),
+            BlobStorageLocalCounters::new(0, 0, 0)
+        );
+        assert!(BlobStorageApi::pending_deletion_hashes().is_empty());
+    }
+
+    #[test]
     fn live_blob_lifecycle_maps_to_public_api() {
         crate::storage::stable::blob_storage::BlobStorageStore::clear();
         let hash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -279,6 +339,12 @@ mod tests {
         assert!(!BlobStorageApi::is_live(hash).expect("live check"));
         assert_eq!(BlobStorageApi::stored_blob_count(), 0);
         assert_eq!(BlobStorageApi::pending_deletion_count(), 0);
+        assert_eq!(
+            BlobStorageApi::require_live(hash)
+                .expect_err("missing blob is not live")
+                .code,
+            ErrorCode::NotFound
+        );
         assert!(BlobStorageApi::register_live(hash, 10).expect("register"));
         assert!(!BlobStorageApi::register_live(hash, 20).expect("register again"));
         assert!(BlobStorageApi::is_live(hash).expect("live check"));
@@ -287,6 +353,7 @@ mod tests {
         BlobStorageApi::require_live(hash).expect("require live");
 
         assert!(BlobStorageApi::mark_pending_delete(hash, 30).expect("mark pending"));
+        assert!(!BlobStorageApi::mark_pending_delete(hash, 40).expect("mark again"));
         assert_eq!(BlobStorageApi::stored_blob_count(), 1);
         assert_eq!(BlobStorageApi::pending_deletion_count(), 1);
         assert_eq!(
@@ -360,6 +427,11 @@ mod tests {
 
         BlobStorageApi::mark_pending_delete(hash, 10).expect("mark pending");
         assert!(BlobStorageApi::pending_deletion_hashes_for_gateway(gateway).is_empty());
+        BlobStorageApi::confirm_deleted_by_gateway_hash_bytes_batch(gateway, vec![bytes.to_vec()]);
+        assert_eq!(
+            BlobStorageApi::pending_deletion_hashes(),
+            vec![hash.to_string()]
+        );
 
         BlobStorageApi::upsert_gateway_principal(gateway, 20);
         assert_eq!(

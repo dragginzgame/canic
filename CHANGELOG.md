@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)
 
+- `0.69.5` strengthens blob-storage regression coverage for malformed hashes,
+  canonical stable keys, idempotent lifecycle edges, and gateway confirmation
+  behavior without changing the 0.69 runtime surface.
+
 - `0.69.4` makes local blob-storage status easier to consume with a named
   counters DTO and pins create-certificate hash echo compatibility while
   keeping Cashier/billing surfaces deferred.

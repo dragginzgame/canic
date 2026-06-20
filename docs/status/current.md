@@ -9,7 +9,35 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.69.4` is prepared as a blob-storage developer-readiness cleanup slice.
+- `0.69.5` is prepared as a focused blob-storage malformed-input
+  regression cleanup. Current work closes the 0.69 design checklist gap for
+  `BlobRootHash` malformed text coverage by explicitly testing missing
+  prefixes, whitespace bytes, and control bytes, and expands gateway byte input
+  conversion coverage to reject oversized as well as undersized hashes. It
+  also pins deletion-confirmation inventory edge cases for unknown,
+  live-but-not-pending, pending, and already-confirmed roots, and extends API
+  facade coverage for missing `require_live`, repeated pending-delete marking,
+  non-gateway batch-confirm no-op behavior, malformed-input no-mutation
+  behavior, repeated create-certificate canonical idempotency, and explicit
+  re-registration after gateway confirmation. Stable storage coverage now pins
+  that uppercase/lowercase equivalent roots share one normalized live and
+  pending-deletion key. This does not change runtime behavior, endpoint shape,
+  Cashier/billing state, or public admin surface. The root and detailed 0.69
+  changelogs are finalized for this slice.
+  Focused validation passing for this slice:
+  ```text
+  cargo fmt --all -- --check
+  cargo test --locked -p canic-core model::blob_storage::hash --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic-core ops::blob_storage::conversion --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic-core ops::blob_storage::lifecycle --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic-core api::blob_storage --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic-core storage::stable::blob_storage --lib --features blob-storage -- --nocapture
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  git diff --check
+  ```
+
+- `0.69.4` is pushed as a blob-storage developer-readiness cleanup slice.
   Current work replaces tuple-shaped local count plumbing with a named passive
   `BlobStorageLocalCounters` DTO and `BlobStorageApi::local_counters()` helper.
   The `blob_storage_probe` count query now returns the named DTO so downstream
