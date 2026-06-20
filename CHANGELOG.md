@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.1` adds a transient in-flight guard around project-cycle funding so
+  overlapping blob-storage funding calls fail with a typed conflict instead of
+  double-submitting against stale observed state.
+
 - `0.70.0` starts the blob-storage billing line with source-backed Cashier
   DTOs, typed Cashier wrappers, stable billing config, gateway-principal sync,
   project-cycle funding, read-only backend billing status, opt-in billing

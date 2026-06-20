@@ -5,4 +5,6 @@
 //! Boundary: workflow calls these ops after authorization and before storage effects.
 
 pub mod conversion;
+#[cfg(feature = "blob-storage-billing")]
+pub mod funding;
 pub mod lifecycle;

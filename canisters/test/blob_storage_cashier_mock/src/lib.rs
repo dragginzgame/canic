@@ -146,6 +146,9 @@ async fn storage_gateway_principal_list_v1() -> Vec<Principal> {
     GATEWAYS.with_borrow(Clone::clone)
 }
 
+#[ic_cdk::update]
+async fn blob_storage_cashier_mock_delay_tick() {}
+
 fn cycle_balances(total: u128) -> BlobStorageCashierAccountCycleBalances {
     BlobStorageCashierAccountCycleBalances {
         total: int_from_u128(total),
