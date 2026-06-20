@@ -9,8 +9,24 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.0` blob-storage billing is prepared as a Toko-compatible backend MVP.
-  The maintainer has approved current local Toko `boss` commit
+- `0.70.1` is in progress as a narrow blob-storage billing hardening slice
+  after the pushed `0.70.0` backend MVP. Current work adds a transient in-memory
+  single-flight guard around project-cycle funding so overlapping
+  `_immutableObjectStorageFundFromProjectCycles` calls fail with a typed
+  conflict while one Cashier top-up is already in progress. The guard is not
+  stable state and releases automatically on drop, so upgrades start unlocked.
+  Focused validation passing so far:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  ```
+
+- `0.70.0` blob-storage billing is pushed as a Toko-compatible backend MVP. The
+  maintainer has approved current local Toko `boss` commit
   `9ca150b396a2bde42f2b8977a04a7ca2c6172b56` as the protocol source for
   `account_balance_get_v1`, `account_top_up_v1`, and
   `storage_gateway_principal_list_v1`; production Cashier still has no default
@@ -22,8 +38,8 @@ inspect only the files needed for the current task.
   canister, and PocketIC coverage through the probe canister. Important protocol
   detail: `account_top_up_v1` takes an optional request record because Toko calls
   it with `Some(request)`. Deferred hardening remains status-triggered gateway
-  sync, transient funding single-flight, broader failure matrices, and separate
-  payment-account linking.
+  sync, broader failure matrices, concurrent-funding stress coverage, and
+  separate payment-account linking.
   Focused validation passing for this slice:
   ```text
   cargo fmt --all

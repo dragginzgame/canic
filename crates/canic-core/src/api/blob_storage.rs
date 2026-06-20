@@ -13,6 +13,7 @@ use crate::{
     ops::{
         blob_storage::{
             conversion::{BlobStorageConversionError, BlobStorageConversionOps},
+            funding::{BlobStorageFundingInProgress, BlobStorageFundingOps},
             lifecycle::{
                 BlobPendingDeletionOutcome, BlobRegisterOutcome, BlobStorageLifecycleError,
                 BlobStorageLifecycleOps,
@@ -361,6 +362,8 @@ impl BlobStorageApi {
         let Some(config) = BlobStorageLifecycleOps::billing_config() else {
             return Err(Error::invalid("blob-storage billing config is not set"));
         };
+        let _funding_guard =
+            BlobStorageFundingOps::try_acquire().map_err(Self::map_funding_in_progress)?;
 
         let project_cycles_before = MgmtOps::canister_cycle_balance().to_u128();
         let transferable = project_cycles_before.saturating_sub(config.project_cycles_reserve);
@@ -505,6 +508,11 @@ impl BlobStorageApi {
     #[cfg(feature = "blob-storage-billing")]
     fn map_cashier_decode_error(err: CashierDecodeError) -> Error {
         Error::from(InternalError::from(err))
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn map_funding_in_progress(err: BlobStorageFundingInProgress) -> Error {
+        Error::conflict(err.to_string())
     }
 
     #[cfg(feature = "blob-storage-billing")]

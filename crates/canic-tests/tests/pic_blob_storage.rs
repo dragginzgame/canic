@@ -65,20 +65,7 @@ fn blob_storage_gateway_lifecycle_round_trips_under_pocketic() {
 fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
-    let cashier_id = install_standalone_canister_on_pic(
-        &pic,
-        CASHIER_MOCK_CRATE,
-        PROBE_ROLE,
-        CanicWasmBuildProfile::Fast,
-        "blob-storage-cashier-mock",
-    );
-    let probe_id = install_standalone_canister_on_pic(
-        &pic,
-        PROBE_CRATE,
-        PROBE_ROLE,
-        CanicWasmBuildProfile::Fast,
-        "blob-storage-probe",
-    );
+    let (cashier_id, probe_id) = install_billing_canisters(&pic);
     let gateway = principal(0x55);
 
     let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
@@ -95,18 +82,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     );
     seeded_gateways.expect("mock Cashier gateway seed should succeed");
 
-    let configured: Result<(), Error> = pic.update_call_or_panic(
-        probe_id,
-        "blob_storage_probe_configure_billing",
-        (BlobStorageBillingConfig {
-            cashier_canister_id: cashier_id,
-            project_cycles_reserve: candid::Nat::from(1_u64),
-            min_upload_balance: candid::Nat::from(10_u64),
-            target_upload_balance: candid::Nat::from(100_u64),
-            gateway_principal_limit: 8,
-        },),
-    );
-    configured.expect("probe billing config should be accepted");
+    configure_billing(&pic, cashier_id, probe_id);
 
     let synced: Result<(), Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
@@ -156,6 +132,39 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     assert_eq!(account, Some(probe_id));
     assert_eq!(target_balance, None);
     assert_eq!(attached_cycles, candid::Nat::from(77_u64));
+}
+
+fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {
+    let cashier_id = install_standalone_canister_on_pic(
+        pic,
+        CASHIER_MOCK_CRATE,
+        PROBE_ROLE,
+        CanicWasmBuildProfile::Fast,
+        "blob-storage-cashier-mock",
+    );
+    let probe_id = install_standalone_canister_on_pic(
+        pic,
+        PROBE_CRATE,
+        PROBE_ROLE,
+        CanicWasmBuildProfile::Fast,
+        "blob-storage-probe",
+    );
+    (cashier_id, probe_id)
+}
+
+fn configure_billing(pic: &Pic, cashier_id: Principal, probe_id: Principal) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_configure_billing",
+        (BlobStorageBillingConfig {
+            cashier_canister_id: cashier_id,
+            project_cycles_reserve: candid::Nat::from(1_u64),
+            min_upload_balance: candid::Nat::from(10_u64),
+            target_upload_balance: candid::Nat::from(100_u64),
+            gateway_principal_limit: 8,
+        },),
+    );
+    configured.expect("probe billing config should be accepted");
 }
 
 fn assert_billing_status_ready(pic: &Pic, probe_id: Principal) {
