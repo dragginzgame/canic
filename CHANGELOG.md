@@ -8,15 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Adds a named `BlobStorageLocalCounters` DTO and `BlobStorageApi::local_counters`
-  helper so downstream status wrappers can expose local blob-storage counts
-  without tuple-shaped Candid or any Cashier/billing surface, and pins the
-  create-certificate request-hash echo behavior while keeping internal blob
-  state canonicalized.
-
 ## [0.69.x] - 2026-06-20 - Blob Storage Protocol Preflight
 
 Detailed patch breakdown: [docs/changelog/0.69.md](docs/changelog/0.69.md)
+
+- `0.69.4` makes local blob-storage status easier to consume with a named
+  counters DTO and pins create-certificate hash echo compatibility while
+  keeping Cashier/billing surfaces deferred.
 
 - `0.69.3` prepares the non-billing blob-storage MVP for downstream validation
   with an integration runbook, updated design/handoff status, local status
