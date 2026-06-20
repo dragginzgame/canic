@@ -213,6 +213,10 @@ mod tests {
         hash("sha256:1111111111111111111111111111111111111111111111111111111111111111")
     }
 
+    fn h2() -> BlobRootHash {
+        hash("sha256:2222222222222222222222222222222222222222222222222222222222222222")
+    }
+
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
@@ -276,6 +280,50 @@ mod tests {
         assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
         assert!(BlobStorageLifecycleOps::pending_deletion_hashes().is_empty());
         BlobStorageLifecycleOps::confirm_deleted_by_gateway(&hash);
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 0);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
+    }
+
+    #[test]
+    fn gateway_confirmation_matches_inventory_edge_cases() {
+        BlobStorageStore::clear();
+        let unknown = h1();
+        let live_only = h2();
+
+        BlobStorageLifecycleOps::confirm_deleted_by_gateway(&unknown);
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 0);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
+
+        BlobStorageLifecycleOps::register_live(&live_only, 10).expect("register");
+        assert!(BlobStorageLifecycleOps::is_live(&live_only));
+
+        BlobStorageLifecycleOps::confirm_deleted_by_gateway(&live_only);
+
+        assert!(!BlobStorageLifecycleOps::is_live(&live_only));
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 0);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
+    }
+
+    #[test]
+    fn re_registration_after_confirmation_requires_explicit_register() {
+        BlobStorageStore::clear();
+        let hash = h1();
+
+        BlobStorageLifecycleOps::register_live(&hash, 10).expect("register");
+        BlobStorageLifecycleOps::mark_pending_delete(&hash, 20).expect("mark pending");
+        BlobStorageLifecycleOps::confirm_deleted_by_gateway(&hash);
+
+        assert!(!BlobStorageLifecycleOps::is_live(&hash));
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 0);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
+
+        assert_eq!(
+            BlobStorageLifecycleOps::register_live(&hash, 30).expect("explicit re-register"),
+            BlobRegisterOutcome::Registered
+        );
+        assert!(BlobStorageLifecycleOps::is_live(&hash));
+        assert_eq!(BlobStorageLifecycleOps::stored_blob_count(), 1);
+        assert_eq!(BlobStorageLifecycleOps::pending_deletion_count(), 0);
     }
 
     #[test]

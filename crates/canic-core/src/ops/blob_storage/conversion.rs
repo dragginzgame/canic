@@ -96,6 +96,10 @@ mod tests {
             BlobStorageConversionOps::root_hash_from_bytes(&[0u8; 31]),
             Err(BlobStorageConversionError::InvalidRootHashByteLength { actual: 31 })
         );
+        assert_eq!(
+            BlobStorageConversionOps::root_hash_from_bytes(&[0u8; 33]),
+            Err(BlobStorageConversionError::InvalidRootHashByteLength { actual: 33 })
+        );
     }
 
     #[test]

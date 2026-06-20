@@ -197,6 +197,16 @@ mod tests {
     }
 
     #[test]
+    fn rejects_missing_prefix() {
+        assert_eq!(
+            BlobRootHash::try_from(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ),
+            Err(BlobRootHashError::InvalidPrefix)
+        );
+    }
+
+    #[test]
     fn rejects_wrong_length() {
         assert_eq!(
             BlobRootHash::try_from("sha256:00"),
@@ -213,6 +223,27 @@ mod tests {
             Err(BlobRootHashError::InvalidHexCharacter {
                 index: 70,
                 byte: b'g',
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_whitespace_and_control_characters() {
+        let whitespace = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde ";
+        let control = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n";
+
+        assert_eq!(
+            BlobRootHash::try_from(whitespace),
+            Err(BlobRootHashError::InvalidHexCharacter {
+                index: 70,
+                byte: b' ',
+            })
+        );
+        assert_eq!(
+            BlobRootHash::try_from(control),
+            Err(BlobRootHashError::InvalidHexCharacter {
+                index: 70,
+                byte: b'\n',
             })
         );
     }

@@ -357,6 +357,10 @@ mod tests {
         hash("sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
     }
 
+    fn h1_lower() -> BlobRootHash {
+        hash("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    }
+
     fn h2() -> BlobRootHash {
         hash("sha256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
     }
@@ -370,6 +374,46 @@ mod tests {
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         );
         assert_eq!(key.into_hash().expect("hash parses"), h1());
+    }
+
+    #[test]
+    fn stable_blob_maps_use_normalized_root_hash_keys() {
+        BlobStorageStore::clear();
+        let upper = h1();
+        let lower = h1_lower();
+
+        assert_eq!(upper, lower);
+
+        BlobStorageStore::upsert_stored_blob(&upper, StoredBlobRecord::new(&upper, 10));
+        BlobStorageStore::upsert_stored_blob(&lower, StoredBlobRecord::new(&lower, 20));
+
+        assert_eq!(BlobStorageStore::stored_blob_count(), 1);
+        assert_eq!(
+            BlobStorageStore::get_stored_blob(&upper),
+            Some(StoredBlobRecord::new(&lower, 20))
+        );
+
+        BlobStorageStore::upsert_pending_deletion(
+            &upper,
+            BlobDeletionPendingRecord::new(&upper, 30),
+        );
+        BlobStorageStore::upsert_pending_deletion(
+            &lower,
+            BlobDeletionPendingRecord::new(&lower, 40),
+        );
+
+        assert_eq!(BlobStorageStore::pending_deletion_count(), 1);
+        assert_eq!(
+            BlobStorageStore::get_pending_deletion(&upper),
+            Some(BlobDeletionPendingRecord::new(&lower, 40))
+        );
+        assert_eq!(
+            BlobStorageStore::pending_deletions()
+                .into_iter()
+                .map(|(key, _)| key.as_str().to_string())
+                .collect::<Vec<_>>(),
+            vec![lower.as_str().to_string()]
+        );
     }
 
     #[test]
