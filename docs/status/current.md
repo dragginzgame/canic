@@ -9,8 +9,27 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.6` is in progress as a narrow blob-storage billing upgrade-persistence
-  hardening slice after the pushed `0.70.5` release. Current work adds PocketIC
+- `0.70.7` is in progress as a narrow blob-storage billing endpoint-guard
+  hardening slice after the pushed `0.70.6` release. Current work adds PocketIC
+  coverage proving the generated `_immutableObjectStorageUpdateGatewayPrincipals`,
+  `_immutableObjectStorageFundFromProjectCycles`, and
+  `get_blob_storage_status` endpoints reject non-controller callers with
+  `Unauthorized` before gateway sync, project-cycle funding, or billing-status
+  logic can run. It also serializes the blob-storage PocketIC test file around
+  shared standalone wasm artifacts so full-file runs do not race upgrade wasm
+  reads against concurrent probe builds.
+  Focused validation passing so far:
+  ```text
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+
+- `0.70.6` is pushed as a narrow blob-storage billing upgrade-persistence
+  hardening slice after the pushed `0.70.5` release. It adds PocketIC
   coverage proving billing config, Cashier-synced gateway principals, pending
   gateway deletion visibility, and the last successful gateway-sync timestamp
   survive a probe canister upgrade. It also proves explicit project-cycle
