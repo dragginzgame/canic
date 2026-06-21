@@ -9,16 +9,35 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.11` is in progress as a narrow blob-storage gateway-sync failure
-  metadata coverage slice after the pushed `0.70.10` release. Current work
-  extends the PocketIC billing flow so empty and invalid Cashier
+- `0.70.12` is in progress as a narrow direct Cashier gateway-sync bounds
+  coverage slice after the pushed `0.70.11` release. Current work extends the
+  existing PocketIC billing flow so the lower-level
+  `sync_gateway_principals_from_cashier` helper normalizes duplicate Cashier
+  gateway principals within the configured maximum, rejects too many distinct
+  gateways with `InternalRpcMalformed` without recording a successful sync
+  timestamp, and recovers with a fresh timestamp once the maximum allows the
+  distinct gateway set. This is folded into the existing billing scenario
+  rather than adding another PocketIC server startup.
+  Focused validation passing so far:
+  ```text
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+- `0.70.11` is pushed as a narrow blob-storage gateway-sync failure metadata
+  coverage slice after the pushed `0.70.10` release. It extends the PocketIC
+  billing flow so empty and invalid Cashier
   `storage_gateway_principal_list_v1` responses, plus trapped Cashier
   gateway-list calls, must preserve the last successful gateway-sync timestamp
   as well as the previously synced gateway registry. The trapped gateway-list
   path also proves a later valid Cashier list recovers and records a fresh
   success timestamp after the trap hook is explicitly cleared. The mock Cashier
-  now has a guarded, explicitly clearable gateway-list trap hook for this
-  failure path.
+  has a guarded, explicitly clearable gateway-list trap hook for this failure
+  path.
   Focused validation passing so far:
   ```text
   cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
