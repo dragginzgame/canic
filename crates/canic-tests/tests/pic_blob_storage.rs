@@ -159,6 +159,89 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     assert_eq!(attached_cycles, candid::Nat::from(77_u64));
 }
 
+// Verify billing config, synced gateways, and sync metadata persist across upgrade.
+#[test]
+fn blob_storage_billing_state_survives_upgrade_under_pocketic() {
+    let _serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
+    let (cashier_id, probe_id) = install_billing_canisters(&pic);
+    let gateway = principal(0x56);
+
+    seed_mock_cashier_for_billing_flow(&pic, cashier_id, probe_id, gateway);
+    configure_billing(&pic, cashier_id, probe_id);
+    assert_initial_gateway_sync_succeeds(&pic, probe_id);
+    create_certificate_on_pic(&pic, probe_id, ROOT_HASH);
+    mark_pending_delete_on_pic(&pic, probe_id, ROOT_HASH);
+    assert_gateway_pending_roots_on_pic(&pic, probe_id, gateway, &[ROOT_HASH]);
+
+    let status_before = billing_status(&pic, probe_id, false);
+    let sync_at_before =
+        assert_billing_status_matches_config(&status_before, cashier_id, probe_id, 1, 1);
+
+    upgrade_probe_canister_on_pic(&pic, probe_id);
+
+    let status_after = billing_status(&pic, probe_id, false);
+    assert_eq!(
+        assert_billing_status_matches_config(&status_after, cashier_id, probe_id, 1, 1),
+        sync_at_before,
+        "last successful gateway sync timestamp must survive upgrade"
+    );
+    assert_gateway_pending_roots_on_pic(&pic, probe_id, gateway, &[ROOT_HASH]);
+    assert_status_request_does_not_sync_gateways_after_upgrade(
+        &pic,
+        cashier_id,
+        probe_id,
+        gateway,
+        sync_at_before,
+    );
+    assert_explicit_gateway_sync_works_after_upgrade(
+        &pic,
+        cashier_id,
+        probe_id,
+        gateway,
+        sync_at_before,
+    );
+
+    pic.add_cycles(probe_id, 10_000);
+    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (22_u128,));
+    assert_eq!(
+        top_up
+            .expect("post-upgrade funding endpoint should not inherit a stale transient lock")
+            .attached_cycles,
+        candid::Nat::from(22_u64)
+    );
+}
+
+// Verify missing billing config stays explicit and read-only across upgrade.
+#[test]
+fn blob_storage_missing_billing_config_status_survives_upgrade_under_pocketic() {
+    let _serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
+    let probe_id = install_probe_canister(&pic);
+    let gateway = principal(0x58);
+
+    add_gateway_on_pic(&pic, probe_id, gateway);
+    create_certificate_on_pic(&pic, probe_id, ROOT_HASH);
+    mark_pending_delete_on_pic(&pic, probe_id, ROOT_HASH);
+    assert_gateway_pending_roots_on_pic(&pic, probe_id, gateway, &[ROOT_HASH]);
+    assert_missing_billing_config_status(&billing_status(&pic, probe_id, true), 1);
+
+    upgrade_probe_canister_on_pic(&pic, probe_id);
+
+    assert_missing_billing_config_status(&billing_status(&pic, probe_id, true), 1);
+    assert_gateway_pending_roots_on_pic(&pic, probe_id, gateway, &[ROOT_HASH]);
+
+    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (22_u128,));
+    assert_eq!(
+        top_up
+            .expect_err("missing billing config should still block funding after upgrade")
+            .code,
+        ErrorCode::InvalidInput
+    );
+}
+
 fn seed_mock_cashier_for_billing_flow(
     pic: &Pic,
     cashier_id: Principal,
@@ -178,6 +261,189 @@ fn seed_mock_cashier_for_billing_flow(
         (vec![gateway, gateway],),
     );
     seeded_gateways.expect("mock Cashier gateway seed should succeed");
+}
+
+fn add_gateway_on_pic(pic: &Pic, probe_id: Principal, gateway: Principal) {
+    let added: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, "blob_storage_probe_add_gateway", (gateway,));
+    added.expect("gateway principal should be added");
+}
+
+fn assert_status_request_does_not_sync_gateways_after_upgrade(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+    original_gateway: Principal,
+    sync_at_before: u64,
+) {
+    let replacement_gateway = principal(0x57);
+    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateways",
+        (vec![replacement_gateway],),
+    );
+    seeded_gateways.expect("mock Cashier replacement gateway seed should succeed");
+
+    let status = billing_status(pic, probe_id, true);
+    assert_eq!(
+        status.gateway_principal_sync_action,
+        BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus
+    );
+    assert_eq!(status.gateway_principal_count, 1);
+    assert_eq!(
+        status.last_gateway_principal_sync_at_ns,
+        Some(sync_at_before),
+        "read-only status must not record a new gateway sync timestamp"
+    );
+    assert!(
+        status
+            .warnings
+            .contains(&BlobStorageBillingWarning::SyncRequestedButStatusIsReadOnly)
+    );
+    assert_gateway_pending_roots_on_pic(pic, probe_id, original_gateway, &[ROOT_HASH]);
+    assert_gateway_pending_roots_on_pic(pic, probe_id, replacement_gateway, &[]);
+}
+
+fn assert_explicit_gateway_sync_works_after_upgrade(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+    original_gateway: Principal,
+    sync_at_before: u64,
+) {
+    let replacement_gateway = principal(0x57);
+
+    pic.advance_time(Duration::from_nanos(1));
+    pic.tick();
+
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    synced.expect("explicit gateway sync should still work after upgrade");
+
+    let status = billing_status(pic, probe_id, false);
+    let sync_at_after = assert_billing_status_matches_config(&status, cashier_id, probe_id, 1, 1);
+    assert!(
+        sync_at_after > sync_at_before,
+        "explicit sync should record a fresh post-upgrade gateway-sync timestamp"
+    );
+    assert_gateway_pending_roots_on_pic(pic, probe_id, original_gateway, &[]);
+    assert_gateway_pending_roots_on_pic(pic, probe_id, replacement_gateway, &[ROOT_HASH]);
+}
+
+fn create_certificate_on_pic(pic: &Pic, probe_id: Principal, root_hash: &str) {
+    let result: Result<CreateCertificateResult, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_CREATE_CERTIFICATE,
+        (root_hash.to_string(),),
+    );
+    result.expect("create certificate should register live blob");
+}
+
+fn mark_pending_delete_on_pic(pic: &Pic, probe_id: Principal, root_hash: &str) {
+    let marked: Result<bool, Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_mark_pending_delete",
+        (root_hash.to_string(),),
+    );
+    assert!(marked.expect("live blob should be marked pending deletion"));
+}
+
+fn assert_gateway_pending_roots_on_pic(
+    pic: &Pic,
+    probe_id: Principal,
+    gateway: Principal,
+    expected_roots: &[&str],
+) {
+    let pending: Vec<String> =
+        pic.query_call_as_or_panic(probe_id, gateway, BLOB_STORAGE_BLOBS_TO_DELETE, ());
+    assert_eq!(
+        pending,
+        expected_roots
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+    );
+}
+
+fn billing_status(
+    pic: &Pic,
+    probe_id: Principal,
+    sync_gateway_principals: bool,
+) -> BlobStorageStatusResponse {
+    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_STATUS,
+        (BlobStorageStatusRequest {
+            sync_gateway_principals,
+        },),
+    );
+    status.expect("status endpoint should succeed")
+}
+
+fn assert_missing_billing_config_status(status: &BlobStorageStatusResponse, gateways: u64) {
+    assert_eq!(
+        status.payment_model,
+        BlobStoragePaymentModelStatus::NotConfigured
+    );
+    assert_eq!(status.cashier_canister_id, None);
+    assert_eq!(status.payment_account, None);
+    assert_eq!(status.cashier_balance, None);
+    assert_eq!(status.min_upload_balance, None);
+    assert_eq!(status.target_upload_balance, None);
+    assert_eq!(status.project_cycles_reserve, None);
+    assert_eq!(status.gateway_principal_count, gateways);
+    assert_eq!(status.last_gateway_principal_sync_at_ns, None);
+    assert_eq!(
+        status.gateway_principal_sync_action,
+        BlobStorageGatewayPrincipalSyncAction::SkippedConfigMissing
+    );
+    assert_eq!(
+        status.funding_status,
+        BlobStorageFundingStatus::NotConfigured
+    );
+    assert!(!status.ready);
+    assert_eq!(
+        status.blockers,
+        vec![BlobStorageReadinessBlocker::NotConfigured]
+    );
+    assert!(status.warnings.is_empty());
+}
+
+fn assert_billing_status_matches_config(
+    status: &BlobStorageStatusResponse,
+    cashier_id: Principal,
+    probe_id: Principal,
+    project_cycles_reserve: u64,
+    gateway_principal_count: u64,
+) -> u64 {
+    assert_eq!(
+        status.payment_model,
+        BlobStoragePaymentModelStatus::ProjectAsPaymentAccount
+    );
+    assert_eq!(status.cashier_canister_id, Some(cashier_id));
+    assert_eq!(status.payment_account, Some(probe_id));
+    assert_eq!(status.cashier_balance, Some(candid::Nat::from(123_u64)));
+    assert_eq!(status.min_upload_balance, Some(candid::Nat::from(10_u64)));
+    assert_eq!(
+        status.target_upload_balance,
+        Some(candid::Nat::from(100_u64))
+    );
+    assert_eq!(
+        status.project_cycles_reserve,
+        Some(candid::Nat::from(project_cycles_reserve))
+    );
+    assert_eq!(status.gateway_principal_count, gateway_principal_count);
+    assert_eq!(
+        status.gateway_principal_sync_action,
+        BlobStorageGatewayPrincipalSyncAction::NotRequested
+    );
+    assert_eq!(status.funding_status, BlobStorageFundingStatus::NotNeeded);
+    assert!(status.ready);
+    assert!(status.blockers.is_empty());
+    assert!(status.warnings.is_empty());
+    status
+        .last_gateway_principal_sync_at_ns
+        .expect("successful gateway sync timestamp should be recorded")
 }
 
 fn assert_initial_gateway_sync_succeeds(pic: &Pic, probe_id: Principal) {
@@ -493,14 +759,18 @@ fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {
         CanicWasmBuildProfile::Fast,
         "blob-storage-cashier-mock",
     );
-    let probe_id = install_standalone_canister_on_pic(
+    let probe_id = install_probe_canister(pic);
+    (cashier_id, probe_id)
+}
+
+fn install_probe_canister(pic: &Pic) -> Principal {
+    install_standalone_canister_on_pic(
         pic,
         PROBE_CRATE,
         PROBE_ROLE,
         CanicWasmBuildProfile::Fast,
         "blob-storage-probe",
-    );
-    (cashier_id, probe_id)
+    )
 }
 
 fn configure_billing(pic: &Pic, cashier_id: Principal, probe_id: Principal) {
@@ -802,24 +1072,20 @@ fn add_gateway(fixture: &StandaloneCanisterFixture, gateway: Principal) {
 
 // Upgrade the probe with the same compiled wasm artifact used for install.
 fn upgrade_probe_canister(fixture: &StandaloneCanisterFixture) {
-    fixture
-        .pic()
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-    let canister_id = fixture.canister_id();
+    upgrade_probe_canister_on_pic(fixture.pic(), fixture.canister_id());
+}
+
+// Upgrade the probe with the same compiled wasm artifact used for install.
+fn upgrade_probe_canister_on_pic(pic: &Pic, canister_id: Principal) {
+    pic.wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     let wasm = probe_wasm();
 
-    fixture
-        .pic()
-        .retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, || {
-            fixture
-                .pic()
-                .upgrade_canister(canister_id, wasm.clone(), upgrade_args(), None)
-                .map_err(|err| err.to_string())
-        })
-        .expect("probe upgrade should succeed");
-    fixture
-        .pic()
-        .wait_for_ready(canister_id, READY_TICK_LIMIT, "blob storage post_upgrade");
+    pic.retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, || {
+        pic.upgrade_canister(canister_id, wasm.clone(), upgrade_args(), None)
+            .map_err(|err| err.to_string())
+    })
+    .expect("probe upgrade should succeed");
+    pic.wait_for_ready(canister_id, READY_TICK_LIMIT, "blob storage post_upgrade");
 }
 
 // Read the standalone probe wasm built by `install_standalone_canister`.

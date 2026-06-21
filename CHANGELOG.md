@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.6` hardens blob-storage billing upgrade behavior with PocketIC
+  coverage proving billing config, Cashier-synced gateway principals, pending
+  gateway deletion visibility, and last successful gateway-sync metadata
+  survive a probe canister upgrade. It also proves explicit funding remains
+  usable after upgrade, so the transient funding guard is not restored as a
+  stale lock. The same upgrade path now pins that status-requested gateway sync
+  remains read-only after upgrade and does not replace the synced gateway set.
+  It also proves the explicit gateway-sync endpoint still uses the persisted
+  billing config after upgrade and can replace the local gateway set.
+  It also covers the no-billing-config upgrade path so status stays
+  `NotConfigured`, local gateway state is preserved, and funding remains
+  blocked until config exists.
+
 - `0.70.5` makes blob-storage project-cycle funding all-or-nothing against the
   configured reserve: reserve-blocked requests now return a skipped report and
   attach zero cycles instead of partially topping up Cashier. It also rejects
