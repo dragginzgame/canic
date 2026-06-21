@@ -71,6 +71,8 @@ impl BlobStorageApi {
                 "gateway_principal_limit must be greater than zero",
             ));
         }
+        let _gateway_principal_limit = usize::try_from(config.gateway_principal_limit)
+            .map_err(|_| Error::invalid("gateway_principal_limit exceeds usize"))?;
 
         let project_cycles_reserve =
             Self::nat_to_u128("project_cycles_reserve", &config.project_cycles_reserve)?;
@@ -82,6 +84,16 @@ impl BlobStorageApi {
         if project_cycles_reserve == 0 {
             return Err(Error::invalid(
                 "project_cycles_reserve must be greater than zero",
+            ));
+        }
+        if min_upload_balance == 0 {
+            return Err(Error::invalid(
+                "min_upload_balance must be greater than zero",
+            ));
+        }
+        if target_upload_balance == 0 {
+            return Err(Error::invalid(
+                "target_upload_balance must be greater than zero",
             ));
         }
         if min_upload_balance > target_upload_balance {
@@ -584,14 +596,19 @@ impl BlobStorageApi {
     }
 
     #[cfg(feature = "blob-storage-billing")]
-    fn funding_attachment(
+    const fn funding_attachment(
         requested_cycles: u128,
         project_cycles_available: u128,
         project_cycles_reserve: u128,
     ) -> BlobStorageFundingAttachment {
         let transferable_cycles = project_cycles_available.saturating_sub(project_cycles_reserve);
-        let attached_cycles = requested_cycles.min(transferable_cycles);
-        let skipped_reason = if attached_cycles == 0 {
+        let reserve_would_be_violated = requested_cycles > transferable_cycles;
+        let attached_cycles = if reserve_would_be_violated {
+            0
+        } else {
+            requested_cycles
+        };
+        let skipped_reason = if reserve_would_be_violated {
             Some("reserve would be violated")
         } else {
             None
@@ -686,6 +703,28 @@ struct BlobStorageFundingAttachment {
 mod tests {
     use super::*;
     use crate::dto::error::ErrorCode;
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn billing_test_principal(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn billing_test_config(
+        cashier_canister_id: Principal,
+        project_cycles_reserve: u128,
+        min_upload_balance: u128,
+        target_upload_balance: u128,
+        gateway_principal_limit: u64,
+    ) -> BlobStorageBillingConfig {
+        BlobStorageBillingConfig {
+            cashier_canister_id,
+            project_cycles_reserve: Nat::from(project_cycles_reserve),
+            min_upload_balance: Nat::from(min_upload_balance),
+            target_upload_balance: Nat::from(target_upload_balance),
+            gateway_principal_limit,
+        }
+    }
 
     #[test]
     fn canonical_root_hash_text_normalizes_toko_hashes() {
@@ -977,12 +1016,37 @@ mod tests {
 
     #[cfg(feature = "blob-storage-billing")]
     #[test]
-    fn funding_attachment_caps_to_transferable_cycles() {
+    fn configure_billing_rejects_invalid_config_without_replacing_current_config() {
+        crate::storage::stable::blob_storage::BlobStorageStore::clear_billing();
+        let valid = billing_test_config(billing_test_principal(1), 1, 10, 100, 8);
+        BlobStorageApi::configure_billing(valid.clone()).expect("valid billing config is stored");
+
+        let invalid_configs = [
+            billing_test_config(Principal::anonymous(), 1, 10, 100, 8),
+            billing_test_config(Principal::management_canister(), 1, 10, 100, 8),
+            billing_test_config(billing_test_principal(2), 0, 10, 100, 8),
+            billing_test_config(billing_test_principal(3), 1, 0, 100, 8),
+            billing_test_config(billing_test_principal(4), 1, 10, 0, 8),
+            billing_test_config(billing_test_principal(5), 1, 100, 10, 8),
+            billing_test_config(billing_test_principal(6), 1, 10, 100, 0),
+        ];
+
+        for config in invalid_configs {
+            let err = BlobStorageApi::configure_billing(config)
+                .expect_err("invalid billing config should be rejected");
+            assert_eq!(err.code, ErrorCode::InvalidInput);
+            assert_eq!(BlobStorageApi::billing_config(), Some(valid.clone()));
+        }
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn funding_attachment_attaches_requested_cycles_when_reserve_allows() {
         assert_eq!(
-            BlobStorageApi::funding_attachment(500, 1_000, 700),
+            BlobStorageApi::funding_attachment(500, 1_000, 500),
             BlobStorageFundingAttachment {
                 project_cycles_available: 1_000,
-                attached_cycles: 300,
+                attached_cycles: 500,
                 skipped_reason: None,
             }
         );
@@ -990,11 +1054,11 @@ mod tests {
 
     #[cfg(feature = "blob-storage-billing")]
     #[test]
-    fn funding_attachment_reports_reserve_violation_only_when_reserve_blocks_transfer() {
+    fn funding_attachment_rejects_partial_top_up_when_reserve_would_be_violated() {
         assert_eq!(
-            BlobStorageApi::funding_attachment(500, 700, 700),
+            BlobStorageApi::funding_attachment(500, 1_000, 700),
             BlobStorageFundingAttachment {
-                project_cycles_available: 700,
+                project_cycles_available: 1_000,
                 attached_cycles: 0,
                 skipped_reason: Some("reserve would be violated"),
             }

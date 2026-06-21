@@ -471,6 +471,12 @@ impl BlobStorageStore {
         BLOB_DELETION_PENDING.with_borrow_mut(StableBtreeMap::clear_new);
         STORAGE_GATEWAY_PRINCIPALS.with_borrow_mut(StableBtreeMap::clear_new);
     }
+
+    #[cfg(all(test, feature = "blob-storage-billing"))]
+    pub(crate) fn clear_billing() {
+        BLOB_STORAGE_BILLING
+            .with_borrow_mut(|cell| cell.set(BlobStorageBillingStateRecord::default()));
+    }
 }
 
 // -----------------------------------------------------------------------------

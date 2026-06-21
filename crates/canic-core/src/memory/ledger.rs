@@ -7,13 +7,11 @@
 #[cfg(target_arch = "wasm32")]
 use super::manager;
 use super::{manager::MEMORY_MANAGER, policy, registry::MemoryRegistryError};
-#[cfg(any(test, target_arch = "wasm32"))]
-use ic_memory::stable_structures::Memory;
 use ic_memory::{
     AllocationHistory, AllocationLedger, AllocationSlotDescriptor, DiagnosticExport,
-    MemoryManagerAuthorityRecord, StableCellLedgerRecord,
+    DiagnosticMemorySize, MemoryManagerAuthorityRecord, StableCellLedgerRecord,
     stable_structures::{
-        DefaultMemoryImpl,
+        DefaultMemoryImpl, Memory,
         cell::Cell,
         memory_manager::{MemoryId, VirtualMemory},
     },
@@ -115,15 +113,35 @@ fn snapshot_from_record(
             .clone()
     };
     let commit_recovery = store.physical().diagnostic();
+    let memory_sizes = memory_sizes_for_ledger(&ledger);
     Ok(NativeMemoryLedgerSnapshot {
-        export: DiagnosticExport::from_ledger_with_commit_recovery(
+        export: DiagnosticExport::from_ledger_with_commit_recovery_and_memory_sizes(
             &ledger,
             AllocationSlotDescriptor::memory_manager(MEMORY_LAYOUT_LEDGER_ID)
                 .expect("ledger ID is a usable MemoryManager ID"),
             Some(commit_recovery),
+            memory_sizes,
         ),
         authorities: policy::canonical_authority_records(),
     })
+}
+
+fn memory_sizes_for_ledger(
+    ledger: &AllocationLedger,
+) -> Vec<(AllocationSlotDescriptor, DiagnosticMemorySize)> {
+    ledger
+        .allocation_history()
+        .records()
+        .iter()
+        .filter_map(|record| {
+            let id = record.slot().memory_manager_id().ok()?;
+            let memory = open_memory(id);
+            Some((
+                record.slot().clone(),
+                DiagnosticMemorySize::from_wasm_pages(memory.size()),
+            ))
+        })
+        .collect()
 }
 
 fn genesis_ledger() -> AllocationLedger {
@@ -138,7 +156,10 @@ fn genesis_ledger() -> AllocationLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_memory::{STABLE_CELL_LAYOUT_VERSION, STABLE_CELL_MAGIC, STABLE_CELL_VALUE_OFFSET};
+    use ic_memory::{
+        AllocationDeclaration, STABLE_CELL_LAYOUT_VERSION, STABLE_CELL_MAGIC,
+        STABLE_CELL_VALUE_OFFSET, SchemaMetadata,
+    };
 
     #[test]
     fn validates_native_ledger_cell_payload() {
@@ -149,6 +170,32 @@ mod tests {
         write_stable_cell_payload(&memory, &payload);
 
         validate_existing_ledger_memory(&memory).expect("native payload should validate");
+    }
+
+    #[test]
+    fn memory_sizes_for_ledger_reports_live_virtual_memory_pages() {
+        let slot = AllocationSlotDescriptor::memory_manager(100).expect("usable slot");
+        let memory = open_memory(100);
+        let previous_pages = memory.size();
+        memory.grow(2);
+        let declaration = AllocationDeclaration::new(
+            "app.users.v1",
+            slot.clone(),
+            None,
+            SchemaMetadata::default(),
+        )
+        .expect("declaration");
+        let ledger = genesis_ledger()
+            .stage_reservation_generation(&[declaration], None)
+            .expect("reservation generation");
+
+        assert_eq!(
+            memory_sizes_for_ledger(&ledger),
+            vec![(
+                slot,
+                DiagnosticMemorySize::from_wasm_pages(previous_pages + 2)
+            )]
+        );
     }
 
     fn write_stable_cell_payload<M: Memory>(memory: &M, payload: &[u8]) {

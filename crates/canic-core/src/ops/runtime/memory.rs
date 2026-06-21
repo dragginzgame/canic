@@ -7,17 +7,18 @@
 use crate::{
     InternalError,
     dto::memory::{
-        MemoryAllocationRecordEntry, MemoryAllocationState, MemoryCommitRecoveryErrorResponse,
-        MemoryCommitRecoveryResponse, MemoryCommitSlotResponse, MemoryLedgerGenerationEntry,
-        MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemoryRangeAuthorityMode,
-        MemorySchemaMetadataEntry,
+        MemoryAllocationRecordEntry, MemoryAllocationSizeEntry, MemoryAllocationState,
+        MemoryCommitRecoveryErrorResponse, MemoryCommitRecoveryResponse, MemoryCommitSlotResponse,
+        MemoryLedgerGenerationEntry, MemoryLedgerMemoryEntry, MemoryLedgerResponse,
+        MemoryRangeAuthorityEntry, MemoryRangeAuthorityMode, MemorySchemaMetadataEntry,
     },
     memory::{self, ledger, registry::MemoryRegistryError, runtime::init_eager_tls},
     ops::runtime::RuntimeOpsError,
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
-    DiagnosticGeneration, DiagnosticRecord, MemoryManagerRangeMode, SchemaMetadataRecord,
+    DiagnosticGeneration, DiagnosticMemorySize, DiagnosticRecord, MemoryManagerRangeMode,
+    SchemaMetadataRecord,
 };
 use thiserror::Error as ThisError;
 
@@ -106,12 +107,13 @@ impl MemoryRegistryOps {
             })
             .collect();
 
-        let records = snapshot
+        let records: Vec<MemoryAllocationRecordEntry> = snapshot
             .export
             .records
             .into_iter()
             .map(memory_allocation_record_response)
             .collect();
+        let memories = memory_ledger_memory_entries(&records);
         let generations = snapshot
             .export
             .generations
@@ -125,6 +127,7 @@ impl MemoryRegistryOps {
             current_generation: snapshot.export.current_generation,
             commit_recovery: commit_recovery_response(snapshot.export.commit_recovery),
             authorities,
+            memories,
             records,
             generations,
         })
@@ -166,11 +169,13 @@ fn commit_recovery_response(
 }
 
 fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocationRecordEntry {
+    let memory_size = record.memory_size.map(memory_allocation_size_response);
     let allocation = record.allocation;
     MemoryAllocationRecordEntry {
         memory_manager_id: allocation.slot().memory_manager_id().ok(),
         stable_key: allocation.stable_key().as_str().to_string(),
         state: memory_allocation_state_response(allocation.state()),
+        memory_size,
         first_generation: allocation.first_generation(),
         last_seen_generation: allocation.last_seen_generation(),
         retired_generation: allocation.retired_generation(),
@@ -179,6 +184,33 @@ fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocati
             .iter()
             .map(memory_schema_metadata_response)
             .collect(),
+    }
+}
+
+fn memory_ledger_memory_entries(
+    records: &[MemoryAllocationRecordEntry],
+) -> Vec<MemoryLedgerMemoryEntry> {
+    records
+        .iter()
+        .filter_map(memory_ledger_memory_entry_response)
+        .collect()
+}
+
+fn memory_ledger_memory_entry_response(
+    record: &MemoryAllocationRecordEntry,
+) -> Option<MemoryLedgerMemoryEntry> {
+    Some(MemoryLedgerMemoryEntry {
+        memory_manager_id: record.memory_manager_id?,
+        stable_key: record.stable_key.clone(),
+        state: record.state,
+        size: record.memory_size?,
+    })
+}
+
+const fn memory_allocation_size_response(size: DiagnosticMemorySize) -> MemoryAllocationSizeEntry {
+    MemoryAllocationSizeEntry {
+        wasm_pages: size.wasm_pages,
+        bytes: size.bytes,
     }
 }
 
@@ -237,5 +269,59 @@ const fn commit_recovery_error_response(
         CommitRecoveryError::UnexpectedGeneration { .. } => {
             MemoryCommitRecoveryErrorResponse::UnexpectedGeneration
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ic_memory::{
+        AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationSlotDescriptor,
+        SchemaMetadata,
+    };
+
+    #[test]
+    fn memory_allocation_record_response_includes_live_backing_memory_size() {
+        let declaration = AllocationDeclaration::new(
+            "app.users.v1",
+            AllocationSlotDescriptor::memory_manager(100).expect("usable slot"),
+            None,
+            SchemaMetadata::default(),
+        )
+        .expect("declaration");
+        let ledger = AllocationLedger::new_committed(0, AllocationHistory::default())
+            .expect("genesis ledger")
+            .stage_reservation_generation(&[declaration], None)
+            .expect("reservation generation");
+        let record = DiagnosticRecord {
+            allocation: ledger.allocation_history().records()[0].clone(),
+            memory_size: Some(DiagnosticMemorySize::from_wasm_pages(3)),
+        };
+
+        let response = memory_allocation_record_response(record);
+
+        assert_eq!(
+            response.memory_size,
+            Some(MemoryAllocationSizeEntry {
+                wasm_pages: 3,
+                bytes: 196_608,
+            })
+        );
+        assert_eq!(
+            memory_ledger_memory_entry_response(&response),
+            Some(MemoryLedgerMemoryEntry {
+                memory_manager_id: 100,
+                stable_key: "app.users.v1".to_string(),
+                state: MemoryAllocationState::Reserved,
+                size: MemoryAllocationSizeEntry {
+                    wasm_pages: 3,
+                    bytes: 196_608,
+                },
+            })
+        );
     }
 }

@@ -9,10 +9,39 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.4` is in progress as a narrow blob-storage billing hardening slice
-  after the pushed `0.70.3` release. Current work maps malformed Cashier
-  response decoding failures to the stable `InternalRpcMalformed` public error
-  code instead of collapsing them into generic `Internal`. Backend billing
+- `0.70.5` is in progress as a narrow blob-storage billing reserve-policy
+  hardening slice after the pushed `0.70.4` release. Current work makes
+  `_immutableObjectStorageFundFromProjectCycles` all-or-nothing against the
+  configured project-cycle reserve: reserve-blocked requests return a skipped
+  report with zero attached cycles instead of partially topping up Cashier. It
+  also rejects unsafe billing configs with zero upload-balance thresholds or
+  gateway principal limits that cannot fit the target runtime before stable
+  config is replaced. Current work also consumes the local `ic-memory 0.7.1`
+  bump and exposes a controller-only `canic_memory_ledger.memories` inventory
+  of Canic stable memories with `memory_manager_id`, `stable_key`, `state`, and
+  live backing `size` fields. Raw allocation records also retain optional
+  `memory_size.wasm_pages` and `memory_size.bytes` diagnostics.
+  Focused validation passing so far:
+  ```text
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic-core memory --lib -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p canic-core --lib -- -D warnings
+  cargo clippy --locked -p canic --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic --test protocol_surface -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+
+- `0.70.4` is pushed as a narrow blob-storage billing hardening slice after the
+  pushed `0.70.3` release. It maps malformed Cashier response decoding
+  failures to the stable `InternalRpcMalformed` public error code instead of
+  collapsing them into generic `Internal`. Backend billing
   status now distinguishes malformed Cashier balance payloads with explicit
   `BalanceMalformed` / `CashierBalanceMalformed` variants instead of reporting
   them as transient balance unavailability. PocketIC also proves malformed
@@ -21,7 +50,7 @@ inspect only the files needed for the current task.
   The gateway-sync failure case now pins `InternalRpcMalformed` while still
   proving invalid Cashier gateway lists do not replace the previous local
   gateway set.
-  Focused validation passing so far:
+  Focused validation passing for this slice:
   ```text
   cargo fmt --all
   cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
