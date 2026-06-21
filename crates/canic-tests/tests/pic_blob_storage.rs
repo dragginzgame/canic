@@ -50,6 +50,7 @@ type MockCashierLastTopUp = Option<(Option<Principal>, Option<candid::Nat>, cand
 // Verify the non-billing blob-storage gateway lifecycle through a real canister.
 #[test]
 fn blob_storage_gateway_lifecycle_round_trips_under_pocketic() {
+    let _serial_guard = acquire_pic_serial_guard();
     let fixture = install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast);
     let gateway = principal(0x67);
     let non_gateway = principal(0x90);
@@ -69,6 +70,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     let (cashier_id, probe_id) = install_billing_canisters(&pic);
     let gateway = principal(0x55);
 
+    assert_billing_endpoints_require_controller(&pic, probe_id);
     assert_mock_failure_controls_require_controller(&pic, cashier_id);
     seed_mock_cashier_for_billing_flow(&pic, cashier_id, probe_id, gateway);
     configure_billing(&pic, cashier_id, probe_id);
@@ -261,6 +263,51 @@ fn seed_mock_cashier_for_billing_flow(
         (vec![gateway, gateway],),
     );
     seeded_gateways.expect("mock Cashier gateway seed should succeed");
+}
+
+fn assert_billing_endpoints_require_controller(pic: &Pic, probe_id: Principal) {
+    let non_controller = principal(0x92);
+
+    let sync_denied: Result<(), Error> = pic.update_call_as_or_panic(
+        probe_id,
+        non_controller,
+        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+        (),
+    );
+    assert_eq!(
+        sync_denied
+            .expect_err("non-controller must not sync billing gateways")
+            .code,
+        ErrorCode::Unauthorized
+    );
+
+    let fund_denied: Result<BlobProjectCyclesTopUpReport, Error> = pic.update_call_as_or_panic(
+        probe_id,
+        non_controller,
+        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+        (11_u128,),
+    );
+    assert_eq!(
+        fund_denied
+            .expect_err("non-controller must not fund blob-storage billing")
+            .code,
+        ErrorCode::Unauthorized
+    );
+
+    let status_denied: Result<BlobStorageStatusResponse, Error> = pic.update_call_as_or_panic(
+        probe_id,
+        non_controller,
+        BLOB_STORAGE_STATUS,
+        (BlobStorageStatusRequest {
+            sync_gateway_principals: true,
+        },),
+    );
+    assert_eq!(
+        status_denied
+            .expect_err("non-controller must not read guarded billing status")
+            .code,
+        ErrorCode::Unauthorized
+    );
 }
 
 fn add_gateway_on_pic(pic: &Pic, probe_id: Principal, gateway: Principal) {

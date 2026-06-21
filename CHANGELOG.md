@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.7` hardens blob-storage billing endpoint authorization with PocketIC
+  coverage proving the generated gateway-sync, project-cycle funding, and
+  billing-status endpoints reject non-controller callers with `Unauthorized`
+  before reaching billing logic. It also serializes the blob-storage PocketIC
+  test file around shared standalone wasm artifacts so full-file runs do not
+  race upgrade wasm reads against concurrent probe builds.
+
 - `0.70.6` hardens blob-storage billing upgrade behavior with PocketIC
   coverage proving billing config, Cashier-synced gateway principals, pending
   gateway deletion visibility, and last successful gateway-sync metadata
