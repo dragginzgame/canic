@@ -128,6 +128,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
         ErrorCode::InvalidInput,
     );
     assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(&pic, cashier_id, probe_id);
+    assert_reserve_violation_does_not_partially_top_up(&pic, cashier_id, probe_id);
 
     let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
@@ -429,6 +430,61 @@ fn assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(
     );
 }
 
+fn assert_reserve_violation_does_not_partially_top_up(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_STATUS,
+        (BlobStorageStatusRequest {
+            sync_gateway_principals: false,
+        },),
+    );
+    let project_cycles_available = u128::try_from(
+        status
+            .expect("status should report available project cycles")
+            .project_cycles_available
+            .0,
+    )
+    .expect("available project cycles should fit u128");
+    let transferable_cycles = 1_000_u128;
+    assert!(
+        project_cycles_available > transferable_cycles,
+        "probe should have enough cycles to exercise partial-reserve refusal"
+    );
+
+    configure_billing_with_reserve(
+        pic,
+        cashier_id,
+        probe_id,
+        project_cycles_available - transferable_cycles,
+    );
+
+    let top_up: Result<BlobProjectCyclesTopUpReport, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+        (transferable_cycles + 1,),
+    );
+    let report = top_up.expect("reserve-blocked funding should return a skipped report");
+    assert_eq!(report.attached_cycles, candid::Nat::from(0_u64));
+    assert_eq!(
+        report.skipped_reason.as_deref(),
+        Some("reserve would be violated")
+    );
+
+    let last_top_up: Result<MockCashierLastTopUp, Error> =
+        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
+    assert_eq!(
+        last_top_up.expect("last top-up query should succeed"),
+        None,
+        "reserve-blocked funding must not create a partial Cashier top-up"
+    );
+
+    configure_billing(pic, cashier_id, probe_id);
+}
+
 fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {
     let cashier_id = install_standalone_canister_on_pic(
         pic,
@@ -448,12 +504,21 @@ fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {
 }
 
 fn configure_billing(pic: &Pic, cashier_id: Principal, probe_id: Principal) {
+    configure_billing_with_reserve(pic, cashier_id, probe_id, 1);
+}
+
+fn configure_billing_with_reserve(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+    project_cycles_reserve: u128,
+) {
     let configured: Result<(), Error> = pic.update_call_or_panic(
         probe_id,
         "blob_storage_probe_configure_billing",
         (BlobStorageBillingConfig {
             cashier_canister_id: cashier_id,
-            project_cycles_reserve: candid::Nat::from(1_u64),
+            project_cycles_reserve: candid::Nat::from(project_cycles_reserve),
             min_upload_balance: candid::Nat::from(10_u64),
             target_upload_balance: candid::Nat::from(100_u64),
             gateway_principal_limit: 8,

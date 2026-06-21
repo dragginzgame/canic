@@ -31,6 +31,7 @@ use canic::{
         RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
+    dto::memory::MemoryLedgerResponse,
     ids::CanisterRole,
 };
 
@@ -922,6 +923,25 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
         endpoint.contains("$crate::cdk::api::is_controller")
             && endpoint.contains("MemoryQuery::ledger()"),
         "memory ledger diagnostic must be controller-gated and read the restricted ledger path"
+    );
+}
+
+#[test]
+fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
+    let ledger_env = candid_type_env::<MemoryLedgerResponse>();
+
+    assert!(
+        ledger_env.contains("memories : vec MemoryLedgerMemoryEntry")
+            && ledger_env.contains("type MemoryLedgerMemoryEntry = record")
+            && ledger_env.contains("memory_manager_id : nat8")
+            && ledger_env.contains("stable_key : text")
+            && ledger_env.contains("state : MemoryAllocationState")
+            && ledger_env.contains("size : MemoryAllocationSizeEntry")
+            && ledger_env.contains("memory_size : opt MemoryAllocationSizeEntry")
+            && ledger_env.contains("type MemoryAllocationSizeEntry = record")
+            && ledger_env.contains("wasm_pages : nat64")
+            && ledger_env.contains("bytes : nat64"),
+        "memory ledger DTO Candid changed:\n{ledger_env}"
     );
 }
 

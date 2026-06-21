@@ -80,7 +80,7 @@ ic-cdk = "0.20.1"
 ic-cdk-management-canister = "0.1.0"
 ic-cdk-timers = "1.0"
 ic-certification = "3.0"
-ic-memory = "0.7.0"
+ic-memory = "0.7.1"
 ic-signature-verification = "0.3.0"
 ic-testkit = "0.1.11"
 icrc-ledger-types = { version = "0.2", default-features = false }

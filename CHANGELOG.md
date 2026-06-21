@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.5` makes blob-storage project-cycle funding all-or-nothing against the
+  configured reserve: reserve-blocked requests now return a skipped report and
+  attach zero cycles instead of partially topping up Cashier. It also rejects
+  unsafe billing configs with zero upload-balance thresholds or gateway limits
+  that cannot fit the target runtime. It consumes `ic-memory 0.7.1` and exposes
+  a controller-only `canic_memory_ledger.memories` inventory of Canic stable
+  memories with live backing sizes, while retaining raw allocation-record
+  `memory_size` diagnostics.
+
 - `0.70.4` maps malformed Cashier response decoding failures to the stable
   `InternalRpcMalformed` public error code and updates gateway-sync PocketIC
   coverage to pin the more precise error while preserving no-mutation behavior.

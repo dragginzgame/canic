@@ -11,6 +11,7 @@ pub struct MemoryLedgerResponse {
     pub current_generation: u64,
     pub commit_recovery: MemoryCommitRecoveryResponse,
     pub authorities: Vec<MemoryRangeAuthorityEntry>,
+    pub memories: Vec<MemoryLedgerMemoryEntry>,
     pub records: Vec<MemoryAllocationRecordEntry>,
     pub generations: Vec<MemoryLedgerGenerationEntry>,
 }
@@ -74,6 +75,18 @@ pub enum MemoryRangeAuthorityMode {
 }
 
 ///
+/// MemoryLedgerMemoryEntry
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct MemoryLedgerMemoryEntry {
+    pub memory_manager_id: u8,
+    pub stable_key: String,
+    pub state: MemoryAllocationState,
+    pub size: MemoryAllocationSizeEntry,
+}
+
+///
 /// MemoryAllocationRecordEntry
 ///
 
@@ -82,10 +95,21 @@ pub struct MemoryAllocationRecordEntry {
     pub memory_manager_id: Option<u8>,
     pub stable_key: String,
     pub state: MemoryAllocationState,
+    pub memory_size: Option<MemoryAllocationSizeEntry>,
     pub first_generation: u64,
     pub last_seen_generation: u64,
     pub retired_generation: Option<u64>,
     pub schema_history: Vec<MemorySchemaMetadataEntry>,
+}
+
+///
+/// MemoryAllocationSizeEntry
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct MemoryAllocationSizeEntry {
+    pub wasm_pages: u64,
+    pub bytes: u64,
 }
 
 ///
