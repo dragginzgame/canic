@@ -5,6 +5,7 @@ use canic::{
     cdk::{
         api::{msg_caller, msg_cycles_accept, msg_cycles_available},
         candid::{Int, Nat},
+        trap,
         types::Principal,
     },
     dto::blob_storage::{
@@ -30,6 +31,7 @@ thread_local! {
         RefCell::new(None)
     };
     static NEXT_TOP_UP_TOTAL: RefCell<Option<Int>> = const { RefCell::new(None) };
+    static GATEWAY_LIST_TRAP: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 type MockTopUpRecordView = Option<(Option<Principal>, Option<Nat>, Nat)>;
@@ -116,6 +118,16 @@ async fn blob_storage_cashier_mock_set_next_top_up_error(
 async fn blob_storage_cashier_mock_set_next_top_up_total(total: Option<Int>) -> Result<(), Error> {
     NEXT_TOP_UP_TOTAL.with_borrow_mut(|stored| {
         *stored = total;
+    });
+    Ok(())
+}
+
+#[canic_update(requires(caller::is_controller()))]
+async fn blob_storage_cashier_mock_set_gateway_list_trap(
+    message: Option<String>,
+) -> Result<(), Error> {
+    GATEWAY_LIST_TRAP.with_borrow_mut(|stored| {
+        *stored = message;
     });
     Ok(())
 }
@@ -209,6 +221,10 @@ async fn account_top_up_v1(
 
 #[ic_cdk::update(name = "storage_gateway_principal_list_v1")]
 async fn storage_gateway_principal_list_v1() -> Vec<Principal> {
+    if let Some(message) = GATEWAY_LIST_TRAP.with_borrow(Clone::clone) {
+        trap(message);
+    }
+
     GATEWAYS.with_borrow(Clone::clone)
 }
 
