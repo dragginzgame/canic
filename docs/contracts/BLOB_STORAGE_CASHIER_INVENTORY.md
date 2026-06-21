@@ -480,9 +480,11 @@ Behavior:
 
 - Request DTO shape: no arguments.
 - Response DTO shape: `vec principal`.
-- Empty-list behavior: accepted by the Toko contract. Canic sync treats an empty
-  successful response as an empty Cashier-sourced gateway set and atomically
-  replaces the previous Cashier-sourced set.
+- Empty-list behavior: malformed; preserves the previous gateway-principal set.
+  Toko's call-site type allows an empty vector, but Canic sync treats empty
+  successful responses as malformed Cashier responses. This prevents transient
+  or misconfigured Cashier responses from atomically wiping all upload gateway
+  authorization.
 - Duplicate-principal behavior: duplicates have no additional meaning. Canic
   deduplicates before writing gateway-principal state.
 - Anonymous-principal behavior: Canic rejects anonymous principals as malformed
@@ -501,8 +503,9 @@ Behavior:
 - Malformed request behavior: Canic sends no arguments; no public Canic path
   accepts arbitrary Cashier request bytes.
 - Malformed response behavior expected from Canic wrappers: Candid decode
-  failure, invalid principals, and responses exceeding the configured maximum
-  preserve the previous gateway-principal set and report a typed sync failure.
+  failure, empty lists, invalid principals, and responses exceeding the
+  configured maximum preserve the previous gateway-principal set and report a
+  typed sync failure.
 - Production-vs-local differences: production defaults to
   `72ch2-fiaaa-aaaar-qbsvq-cai` only when explicitly configured; tests must use
   injected mock Cashier principals and must not call production Cashier.

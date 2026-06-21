@@ -332,7 +332,8 @@ fn complete_billing_inventory_with_optional_section(optional_section: &str) -> S
     );
     for method in REQUIRED_BILLING_METHODS {
         let method = billing_method_name(method);
-        write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+        let method_section = complete_billing_method_section(&method);
+        write!(&mut inventory, "\n### `{method}`\n\n{method_section}\n")
             .expect("writing to String should not fail");
     }
     write!(
@@ -345,6 +346,28 @@ fn complete_billing_inventory_with_optional_section(optional_section: &str) -> S
     inventory
 }
 
+fn complete_billing_method_section(method: &str) -> String {
+    let mut section = "Status: **Complete**\n".to_string();
+    if method == billing_method_name("gateway-principal-list") {
+        section.push_str(
+            "\n- Empty-list behavior: empty lists are malformed and preserve previous gateway state\n",
+        );
+        for field in [
+            "Duplicate-principal behavior",
+            "Anonymous-principal behavior",
+            "Management-canister-principal behavior",
+            "Malformed response behavior expected from Canic wrappers",
+        ] {
+            writeln!(
+                &mut section,
+                "\n- {field}: captured behavior from upstream source"
+            )
+            .expect("writing to String should not fail");
+        }
+    }
+    section
+}
+
 fn complete_billing_inventory_missing_method(omitted_method: &str) -> String {
     let mut inventory = format!(
         "# Blob Storage {} Protocol Inventory\n\nStatus: **Complete**\n",
@@ -355,7 +378,8 @@ fn complete_billing_inventory_missing_method(omitted_method: &str) -> String {
             continue;
         }
         let method = billing_method_name(method);
-        write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+        let method_section = complete_billing_method_section(&method);
+        write!(&mut inventory, "\n### `{method}`\n\n{method_section}\n")
             .expect("writing to String should not fail");
     }
     write!(
@@ -381,7 +405,8 @@ fn complete_billing_inventory_with_method_section(
             write!(&mut inventory, "\n### `{method}`\n\n{method_section}\n")
                 .expect("writing to String should not fail");
         } else {
-            write!(&mut inventory, "\n### `{method}`\n\nStatus: **Complete**\n")
+            let method_section = complete_billing_method_section(&method);
+            write!(&mut inventory, "\n### `{method}`\n\n{method_section}\n")
                 .expect("writing to String should not fail");
         }
     }
@@ -1010,6 +1035,55 @@ fn complete_billing_inventory_rejects_unresolved_method_fields() {
         "billing gate should reject unresolved required-method fields"
     );
     assert!(text.contains("method still has TBD fields"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn complete_billing_inventory_rejects_missing_gateway_list_behavior_fields() {
+    let root = create_temp_workspace("billing-gate-gateway-list-fields");
+    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
+    let method = billing_method_name("gateway-principal-list");
+    fs::write(
+        &inventory,
+        complete_billing_inventory_with_method_section(&method, "Status: **Complete**\n"),
+    )
+    .expect("inventory should be written");
+
+    let output = run_billing_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "billing gate should reject gateway-list sections without behavior fields"
+    );
+    assert!(text.contains("method missing required field"));
+    assert!(text.contains("Empty-list behavior"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn complete_billing_inventory_rejects_unsafe_empty_gateway_list_behavior() {
+    let root = create_temp_workspace("billing-gate-empty-list-contract");
+    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
+    let method = billing_method_name("gateway-principal-list");
+    let method_section = complete_billing_method_section(&method).replace(
+        "empty lists are malformed and preserve previous gateway state",
+        "empty lists are accepted and replace the previous gateway set",
+    );
+    fs::write(
+        &inventory,
+        complete_billing_inventory_with_method_section(&method, &method_section),
+    )
+    .expect("inventory should be written");
+
+    let output = run_billing_gate(&root, &inventory);
+    let text = output_text(&output);
+
+    assert!(
+        !output.status.success(),
+        "billing gate should reject unsafe empty gateway-list behavior"
+    );
+    assert!(text.contains("invalid empty-list behavior"));
     let _ = fs::remove_dir_all(root);
 }
 

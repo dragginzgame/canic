@@ -37,6 +37,9 @@ pub enum CashierDecodeError {
     #[error("Cashier cycle balance field `{field}` is negative or exceeds u128")]
     InvalidCycleBalance { field: &'static str },
 
+    #[error("Cashier gateway principal list must not be empty")]
+    EmptyGatewayPrincipalList,
+
     #[error("Cashier gateway principal list contains invalid principal {principal}")]
     InvalidGatewayPrincipal { principal: Principal },
 
@@ -96,6 +99,10 @@ impl CashierConversionOps {
                     max,
                 });
             }
+        }
+
+        if normalized.is_empty() {
+            return Err(CashierDecodeError::EmptyGatewayPrincipalList);
         }
 
         Ok(normalized)
@@ -194,6 +201,10 @@ mod tests {
 
     #[test]
     fn gateway_principal_normalization_rejects_invalid_principals() {
+        assert_eq!(
+            CashierConversionOps::normalize_gateway_principals(Vec::new(), 4),
+            Err(CashierDecodeError::EmptyGatewayPrincipalList)
+        );
         assert_eq!(
             CashierConversionOps::normalize_gateway_principals(vec![Principal::anonymous()], 4),
             Err(CashierDecodeError::InvalidGatewayPrincipal {

@@ -35,6 +35,36 @@ status="$(
 if [[ "$status" == "Complete" ]]; then
     failed=0
 
+    require_method_field() {
+        local method="$1"
+        local section="$2"
+        local field="$3"
+
+        if ! grep -Eq "^- ${field}: .+$" <<<"$section"; then
+            echo "blob-storage Cashier inventory method missing required field: $method: $field" >&2
+            failed=1
+        fi
+    }
+
+    validate_method_specific_fields() {
+        local method="$1"
+        local section="$2"
+
+        case "$method" in
+            "storage_gateway_principal_list_v1")
+                require_method_field "$method" "$section" "Empty-list behavior"
+                if ! grep -Eiq "^- Empty-list behavior: .*malformed.*preserv" <<<"$section"; then
+                    echo "blob-storage Cashier inventory method has invalid empty-list behavior: $method" >&2
+                    failed=1
+                fi
+                require_method_field "$method" "$section" "Duplicate-principal behavior"
+                require_method_field "$method" "$section" "Anonymous-principal behavior"
+                require_method_field "$method" "$section" "Management-canister-principal behavior"
+                require_method_field "$method" "$section" "Malformed response behavior expected from Canic wrappers"
+                ;;
+        esac
+    }
+
     validate_complete_method_section() {
         local method="$1"
         local section
@@ -62,6 +92,8 @@ if [[ "$status" == "Complete" ]]; then
             echo "blob-storage Cashier inventory method still has TBD fields: $method" >&2
             failed=1
         fi
+
+        validate_method_specific_fields "$method" "$section"
     }
 
     validate_complete_optional_section() {

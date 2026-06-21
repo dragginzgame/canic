@@ -720,6 +720,30 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
     let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
         "blob_storage_cashier_mock_set_gateways",
+        (Vec::<Principal>::new(),),
+    );
+    seeded_gateways.expect("mock Cashier empty gateway seed should succeed");
+
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    assert_eq!(
+        synced
+            .expect_err("empty Cashier gateway list should fail sync")
+            .code,
+        ErrorCode::InternalRpcMalformed
+    );
+
+    let counts: Result<BlobStorageLocalCounters, Error> =
+        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
+    assert_eq!(
+        counts.expect("probe counts query should succeed"),
+        BlobStorageLocalCounters::new(0, 0, 1),
+        "empty gateway sync must leave the previous gateway set intact"
+    );
+
+    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateways",
         (vec![Principal::anonymous()],),
     );
     seeded_gateways.expect("mock Cashier invalid gateway seed should succeed");

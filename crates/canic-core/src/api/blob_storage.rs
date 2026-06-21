@@ -963,6 +963,10 @@ mod tests {
     #[cfg(feature = "blob-storage-billing")]
     #[test]
     fn cashier_decode_errors_map_to_rpc_malformed_code() {
+        let empty_gateway =
+            BlobStorageApi::map_cashier_decode_error(CashierDecodeError::EmptyGatewayPrincipalList);
+        assert_eq!(empty_gateway.code, ErrorCode::InternalRpcMalformed);
+
         let invalid_balance =
             BlobStorageApi::map_cashier_decode_error(CashierDecodeError::InvalidCycleBalance {
                 field: "total",
