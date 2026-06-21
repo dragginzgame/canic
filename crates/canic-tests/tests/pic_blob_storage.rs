@@ -161,6 +161,32 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     assert_eq!(attached_cycles, candid::Nat::from(77_u64));
 }
 
+// Verify status reports endpoint-visible billing readiness blockers.
+#[test]
+fn blob_storage_billing_status_matrix_reports_readiness_blockers_under_pocketic() {
+    let _serial_guard = acquire_pic_serial_guard();
+    let pic = pic();
+    let (cashier_id, probe_id) = install_billing_canisters(&pic);
+    let gateway = principal(0x59);
+
+    seed_mock_cashier_for_billing_flow(&pic, cashier_id, probe_id, gateway);
+    configure_billing(&pic, cashier_id, probe_id);
+    assert_billing_status_reports_missing_gateways(&pic, probe_id);
+
+    assert_initial_gateway_sync_succeeds(&pic, probe_id);
+    set_mock_cashier_balance(&pic, cashier_id, probe_id, 9);
+    assert_billing_status_reports_funding_required(&pic, probe_id);
+
+    let project_cycles_available =
+        status_project_cycles_available(&billing_status(&pic, probe_id, false));
+    assert!(
+        project_cycles_available > 1,
+        "probe should have cycles available for reserve-status coverage"
+    );
+    configure_billing_with_reserve(&pic, cashier_id, probe_id, project_cycles_available - 1);
+    assert_billing_status_reports_reserve_violation(&pic, probe_id);
+}
+
 // Verify billing config, synced gateways, and sync metadata persist across upgrade.
 #[test]
 fn blob_storage_billing_state_survives_upgrade_under_pocketic() {
@@ -250,12 +276,7 @@ fn seed_mock_cashier_for_billing_flow(
     probe_id: Principal,
     gateway: Principal,
 ) {
-    let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_balance",
-        (probe_id, 123_u128),
-    );
-    seeded_balance.expect("mock Cashier balance seed should succeed");
+    set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
 
     let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
@@ -263,6 +284,15 @@ fn seed_mock_cashier_for_billing_flow(
         (vec![gateway, gateway],),
     );
     seeded_gateways.expect("mock Cashier gateway seed should succeed");
+}
+
+fn set_mock_cashier_balance(pic: &Pic, cashier_id: Principal, account: Principal, balance: u128) {
+    let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_balance",
+        (account, balance),
+    );
+    seeded_balance.expect("mock Cashier balance seed should succeed");
 }
 
 fn assert_billing_endpoints_require_controller(pic: &Pic, probe_id: Principal) {
@@ -454,6 +484,79 @@ fn assert_missing_billing_config_status(status: &BlobStorageStatusResponse, gate
         vec![BlobStorageReadinessBlocker::NotConfigured]
     );
     assert!(status.warnings.is_empty());
+}
+
+fn assert_billing_status_reports_missing_gateways(pic: &Pic, probe_id: Principal) {
+    let status = billing_status(pic, probe_id, false);
+
+    assert_eq!(status.gateway_principal_count, 0);
+    assert_eq!(
+        status.gateway_principal_sync_action,
+        BlobStorageGatewayPrincipalSyncAction::NotRequested
+    );
+    assert_eq!(status.cashier_balance, Some(candid::Nat::from(123_u64)));
+    assert_eq!(status.funding_status, BlobStorageFundingStatus::NotNeeded);
+    assert!(!status.ready);
+    assert_eq!(
+        status.blockers,
+        vec![BlobStorageReadinessBlocker::GatewayPrincipalsMissing]
+    );
+    assert_eq!(
+        status.warnings,
+        vec![BlobStorageBillingWarning::GatewayPrincipalSetEmpty]
+    );
+}
+
+fn assert_billing_status_reports_funding_required(pic: &Pic, probe_id: Principal) {
+    let status = billing_status(pic, probe_id, false);
+
+    assert_eq!(status.gateway_principal_count, 1);
+    assert_eq!(status.cashier_balance, Some(candid::Nat::from(9_u64)));
+    assert_eq!(
+        status.funding_status,
+        BlobStorageFundingStatus::FundingRequired {
+            requested_cycles: candid::Nat::from(91_u64),
+        }
+    );
+    assert!(!status.ready);
+    assert_eq!(
+        status.blockers,
+        vec![BlobStorageReadinessBlocker::InsufficientCashierBalance]
+    );
+    assert!(status.warnings.is_empty());
+}
+
+fn assert_billing_status_reports_reserve_violation(pic: &Pic, probe_id: Principal) {
+    let status = billing_status(pic, probe_id, false);
+
+    assert_eq!(status.cashier_balance, Some(candid::Nat::from(9_u64)));
+    match status.funding_status {
+        BlobStorageFundingStatus::ReserveWouldBeViolated {
+            requested_cycles,
+            transferable_cycles,
+        } => {
+            assert_eq!(requested_cycles, candid::Nat::from(91_u64));
+            assert!(
+                transferable_cycles < 91_u64,
+                "reserve violation should report fewer transferable cycles than requested"
+            );
+        }
+        other => panic!("expected reserve violation status, got {other:?}"),
+    }
+    assert!(!status.ready);
+    assert_eq!(
+        status.blockers,
+        vec![
+            BlobStorageReadinessBlocker::InsufficientCashierBalance,
+            BlobStorageReadinessBlocker::ReserveWouldBeViolated,
+        ]
+    );
+    assert!(status.warnings.is_empty());
+}
+
+fn status_project_cycles_available(status: &BlobStorageStatusResponse) -> u128 {
+    u128::try_from(status.project_cycles_available.0.clone())
+        .expect("available project cycles should fit u128")
 }
 
 fn assert_billing_status_matches_config(
