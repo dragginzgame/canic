@@ -9,8 +9,21 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.7` is in progress as a narrow blob-storage billing endpoint-guard
-  hardening slice after the pushed `0.70.6` release. Current work adds PocketIC
+- `0.70.8` is in progress as a narrow blob-storage billing status-readiness
+  hardening slice after the pushed `0.70.7` release. Current work adds PocketIC
+  coverage proving `get_blob_storage_status` reports endpoint-visible readiness
+  blockers for missing gateway principals, insufficient Cashier balance, and
+  reserve-blocked funding.
+  Focused validation passing so far:
+  ```text
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_status_matrix_reports_readiness_blockers_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  cargo fmt --all -- --check
+  ```
+
+- `0.70.7` is pushed as a narrow blob-storage billing endpoint-guard
+  hardening slice after the pushed `0.70.6` release. It adds PocketIC
   coverage proving the generated `_immutableObjectStorageUpdateGatewayPrincipals`,
   `_immutableObjectStorageFundFromProjectCycles`, and
   `get_blob_storage_status` endpoints reject non-controller callers with

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.8` expands blob-storage billing status coverage with PocketIC tests
+  proving `get_blob_storage_status` reports endpoint-visible readiness blockers
+  for missing gateway principals, insufficient Cashier balance, and
+  reserve-blocked funding.
+
 - `0.70.7` hardens blob-storage billing endpoint authorization with PocketIC
   coverage proving the generated gateway-sync, project-cycle funding, and
   billing-status endpoints reject non-controller callers with `Unauthorized`
