@@ -9,14 +9,41 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.5` is in progress as a narrow blob-storage billing reserve-policy
-  hardening slice after the pushed `0.70.4` release. Current work makes
+- `0.70.6` is in progress as a narrow blob-storage billing upgrade-persistence
+  hardening slice after the pushed `0.70.5` release. Current work adds PocketIC
+  coverage proving billing config, Cashier-synced gateway principals, pending
+  gateway deletion visibility, and the last successful gateway-sync timestamp
+  survive a probe canister upgrade. It also proves explicit project-cycle
+  funding remains usable after upgrade, so the transient in-memory funding
+  guard is not restored as a stale lock. The same upgrade path now pins that
+  status-requested gateway sync remains read-only after upgrade: it reports
+  `SkippedReadOnlyStatus`, preserves the previous gateway set, and does not
+  record a new gateway-sync timestamp. It also proves the explicit
+  gateway-sync endpoint still uses the persisted billing config after upgrade,
+  records a fresh sync timestamp, and replaces the local gateway set from
+  Cashier. Current work also covers the
+  no-billing-config upgrade path so status stays `NotConfigured` with
+  `SkippedConfigMissing`, local gateway state remains intact, and explicit
+  funding still fails until billing config exists.
+  Focused validation passing so far:
+  ```text
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_state_survives_upgrade_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_missing_billing_config_status_survives_upgrade_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+
+- `0.70.5` is pushed as a narrow blob-storage billing reserve-policy
+  hardening slice after the pushed `0.70.4` release. It makes
   `_immutableObjectStorageFundFromProjectCycles` all-or-nothing against the
   configured project-cycle reserve: reserve-blocked requests return a skipped
   report with zero attached cycles instead of partially topping up Cashier. It
   also rejects unsafe billing configs with zero upload-balance thresholds or
   gateway principal limits that cannot fit the target runtime before stable
-  config is replaced. Current work also consumes the local `ic-memory 0.7.1`
+  config is replaced. It also consumes the local `ic-memory 0.7.1`
   bump and exposes a controller-only `canic_memory_ledger.memories` inventory
   of Canic stable memories with `memory_manager_id`, `stable_key`, `state`, and
   live backing `size` fields. Raw allocation records also retain optional
