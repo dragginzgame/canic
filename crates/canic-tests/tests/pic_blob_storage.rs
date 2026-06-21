@@ -72,6 +72,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
 
     assert_billing_endpoints_require_controller(&pic, probe_id);
     assert_mock_failure_controls_require_controller(&pic, cashier_id);
+    assert_direct_cashier_gateway_sync_bounds(&pic, cashier_id, probe_id);
     seed_mock_cashier_for_billing_flow(&pic, cashier_id, probe_id, gateway);
     configure_billing(&pic, cashier_id, probe_id);
     assert_initial_gateway_sync_succeeds(&pic, probe_id);
@@ -273,11 +274,14 @@ fn seed_mock_cashier_for_billing_flow(
     gateway: Principal,
 ) {
     set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
+    seed_mock_cashier_gateways(pic, cashier_id, vec![gateway, gateway]);
+}
 
+fn seed_mock_cashier_gateways(pic: &Pic, cashier_id: Principal, gateways: Vec<Principal>) {
     let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
         "blob_storage_cashier_mock_set_gateways",
-        (vec![gateway, gateway],),
+        (gateways,),
     );
     seeded_gateways.expect("mock Cashier gateway seed should succeed");
 }
@@ -289,6 +293,71 @@ fn set_mock_cashier_balance(pic: &Pic, cashier_id: Principal, account: Principal
         (account, balance),
     );
     seeded_balance.expect("mock Cashier balance seed should succeed");
+}
+
+fn assert_direct_cashier_gateway_sync_bounds(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let first_gateway = principal(0x5a);
+    let second_gateway = principal(0x5b);
+    let third_gateway = principal(0x5c);
+
+    seed_mock_cashier_gateways(pic, cashier_id, vec![first_gateway, first_gateway]);
+
+    let synced: Result<u64, Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_sync_gateways_from_cashier",
+        (cashier_id, 1_u64),
+    );
+    assert_eq!(
+        synced.expect("duplicate gateway list should normalize within max"),
+        1
+    );
+    let sync_at_before = assert_direct_gateway_sync_status(pic, probe_id, 1)
+        .last_gateway_principal_sync_at_ns
+        .expect("direct gateway sync timestamp should be recorded");
+
+    seed_mock_cashier_gateways(pic, cashier_id, vec![second_gateway, third_gateway]);
+
+    let synced: Result<u64, Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_sync_gateways_from_cashier",
+        (cashier_id, 1_u64),
+    );
+    assert_eq!(
+        synced
+            .expect_err("too many distinct Cashier gateways should fail sync")
+            .code,
+        ErrorCode::InternalRpcMalformed
+    );
+    assert_direct_gateway_sync_failure_preserves_state(pic, probe_id, sync_at_before);
+
+    seed_mock_cashier_gateways(
+        pic,
+        cashier_id,
+        vec![second_gateway, third_gateway, second_gateway],
+    );
+    pic.advance_time(Duration::from_nanos(1));
+    pic.tick();
+
+    let synced: Result<u64, Error> = pic.update_call_or_panic(
+        probe_id,
+        "blob_storage_probe_sync_gateways_from_cashier",
+        (cashier_id, 2_u64),
+    );
+    assert_eq!(
+        synced.expect("gateway sync should recover when max allows distinct gateways"),
+        2
+    );
+    let sync_at_after = assert_direct_gateway_sync_status(pic, probe_id, 2)
+        .last_gateway_principal_sync_at_ns
+        .expect("recovered direct gateway sync timestamp should be recorded");
+    assert!(
+        sync_at_after > sync_at_before,
+        "recovered direct gateway sync must record a fresh timestamp"
+    );
 }
 
 fn assert_billing_endpoints_require_controller(pic: &Pic, probe_id: Principal) {
@@ -451,6 +520,47 @@ fn billing_status(
         },),
     );
     status.expect("status endpoint should succeed")
+}
+
+fn assert_direct_gateway_sync_status(
+    pic: &Pic,
+    probe_id: Principal,
+    gateway_principal_count: u64,
+) -> BlobStorageStatusResponse {
+    let status = billing_status(pic, probe_id, false);
+    assert_eq!(
+        status.payment_model,
+        BlobStoragePaymentModelStatus::NotConfigured
+    );
+    assert_eq!(status.cashier_canister_id, None);
+    assert_eq!(status.gateway_principal_count, gateway_principal_count);
+    assert_eq!(
+        status.gateway_principal_sync_action,
+        BlobStorageGatewayPrincipalSyncAction::NotRequested
+    );
+    assert_eq!(
+        status.funding_status,
+        BlobStorageFundingStatus::NotConfigured
+    );
+    assert_eq!(
+        status.blockers,
+        vec![BlobStorageReadinessBlocker::NotConfigured]
+    );
+    assert!(status.warnings.is_empty());
+    status
+}
+
+fn assert_direct_gateway_sync_failure_preserves_state(
+    pic: &Pic,
+    probe_id: Principal,
+    sync_at_before: u64,
+) {
+    let status = assert_direct_gateway_sync_status(pic, probe_id, 1);
+    assert_eq!(
+        status.last_gateway_principal_sync_at_ns,
+        Some(sync_at_before),
+        "failed direct gateway sync must not record a successful sync timestamp"
+    );
 }
 
 fn assert_missing_billing_config_status(status: &BlobStorageStatusResponse, gateways: u64) {

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.12` hardens direct Cashier gateway-sync coverage by proving the
+  lower-level sync helper normalizes duplicate Cashier gateway principals,
+  rejects too many distinct gateway principals with `InternalRpcMalformed`
+  before mutating sync metadata, and recovers with a fresh timestamp when the
+  configured maximum allows the distinct gateway set.
+
 - `0.70.11` hardens Cashier gateway-sync failure coverage by proving empty and
   invalid Cashier gateway lists, and trapped Cashier gateway-list calls,
   preserve the last successful gateway-sync timestamp as well as the previously
