@@ -261,6 +261,7 @@ pub enum BlobStorageFundingStatus {
         requested_cycles: Nat,
     },
     BalanceUnavailable,
+    BalanceMalformed,
     ReserveWouldBeViolated {
         requested_cycles: Nat,
         transferable_cycles: Nat,
@@ -279,6 +280,7 @@ pub enum BlobStorageReadinessBlocker {
     NotConfigured,
     GatewayPrincipalsMissing,
     CashierBalanceUnavailable,
+    CashierBalanceMalformed,
     InsufficientCashierBalance,
     ReserveWouldBeViolated,
 }
@@ -294,6 +296,7 @@ pub enum BlobStorageReadinessBlocker {
 pub enum BlobStorageBillingWarning {
     GatewayPrincipalSetEmpty,
     CashierBalanceUnavailable,
+    CashierBalanceMalformed,
     SyncRequestedButStatusIsReadOnly,
 }
 

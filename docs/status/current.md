@@ -9,8 +9,33 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.3` is in progress as a narrow blob-storage billing test-hardening slice
-  after the pushed `0.70.2` release. Current work adds controller-only one-shot
+- `0.70.4` is in progress as a narrow blob-storage billing hardening slice
+  after the pushed `0.70.3` release. Current work maps malformed Cashier
+  response decoding failures to the stable `InternalRpcMalformed` public error
+  code instead of collapsing them into generic `Internal`. Backend billing
+  status now distinguishes malformed Cashier balance payloads with explicit
+  `BalanceMalformed` / `CashierBalanceMalformed` variants instead of reporting
+  them as transient balance unavailability. PocketIC also proves malformed
+  Cashier `account_top_up_v1` success payloads are rejected from
+  `_immutableObjectStorageFundFromProjectCycles` with `InternalRpcMalformed`.
+  The gateway-sync failure case now pins `InternalRpcMalformed` while still
+  proving invalid Cashier gateway lists do not replace the previous local
+  gateway set.
+  Focused validation passing so far:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage -- -D warnings
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  ```
+
+- `0.70.3` is pushed as a narrow blob-storage billing test-hardening slice
+  after the pushed `0.70.2` release. It adds controller-only one-shot
   failure hooks to the mock Cashier canister and uses PocketIC to prove
   `get_blob_storage_status` reports Cashier balance failures as
   `BalanceUnavailable` with the expected blocker/warning, and that the
@@ -24,14 +49,6 @@ inspect only the files needed for the current task.
   endpoint that was not part of the production protocol or active test flow.
   PocketIC now pins that forced mock top-up failures do not update the mock's
   successful top-up record.
-  Focused validation passing so far:
-  ```text
-  cargo fmt --all
-  cargo test --locked -p canic --test changelog_governance -- --nocapture
-  cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
-  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
-  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
-  ```
 
 - `0.70.2` is pushed as a narrow blob-storage billing hardening slice after the
   pushed `0.70.1` release. It rejects zero-cycle

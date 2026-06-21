@@ -7,13 +7,14 @@ use candid::{decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 #[cfg(feature = "blob-storage-billing")]
 use canic::dto::blob_storage::{
-    BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetOk,
-    BlobStorageCashierAccountBalanceGetRequest, BlobStorageCashierAccountBalanceGetResult,
-    BlobStorageCashierAccountCycleBalances, BlobStorageCashierAccountTopUpError,
-    BlobStorageCashierAccountTopUpOk, BlobStorageCashierAccountTopUpRequest,
-    BlobStorageCashierAccountTopUpResult, BlobStorageCashierDebtTarget, BlobStorageFundingStatus,
-    BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
-    BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
+    BlobStorageBillingWarning, BlobStorageCashierAccountBalanceGetError,
+    BlobStorageCashierAccountBalanceGetOk, BlobStorageCashierAccountBalanceGetRequest,
+    BlobStorageCashierAccountBalanceGetResult, BlobStorageCashierAccountCycleBalances,
+    BlobStorageCashierAccountTopUpError, BlobStorageCashierAccountTopUpOk,
+    BlobStorageCashierAccountTopUpRequest, BlobStorageCashierAccountTopUpResult,
+    BlobStorageCashierDebtTarget, BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
+    BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker, BlobStorageStatusRequest,
+    BlobStorageStatusResponse,
 };
 use canic::{
     cdk::types::Principal,
@@ -389,6 +390,9 @@ fn blob_storage_status_dtos_roundtrip_through_candid() {
         blockers: Vec::new(),
         warnings: Vec::new(),
     });
+    assert_candid_roundtrip(BlobStorageFundingStatus::BalanceMalformed);
+    assert_candid_roundtrip(BlobStorageReadinessBlocker::CashierBalanceMalformed);
+    assert_candid_roundtrip(BlobStorageBillingWarning::CashierBalanceMalformed);
 }
 
 #[cfg(feature = "blob-storage-billing")]
@@ -415,8 +419,25 @@ fn blob_storage_status_dto_candid_shapes_are_pinned() {
     assert!(
         blocker_env.contains("NotConfigured")
             && blocker_env.contains("GatewayPrincipalsMissing")
+            && blocker_env.contains("CashierBalanceMalformed")
             && blocker_env.contains("ReserveWouldBeViolated"),
         "blob-storage readiness blocker DTO Candid changed:\n{blocker_env}"
+    );
+
+    let funding_env = candid_type_env::<BlobStorageFundingStatus>();
+    assert!(
+        funding_env.contains("BalanceUnavailable")
+            && funding_env.contains("BalanceMalformed")
+            && funding_env.contains("ReserveWouldBeViolated"),
+        "blob-storage funding status DTO Candid changed:\n{funding_env}"
+    );
+
+    let warning_env = candid_type_env::<BlobStorageBillingWarning>();
+    assert!(
+        warning_env.contains("CashierBalanceUnavailable")
+            && warning_env.contains("CashierBalanceMalformed")
+            && warning_env.contains("SyncRequestedButStatusIsReadOnly"),
+        "blob-storage billing warning DTO Candid changed:\n{warning_env}"
     );
 }
 
