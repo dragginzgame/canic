@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.4` maps malformed Cashier response decoding failures to the stable
+  `InternalRpcMalformed` public error code and updates gateway-sync PocketIC
+  coverage to pin the more precise error while preserving no-mutation behavior.
+  It also distinguishes malformed Cashier balance payloads in backend billing
+  status instead of reporting them as transient balance unavailability, and
+  covers malformed top-up success payloads through the generated funding
+  endpoint.
+
 - `0.70.3` adds mock-Cashier one-shot failure controls and PocketIC coverage
   proving generated blob-storage status/funding endpoints surface Cashier
   balance and top-up failures with stable public state and error codes. It

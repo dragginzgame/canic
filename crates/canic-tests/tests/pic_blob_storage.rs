@@ -70,33 +70,9 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     let gateway = principal(0x55);
 
     assert_mock_failure_controls_require_controller(&pic, cashier_id);
-
-    let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_balance",
-        (probe_id, 123_u128),
-    );
-    seeded_balance.expect("mock Cashier balance seed should succeed");
-
-    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateways",
-        (vec![gateway, gateway],),
-    );
-    seeded_gateways.expect("mock Cashier gateway seed should succeed");
-
+    seed_mock_cashier_for_billing_flow(&pic, cashier_id, probe_id, gateway);
     configure_billing(&pic, cashier_id, probe_id);
-
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
-    synced.expect("gateway sync should succeed");
-
-    let counts: Result<BlobStorageLocalCounters, Error> =
-        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
-    assert_eq!(
-        counts.expect("probe counts query should succeed"),
-        BlobStorageLocalCounters::new(0, 0, 1)
-    );
+    assert_initial_gateway_sync_succeeds(&pic, probe_id);
 
     assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(&pic, cashier_id, probe_id);
 
@@ -109,6 +85,8 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
 
     assert_billing_status_ready(&pic, probe_id);
     assert_billing_status_reports_cashier_balance_unavailable(&pic, cashier_id, probe_id);
+    assert_billing_status_ready(&pic, probe_id);
+    assert_billing_status_reports_cashier_balance_malformed(&pic, cashier_id, probe_id);
     assert_billing_status_ready(&pic, probe_id);
 
     let zero_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
@@ -149,6 +127,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
         BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
         ErrorCode::InvalidInput,
     );
+    assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(&pic, cashier_id, probe_id);
 
     let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
@@ -177,6 +156,40 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     assert_eq!(account, Some(probe_id));
     assert_eq!(target_balance, None);
     assert_eq!(attached_cycles, candid::Nat::from(77_u64));
+}
+
+fn seed_mock_cashier_for_billing_flow(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+    gateway: Principal,
+) {
+    let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_balance",
+        (probe_id, 123_u128),
+    );
+    seeded_balance.expect("mock Cashier balance seed should succeed");
+
+    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateways",
+        (vec![gateway, gateway],),
+    );
+    seeded_gateways.expect("mock Cashier gateway seed should succeed");
+}
+
+fn assert_initial_gateway_sync_succeeds(pic: &Pic, probe_id: Principal) {
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    synced.expect("gateway sync should succeed");
+
+    let counts: Result<BlobStorageLocalCounters, Error> =
+        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
+    assert_eq!(
+        counts.expect("probe counts query should succeed"),
+        BlobStorageLocalCounters::new(0, 0, 1)
+    );
 }
 
 fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Principal) {
@@ -213,6 +226,32 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
             .code,
         ErrorCode::Unauthorized
     );
+
+    let balance_total_denied: Result<(), Error> = pic.update_call_as_or_panic(
+        cashier_id,
+        non_controller,
+        "blob_storage_cashier_mock_set_next_balance_total",
+        (Some(candid::Int::from(-1)),),
+    );
+    assert_eq!(
+        balance_total_denied
+            .expect_err("non-controller must not configure mock malformed balance responses")
+            .code,
+        ErrorCode::Unauthorized
+    );
+
+    let top_up_total_denied: Result<(), Error> = pic.update_call_as_or_panic(
+        cashier_id,
+        non_controller,
+        "blob_storage_cashier_mock_set_next_top_up_total",
+        (Some(candid::Int::from(-1)),),
+    );
+    assert_eq!(
+        top_up_total_denied
+            .expect_err("non-controller must not configure mock malformed top-up responses")
+            .code,
+        ErrorCode::Unauthorized
+    );
 }
 
 fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
@@ -233,7 +272,7 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         synced
             .expect_err("invalid Cashier gateway list should fail sync")
             .code,
-        ErrorCode::Internal
+        ErrorCode::InternalRpcMalformed
     );
 
     let counts: Result<BlobStorageLocalCounters, Error> =
@@ -242,6 +281,45 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         counts.expect("probe counts query should succeed"),
         BlobStorageLocalCounters::new(0, 0, 1),
         "failed gateway sync must leave the previous gateway set intact"
+    );
+}
+
+fn assert_billing_status_reports_cashier_balance_malformed(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_next_balance_total",
+        (Some(candid::Int::from(-1)),),
+    );
+    configured.expect("mock Cashier malformed balance should be configured");
+
+    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_STATUS,
+        (BlobStorageStatusRequest {
+            sync_gateway_principals: true,
+        },),
+    );
+    let status = status.expect("status endpoint should succeed");
+
+    assert_eq!(status.cashier_balance, None);
+    assert_eq!(
+        status.funding_status,
+        BlobStorageFundingStatus::BalanceMalformed
+    );
+    assert!(!status.ready);
+    assert!(
+        status
+            .blockers
+            .contains(&BlobStorageReadinessBlocker::CashierBalanceMalformed)
+    );
+    assert!(
+        status
+            .warnings
+            .contains(&BlobStorageBillingWarning::CashierBalanceMalformed)
     );
 }
 
@@ -318,6 +396,36 @@ fn assert_cashier_top_up_error_maps_to_public_code(
         last_top_up.expect("last top-up query should succeed"),
         None,
         "forced Cashier errors must not be recorded as successful top-ups"
+    );
+}
+
+fn assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_next_top_up_total",
+        (Some(candid::Int::from(-1)),),
+    );
+    configured.expect("mock Cashier malformed top-up balance should be configured");
+
+    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (11_u128,));
+    assert_eq!(
+        top_up
+            .expect_err("malformed Cashier top-up balance should propagate")
+            .code,
+        ErrorCode::InternalRpcMalformed
+    );
+
+    let last_top_up: Result<MockCashierLastTopUp, Error> =
+        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
+    assert_eq!(
+        last_top_up.expect("last top-up query should succeed"),
+        None,
+        "malformed Cashier top-up responses must not be recorded as successful top-ups"
     );
 }
 

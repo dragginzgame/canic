@@ -25,9 +25,11 @@ thread_local! {
     static NEXT_BALANCE_ERROR: RefCell<Option<BlobStorageCashierAccountBalanceGetError>> = const {
         RefCell::new(None)
     };
+    static NEXT_BALANCE_TOTAL: RefCell<Option<Int>> = const { RefCell::new(None) };
     static NEXT_TOP_UP_ERROR: RefCell<Option<BlobStorageCashierAccountTopUpError>> = const {
         RefCell::new(None)
     };
+    static NEXT_TOP_UP_TOTAL: RefCell<Option<Int>> = const { RefCell::new(None) };
 }
 
 type MockTopUpRecordView = Option<(Option<Principal>, Option<Nat>, Nat)>;
@@ -93,11 +95,27 @@ async fn blob_storage_cashier_mock_set_next_balance_error(
 }
 
 #[canic_update(requires(caller::is_controller()))]
+async fn blob_storage_cashier_mock_set_next_balance_total(total: Option<Int>) -> Result<(), Error> {
+    NEXT_BALANCE_TOTAL.with_borrow_mut(|stored| {
+        *stored = total;
+    });
+    Ok(())
+}
+
+#[canic_update(requires(caller::is_controller()))]
 async fn blob_storage_cashier_mock_set_next_top_up_error(
     error: Option<BlobStorageCashierAccountTopUpError>,
 ) -> Result<(), Error> {
     NEXT_TOP_UP_ERROR.with_borrow_mut(|stored| {
         *stored = error;
+    });
+    Ok(())
+}
+
+#[canic_update(requires(caller::is_controller()))]
+async fn blob_storage_cashier_mock_set_next_top_up_total(total: Option<Int>) -> Result<(), Error> {
+    NEXT_TOP_UP_TOTAL.with_borrow_mut(|stored| {
+        *stored = total;
     });
     Ok(())
 }
@@ -108,6 +126,14 @@ async fn account_balance_get_v1(
 ) -> BlobStorageCashierAccountBalanceGetResult {
     if let Some(error) = NEXT_BALANCE_ERROR.with_borrow_mut(Option::take) {
         return BlobStorageCashierAccountBalanceGetResult::Err(error);
+    }
+    if let Some(total) = NEXT_BALANCE_TOTAL.with_borrow_mut(Option::take) {
+        return BlobStorageCashierAccountBalanceGetResult::Ok(
+            BlobStorageCashierAccountBalanceGetOk {
+                account_cycle_balances: cycle_balances_from_int(total),
+                account: request.account,
+            },
+        );
     }
 
     BALANCES.with_borrow(|balances| {
@@ -149,6 +175,12 @@ async fn account_top_up_v1(
     if let Some(error) = NEXT_TOP_UP_ERROR.with_borrow_mut(Option::take) {
         return BlobStorageCashierAccountTopUpResult::Err(error);
     }
+    if let Some(total) = NEXT_TOP_UP_TOTAL.with_borrow_mut(Option::take) {
+        return BlobStorageCashierAccountTopUpResult::Ok(BlobStorageCashierAccountTopUpOk {
+            balance: cycle_balances_from_int(total),
+            message: "mock malformed top-up balance".to_string(),
+        });
+    }
 
     let Some(balance) = BALANCES.with_borrow_mut(|balances| {
         let current = balances.get(&account).copied().unwrap_or(0);
@@ -184,6 +216,16 @@ fn cycle_balances(total: u128) -> BlobStorageCashierAccountCycleBalances {
     BlobStorageCashierAccountCycleBalances {
         total: int_from_u128(total),
         cycles_prepaid: int_from_u128(total),
+        cycles_promo: int_from_u128(0),
+        debt_target: BlobStorageCashierDebtTarget::Prepaid,
+        cycles_ledger: int_from_u128(0),
+    }
+}
+
+fn cycle_balances_from_int(total: Int) -> BlobStorageCashierAccountCycleBalances {
+    BlobStorageCashierAccountCycleBalances {
+        total,
+        cycles_prepaid: int_from_u128(0),
         cycles_promo: int_from_u128(0),
         debt_target: BlobStorageCashierDebtTarget::Prepaid,
         cycles_ledger: int_from_u128(0),

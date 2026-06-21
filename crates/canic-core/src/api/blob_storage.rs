@@ -24,15 +24,17 @@ use crate::{
 
 #[cfg(feature = "blob-storage-billing")]
 use crate::{
-    InternalError,
     cdk::candid::Nat,
-    dto::blob_storage::{
-        BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
-        BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetResult,
-        BlobStorageCashierAccountTopUpError, BlobStorageCashierAccountTopUpRequest,
-        BlobStorageCashierAccountTopUpResult, BlobStorageFundingStatus,
-        BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
-        BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
+    dto::{
+        blob_storage::{
+            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
+            BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetResult,
+            BlobStorageCashierAccountTopUpError, BlobStorageCashierAccountTopUpRequest,
+            BlobStorageCashierAccountTopUpResult, BlobStorageFundingStatus,
+            BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
+            BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
+        },
+        error::ErrorCode,
     },
     ops::{
         blob_storage::funding::{BlobStorageFundingInProgress, BlobStorageFundingOps},
@@ -460,20 +462,28 @@ impl BlobStorageApi {
         let balance =
             Self::cashier_account_total_balance(config.cashier_canister_id, IcOps::canister_self())
                 .await;
-        let (cashier_balance, funding_status) = if let Ok(balance) = balance {
-            let funding_status = Self::status_funding_status(
-                balance,
-                config.min_upload_balance,
-                config.target_upload_balance,
-                config.project_cycles_reserve,
-                project_cycles_available,
-                &mut blockers,
-            );
-            (Some(Self::nat_from_u128(balance)), funding_status)
-        } else {
-            blockers.push(BlobStorageReadinessBlocker::CashierBalanceUnavailable);
-            warnings.push(BlobStorageBillingWarning::CashierBalanceUnavailable);
-            (None, BlobStorageFundingStatus::BalanceUnavailable)
+        let (cashier_balance, funding_status) = match balance {
+            Ok(balance) => {
+                let funding_status = Self::status_funding_status(
+                    balance,
+                    config.min_upload_balance,
+                    config.target_upload_balance,
+                    config.project_cycles_reserve,
+                    project_cycles_available,
+                    &mut blockers,
+                );
+                (Some(Self::nat_from_u128(balance)), funding_status)
+            }
+            Err(err) if err.code == ErrorCode::InternalRpcMalformed => {
+                blockers.push(BlobStorageReadinessBlocker::CashierBalanceMalformed);
+                warnings.push(BlobStorageBillingWarning::CashierBalanceMalformed);
+                (None, BlobStorageFundingStatus::BalanceMalformed)
+            }
+            Err(_) => {
+                blockers.push(BlobStorageReadinessBlocker::CashierBalanceUnavailable);
+                warnings.push(BlobStorageBillingWarning::CashierBalanceUnavailable);
+                (None, BlobStorageFundingStatus::BalanceUnavailable)
+            }
         };
 
         BlobStorageStatusResponse {
@@ -515,7 +525,7 @@ impl BlobStorageApi {
 
     #[cfg(feature = "blob-storage-billing")]
     fn map_cashier_decode_error(err: CashierDecodeError) -> Error {
-        Error::from(InternalError::from(err))
+        Error::new(ErrorCode::InternalRpcMalformed, err.to_string())
     }
 
     #[cfg(feature = "blob-storage-billing")]
@@ -909,6 +919,27 @@ mod tests {
 
         assert!(BlobStorageApi::pending_deletion_hashes().is_empty());
         assert!(!BlobStorageApi::is_live(hash).expect("live check"));
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn cashier_decode_errors_map_to_rpc_malformed_code() {
+        let invalid_balance =
+            BlobStorageApi::map_cashier_decode_error(CashierDecodeError::InvalidCycleBalance {
+                field: "total",
+            });
+        assert_eq!(invalid_balance.code, ErrorCode::InternalRpcMalformed);
+
+        let invalid_gateway =
+            BlobStorageApi::map_cashier_decode_error(CashierDecodeError::InvalidGatewayPrincipal {
+                principal: Principal::anonymous(),
+            });
+        assert_eq!(invalid_gateway.code, ErrorCode::InternalRpcMalformed);
+
+        let too_many_gateways = BlobStorageApi::map_cashier_decode_error(
+            CashierDecodeError::TooManyGatewayPrincipals { actual: 2, max: 1 },
+        );
+        assert_eq!(too_many_gateways.code, ErrorCode::InternalRpcMalformed);
     }
 
     #[cfg(feature = "blob-storage-billing")]
