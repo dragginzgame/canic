@@ -9,8 +9,33 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.8` is in progress as a narrow blob-storage billing status-readiness
-  hardening slice after the pushed `0.70.7` release. Current work adds PocketIC
+- `0.70.9` is in progress as a narrow blob-storage funding-report metadata
+  hardening slice after the pushed `0.70.8` release. Current work expands
+  PocketIC coverage for `_immutableObjectStorageFundFromProjectCycles` reports:
+  successful funding now pins requested cycles, attached cycles, reserve cycles,
+  Cashier total, and project-cycle balance metadata; reserve-skipped funding
+  now pins zero attached cycles, zero Cashier total, unchanged project-cycle
+  balance metadata, and the documented skipped reason. It also adds
+  protocol-surface coverage for the funding report DTO, including Candid
+  roundtrips for successful and reserve-skipped reports and a field-shape
+  guard, plus a generated endpoint-source guard proving the funding wrapper
+  keeps returning the structured top-up report DTO.
+  Focused validation passing so far:
+  ```text
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface blob_storage_funding_report_dto_roundtrips_through_candid -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface blob_storage_billing_gateway_protocol_names_are_pinned -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface -- --nocapture
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  cargo clippy --locked -p canic --features blob-storage-billing --test protocol_surface -- -D warnings
+  cargo fmt --all -- --check
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  git diff --check
+  ```
+
+- `0.70.8` is pushed as a narrow blob-storage billing status-readiness
+  hardening slice after the pushed `0.70.7` release. It adds PocketIC
   coverage proving `get_blob_storage_status` reports endpoint-visible readiness
   blockers for missing gateway principals, insufficient Cashier balance, and
   reserve-blocked funding.
