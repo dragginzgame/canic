@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-20
+Last updated: 2026-06-21
 
 ## Purpose
 
@@ -9,21 +9,34 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.1` is in progress as a narrow blob-storage billing hardening slice
-  after the pushed `0.70.0` backend MVP. Current work adds a transient in-memory
-  single-flight guard around project-cycle funding so overlapping
-  `_immutableObjectStorageFundFromProjectCycles` calls fail with a typed
-  conflict while one Cashier top-up is already in progress. The guard is not
-  stable state and releases automatically on drop, so upgrades start unlocked.
+- `0.70.2` is in progress as a narrow blob-storage billing hardening slice
+  after the pushed `0.70.1` release. Current work rejects zero-cycle
+  `_immutableObjectStorageFundFromProjectCycles` requests with `InvalidInput`
+  before acquiring the transient funding guard, avoiding a misleading
+  `reserve would be violated` skipped report when the caller requested no
+  cycles. The funding guard still covers the project-cycle balance observation
+  and Cashier top-up decision for nonzero requests. Known Cashier top-up
+  failure variants now map to stable public Canic error codes instead of
+  collapsing to generic `Internal`.
   Focused validation passing so far:
   ```text
   cargo fmt --all
   cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
   cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
-  cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
   cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
   POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
   ```
+
+- `0.70.1` is pushed as a narrow blob-storage billing hardening slice after the
+  pushed `0.70.0` backend MVP. It adds a transient in-memory single-flight guard
+  around project-cycle funding so overlapping
+  `_immutableObjectStorageFundFromProjectCycles` calls fail with a typed
+  conflict while one Cashier top-up is already in progress. The guard is not
+  stable state and releases automatically on drop, so upgrades start unlocked.
+  The final cleanup adds read-only status decision coverage and keeps the
+  billing-only stable-storage record impl gated so plain `blob-storage` still
+  compiles without `blob-storage-billing`.
 
 - `0.70.0` blob-storage billing is pushed as a Toko-compatible backend MVP. The
   maintainer has approved current local Toko `boss` commit

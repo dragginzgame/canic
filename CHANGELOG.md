@@ -12,9 +12,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.2` rejects zero-cycle blob-storage project funding requests with
+  `InvalidInput` instead of reporting a misleading reserve-violation skip, and
+  maps known Cashier top-up failures to stable public error codes. It pins the
+  funding attachment decision with unit and PocketIC coverage.
+
 - `0.70.1` adds a transient in-flight guard around project-cycle funding so
   overlapping blob-storage funding calls fail with a typed conflict instead of
-  double-submitting against stale observed state.
+  double-submitting against stale observed state, and tightens billing-only
+  feature gates plus read-only status decision coverage.
 
 - `0.70.0` starts the blob-storage billing line with source-backed Cashier
   DTOs, typed Cashier wrappers, stable billing config, gateway-principal sync,

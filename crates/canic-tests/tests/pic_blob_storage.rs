@@ -104,6 +104,15 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
 
     assert_billing_status_ready(&pic, probe_id);
 
+    let zero_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (0_u128,));
+    assert_eq!(
+        zero_top_up
+            .expect_err("zero-cycle funding should be rejected")
+            .code,
+        ErrorCode::InvalidInput
+    );
+
     pic.add_cycles(probe_id, 10_000);
     let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
