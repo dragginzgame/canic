@@ -213,6 +213,7 @@ pub struct BlobStorageBillingConfigRecord {
     pub updated_at_ns: u64,
 }
 
+#[cfg(feature = "blob-storage-billing")]
 impl_storable_bounded!(
     BlobStorageBillingConfigRecord,
     BlobStorageBillingConfigRecord::STORABLE_MAX_SIZE,

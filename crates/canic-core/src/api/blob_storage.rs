@@ -13,7 +13,6 @@ use crate::{
     ops::{
         blob_storage::{
             conversion::{BlobStorageConversionError, BlobStorageConversionOps},
-            funding::{BlobStorageFundingInProgress, BlobStorageFundingOps},
             lifecycle::{
                 BlobPendingDeletionOutcome, BlobRegisterOutcome, BlobStorageLifecycleError,
                 BlobStorageLifecycleOps,
@@ -30,12 +29,13 @@ use crate::{
     dto::blob_storage::{
         BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
         BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetResult,
-        BlobStorageCashierAccountTopUpRequest, BlobStorageCashierAccountTopUpResult,
-        BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
-        BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker, BlobStorageStatusRequest,
-        BlobStorageStatusResponse,
+        BlobStorageCashierAccountTopUpError, BlobStorageCashierAccountTopUpRequest,
+        BlobStorageCashierAccountTopUpResult, BlobStorageFundingStatus,
+        BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
+        BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
     },
     ops::{
+        blob_storage::funding::{BlobStorageFundingInProgress, BlobStorageFundingOps},
         cashier::{
             client::CashierClientOps,
             conversion::{CashierConversionOps, CashierDecodeError},
@@ -362,12 +362,17 @@ impl BlobStorageApi {
         let Some(config) = BlobStorageLifecycleOps::billing_config() else {
             return Err(Error::invalid("blob-storage billing config is not set"));
         };
+        Self::validate_requested_funding_cycles(requested_cycles)?;
         let _funding_guard =
             BlobStorageFundingOps::try_acquire().map_err(Self::map_funding_in_progress)?;
 
-        let project_cycles_before = MgmtOps::canister_cycle_balance().to_u128();
-        let transferable = project_cycles_before.saturating_sub(config.project_cycles_reserve);
-        let attached_cycles = requested_cycles.min(transferable);
+        let attachment = Self::funding_attachment(
+            requested_cycles,
+            MgmtOps::canister_cycle_balance().to_u128(),
+            config.project_cycles_reserve,
+        );
+        let project_cycles_before = attachment.project_cycles_available;
+        let attached_cycles = attachment.attached_cycles;
 
         if attached_cycles == 0 {
             return Ok(Self::top_up_report(
@@ -377,7 +382,7 @@ impl BlobStorageApi {
                 project_cycles_before,
                 config.project_cycles_reserve,
                 0,
-                Some("reserve would be violated".to_string()),
+                attachment.skipped_reason.map(str::to_string),
             ));
         }
 
@@ -391,8 +396,11 @@ impl BlobStorageApi {
             attached_cycles,
         )
         .await?;
-        let BlobStorageCashierAccountTopUpResult::Ok(top_up) = result else {
-            return Err(Error::internal("Cashier top-up failed"));
+        let top_up = match result {
+            BlobStorageCashierAccountTopUpResult::Ok(top_up) => top_up,
+            BlobStorageCashierAccountTopUpResult::Err(err) => {
+                return Err(Self::map_cashier_top_up_error(err));
+            }
         };
         let cashier_total_after =
             CashierConversionOps::account_cycle_balances_to_u128(&top_up.balance)
@@ -511,6 +519,24 @@ impl BlobStorageApi {
     }
 
     #[cfg(feature = "blob-storage-billing")]
+    fn map_cashier_top_up_error(err: BlobStorageCashierAccountTopUpError) -> Error {
+        match err {
+            BlobStorageCashierAccountTopUpError::NotAuthorized(principal) => {
+                Error::forbidden(format!("Cashier rejected top-up for account {principal}"))
+            }
+            BlobStorageCashierAccountTopUpError::AccountBalanceOverflow => {
+                Error::exhausted("Cashier account balance overflow")
+            }
+            BlobStorageCashierAccountTopUpError::InternalError(message) => {
+                Error::internal(format!("Cashier top-up failed: {message}"))
+            }
+            BlobStorageCashierAccountTopUpError::TopUpWithoutCycles => {
+                Error::invalid("Cashier top-up rejected request without attached cycles")
+            }
+        }
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
     fn map_funding_in_progress(err: BlobStorageFundingInProgress) -> Error {
         Error::conflict(err.to_string())
     }
@@ -536,6 +562,36 @@ impl BlobStorageApi {
     #[cfg(feature = "blob-storage-billing")]
     fn nat_from_u128(value: u128) -> Nat {
         Nat::parse(value.to_string().as_bytes()).expect("u128 must encode as Candid nat")
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn validate_requested_funding_cycles(requested_cycles: u128) -> Result<(), Error> {
+        if requested_cycles == 0 {
+            return Err(Error::invalid("requested_cycles must be greater than zero"));
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn funding_attachment(
+        requested_cycles: u128,
+        project_cycles_available: u128,
+        project_cycles_reserve: u128,
+    ) -> BlobStorageFundingAttachment {
+        let transferable_cycles = project_cycles_available.saturating_sub(project_cycles_reserve);
+        let attached_cycles = requested_cycles.min(transferable_cycles);
+        let skipped_reason = if attached_cycles == 0 {
+            Some("reserve would be violated")
+        } else {
+            None
+        };
+
+        BlobStorageFundingAttachment {
+            project_cycles_available,
+            attached_cycles,
+            skipped_reason,
+        }
     }
 
     #[cfg(feature = "blob-storage-billing")]
@@ -602,6 +658,14 @@ impl BlobStorageApi {
             skipped_reason,
         }
     }
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[derive(Debug, Eq, PartialEq)]
+struct BlobStorageFundingAttachment {
+    project_cycles_available: u128,
+    attached_cycles: u128,
+    skipped_reason: Option<&'static str>,
 }
 
 // -----------------------------------------------------------------------------
@@ -845,5 +909,149 @@ mod tests {
 
         assert!(BlobStorageApi::pending_deletion_hashes().is_empty());
         assert!(!BlobStorageApi::is_live(hash).expect("live check"));
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn cashier_top_up_errors_map_to_stable_public_codes() {
+        let unauthorized = BlobStorageApi::map_cashier_top_up_error(
+            BlobStorageCashierAccountTopUpError::NotAuthorized(Principal::from_slice(&[1; 29])),
+        );
+        assert_eq!(unauthorized.code, ErrorCode::Forbidden);
+
+        let overflow = BlobStorageApi::map_cashier_top_up_error(
+            BlobStorageCashierAccountTopUpError::AccountBalanceOverflow,
+        );
+        assert_eq!(overflow.code, ErrorCode::ResourceExhausted);
+
+        let internal = BlobStorageApi::map_cashier_top_up_error(
+            BlobStorageCashierAccountTopUpError::InternalError("down".to_string()),
+        );
+        assert_eq!(internal.code, ErrorCode::Internal);
+
+        let without_cycles = BlobStorageApi::map_cashier_top_up_error(
+            BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
+        );
+        assert_eq!(without_cycles.code, ErrorCode::InvalidInput);
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn validate_requested_funding_cycles_rejects_zero() {
+        let err = BlobStorageApi::validate_requested_funding_cycles(0)
+            .expect_err("zero requested cycles should be invalid");
+
+        assert_eq!(err.code, ErrorCode::InvalidInput);
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn funding_attachment_caps_to_transferable_cycles() {
+        assert_eq!(
+            BlobStorageApi::funding_attachment(500, 1_000, 700),
+            BlobStorageFundingAttachment {
+                project_cycles_available: 1_000,
+                attached_cycles: 300,
+                skipped_reason: None,
+            }
+        );
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn funding_attachment_reports_reserve_violation_only_when_reserve_blocks_transfer() {
+        assert_eq!(
+            BlobStorageApi::funding_attachment(500, 700, 700),
+            BlobStorageFundingAttachment {
+                project_cycles_available: 700,
+                attached_cycles: 0,
+                skipped_reason: Some("reserve would be violated"),
+            }
+        );
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn status_sync_action_is_read_only_when_requested() {
+        assert_eq!(
+            BlobStorageApi::status_sync_action(
+                &BlobStorageStatusRequest {
+                    sync_gateway_principals: false,
+                },
+                true,
+            ),
+            BlobStorageGatewayPrincipalSyncAction::NotRequested
+        );
+        assert_eq!(
+            BlobStorageApi::status_sync_action(
+                &BlobStorageStatusRequest {
+                    sync_gateway_principals: true,
+                },
+                false,
+            ),
+            BlobStorageGatewayPrincipalSyncAction::SkippedConfigMissing
+        );
+        assert_eq!(
+            BlobStorageApi::status_sync_action(
+                &BlobStorageStatusRequest {
+                    sync_gateway_principals: true,
+                },
+                true,
+            ),
+            BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus
+        );
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn status_funding_status_reports_not_needed_at_min_balance() {
+        let mut blockers = Vec::new();
+
+        let status = BlobStorageApi::status_funding_status(10, 10, 100, 1, 1_000, &mut blockers);
+
+        assert_eq!(status, BlobStorageFundingStatus::NotNeeded);
+        assert!(blockers.is_empty());
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn status_funding_status_reports_required_top_up() {
+        let mut blockers = Vec::new();
+
+        let status = BlobStorageApi::status_funding_status(9, 10, 100, 1, 1_000, &mut blockers);
+
+        assert_eq!(
+            status,
+            BlobStorageFundingStatus::FundingRequired {
+                requested_cycles: Nat::from(91_u64),
+            }
+        );
+        assert_eq!(
+            blockers,
+            vec![BlobStorageReadinessBlocker::InsufficientCashierBalance]
+        );
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn status_funding_status_reports_reserve_violation() {
+        let mut blockers = Vec::new();
+
+        let status = BlobStorageApi::status_funding_status(9, 10, 100, 950, 1_000, &mut blockers);
+
+        assert_eq!(
+            status,
+            BlobStorageFundingStatus::ReserveWouldBeViolated {
+                requested_cycles: Nat::from(91_u64),
+                transferable_cycles: Nat::from(50_u64),
+            }
+        );
+        assert_eq!(
+            blockers,
+            vec![
+                BlobStorageReadinessBlocker::InsufficientCashierBalance,
+                BlobStorageReadinessBlocker::ReserveWouldBeViolated,
+            ]
+        );
     }
 }
