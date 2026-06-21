@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.11` hardens Cashier gateway-sync failure coverage by proving empty and
+  invalid Cashier gateway lists, and trapped Cashier gateway-list calls,
+  preserve the last successful gateway-sync timestamp as well as the previously
+  synced gateway registry. The trapped gateway-list path also proves a
+  subsequent valid sync recovers and records a fresh success timestamp after
+  the mock trap hook is explicitly cleared.
+
 - `0.70.10` hardens Cashier gateway-principal sync by rejecting empty
   Cashier gateway lists as malformed before mutating local gateway state. The
   PocketIC billing flow now proves empty and invalid Cashier lists both fail

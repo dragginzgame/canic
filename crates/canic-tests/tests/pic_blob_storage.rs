@@ -710,6 +710,19 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
             .code,
         ErrorCode::Unauthorized
     );
+
+    let gateway_list_trap_denied: Result<(), Error> = pic.update_call_as_or_panic(
+        cashier_id,
+        non_controller,
+        "blob_storage_cashier_mock_set_gateway_list_trap",
+        (Some("denied gateway-list trap".to_string()),),
+    );
+    assert_eq!(
+        gateway_list_trap_denied
+            .expect_err("non-controller must not configure mock gateway-list traps")
+            .code,
+        ErrorCode::Unauthorized
+    );
 }
 
 fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
@@ -717,6 +730,10 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
     cashier_id: Principal,
     probe_id: Principal,
 ) {
+    let sync_at_before = billing_status(pic, probe_id, false)
+        .last_gateway_principal_sync_at_ns
+        .expect("successful gateway sync timestamp should exist before failed sync");
+
     let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
         "blob_storage_cashier_mock_set_gateways",
@@ -733,13 +750,7 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         ErrorCode::InternalRpcMalformed
     );
 
-    let counts: Result<BlobStorageLocalCounters, Error> =
-        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
-    assert_eq!(
-        counts.expect("probe counts query should succeed"),
-        BlobStorageLocalCounters::new(0, 0, 1),
-        "empty gateway sync must leave the previous gateway set intact"
-    );
+    assert_failed_gateway_sync_preserves_state(pic, probe_id, sync_at_before, "empty gateway sync");
 
     let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
@@ -757,12 +768,88 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         ErrorCode::InternalRpcMalformed
     );
 
+    assert_failed_gateway_sync_preserves_state(
+        pic,
+        probe_id,
+        sync_at_before,
+        "invalid gateway sync",
+    );
+
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateway_list_trap",
+        (Some("mock gateway list trap".to_string()),),
+    );
+    configured.expect("mock Cashier gateway-list trap should be configured");
+
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    assert_eq!(
+        synced
+            .expect_err("trapped Cashier gateway list should fail sync")
+            .code,
+        ErrorCode::Internal
+    );
+
+    assert_failed_gateway_sync_preserves_state(
+        pic,
+        probe_id,
+        sync_at_before,
+        "trapped gateway sync",
+    );
+
+    let cleared: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateway_list_trap",
+        (Option::<String>::None,),
+    );
+    cleared.expect("mock Cashier gateway-list trap should be cleared");
+
+    let replacement_gateway = principal(0x5a);
+    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateways",
+        (vec![replacement_gateway],),
+    );
+    seeded_gateways.expect("mock Cashier replacement gateway seed should succeed");
+
+    pic.advance_time(Duration::from_nanos(1));
+    pic.tick();
+
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    synced.expect("gateway sync should recover after cleared trap");
+
+    let status = billing_status(pic, probe_id, false);
+    let sync_at_after = status
+        .last_gateway_principal_sync_at_ns
+        .expect("recovered gateway sync timestamp should be recorded");
+    assert!(
+        sync_at_after > sync_at_before,
+        "successful sync after a cleared trap must record a fresh timestamp"
+    );
+    assert_eq!(status.gateway_principal_count, 1);
+}
+
+fn assert_failed_gateway_sync_preserves_state(
+    pic: &Pic,
+    probe_id: Principal,
+    sync_at_before: u64,
+    context: &str,
+) {
     let counts: Result<BlobStorageLocalCounters, Error> =
         pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
     assert_eq!(
         counts.expect("probe counts query should succeed"),
         BlobStorageLocalCounters::new(0, 0, 1),
-        "failed gateway sync must leave the previous gateway set intact"
+        "{context} must leave the previous gateway set intact"
+    );
+
+    let status = billing_status(pic, probe_id, false);
+    assert_eq!(
+        status.last_gateway_principal_sync_at_ns,
+        Some(sync_at_before),
+        "{context} must not record a successful gateway sync timestamp"
     );
 }
 
