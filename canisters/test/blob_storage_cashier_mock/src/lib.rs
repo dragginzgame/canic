@@ -22,6 +22,12 @@ thread_local! {
     static BALANCES: RefCell<BTreeMap<Principal, u128>> = const { RefCell::new(BTreeMap::new()) };
     static GATEWAYS: RefCell<Vec<Principal>> = const { RefCell::new(Vec::new()) };
     static LAST_TOP_UP: RefCell<Option<MockTopUpRecord>> = const { RefCell::new(None) };
+    static NEXT_BALANCE_ERROR: RefCell<Option<BlobStorageCashierAccountBalanceGetError>> = const {
+        RefCell::new(None)
+    };
+    static NEXT_TOP_UP_ERROR: RefCell<Option<BlobStorageCashierAccountTopUpError>> = const {
+        RefCell::new(None)
+    };
 }
 
 type MockTopUpRecordView = Option<(Option<Principal>, Option<Nat>, Nat)>;
@@ -76,10 +82,34 @@ fn blob_storage_cashier_mock_last_top_up() -> Result<MockTopUpRecordView, Error>
     }))
 }
 
+#[canic_update(requires(caller::is_controller()))]
+async fn blob_storage_cashier_mock_set_next_balance_error(
+    error: Option<BlobStorageCashierAccountBalanceGetError>,
+) -> Result<(), Error> {
+    NEXT_BALANCE_ERROR.with_borrow_mut(|stored| {
+        *stored = error;
+    });
+    Ok(())
+}
+
+#[canic_update(requires(caller::is_controller()))]
+async fn blob_storage_cashier_mock_set_next_top_up_error(
+    error: Option<BlobStorageCashierAccountTopUpError>,
+) -> Result<(), Error> {
+    NEXT_TOP_UP_ERROR.with_borrow_mut(|stored| {
+        *stored = error;
+    });
+    Ok(())
+}
+
 #[ic_cdk::update(name = "account_balance_get_v1")]
 async fn account_balance_get_v1(
     request: BlobStorageCashierAccountBalanceGetRequest,
 ) -> BlobStorageCashierAccountBalanceGetResult {
+    if let Some(error) = NEXT_BALANCE_ERROR.with_borrow_mut(Option::take) {
+        return BlobStorageCashierAccountBalanceGetResult::Err(error);
+    }
+
     BALANCES.with_borrow(|balances| {
         balances.get(&request.account).copied().map_or(
             BlobStorageCashierAccountBalanceGetResult::Err(
@@ -116,6 +146,10 @@ async fn account_top_up_v1(
         .as_ref()
         .and_then(|request| request.target_balance.clone());
 
+    if let Some(error) = NEXT_TOP_UP_ERROR.with_borrow_mut(Option::take) {
+        return BlobStorageCashierAccountTopUpResult::Err(error);
+    }
+
     let Some(balance) = BALANCES.with_borrow_mut(|balances| {
         let current = balances.get(&account).copied().unwrap_or(0);
         let next = current.checked_add(attached_cycles)?;
@@ -145,9 +179,6 @@ async fn account_top_up_v1(
 async fn storage_gateway_principal_list_v1() -> Vec<Principal> {
     GATEWAYS.with_borrow(Clone::clone)
 }
-
-#[ic_cdk::update]
-async fn blob_storage_cashier_mock_delay_tick() {}
 
 fn cycle_balances(total: u128) -> BlobStorageCashierAccountCycleBalances {
     BlobStorageCashierAccountCycleBalances {

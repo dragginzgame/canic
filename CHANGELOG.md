@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.3` adds mock-Cashier one-shot failure controls and PocketIC coverage
+  proving generated blob-storage status/funding endpoints surface Cashier
+  balance and top-up failures with stable public state and error codes. It
+  also pins that invalid Cashier gateway lists fail gateway sync without
+  replacing the existing local gateway set.
+
 - `0.70.2` rejects zero-cycle blob-storage project funding requests with
   `InvalidInput` instead of reporting a misleading reserve-violation skip, and
   maps known Cashier top-up failures to stable public error codes. It pins the
