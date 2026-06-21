@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.9` hardens blob-storage funding-report coverage with PocketIC tests
+  proving successful project-cycle funding reports requested, attached, reserve,
+  Cashier total, and cycle-balance metadata, and reserve-skipped funding reports
+  zero attached cycles with unchanged project-cycle balance metadata. It also
+  pins the funding report Candid shape, roundtrips both success and skipped
+  reports through the protocol-surface tests, and guards that the generated
+  funding endpoint keeps returning the structured top-up report.
+
 - `0.70.8` expands blob-storage billing status coverage with PocketIC tests
   proving `get_blob_storage_status` reports endpoint-visible readiness blockers
   for missing gateway principals, insufficient Cashier balance, and

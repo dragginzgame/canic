@@ -7,14 +7,14 @@ use candid::{decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 #[cfg(feature = "blob-storage-billing")]
 use canic::dto::blob_storage::{
-    BlobStorageBillingWarning, BlobStorageCashierAccountBalanceGetError,
-    BlobStorageCashierAccountBalanceGetOk, BlobStorageCashierAccountBalanceGetRequest,
-    BlobStorageCashierAccountBalanceGetResult, BlobStorageCashierAccountCycleBalances,
-    BlobStorageCashierAccountTopUpError, BlobStorageCashierAccountTopUpOk,
-    BlobStorageCashierAccountTopUpRequest, BlobStorageCashierAccountTopUpResult,
-    BlobStorageCashierDebtTarget, BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
-    BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker, BlobStorageStatusRequest,
-    BlobStorageStatusResponse,
+    BlobProjectCyclesTopUpReport, BlobStorageBillingWarning,
+    BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetOk,
+    BlobStorageCashierAccountBalanceGetRequest, BlobStorageCashierAccountBalanceGetResult,
+    BlobStorageCashierAccountCycleBalances, BlobStorageCashierAccountTopUpError,
+    BlobStorageCashierAccountTopUpOk, BlobStorageCashierAccountTopUpRequest,
+    BlobStorageCashierAccountTopUpResult, BlobStorageCashierDebtTarget, BlobStorageFundingStatus,
+    BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
+    BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
 };
 use canic::{
     cdk::types::Principal,
@@ -277,6 +277,14 @@ fn blob_storage_billing_gateway_protocol_names_are_pinned() {
             && source.contains("requires($status_guard)"),
         "0.70 billing endpoints must stay update endpoints with separate guards"
     );
+    assert!(
+        source.contains("requested_cycles: u128")
+            && source.contains(
+                ") -> Result<::canic::dto::blob_storage::BlobProjectCyclesTopUpReport, ::canic::Error>"
+            )
+            && source.contains("BlobStorageApi::fund_from_project_cycles("),
+        "funding endpoint must keep returning the structured top-up report"
+    );
 }
 
 #[test]
@@ -362,6 +370,42 @@ fn blob_storage_cashier_dto_candid_shapes_are_pinned() {
         top_up_env.contains("target_balance : opt nat")
             && top_up_env.contains("account : opt principal"),
         "Cashier top-up request DTO Candid changed:\n{top_up_env}"
+    );
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_funding_report_dto_roundtrips_through_candid() {
+    assert_candid_roundtrip(BlobProjectCyclesTopUpReport {
+        requested_cycles: candid::Nat::from(77_u64),
+        attached_cycles: candid::Nat::from(77_u64),
+        project_cycles_before: candid::Nat::from(1_000_u64),
+        project_cycles_after: candid::Nat::from(923_u64),
+        reserve_cycles: candid::Nat::from(1_u64),
+        cashier_total_after: candid::Nat::from(200_u64),
+        skipped_reason: None,
+    });
+    assert_candid_roundtrip(BlobProjectCyclesTopUpReport {
+        requested_cycles: candid::Nat::from(1_001_u64),
+        attached_cycles: candid::Nat::from(0_u64),
+        project_cycles_before: candid::Nat::from(1_000_u64),
+        project_cycles_after: candid::Nat::from(1_000_u64),
+        reserve_cycles: candid::Nat::from(999_u64),
+        cashier_total_after: candid::Nat::from(0_u64),
+        skipped_reason: Some("reserve would be violated".to_string()),
+    });
+
+    let report_env = candid_type_env::<BlobProjectCyclesTopUpReport>();
+    assert!(
+        report_env.contains("type BlobProjectCyclesTopUpReport = record")
+            && report_env.contains("requested_cycles : nat")
+            && report_env.contains("attached_cycles : nat")
+            && report_env.contains("project_cycles_before : nat")
+            && report_env.contains("project_cycles_after : nat")
+            && report_env.contains("reserve_cycles : nat")
+            && report_env.contains("cashier_total_after : nat")
+            && report_env.contains("skipped_reason : opt text"),
+        "blob-storage funding report DTO Candid changed:\n{report_env}"
     );
 }
 

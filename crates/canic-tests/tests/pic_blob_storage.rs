@@ -134,12 +134,8 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
 
     let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
-    assert_eq!(
-        top_up
-            .expect("funding endpoint should reach mock Cashier")
-            .attached_cycles,
-        candid::Nat::from(77_u64)
-    );
+    let report = top_up.expect("funding endpoint should reach mock Cashier");
+    assert_successful_funding_report(&report, 77, 1, 200);
 
     let balance_after: Result<u128, Error> = pic.update_call_or_panic(
         probe_id,
@@ -555,8 +551,53 @@ fn assert_billing_status_reports_reserve_violation(pic: &Pic, probe_id: Principa
 }
 
 fn status_project_cycles_available(status: &BlobStorageStatusResponse) -> u128 {
-    u128::try_from(status.project_cycles_available.0.clone())
-        .expect("available project cycles should fit u128")
+    nat_to_u128(&status.project_cycles_available)
+}
+
+fn assert_successful_funding_report(
+    report: &BlobProjectCyclesTopUpReport,
+    requested_cycles: u64,
+    reserve_cycles: u64,
+    cashier_total_after: u64,
+) {
+    assert_eq!(report.requested_cycles, candid::Nat::from(requested_cycles));
+    assert_eq!(report.attached_cycles, candid::Nat::from(requested_cycles));
+    assert_eq!(report.reserve_cycles, candid::Nat::from(reserve_cycles));
+    assert_eq!(
+        report.cashier_total_after,
+        candid::Nat::from(cashier_total_after)
+    );
+    assert_eq!(report.skipped_reason, None);
+    let project_cycles_before = nat_to_u128(&report.project_cycles_before);
+    let project_cycles_after = nat_to_u128(&report.project_cycles_after);
+    assert!(
+        project_cycles_before > project_cycles_after,
+        "project cycle balance must decrease during explicit funding"
+    );
+    assert!(
+        project_cycles_before - project_cycles_after >= u128::from(requested_cycles),
+        "project cycle balance decrease must cover the attached funding cycles"
+    );
+}
+
+fn assert_reserve_skipped_funding_report(
+    report: &BlobProjectCyclesTopUpReport,
+    requested_cycles: u128,
+    reserve_cycles: u128,
+) {
+    assert_eq!(report.requested_cycles, candid::Nat::from(requested_cycles));
+    assert_eq!(report.attached_cycles, candid::Nat::from(0_u64));
+    assert_eq!(report.reserve_cycles, candid::Nat::from(reserve_cycles));
+    assert_eq!(report.cashier_total_after, candid::Nat::from(0_u64));
+    assert_eq!(report.project_cycles_before, report.project_cycles_after);
+    assert_eq!(
+        report.skipped_reason.as_deref(),
+        Some("reserve would be violated")
+    );
+}
+
+fn nat_to_u128(value: &candid::Nat) -> u128 {
+    u128::try_from(value.0.clone()).expect("Candid nat should fit u128")
 }
 
 fn assert_billing_status_matches_config(
@@ -884,10 +925,10 @@ fn assert_reserve_violation_does_not_partially_top_up(
         (transferable_cycles + 1,),
     );
     let report = top_up.expect("reserve-blocked funding should return a skipped report");
-    assert_eq!(report.attached_cycles, candid::Nat::from(0_u64));
-    assert_eq!(
-        report.skipped_reason.as_deref(),
-        Some("reserve would be violated")
+    assert_reserve_skipped_funding_report(
+        &report,
+        transferable_cycles + 1,
+        project_cycles_available - transferable_cycles,
     );
 
     let last_top_up: Result<MockCashierLastTopUp, Error> =
