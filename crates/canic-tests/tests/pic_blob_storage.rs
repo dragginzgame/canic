@@ -3,10 +3,11 @@ use canic::{
     Error,
     dto::{
         blob_storage::{
-            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageFundingStatus,
-            BlobStorageGatewayPrincipalSyncAction, BlobStorageLocalCounters,
-            BlobStoragePaymentModelStatus, BlobStorageStatusRequest, BlobStorageStatusResponse,
-            CreateCertificateResult,
+            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
+            BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountTopUpError,
+            BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
+            BlobStorageLocalCounters, BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker,
+            BlobStorageStatusRequest, BlobStorageStatusResponse, CreateCertificateResult,
         },
         error::ErrorCode,
     },
@@ -68,6 +69,8 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     let (cashier_id, probe_id) = install_billing_canisters(&pic);
     let gateway = principal(0x55);
 
+    assert_mock_failure_controls_require_controller(&pic, cashier_id);
+
     let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
         "blob_storage_cashier_mock_set_balance",
@@ -95,6 +98,8 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
         BlobStorageLocalCounters::new(0, 0, 1)
     );
 
+    assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(&pic, cashier_id, probe_id);
+
     let balance: Result<u128, Error> = pic.update_call_or_panic(
         probe_id,
         "blob_storage_probe_cashier_total_balance",
@@ -102,6 +107,8 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     );
     assert_eq!(balance.expect("balance read should succeed"), 123);
 
+    assert_billing_status_ready(&pic, probe_id);
+    assert_billing_status_reports_cashier_balance_unavailable(&pic, cashier_id, probe_id);
     assert_billing_status_ready(&pic, probe_id);
 
     let zero_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
@@ -114,6 +121,35 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     );
 
     pic.add_cycles(probe_id, 10_000);
+    assert_cashier_top_up_error_maps_to_public_code(
+        &pic,
+        cashier_id,
+        probe_id,
+        BlobStorageCashierAccountTopUpError::NotAuthorized(probe_id),
+        ErrorCode::Forbidden,
+    );
+    assert_cashier_top_up_error_maps_to_public_code(
+        &pic,
+        cashier_id,
+        probe_id,
+        BlobStorageCashierAccountTopUpError::AccountBalanceOverflow,
+        ErrorCode::ResourceExhausted,
+    );
+    assert_cashier_top_up_error_maps_to_public_code(
+        &pic,
+        cashier_id,
+        probe_id,
+        BlobStorageCashierAccountTopUpError::InternalError("mock failure".to_string()),
+        ErrorCode::Internal,
+    );
+    assert_cashier_top_up_error_maps_to_public_code(
+        &pic,
+        cashier_id,
+        probe_id,
+        BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
+        ErrorCode::InvalidInput,
+    );
+
     let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
     assert_eq!(
@@ -141,6 +177,148 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     assert_eq!(account, Some(probe_id));
     assert_eq!(target_balance, None);
     assert_eq!(attached_cycles, candid::Nat::from(77_u64));
+}
+
+fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Principal) {
+    let non_controller = principal(0x91);
+
+    let balance_denied: Result<(), Error> = pic.update_call_as_or_panic(
+        cashier_id,
+        non_controller,
+        "blob_storage_cashier_mock_set_next_balance_error",
+        (Some(
+            BlobStorageCashierAccountBalanceGetError::InternalError(
+                "denied balance failure".to_string(),
+            ),
+        ),),
+    );
+    assert_eq!(
+        balance_denied
+            .expect_err("non-controller must not configure mock balance failures")
+            .code,
+        ErrorCode::Unauthorized
+    );
+
+    let top_up_denied: Result<(), Error> = pic.update_call_as_or_panic(
+        cashier_id,
+        non_controller,
+        "blob_storage_cashier_mock_set_next_top_up_error",
+        (Some(
+            BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
+        ),),
+    );
+    assert_eq!(
+        top_up_denied
+            .expect_err("non-controller must not configure mock top-up failures")
+            .code,
+        ErrorCode::Unauthorized
+    );
+}
+
+fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_gateways",
+        (vec![Principal::anonymous()],),
+    );
+    seeded_gateways.expect("mock Cashier invalid gateway seed should succeed");
+
+    let synced: Result<(), Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    assert_eq!(
+        synced
+            .expect_err("invalid Cashier gateway list should fail sync")
+            .code,
+        ErrorCode::Internal
+    );
+
+    let counts: Result<BlobStorageLocalCounters, Error> =
+        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
+    assert_eq!(
+        counts.expect("probe counts query should succeed"),
+        BlobStorageLocalCounters::new(0, 0, 1),
+        "failed gateway sync must leave the previous gateway set intact"
+    );
+}
+
+fn assert_billing_status_reports_cashier_balance_unavailable(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_next_balance_error",
+        (Some(
+            BlobStorageCashierAccountBalanceGetError::InternalError(
+                "mock balance failure".to_string(),
+            ),
+        ),),
+    );
+    configured.expect("mock Cashier balance failure should be configured");
+
+    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_STATUS,
+        (BlobStorageStatusRequest {
+            sync_gateway_principals: true,
+        },),
+    );
+    let status = status.expect("status endpoint should succeed");
+
+    assert_eq!(status.cashier_balance, None);
+    assert_eq!(
+        status.funding_status,
+        BlobStorageFundingStatus::BalanceUnavailable
+    );
+    assert!(!status.ready);
+    assert!(
+        status
+            .blockers
+            .contains(&BlobStorageReadinessBlocker::CashierBalanceUnavailable)
+    );
+    assert!(
+        status
+            .warnings
+            .contains(&BlobStorageBillingWarning::CashierBalanceUnavailable)
+    );
+}
+
+fn assert_cashier_top_up_error_maps_to_public_code(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+    error: BlobStorageCashierAccountTopUpError,
+    expected_code: ErrorCode,
+) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_next_top_up_error",
+        (Some(error),),
+    );
+    configured.expect("mock Cashier top-up failure should be configured");
+
+    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (11_u128,));
+
+    assert_eq!(
+        top_up
+            .expect_err("mock Cashier top-up failure should propagate")
+            .code,
+        expected_code
+    );
+
+    let last_top_up: Result<MockCashierLastTopUp, Error> =
+        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
+    assert_eq!(
+        last_top_up.expect("last top-up query should succeed"),
+        None,
+        "forced Cashier errors must not be recorded as successful top-ups"
+    );
 }
 
 fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {
