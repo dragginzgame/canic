@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.10` hardens Cashier gateway-principal sync by rejecting empty
+  Cashier gateway lists as malformed before mutating local gateway state. The
+  PocketIC billing flow now proves empty and invalid Cashier lists both fail
+  with `InternalRpcMalformed` while preserving the previously synced gateway
+  registry. It also aligns the Cashier protocol inventory with that behavior
+  and makes the inventory gate require explicit gateway-list behavior fields,
+  including the empty-list malformed/preserve-state invariant.
+
 - `0.70.9` hardens blob-storage funding-report coverage with PocketIC tests
   proving successful project-cycle funding reports requested, attached, reserve,
   Cashier total, and cycle-balance metadata, and reserve-skipped funding reports

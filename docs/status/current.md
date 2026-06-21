@@ -9,8 +9,37 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.9` is in progress as a narrow blob-storage funding-report metadata
-  hardening slice after the pushed `0.70.8` release. Current work expands
+- `0.70.10` is in progress as a narrow blob-storage gateway-sync safety slice
+  after the pushed `0.70.9` release. Current work rejects empty Cashier
+  `storage_gateway_principal_list_v1` responses as malformed before applying
+  gateway sync, so a transient or misconfigured Cashier response cannot wipe
+  the local gateway-principal registry. It extends focused Cashier conversion
+  and blob-storage API tests, and extends the PocketIC billing flow so empty
+  and invalid Cashier gateway lists both fail sync with `InternalRpcMalformed`
+  while preserving the previously synced gateway set. Follow-up work aligns the
+  Cashier protocol inventory with the runtime behavior and strengthens the
+  Cashier inventory gate so complete `storage_gateway_principal_list_v1`
+  evidence must document empty, duplicate, invalid-principal, and
+  malformed-response behavior; the `Empty-list behavior` field must pin the
+  malformed/preserve-state invariant.
+  Focused validation passing so far:
+  ```text
+  cargo test --locked -p canic-core cashier --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  cargo test --locked -p canic --test protocol_inventory_gate -- --nocapture
+  cargo clippy --locked -p canic --test protocol_inventory_gate -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+- `0.70.9` is pushed as a narrow blob-storage funding-report metadata
+  hardening slice after the pushed `0.70.8` release. It expands
   PocketIC coverage for `_immutableObjectStorageFundFromProjectCycles` reports:
   successful funding now pins requested cycles, attached cycles, reserve cycles,
   Cashier total, and project-cycle balance metadata; reserve-skipped funding
