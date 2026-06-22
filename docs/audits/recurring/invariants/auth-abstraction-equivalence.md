@@ -1,5 +1,7 @@
 # Audit: Auth Abstraction Equivalence Invariant
 
+Method: `auth-abstraction-equivalence-v2`
+
 ## Purpose
 
 Ensure macro-generated, DSL-generated, and helper-generated authentication paths preserve the security semantics of the canonical verifier.
@@ -25,6 +27,13 @@ Current Canic auth surface:
 - public `canic::start!()` startup selection is metadata-driven and outside
   this auth-equivalence audit except where generated root/non-root endpoint
   bundles expose authenticated surfaces
+- generated root proof provisioning endpoints are controller/registered-caller
+  authority surfaces, not delegated-token authenticated endpoints; they must not
+  be collapsed into `auth::authenticated(...)` or product frontend auth paths
+- opt-in blob-storage endpoint bundles accept explicit access expressions for
+  certificate creation, billing sync, project-cycle funding, and status; those
+  generated guards must preserve the same access-expression semantics as other
+  macro-generated endpoints
 
 ## Risk Model / Invariant
 
@@ -98,6 +107,8 @@ answer what the token may do after that acceptance check passes.
 - delegated-token audience DTO or Candid shape changes
 - role-attestation predicate changes (`caller::has_role`,
   `caller::has_any_role`, internal invocation proof handling)
+- root proof provisioning endpoint-bundle changes
+- blob-storage endpoint or blob-storage billing endpoint-bundle guard changes
 
 ## Report Preamble (Required)
 
@@ -127,6 +138,10 @@ delegated_token_verified
 AccessContext
 DelegationAudience
 DelegatedRoleGrant
+canic_emit_root_auth_attestation_endpoints
+canic_emit_nonroot_auth_attestation_endpoints
+canic_emit_blob_storage_endpoints
+canic_emit_blob_storage_billing_endpoints
 ```
 
 ### 2. Inspect Expansion or Equivalent Implementation
@@ -146,6 +161,11 @@ Confirm:
   `AuthenticatedIdentitySource::RawCaller`
 - `authenticated(...)` endpoints require first argument type `DelegatedToken`
 - role-attestation helpers remain separate from delegated-token verification
+- generated root proof provisioning endpoints keep controller or registered
+  caller guards and do not become product delegated-token auth shortcuts
+- generated blob-storage endpoint bundles delegate to access expressions where
+  a guard is required and keep protocol-owned gateway checks separate from
+  product frontend auth
 
 ### 3. Verify Drift Risk
 
@@ -209,6 +229,7 @@ rg -l 'access::expr|eval_access|AccessExpr|AccessPredicate|BuiltinPredicate' cra
 rg -l 'access::auth|delegated_token_verified|resolve_authenticated_identity|AuthenticatedIdentitySource|ResolvedAuthenticatedIdentity' crates canisters fleets -g '*.rs'
 rg -l 'DelegationProof' crates canisters fleets -g '*.rs'
 rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters fleets -g '*.rs'
+rg -l 'canic_emit_root_auth_attestation_endpoints|canic_emit_nonroot_auth_attestation_endpoints|canic_emit_blob_storage_endpoints|canic_emit_blob_storage_billing_endpoints' crates canisters fleets -g '*.rs'
 rg -n 'RolesOrPrincipals|RoleAudienceMustBeSingular|DelegatedTokenAudience|Roles\\(|Principals\\(' crates docs canisters fleets -g '*.rs' -g '*.md'
 rg -n 'caller::has_role|caller::has_any_role|DelegationAudience::Role|DelegationAudience::Principal|verifier_role_hash' crates canisters fleets docs -g '*.rs' -g '*.md'
 rg -n 'DelegationAudience::Canister|DelegationAudience::CanicSubnet|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
@@ -225,6 +246,10 @@ git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access cr
 | `crates/canic-core/src/api/auth/session/mod.rs` | delegated session bootstrap | convenience path that must not replace endpoint auth semantics | Medium |
 | `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | canister/subnet/project audience validation and local-role grant binding | High |
 | `crates/canic-core/src/dto/auth.rs` | `DelegationAudience`, `DelegatedRoleGrant`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and grant-authorized | Medium |
+| `crates/canic/src/macros/endpoints/root.rs` | `canic_emit_root_auth_attestation_endpoints!` | root proof provisioning and attestation generated endpoint guards | High |
+| `crates/canic/src/macros/endpoints/nonroot.rs` | `canic_emit_nonroot_auth_attestation_endpoints!` | issuer-local delegated-token prepare/get and active-proof install generated endpoints | High |
+| `crates/canic/src/macros/endpoints/blob_storage.rs` | `canic_emit_blob_storage_endpoints!` | generated endpoint guard for certificate creation plus protocol-owned gateway checks | Medium |
+| `crates/canic/src/macros/endpoints/blob_storage_billing.rs` | `canic_emit_blob_storage_billing_endpoints!` | explicit generated access guards for billing sync, funding, and status | Medium |
 | `crates/canic/src/macros/endpoints/wasm_store.rs` | `caller::has_role("root")` protected endpoints | role-attestation endpoint policy that must not be confused with delegated-token audience | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
@@ -252,6 +277,8 @@ Pressure score guidance:
 - a public material-only verifier is exposed outside endpoint binding/replay
 - default app guard starts resolving delegated-session identity
 - DTO auth types gain verification, signing, replay, or policy behavior
+- root proof provisioning or gateway protocol checks are reused as product
+  delegated-token authentication shortcuts
 
 ## Severity
 
@@ -313,6 +340,11 @@ Thresholds:
 
 If no predictive signals are detected, state: No predictive architectural signals detected in this run.
 
+Watch generated root proof and blob-storage endpoint bundles for authority
+drift: root proof provisioning should stay controller/registered-caller scoped,
+and blob-storage gateway protocol checks should not become substitutes for
+product delegated-token authentication.
+
 ## Dependency Fan-In Pressure
 
 Detect modules and structs becoming architectural gravity wells before friction increases.
@@ -354,6 +386,13 @@ Interpretation:
 - `9-12` = hub abstraction
 - `12+` = system dependency center
 
+Expected passive DTO/protocol fan-in is a pressure signal, not automatically a
+risk-score increase. Apply fan-in score increases only when behavior,
+authorization, verification, signing, replay, storage mutation, or public
+helper APIs spread with the data shape. Passive `dto` references used for
+protocol roundtrips, storage snapshots, tests, or endpoint arguments should be
+recorded as watchpoints unless they add behavior.
+
 If no modules exceed the fan-in threshold, state: No fan-in pressure detected in this run.
 
 ## Risk Score
@@ -383,6 +422,8 @@ Derivation guidance (deterministic):
 - add `+1` for fan-in `6-8` across multiple subsystems
 - add `+2` for fan-in `9-12` across multiple subsystems
 - add `+3` for fan-in `12+` across multiple subsystems
+- do not add passive DTO/protocol fan-in points unless behavior or public
+  helper ownership spreads with the data shape
 - clamp to `0..10`
 
 If no confirmed findings and no hotspot/hub signals are present, score must remain `0-2`.

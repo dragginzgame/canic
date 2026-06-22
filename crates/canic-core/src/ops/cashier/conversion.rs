@@ -2,7 +2,7 @@
 //!
 //! Responsibility: convert Cashier DTO responses into bounded internal values.
 //! Does not own: inter-canister calls, billing policy, or stable storage writes.
-//! Boundary: workflow calls these helpers before applying Cashier-derived facts.
+//! Boundary: callers use these helpers before applying Cashier-derived facts.
 
 use crate::{
     InternalError, InternalErrorOrigin,

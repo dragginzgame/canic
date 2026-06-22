@@ -13,7 +13,7 @@ const ICP_JSON_OUTPUT: &str = "json";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubnetRegistryQuery {
-    pub source: SubnetRegistryQuerySource,
+    pub(crate) source: SubnetRegistryQuerySource,
     pub registry_json: String,
 }
 
@@ -22,7 +22,7 @@ pub struct SubnetRegistryQuery {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SubnetRegistryQuerySource {
+pub(crate) enum SubnetRegistryQuerySource {
     LocalReplica,
     IcpCli,
 }

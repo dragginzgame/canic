@@ -9,6 +9,78 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
+- `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A
+  follow-up least-fresh recurring audit selected `ops-purity` and refreshed
+  the definition for the 0.70 blob-storage billing split. The 2026-06-22 run
+  passed with watchpoints and risk 3/10: ops still owns bounded record/view/DTO
+  projection, Cashier wrappers/conversions, transient funding guards, and root
+  proof helpers, while async billing sync/funding/status orchestration remains
+  in `api::blob_storage` as a layer/API watchpoint. The only code cleanup was
+  caller-neutral wording in `ops::cashier` module comments.
+  ```text
+  cargo test --locked -p canic-core cashier --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic-core --lib root_prepare_policy_rejects_audience_or_grant_outside_policy -- --nocapture
+  cargo test --locked -p canic-core --lib batch_install_preflight_rejects_proof_mismatch -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  bash scripts/ci/run-layering-guards.sh
+  cargo fmt --all -- --check
+  ```
+  The next least-fresh recurring audit then selected `workflow-purity`. Its
+  definition now covers the blob-storage billing boundary explicitly. The
+  2026-06-22 workflow-purity run passed with watchpoints and risk 3/10: no
+  production blob-storage billing ownership exists under `workflow/`; root
+  proof provisioning still sequences install through auth ops and `CallOps`;
+  and replay/cost/intent state remains ops-owned. No production code changes
+  were made for this audit.
+  ```text
+  cargo test --locked -p canic-core workflow::runtime::auth --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::rpc --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::pool --lib -- --nocapture
+  cargo test --locked -p canic-core workflow::ic::icp_refill --lib -- --nocapture
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  ```
+  The next least-fresh recurring audit selected
+  `auth-abstraction-equivalence`. Its definition now explicitly covers
+  root/nonroot auth endpoint bundles, blob-storage endpoint guard bundles, and
+  passive DTO/protocol fan-in scoring. The 2026-06-22 run passed with
+  watchpoints and risk 3/10: generated and helper auth paths still converge on
+  the canonical verifier; root proof provisioning endpoints remain
+  controller/registered-caller scoped; blob-storage gateway protocol checks
+  remain separate from product delegated-token auth; and high `DelegationProof`
+  fan-in is passive protocol pressure rather than behavior leakage. No
+  production code changes were made for this audit.
+  ```text
+  cargo test --locked -p canic-macros authenticated -- --nocapture
+  cargo test --locked -p canic-macros access_stage_ -- --nocapture
+  cargo test --locked -p canic-core --lib access::auth -- --nocapture
+  cargo test --locked -p canic-core --lib verify_delegated_token -- --nocapture
+  cargo test --locked -p canic-core --lib caller_predicates_use_transport_caller_not_authenticated_subject -- --nocapture
+  cargo test --locked -p canic-core --lib delegated::audience -- --nocapture
+  cargo test --locked -p canic --test endpoint_macro -- --nocapture
+  cargo test --locked -p canic --test blob_storage_endpoint_macro -- --nocapture
+  cargo test --locked -p canic --test protocol_surface -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite sharding -- --nocapture
+  ```
+  The next least-fresh recurring audit selected
+  `bootstrap-lifecycle-symmetry`. Its definition now covers synchronous
+  lifecycle metrics, embedded root wasm-store bootstrap release-set
+  registration/logging, and post-upgrade memory registry restore ordering. The
+  2026-06-22 run passed with watchpoints and risk 3/10: lifecycle hooks still
+  restore synchronously, schedule bootstrap/user work through timers, and keep
+  root bootstrap execution inside timer closures. No production code changes
+  were made for this audit; the main watchpoint is keeping
+  `api/lifecycle.rs` from calling storage-backed template admin helpers inline.
+  ```text
+  cargo check --locked -p canic-core -p canic -p canic-control-plane
+  cargo test --locked -p canic-core --test trap_guard -- --nocapture
+  cargo test --locked -p canic --test protocol_surface finish -- --nocapture
+  cargo test --locked -p canic --test workspace_manifest -- --nocapture
+  cargo test --locked -p canic --test metrics_facade -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test lifecycle_boundary -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_wasm_store_reconcile root_post_upgrade_preserves_multi_store_current_release_binding -- --nocapture
+  ```
+
 - `0.70.15` is pushed as a narrow blob-storage PocketIC test readability
   cleanup slice after the pushed `0.70.14` release. It centralizes probe/mock
   method names in `pic_blob_storage` constants and adds section banners so

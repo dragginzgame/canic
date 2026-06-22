@@ -15,6 +15,9 @@ This audit tracks the current post-v1 startup surface:
   package metadata emitted by `canic::build!`;
 * `start_local!` and `start_wasm_store!` remain separate special-purpose
   runtime modes and must still obey the same lifecycle timer boundary.
+* lifecycle adapters may record bounded lifecycle metrics synchronously and may
+  register embedded root bootstrap module sources before scheduling, but must
+  not run bootstrap orchestration inline.
 
 ## Audit Type
 
@@ -57,6 +60,9 @@ Drift in lifecycle startup structure can introduce:
 * init/post-upgrade refactors
 * workflow boundary changes affecting bootstrap scheduling
 * changes to `start_local!` or `start_wasm_store!`
+* lifecycle metrics changes
+* embedded root wasm-store bootstrap release-set registration changes
+* post-upgrade memory registry restoration changes
 
 ---
 
@@ -87,6 +93,8 @@ The following must remain true:
 5. `init` and `post_upgrade` remain structurally symmetric
 6. environment/runtime restoration occurs before bootstrap scheduling
 7. lifecycle code does not bypass layering by mutating storage or embedding policy/orchestration logic directly
+8. synchronous lifecycle metrics and root bootstrap module-source registration
+   remain bounded adapter duties, not orchestration owners
 
 ## Canonical Lifecycle Pipeline
 
@@ -104,9 +112,12 @@ Audit these modules first:
 * `crates/canic-core/src/api/lifecycle/{mod.rs,root.rs,nonroot.rs}`
 * `crates/canic-core/src/lifecycle/{init,upgrade}/{mod.rs,root.rs,nonroot.rs}`
 * `crates/canic-control-plane/src/api/lifecycle.rs`
+* `crates/canic-control-plane/src/api/template/mod.rs` for embedded root
+  wasm-store bootstrap source registration invoked from lifecycle
 * `crates/canic-core/src/workflow/runtime/mod.rs`
 * `crates/canic-core/src/workflow/runtime/{root.rs,nonroot.rs}`
 * `crates/canic-core/src/workflow/bootstrap/*`
+* `crates/canic-core/src/api/lifecycle/mod.rs` for lifecycle metrics
 * `crates/canic/src/macros/timer.rs`
 
 Optional supporting scope:
@@ -210,24 +221,50 @@ rg -n '\.await|async fn|spawn\(' crates/canic-core/src/lifecycle -g '*.rs'
 #### Restore-before-bootstrap ordering
 
 ```bash
-rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|TimerOps::set|TimerWorkflow::set|TimerApi::set_lifecycle_timer' \
+rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|post_upgrade_.*after_memory_init|TimerOps::set|TimerWorkflow::set|TimerApi::set_lifecycle_timer' \
   crates/canic-core/src/lifecycle crates/canic-core/src/workflow/runtime \
   crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
+#### Lifecycle metrics and root bootstrap source registration
+
+```bash
+rg -n 'LifecycleMetricsApi|record_runtime|record_bootstrap|WasmStoreBootstrapApi|register_embedded_root_wasm_store_release_set|log_embedded_root_wasm_store_release_set' \
+  crates/canic-core/src/lifecycle crates/canic-core/src/api/lifecycle/mod.rs \
+  crates/canic-control-plane/src/api/lifecycle.rs crates/canic-control-plane/src/api/template/mod.rs -g '*.rs'
+```
+
+Expected:
+
+* lifecycle metrics may be recorded inline before/after runtime restore and
+  before/inside scheduled bootstrap timer closures
+* embedded root wasm-store bootstrap release-set registration may happen before
+  root runtime restoration delegates to `canic-core`
+* embedded root wasm-store logging may happen after core runtime restoration
+* these paths must not perform bootstrap workflow execution inline
+* storage-backed template admin helpers in the same `api/template` module are
+  outside lifecycle scope unless lifecycle starts calling them
+
 #### Layering discipline
 
 ```bash
-rg -n '\bops::|\bdomain::policy|\bstorage::stable::' \
-  crates/canic-core/src/lifecycle crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
+rg -n '\bops::|\bdomain::policy|\bstorage::stable::|workflow::bootstrap' \
+  crates/canic-core/src/lifecycle crates/canic-control-plane/src/api/lifecycle.rs \
+  crates/canic-control-plane/src/api/template/mod.rs -g '*.rs'
 ```
 
 Expected:
 
 * runtime environment restoration through `ops::runtime::env::EnvOps` is
   allowed inside post-upgrade lifecycle adapters
+* timer scheduling through `TimerOps`, `TimerWorkflow`, and
+  `TimerApi::set_lifecycle_timer` is allowed at lifecycle scheduling boundaries
 * direct stable-storage mutation, storage-schema imports, and domain policy
   imports are not allowed in lifecycle adapters
+* `workflow::bootstrap` may appear only inside scheduled timer closures, not as
+  inline lifecycle work
+* `api/template` scan hits are lifecycle-relevant only for functions directly
+  called from `api/lifecycle.rs`
 
 #### Test coverage
 
@@ -283,18 +320,24 @@ Verify lifecycle API is a glue layer that delegates to `lifecycle::*`.
 Pass criteria:
 
 * API functions are thin wrappers or direct delegation
-* no workflow/bootstrap/runtime orchestration logic is introduced here
+* no workflow/bootstrap/runtime orchestration logic is introduced here outside
+  explicit lifecycle timer scheduling
+* inline lifecycle metrics and embedded root wasm-store source registration are
+  bounded adapter duties
 
 Fail conditions:
 
 * API layer adds sequencing/orchestration logic
 * API layer mutates lifecycle state directly
 * API layer duplicates lifecycle adapter behavior
+* API layer runs root bootstrap workflow inline rather than scheduling a timer
 
 Checklist:
 
 * [ ] API layer is glue only
-* [ ] No direct workflow orchestration in API layer
+* [ ] No direct workflow orchestration in API layer outside timer closures
+* [ ] Lifecycle metrics and embedded root wasm-store registration do not own
+  bootstrap orchestration
 
 Findings:
 
@@ -317,6 +360,8 @@ Allowed differences:
 * explicitly documented restore-path differences
 * root bootstrap scheduling split between `canic-core` runtime restoration and
   `canic-control-plane` root orchestration, if the report records both halves
+* post-upgrade memory registry restoration, if it precedes environment
+  restoration and runtime continuation on both root and non-root upgrade paths
 
 Fail conditions:
 
@@ -384,6 +429,8 @@ Checklist:
 
 * [ ] Root env restoration precedes bootstrap scheduling
 * [ ] Non-root role restoration precedes bootstrap scheduling
+* [ ] Post-upgrade memory registry restoration precedes env restoration and
+  runtime continuation
 * [ ] Runtime state init/restoration completes before scheduling bootstrap
 * [ ] Failure paths trap before scheduling continuation where required
 
@@ -423,6 +470,8 @@ Additional check for root control-plane lifecycle:
   timers, but must not perform the bootstrap work inline
 * root control-plane lifecycle must delegate runtime restoration to
   `canic-core` before scheduling root bootstrap timers
+* lifecycle metrics may be recorded inline but must not introduce storage,
+  policy, or async orchestration ownership into lifecycle adapters
 
 ## 7. Timer and Bootstrap Coverage
 
