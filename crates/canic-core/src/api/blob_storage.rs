@@ -1017,6 +1017,14 @@ mod tests {
 
     #[cfg(feature = "blob-storage-billing")]
     #[test]
+    fn funding_in_progress_maps_to_conflict_code() {
+        let err = BlobStorageApi::map_funding_in_progress(BlobStorageFundingInProgress);
+
+        assert_eq!(err.code, ErrorCode::Conflict);
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
     fn validate_requested_funding_cycles_rejects_zero() {
         let err = BlobStorageApi::validate_requested_funding_cycles(0)
             .expect_err("zero requested cycles should be invalid");

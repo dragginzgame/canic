@@ -3,6 +3,7 @@
 //! Responsibility: manage transient blob-storage funding execution state.
 //! Does not own: Cashier calls, cycle math, stable storage, or endpoint authorization.
 //! Boundary: API/workflow acquires the guard before awaiting external funding effects.
+//! The guard relies on `Drop` to clear the transient lock on every return path.
 
 use std::{cell::Cell, error::Error, fmt};
 
@@ -83,6 +84,9 @@ impl Error for BlobStorageFundingInProgress {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static PANIC_HOOK_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn funding_guard_rejects_reentrant_acquire() {
@@ -106,5 +110,24 @@ mod tests {
 
         assert!(!BlobStorageFundingOps::in_progress());
         let _guard = BlobStorageFundingOps::try_acquire().expect("drop releases guard");
+    }
+
+    #[test]
+    fn funding_guard_releases_during_unwind() {
+        let _panic_hook_guard = PANIC_HOOK_LOCK
+            .lock()
+            .expect("panic hook lock should not be poisoned");
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(|| {
+            let _guard = BlobStorageFundingOps::try_acquire().expect("acquire succeeds");
+            assert!(BlobStorageFundingOps::in_progress());
+            panic!("simulated funding unwind");
+        });
+        std::panic::set_hook(previous_hook);
+
+        assert!(result.is_err());
+        assert!(!BlobStorageFundingOps::in_progress());
+        let _guard = BlobStorageFundingOps::try_acquire().expect("unwind releases guard");
     }
 }
