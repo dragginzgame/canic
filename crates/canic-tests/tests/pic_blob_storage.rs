@@ -44,8 +44,37 @@ const UNAUTHORIZED_ROOT_HASH_BYTES: [u8; 32] = [0xbb; 32];
 const READY_TICK_LIMIT: usize = 60;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+const INITIAL_CASHIER_BALANCE: u64 = 123;
+const DEFAULT_PROJECT_CYCLES_RESERVE: u64 = 1;
+const MIN_UPLOAD_BALANCE: u64 = 10;
+const TARGET_UPLOAD_BALANCE: u64 = 100;
+const GATEWAY_PRINCIPAL_LIMIT: u64 = 8;
+const FINAL_TOP_UP_CYCLES: u64 = 77;
+const FINAL_CASHIER_BALANCE: u64 = INITIAL_CASHIER_BALANCE + FINAL_TOP_UP_CYCLES;
+
+const PROBE_ADD_GATEWAY: &str = "blob_storage_probe_add_gateway";
+const PROBE_CASHIER_TOTAL_BALANCE: &str = "blob_storage_probe_cashier_total_balance";
+const PROBE_CONFIGURE_BILLING: &str = "blob_storage_probe_configure_billing";
+const PROBE_COUNTS: &str = "blob_storage_probe_counts";
+const PROBE_IS_LIVE: &str = "blob_storage_probe_is_live";
+const PROBE_MARK_PENDING_DELETE: &str = "blob_storage_probe_mark_pending_delete";
+const PROBE_REMOVE_GATEWAY: &str = "blob_storage_probe_remove_gateway";
+const PROBE_SYNC_GATEWAYS_FROM_CASHIER: &str = "blob_storage_probe_sync_gateways_from_cashier";
+
+const MOCK_LAST_TOP_UP: &str = "blob_storage_cashier_mock_last_top_up";
+const MOCK_SET_BALANCE: &str = "blob_storage_cashier_mock_set_balance";
+const MOCK_SET_GATEWAY_LIST_TRAP: &str = "blob_storage_cashier_mock_set_gateway_list_trap";
+const MOCK_SET_GATEWAYS: &str = "blob_storage_cashier_mock_set_gateways";
+const MOCK_SET_NEXT_BALANCE_ERROR: &str = "blob_storage_cashier_mock_set_next_balance_error";
+const MOCK_SET_NEXT_BALANCE_TOTAL: &str = "blob_storage_cashier_mock_set_next_balance_total";
+const MOCK_SET_NEXT_TOP_UP_ERROR: &str = "blob_storage_cashier_mock_set_next_top_up_error";
+const MOCK_SET_NEXT_TOP_UP_TOTAL: &str = "blob_storage_cashier_mock_set_next_top_up_total";
 
 type MockCashierLastTopUp = Option<(Option<Principal>, Option<candid::Nat>, candid::Nat)>;
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 // Verify the non-billing blob-storage gateway lifecycle through a real canister.
 #[test]
@@ -79,84 +108,16 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
 
     assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(&pic, cashier_id, probe_id);
 
-    let balance: Result<u128, Error> = pic.update_call_or_panic(
-        probe_id,
-        "blob_storage_probe_cashier_total_balance",
-        (cashier_id, probe_id),
-    );
-    assert_eq!(balance.expect("balance read should succeed"), 123);
-
-    assert_billing_status_ready(&pic, probe_id);
-    assert_billing_status_reports_cashier_balance_unavailable(&pic, cashier_id, probe_id);
-    assert_billing_status_ready(&pic, probe_id);
-    assert_billing_status_reports_cashier_balance_malformed(&pic, cashier_id, probe_id);
-    assert_billing_status_ready(&pic, probe_id);
-
-    let zero_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (0_u128,));
-    assert_eq!(
-        zero_top_up
-            .expect_err("zero-cycle funding should be rejected")
-            .code,
-        ErrorCode::InvalidInput
-    );
+    assert_initial_cashier_balance(&pic, cashier_id, probe_id);
+    assert_billing_status_recovers_after_cashier_balance_failures(&pic, cashier_id, probe_id);
+    assert_zero_cycle_funding_rejected(&pic, probe_id);
 
     pic.add_cycles(probe_id, 10_000);
-    assert_cashier_top_up_error_maps_to_public_code(
-        &pic,
-        cashier_id,
-        probe_id,
-        BlobStorageCashierAccountTopUpError::NotAuthorized(probe_id),
-        ErrorCode::Forbidden,
-    );
-    assert_cashier_top_up_error_maps_to_public_code(
-        &pic,
-        cashier_id,
-        probe_id,
-        BlobStorageCashierAccountTopUpError::AccountBalanceOverflow,
-        ErrorCode::ResourceExhausted,
-    );
-    assert_cashier_top_up_error_maps_to_public_code(
-        &pic,
-        cashier_id,
-        probe_id,
-        BlobStorageCashierAccountTopUpError::InternalError("mock failure".to_string()),
-        ErrorCode::Internal,
-    );
-    assert_cashier_top_up_error_maps_to_public_code(
-        &pic,
-        cashier_id,
-        probe_id,
-        BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
-        ErrorCode::InvalidInput,
-    );
+    assert_cashier_top_up_errors_map_to_public_codes(&pic, cashier_id, probe_id);
     assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(&pic, cashier_id, probe_id);
     assert_reserve_violation_does_not_partially_top_up(&pic, cashier_id, probe_id);
     assert_funding_recovers_after_transient_cashier_failure(&pic, cashier_id, probe_id);
-
-    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
-    let report = top_up.expect("funding endpoint should reach mock Cashier");
-    assert_successful_funding_report(&report, 77, 1, 200);
-
-    let balance_after: Result<u128, Error> = pic.update_call_or_panic(
-        probe_id,
-        "blob_storage_probe_cashier_total_balance",
-        (cashier_id, probe_id),
-    );
-    assert_eq!(
-        balance_after.expect("balance after top-up should decode"),
-        200
-    );
-
-    let last_top_up: Result<MockCashierLastTopUp, Error> =
-        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
-    let (account, target_balance, attached_cycles) = last_top_up
-        .expect("last top-up query should succeed")
-        .expect("mock should record top-up");
-    assert_eq!(account, Some(probe_id));
-    assert_eq!(target_balance, None);
-    assert_eq!(attached_cycles, candid::Nat::from(77_u64));
+    assert_final_successful_funding_records_top_up(&pic, cashier_id, probe_id);
 }
 
 // Verify status reports endpoint-visible billing readiness blockers.
@@ -229,8 +190,7 @@ fn blob_storage_billing_state_survives_upgrade_under_pocketic() {
     );
 
     pic.add_cycles(probe_id, 10_000);
-    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (22_u128,));
+    let top_up = fund_from_project_cycles(&pic, probe_id, 22);
     assert_eq!(
         top_up
             .expect("post-upgrade funding endpoint should not inherit a stale transient lock")
@@ -258,8 +218,7 @@ fn blob_storage_missing_billing_config_status_survives_upgrade_under_pocketic() 
     assert_missing_billing_config_status(&billing_status(&pic, probe_id, true), 1);
     assert_gateway_pending_roots_on_pic(&pic, probe_id, gateway, &[ROOT_HASH]);
 
-    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (22_u128,));
+    let top_up = fund_from_project_cycles(&pic, probe_id, 22);
     assert_eq!(
         top_up
             .expect_err("missing billing config should still block funding after upgrade")
@@ -268,33 +227,49 @@ fn blob_storage_missing_billing_config_status_survives_upgrade_under_pocketic() 
     );
 }
 
+// -----------------------------------------------------------------------------
+// Billing Fixture Helpers
+// -----------------------------------------------------------------------------
+
 fn seed_mock_cashier_for_billing_flow(
     pic: &Pic,
     cashier_id: Principal,
     probe_id: Principal,
     gateway: Principal,
 ) {
-    set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
+    set_mock_cashier_balance(
+        pic,
+        cashier_id,
+        probe_id,
+        u128::from(INITIAL_CASHIER_BALANCE),
+    );
     seed_mock_cashier_gateways(pic, cashier_id, vec![gateway, gateway]);
 }
 
 fn seed_mock_cashier_gateways(pic: &Pic, cashier_id: Principal, gateways: Vec<Principal>) {
-    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateways",
-        (gateways,),
-    );
+    let seeded_gateways: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_GATEWAYS, (gateways,));
     seeded_gateways.expect("mock Cashier gateway seed should succeed");
 }
 
 fn set_mock_cashier_balance(pic: &Pic, cashier_id: Principal, account: Principal, balance: u128) {
-    let seeded_balance: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_balance",
-        (account, balance),
-    );
+    let seeded_balance: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_BALANCE, (account, balance));
     seeded_balance.expect("mock Cashier balance seed should succeed");
 }
+
+fn cashier_total_balance(pic: &Pic, cashier_id: Principal, probe_id: Principal) -> u128 {
+    let balance: Result<u128, Error> = pic.update_call_or_panic(
+        probe_id,
+        PROBE_CASHIER_TOTAL_BALANCE,
+        (cashier_id, probe_id),
+    );
+    balance.expect("Cashier balance read should succeed")
+}
+
+// -----------------------------------------------------------------------------
+// Billing Gateway Sync Helpers
+// -----------------------------------------------------------------------------
 
 fn assert_direct_cashier_gateway_sync_bounds(
     pic: &Pic,
@@ -307,11 +282,7 @@ fn assert_direct_cashier_gateway_sync_bounds(
 
     seed_mock_cashier_gateways(pic, cashier_id, vec![first_gateway, first_gateway]);
 
-    let synced: Result<u64, Error> = pic.update_call_or_panic(
-        probe_id,
-        "blob_storage_probe_sync_gateways_from_cashier",
-        (cashier_id, 1_u64),
-    );
+    let synced = sync_gateway_principals_from_cashier(pic, cashier_id, probe_id, 1);
     assert_eq!(
         synced.expect("duplicate gateway list should normalize within max"),
         1
@@ -322,11 +293,7 @@ fn assert_direct_cashier_gateway_sync_bounds(
 
     seed_mock_cashier_gateways(pic, cashier_id, vec![second_gateway, third_gateway]);
 
-    let synced: Result<u64, Error> = pic.update_call_or_panic(
-        probe_id,
-        "blob_storage_probe_sync_gateways_from_cashier",
-        (cashier_id, 1_u64),
-    );
+    let synced = sync_gateway_principals_from_cashier(pic, cashier_id, probe_id, 1);
     assert_eq!(
         synced
             .expect_err("too many distinct Cashier gateways should fail sync")
@@ -343,11 +310,7 @@ fn assert_direct_cashier_gateway_sync_bounds(
     pic.advance_time(Duration::from_nanos(1));
     pic.tick();
 
-    let synced: Result<u64, Error> = pic.update_call_or_panic(
-        probe_id,
-        "blob_storage_probe_sync_gateways_from_cashier",
-        (cashier_id, 2_u64),
-    );
+    let synced = sync_gateway_principals_from_cashier(pic, cashier_id, probe_id, 2);
     assert_eq!(
         synced.expect("gateway sync should recover when max allows distinct gateways"),
         2
@@ -360,6 +323,10 @@ fn assert_direct_cashier_gateway_sync_bounds(
         "recovered direct gateway sync must record a fresh timestamp"
     );
 }
+
+// -----------------------------------------------------------------------------
+// Billing Endpoint Guard Helpers
+// -----------------------------------------------------------------------------
 
 fn assert_billing_endpoints_require_controller(pic: &Pic, probe_id: Principal) {
     let non_controller = principal(0x92);
@@ -406,9 +373,13 @@ fn assert_billing_endpoints_require_controller(pic: &Pic, probe_id: Principal) {
     );
 }
 
+// -----------------------------------------------------------------------------
+// Shared Probe State Helpers
+// -----------------------------------------------------------------------------
+
 fn add_gateway_on_pic(pic: &Pic, probe_id: Principal, gateway: Principal) {
     let added: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, "blob_storage_probe_add_gateway", (gateway,));
+        pic.update_call_or_panic(probe_id, PROBE_ADD_GATEWAY, (gateway,));
     added.expect("gateway principal should be added");
 }
 
@@ -420,11 +391,8 @@ fn assert_status_request_does_not_sync_gateways_after_upgrade(
     sync_at_before: u64,
 ) {
     let replacement_gateway = principal(0x57);
-    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateways",
-        (vec![replacement_gateway],),
-    );
+    let seeded_gateways: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_GATEWAYS, (vec![replacement_gateway],));
     seeded_gateways.expect("mock Cashier replacement gateway seed should succeed");
 
     let status = billing_status(pic, probe_id, true);
@@ -459,8 +427,7 @@ fn assert_explicit_gateway_sync_works_after_upgrade(
     pic.advance_time(Duration::from_nanos(1));
     pic.tick();
 
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    let synced = sync_gateway_principals(pic, probe_id);
     synced.expect("explicit gateway sync should still work after upgrade");
 
     let status = billing_status(pic, probe_id, false);
@@ -485,7 +452,7 @@ fn create_certificate_on_pic(pic: &Pic, probe_id: Principal, root_hash: &str) {
 fn mark_pending_delete_on_pic(pic: &Pic, probe_id: Principal, root_hash: &str) {
     let marked: Result<bool, Error> = pic.update_call_or_panic(
         probe_id,
-        "blob_storage_probe_mark_pending_delete",
+        PROBE_MARK_PENDING_DELETE,
         (root_hash.to_string(),),
     );
     assert!(marked.expect("live blob should be marked pending deletion"));
@@ -508,6 +475,10 @@ fn assert_gateway_pending_roots_on_pic(
     );
 }
 
+// -----------------------------------------------------------------------------
+// Billing Status and Report Helpers
+// -----------------------------------------------------------------------------
+
 fn billing_status(
     pic: &Pic,
     probe_id: Principal,
@@ -521,6 +492,88 @@ fn billing_status(
         },),
     );
     status.expect("status endpoint should succeed")
+}
+
+fn sync_gateway_principals(pic: &Pic, probe_id: Principal) -> Result<(), Error> {
+    pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ())
+}
+
+fn sync_gateway_principals_from_cashier(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+    max_gateway_principals: u64,
+) -> Result<u64, Error> {
+    pic.update_call_or_panic(
+        probe_id,
+        PROBE_SYNC_GATEWAYS_FROM_CASHIER,
+        (cashier_id, max_gateway_principals),
+    )
+}
+
+fn fund_from_project_cycles(
+    pic: &Pic,
+    probe_id: Principal,
+    requested_cycles: u128,
+) -> Result<BlobProjectCyclesTopUpReport, Error> {
+    pic.update_call_or_panic(
+        probe_id,
+        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+        (requested_cycles,),
+    )
+}
+
+fn mock_last_top_up(pic: &Pic, cashier_id: Principal) -> MockCashierLastTopUp {
+    let last_top_up: Result<MockCashierLastTopUp, Error> =
+        pic.query_call_or_panic(cashier_id, MOCK_LAST_TOP_UP, ());
+    last_top_up.expect("last top-up query should succeed")
+}
+
+fn probe_counts(pic: &Pic, probe_id: Principal) -> BlobStorageLocalCounters {
+    let counts: Result<BlobStorageLocalCounters, Error> =
+        pic.query_call_or_panic(probe_id, PROBE_COUNTS, ());
+    counts.expect("probe counts query should succeed")
+}
+
+fn configure_mock_balance_error(
+    pic: &Pic,
+    cashier_id: Principal,
+    error: BlobStorageCashierAccountBalanceGetError,
+) {
+    let configured: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_NEXT_BALANCE_ERROR, (Some(error),));
+    configured.expect("mock Cashier balance failure should be configured");
+}
+
+fn configure_mock_balance_total(pic: &Pic, cashier_id: Principal, total: candid::Int) {
+    let configured: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_NEXT_BALANCE_TOTAL, (Some(total),));
+    configured.expect("mock Cashier balance total should be configured");
+}
+
+fn configure_mock_top_up_error(
+    pic: &Pic,
+    cashier_id: Principal,
+    error: BlobStorageCashierAccountTopUpError,
+) {
+    let configured: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_NEXT_TOP_UP_ERROR, (Some(error),));
+    configured.expect("mock Cashier top-up failure should be configured");
+}
+
+fn configure_mock_top_up_total(pic: &Pic, cashier_id: Principal, total: candid::Int) {
+    let configured: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_NEXT_TOP_UP_TOTAL, (Some(total),));
+    configured.expect("mock Cashier top-up total should be configured");
+}
+
+fn configure_mock_gateway_list_trap(pic: &Pic, cashier_id: Principal, message: Option<&str>) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        MOCK_SET_GATEWAY_LIST_TRAP,
+        (message.map(str::to_string),),
+    );
+    configured.expect("mock Cashier gateway-list trap should be configured");
 }
 
 fn assert_direct_gateway_sync_status(
@@ -601,7 +654,10 @@ fn assert_billing_status_reports_missing_gateways(pic: &Pic, probe_id: Principal
         status.gateway_principal_sync_action,
         BlobStorageGatewayPrincipalSyncAction::NotRequested
     );
-    assert_eq!(status.cashier_balance, Some(candid::Nat::from(123_u64)));
+    assert_eq!(
+        status.cashier_balance,
+        Some(candid::Nat::from(INITIAL_CASHIER_BALANCE))
+    );
     assert_eq!(status.funding_status, BlobStorageFundingStatus::NotNeeded);
     assert!(!status.ready);
     assert_eq!(
@@ -724,11 +780,17 @@ fn assert_billing_status_matches_config(
     );
     assert_eq!(status.cashier_canister_id, Some(cashier_id));
     assert_eq!(status.payment_account, Some(probe_id));
-    assert_eq!(status.cashier_balance, Some(candid::Nat::from(123_u64)));
-    assert_eq!(status.min_upload_balance, Some(candid::Nat::from(10_u64)));
+    assert_eq!(
+        status.cashier_balance,
+        Some(candid::Nat::from(INITIAL_CASHIER_BALANCE))
+    );
+    assert_eq!(
+        status.min_upload_balance,
+        Some(candid::Nat::from(MIN_UPLOAD_BALANCE))
+    );
     assert_eq!(
         status.target_upload_balance,
-        Some(candid::Nat::from(100_u64))
+        Some(candid::Nat::from(TARGET_UPLOAD_BALANCE))
     );
     assert_eq!(
         status.project_cycles_reserve,
@@ -748,15 +810,16 @@ fn assert_billing_status_matches_config(
         .expect("successful gateway sync timestamp should be recorded")
 }
 
+// -----------------------------------------------------------------------------
+// Cashier Failure and Funding Helpers
+// -----------------------------------------------------------------------------
+
 fn assert_initial_gateway_sync_succeeds(pic: &Pic, probe_id: Principal) {
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    let synced = sync_gateway_principals(pic, probe_id);
     synced.expect("gateway sync should succeed");
 
-    let counts: Result<BlobStorageLocalCounters, Error> =
-        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
     assert_eq!(
-        counts.expect("probe counts query should succeed"),
+        probe_counts(pic, probe_id),
         BlobStorageLocalCounters::new(0, 0, 1)
     );
 }
@@ -767,7 +830,7 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
     let balance_denied: Result<(), Error> = pic.update_call_as_or_panic(
         cashier_id,
         non_controller,
-        "blob_storage_cashier_mock_set_next_balance_error",
+        MOCK_SET_NEXT_BALANCE_ERROR,
         (Some(
             BlobStorageCashierAccountBalanceGetError::InternalError(
                 "denied balance failure".to_string(),
@@ -784,7 +847,7 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
     let top_up_denied: Result<(), Error> = pic.update_call_as_or_panic(
         cashier_id,
         non_controller,
-        "blob_storage_cashier_mock_set_next_top_up_error",
+        MOCK_SET_NEXT_TOP_UP_ERROR,
         (Some(
             BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
         ),),
@@ -799,7 +862,7 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
     let balance_total_denied: Result<(), Error> = pic.update_call_as_or_panic(
         cashier_id,
         non_controller,
-        "blob_storage_cashier_mock_set_next_balance_total",
+        MOCK_SET_NEXT_BALANCE_TOTAL,
         (Some(candid::Int::from(-1)),),
     );
     assert_eq!(
@@ -812,7 +875,7 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
     let top_up_total_denied: Result<(), Error> = pic.update_call_as_or_panic(
         cashier_id,
         non_controller,
-        "blob_storage_cashier_mock_set_next_top_up_total",
+        MOCK_SET_NEXT_TOP_UP_TOTAL,
         (Some(candid::Int::from(-1)),),
     );
     assert_eq!(
@@ -825,7 +888,7 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
     let gateway_list_trap_denied: Result<(), Error> = pic.update_call_as_or_panic(
         cashier_id,
         non_controller,
-        "blob_storage_cashier_mock_set_gateway_list_trap",
+        MOCK_SET_GATEWAY_LIST_TRAP,
         (Some("denied gateway-list trap".to_string()),),
     );
     assert_eq!(
@@ -834,6 +897,69 @@ fn assert_mock_failure_controls_require_controller(pic: &Pic, cashier_id: Princi
             .code,
         ErrorCode::Unauthorized
     );
+}
+
+fn assert_initial_cashier_balance(pic: &Pic, cashier_id: Principal, probe_id: Principal) {
+    assert_eq!(
+        cashier_total_balance(pic, cashier_id, probe_id),
+        u128::from(INITIAL_CASHIER_BALANCE)
+    );
+}
+
+fn assert_billing_status_recovers_after_cashier_balance_failures(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    assert_billing_status_ready(pic, probe_id);
+    assert_billing_status_reports_cashier_balance_unavailable(pic, cashier_id, probe_id);
+    assert_billing_status_ready(pic, probe_id);
+    assert_billing_status_reports_cashier_balance_malformed(pic, cashier_id, probe_id);
+    assert_billing_status_ready(pic, probe_id);
+}
+
+fn assert_zero_cycle_funding_rejected(pic: &Pic, probe_id: Principal) {
+    let zero_top_up = fund_from_project_cycles(pic, probe_id, 0);
+
+    assert_eq!(
+        zero_top_up
+            .expect_err("zero-cycle funding should be rejected")
+            .code,
+        ErrorCode::InvalidInput
+    );
+}
+
+fn assert_cashier_top_up_errors_map_to_public_codes(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    for (error, expected_code) in [
+        (
+            BlobStorageCashierAccountTopUpError::NotAuthorized(probe_id),
+            ErrorCode::Forbidden,
+        ),
+        (
+            BlobStorageCashierAccountTopUpError::AccountBalanceOverflow,
+            ErrorCode::ResourceExhausted,
+        ),
+        (
+            BlobStorageCashierAccountTopUpError::InternalError("mock failure".to_string()),
+            ErrorCode::Internal,
+        ),
+        (
+            BlobStorageCashierAccountTopUpError::TopUpWithoutCycles,
+            ErrorCode::InvalidInput,
+        ),
+    ] {
+        assert_cashier_top_up_error_maps_to_public_code(
+            pic,
+            cashier_id,
+            probe_id,
+            error,
+            expected_code,
+        );
+    }
 }
 
 fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
@@ -845,15 +971,11 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         .last_gateway_principal_sync_at_ns
         .expect("successful gateway sync timestamp should exist before failed sync");
 
-    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateways",
-        (Vec::<Principal>::new(),),
-    );
+    let seeded_gateways: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_GATEWAYS, (Vec::<Principal>::new(),));
     seeded_gateways.expect("mock Cashier empty gateway seed should succeed");
 
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    let synced = sync_gateway_principals(pic, probe_id);
     assert_eq!(
         synced
             .expect_err("empty Cashier gateway list should fail sync")
@@ -865,13 +987,12 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
 
     let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
         cashier_id,
-        "blob_storage_cashier_mock_set_gateways",
+        MOCK_SET_GATEWAYS,
         (vec![Principal::anonymous()],),
     );
     seeded_gateways.expect("mock Cashier invalid gateway seed should succeed");
 
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    let synced = sync_gateway_principals(pic, probe_id);
     assert_eq!(
         synced
             .expect_err("invalid Cashier gateway list should fail sync")
@@ -886,15 +1007,9 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         "invalid gateway sync",
     );
 
-    let configured: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateway_list_trap",
-        (Some("mock gateway list trap".to_string()),),
-    );
-    configured.expect("mock Cashier gateway-list trap should be configured");
+    configure_mock_gateway_list_trap(pic, cashier_id, Some("mock gateway list trap"));
 
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    let synced = sync_gateway_principals(pic, probe_id);
     assert_eq!(
         synced
             .expect_err("trapped Cashier gateway list should fail sync")
@@ -909,26 +1024,17 @@ fn assert_gateway_sync_rejects_invalid_cashier_list_without_mutation(
         "trapped gateway sync",
     );
 
-    let cleared: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateway_list_trap",
-        (Option::<String>::None,),
-    );
-    cleared.expect("mock Cashier gateway-list trap should be cleared");
+    configure_mock_gateway_list_trap(pic, cashier_id, None);
 
     let replacement_gateway = principal(0x5a);
-    let seeded_gateways: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_gateways",
-        (vec![replacement_gateway],),
-    );
+    let seeded_gateways: Result<(), Error> =
+        pic.update_call_or_panic(cashier_id, MOCK_SET_GATEWAYS, (vec![replacement_gateway],));
     seeded_gateways.expect("mock Cashier replacement gateway seed should succeed");
 
     pic.advance_time(Duration::from_nanos(1));
     pic.tick();
 
-    let synced: Result<(), Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, ());
+    let synced = sync_gateway_principals(pic, probe_id);
     synced.expect("gateway sync should recover after cleared trap");
 
     let status = billing_status(pic, probe_id, false);
@@ -948,10 +1054,8 @@ fn assert_failed_gateway_sync_preserves_state(
     sync_at_before: u64,
     context: &str,
 ) {
-    let counts: Result<BlobStorageLocalCounters, Error> =
-        pic.query_call_or_panic(probe_id, "blob_storage_probe_counts", ());
     assert_eq!(
-        counts.expect("probe counts query should succeed"),
+        probe_counts(pic, probe_id),
         BlobStorageLocalCounters::new(0, 0, 1),
         "{context} must leave the previous gateway set intact"
     );
@@ -969,21 +1073,9 @@ fn assert_billing_status_reports_cashier_balance_malformed(
     cashier_id: Principal,
     probe_id: Principal,
 ) {
-    let configured: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_next_balance_total",
-        (Some(candid::Int::from(-1)),),
-    );
-    configured.expect("mock Cashier malformed balance should be configured");
+    configure_mock_balance_total(pic, cashier_id, candid::Int::from(-1));
 
-    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
-        probe_id,
-        BLOB_STORAGE_STATUS,
-        (BlobStorageStatusRequest {
-            sync_gateway_principals: true,
-        },),
-    );
-    let status = status.expect("status endpoint should succeed");
+    let status = billing_status(pic, probe_id, true);
 
     assert_eq!(status.cashier_balance, None);
     assert_eq!(
@@ -1008,25 +1100,13 @@ fn assert_billing_status_reports_cashier_balance_unavailable(
     cashier_id: Principal,
     probe_id: Principal,
 ) {
-    let configured: Result<(), Error> = pic.update_call_or_panic(
+    configure_mock_balance_error(
+        pic,
         cashier_id,
-        "blob_storage_cashier_mock_set_next_balance_error",
-        (Some(
-            BlobStorageCashierAccountBalanceGetError::InternalError(
-                "mock balance failure".to_string(),
-            ),
-        ),),
+        BlobStorageCashierAccountBalanceGetError::InternalError("mock balance failure".to_string()),
     );
-    configured.expect("mock Cashier balance failure should be configured");
 
-    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
-        probe_id,
-        BLOB_STORAGE_STATUS,
-        (BlobStorageStatusRequest {
-            sync_gateway_principals: true,
-        },),
-    );
-    let status = status.expect("status endpoint should succeed");
+    let status = billing_status(pic, probe_id, true);
 
     assert_eq!(status.cashier_balance, None);
     assert_eq!(
@@ -1053,15 +1133,9 @@ fn assert_cashier_top_up_error_maps_to_public_code(
     error: BlobStorageCashierAccountTopUpError,
     expected_code: ErrorCode,
 ) {
-    let configured: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_next_top_up_error",
-        (Some(error),),
-    );
-    configured.expect("mock Cashier top-up failure should be configured");
+    configure_mock_top_up_error(pic, cashier_id, error);
 
-    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (11_u128,));
+    let top_up = fund_from_project_cycles(pic, probe_id, 11);
 
     assert_eq!(
         top_up
@@ -1070,10 +1144,8 @@ fn assert_cashier_top_up_error_maps_to_public_code(
         expected_code
     );
 
-    let last_top_up: Result<MockCashierLastTopUp, Error> =
-        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
     assert_eq!(
-        last_top_up.expect("last top-up query should succeed"),
+        mock_last_top_up(pic, cashier_id),
         None,
         "forced Cashier errors must not be recorded as successful top-ups"
     );
@@ -1084,15 +1156,9 @@ fn assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(
     cashier_id: Principal,
     probe_id: Principal,
 ) {
-    let configured: Result<(), Error> = pic.update_call_or_panic(
-        cashier_id,
-        "blob_storage_cashier_mock_set_next_top_up_total",
-        (Some(candid::Int::from(-1)),),
-    );
-    configured.expect("mock Cashier malformed top-up balance should be configured");
+    configure_mock_top_up_total(pic, cashier_id, candid::Int::from(-1));
 
-    let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (11_u128,));
+    let top_up = fund_from_project_cycles(pic, probe_id, 11);
     assert_eq!(
         top_up
             .expect_err("malformed Cashier top-up balance should propagate")
@@ -1100,21 +1166,23 @@ fn assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(
         ErrorCode::InternalRpcMalformed
     );
 
-    let last_top_up: Result<MockCashierLastTopUp, Error> =
-        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
     assert_eq!(
-        last_top_up.expect("last top-up query should succeed"),
+        mock_last_top_up(pic, cashier_id),
         None,
         "malformed Cashier top-up responses must not be recorded as successful top-ups"
     );
 
-    let recovered_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (13_u128,));
+    let recovered_top_up = fund_from_project_cycles(pic, probe_id, 13);
     let report = recovered_top_up
         .expect("funding guard should be released after malformed Cashier top-up response");
     assert_successful_funding_report(&report, 13, 1, 136);
 
-    set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
+    set_mock_cashier_balance(
+        pic,
+        cashier_id,
+        probe_id,
+        u128::from(INITIAL_CASHIER_BALANCE),
+    );
 }
 
 fn assert_reserve_violation_does_not_partially_top_up(
@@ -1122,27 +1190,14 @@ fn assert_reserve_violation_does_not_partially_top_up(
     cashier_id: Principal,
     probe_id: Principal,
 ) {
-    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
-        probe_id,
-        BLOB_STORAGE_STATUS,
-        (BlobStorageStatusRequest {
-            sync_gateway_principals: false,
-        },),
-    );
-    let project_cycles_available = u128::try_from(
-        status
-            .expect("status should report available project cycles")
-            .project_cycles_available
-            .0,
-    )
-    .expect("available project cycles should fit u128");
+    let project_cycles_available =
+        status_project_cycles_available(&billing_status(pic, probe_id, false));
     let transferable_cycles = 1_000_u128;
     assert!(
         project_cycles_available > transferable_cycles,
         "probe should have enough cycles to exercise partial-reserve refusal"
     );
-    let last_top_up_before: Result<MockCashierLastTopUp, Error> =
-        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
+    let last_top_up_before = mock_last_top_up(pic, cashier_id);
 
     configure_billing_with_reserve(
         pic,
@@ -1151,11 +1206,7 @@ fn assert_reserve_violation_does_not_partially_top_up(
         project_cycles_available - transferable_cycles,
     );
 
-    let top_up: Result<BlobProjectCyclesTopUpReport, Error> = pic.update_call_or_panic(
-        probe_id,
-        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
-        (transferable_cycles + 1,),
-    );
+    let top_up = fund_from_project_cycles(pic, probe_id, transferable_cycles + 1);
     let report = top_up.expect("reserve-blocked funding should return a skipped report");
     assert_reserve_skipped_funding_report(
         &report,
@@ -1163,11 +1214,9 @@ fn assert_reserve_violation_does_not_partially_top_up(
         project_cycles_available - transferable_cycles,
     );
 
-    let last_top_up: Result<MockCashierLastTopUp, Error> =
-        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
     assert_eq!(
-        last_top_up.expect("last top-up query should succeed"),
-        last_top_up_before.expect("last top-up query should succeed before reserve check"),
+        mock_last_top_up(pic, cashier_id),
+        last_top_up_before,
         "reserve-blocked funding must not replace the last successful Cashier top-up"
     );
 
@@ -1179,17 +1228,13 @@ fn assert_funding_recovers_after_transient_cashier_failure(
     cashier_id: Principal,
     probe_id: Principal,
 ) {
-    let configured: Result<(), Error> = pic.update_call_or_panic(
+    configure_mock_top_up_error(
+        pic,
         cashier_id,
-        "blob_storage_cashier_mock_set_next_top_up_error",
-        (Some(BlobStorageCashierAccountTopUpError::InternalError(
-            "transient top-up failure".to_string(),
-        )),),
+        BlobStorageCashierAccountTopUpError::InternalError("transient top-up failure".to_string()),
     );
-    configured.expect("mock Cashier transient top-up failure should be configured");
 
-    let failed_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (12_u128,));
+    let failed_top_up = fund_from_project_cycles(pic, probe_id, 12);
     assert_eq!(
         failed_top_up
             .expect_err("transient Cashier top-up failure should propagate")
@@ -1197,14 +1242,48 @@ fn assert_funding_recovers_after_transient_cashier_failure(
         ErrorCode::Internal
     );
 
-    let recovered_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
-        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (12_u128,));
+    let recovered_top_up = fund_from_project_cycles(pic, probe_id, 12);
     let report =
         recovered_top_up.expect("funding guard should be released after transient Cashier failure");
     assert_successful_funding_report(&report, 12, 1, 135);
 
-    set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
+    set_mock_cashier_balance(
+        pic,
+        cashier_id,
+        probe_id,
+        u128::from(INITIAL_CASHIER_BALANCE),
+    );
 }
+
+fn assert_final_successful_funding_records_top_up(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let top_up = fund_from_project_cycles(pic, probe_id, u128::from(FINAL_TOP_UP_CYCLES));
+    let report = top_up.expect("funding endpoint should reach mock Cashier");
+    assert_successful_funding_report(
+        &report,
+        FINAL_TOP_UP_CYCLES,
+        DEFAULT_PROJECT_CYCLES_RESERVE,
+        FINAL_CASHIER_BALANCE,
+    );
+
+    assert_eq!(
+        cashier_total_balance(pic, cashier_id, probe_id),
+        u128::from(FINAL_CASHIER_BALANCE)
+    );
+
+    let (account, target_balance, attached_cycles) =
+        mock_last_top_up(pic, cashier_id).expect("mock should record top-up");
+    assert_eq!(account, Some(probe_id));
+    assert_eq!(target_balance, None);
+    assert_eq!(attached_cycles, candid::Nat::from(FINAL_TOP_UP_CYCLES));
+}
+
+// -----------------------------------------------------------------------------
+// Canister Install and Billing Config Helpers
+// -----------------------------------------------------------------------------
 
 fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {
     let cashier_id = install_standalone_canister_on_pic(
@@ -1229,7 +1308,12 @@ fn install_probe_canister(pic: &Pic) -> Principal {
 }
 
 fn configure_billing(pic: &Pic, cashier_id: Principal, probe_id: Principal) {
-    configure_billing_with_reserve(pic, cashier_id, probe_id, 1);
+    configure_billing_with_reserve(
+        pic,
+        cashier_id,
+        probe_id,
+        u128::from(DEFAULT_PROJECT_CYCLES_RESERVE),
+    );
 }
 
 fn configure_billing_with_reserve(
@@ -1240,27 +1324,20 @@ fn configure_billing_with_reserve(
 ) {
     let configured: Result<(), Error> = pic.update_call_or_panic(
         probe_id,
-        "blob_storage_probe_configure_billing",
+        PROBE_CONFIGURE_BILLING,
         (BlobStorageBillingConfig {
             cashier_canister_id: cashier_id,
             project_cycles_reserve: candid::Nat::from(project_cycles_reserve),
-            min_upload_balance: candid::Nat::from(10_u64),
-            target_upload_balance: candid::Nat::from(100_u64),
-            gateway_principal_limit: 8,
+            min_upload_balance: candid::Nat::from(MIN_UPLOAD_BALANCE),
+            target_upload_balance: candid::Nat::from(TARGET_UPLOAD_BALANCE),
+            gateway_principal_limit: GATEWAY_PRINCIPAL_LIMIT,
         },),
     );
     configured.expect("probe billing config should be accepted");
 }
 
 fn assert_billing_status_ready(pic: &Pic, probe_id: Principal) {
-    let status: Result<BlobStorageStatusResponse, Error> = pic.update_call_or_panic(
-        probe_id,
-        BLOB_STORAGE_STATUS,
-        (BlobStorageStatusRequest {
-            sync_gateway_principals: true,
-        },),
-    );
-    let status = status.expect("status endpoint should succeed");
+    let status = billing_status(pic, probe_id, true);
     assert_eq!(
         status.payment_model,
         BlobStoragePaymentModelStatus::ProjectAsPaymentAccount
@@ -1270,10 +1347,17 @@ fn assert_billing_status_ready(pic: &Pic, probe_id: Principal) {
         BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus
     );
     assert_eq!(status.gateway_principal_count, 1);
-    assert_eq!(status.cashier_balance, Some(candid::Nat::from(123_u64)));
+    assert_eq!(
+        status.cashier_balance,
+        Some(candid::Nat::from(INITIAL_CASHIER_BALANCE))
+    );
     assert_eq!(status.funding_status, BlobStorageFundingStatus::NotNeeded);
     assert!(status.ready);
 }
+
+// -----------------------------------------------------------------------------
+// Non-Billing Gateway Lifecycle Helpers
+// -----------------------------------------------------------------------------
 
 // Assert create-certificate remains controlled by the host-supplied guard.
 fn assert_create_certificate_requires_controller(
@@ -1314,10 +1398,8 @@ fn assert_pending_deletion_is_gateway_filtered(
 ) {
     add_gateway(fixture, gateway);
 
-    let marked: Result<bool, Error> = fixture.update_call_or_panic(
-        "blob_storage_probe_mark_pending_delete",
-        (ROOT_HASH.to_string(),),
-    );
+    let marked: Result<bool, Error> =
+        fixture.update_call_or_panic(PROBE_MARK_PENDING_DELETE, (ROOT_HASH.to_string(),));
     assert!(marked.expect("live blob should be marked pending deletion"));
     assert_probe_counts(fixture, 1, 1, 1);
 
@@ -1331,7 +1413,7 @@ fn assert_pending_deletion_is_gateway_filtered(
 
     create_certificate(fixture, SECOND_PENDING_ROOT_HASH);
     let marked_second: Result<bool, Error> = fixture.update_call_or_panic(
-        "blob_storage_probe_mark_pending_delete",
+        PROBE_MARK_PENDING_DELETE,
         (SECOND_PENDING_ROOT_HASH.to_string(),),
     );
     assert!(marked_second.expect("second live blob should be marked pending deletion"));
@@ -1362,12 +1444,12 @@ fn assert_gateway_principal_removal_revokes_scrubber_access(
     expected_pending: &[String],
 ) {
     let removed: Result<bool, Error> =
-        fixture.update_call_or_panic("blob_storage_probe_remove_gateway", (gateway,));
+        fixture.update_call_or_panic(PROBE_REMOVE_GATEWAY, (gateway,));
     assert!(removed.expect("gateway principal should be removed"));
     assert_probe_counts(fixture, 2, 2, 0);
 
     let removed_again: Result<bool, Error> =
-        fixture.update_call_or_panic("blob_storage_probe_remove_gateway", (gateway,));
+        fixture.update_call_or_panic(PROBE_REMOVE_GATEWAY, (gateway,));
     assert!(!removed_again.expect("repeated gateway removal should be idempotent"));
 
     let denied_after_removal: Vec<String> =
@@ -1387,7 +1469,7 @@ fn assert_gateway_principal_removal_revokes_scrubber_access(
     assert_eq!(still_pending, expected_pending);
 
     let removed_after_check: Result<bool, Error> =
-        fixture.update_call_or_panic("blob_storage_probe_remove_gateway", (gateway,));
+        fixture.update_call_or_panic(PROBE_REMOVE_GATEWAY, (gateway,));
     assert!(removed_after_check.expect("gateway principal should be removable again"));
     assert_probe_counts(fixture, 2, 2, 0);
 }
@@ -1471,7 +1553,7 @@ fn assert_gateway_confirm_deletion_removes_live_blob(
     assert_probe_counts(fixture, 1, 0, 1);
 
     let live_status: Result<bool, Error> =
-        fixture.query_call_or_panic("blob_storage_probe_is_live", (ROOT_HASH.to_string(),));
+        fixture.query_call_or_panic(PROBE_IS_LIVE, (ROOT_HASH.to_string(),));
     assert!(!live_status.expect("live status query should accept canonical root hash"));
     assert!(!blob_is_live(fixture, SECOND_PENDING_ROOT_HASH_BYTES));
     assert!(blob_is_live(fixture, LIVE_ONLY_ROOT_HASH_BYTES));
@@ -1503,7 +1585,7 @@ fn assert_probe_counts(
     gateway_principals: u64,
 ) {
     let counts: Result<BlobStorageLocalCounters, Error> =
-        fixture.query_call_or_panic("blob_storage_probe_counts", ());
+        fixture.query_call_or_panic(PROBE_COUNTS, ());
 
     assert_eq!(
         counts.expect("probe counts query should succeed"),
@@ -1520,10 +1602,13 @@ fn create_certificate(fixture: &StandaloneCanisterFixture, root_hash: &str) {
 
 // Register one gateway principal through the test probe helper.
 fn add_gateway(fixture: &StandaloneCanisterFixture, gateway: Principal) {
-    let added: Result<(), Error> =
-        fixture.update_call_or_panic("blob_storage_probe_add_gateway", (gateway,));
+    let added: Result<(), Error> = fixture.update_call_or_panic(PROBE_ADD_GATEWAY, (gateway,));
     added.expect("gateway principal should be added");
 }
+
+// -----------------------------------------------------------------------------
+// Probe Upgrade and Misc Helpers
+// -----------------------------------------------------------------------------
 
 // Upgrade the probe with the same compiled wasm artifact used for install.
 fn upgrade_probe_canister(fixture: &StandaloneCanisterFixture) {

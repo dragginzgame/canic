@@ -9,9 +9,33 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.14` is in progress as a narrow blob-storage funding failure recovery
-  coverage slice after the pushed `0.70.13` release. Current work extends the
-  existing PocketIC billing flow so a transient Cashier top-up failure through
+- `0.70.15` is in progress as a narrow blob-storage PocketIC test readability
+  cleanup slice after the pushed `0.70.14` release. Current work centralizes
+  probe/mock method names in `pic_blob_storage` constants and adds section
+  banners so tests, billing fixtures, gateway sync, endpoint guards,
+  status/report assertions, Cashier/funding failure paths, install/config
+  helpers, non-billing gateway lifecycle helpers, and probe upgrade helpers are
+  easier to navigate. It also adds typed helpers for repeated funding, Cashier
+  balance, mock last-top-up, and probe counter calls, names the standard
+  billing fixture values, and routes gateway sync, direct Cashier sync, billing
+  status, and one-shot mock failure controls through helper wrappers. The long
+  billing wrapper scenario now reads as named phases for setup, failure
+  recovery, rejection cases, and final funding metadata. No behavior change is
+  intended.
+  Focused validation passing so far:
+  ```text
+  cargo fmt --all
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+- `0.70.14` is pushed as a narrow blob-storage funding failure recovery
+  coverage slice after the pushed `0.70.13` release. It extends the existing
+  PocketIC billing flow so a transient Cashier top-up failure through
   `_immutableObjectStorageFundFromProjectCycles` must release the generated
   funding path's in-flight guard, allowing an immediate subsequent valid
   top-up to succeed. It also proves malformed Cashier top-up success payloads
@@ -19,7 +43,7 @@ inspect only the files needed for the current task.
   prior top-up metadata, and adds core guard coverage proving the transient
   funding lock is released during unwinding as well as normal drop. The
   in-flight funding error mapping is pinned to the public `Conflict` code.
-  Focused validation passing so far:
+  Focused validation passing:
   ```text
   cargo fmt --all
   cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture

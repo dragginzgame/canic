@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.15` cleans up the blob-storage PocketIC test readability by
+  centralizing probe/mock method names as constants and adding clear helper
+  section banners for the gateway, billing, Cashier failure, funding,
+  install/config, lifecycle, and upgrade paths. It also adds typed helper
+  wrappers for repeated funding, Cashier balance, mock last-top-up, and probe
+  counter calls, plus named fixture values and helper wrappers for gateway
+  sync, direct Cashier sync, billing status, and one-shot mock failure
+  controls. The long billing wrapper scenario now reads as named phases for
+  setup, failure recovery, rejection cases, and final funding metadata.
+
 - `0.70.14` hardens blob-storage funding failure recovery coverage by proving
   a transient Cashier top-up failure through the generated funding endpoint
   releases the in-flight funding guard and allows an immediate subsequent
