@@ -11,13 +11,15 @@
 | `2026-06-08` | reports retained under `docs/audits/reports/2026-06/2026-06-08/` | partial: day summary not present in current tree |
 | `2026-06-13` | [2026-06-13/summary.md](2026-06-13/summary.md) | complete for reports retained on this day |
 | `2026-06-19` | [2026-06-19/summary.md](2026-06-19/summary.md) | complete for reports retained on this day |
+| `2026-06-22` | [2026-06-22/summary.md](2026-06-22/summary.md) | complete for reports retained on this day |
 
 ## Month-Level Status
 
 Status: `partial`.
 
 The month has retained report artifacts for `2026-06-01`, `2026-06-02`,
-`2026-06-04`, `2026-06-06`, `2026-06-08`, `2026-06-13`, and `2026-06-19`.
+`2026-06-04`, `2026-06-06`, `2026-06-08`, `2026-06-13`, `2026-06-19`, and
+`2026-06-22`.
 This summary was created during the `2026-06-02` modular MSH run and updated as
 additional audit reports were added; older reports without day summaries were
 not rewritten.
@@ -31,10 +33,10 @@ not rewritten.
   and Candid codecs behind ops/lower codec ownership. The workflow/API
   registry-record projection follow-up was closed after the 2026-06-13
   change-friction report.
-- Carry forward the audience-target-binding method drift note: retired or
-  absent internal-invocation and delegated-grant surfaces should either be
-  removed from the recurring definition or explicitly tracked as historical
-  scope.
+- The audience-target-binding method drift note is closed as of 2026-06-22;
+  carry forward the current watchpoint that active proof install issuer/root
+  binding and root proof batch install metadata matching must remain in
+  recurring coverage.
 - Carry forward the change-friction watchpoints: the `workflow/pool` direct
   storage-record reference was fixed on 2026-06-13; prioritize host
   deployment-truth decomposition before adding more promotion/lifecycle report

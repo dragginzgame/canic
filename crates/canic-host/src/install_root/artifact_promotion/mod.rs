@@ -1,6 +1,6 @@
-use super::InstallRootOptions;
 use super::phase_receipts::{completed_phase_role_receipt, receipt_with_execution_context};
 use super::receipt_io::write_artifact_promotion_execution_receipt;
+use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::deployment_truth::{
     ArtifactPromotionExecutionReceiptRequest, ArtifactPromotionPlanV1,
     ArtifactPromotionProvenanceReportRequest, DeploymentCheckV1, DeploymentCommandResultV1,
@@ -50,8 +50,8 @@ fn promotion_install_deployment_receipt(
     execution_context: &DeploymentExecutionContextV1,
     promotion_plan: &ArtifactPromotionPlanV1,
 ) -> Result<DeploymentReceiptV1, Box<dyn std::error::Error>> {
-    let started_at = super::current_unix_timestamp_label()?;
-    let finished_at = super::current_unix_timestamp_label()?;
+    let started_at = current_unix_timestamp_label()?;
+    let finished_at = current_unix_timestamp_label()?;
     let phase = phase_receipt(
         "promoted_plan_install",
         started_at.clone(),

@@ -21,7 +21,7 @@ pub fn stage_root_release_set(
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let now_secs = root_time_secs(root_canister)?;
+    let now_secs = root_time_secs()?;
     println!("Stage release set:");
     let mut progress = StageProgress::new();
     progress.print_header();

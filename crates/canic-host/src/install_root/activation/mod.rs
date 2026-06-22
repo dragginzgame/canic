@@ -1,8 +1,8 @@
-use super::InstallRootOptions;
 use super::operations::{
     EnsureRootCyclesOperation, InstallRootWasmOperation, ResumeBootstrapOperation,
     WaitRootReadyOperation,
 };
+use super::options::InstallRootOptions;
 use super::output::print_install_timing_summary;
 use super::phase_receipts::InstallReceiptScope;
 use super::plan_artifacts::root_wasm_for_install_plan;

@@ -1,3 +1,4 @@
+use super::model::PolicyBuildProvenanceRuleV1;
 use super::*;
 use crate::build_provenance::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, BuildProvenanceStatusV1, BuildProvenanceV1,

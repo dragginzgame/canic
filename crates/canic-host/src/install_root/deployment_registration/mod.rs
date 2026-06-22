@@ -1,3 +1,4 @@
+use super::clock::current_unix_secs;
 use super::root_verification::{
     RootVerificationReceiptInput, deployment_root_verification_state, file_sha256_hex,
     root_verification_receipt_from_report, verified_root_state_transition,
@@ -82,7 +83,7 @@ pub fn register_deployment_state(
     };
     let release_set_manifest_path =
         registered_deployment_release_set_manifest_path(&icp_root, &options.network);
-    let timestamp = super::current_unix_secs()?;
+    let timestamp = current_unix_secs()?;
     let state = InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: options.deployment_name,
@@ -117,7 +118,7 @@ pub fn verify_registered_deployment_root(
     validate_network_name(&options.network)?;
     let verified_at_unix_secs = match options.verified_at_unix_secs {
         Some(value) => value,
-        None => super::current_unix_secs()?,
+        None => current_unix_secs()?,
     };
     let icp_root = match options.icp_root {
         Some(path) => path,

@@ -1,9 +1,9 @@
-use super::InstallRootOptions;
 use super::operations::EmitRootManifestOperation;
 use super::phase_receipts::{
     CompletedInstallPhase, install_deployment_truth_phase_receipt, receipt_with_execution_context,
 };
 use super::receipt_io::write_install_deployment_truth_receipt;
+use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentPlanV1};
 use crate::release_set::{
     ReleaseSetEntry, RootReleaseSetManifest, resolve_artifact_root, root_release_set_manifest_path,
@@ -21,7 +21,7 @@ pub(super) fn validate_plan_artifacts_with_phase(
     icp_root: &Path,
     network: &str,
 ) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
-    let started_at = super::current_unix_timestamp_label()?;
+    let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
     validate_plan_artifact_paths(plan, icp_root, network)?;
     let duration = started.elapsed();
@@ -34,7 +34,7 @@ pub(super) fn validate_plan_artifacts_with_phase(
         phase: "materialize_artifacts",
         attempted_action: "validate supplied deployment plan artifacts",
         started_at,
-        finished_at: Some(super::current_unix_timestamp_label()?),
+        finished_at: Some(current_unix_timestamp_label()?),
         evidence: vec![format!("deployment_plan:{}", plan.plan_id)],
         role_names,
     };
@@ -52,7 +52,7 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
 ) -> Result<(PathBuf, Duration), Box<dyn std::error::Error>> {
     let operation =
         EmitRootManifestOperation::new(workspace_root, icp_root, &options.network, config_path);
-    let emit_manifest_started_at_label = super::current_unix_timestamp_label()?;
+    let emit_manifest_started_at_label = current_unix_timestamp_label()?;
     let emit_manifest_started_at = Instant::now();
     let manifest_path = if let Some(plan) = &options.deployment_plan_override {
         emit_root_release_set_manifest_from_plan(icp_root, &options.network, plan)?
@@ -65,7 +65,7 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
             deployment_truth_check,
             "emit_manifest",
             emit_manifest_started_at_label,
-            Some(super::current_unix_timestamp_label()?),
+            Some(current_unix_timestamp_label()?),
             "emit root release-set manifest",
             crate::deployment_truth::ObservationStatusV1::Observed,
             EmitRootManifestOperation::evidence(&manifest_path),

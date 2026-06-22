@@ -19,6 +19,7 @@ Audience/target binding must be enforced by the canonical verifier or by a verif
 Runtime context may include:
 
 - current canister principal
+- configured trusted root canister principal
 - service identifier
 - RPC target
 - execution environment identifier
@@ -99,6 +100,10 @@ Examples:
 - delegated grant audience includes target canister
 - service scope matches expected service
 - issuer/target relationship is validated where required
+- active root delegation proof install binds the proof certificate issuer to
+  the current signer canister before storing active proof state
+- active root delegation proof install verifies the proof against the
+  configured trusted root canister/root key before storing active proof state
 
 ### 3. Verify Failure Semantics
 
@@ -119,6 +124,8 @@ Cross-reference result against the Expiry / Replay / Single-Use Invariant.
 - valid token for audience A used in audience B => rejection
 - valid token for wrong target canister => rejection
 - valid token for correct audience/target => success
+- active delegation proof for issuer A installed on issuer B => rejection
+- active delegation proof signed by unexpected root => rejection
 
 ## Structural Hotspots
 
@@ -138,8 +145,11 @@ git log --name-only -n 20 -- crates/
 | `ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_subset`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | delegated-token audience shape, subset, local runtime matching, grant subset, and local-role grant lookup | High |
 | `ops/auth/delegated/verify.rs` | `verify_audience_and_grants` | delegated-token cert/claim audience, local verifier, grant subset, and scope checks | High |
 | `ops/auth/delegated/prepare.rs` | `prepare_delegated_token` | rejects delegated-token audience expansion against the active issuer certificate | High |
+| `ops/auth/delegated/active_proof.rs` | `install_active_delegation_proof` | binds active proof cert issuer to the local signer canister and verifies trusted root proof before storage | High |
+| `ops/auth/delegation/active.rs` | `install_active_delegation_proof` | supplies current canister/root verifier context before persisting active proof | High |
 | `domain/policy/auth/root_provisioning.rs` | `validate_root_delegation_proof_prepare_policy` | root issuer registry policy enforces issuer, enabled state, allowed audiences, allowed grants, TTL, and refresh policy before root proof batch prepare | High |
 | `ops/auth/delegation/batch.rs` | `preflight_delegation_proof_batch_prepare_request` | maps root proof batch prepare DTOs into root issuer policy decisions before preparing proof metadata | High |
+| `ops/auth/delegation/batch.rs` | `preflight_delegation_proof_batch_install_proof` | rejects retrieved proofs whose issuer/cert hash/cert payload do not match pending batch metadata | High |
 | `ops/auth/verify/attestation.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
 | `ops/rpc/capability.rs` | `root_capability_hash` | canonical root capability hash binding to target canister, capability version, service, and canonical payload | High |
 | `workflow/rpc/capability/proof.rs` | `verify_capability_hash_binding`, structural proof helpers | test-visible target hash verification and runtime structural proof checks | Medium |
@@ -238,8 +248,11 @@ Use current targeted tests rather than historical test names from older reports.
 cargo test --locked -p canic-core --lib audience -- --nocapture
 cargo test --locked -p canic-core --lib local_role -- --nocapture
 cargo test --locked -p canic-core --lib prepare_delegated_token_rejects_audience_expansion -- --nocapture
+cargo test --locked -p canic-core --lib install_active_delegation_proof_rejects_wrong_issuer -- --nocapture
+cargo test --locked -p canic-core --lib install_active_delegation_proof_rejects_root_proof_failure -- --nocapture
 cargo test --locked -p canic-core --lib root_prepare_policy_rejects_audience_or_grant_outside_policy -- --nocapture
 cargo test --locked -p canic-core --lib batch_prepare_preflight_rejects_grant_outside_issuer_policy -- --nocapture
+cargo test --locked -p canic-core --lib batch_install_preflight_rejects_proof_mismatch -- --nocapture
 cargo test --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
 cargo test --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
 cargo test --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture

@@ -1,3 +1,4 @@
+use super::clock::current_unix_timestamp_label;
 use super::operations::InstallPhaseOperation;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use crate::deployment_truth::{
@@ -187,7 +188,7 @@ impl InstallReceiptScope<'_> {
         evidence: Vec<String>,
         run: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
     ) -> Result<Duration, Box<dyn std::error::Error>> {
-        let started_at = super::current_unix_timestamp_label()?;
+        let started_at = current_unix_timestamp_label()?;
         let started = Instant::now();
         match run() {
             Ok(()) => {
@@ -196,7 +197,7 @@ impl InstallReceiptScope<'_> {
                     self.check,
                     phase,
                     started_at,
-                    Some(super::current_unix_timestamp_label()?),
+                    Some(current_unix_timestamp_label()?),
                     attempted_action,
                     ObservationStatusV1::Observed,
                     evidence,
@@ -255,7 +256,7 @@ impl InstallReceiptScope<'_> {
                 phase,
                 started_at,
                 finished_at: Some(
-                    super::current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string()),
+                    current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string()),
                 ),
                 attempted_action,
                 status: ObservationStatusV1::Inconclusive,

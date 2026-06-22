@@ -97,10 +97,7 @@ fn local_replica_endpoint(network: Option<&str>) -> String {
     local_replica_endpoint_with_port(network, configured_local_gateway_port().ok())
 }
 
-pub(super) fn local_replica_endpoint_with_port(
-    network: Option<&str>,
-    configured_port: Option<u16>,
-) -> String {
+fn local_replica_endpoint_with_port(network: Option<&str>, configured_port: Option<u16>) -> String {
     if let Some(network) = network.filter(|network| network.starts_with("http://")) {
         return network.trim_end_matches('/').to_string();
     }

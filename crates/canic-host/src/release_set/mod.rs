@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod config;
 mod manifest;
 mod paths;
-pub(crate) mod stage;
+mod stage;
 
 pub use config::{
     AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
@@ -31,21 +31,6 @@ use stage::build_release_set_entry;
 pub(crate) use stage::icp_query_on_network;
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
-#[cfg(test)]
-use stage::read_release_artifact;
-
-#[cfg(test)]
-use config::{
-    attach_fleet_role_source, configured_bootstrap_roles_from_source,
-    configured_controllers_from_source, configured_deployable_roles_from_source,
-    configured_fleet_name_from_source, configured_local_root_create_cycles_from_source,
-    configured_pool_expectations_from_source, configured_release_roles_from_source,
-    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
-    configured_role_details_from_source, configured_role_kinds_from_source,
-    configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
-    configured_role_topups_from_source, declare_fleet_role_source, rename_fleet_role_source,
-};
-
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
 pub(super) const ROOT_CONFIG_FILE: &str = "canic.toml";
 pub(super) const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
@@ -55,8 +40,7 @@ pub(super) const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6d];
 
 // Read the current host wall clock so staged manifests use a stable whole-second
 // timestamp without depending on an exported root time endpoint.
-pub(super) fn root_time_secs(root_canister: &str) -> Result<u64, Box<dyn std::error::Error>> {
-    let _ = root_canister;
+pub(super) fn root_time_secs() -> Result<u64, Box<dyn std::error::Error>> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| format!("system clock before unix epoch: {err}"))?;
