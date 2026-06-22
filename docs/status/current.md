@@ -9,20 +9,20 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.15` is in progress as a narrow blob-storage PocketIC test readability
-  cleanup slice after the pushed `0.70.14` release. Current work centralizes
-  probe/mock method names in `pic_blob_storage` constants and adds section
-  banners so tests, billing fixtures, gateway sync, endpoint guards,
-  status/report assertions, Cashier/funding failure paths, install/config
-  helpers, non-billing gateway lifecycle helpers, and probe upgrade helpers are
-  easier to navigate. It also adds typed helpers for repeated funding, Cashier
+- `0.70.15` is pushed as a narrow blob-storage PocketIC test readability
+  cleanup slice after the pushed `0.70.14` release. It centralizes probe/mock
+  method names in `pic_blob_storage` constants and adds section banners so
+  tests, billing fixtures, gateway sync, endpoint guards, status/report
+  assertions, Cashier/funding failure paths, install/config helpers,
+  non-billing gateway lifecycle helpers, and probe upgrade helpers are easier
+  to navigate. It also adds typed helpers for repeated funding, Cashier
   balance, mock last-top-up, and probe counter calls, names the standard
   billing fixture values, and routes gateway sync, direct Cashier sync, billing
   status, and one-shot mock failure controls through helper wrappers. The long
   billing wrapper scenario now reads as named phases for setup, failure
   recovery, rejection cases, and final funding metadata. No behavior change is
   intended.
-  Focused validation passing so far:
+  Focused validation passing:
   ```text
   cargo fmt --all
   cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
@@ -31,6 +31,94 @@ inspect only the files needed for the current task.
   cargo test --locked -p canic --test changelog_governance -- --nocapture
   cargo fmt --all -- --check
   git diff --check
+  ```
+  Post-push cleanup audit passing:
+  ```text
+  bash scripts/ci/check-blob-storage-inventory-gate.sh
+  bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+  bash scripts/ci/run-layering-guards.sh
+  bash scripts/ci/check-upgrade-state-audit.sh
+  bash scripts/ci/check-diagnostic-consistency-audit.sh
+  bash scripts/ci/check-rc-readiness-audit.sh
+  bash scripts/ci/check-recovery-runbooks.sh
+  bash scripts/ci/check-release-validation-matrix.sh
+  bash scripts/ci/check-release-package-install-validation.sh
+  cargo fmt --all -- --check
+  cargo check --locked -p canic-core --features blob-storage-billing
+  cargo check --locked -p canic --features blob-storage-billing
+  cargo check --locked -p blob_storage_probe
+  cargo check --locked -p blob_storage_cashier_mock
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic --features blob-storage-billing --test protocol_surface -- -D warnings
+  cargo clippy --locked -p blob_storage_probe -- -D warnings
+  cargo clippy --locked -p blob_storage_cashier_mock -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --features blob-storage-billing --test blob_storage_endpoint_macro -- --nocapture
+  cargo test --locked -p canic --test protocol_inventory_gate -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo test --locked -p canic --test workspace_manifest -- --nocapture
+  cargo test --locked -p canic --test release_index_guard -- --nocapture
+  cargo test --locked -p canic --test install_script_surface -- --nocapture
+  make fmt-check
+  make clippy
+  make test-unit
+  git diff --check
+  ```
+  The audit found no runtime cleanup. It only reworded one stale production
+  `TODO` in `ops::storage::state::mapper` into an ownership comment and
+  corrected this handoff from in-progress to pushed. Follow-up recurring-audit
+  freshness work identified `layer-violations` as the least fresh active audit
+  definition and tightened it against the current layering guard coverage. The
+  audit was then run on 2026-06-22 and ended PASS-with-drift-risk after fixing
+  one production layer leak: `api::blob_storage` no longer imports or
+  constructs `BlobStorageBillingConfigRecord`; billing config record/view/DTO
+  mapping now lives in `ops::blob_storage::lifecycle` with
+  `view::blob_storage::BlobStorageBillingConfigView`. Remaining watchpoint:
+  `api::blob_storage` is still a large billing/status facade.
+  Focused follow-up validation passing:
+  ```text
+  bash scripts/ci/run-layering-guards.sh
+  cargo fmt --all
+  cargo check --locked -p canic-core --features blob-storage-billing
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  git diff --check
+  ```
+  Follow-up least-fresh recurring audit work then selected `access-purity`
+  from the tied 2026-06-19 audit set. Its definition now explicitly guards root
+  proof provisioning and root issuer policy mutation out of access. The
+  2026-06-22 access-purity run passed with watchpoints and required no
+  production code changes.
+  ```text
+  bash scripts/ci/run-layering-guards.sh
+  cargo test --locked -p canic-core access:: --lib -- --nocapture
+  cargo test --locked -p canic-macros endpoint --lib -- --nocapture
+  ```
+  The next least-fresh recurring audit then selected
+  `audience-target-binding`. Its definition now explicitly covers active root
+  delegation proof install issuer/root binding and root proof batch install
+  proof/pending metadata matching. The 2026-06-22 run passed with risk 3/10
+  and required no production code changes; the initial sandboxed PocketIC runs
+  failed only because the local PocketIC server could not bind a socket, and
+  the unsandboxed retries passed.
+  ```text
+  cargo test --locked -p canic-core --lib audience -- --nocapture
+  cargo test --locked -p canic-core --lib local_role -- --nocapture
+  cargo test --locked -p canic-core --lib prepare_delegated_token_rejects_audience_expansion -- --nocapture
+  cargo test --locked -p canic-core --lib install_active_delegation_proof_rejects_wrong_issuer -- --nocapture
+  cargo test --locked -p canic-core --lib install_active_delegation_proof_rejects_root_proof_failure -- --nocapture
+  cargo test --locked -p canic-core --lib root_prepare_policy_rejects_audience_or_grant_outside_policy -- --nocapture
+  cargo test --locked -p canic-core --lib batch_prepare_preflight_rejects_grant_outside_issuer_policy -- --nocapture
+  cargo test --locked -p canic-core --lib batch_install_preflight_rejects_proof_mismatch -- --nocapture
+  cargo test --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
+  cargo test --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
+  cargo test --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
   ```
 
 - `0.70.14` is pushed as a narrow blob-storage funding failure recovery

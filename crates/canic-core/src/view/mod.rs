@@ -4,6 +4,8 @@
 //! Does not own: endpoint DTOs, stable records, or workflow decisions.
 //! Boundary: ops and workflow use views internally before endpoint DTO shaping.
 
+#[cfg(feature = "blob-storage-billing")]
+pub mod blob_storage;
 pub mod env;
 pub mod icp_refill;
 pub mod placement;

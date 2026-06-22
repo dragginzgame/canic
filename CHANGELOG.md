@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.16` closes the post-`0.70.15` cleanup/audit pass by fixing a
+  blob-storage API layer leak around billing config storage records,
+  refreshing the recurring layer/access/audience audit definitions, and
+  recording the retained June 22 audit reports.
+
 - `0.70.15` cleans up the blob-storage PocketIC test readability by
   centralizing probe/mock method names as constants and adding clear helper
   section banners for the gateway, billing, Cashier failure, funding,

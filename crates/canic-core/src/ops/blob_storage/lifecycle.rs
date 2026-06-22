@@ -16,7 +16,11 @@ use crate::{
 };
 
 #[cfg(feature = "blob-storage-billing")]
-use crate::storage::stable::blob_storage::BlobStorageBillingConfigRecord;
+use crate::{
+    cdk::candid::Nat, dto::blob_storage::BlobStorageBillingConfig,
+    storage::stable::blob_storage::BlobStorageBillingConfigRecord,
+    view::blob_storage::BlobStorageBillingConfigView,
+};
 
 ///
 /// BlobStorageLifecycleOps
@@ -29,13 +33,33 @@ pub struct BlobStorageLifecycleOps;
 impl BlobStorageLifecycleOps {
     #[cfg(feature = "blob-storage-billing")]
     #[must_use]
-    pub fn billing_config() -> Option<BlobStorageBillingConfigRecord> {
-        BlobStorageStore::billing_config()
+    pub fn billing_config() -> Option<BlobStorageBillingConfigView> {
+        BlobStorageStore::billing_config().map(Self::billing_config_record_to_view)
     }
 
     #[cfg(feature = "blob-storage-billing")]
-    pub fn set_billing_config(config: BlobStorageBillingConfigRecord) {
-        BlobStorageStore::set_billing_config(config);
+    #[must_use]
+    pub fn billing_config_dto() -> Option<BlobStorageBillingConfig> {
+        Self::billing_config().map(Self::billing_config_view_to_dto)
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    pub fn set_billing_config(
+        cashier_canister_id: Principal,
+        project_cycles_reserve: u128,
+        min_upload_balance: u128,
+        target_upload_balance: u128,
+        gateway_principal_limit: u64,
+        updated_at_ns: u64,
+    ) {
+        BlobStorageStore::set_billing_config(BlobStorageBillingConfigRecord::new(
+            cashier_canister_id,
+            project_cycles_reserve,
+            min_upload_balance,
+            target_upload_balance,
+            gateway_principal_limit,
+            updated_at_ns,
+        ));
     }
 
     #[cfg(feature = "blob-storage-billing")]
@@ -174,6 +198,36 @@ impl BlobStorageLifecycleOps {
     #[must_use]
     pub fn is_gateway_principal(principal: Principal) -> bool {
         BlobStorageStore::get_gateway_principal(principal).is_some()
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    const fn billing_config_record_to_view(
+        record: BlobStorageBillingConfigRecord,
+    ) -> BlobStorageBillingConfigView {
+        BlobStorageBillingConfigView::new(
+            record.cashier_canister_id,
+            record.project_cycles_reserve,
+            record.min_upload_balance,
+            record.target_upload_balance,
+            record.gateway_principal_limit,
+            record.updated_at_ns,
+        )
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn billing_config_view_to_dto(view: BlobStorageBillingConfigView) -> BlobStorageBillingConfig {
+        BlobStorageBillingConfig {
+            cashier_canister_id: view.cashier_canister_id,
+            project_cycles_reserve: Self::nat_from_u128(view.project_cycles_reserve),
+            min_upload_balance: Self::nat_from_u128(view.min_upload_balance),
+            target_upload_balance: Self::nat_from_u128(view.target_upload_balance),
+            gateway_principal_limit: view.gateway_principal_limit,
+        }
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    fn nat_from_u128(value: u128) -> Nat {
+        Nat::parse(value.to_string().as_bytes()).expect("u128 must encode as Candid nat")
     }
 }
 

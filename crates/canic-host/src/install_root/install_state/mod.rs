@@ -1,9 +1,12 @@
-use super::InstallRootOptions;
 use super::phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
 };
 use super::state::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, RootVerificationStatus, write_install_state,
+};
+use super::{
+    clock::{current_unix_secs, current_unix_timestamp_label},
+    options::InstallRootOptions,
 };
 use std::path::{Path, PathBuf};
 
@@ -12,13 +15,13 @@ pub(super) fn write_install_state_with_deployment_truth_receipt(
     network: &str,
     state: &InstallState,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let started_at = super::current_unix_timestamp_label()?;
+    let started_at = current_unix_timestamp_label()?;
     let state_path = write_install_state(receipt_scope.icp_root, network, state)?;
     let completed = CompletedInstallPhase {
         phase: "write_install_state",
         attempted_action: "write local install state",
         started_at,
-        finished_at: Some(super::current_unix_timestamp_label()?),
+        finished_at: Some(current_unix_timestamp_label()?),
         evidence: vec![
             format!("install_state:{}", state_path.display()),
             format!("deployment:{}", state.deployment_name),
@@ -42,7 +45,7 @@ pub(super) fn build_install_state(
     root_canister_id: &str,
 ) -> Result<InstallState, Box<dyn std::error::Error>> {
     let (deployment_name, fleet_name) = identity;
-    let timestamp = super::current_unix_secs()?;
+    let timestamp = current_unix_secs()?;
     Ok(InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
         deployment_name: deployment_name.to_string(),

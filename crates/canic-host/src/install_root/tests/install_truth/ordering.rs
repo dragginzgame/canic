@@ -3,11 +3,10 @@ use super::*;
 #[test]
 fn current_install_records_gates_before_activation_mutation() {
     let source = include_str!("../../mod.rs");
-    let install = source_section(
-        source,
-        "pub fn install_root(",
-        "fn resolve_install_identity(",
-    );
+    let install_start = source
+        .find("pub fn install_root(")
+        .expect("install_root function exists");
+    let install = &source[install_start..];
     assert_before(
         install,
         "prepare_install_deployment_truth(",

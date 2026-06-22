@@ -1,7 +1,7 @@
-use super::InstallRootOptions;
 use super::config_selection::resolve_install_config_path;
 use super::current_execution::current_install_execution_context;
 use super::state::{read_named_deployment_install_state_from_root, validate_state_name};
+use super::{capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, options::InstallRootOptions};
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentExecutionPreflightV1,
@@ -68,7 +68,7 @@ pub fn check_install_execution_preflight(
     let preflight = deployment_execution_preflight_from_check(
         &check,
         &executor,
-        super::CURRENT_INSTALL_REQUIRED_CAPABILITIES,
+        CURRENT_INSTALL_REQUIRED_CAPABILITIES,
     );
     validate_deployment_execution_preflight_for_check(&check, &preflight)?;
     Ok(preflight)

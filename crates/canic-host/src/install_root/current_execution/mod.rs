@@ -6,7 +6,10 @@ use super::deployment_truth_gate::{
 use super::execution_preflight::write_current_install_execution_preflight_receipt;
 use super::phase_receipts::receipt_with_execution_context;
 use super::receipt_io::write_install_deployment_truth_receipt;
-use super::{CURRENT_INSTALL_REQUIRED_CAPABILITIES, InstallRootOptions};
+use super::{
+    capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, clock::current_unix_timestamp_label,
+    options::InstallRootOptions,
+};
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentExecutionContextV1,
     DeploymentExecutor, DeploymentExecutorCapabilityV1, artifact_gate_phase_receipt,
@@ -60,7 +63,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     deployment_name: &str,
     execution_context: &DeploymentExecutionContextV1,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
-    let truth_gate_started_at = super::current_unix_timestamp_label()?;
+    let truth_gate_started_at = current_unix_timestamp_label()?;
     let deployment_truth_check = super::truth_check::current_install_deployment_truth_check_at(
         options,
         workspace_root,
@@ -72,7 +75,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     let artifact_gate_receipt = artifact_gate_phase_receipt(
         &deployment_truth_check,
         truth_gate_started_at.clone(),
-        Some(super::current_unix_timestamp_label()?),
+        Some(current_unix_timestamp_label()?),
     );
     let role_receipts = artifact_gate_role_phase_receipts(&deployment_truth_check);
     let deployment_receipt = receipt_with_execution_context(

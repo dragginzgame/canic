@@ -27,6 +27,8 @@ Access must not own:
 - storage records or stable storage types;
 - orchestration loops;
 - retry or recovery behavior;
+- root delegation proof preparation, retrieval, installation, or provisioning;
+- root issuer policy validation or mutation;
 - DTO conversion ownership outside endpoint-boundary auth material;
 - transport parsing beyond boundary unmarshalling;
 - auth state mutation outside narrow replay/session boundary calls.
@@ -50,6 +52,7 @@ Boundary comparison scope:
 - changing endpoint auth macro lowering;
 - changing delegated-token verification or delegated-session resolution;
 - changing delegated-token audience DTOs;
+- changing root proof provisioning or root issuer policy endpoints;
 - changing protected internal caller role predicates;
 - changing app/environment endpoint guards;
 - adding metrics to access paths.
@@ -70,6 +73,12 @@ Expected:
 
 - no production access imports of stable storage or record types;
 - test fixtures may import records inside `#[cfg(test)]` modules.
+
+Also run the executable guard that shares this access-boundary check:
+
+```bash
+bash scripts/ci/run-layering-guards.sh
+```
 
 ### 2. Workflow / Orchestration Drift
 
@@ -134,7 +143,24 @@ Expected:
 - auth state reads/writes should stay narrow and endpoint-boundary related;
 - delegated-token authentication must not write verifier-local token-use state.
 
-### 6. Endpoint Macro Lowering
+### 6. Root Proof And Issuer Policy Boundary
+
+Access must not own delegated-token root-proof provisioning or root issuer
+policy mutation. Those surfaces belong to endpoint/API facades plus auth
+ops/workflow, with access only enforcing endpoint guard predicates.
+
+```bash
+rg -n 'delegation_proof|root_issuer|issuer_policy|RootIssuerPolicy|prepare_delegation|install_active_delegation|canic_get_delegation_proof|canic_prepare_delegation_proof' crates/canic-core/src/access -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- no proof preparation, proof retrieval, proof installation, or root issuer
+  policy mutation in access;
+- endpoint guards may reference authenticated subject/caller state but not
+  provision active proofs.
+
+### 7. Endpoint Macro Lowering
 
 The endpoint macro may generate access-boundary calls, but it must not hide
 workflow, policy, or topology mutation in generated code.

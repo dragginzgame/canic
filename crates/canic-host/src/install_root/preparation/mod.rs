@@ -1,4 +1,3 @@
-use super::InstallRootOptions;
 use super::build_environment::ensure_icp_environment_ready;
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
@@ -9,6 +8,7 @@ use super::phase_receipts::{
 };
 use super::plan_artifacts::validate_plan_artifacts_with_phase;
 use super::timing::InstallTimingSummary;
+use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1};
 use crate::release_set::configured_install_targets;
 use std::{
@@ -77,7 +77,7 @@ fn resolve_root_canister_with_phase(
         &options.root_canister,
         config_path,
     );
-    let started_at = super::current_unix_timestamp_label()?;
+    let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
     let root_canister_id = operation.execute()?;
     let duration = started.elapsed();
@@ -85,7 +85,7 @@ fn resolve_root_canister_with_phase(
         phase: "resolve_root_canister",
         attempted_action: "resolve or create root canister id",
         started_at,
-        finished_at: Some(super::current_unix_timestamp_label()?),
+        finished_at: Some(current_unix_timestamp_label()?),
         evidence: operation.evidence(&root_canister_id),
         role_names: Vec::new(),
     };
@@ -109,7 +109,7 @@ fn build_install_targets_with_phase(
         config_path,
         icp_root,
     );
-    let started_at = super::current_unix_timestamp_label()?;
+    let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
     operation.execute()?;
     let duration = started.elapsed();
@@ -117,7 +117,7 @@ fn build_install_targets_with_phase(
         phase: "build_artifacts",
         attempted_action: "build configured install targets",
         started_at,
-        finished_at: Some(super::current_unix_timestamp_label()?),
+        finished_at: Some(current_unix_timestamp_label()?),
         evidence: operation.evidence(),
         role_names: operation.role_names(),
     };

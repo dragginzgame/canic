@@ -1,3 +1,4 @@
+use super::clock::current_unix_timestamp_label;
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     PhaseReceiptV1, RolePhaseReceiptV1, SafetyFindingV1, deployment_receipt_from_check_with_status,
@@ -115,7 +116,7 @@ pub(super) fn install_deployment_truth_gate_receipt(
         format!("{}:materialize_artifacts", check.check_id),
         operation_status,
         started_at,
-        Some(super::current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string())),
+        Some(current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string())),
         phase_receipts,
         role_phase_receipts,
         command_result,

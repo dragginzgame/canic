@@ -9,8 +9,6 @@ mod validation;
 
 use evaluation::evaluate_policy;
 pub use manifest_gate::evaluate_project_evidence_manifest_gate;
-#[cfg(test)]
-use model::PolicyBuildProvenanceRuleV1;
 pub use model::{
     CiPolicyV1, PolicyBuildProvenanceRulesV1, PolicyEnvelopeRulesV1, PolicyEvaluationStatusV1,
     PolicyExitClassRulesV1, PolicyFindingSeverityV1, PolicyFindingV1, PolicyGateError,

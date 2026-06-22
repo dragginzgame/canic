@@ -1,6 +1,9 @@
 use super::deployment_truth_gate::deployment_truth_finding_label;
 use super::phase_receipts::receipt_with_execution_context;
 use super::receipt_io::write_install_deployment_truth_receipt;
+use super::{
+    capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, clock::current_unix_timestamp_label,
+};
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentCommandResultV1,
     DeploymentExecutionContextV1, DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1,
@@ -17,7 +20,7 @@ pub(super) fn write_current_install_execution_preflight_receipt(
     check: &DeploymentCheckV1,
     execution_context: &DeploymentExecutionContextV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let started_at = super::current_unix_timestamp_label()?;
+    let started_at = current_unix_timestamp_label()?;
     let executor = CurrentCliDeploymentExecutor::new(
         execution_context.workspace_root.clone(),
         execution_context.icp_root.clone(),
@@ -26,7 +29,7 @@ pub(super) fn write_current_install_execution_preflight_receipt(
     let preflight = deployment_execution_preflight_from_check(
         check,
         &executor,
-        super::CURRENT_INSTALL_REQUIRED_CAPABILITIES,
+        CURRENT_INSTALL_REQUIRED_CAPABILITIES,
     );
     validate_deployment_execution_preflight_for_check(check, &preflight)?;
     let blockers = preflight.blockers.clone();
@@ -44,7 +47,7 @@ pub(super) fn write_current_install_execution_preflight_receipt(
             },
         )
     };
-    let finished_at = super::current_unix_timestamp_label()?;
+    let finished_at = current_unix_timestamp_label()?;
     let receipt = receipt_with_execution_context(
         deployment_receipt_from_check_with_status(
             check,

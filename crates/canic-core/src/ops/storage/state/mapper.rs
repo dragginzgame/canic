@@ -59,7 +59,7 @@ impl AppStateMapper {
     // Map a DTO input snapshot back into the stored app-state record.
     #[must_use]
     pub const fn input_to_record(view: AppStateInput) -> AppStateRecord {
-        // TODO: mapping from DTO to storage record must remain in ops.
+        // Keep DTO-to-record conversion in ops so workflow never mutates storage records.
         AppStateRecord {
             mode: match view.mode {
                 AppModeDto::Enabled => StorageAppMode::Enabled,

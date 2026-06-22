@@ -44,7 +44,6 @@ use crate::{
         },
         ic::mgmt::MgmtOps,
     },
-    storage::stable::blob_storage::BlobStorageBillingConfigRecord,
 };
 
 ///
@@ -102,21 +101,22 @@ impl BlobStorageApi {
             ));
         }
 
-        BlobStorageLifecycleOps::set_billing_config(BlobStorageBillingConfigRecord::new(
+        BlobStorageLifecycleOps::set_billing_config(
             config.cashier_canister_id,
             project_cycles_reserve,
             min_upload_balance,
             target_upload_balance,
             config.gateway_principal_limit,
             IcOps::now_nanos(),
-        ));
+        );
         Ok(())
     }
 
     /// Return the stored blob-storage billing configuration, if one is set.
     #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
     pub fn billing_config() -> Option<BlobStorageBillingConfig> {
-        BlobStorageLifecycleOps::billing_config().map(Self::billing_config_record_to_dto)
+        BlobStorageLifecycleOps::billing_config_dto()
     }
 
     /// Canonicalize a Toko/Caffeine root hash string into `sha256:<64-lowercase-hex>`.
@@ -566,19 +566,6 @@ impl BlobStorageApi {
     #[cfg(feature = "blob-storage-billing")]
     fn nat_to_u128(field: &str, value: &Nat) -> Result<u128, Error> {
         u128::try_from(value.0.clone()).map_err(|_| Error::invalid(format!("{field} exceeds u128")))
-    }
-
-    #[cfg(feature = "blob-storage-billing")]
-    fn billing_config_record_to_dto(
-        record: BlobStorageBillingConfigRecord,
-    ) -> BlobStorageBillingConfig {
-        BlobStorageBillingConfig {
-            cashier_canister_id: record.cashier_canister_id,
-            project_cycles_reserve: Self::nat_from_u128(record.project_cycles_reserve),
-            min_upload_balance: Self::nat_from_u128(record.min_upload_balance),
-            target_upload_balance: Self::nat_from_u128(record.target_upload_balance),
-            gateway_principal_limit: record.gateway_principal_limit,
-        }
     }
 
     #[cfg(feature = "blob-storage-billing")]

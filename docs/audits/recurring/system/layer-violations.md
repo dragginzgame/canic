@@ -38,17 +38,25 @@ For the current post-v1 tree, this audit must explicitly check:
 - workflow constructing storage records;
 - workflow performing serialization;
 - workflow performing conversion logic;
+- workflow mutating persisted records or owning DTO/record mapping;
 - workflow bypassing policy;
 - ops calling workflow;
 - policy importing DTOs;
 - policy performing async, IC, or storage work;
-- endpoint macros bypassing access/auth guards.
+- endpoint macros bypassing access/auth guards;
 - public RPC/API modules owning proof verification, replay projection, metrics,
   dispatch orchestration, or other workflow behavior;
+- public RPC/API modules owning root issuer policy upsert validation or storage
+  mutation behavior;
 - role-attestation verification drifting back from workflow/access ownership
   into public API modules;
 - ops/workflow contracts leaking public `dto::error::Error` across internal
   boundaries;
+- access guard code importing stable storage records instead of using ops
+  boundary helpers;
+- record types being publicly re-exported across crate boundaries;
+- `view` terminology being used for mutable record conversion outside `view/`
+  or explicit `record_to_view` helpers;
 - host-side operator evidence DTOs being incorrectly treated as core runtime
   layer-boundary concerns.
 
@@ -97,6 +105,10 @@ Canonical path ownership for this audit:
 - `model/storage`:
   - `crates/canic-core/src/model/**`
   - `crates/canic-core/src/storage/**`
+
+For this audit, `storage/**` is the persistence sublayer under
+model/storage ownership. It owns stable-memory projection and persisted schema
+records, but must not become an API, workflow, policy, or access guard surface.
 
 ### DTO Usage Rule
 
@@ -155,6 +167,7 @@ Policy must not depend on:
 
 - `workflow`
 - `ops`
+- `storage`
 - `infra`
 - serialization (`serde`, `candid`)
 - async behavior
@@ -206,9 +219,11 @@ rg -n 'use crate::workflow|crate::workflow::' crates/canic-core/src/{ops,storage
 rg -n '(^|[^A-Za-z0-9_])workflow::|crate::workflow::' crates/canic-core/src/{ops,storage,domain} -g '*.rs'
 rg -n 'use crate::domain::policy|crate::domain::policy::' crates/canic-core/src/{ops,storage} -g '*.rs'
 rg -n 'use crate::ops|crate::ops::' crates/canic-core/src/storage -g '*.rs'
+bash scripts/ci/run-layering-guards.sh
 ```
 
 - [ ] No upward imports detected
+- [ ] Executable layering guard passes
 - [ ] Violations listed below
 
 Violations:
@@ -222,7 +237,7 @@ Policy must not import runtime/infra/serialization concerns.
 Suggested scans:
 
 ```bash
-rg -n 'ic_cdk|crate::ops|crate::workflow|crate::api|serde::|candid::' crates/canic-core/src/domain/policy -g '*.rs'
+rg -n 'ic_cdk|crate::ops|crate::workflow|crate::api|storage::|serde::|candid::' crates/canic-core/src/domain/policy -g '*.rs'
 rg -n 'async fn' crates/canic-core/src/domain/policy -g '*.rs'
 test ! -d crates/canic-core/src/policy || rg -n 'ic_cdk|crate::ops|crate::workflow|crate::api|serde::|candid::|async fn|\\.await|storage::' crates/canic-core/src/policy -g '*.rs'
 ```
@@ -275,6 +290,30 @@ Findings:
 
 - (file, line, pattern, why risky)
 
+#### 1.5 Executable Guard Parity
+
+`scripts/ci/run-layering-guards.sh` is the executable hard-fail surface for
+this audit. Each run must execute it and summarize any failure against the
+matching audit concern.
+
+The guard currently covers:
+
+- workflow storage-record access
+- workflow imports from API
+- API shared replay orchestration
+- API root issuer policy upsert handling
+- workflow-defined policy types
+- DTO usage in domain/storage/model
+- public error DTO leakage in auth ops
+- access guard direct stable/record usage
+- public `*Record` re-exports
+- `view` naming misuse
+
+Result:
+
+- [ ] `bash scripts/ci/run-layering-guards.sh` passes
+- [ ] Any failure is classified in the result file with file/line evidence
+
 ## 2. Layer Responsibility Checks (Behavioral)
 
 ### 2.1 API Boundary Discipline
@@ -286,6 +325,7 @@ Check:
 - [ ] API does not embed business policy logic
 - [ ] API does not orchestrate multi-step workflows
 - [ ] API does not directly mutate model/storage internals
+- [ ] API delegates root issuer policy upsert validation and mutation to auth ops
 
 Suggested scan:
 
@@ -308,6 +348,10 @@ security/business orchestration, proof verification, replay projection,
 metrics/logging branches, or direct workflow sequencing that should live behind
 a workflow/access seam.
 
+Root issuer policy upsert handling is a hard guard: API modules may decode
+boundary DTOs and delegate, but must not own root issuer policy validation,
+storage mutation, or `AuthStateOps::upsert_root_issuer_policy` orchestration.
+
 ### 2.2 Workflow Ownership
 
 Workflow should orchestrate and sequence, not become infra/model boundary.
@@ -317,13 +361,16 @@ Check:
 - [ ] Workflow does not call infra directly (except via approved ops surface)
 - [ ] Workflow does not mutate storage internals directly
 - [ ] Workflow does not bypass policy where policy is required
+- [ ] Workflow does not construct or mutate persisted storage records
+- [ ] Workflow does not own DTO/model/record conversion helpers
+- [ ] Conversion helpers belong in `ops::*` or endpoint boundary adapters
 
 Suggested scan:
 
 ```bash
 rg -n 'ic_cdk::|sign_with_ecdsa|ecdsa_public_key|set_certified_data|data_certificate' crates/canic-core/src/workflow -g '*.rs'
 rg -n 'storage::stable::|crate::storage::stable::' crates/canic-core/src/workflow -g '*.rs'
-rg -n 'storage::.*Record|Record\\b|impl From|impl TryFrom|serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder' crates/canic-core/src/workflow -g '*.rs'
+rg -n 'storage::.*Record|Record\\b|record_to_|dto_to_|to_record|from_record|Mapper|impl From|impl TryFrom|serde::|serde_json|candid::|CandidType|ArgumentEncoder|ArgumentDecoder' crates/canic-core/src/workflow -g '*.rs'
 ```
 
 Findings:
@@ -362,7 +409,7 @@ Check:
 Suggested scan:
 
 ```bash
-rg -n 'crate::workflow|crate::api|authenticated\\(|caller::|policy::' crates/canic-core/src/storage -g '*.rs'
+rg -n 'crate::workflow|crate::api|crate::ops|authenticated\\(|caller::|policy::' crates/canic-core/src/storage crates/canic-core/src/model -g '*.rs'
 ```
 
 Findings:
@@ -402,19 +449,42 @@ Check:
 - [ ] API DTOs are not persisted directly to stable storage
 - [ ] Storage records are not returned directly as public API payloads
 - [ ] Workflow-internal models are not exposed as endpoint DTOs
-- [ ] DTO <-> model mapping occurs in API/workflow adapters, never inside `model`/`storage`
+- [ ] DTO <-> record/model/view conversion occurs in `ops::*` or the owning endpoint adapter
+- [ ] Workflow must not construct or mutate persisted records
+- [ ] Model/storage must not depend on DTOs
 
 Suggested scan:
 
 ```bash
 rg -n 'dto::.*(Record|State)|set_.*dto|store_.*dto|export\\(\\).*dto' crates/canic-core/src -g '*.rs'
+rg -n 'record_to_|dto_to_|to_record|from_record|Mapper|impl From|impl TryFrom' crates/canic-core/src/workflow -g '*.rs'
 ```
 
 Findings:
 
 - (file, line, why)
 
-### 3.2 Error Boundary Leakage
+### 3.2 Record Surface Leakage
+
+Persisted record types must remain storage/model internals unless explicitly
+wrapped by DTOs or view types.
+
+Check:
+
+- [ ] `*Record` types are not publicly re-exported across crate boundaries
+- [ ] Public surfaces expose DTOs/views, not storage records
+
+Suggested scan:
+
+```bash
+rg 'pub use .*Record' crates/canic-core/src | rg -v 'pub\\(crate\\)'
+```
+
+Findings:
+
+- (file, line, why)
+
+### 3.3 Error Boundary Leakage
 
 Check:
 
@@ -658,12 +728,46 @@ Policy must remain pure and deterministic.
 Scan:
 
 ```bash
-rg -n '\\.await|spawn\\(|stable_|env::' crates/canic-core/src/{domain/policy,access} -g '*.rs'
+rg -n '\\.await|spawn\\(|stable_|env::|storage::' crates/canic-core/src/domain/policy -g '*.rs'
+test ! -d crates/canic-core/src/policy || rg -n '\\.await|spawn\\(|stable_|env::|storage::' crates/canic-core/src/policy -g '*.rs'
 ```
 
 | Location | Pattern | Drift Risk | Why |
 | --- | --- | --- | --- |
 | `<path:line>` | `<pattern>` | `<High>` | `<policy side-effect/async signal>` |
+
+### Access Guard Boundary Drift
+
+Access guard code may evaluate endpoint authorization predicates, but must not
+reach directly into stable storage records or stable projection types.
+
+Scan:
+
+```bash
+find crates/canic-core/src/access -name '*.rs' -print0 \
+    | xargs -0 awk 'FNR == 1 { in_test = 0 } /^#\[cfg\(test\)\]/ { in_test = 1 } !in_test { print FILENAME ":" FNR ":" $0 }' \
+    | rg 'stable::|storage::.*Record|AppMode|EnvRecord|AppStateRecord'
+```
+
+| Location | Pattern | Drift Risk | Why |
+| --- | --- | --- | --- |
+| `<path:line>` | `<pattern>` | `<High>` | `<access bypasses ops boundary>` |
+
+### View Terminology Drift
+
+`view` names should refer to read-only projections under `view/` or explicit
+`record_to_view` conversion helpers. Other `to_view`/`from_view` helpers often
+hide mutable record conversion under read-only terminology.
+
+Scan:
+
+```bash
+rg '(to_view|from_view)' crates/canic-core/src | rg -v 'record_to_view|view::'
+```
+
+| Location | Pattern | Drift Risk | Why |
+| --- | --- | --- | --- |
+| `<path:line>` | `<pattern>` | `<Low/Medium>` | `<view naming drift signal>` |
 
 ### Lifecycle Adapter Drift
 
@@ -860,9 +964,15 @@ Derivation guidance (deterministic):
 - add `+2` for fan-in `9-12` across multiple subsystems
 - add `+3` for fan-in `12+` across multiple subsystems
 - add `+2` if workflow side-effect drift is detected
+- add `+2` if workflow owns DTO/record conversion or constructs/mutates
+  persisted records
 - add `+3` if policy async/side-effect drift is detected
+- add `+3` if access guard code imports stable storage records or stable
+  projection types directly
 - add `+1` if lifecycle adapter orchestration drift is detected
 - add `+1` if DTO behavioral drift is detected
+- add `+2` if `*Record` types are publicly re-exported
+- add `+1` if `view` naming drift is detected outside approved helpers
 - clamp to `0..10`
 
 If no confirmed findings and no hotspot/hub/amplification signals are present, score must remain `0-2`.
