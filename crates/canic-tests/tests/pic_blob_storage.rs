@@ -62,7 +62,7 @@ fn blob_storage_gateway_lifecycle_round_trips_under_pocketic() {
     assert_gateway_confirm_deletion_removes_live_blob(&fixture, gateway);
 }
 
-// Verify the 0.70 billing wrappers against a mock Cashier canister.
+// Verify the billing wrappers against a mock Cashier canister.
 #[test]
 fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     let _serial_guard = acquire_pic_serial_guard();
@@ -132,6 +132,7 @@ fn blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic() {
     );
     assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(&pic, cashier_id, probe_id);
     assert_reserve_violation_does_not_partially_top_up(&pic, cashier_id, probe_id);
+    assert_funding_recovers_after_transient_cashier_failure(&pic, cashier_id, probe_id);
 
     let top_up: Result<BlobProjectCyclesTopUpReport, Error> =
         pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (77_u128,));
@@ -1106,6 +1107,14 @@ fn assert_cashier_top_up_malformed_balance_maps_to_rpc_malformed(
         None,
         "malformed Cashier top-up responses must not be recorded as successful top-ups"
     );
+
+    let recovered_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (13_u128,));
+    let report = recovered_top_up
+        .expect("funding guard should be released after malformed Cashier top-up response");
+    assert_successful_funding_report(&report, 13, 1, 136);
+
+    set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
 }
 
 fn assert_reserve_violation_does_not_partially_top_up(
@@ -1132,6 +1141,8 @@ fn assert_reserve_violation_does_not_partially_top_up(
         project_cycles_available > transferable_cycles,
         "probe should have enough cycles to exercise partial-reserve refusal"
     );
+    let last_top_up_before: Result<MockCashierLastTopUp, Error> =
+        pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
 
     configure_billing_with_reserve(
         pic,
@@ -1156,11 +1167,43 @@ fn assert_reserve_violation_does_not_partially_top_up(
         pic.query_call_or_panic(cashier_id, "blob_storage_cashier_mock_last_top_up", ());
     assert_eq!(
         last_top_up.expect("last top-up query should succeed"),
-        None,
-        "reserve-blocked funding must not create a partial Cashier top-up"
+        last_top_up_before.expect("last top-up query should succeed before reserve check"),
+        "reserve-blocked funding must not replace the last successful Cashier top-up"
     );
 
     configure_billing(pic, cashier_id, probe_id);
+}
+
+fn assert_funding_recovers_after_transient_cashier_failure(
+    pic: &Pic,
+    cashier_id: Principal,
+    probe_id: Principal,
+) {
+    let configured: Result<(), Error> = pic.update_call_or_panic(
+        cashier_id,
+        "blob_storage_cashier_mock_set_next_top_up_error",
+        (Some(BlobStorageCashierAccountTopUpError::InternalError(
+            "transient top-up failure".to_string(),
+        )),),
+    );
+    configured.expect("mock Cashier transient top-up failure should be configured");
+
+    let failed_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (12_u128,));
+    assert_eq!(
+        failed_top_up
+            .expect_err("transient Cashier top-up failure should propagate")
+            .code,
+        ErrorCode::Internal
+    );
+
+    let recovered_top_up: Result<BlobProjectCyclesTopUpReport, Error> =
+        pic.update_call_or_panic(probe_id, BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, (12_u128,));
+    let report =
+        recovered_top_up.expect("funding guard should be released after transient Cashier failure");
+    assert_successful_funding_report(&report, 12, 1, 135);
+
+    set_mock_cashier_balance(pic, cashier_id, probe_id, 123);
 }
 
 fn install_billing_canisters(pic: &Pic) -> (Principal, Principal) {

@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.14` hardens blob-storage funding failure recovery coverage by proving
+  a transient Cashier top-up failure through the generated funding endpoint
+  releases the in-flight funding guard and allows an immediate subsequent
+  valid top-up to succeed. It also proves malformed Cashier top-up success
+  payloads release the same guard, tightens reserve-skipped funding coverage to
+  preserve prior top-up metadata, and adds core guard coverage proving the
+  transient funding lock is released during unwinding as well as normal drop.
+  The in-flight funding error mapping is pinned to the public `Conflict` code.
+
 - `0.70.13` pins the blob-storage billing configuration DTO protocol surface
   by adding Candid roundtrip and field-shape guards for
   `BlobStorageBillingConfig`, covering the operator-facing Cashier/reserve/

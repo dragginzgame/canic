@@ -9,9 +9,33 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.13` is in progress as a narrow blob-storage billing config protocol
-  coverage slice after the pushed `0.70.12` release. Current work adds Candid
-  roundtrip and field-shape guards for `BlobStorageBillingConfig`, covering the
+- `0.70.14` is in progress as a narrow blob-storage funding failure recovery
+  coverage slice after the pushed `0.70.13` release. Current work extends the
+  existing PocketIC billing flow so a transient Cashier top-up failure through
+  `_immutableObjectStorageFundFromProjectCycles` must release the generated
+  funding path's in-flight guard, allowing an immediate subsequent valid
+  top-up to succeed. It also proves malformed Cashier top-up success payloads
+  release the same guard, tightens reserve-skipped funding coverage to preserve
+  prior top-up metadata, and adds core guard coverage proving the transient
+  funding lock is released during unwinding as well as normal drop. The
+  in-flight funding error mapping is pinned to the public `Conflict` code.
+  Focused validation passing so far:
+  ```text
+  cargo fmt --all
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo test --locked -p canic-core blob_storage::funding --lib --features blob-storage-billing -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage blob_storage_billing_wrappers_round_trip_with_mock_cashier_under_pocketic -- --nocapture
+  POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test pic_blob_storage -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+- `0.70.13` is pushed as a narrow blob-storage billing config protocol
+  coverage slice after the pushed `0.70.12` release. It adds Candid roundtrip
+  and field-shape guards for `BlobStorageBillingConfig`, covering the
   operator-facing Cashier canister, project-cycle reserve, upload-balance
   thresholds, and gateway-principal limit contract. It also guards that the
   generated billing endpoint macro does not expose billing configuration as a
