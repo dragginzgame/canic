@@ -22,6 +22,8 @@ Ops may own:
 - auth proof material verification, root/issuer canister-signature proof
   preparation/retrieval, and issuer-local active proof state installation when
   each operation is a single bounded step.
+- blob-storage stable-record/view/DTO mapping, Cashier response conversion,
+  typed single Cashier call wrappers, and transient single-operation guards.
 
 Ops must not own:
 
@@ -35,6 +37,8 @@ Ops must not own:
 - auth endpoint decisions;
 - business state machines.
 - root proof batch broadcast orchestration or external provisioning loops.
+- blob-storage billing workflow orchestration, readiness/status construction,
+  funding attachment decisions, or public endpoint error mapping.
 
 Ops mapper names may contain `PolicyInputMapper`, `RootIssuerPolicyRecordMapper`,
 or root-issuer-policy mapping helpers when they only convert storage records,
@@ -66,6 +70,9 @@ Boundary comparison scope:
   affect `canic-core/src/ops/**`.
 - changing root proof provisioning prepare/get/install, active proof install,
   or root issuer policy mapping.
+- changing blob-storage billing config persistence/projection, Cashier client
+  wrappers/conversions, gateway-principal sync, project-cycle funding, or
+  funding guards.
 
 ## Checklist
 
@@ -159,7 +166,7 @@ Expected:
 ### 4b. Public Error Boundary
 
 ```bash
-rg -n 'crate::dto::error|dto::error::Error|InternalError::public|Self::public|root_data_certificate_unavailable' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
+rg -n 'crate::dto::error|dto::error::Error|crate::Error|Error::invalid|Error::forbidden|Error::exhausted|InternalError::public|Self::public|root_data_certificate_unavailable' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -171,6 +178,27 @@ Expected:
 - RPC ops may preserve a remote canister's wire-level public `Error` through
   `InternalError::public`, but must not invent endpoint/API public errors;
 - endpoint/API layers remain responsible for general public error DTO mapping.
+
+### 4c. Blob-Storage Billing Ops Split
+
+```bash
+rg -n 'set_billing_config|billing_config_dto|billing_config_record_to_view|billing_config_view_to_dto|record_gateway_principal_sync|replace_gateway_principals|BlobStorageFundingOps|CashierClientOps|CashierConversionOps|sync_gateway_principals_from_cashier|sync_gateway_principals_from_configured_cashier|fund_from_project_cycles|status\(' crates/canic-core/src/ops/blob_storage crates/canic-core/src/ops/cashier crates/canic-core/src/api/blob_storage.rs -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- `ops/blob_storage/lifecycle` may construct stable blob-storage billing
+  config records, expose read-only views, project DTOs, and mutate stable
+  gateway-principal state as bounded storage operations;
+- `ops/blob_storage/funding` may own the transient single-flight funding guard,
+  but not cycle math, Cashier calls, public error mapping, or stable billing
+  workflow state;
+- `ops/cashier` may own typed single Cashier call wrappers and response
+  conversion/normalization helpers;
+- `api/blob_storage` may currently own endpoint-facing billing config
+  validation, status DTO construction, Cashier sync/funding orchestration, and
+  public error mapping; this remains a layer/API watchpoint, not an ops-purity
+  failure, unless that orchestration moves into ops.
 
 ### 5. Metrics Coordination
 

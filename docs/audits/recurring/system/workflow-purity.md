@@ -1,6 +1,6 @@
 # Audit: Workflow Purity
 
-Method: `workflow-purity-v3`
+Method: `workflow-purity-v4`
 
 ## Purpose
 
@@ -48,6 +48,16 @@ must therefore distinguish allowed sequencing from ownership leaks:
   `data_certificate()`, verifies delegated-token material, or invents issuer
   policy/retrieval authorization.
 
+The blob-storage billing split adds another current ownership boundary.
+Workflow must not quietly become the home for Cashier protocol calls,
+blob-storage billing status construction, gateway-principal sync storage,
+project-cycle funding guards, or billing config record/view/DTO projection.
+Those responsibilities currently belong to `api::blob_storage`,
+`ops::blob_storage`, and `ops::cashier`. If a future blob-storage workflow is
+introduced, it may only sequence ops/API-owned steps; it must not own storage
+records, DTO conversion, public error mapping, Cashier protocol defaults, or
+transient funding guard state.
+
 ## Scope
 
 Primary scope:
@@ -58,7 +68,10 @@ Boundary comparison scope:
 
 - `crates/canic-core/src/domain/policy/**`
 - `crates/canic-core/src/dto/**`
+- `crates/canic-core/src/api/blob_storage.rs`
 - `crates/canic-core/src/model/**`
+- `crates/canic-core/src/ops/blob_storage/**`
+- `crates/canic-core/src/ops/cashier/**`
 - `crates/canic-core/src/ops/**`
 - `crates/canic-core/src/replay_policy/mod.rs`
 - `crates/canic-core/src/storage/**`
@@ -74,6 +87,8 @@ Boundary comparison scope:
   or management-effect recovery;
 - changing delegated-token prepare, root proof batch prepare/get/install, active
   proof status, or issuer proof verification flows;
+- changing blob-storage billing sync/funding/status, Cashier wrappers,
+  project-cycle funding guards, or gateway-principal sync;
 - changing persisted record shapes consumed by workflow;
 - changing endpoint macro auth/access lowering.
 
@@ -186,7 +201,30 @@ Expected:
   certificate hash verification, active proof verification, and retrieval ACLs
   remain outside workflow.
 
-### 6. Policy / Persistence Policy Ownership
+### 6. Blob-Storage Billing Boundary
+
+Workflow currently has no production blob-storage billing owner. Billing status,
+gateway sync, project-cycle funding, and Cashier interaction should remain in
+the API/ops split unless a deliberate workflow module is introduced.
+
+```bash
+rg -n 'blob|BlobStorage|cashier|Cashier|billing|gateway_principal|fund_from_project_cycles|BlobStorageFunding|storage_gateway|BlobStorageStatus|ReadinessBlocker' crates/canic-core/src/workflow crates/canic-core/src/api/blob_storage.rs crates/canic-core/src/ops/blob_storage crates/canic-core/src/ops/cashier -g '*.rs' --glob '!**/tests.rs'
+```
+
+Expected:
+
+- no production blob-storage billing sync/status/funding ownership in
+  `crates/canic-core/src/workflow`;
+- `api::blob_storage` may currently orchestrate endpoint-facing billing status,
+  direct Cashier sync, and project-cycle funding, but remains a watchpoint;
+- `ops::blob_storage` owns bounded storage, billing config projection, gateway
+  registry projection, and transient funding guard helpers;
+- `ops::cashier` owns typed single-call Cashier wrappers and conversion;
+- if future workflow code is added, it may only sequence ops/API-owned steps
+  and must not own DTO conversion, stable writes, public error mapping, or
+  Cashier protocol defaults.
+
+### 7. Policy / Persistence Policy Ownership
 
 Workflow may apply policy but must not define pure policy types or own mutable
 policy ledgers.
@@ -203,7 +241,7 @@ Expected:
 - cost class, quota, replay, and intent semantics are imported from
   `replay_policy`, `domain/policy`, or `ops`, not invented in workflow.
 
-### 7. Replay / Cost / Intent Boundary
+### 8. Replay / Cost / Intent Boundary
 
 Workflow may orchestrate replay, cost guards, and durable intents, but ownership
 of replay/cost/intent state and codec behavior must remain below workflow.
@@ -226,7 +264,7 @@ Expected:
   ops/model responsibilities; workflow only sequences install calls and records
   per-issuer outcomes.
 
-### 8. Recovery / Idempotence Surface
+### 9. Recovery / Idempotence Surface
 
 Recent pool and replay work makes recovery ordering a first-class workflow
 purity risk. Workflow may decide sequence, but recovery state must be ops-owned
@@ -246,7 +284,7 @@ Expected:
 - failure branches do not overwrite recovery markers in a way that makes a retry
   repeat the same external effect unsafely.
 
-### 9. Metrics / Error Mapping
+### 10. Metrics / Error Mapping
 
 Workflow may record metrics and map errors at orchestration boundaries, but
 metrics and formatted errors must not become policy inputs.
@@ -262,7 +300,7 @@ Expected:
   ops errors;
 - workflow does not branch on formatted error strings.
 
-### 10. Module Pressure
+### 11. Module Pressure
 
 Workflow files that accumulate many responsibilities should be flagged even
 when individual responsibilities are delegated correctly.

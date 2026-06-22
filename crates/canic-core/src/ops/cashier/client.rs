@@ -2,7 +2,7 @@
 //!
 //! Responsibility: perform typed bounded-wait calls to the Cashier canister.
 //! Does not own: billing policy, endpoint authorization, or production defaults.
-//! Boundary: workflow supplies validated Cashier principals and funding decisions.
+//! Boundary: callers supply validated Cashier principals and funding decisions.
 
 use crate::{
     InternalError,

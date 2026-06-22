@@ -17,7 +17,7 @@ pub fn find_field<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a s
 }
 
 #[must_use]
-pub fn find_string_field(value: &serde_json::Value, field: &str) -> Option<String> {
+pub(crate) fn find_string_field(value: &serde_json::Value, field: &str) -> Option<String> {
     match value {
         serde_json::Value::Object(map) => map
             .get(field)
@@ -39,14 +39,14 @@ pub fn response_candid(value: &serde_json::Value) -> Option<&str> {
 }
 
 #[must_use]
-pub fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
+pub(crate) fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
     let after_eq = field_value_after_equals(output, field)?;
     let after_quote = after_eq.trim_start().strip_prefix('"')?;
     parse_candid_quoted_text(after_quote)
 }
 
 #[must_use]
-pub fn parse_candid_text_like_field(output: &str, field: &str) -> Option<String> {
+pub(crate) fn parse_candid_text_like_field(output: &str, field: &str) -> Option<String> {
     let after_eq = field_value_after_equals(output, field)?;
     let after_quote = after_eq
         .trim_start()
@@ -56,7 +56,7 @@ pub fn parse_candid_text_like_field(output: &str, field: &str) -> Option<String>
 }
 
 #[must_use]
-pub fn parse_cycle_balance_response(output: &str) -> Option<u128> {
+pub(crate) fn parse_cycle_balance_response(output: &str) -> Option<u128> {
     serde_json::from_str::<serde_json::Value>(output)
         .ok()
         .and_then(|value| {
