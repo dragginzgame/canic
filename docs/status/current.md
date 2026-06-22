@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-21
+Last updated: 2026-06-22
 
 ## Purpose
 
@@ -9,15 +9,35 @@ inspect only the files needed for the current task.
 
 ## Current Line
 
-- `0.70.12` is in progress as a narrow direct Cashier gateway-sync bounds
-  coverage slice after the pushed `0.70.11` release. Current work extends the
-  existing PocketIC billing flow so the lower-level
-  `sync_gateway_principals_from_cashier` helper normalizes duplicate Cashier
-  gateway principals within the configured maximum, rejects too many distinct
-  gateways with `InternalRpcMalformed` without recording a successful sync
-  timestamp, and recovers with a fresh timestamp once the maximum allows the
-  distinct gateway set. This is folded into the existing billing scenario
-  rather than adding another PocketIC server startup.
+- `0.70.13` is in progress as a narrow blob-storage billing config protocol
+  coverage slice after the pushed `0.70.12` release. Current work adds Candid
+  roundtrip and field-shape guards for `BlobStorageBillingConfig`, covering the
+  operator-facing Cashier canister, project-cycle reserve, upload-balance
+  thresholds, and gateway-principal limit contract. It also guards that the
+  generated billing endpoint macro does not expose billing configuration as a
+  public admin surface, and adds core validation coverage proving oversized
+  Candid `nat` reserve/balance fields are rejected without replacing the
+  previous valid config.
+  Focused validation passing so far:
+  ```text
+  cargo test --locked -p canic-core blob_storage --lib --features blob-storage-billing -- --nocapture
+  cargo clippy --locked -p canic-core --lib --features blob-storage-billing -- -D warnings
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface blob_storage_billing -- --nocapture
+  cargo clippy --locked -p canic --features blob-storage-billing --test protocol_surface -- -D warnings
+  cargo test --locked -p canic --features blob-storage-billing --test protocol_surface -- --nocapture
+  cargo test --locked -p canic --test changelog_governance -- --nocapture
+  cargo fmt --all -- --check
+  git diff --check
+  ```
+
+- `0.70.12` is pushed as a narrow direct Cashier gateway-sync bounds coverage
+  slice after the pushed `0.70.11` release. It extends the existing PocketIC
+  billing flow so the lower-level `sync_gateway_principals_from_cashier` helper
+  normalizes duplicate Cashier gateway principals within the configured maximum,
+  rejects too many distinct gateways with `InternalRpcMalformed` without
+  recording a successful sync timestamp, and recovers with a fresh timestamp
+  once the maximum allows the distinct gateway set. This is folded into the
+  existing billing scenario rather than adding another PocketIC server startup.
   Focused validation passing so far:
   ```text
   cargo clippy --locked -p canic-tests --test pic_blob_storage -- -D warnings
