@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)
 
+- `0.70.13` pins the blob-storage billing configuration DTO protocol surface
+  by adding Candid roundtrip and field-shape guards for
+  `BlobStorageBillingConfig`, covering the operator-facing Cashier/reserve/
+  balance/gateway-limit configuration contract. It also guards that the
+  generated billing endpoint macro does not expose billing configuration as a
+  public admin surface, and adds config validation coverage for oversized
+  Candid `nat` values.
+
 - `0.70.12` hardens direct Cashier gateway-sync coverage by proving the
   lower-level sync helper normalizes duplicate Cashier gateway principals,
   rejects too many distinct gateway principals with `InternalRpcMalformed`

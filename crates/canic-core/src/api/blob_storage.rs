@@ -726,6 +726,12 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "blob-storage-billing")]
+    fn oversized_billing_nat() -> Nat {
+        Nat::parse("340282366920938463463374607431768211456".as_bytes())
+            .expect("valid oversized Candid nat")
+    }
+
     #[test]
     fn canonical_root_hash_text_normalizes_toko_hashes() {
         let hash = BlobStorageApi::canonical_root_hash_text(
@@ -1038,6 +1044,34 @@ mod tests {
         for config in invalid_configs {
             let err = BlobStorageApi::configure_billing(config)
                 .expect_err("invalid billing config should be rejected");
+            assert_eq!(err.code, ErrorCode::InvalidInput);
+            assert_eq!(BlobStorageApi::billing_config(), Some(valid.clone()));
+        }
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn configure_billing_rejects_oversized_nat_fields_without_replacing_current_config() {
+        crate::storage::stable::blob_storage::BlobStorageStore::clear_billing();
+        let valid = billing_test_config(billing_test_principal(1), 1, 10, 100, 8);
+        BlobStorageApi::configure_billing(valid.clone()).expect("valid billing config is stored");
+
+        let mut oversized_reserve = valid.clone();
+        oversized_reserve.project_cycles_reserve = oversized_billing_nat();
+
+        let mut oversized_min_upload = valid.clone();
+        oversized_min_upload.min_upload_balance = oversized_billing_nat();
+
+        let mut oversized_target_upload = valid.clone();
+        oversized_target_upload.target_upload_balance = oversized_billing_nat();
+
+        for config in [
+            oversized_reserve,
+            oversized_min_upload,
+            oversized_target_upload,
+        ] {
+            let err = BlobStorageApi::configure_billing(config)
+                .expect_err("oversized billing nat should be rejected");
             assert_eq!(err.code, ErrorCode::InvalidInput);
             assert_eq!(BlobStorageApi::billing_config(), Some(valid.clone()));
         }

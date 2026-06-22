@@ -7,7 +7,7 @@ use candid::{decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 #[cfg(feature = "blob-storage-billing")]
 use canic::dto::blob_storage::{
-    BlobProjectCyclesTopUpReport, BlobStorageBillingWarning,
+    BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
     BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetOk,
     BlobStorageCashierAccountBalanceGetRequest, BlobStorageCashierAccountBalanceGetResult,
     BlobStorageCashierAccountCycleBalances, BlobStorageCashierAccountTopUpError,
@@ -285,6 +285,12 @@ fn blob_storage_billing_gateway_protocol_names_are_pinned() {
             && source.contains("BlobStorageApi::fund_from_project_cycles("),
         "funding endpoint must keep returning the structured top-up report"
     );
+    assert!(
+        !source.contains("BlobStorageBillingConfig")
+            && !source.contains("configure_billing")
+            && !source.contains("billing_config"),
+        "generated billing endpoints must not expose billing configuration as a public admin surface"
+    );
 }
 
 #[test]
@@ -406,6 +412,33 @@ fn blob_storage_funding_report_dto_roundtrips_through_candid() {
             && report_env.contains("cashier_total_after : nat")
             && report_env.contains("skipped_reason : opt text"),
         "blob-storage funding report DTO Candid changed:\n{report_env}"
+    );
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_billing_config_dto_roundtrips_through_candid() {
+    assert_candid_roundtrip(BlobStorageBillingConfig {
+        cashier_canister_id: Principal::from_slice(&[1, 2, 3]),
+        project_cycles_reserve: candid::Nat::from(1_u64),
+        min_upload_balance: candid::Nat::from(10_u64),
+        target_upload_balance: candid::Nat::from(100_u64),
+        gateway_principal_limit: 8,
+    });
+}
+
+#[cfg(feature = "blob-storage-billing")]
+#[test]
+fn blob_storage_billing_config_dto_candid_shape_is_pinned() {
+    let config_env = candid_type_env::<BlobStorageBillingConfig>();
+    assert!(
+        config_env.contains("type BlobStorageBillingConfig = record")
+            && config_env.contains("cashier_canister_id : principal")
+            && config_env.contains("project_cycles_reserve : nat")
+            && config_env.contains("min_upload_balance : nat")
+            && config_env.contains("target_upload_balance : nat")
+            && config_env.contains("gateway_principal_limit : nat64"),
+        "blob-storage billing config DTO Candid changed:\n{config_env}"
     );
 }
 
