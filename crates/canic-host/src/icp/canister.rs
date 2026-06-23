@@ -253,6 +253,28 @@ impl IcpCli {
         command_display(&command)
     }
 
+    /// Render a dry-run argument query call with optional local Candid.
+    #[must_use]
+    pub fn canister_query_arg_output_display_with_candid(
+        &self,
+        canister: &str,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+        candid_path: Option<&Path>,
+    ) -> String {
+        let mut command = self.canister_command();
+        command.args(["call", canister, method]);
+        command.arg(arg);
+        command.arg("--query");
+        add_candid_arg(&mut command, candid_path);
+        if let Some(output) = output {
+            add_output_arg(&mut command, output);
+        }
+        self.add_target_args(&mut command);
+        command_display(&command)
+    }
+
     /// Render a dry-run update call with an explicit Candid argument.
     #[must_use]
     pub fn canister_call_arg_output_display(

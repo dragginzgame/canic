@@ -72,6 +72,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Deployment,
     },
     CommandSpec {
+        name: "blob-storage",
+        about: "Inspect and provision blob-storage billing",
+        scope: CommandScope::Deployment,
+    },
+    CommandSpec {
         name: "build",
         about: "Build one Canic canister artifact",
         scope: CommandScope::Deployment,
