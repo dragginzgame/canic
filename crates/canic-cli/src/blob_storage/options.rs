@@ -142,10 +142,6 @@ pub(super) fn usage() -> String {
     render_usage(blob_storage_command)
 }
 
-pub(super) fn status_usage_with_bin_name() -> String {
-    render_usage(|| status_command().bin_name("canic blob-storage status"))
-}
-
 pub(super) fn sync_gateways_usage_with_bin_name() -> String {
     render_usage(|| sync_gateways_command().bin_name("canic blob-storage sync-gateways"))
 }

@@ -6,6 +6,7 @@
 
 mod model;
 mod options;
+mod parse;
 mod render;
 mod target;
 
@@ -16,18 +17,21 @@ use crate::{
     blob_storage::{
         model::{BlobStorageActionName, BlobStorageActionResult},
         options::{BlobStorageCommand, BlobStorageOptions},
-        render::{render_action_result, render_dry_run_command},
+        parse::parse_status_result,
+        render::{render_action_result, render_dry_run_command, render_status_result},
         target::{BlobStorageMethodMode, resolve_blob_storage_call_target},
     },
     cli::help::print_help_or_version,
     version_text,
 };
 use canic_core::protocol::{
-    BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+    BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
+    BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
 };
 use canic_host::icp::IcpCli;
 use canic_host::{
-    candid_endpoints::CandidEndpointError, installed_deployment::InstalledDeploymentError,
+    candid_endpoints::CandidEndpointError, icp::IcpCommandError,
+    installed_deployment::InstalledDeploymentError,
 };
 use std::{ffi::OsString, io, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -82,6 +86,9 @@ pub enum BlobStorageCommandError {
 
     #[error("local Candid sidecar {path} does not define blob-storage method {method}")]
     MethodUnavailable { path: PathBuf, method: String },
+
+    #[error("failed to parse blob-storage status response")]
+    ResponseParse,
 }
 
 /// Run the blob-storage operator command group.
@@ -100,13 +107,29 @@ where
 
 fn run_command(command: BlobStorageCommand) -> Result<(), BlobStorageCommandError> {
     match command {
-        BlobStorageCommand::Status(_) => Err(BlobStorageCommandError::Usage(format!(
-            "blob-storage status live transport is not implemented yet\n\n{}",
-            options::status_usage_with_bin_name()
-        ))),
+        BlobStorageCommand::Status(options) => run_status(&options),
         BlobStorageCommand::SyncGateways(options) => run_sync_gateways(&options),
         BlobStorageCommand::Fund(options) => run_fund(&options),
     }
+}
+
+fn run_status(options: &options::StatusOptions) -> Result<(), BlobStorageCommandError> {
+    let target = resolve_blob_storage_call_target(
+        &options.common,
+        &options.deployment,
+        &options.canister,
+        BLOB_STORAGE_STATUS,
+    )?;
+    let output = live_call_output(
+        &options.common,
+        &target,
+        BLOB_STORAGE_STATUS,
+        "(record { sync_gateway_principals = false })",
+        Some("json"),
+    )?;
+    let result = parse_status_result(&options.deployment, target.target, &output)
+        .ok_or(BlobStorageCommandError::ResponseParse)?;
+    write_status_result(options.json, &result)
 }
 
 fn run_sync_gateways(
@@ -208,6 +231,33 @@ fn dry_run_call_display(
     }
 }
 
+fn live_call_output(
+    options: &options::CommonOptions,
+    target: &target::BlobStorageCallTarget,
+    method: &str,
+    arg: &str,
+    output: Option<&str>,
+) -> Result<String, BlobStorageCommandError> {
+    let icp = icp_cli(options).with_cwd(&target.icp_root);
+    let result = match target.method_mode {
+        BlobStorageMethodMode::Query => icp.canister_query_arg_output_with_candid(
+            &target.target.canister_id,
+            method,
+            arg,
+            output,
+            Some(target.candid_path.as_path()),
+        ),
+        BlobStorageMethodMode::Update => icp.canister_call_arg_output_with_candid(
+            &target.target.canister_id,
+            method,
+            arg,
+            output,
+            Some(target.candid_path.as_path()),
+        ),
+    };
+    result.map_err(blob_storage_icp_error)
+}
+
 fn blob_storage_installed_deployment_error(
     error: InstalledDeploymentError,
 ) -> BlobStorageCommandError {
@@ -238,6 +288,39 @@ fn blob_storage_installed_deployment_error(
             BlobStorageCommandError::InstallState(error.to_string())
         }
     }
+}
+
+fn blob_storage_icp_error(error: IcpCommandError) -> BlobStorageCommandError {
+    match error {
+        IcpCommandError::Io(err) => BlobStorageCommandError::InstallState(err.to_string()),
+        IcpCommandError::Failed { command, stderr }
+        | IcpCommandError::Json {
+            command,
+            output: stderr,
+            ..
+        } => BlobStorageCommandError::IcpFailed { command, stderr },
+        IcpCommandError::SnapshotIdUnavailable { output } => BlobStorageCommandError::IcpFailed {
+            command: "icp canister call".to_string(),
+            stderr: output,
+        },
+        error @ (IcpCommandError::MissingCli { .. }
+        | IcpCommandError::IncompatibleCliVersion { .. }) => BlobStorageCommandError::IcpFailed {
+            command: "icp --version".to_string(),
+            stderr: error.to_string(),
+        },
+    }
+}
+
+fn write_status_result(
+    json: bool,
+    result: &model::BlobStorageStatusResult,
+) -> Result<(), BlobStorageCommandError> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(result)?);
+    } else {
+        println!("{}", render_status_result(result));
+    }
+    Ok(())
 }
 
 fn write_action_result(

@@ -35,14 +35,18 @@ inspect only the files needed for the current task.
   and requires doc/changelog/test updates for new JSON codes. It explicitly
   avoids new blob-storage protocol shape, browser frontend provisioning,
   autonomous funding/sync, public billing-config admin surfaces, and
-  product-specific migration work. Implementation has started: the top-level
-  `canic blob-storage` command group is wired, global `--icp`/`--network`
-  forwarding is enabled, strict `--cycles` parsing is in place, and
-  `sync-gateways --dry-run` / `fund --dry-run` now resolve installed
-  deployment targets, require local Candid metadata, derive method mode from
-  Candid, and render schema-versioned JSON/plain exact canister-call previews.
-  Live `status`, live `sync-gateways`, and live `fund` transport remain the
-  next implementation step.
+  product-specific migration work. `0.71.0` wired the top-level
+  `canic blob-storage` command group, global `--icp`/`--network` forwarding,
+  strict `--cycles` parsing, and `sync-gateways --dry-run` / `fund --dry-run`
+  previews that resolve installed deployment targets, require local Candid
+  metadata, and derive method mode from Candid. The current `0.71.1` slice adds
+  live `canic blob-storage status`: it calls `get_blob_storage_status` with
+  `sync_gateway_principals = false`, follows Candid-derived query/update mode,
+  parses the 0.70 status response into stable CLI status JSON/plain output, and
+  maps readiness/funding codes without adding new runtime policy. Status
+  remediation commands point at the existing dry-run sync/fund previews until
+  the live mutation slices land. Live `sync-gateways` and live `fund` transport
+  remain the next implementation steps.
 
 - `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A
   follow-up least-fresh recurring audit selected `ops-purity` and refreshed
