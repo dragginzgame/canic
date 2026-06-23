@@ -1,4 +1,5 @@
 mod backup;
+mod blob_storage;
 mod build;
 mod cli;
 mod cycles;
@@ -49,6 +50,9 @@ pub enum CliError {
 
     #[error("backup: {0}")]
     Backup(#[from] backup::BackupCommandError),
+
+    #[error("blob-storage: {0}")]
+    BlobStorage(#[from] blob_storage::BlobStorageCommandError),
 
     #[error("build: {0}")]
     Build(#[from] build::BuildCommandError),
@@ -134,6 +138,7 @@ where
 
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
+        "blob-storage" => blob_storage::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),

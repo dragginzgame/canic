@@ -141,7 +141,7 @@ pub fn apply_global_network(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "cycles" | "status" | "token" => true,
+        "blob-storage" | "cycles" | "status" | "token" => true,
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
@@ -156,7 +156,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "build" | "cycles" | "install" | "status" | "token" => true,
+        "blob-storage" | "build" | "cycles" | "install" | "status" | "token" => true,
         "deploy" => deploy_leaf_accepts_global_network(tail),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),

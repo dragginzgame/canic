@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-22
+Last updated: 2026-06-23
 
 ## Purpose
 
@@ -8,6 +8,41 @@ This file is the compact handoff for new agent sessions. Read it first, then
 inspect only the files needed for the current task.
 
 ## Current Line
+
+- `0.71` planning has started as a blob-storage operator-readiness cleanup
+  line. The draft design lives at
+  `docs/design/0.71-blob-storage-operator-readiness/0.71-design.md` and keeps
+  0.71 focused on first-class `canic blob-storage` CLI support, medic hints,
+  local operator runbooks, packaged/downstream validation, and targeted
+  ownership cleanup around the 0.69/0.70 blob-storage backend. The draft now
+  locks down target resolution, dry-run semantics, exit-code behavior, stable
+  JSON with `schema_version`/`kind`, decimal-string cycle and timestamp values,
+  finite readiness codes, separate command error codes, structured `--json`
+  stderr errors, metadata-derived method modes, passive default medic behavior,
+  shared medic/status readiness interpretation, and the programmatic consumer
+  contract for product backends/hubs that call the 0.70 status/sync/fund
+  endpoints directly. It documents existing DTO semantics for `payment_account`,
+  Cashier total balance, `ready`, `requested_cycles`, and AccountNotFound as
+  zero balance, records Canic V1 policy defaults for docs/runbooks, and keeps
+  separate product subscription/payment account mapping outside the current
+  `ProjectAsPaymentAccount` status model. It leaves split Cashier balances,
+  account-existence bits, upload pricing, and product UI adapters outside the
+  0.71 MVP. The latest pass makes `<canister-or-role>` required everywhere,
+  treats missing/ambiguous Candid metadata as a hard MVP failure, repeats that
+  status mode comes from metadata despite read-only semantics, keeps transport
+  on the existing Canic host canister-call abstraction, makes CLI funding defer
+  reserve policy to the endpoint, marks M5 cleanup opportunistic/non-blocking,
+  and requires doc/changelog/test updates for new JSON codes. It explicitly
+  avoids new blob-storage protocol shape, browser frontend provisioning,
+  autonomous funding/sync, public billing-config admin surfaces, and
+  product-specific migration work. Implementation has started: the top-level
+  `canic blob-storage` command group is wired, global `--icp`/`--network`
+  forwarding is enabled, strict `--cycles` parsing is in place, and
+  `sync-gateways --dry-run` / `fund --dry-run` now resolve installed
+  deployment targets, require local Candid metadata, derive method mode from
+  Candid, and render schema-versioned JSON/plain exact canister-call previews.
+  Live `status`, live `sync-gateways`, and live `fund` transport remain the
+  next implementation step.
 
 - `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A
   follow-up least-fresh recurring audit selected `ops-purity` and refreshed

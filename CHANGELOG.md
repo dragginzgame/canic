@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.71.x] - 2026-06-23 - Blob Storage Operator Readiness
+
+Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
+
+- `0.71.0` starts the blob-storage operator-readiness line with the
+  first-class `canic blob-storage` command group, strict funding input parsing,
+  installed-target and local-Candid validation for dry-run gateway sync/funding
+  previews, and the design contract for completing live status and provisioning
+  support. Live status, sync, and fund transport remain intentionally gated for
+  follow-up slices.
+
 ## [0.70.x] - 2026-06-20 - Blob Storage Billing MVP
 
 Detailed patch breakdown: [docs/changelog/0.70.md](docs/changelog/0.70.md)

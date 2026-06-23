@@ -217,6 +217,23 @@ fn renders_no_argument_query_call_with_local_candid() {
     );
 }
 
+// Ensure query-call previews preserve the explicit Candid argument.
+#[test]
+fn renders_argument_query_call_with_local_candid() {
+    let icp = IcpCli::new("icp", None, Some("local".to_string()));
+
+    assert_eq!(
+        icp.canister_query_arg_output_display_with_candid(
+            "root",
+            "get_blob_storage_status",
+            "(record { sync_gateway_principals = false })",
+            Some("json"),
+            Some(Path::new(".icp/local/canisters/root/root.did"))
+        ),
+        "icp canister call root get_blob_storage_status (record { sync_gateway_principals = false }) --query --candid .icp/local/canisters/root/root.did --json -n local"
+    );
+}
+
 // Ensure update-call previews preserve the explicit Candid argument.
 #[test]
 fn renders_argument_update_call() {
