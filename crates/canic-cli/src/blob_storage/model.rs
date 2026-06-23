@@ -9,6 +9,36 @@ use serde::Serialize;
 pub(super) const BLOB_STORAGE_JSON_SCHEMA_VERSION: u16 = 1;
 pub(super) const BLOB_STORAGE_STATUS_KIND: &str = "blob_storage_status";
 pub(super) const BLOB_STORAGE_ERROR_KIND: &str = "blob_storage_error";
+pub(super) const BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
+pub(super) const BLOB_STORAGE_READINESS_BLOCKED: &str = "blocked";
+pub(super) const BLOB_STORAGE_READINESS_READY: &str = "ready";
+pub(super) const BLOB_STORAGE_READINESS_WARNING: &str = "warning";
+pub(super) const BLOB_STORAGE_CODE_NOT_CONFIGURED: &str = "not_configured";
+pub(super) const BLOB_STORAGE_CODE_PROJECT_AS_PAYMENT_ACCOUNT: &str = "project_as_payment_account";
+pub(super) const BLOB_STORAGE_CODE_FUNDING_NEEDED: &str = "funding_needed";
+pub(super) const BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY: &str = "gateway_principals_empty";
+pub(super) const BLOB_STORAGE_CODE_CASHIER_BALANCE_BELOW_MIN: &str = "cashier_balance_below_min";
+pub(super) const BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE: &str =
+    "cashier_balance_unavailable";
+pub(super) const BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED: &str = "cashier_response_malformed";
+pub(super) const BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING: &str =
+    "project_cycles_reserve_blocks_funding";
+pub(super) const BLOB_STORAGE_CODE_NOT_NEEDED: &str = "not_needed";
+pub(super) const BLOB_STORAGE_CODE_NOT_REQUESTED: &str = "not_requested";
+pub(super) const BLOB_STORAGE_CODE_SKIPPED_CONFIG_MISSING: &str = "skipped_config_missing";
+pub(super) const BLOB_STORAGE_CODE_SKIPPED_READ_ONLY_STATUS: &str = "skipped_read_only_status";
+pub(super) const BLOB_STORAGE_CODE_STATUS_SYNC_REQUEST_IGNORED: &str =
+    "status_sync_request_ignored";
+pub(super) const BLOB_STORAGE_CODE_UNKNOWN: &str = "unknown";
+pub(super) const BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE: &str = "post_status_unavailable";
+pub(super) const BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES: &str = "invalid_cycles";
+pub(super) const BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED: &str =
+    "target_resolution_failed";
+pub(super) const BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE: &str = "candid_unavailable";
+pub(super) const BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE: &str = "method_unavailable";
+pub(super) const BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED: &str = "transport_failed";
+pub(super) const BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED: &str = "response_parse_failed";
+pub(super) const BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED: &str = "candid_decode_failed";
 
 ///
 /// BlobStorageTarget
@@ -23,17 +53,16 @@ pub(super) struct BlobStorageTarget {
 }
 
 impl BlobStorageTarget {
-    pub(super) fn resolved(
+    pub(super) fn from_installed_deployment(
         input: &str,
         role: Option<String>,
         canister_id: &str,
-        candid_source: &str,
     ) -> Self {
         Self {
             input: input.to_string(),
             role,
             canister_id: canister_id.to_string(),
-            candid_source: Some(candid_source.to_string()),
+            candid_source: Some(BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string()),
         }
     }
 }

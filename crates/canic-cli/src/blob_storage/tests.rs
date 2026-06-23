@@ -101,13 +101,16 @@ fn json_reported_errors_use_structured_blob_storage_shape() {
     let value = serde_json::from_str::<serde_json::Value>(&output).expect("error json");
 
     assert_eq!(value["schema_version"], 1);
-    assert_eq!(value["kind"], "blob_storage_error");
+    assert_eq!(value["kind"], model::BLOB_STORAGE_ERROR_KIND);
     assert_eq!(value["deployment"], "local");
     assert_eq!(value["target"]["input"], "backend");
     assert_eq!(value["target"]["role"], serde_json::Value::Null);
     assert_eq!(value["target"]["canister_id"], serde_json::Value::Null);
     assert_eq!(value["target"]["candid_source"], serde_json::Value::Null);
-    assert_eq!(value["error"]["code"], "response_parse_failed");
+    assert_eq!(
+        value["error"]["code"],
+        model::BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED
+    );
     assert_eq!(value["error"]["exit_code"], 3);
     assert_eq!(crate::cli_error_exit_code(&cli_error), 3);
 }
@@ -145,19 +148,24 @@ fn json_error_codes_distinguish_candid_and_transport_failures() {
     )
     .expect("decode transport error json");
 
-    assert_eq!(candid["error"]["code"], "candid_unavailable");
+    assert_eq!(
+        candid["error"]["code"],
+        model::BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
+    );
     assert_eq!(candid["error"]["exit_code"], 1);
-    assert_eq!(transport["error"]["code"], "transport_failed");
+    assert_eq!(
+        transport["error"]["code"],
+        model::BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
+    );
     assert_eq!(transport["error"]["exit_code"], 2);
 }
 
 #[test]
 fn renders_sync_gateways_dry_run_json_shape() {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let result = model::BlobStorageActionResult::dry_run(
         "local",
@@ -172,7 +180,10 @@ fn renders_sync_gateways_dry_run_json_shape() {
     let value = serde_json::to_value(&result).expect("serialize result");
 
     assert_eq!(value["schema_version"], 1);
-    assert_eq!(value["kind"], "blob_storage_sync_gateways_result");
+    assert_eq!(
+        value["kind"],
+        model::BlobStorageActionName::SyncGateways.kind()
+    );
     assert_eq!(value["deployment"], "local");
     assert_eq!(value["target"]["input"], "backend");
     assert_eq!(value["target"]["role"], "backend");
@@ -180,19 +191,24 @@ fn renders_sync_gateways_dry_run_json_shape() {
         value["target"]["canister_id"],
         "rrkah-fqaaa-aaaaa-aaaaq-cai"
     );
-    assert_eq!(value["target"]["candid_source"], "installed_deployment");
-    assert_eq!(value["action"]["name"], "sync_gateways");
+    assert_eq!(
+        value["target"]["candid_source"],
+        model::BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT
+    );
+    assert_eq!(
+        value["action"]["name"],
+        model::BlobStorageActionName::SyncGateways.label()
+    );
     assert_eq!(value["action"]["mode"], "update");
     assert_eq!(value["action"]["dry_run"], true);
 }
 
 #[test]
 fn renders_sync_gateways_completed_json_shape() {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let result = model::BlobStorageActionResult::completed(
         "local",
@@ -204,35 +220,49 @@ fn renders_sync_gateways_completed_json_shape() {
         None,
     )
     .with_post_status(sample_status_result())
-    .with_warning("post_status_unavailable");
+    .with_warning(model::BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE);
     let value = serde_json::to_value(&result).expect("serialize result");
 
-    assert_eq!(value["kind"], "blob_storage_sync_gateways_result");
-    assert_eq!(value["action"]["name"], "sync_gateways");
+    assert_eq!(
+        value["kind"],
+        model::BlobStorageActionName::SyncGateways.kind()
+    );
+    assert_eq!(
+        value["action"]["name"],
+        model::BlobStorageActionName::SyncGateways.label()
+    );
     assert_eq!(value["action"]["dry_run"], false);
     assert_eq!(value["action"]["success"], true);
-    assert_eq!(value["post_status"]["kind"], "blob_storage_status");
+    assert_eq!(
+        value["post_status"]["kind"],
+        model::BLOB_STORAGE_STATUS_KIND
+    );
     assert_eq!(
         value["warnings"],
-        serde_json::json!(["post_status_unavailable"])
+        serde_json::json!([model::BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE])
     );
     let text = render::render_action_result(&result);
     assert_eq!(
         text.lines().next().expect("first line"),
         "Blob storage sync_gateways completed"
     );
-    assert!(text.contains("Warnings:\n  - post_status_unavailable"));
+    assert!(text.contains(&format!(
+        "Warnings:\n  - {}",
+        model::BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE
+    )));
     assert!(text.contains("Post status:\n  Blob storage status: backend"));
-    assert!(text.contains("  Readiness: ready"));
+    assert!(text.contains(&format!(
+        "  Readiness: {}",
+        model::BLOB_STORAGE_READINESS_READY
+    )));
 }
 
 #[test]
 fn renders_fund_dry_run_plain_text() {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let result = model::BlobStorageActionResult::dry_run(
         "local",
@@ -291,11 +321,10 @@ fn parses_funding_report_json_into_stable_cli_shape() {
 
 #[test]
 fn renders_fund_completed_report_json_and_plain_text() {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let result = model::BlobStorageActionResult::completed(
         "local",
@@ -318,7 +347,7 @@ fn renders_fund_completed_report_json_and_plain_text() {
     });
     let value = serde_json::to_value(&result).expect("serialize result");
 
-    assert_eq!(value["kind"], "blob_storage_fund_result");
+    assert_eq!(value["kind"], model::BlobStorageActionName::Fund.kind());
     assert_eq!(value["action"]["dry_run"], false);
     assert_eq!(value["funding_report"]["requested_cycles"], "100");
     assert_eq!(value["funding_report"]["attached_cycles"], "100");
@@ -331,11 +360,10 @@ fn renders_fund_completed_report_json_and_plain_text() {
 
 #[test]
 fn parses_status_json_into_stable_cli_shape() {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let output = serde_json::json!({
         "Ok": {
@@ -371,20 +399,32 @@ fn parses_status_json_into_stable_cli_shape() {
     let value = serde_json::to_value(&status).expect("serialize status");
 
     assert_eq!(value["schema_version"], 1);
-    assert_eq!(value["kind"], "blob_storage_status");
+    assert_eq!(value["kind"], model::BLOB_STORAGE_STATUS_KIND);
     assert_eq!(value["configured"], true);
     assert_eq!(value["cashier"]["balance_cycles"], "100");
     assert_eq!(value["policy"]["project_cycles_available"], "3000");
     assert_eq!(value["gateways"]["principal_count"], 0);
-    assert_eq!(value["funding"]["status"], "funding_needed");
+    assert_eq!(
+        value["funding"]["status"],
+        model::BLOB_STORAGE_CODE_FUNDING_NEEDED
+    );
     assert_eq!(value["funding"]["requested_cycles"], "900");
-    assert_eq!(value["readiness"]["state"], "blocked");
+    assert_eq!(
+        value["readiness"]["state"],
+        model::BLOB_STORAGE_READINESS_BLOCKED
+    );
     assert_eq!(value["readiness"]["ready_for_upload"], false);
     assert_eq!(
         value["readiness"]["blockers"],
-        serde_json::json!(["gateway_principals_empty", "cashier_balance_below_min"])
+        serde_json::json!([
+            model::BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY,
+            model::BLOB_STORAGE_CODE_CASHIER_BALANCE_BELOW_MIN
+        ])
     );
-    assert_eq!(value["next"][0]["action"], "sync_gateways");
+    assert_eq!(
+        value["next"][0]["action"],
+        model::BlobStorageActionName::SyncGateways.label()
+    );
     assert_eq!(
         value["next"][0]["command"],
         "canic blob-storage sync-gateways local backend"
@@ -393,6 +433,50 @@ fn parses_status_json_into_stable_cli_shape() {
         value["next"][1]["command"],
         "canic blob-storage fund local backend --cycles 900"
     );
+}
+
+#[test]
+fn parses_ready_status_with_warnings_as_warning_state() {
+    let target = model::BlobStorageTarget::from_installed_deployment(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    );
+    let output = serde_json::json!({
+        "Ok": {
+            "payment_model": { "ProjectAsPaymentAccount": null },
+            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
+            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
+            "cashier_balance": ["1000"],
+            "min_upload_balance": ["500"],
+            "target_upload_balance": ["1000"],
+            "project_cycles_reserve": ["2000"],
+            "project_cycles_available": "3000",
+            "gateway_principal_count": 0,
+            "last_gateway_principal_sync_at_ns": null,
+            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
+            "funding_status": { "NotNeeded": null },
+            "ready": true,
+            "blockers": [],
+            "warnings": [
+                { "GatewayPrincipalSetEmpty": null }
+            ]
+        }
+    })
+    .to_string();
+
+    let status = parse::parse_status_result("local", target, &output).expect("parse status");
+
+    assert_eq!(
+        status.readiness.state,
+        model::BLOB_STORAGE_READINESS_WARNING
+    );
+    assert!(status.readiness.ready_for_upload);
+    assert_eq!(
+        status.readiness.warnings,
+        vec![model::BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY.to_string()]
+    );
+    assert!(status.next.is_empty());
 }
 
 #[test]
@@ -416,7 +500,10 @@ fn scripted_operator_loop_proves_status_sync_fund_and_recheck_sequence() {
     let fund = fund_result_with_runtime(&runtime, &fund_options(common, 900)).expect("fund result");
 
     assert_eq!(initial.gateways.principal_count, 0);
-    assert_eq!(initial.readiness.state, "blocked");
+    assert_eq!(
+        initial.readiness.state,
+        model::BLOB_STORAGE_READINESS_BLOCKED
+    );
     assert_eq!(
         sync.post_status
             .as_ref()
@@ -471,9 +558,15 @@ fn mutating_commands_warn_when_post_status_diagnostic_fails() {
     let fund = fund_result_with_runtime(&fund_runtime, &fund_options(common, 900))
         .expect("fund should not fail on post-status diagnostic");
 
-    assert_eq!(sync.warnings, vec!["post_status_unavailable"]);
+    assert_eq!(
+        sync.warnings,
+        vec![model::BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE]
+    );
     assert_eq!(sync.post_status, None);
-    assert_eq!(fund.warnings, vec!["post_status_unavailable"]);
+    assert_eq!(
+        fund.warnings,
+        vec![model::BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE]
+    );
     assert_eq!(fund.post_status, None);
     assert_eq!(
         fund.funding_report
@@ -486,11 +579,10 @@ fn mutating_commands_warn_when_post_status_diagnostic_fails() {
 
 #[test]
 fn renders_status_plain_text_with_blockers_and_next_actions() {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let output = serde_json::json!({
         "Ok": {
@@ -541,11 +633,10 @@ fn renders_status_plain_text_with_blockers_and_next_actions() {
 }
 
 fn sample_status_result() -> model::BlobStorageStatusResult {
-    let target = model::BlobStorageTarget::resolved(
+    let target = model::BlobStorageTarget::from_installed_deployment(
         "backend",
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        "installed_deployment",
     );
     let output = serde_json::json!({
         "Ok": {
@@ -636,11 +727,10 @@ impl BlobStorageRuntime for ScriptedBlobStorageRuntime {
         method: &str,
     ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError> {
         Ok(target::BlobStorageCallTarget {
-            target: model::BlobStorageTarget::resolved(
+            target: model::BlobStorageTarget::from_installed_deployment(
                 canister,
                 Some(canister.to_string()),
                 "rrkah-fqaaa-aaaaa-aaaaq-cai",
-                "installed_deployment",
             ),
             method_mode: if method == BLOB_STORAGE_STATUS {
                 target::BlobStorageMethodMode::Query

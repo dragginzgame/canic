@@ -15,7 +15,16 @@ mod tests;
 
 use crate::{
     blob_storage::{
-        model::{BlobStorageActionName, BlobStorageActionResult, BlobStorageErrorResult},
+        model::{
+            BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
+            BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE, BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES,
+            BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
+            BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
+            BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
+            BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED, BLOB_STORAGE_READINESS_READY,
+            BLOB_STORAGE_READINESS_WARNING, BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE,
+            BlobStorageActionName, BlobStorageActionResult, BlobStorageErrorResult,
+        },
         options::{BlobStorageCommand, BlobStorageOptions},
         parse::{parse_funding_report, parse_status_result},
         render::{render_action_result, render_dry_run_command, render_status_result},
@@ -139,18 +148,24 @@ impl BlobStorageCommandError {
 
     fn command_error_code(&self) -> &'static str {
         match self {
-            Self::Usage(message) if message.contains("--cycles") => "invalid_cycles",
+            Self::Usage(message) if message.contains("--cycles") => {
+                BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES
+            }
             Self::Usage(_)
             | Self::Json(_)
             | Self::InstallState(_)
             | Self::NoInstalledDeployment { .. }
             | Self::UnknownTarget { .. }
-            | Self::AmbiguousRole { .. } => "target_resolution_failed",
-            Self::CandidUnavailable { .. } | Self::CandidRead { .. } => "candid_unavailable",
-            Self::MethodUnavailable { .. } => "method_unavailable",
-            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => "transport_failed",
-            Self::ResponseParse => "response_parse_failed",
-            Self::CandidParse { .. } => "candid_decode_failed",
+            | Self::AmbiguousRole { .. } => BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
+            Self::CandidUnavailable { .. } | Self::CandidRead { .. } => {
+                BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
+            }
+            Self::MethodUnavailable { .. } => BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
+            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => {
+                BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
+            }
+            Self::ResponseParse => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
+            Self::CandidParse { .. } => BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
             Self::JsonReported { source, .. } => source.command_error_code(),
         }
     }
@@ -195,8 +210,8 @@ pub struct BlobStorageMedicSummary {
 impl BlobStorageMedicSummary {
     fn from_status(result: &model::BlobStorageStatusResult) -> Self {
         let status = match result.readiness.state.as_str() {
-            "ready" => BlobStorageMedicStatus::Ready,
-            "warning" => BlobStorageMedicStatus::Warning,
+            BLOB_STORAGE_READINESS_READY => BlobStorageMedicStatus::Ready,
+            BLOB_STORAGE_READINESS_WARNING => BlobStorageMedicStatus::Warning,
             _ => BlobStorageMedicStatus::Blocked,
         };
         let mut detail = vec![
@@ -417,15 +432,13 @@ fn sync_gateways_result_with_runtime(
             command,
             None,
         );
-        match status_result_with_runtime(
+        with_post_status_diagnostic(
             runtime,
             &options.common,
             &options.deployment,
             &options.canister,
-        ) {
-            Ok(status) => result.with_post_status(status),
-            Err(_) => result.with_warning("post_status_unavailable"),
-        }
+            result,
+        )
     };
     Ok(result)
 }
@@ -489,17 +502,28 @@ fn fund_result_with_runtime(
             Some(options.cycles),
         )
         .with_funding_report(report);
-        match status_result_with_runtime(
+        with_post_status_diagnostic(
             runtime,
             &options.common,
             &options.deployment,
             &options.canister,
-        ) {
-            Ok(status) => result.with_post_status(status),
-            Err(_) => result.with_warning("post_status_unavailable"),
-        }
+            result,
+        )
     };
     Ok(result)
+}
+
+fn with_post_status_diagnostic(
+    runtime: &impl BlobStorageRuntime,
+    options: &options::CommonOptions,
+    deployment: &str,
+    canister: &str,
+    result: BlobStorageActionResult,
+) -> BlobStorageActionResult {
+    match status_result_with_runtime(runtime, options, deployment, canister) {
+        Ok(status) => result.with_post_status(status),
+        Err(_) => result.with_warning(BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE),
+    }
 }
 
 fn icp_cli(options: &options::CommonOptions) -> IcpCli {

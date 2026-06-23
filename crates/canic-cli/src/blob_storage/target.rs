@@ -23,8 +23,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
-
 ///
 /// BlobStorageCallTarget
 ///
@@ -106,11 +104,10 @@ pub(super) fn resolve_blob_storage_call_target(
     let method_mode = blob_storage_method_mode(&candid_path, &candid, method)?;
 
     Ok(BlobStorageCallTarget {
-        target: BlobStorageTarget::resolved(
+        target: BlobStorageTarget::from_installed_deployment(
             &resolved.input,
             resolved.role,
             &resolved.canister_id,
-            CANDID_SOURCE_INSTALLED_DEPLOYMENT,
         ),
         method_mode,
         candid_path,

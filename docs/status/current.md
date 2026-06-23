@@ -66,25 +66,31 @@ inspect only the files needed for the current task.
   operator command surfaces belong in those retained proofs. The `0.71.3`
   changelog is prepared in the root ledger and detailed 0.71 notes, also
   covering the ICP CLI compatibility guidance added to `INSTALLING.md` and
-  host ICP CLI diagnostics. The current `0.71.4` slice starts closing the M6
-  full-loop validation gap by adding a private blob-storage CLI runtime seam
-  for target resolution and canister-call execution, then proving the live
-  result path with a scripted status -> sync -> status -> fund -> status
-  sequence. This does not change command grammar, Candid shape, or live
-  transport ownership; production still uses the existing installed-deployment
-  resolver and `IcpCli` canister-call path. The retained packaged and
-  installed CLI proofs now also create a fixture deployment with local Candid
-  metadata and a stateful fake `icp` registry/canister-call transport, then
-  assert fixture `status --json`, live `sync-gateways --json` with
-  post-status, live `fund --json` with funding report and ready post-status,
-  and final `status --json` output from the packaged/installed command
-  surfaces. The shared blob-storage CLI proof helper now owns that fixture and
-  assertion set, plus the common proof command sequence, for both verifier
-  scripts. The same retained proof still keeps dry-run sync/fund JSON
-  assertions. Focused tests now also prove successful live sync/fund results
-  only warn with `post_status_unavailable` when their optional post-action
-  status diagnostic cannot be parsed. The `0.71.4` changelog is prepared in
-  the root ledger and detailed 0.71 notes.
+  host ICP CLI diagnostics. `0.71.4` is pushed and closed the M6 full-loop
+  validation gap by adding a private blob-storage CLI runtime seam for target
+  resolution and canister-call execution, then proving the live result path
+  with a scripted status -> sync -> status -> fund -> status sequence. This
+  does not change command grammar, Candid shape, or live transport ownership;
+  production still uses the existing installed-deployment resolver and
+  `IcpCli` canister-call path. The retained packaged and installed CLI proofs
+  now also create a fixture deployment with local Candid metadata and a
+  stateful fake `icp` registry/canister-call transport, then assert fixture
+  `status --json`, live `sync-gateways --json` with post-status, live
+  `fund --json` with funding report and ready post-status, and final
+  `status --json` output from the packaged/installed command surfaces. The
+  shared blob-storage CLI proof helper now owns that fixture and assertion
+  set, plus the common proof command sequence, for both verifier scripts. The
+  same retained proof still keeps dry-run sync/fund JSON assertions. Focused
+  tests also prove successful live sync/fund results only warn with
+  `post_status_unavailable` when their optional post-action status diagnostic
+  cannot be parsed. The current `0.71.5` cleanup slice centralizes that
+  post-action status diagnostic path behind one helper and warning constant so
+  live sync and fund cannot drift. It also moves the stable blob-storage
+  readiness/funding/warning, Candid-source, medic readiness, and structured
+  command-error code constants into the render-ready model contract, names the
+  installed-deployment target constructor directly, and adds focused coverage
+  for the `warning` readiness state. The `0.71.5` changelog is prepared in the
+  root ledger and detailed 0.71 notes.
 
 - `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A
   follow-up least-fresh recurring audit selected `ops-purity` and refreshed
