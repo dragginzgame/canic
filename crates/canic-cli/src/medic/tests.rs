@@ -104,11 +104,11 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
         &root,
         "local",
         "other",
-        r#"
+        r"
             service : {
                 get_blob_storage_status : () -> () query;
             }
-        "#,
+        ",
     );
     write_candid(
         &root,
@@ -163,11 +163,11 @@ fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
         "#
     ));
     assert!(!candid_declares_blob_storage_billing(
-        r#"
+        r"
             service : {
                 canic_ready : () -> (bool) query;
             }
-        "#
+        "
     ));
 }
 
