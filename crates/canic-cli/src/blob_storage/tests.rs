@@ -162,3 +162,121 @@ fn renders_fund_dry_run_plain_text() {
         "Command: icp canister call backend _immutableObjectStorageFundFromProjectCycles (100 : nat)"
     );
 }
+
+#[test]
+fn parses_status_json_into_stable_cli_shape() {
+    let target = model::BlobStorageTarget::resolved(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "installed_deployment",
+    );
+    let output = serde_json::json!({
+        "Ok": {
+            "payment_model": { "ProjectAsPaymentAccount": null },
+            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
+            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
+            "cashier_balance": ["100"],
+            "min_upload_balance": ["500"],
+            "target_upload_balance": ["1000"],
+            "project_cycles_reserve": ["2000"],
+            "project_cycles_available": "3000",
+            "gateway_principal_count": 0,
+            "last_gateway_principal_sync_at_ns": null,
+            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
+            "funding_status": {
+                "FundingRequired": {
+                    "requested_cycles": "900"
+                }
+            },
+            "ready": false,
+            "blockers": [
+                { "GatewayPrincipalsMissing": null },
+                { "InsufficientCashierBalance": null }
+            ],
+            "warnings": [
+                { "GatewayPrincipalSetEmpty": null }
+            ]
+        }
+    })
+    .to_string();
+
+    let status = parse::parse_status_result("local", target, &output).expect("parse status");
+    let value = serde_json::to_value(&status).expect("serialize status");
+
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["kind"], "blob_storage_status");
+    assert_eq!(value["configured"], true);
+    assert_eq!(value["cashier"]["balance_cycles"], "100");
+    assert_eq!(value["policy"]["project_cycles_available"], "3000");
+    assert_eq!(value["gateways"]["principal_count"], 0);
+    assert_eq!(value["funding"]["status"], "funding_needed");
+    assert_eq!(value["funding"]["requested_cycles"], "900");
+    assert_eq!(value["readiness"]["state"], "blocked");
+    assert_eq!(value["readiness"]["ready_for_upload"], false);
+    assert_eq!(
+        value["readiness"]["blockers"],
+        serde_json::json!(["gateway_principals_empty", "cashier_balance_below_min"])
+    );
+    assert_eq!(value["next"][0]["action"], "sync_gateways");
+    assert_eq!(
+        value["next"][1]["command"],
+        "canic blob-storage fund local backend --cycles 900 --dry-run"
+    );
+}
+
+#[test]
+fn renders_status_plain_text_with_blockers_and_next_actions() {
+    let target = model::BlobStorageTarget::resolved(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "installed_deployment",
+    );
+    let output = serde_json::json!({
+        "Ok": {
+            "payment_model": { "NotConfigured": null },
+            "cashier_canister_id": null,
+            "payment_account": null,
+            "cashier_balance": null,
+            "min_upload_balance": null,
+            "target_upload_balance": null,
+            "project_cycles_reserve": null,
+            "project_cycles_available": "3000",
+            "gateway_principal_count": 0,
+            "last_gateway_principal_sync_at_ns": null,
+            "gateway_principal_sync_action": { "SkippedConfigMissing": null },
+            "funding_status": { "NotConfigured": null },
+            "ready": false,
+            "blockers": [
+                { "NotConfigured": null }
+            ],
+            "warnings": []
+        }
+    })
+    .to_string();
+
+    let status = parse::parse_status_result("local", target, &output).expect("parse status");
+
+    assert_eq!(
+        render::render_status_result(&status),
+        [
+            "Blob storage status: backend",
+            "Deployment: local",
+            "Target: rrkah-fqaaa-aaaaa-aaaaq-cai",
+            "Configured: no",
+            "Cashier: -",
+            "Payment account: -",
+            "Cashier balance: -",
+            "Upload balance: min -, target -",
+            "Project reserve: -",
+            "Project cycles available: 3000",
+            "Gateways: 0 synced",
+            "Last gateway sync: never",
+            "Readiness: blocked",
+            "Blockers:",
+            "  - not_configured",
+        ]
+        .join("\n")
+    );
+}

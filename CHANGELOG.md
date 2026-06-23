@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Adds live `canic blob-storage status` support for the 0.71 line, calling the
+  guarded 0.70 status endpoint with read-only status semantics, rendering
+  stable JSON/plain readiness output, and keeping live sync/fund transport
+  deferred.
+
 ## [0.71.x] - 2026-06-23 - Blob Storage Operator Readiness
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)

@@ -7,6 +7,7 @@
 use serde::Serialize;
 
 pub(super) const BLOB_STORAGE_JSON_SCHEMA_VERSION: u16 = 1;
+pub(super) const BLOB_STORAGE_STATUS_KIND: &str = "blob_storage_status";
 
 ///
 /// BlobStorageTarget
@@ -121,4 +122,92 @@ impl BlobStorageActionResult {
             warnings: Vec::new(),
         }
     }
+}
+
+///
+/// BlobStorageStatusResult
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageStatusResult {
+    pub(super) schema_version: u16,
+    pub(super) kind: String,
+    pub(super) deployment: String,
+    pub(super) target: BlobStorageTarget,
+    pub(super) configured: bool,
+    pub(super) cashier: BlobStorageCashierStatus,
+    pub(super) policy: BlobStoragePolicyStatus,
+    pub(super) gateways: BlobStorageGatewayStatus,
+    pub(super) funding: BlobStorageFundingStatus,
+    pub(super) readiness: BlobStorageReadinessStatus,
+    pub(super) next: Vec<BlobStorageNextAction>,
+}
+
+///
+/// BlobStorageCashierStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageCashierStatus {
+    pub(super) canister_id: Option<String>,
+    pub(super) payment_account: Option<String>,
+    pub(super) balance_cycles: Option<String>,
+    pub(super) balance_available: bool,
+}
+
+///
+/// BlobStoragePolicyStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStoragePolicyStatus {
+    pub(super) min_upload_balance_cycles: Option<String>,
+    pub(super) target_upload_balance_cycles: Option<String>,
+    pub(super) project_cycles_reserve_cycles: Option<String>,
+    pub(super) project_cycles_available: String,
+}
+
+///
+/// BlobStorageGatewayStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageGatewayStatus {
+    pub(super) principal_count: u64,
+    pub(super) last_sync_at_ns: Option<String>,
+    pub(super) sync_action: String,
+}
+
+///
+/// BlobStorageFundingStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageFundingStatus {
+    pub(super) status: String,
+    pub(super) requested_cycles: Option<String>,
+    pub(super) transferable_cycles: Option<String>,
+}
+
+///
+/// BlobStorageReadinessStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageReadinessStatus {
+    pub(super) state: String,
+    pub(super) ready_for_upload: bool,
+    pub(super) blockers: Vec<String>,
+    pub(super) warnings: Vec<String>,
+}
+
+///
+/// BlobStorageNextAction
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageNextAction {
+    pub(super) action: String,
+    pub(super) reason: String,
+    pub(super) command: Option<String>,
 }
