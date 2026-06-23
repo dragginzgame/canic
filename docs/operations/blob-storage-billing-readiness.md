@@ -58,6 +58,17 @@ canic blob-storage status <deployment> <canister-or-role>
 Use `--json` for automation. Parsed blob-storage command failures emit a
 `blob_storage_error` object to stderr with a stable command error code.
 
+Use `--check-ready` when a script should fail if uploads are not ready:
+
+```text
+canic blob-storage status <deployment> <canister-or-role> --check-ready
+```
+
+The check remains read-only. It renders normal status output, then exits `4`
+when `ready_for_upload = false`. Warning status with `ready_for_upload = true`
+does not fail the check. Failed checks print a compact stderr diagnostic with
+the parsed readiness state and blocker/warning codes.
+
 If gateway principals are missing, sync them explicitly:
 
 ```text

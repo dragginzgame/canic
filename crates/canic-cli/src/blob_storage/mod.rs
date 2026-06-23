@@ -19,6 +19,7 @@ use crate::{
             BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
             BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE, BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES,
             BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
+            BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
             BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
             BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
             BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED, BLOB_STORAGE_READINESS_READY,
@@ -99,6 +100,14 @@ pub enum BlobStorageCommandError {
     #[error("failed to parse blob-storage canister response")]
     ResponseParse,
 
+    #[error("{message}")]
+    ReadinessCheckFailed {
+        message: String,
+        state: String,
+        blockers: Vec<String>,
+        warnings: Vec<String>,
+    },
+
     #[error("{source}")]
     JsonReported {
         source: Box<Self>,
@@ -120,6 +129,7 @@ impl BlobStorageCommandError {
             Self::JsonReported { exit_code, .. } => *exit_code,
             Self::ReplicaQuery(_) | Self::IcpFailed { .. } => 2,
             Self::ResponseParse => 3,
+            Self::ReadinessCheckFailed { .. } => 4,
             Self::Usage(_)
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
@@ -166,6 +176,7 @@ impl BlobStorageCommandError {
             }
             Self::ResponseParse => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
             Self::CandidParse { .. } => BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
+            Self::ReadinessCheckFailed { .. } => BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
             Self::JsonReported { source, .. } => source.command_error_code(),
         }
     }
@@ -323,13 +334,17 @@ fn run_command_with_json_errors(
     command: BlobStorageCommand,
 ) -> Result<(), BlobStorageCommandError> {
     let context = json_error_context(&command);
-    run_command(command).map_err(|err| {
-        if let Some((deployment, target)) = context {
-            err.with_json_report(&deployment, &target)
-        } else {
-            err
+    match run_command(command) {
+        Ok(()) => Ok(()),
+        Err(err @ BlobStorageCommandError::ReadinessCheckFailed { .. }) => Err(err),
+        Err(err) => {
+            if let Some((deployment, target)) = context {
+                Err(err.with_json_report(&deployment, &target))
+            } else {
+                Err(err)
+            }
         }
-    })
+    }
 }
 
 fn json_error_context(command: &BlobStorageCommand) -> Option<(String, String)> {
@@ -349,7 +364,11 @@ fn json_error_context(command: &BlobStorageCommand) -> Option<(String, String)> 
 
 fn run_status(options: &options::StatusOptions) -> Result<(), BlobStorageCommandError> {
     let result = live_status_result(&options.common, &options.deployment, &options.canister)?;
-    write_status_result(options.json, &result)
+    write_status_result(options.json, &result)?;
+    if options.check_ready {
+        check_status_ready_for_upload(&result)?;
+    }
+    Ok(())
 }
 
 fn live_status_result(
@@ -377,6 +396,34 @@ fn status_result_with_runtime(
     )?;
     parse_status_result(deployment, target.target, &output)
         .ok_or(BlobStorageCommandError::ResponseParse)
+}
+
+fn check_status_ready_for_upload(
+    result: &model::BlobStorageStatusResult,
+) -> Result<(), BlobStorageCommandError> {
+    if result.readiness.ready_for_upload {
+        return Ok(());
+    }
+    Err(BlobStorageCommandError::ReadinessCheckFailed {
+        message: readiness_check_failure_message(result),
+        state: result.readiness.state.clone(),
+        blockers: result.readiness.blockers.clone(),
+        warnings: result.readiness.warnings.clone(),
+    })
+}
+
+fn readiness_check_failure_message(result: &model::BlobStorageStatusResult) -> String {
+    let mut parts = vec![format!(
+        "readiness check failed: state={}",
+        result.readiness.state
+    )];
+    if !result.readiness.blockers.is_empty() {
+        parts.push(format!("blockers={}", result.readiness.blockers.join(",")));
+    }
+    if !result.readiness.warnings.is_empty() {
+        parts.push(format!("warnings={}", result.readiness.warnings.join(",")));
+    }
+    parts.join("; ")
 }
 
 fn run_sync_gateways(

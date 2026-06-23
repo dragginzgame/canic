@@ -90,6 +90,13 @@ inspect only the files needed for the current task.
   command-error code constants into the render-ready model contract, names the
   installed-deployment target constructor directly, and adds focused coverage
   for the `warning` readiness state. The `0.71.5` changelog is prepared in the
+  root ledger and detailed 0.71 notes. The current `0.71.6` slice starts the
+  explicit status check mode for automation:
+  `canic blob-storage status <deployment> <canister-or-role> --check-ready`
+  remains read-only, preserves normal status output, passes warning state when
+  `ready_for_upload = true`, and exits `4` when status is parsed successfully
+  but uploads are not ready. Failed checks include the parsed blocker/warning
+  codes in the stderr diagnostic. The `0.71.6` changelog is prepared in the
   root ledger and detailed 0.71 notes.
 
 - `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A

@@ -25,6 +25,7 @@ const FUND_COMMAND: &str = "fund";
 const DEPLOYMENT_ARG: &str = "deployment";
 const CANISTER_ARG: &str = "canister";
 const CYCLES_ARG: &str = "cycles";
+const CHECK_READY_ARG: &str = "check-ready";
 const DRY_RUN_ARG: &str = "dry-run";
 const JSON_ARG: &str = "json";
 
@@ -32,6 +33,7 @@ const HELP_AFTER: &str = "\
 Examples:
   canic blob-storage status local backend
   canic blob-storage status local backend --json
+  canic blob-storage status local backend --check-ready
   canic blob-storage sync-gateways local backend --dry-run
   canic blob-storage fund local backend --cycles 1000000000000
   canic blob-storage fund local backend --cycles 1000000000000 --dry-run";
@@ -66,6 +68,7 @@ pub(super) struct StatusOptions {
     pub(super) deployment: String,
     pub(super) canister: String,
     pub(super) json: bool,
+    pub(super) check_ready: bool,
     pub(super) common: CommonOptions,
 }
 
@@ -114,6 +117,7 @@ impl BlobStorageOptions {
                 deployment: required_string(matches, DEPLOYMENT_ARG),
                 canister: required_string(matches, CANISTER_ARG),
                 json: matches.get_flag(JSON_ARG),
+                check_ready: matches.get_flag(CHECK_READY_ARG),
                 common: common_options(matches),
             })),
             Some((SYNC_GATEWAYS_COMMAND, matches)) => {
@@ -165,6 +169,11 @@ fn blob_storage_command() -> ClapCommand {
 fn status_command() -> ClapCommand {
     command_with_target(STATUS_COMMAND, "Inspect blob-storage billing readiness")
         .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
+        .arg(
+            flag_arg(CHECK_READY_ARG)
+                .long(CHECK_READY_ARG)
+                .help("Exit 4 when status is not ready for upload"),
+        )
 }
 
 fn sync_gateways_command() -> ClapCommand {

@@ -39,6 +39,7 @@ pub(super) const BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE: &str = "method_unav
 pub(super) const BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED: &str = "transport_failed";
 pub(super) const BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED: &str = "response_parse_failed";
 pub(super) const BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED: &str = "candid_decode_failed";
+pub(super) const BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED: &str = "readiness_check_failed";
 
 ///
 /// BlobStorageTarget
