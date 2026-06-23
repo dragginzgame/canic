@@ -38,13 +38,15 @@ impl fmt::Display for IcpCommandError {
             Self::MissingCli { executable } => {
                 write!(
                     formatter,
-                    "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\nnext: install icp-cli {REQUIRED_ICP_CLI_VERSION} from https://github.com/dfinity/icp-cli/releases/tag/v{REQUIRED_ICP_CLI_VERSION}, or pass top-level --icp <path>"
+                    "icp-cli executable not found: {executable}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
+                    icp_cli_install_hint(),
                 )
             }
             Self::IncompatibleCliVersion { executable, found } => {
                 write!(
                     formatter,
-                    "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\nnext: install icp-cli {REQUIRED_ICP_CLI_VERSION} from https://github.com/dfinity/icp-cli/releases/tag/v{REQUIRED_ICP_CLI_VERSION}, or pass top-level --icp <path>"
+                    "unsupported icp-cli version for {executable}\nfound: {found}\nrequired: icp-cli {ICP_CLI_SUPPORTED_VERSION_RANGE}\n{}",
+                    icp_cli_install_hint(),
                 )
             }
             Self::Failed { command, stderr } => {
@@ -68,6 +70,12 @@ impl fmt::Display for IcpCommandError {
             }
         }
     }
+}
+
+fn icp_cli_install_hint() -> String {
+    format!(
+        "next: install icp-cli {REQUIRED_ICP_CLI_VERSION} and ensure it is first on PATH\n  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dfinity/icp-cli/releases/download/v{REQUIRED_ICP_CLI_VERSION}/icp-cli-installer.sh | sh\nnote: `icp network update` updates the local network launcher, not the `icp` CLI binary; pass top-level --icp <path> to use a non-PATH install"
+    )
 }
 
 impl Error for IcpCommandError {

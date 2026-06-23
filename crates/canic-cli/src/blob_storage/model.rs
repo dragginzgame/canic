@@ -8,6 +8,7 @@ use serde::Serialize;
 
 pub(super) const BLOB_STORAGE_JSON_SCHEMA_VERSION: u16 = 1;
 pub(super) const BLOB_STORAGE_STATUS_KIND: &str = "blob_storage_status";
+pub(super) const BLOB_STORAGE_ERROR_KIND: &str = "blob_storage_error";
 
 ///
 /// BlobStorageTarget
@@ -35,6 +36,75 @@ impl BlobStorageTarget {
             candid_source: Some(candid_source.to_string()),
         }
     }
+}
+
+///
+/// BlobStorageErrorTarget
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageErrorTarget {
+    pub(super) input: String,
+    pub(super) role: Option<String>,
+    pub(super) canister_id: Option<String>,
+    pub(super) candid_source: Option<String>,
+}
+
+impl BlobStorageErrorTarget {
+    pub(super) fn unresolved(input: &str) -> Self {
+        Self {
+            input: input.to_string(),
+            role: None,
+            canister_id: None,
+            candid_source: None,
+        }
+    }
+}
+
+///
+/// BlobStorageErrorResult
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageErrorResult {
+    pub(super) schema_version: u16,
+    pub(super) kind: String,
+    pub(super) deployment: String,
+    pub(super) target: BlobStorageErrorTarget,
+    pub(super) error: BlobStorageErrorBody,
+}
+
+impl BlobStorageErrorResult {
+    pub(super) fn new(
+        deployment: &str,
+        target: &str,
+        code: &str,
+        message: String,
+        exit_code: u8,
+    ) -> Self {
+        Self {
+            schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
+            kind: BLOB_STORAGE_ERROR_KIND.to_string(),
+            deployment: deployment.to_string(),
+            target: BlobStorageErrorTarget::unresolved(target),
+            error: BlobStorageErrorBody {
+                code: code.to_string(),
+                message,
+                exit_code,
+            },
+        }
+    }
+}
+
+///
+/// BlobStorageErrorBody
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageErrorBody {
+    pub(super) code: String,
+    pub(super) message: String,
+    pub(super) exit_code: u8,
 }
 
 ///
@@ -90,6 +160,7 @@ pub(super) struct BlobStorageActionResult {
     pub(super) deployment: String,
     pub(super) target: BlobStorageTarget,
     pub(super) action: BlobStorageAction,
+    pub(super) funding_report: Option<BlobStorageFundingReport>,
     pub(super) post_status: Option<BlobStorageStatusResult>,
     pub(super) warnings: Vec<String>,
 }
@@ -159,9 +230,15 @@ impl BlobStorageActionResult {
                 command,
                 requested_cycles: requested_cycles.map(|value| value.to_string()),
             },
+            funding_report: None,
             post_status: None,
             warnings: Vec::new(),
         }
+    }
+
+    pub(super) fn with_funding_report(mut self, report: BlobStorageFundingReport) -> Self {
+        self.funding_report = Some(report);
+        self
     }
 
     pub(super) fn with_post_status(mut self, status: BlobStorageStatusResult) -> Self {
@@ -173,6 +250,21 @@ impl BlobStorageActionResult {
         self.warnings.push(warning.to_string());
         self
     }
+}
+
+///
+/// BlobStorageFundingReport
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(super) struct BlobStorageFundingReport {
+    pub(super) requested_cycles: String,
+    pub(super) attached_cycles: String,
+    pub(super) project_cycles_before: String,
+    pub(super) project_cycles_after: String,
+    pub(super) reserve_cycles: String,
+    pub(super) cashier_total_after: String,
+    pub(super) skipped_reason: Option<String>,
 }
 
 ///

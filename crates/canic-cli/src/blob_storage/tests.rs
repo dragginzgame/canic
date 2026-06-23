@@ -85,12 +85,70 @@ fn top_level_forwards_global_icp_and_network() {
         OsString::from("demo"),
         OsString::from("backend"),
         OsString::from("--cycles"),
-        OsString::from("100"),
+        OsString::from("0"),
     ])
-    .expect_err("non-dry-run is not implemented yet");
+    .expect_err("invalid cycles should be parsed after global options");
 
     let message = err.to_string();
-    assert!(message.contains("blob-storage fund requires --dry-run"));
+    assert!(message.contains("--cycles must be greater than zero"));
+}
+
+#[test]
+fn json_reported_errors_use_structured_blob_storage_shape() {
+    let err = BlobStorageCommandError::ResponseParse.with_json_report("local", "backend");
+    let cli_error = crate::CliError::from(err);
+    let output = crate::render_cli_error(&cli_error);
+    let value = serde_json::from_str::<serde_json::Value>(&output).expect("error json");
+
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["kind"], "blob_storage_error");
+    assert_eq!(value["deployment"], "local");
+    assert_eq!(value["target"]["input"], "backend");
+    assert_eq!(value["target"]["role"], serde_json::Value::Null);
+    assert_eq!(value["target"]["canister_id"], serde_json::Value::Null);
+    assert_eq!(value["target"]["candid_source"], serde_json::Value::Null);
+    assert_eq!(value["error"]["code"], "response_parse_failed");
+    assert_eq!(value["error"]["exit_code"], 3);
+    assert_eq!(crate::cli_error_exit_code(&cli_error), 3);
+}
+
+#[test]
+fn non_json_blob_storage_errors_keep_top_level_prefix() {
+    let cli_error = crate::CliError::from(BlobStorageCommandError::ResponseParse);
+
+    assert_eq!(
+        crate::render_cli_error(&cli_error),
+        "blob-storage: failed to parse blob-storage canister response"
+    );
+    assert_eq!(crate::cli_error_exit_code(&cli_error), 3);
+}
+
+#[test]
+fn json_error_codes_distinguish_candid_and_transport_failures() {
+    let candid = BlobStorageCommandError::CandidUnavailable {
+        deployment: "local".to_string(),
+        target: "backend".to_string(),
+    }
+    .with_json_report("local", "backend");
+    let transport = BlobStorageCommandError::IcpFailed {
+        command: "icp canister call".to_string(),
+        stderr: "network unavailable".to_string(),
+    }
+    .with_json_report("local", "backend");
+
+    let candid = serde_json::from_str::<serde_json::Value>(
+        &candid.json_error_report().expect("candid error json"),
+    )
+    .expect("decode candid error json");
+    let transport = serde_json::from_str::<serde_json::Value>(
+        &transport.json_error_report().expect("transport error json"),
+    )
+    .expect("decode transport error json");
+
+    assert_eq!(candid["error"]["code"], "candid_unavailable");
+    assert_eq!(candid["error"]["exit_code"], 1);
+    assert_eq!(transport["error"]["code"], "transport_failed");
+    assert_eq!(transport["error"]["exit_code"], 2);
 }
 
 #[test]
@@ -206,6 +264,72 @@ fn renders_fund_dry_run_plain_text() {
 }
 
 #[test]
+fn parses_funding_report_json_into_stable_cli_shape() {
+    let output = serde_json::json!({
+        "Ok": {
+            "requested_cycles": "1000",
+            "attached_cycles": "750",
+            "project_cycles_before": "5000",
+            "project_cycles_after": "4250",
+            "reserve_cycles": "2000",
+            "cashier_total_after": "1750",
+            "skipped_reason": null
+        }
+    })
+    .to_string();
+
+    let report = parse::parse_funding_report(&output).expect("parse funding report");
+
+    assert_eq!(report.requested_cycles, "1000");
+    assert_eq!(report.attached_cycles, "750");
+    assert_eq!(report.project_cycles_before, "5000");
+    assert_eq!(report.project_cycles_after, "4250");
+    assert_eq!(report.reserve_cycles, "2000");
+    assert_eq!(report.cashier_total_after, "1750");
+    assert_eq!(report.skipped_reason, None);
+}
+
+#[test]
+fn renders_fund_completed_report_json_and_plain_text() {
+    let target = model::BlobStorageTarget::resolved(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "installed_deployment",
+    );
+    let result = model::BlobStorageActionResult::completed(
+        "local",
+        model::BlobStorageActionName::Fund,
+        target,
+        canic_core::protocol::BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+        "update",
+        "icp canister call backend _immutableObjectStorageFundFromProjectCycles (100 : nat) --json"
+            .to_string(),
+        Some(100),
+    )
+    .with_funding_report(model::BlobStorageFundingReport {
+        requested_cycles: "100".to_string(),
+        attached_cycles: "100".to_string(),
+        project_cycles_before: "1000".to_string(),
+        project_cycles_after: "900".to_string(),
+        reserve_cycles: "200".to_string(),
+        cashier_total_after: "300".to_string(),
+        skipped_reason: None,
+    });
+    let value = serde_json::to_value(&result).expect("serialize result");
+
+    assert_eq!(value["kind"], "blob_storage_fund_result");
+    assert_eq!(value["action"]["dry_run"], false);
+    assert_eq!(value["funding_report"]["requested_cycles"], "100");
+    assert_eq!(value["funding_report"]["attached_cycles"], "100");
+    let text = render::render_action_result(&result);
+    assert!(text.contains("Blob storage fund completed"));
+    assert!(text.contains("Attached cycles: 100"));
+    assert!(text.contains("Project cycles: 1000 -> 900"));
+    assert!(text.contains("Cashier total after: 300"));
+}
+
+#[test]
 fn parses_status_json_into_stable_cli_shape() {
     let target = model::BlobStorageTarget::resolved(
         "backend",
@@ -267,7 +391,7 @@ fn parses_status_json_into_stable_cli_shape() {
     );
     assert_eq!(
         value["next"][1]["command"],
-        "canic blob-storage fund local backend --cycles 900 --dry-run"
+        "canic blob-storage fund local backend --cycles 900"
     );
 }
 

@@ -35,6 +35,9 @@ validation notes.
 - [Blob storage integration](blob-storage-integration.md) documents the 0.69
   non-billing gateway endpoint wiring, lifecycle API contract, gateway
   principal handling, and focused validation commands for downstream canisters.
+- [Blob storage billing readiness](blob-storage-billing-readiness.md)
+  documents the operator status, targeted medic, gateway sync, funding, and
+  post-upgrade checks for canisters that host blob-storage billing endpoints.
 - [Blob storage source handoff](blob-storage-source-handoff.md) records the
   source and inventory evidence used to unlock the 0.69 implementation line.
 

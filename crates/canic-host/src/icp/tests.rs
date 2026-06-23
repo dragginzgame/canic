@@ -76,6 +76,10 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
         err.to_string()
             .contains("required: icp-cli >=1.0.0, <2.0.0")
     );
+    assert!(
+        err.to_string()
+            .contains("icp network update` updates the local network launcher")
+    );
 
     fs::remove_dir_all(root).expect("remove temp dir");
 }

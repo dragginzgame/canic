@@ -43,14 +43,30 @@ inspect only the files needed for the current task.
   `canic blob-storage status`: it calls `get_blob_storage_status` with
   `sync_gateway_principals = false`, follows Candid-derived query/update mode,
   parses the 0.70 status response into stable CLI status JSON/plain output, and
-  maps readiness/funding codes without adding new runtime policy. The current
-  `0.71.2` slice adds live `canic blob-storage sync-gateways`: it reuses the
-  same target/Candid validation path, executes the existing 0.70 gateway-sync
+  maps readiness/funding codes without adding new runtime policy. `0.71.2`
+  added live `canic blob-storage sync-gateways`: it reuses the same
+  target/Candid validation path, executes the existing 0.70 gateway-sync
   endpoint when `--dry-run` is absent, reports the shared action JSON/plain
   shape with `dry_run = false`, attaches post-sync status diagnostics when
   available without failing a successful sync if post-status is unavailable,
-  and updates status remediation to suggest the live sync command. Live `fund`
-  transport remains the next implementation step.
+  and updates status remediation to suggest the live sync command. `0.71.2` is
+  pushed and adds live `canic blob-storage fund`, structured
+  `blob_storage_error` stderr payloads for parsed `--json` command failures,
+  targeted `canic info medic <deployment> --blob-storage <canister-or-role>`
+  diagnostics, passive default medic hints from local Candid sidecars, and
+  `docs/operations/blob-storage-billing-readiness.md` as the versionless
+  operator runbook for endpoint inspection, status, gateway sync, funding, and
+  post-upgrade checks. The current `0.71.3` slice starts packaged/downstream
+  validation by extending `scripts/ci/verify-packaged-downstream-cli.sh` to
+  prove the packaged CLI exposes blob-storage help and emits the stable
+  `blob_storage_error` JSON failure shape from the packaged binary, and by
+  extending `scripts/ci/verify-installed-canic-cli.sh` to prove the same
+  surface from a temporary installed CLI binary. The non-versioned
+  package/install validation checklist now records and guards that shipped
+  operator command surfaces belong in those retained proofs. The `0.71.3`
+  changelog is prepared in the root ledger and detailed 0.71 notes, also
+  covering the ICP CLI compatibility guidance added to `INSTALLING.md` and
+  host ICP CLI diagnostics.
 
 - `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A
   follow-up least-fresh recurring audit selected `ops-purity` and refreshed

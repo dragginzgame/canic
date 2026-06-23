@@ -30,6 +30,19 @@ topology.
 ## ICP Target Hygiene
 
 Canic commands take a top-level `--network <name>` for networked operations.
+Before debugging target selection, confirm the shell resolves the expected ICP
+CLI binary:
+
+```bash
+which icp
+icp --version
+```
+
+`icp network update` updates the local network launcher used by the CLI; it
+does not upgrade the `icp` binary itself. If Canic reports an unsupported ICP
+CLI, use the upgrade command in [INSTALLING.md](../../INSTALLING.md#icp-cli-compatibility)
+or pass top-level `--icp /path/to/icp` for a single Canic command.
+
 Raw `icp` commands still need the ICP CLI target shape expected by your
 project. In academic local scripts, prefer clearing stale shell network
 selection before passing the explicit ICP environment:

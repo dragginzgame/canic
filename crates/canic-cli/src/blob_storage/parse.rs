@@ -6,9 +6,9 @@
 
 use crate::blob_storage::model::{
     BLOB_STORAGE_JSON_SCHEMA_VERSION, BLOB_STORAGE_STATUS_KIND, BlobStorageCashierStatus,
-    BlobStorageFundingStatus, BlobStorageGatewayStatus, BlobStorageNextAction,
-    BlobStoragePolicyStatus, BlobStorageReadinessStatus, BlobStorageStatusResult,
-    BlobStorageTarget,
+    BlobStorageFundingReport, BlobStorageFundingStatus, BlobStorageGatewayStatus,
+    BlobStorageNextAction, BlobStoragePolicyStatus, BlobStorageReadinessStatus,
+    BlobStorageStatusResult, BlobStorageTarget,
 };
 use canic_host::response_parse::{find_field, parse_json_u64, parse_json_u128};
 
@@ -77,6 +77,19 @@ pub(super) fn parse_status_result(
     })
 }
 
+pub(super) fn parse_funding_report(output: &str) -> Option<BlobStorageFundingReport> {
+    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
+    Some(BlobStorageFundingReport {
+        requested_cycles: required_cycles(&value, "requested_cycles")?,
+        attached_cycles: required_cycles(&value, "attached_cycles")?,
+        project_cycles_before: required_cycles(&value, "project_cycles_before")?,
+        project_cycles_after: required_cycles(&value, "project_cycles_after")?,
+        reserve_cycles: required_cycles(&value, "reserve_cycles")?,
+        cashier_total_after: required_cycles(&value, "cashier_total_after")?,
+        skipped_reason: find_field(&value, "skipped_reason").and_then(parse_optional_text),
+    })
+}
+
 fn readiness_status(
     ready: bool,
     blockers: Vec<String>,
@@ -142,12 +155,18 @@ fn next_actions(
             action: "fund".to_string(),
             reason: FUNDING_NEEDED.to_string(),
             command: Some(format!(
-                "canic blob-storage fund {deployment} {} --cycles {requested_cycles} --dry-run",
+                "canic blob-storage fund {deployment} {} --cycles {requested_cycles}",
                 target.input
             )),
         });
     }
     next
+}
+
+fn required_cycles(value: &serde_json::Value, field: &str) -> Option<String> {
+    find_field(value, field)
+        .and_then(parse_u128_deep)
+        .map(|cycles| cycles.to_string())
 }
 
 fn parse_code_array(

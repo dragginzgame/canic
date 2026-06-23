@@ -10,6 +10,7 @@
 mod tests;
 
 use crate::{
+    blob_storage::{self, BlobStorageMedicStatus, BlobStorageMedicSummary},
     cli::clap::{parse_matches, render_usage, required_string, string_option_or_else, value_arg},
     cli::defaults::{default_icp, local_network},
     cli::globals::{internal_icp_arg, internal_network_arg},
@@ -17,9 +18,17 @@ use crate::{
     support::candid::role_candid_path,
     version_text,
 };
+use canic_core::protocol::{
+    BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
+    BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+};
 use canic_host::{
-    canister_ready::query_canister_ready, icp::IcpCli, icp_config::resolve_current_canic_icp_root,
-    install_root::InstallState, installed_deployment::read_installed_deployment_state_from_root,
+    candid_endpoints::parse_candid_service_endpoints,
+    canister_ready::query_canister_ready,
+    icp::{IcpCli, local_canister_candid_path},
+    icp_config::resolve_current_canic_icp_root,
+    install_root::InstallState,
+    installed_deployment::read_installed_deployment_state_from_root,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, fs, path::Path};
@@ -31,7 +40,9 @@ const ICP_SESSION_NEXT: &str =
     "icp settings session-length 1h; icp identity reauth <name> --duration 1h";
 const INFO_MEDIC_HELP_AFTER: &str = "\
 Examples:
-  canic info medic test";
+  canic info medic test
+  canic info medic test --blob-storage backend";
+const BLOB_STORAGE_ARG: &str = "blob-storage";
 
 ///
 /// MedicCommandError
@@ -50,6 +61,7 @@ pub enum MedicCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct MedicOptions {
     deployment: String,
+    blob_storage: Option<String>,
     network: String,
     icp: String,
 }
@@ -64,6 +76,7 @@ impl MedicOptions {
 
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
+            blob_storage: crate::cli::clap::string_option(&matches, BLOB_STORAGE_ARG),
             network: string_option_or_else(&matches, "network", local_network),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
@@ -98,6 +111,12 @@ fn info_medic_command() -> ClapCommand {
                 .value_name("deployment")
                 .required(true)
                 .help("Installed deployment name to inspect"),
+        )
+        .arg(
+            value_arg(BLOB_STORAGE_ARG)
+                .long(BLOB_STORAGE_ARG)
+                .value_name("canister-or-role")
+                .help("Run targeted blob-storage billing readiness diagnostics"),
         )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
@@ -155,6 +174,13 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     if let Some(state) = state {
         checks.push(check_config_path(&state));
         checks.push(check_root_ready(options, icp_root.as_deref(), &state));
+    }
+    if let Some(canister) = &options.blob_storage {
+        checks.push(check_blob_storage_billing(options, canister));
+    } else if let Some(root) = icp_root.as_deref()
+        && let Some(check) = check_blob_storage_passive_hint(options, root)
+    {
+        checks.push(check);
     }
 
     checks
@@ -222,6 +248,90 @@ fn check_root_ready(
             "wait briefly, then run canic info medic",
         ),
         Err(err) => MedicCheck::error("root ready", err, "run canic install"),
+    }
+}
+
+fn check_blob_storage_billing(options: &MedicOptions, canister: &str) -> MedicCheck {
+    match blob_storage::medic_summary(
+        &options.deployment,
+        canister,
+        &options.network,
+        &options.icp,
+    ) {
+        Ok(summary) => blob_storage_medic_check_from_summary(summary),
+        Err(err) => MedicCheck::error(
+            "blob-storage billing",
+            err.to_string(),
+            format!(
+                "run canic blob-storage status {} {canister}",
+                options.deployment
+            ),
+        ),
+    }
+}
+
+fn check_blob_storage_passive_hint(options: &MedicOptions, icp_root: &Path) -> Option<MedicCheck> {
+    let roles = blob_storage_billing_roles_from_candid_dir(icp_root, &options.network);
+    let first = roles.first()?;
+    Some(MedicCheck::ok(
+        "blob-storage billing",
+        format!(
+            "local Candid advertises blob-storage billing endpoints for role(s): {}",
+            roles.join(", ")
+        ),
+        format!(
+            "run canic info medic {} --blob-storage {first}",
+            options.deployment
+        ),
+    ))
+}
+
+fn blob_storage_billing_roles_from_candid_dir(icp_root: &Path, network: &str) -> Vec<String> {
+    let canisters_dir = icp_root.join(".icp").join(network).join("canisters");
+    let Ok(entries) = fs::read_dir(canisters_dir) else {
+        return Vec::new();
+    };
+    let mut roles = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|role| {
+            let candid_path = local_canister_candid_path(icp_root, network, role);
+            candid_path_declares_blob_storage_billing(&candid_path)
+        })
+        .collect::<Vec<_>>();
+    roles.sort();
+    roles.dedup();
+    roles
+}
+
+fn candid_path_declares_blob_storage_billing(path: &Path) -> bool {
+    let Ok(candid) = fs::read_to_string(path) else {
+        return false;
+    };
+    candid_declares_blob_storage_billing(&candid)
+}
+
+fn candid_declares_blob_storage_billing(candid: &str) -> bool {
+    let Ok(endpoints) = parse_candid_service_endpoints(candid) else {
+        return false;
+    };
+    [
+        BLOB_STORAGE_STATUS,
+        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+    ]
+    .iter()
+    .all(|method| endpoints.iter().any(|endpoint| endpoint.name == *method))
+}
+
+fn blob_storage_medic_check_from_summary(summary: BlobStorageMedicSummary) -> MedicCheck {
+    match summary.status {
+        BlobStorageMedicStatus::Ready => {
+            MedicCheck::ok("blob-storage billing", summary.detail, summary.next)
+        }
+        BlobStorageMedicStatus::Warning | BlobStorageMedicStatus::Blocked => {
+            MedicCheck::warn("blob-storage billing", summary.detail, summary.next)
+        }
     }
 }
 
