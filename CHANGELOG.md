@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
 
+- `0.71.5` cleans up the blob-storage CLI output contract by centralizing
+  stable readiness, funding, warning, Candid-source, and command-error codes in
+  the render-ready model layer while preserving the existing operator command
+  surface.
+
 - `0.71.4` closes the blob-storage operator-loop validation gap with a private
   CLI runtime seam, scripted status/sync/fund/recheck coverage, and shared
   packaged/installed CLI fixture proofs for dry-run, live sync, live fund, and

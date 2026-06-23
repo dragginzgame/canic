@@ -5,21 +5,21 @@
 //! Boundary: maps endpoint response fields into stable operator JSON codes.
 
 use crate::blob_storage::model::{
-    BLOB_STORAGE_JSON_SCHEMA_VERSION, BLOB_STORAGE_STATUS_KIND, BlobStorageCashierStatus,
-    BlobStorageFundingReport, BlobStorageFundingStatus, BlobStorageGatewayStatus,
-    BlobStorageNextAction, BlobStoragePolicyStatus, BlobStorageReadinessStatus,
-    BlobStorageStatusResult, BlobStorageTarget,
+    BLOB_STORAGE_CODE_CASHIER_BALANCE_BELOW_MIN, BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
+    BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED, BLOB_STORAGE_CODE_FUNDING_NEEDED,
+    BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY, BLOB_STORAGE_CODE_NOT_CONFIGURED,
+    BLOB_STORAGE_CODE_NOT_NEEDED, BLOB_STORAGE_CODE_NOT_REQUESTED,
+    BLOB_STORAGE_CODE_PROJECT_AS_PAYMENT_ACCOUNT,
+    BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
+    BLOB_STORAGE_CODE_SKIPPED_CONFIG_MISSING, BLOB_STORAGE_CODE_SKIPPED_READ_ONLY_STATUS,
+    BLOB_STORAGE_CODE_STATUS_SYNC_REQUEST_IGNORED, BLOB_STORAGE_CODE_UNKNOWN,
+    BLOB_STORAGE_JSON_SCHEMA_VERSION, BLOB_STORAGE_READINESS_BLOCKED, BLOB_STORAGE_READINESS_READY,
+    BLOB_STORAGE_READINESS_WARNING, BLOB_STORAGE_STATUS_KIND, BlobStorageActionName,
+    BlobStorageCashierStatus, BlobStorageFundingReport, BlobStorageFundingStatus,
+    BlobStorageGatewayStatus, BlobStorageNextAction, BlobStoragePolicyStatus,
+    BlobStorageReadinessStatus, BlobStorageStatusResult, BlobStorageTarget,
 };
 use canic_host::response_parse::{find_field, parse_json_u64, parse_json_u128};
-
-const PAYMENT_MODEL_NOT_CONFIGURED: &str = "not_configured";
-const PAYMENT_MODEL_PROJECT_AS_PAYMENT_ACCOUNT: &str = "project_as_payment_account";
-const FUNDING_NEEDED: &str = "funding_needed";
-const GATEWAY_PRINCIPALS_EMPTY: &str = "gateway_principals_empty";
-const CASHIER_BALANCE_BELOW_MIN: &str = "cashier_balance_below_min";
-const CASHIER_BALANCE_UNAVAILABLE: &str = "cashier_balance_unavailable";
-const CASHIER_RESPONSE_MALFORMED: &str = "cashier_response_malformed";
-const PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING: &str = "project_cycles_reserve_blocks_funding";
 
 pub(super) fn parse_status_result(
     deployment: &str,
@@ -28,7 +28,7 @@ pub(super) fn parse_status_result(
 ) -> Option<BlobStorageStatusResult> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
     let payment_model = find_field(&value, "payment_model").and_then(parse_variant_code)?;
-    let configured = payment_model != PAYMENT_MODEL_NOT_CONFIGURED;
+    let configured = payment_model != BLOB_STORAGE_CODE_NOT_CONFIGURED;
     let cashier_balance = find_field(&value, "cashier_balance").and_then(parse_optional_u128);
     let blockers = parse_code_array(find_field(&value, "blockers"), readiness_blocker_code)?;
     let warnings = parse_code_array(find_field(&value, "warnings"), billing_warning_code)?;
@@ -96,11 +96,11 @@ fn readiness_status(
     warnings: Vec<String>,
 ) -> BlobStorageReadinessStatus {
     let state = if !ready || !blockers.is_empty() {
-        "blocked"
+        BLOB_STORAGE_READINESS_BLOCKED
     } else if warnings.is_empty() {
-        "ready"
+        BLOB_STORAGE_READINESS_READY
     } else {
-        "warning"
+        BLOB_STORAGE_READINESS_WARNING
     };
     BlobStorageReadinessStatus {
         state: state.to_string(),
@@ -137,23 +137,23 @@ fn next_actions(
     if readiness
         .blockers
         .iter()
-        .any(|blocker| blocker == GATEWAY_PRINCIPALS_EMPTY)
+        .any(|blocker| blocker == BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY)
     {
         next.push(BlobStorageNextAction {
-            action: "sync_gateways".to_string(),
-            reason: GATEWAY_PRINCIPALS_EMPTY.to_string(),
+            action: BlobStorageActionName::SyncGateways.label().to_string(),
+            reason: BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY.to_string(),
             command: Some(format!(
                 "canic blob-storage sync-gateways {deployment} {}",
                 target.input
             )),
         });
     }
-    if funding.status == FUNDING_NEEDED
+    if funding.status == BLOB_STORAGE_CODE_FUNDING_NEEDED
         && let Some(requested_cycles) = &funding.requested_cycles
     {
         next.push(BlobStorageNextAction {
-            action: "fund".to_string(),
-            reason: FUNDING_NEEDED.to_string(),
+            action: BlobStorageActionName::Fund.label().to_string(),
+            reason: BLOB_STORAGE_CODE_FUNDING_NEEDED.to_string(),
             command: Some(format!(
                 "canic blob-storage fund {deployment} {} --cycles {requested_cycles}",
                 target.input
@@ -246,45 +246,45 @@ fn variant_payload<'a>(
 
 fn common_variant_code(variant: &str) -> &'static str {
     match variant {
-        "NotConfigured" => PAYMENT_MODEL_NOT_CONFIGURED,
-        "ProjectAsPaymentAccount" => PAYMENT_MODEL_PROJECT_AS_PAYMENT_ACCOUNT,
-        "NotRequested" => "not_requested",
-        "SkippedConfigMissing" => "skipped_config_missing",
-        "SkippedReadOnlyStatus" => "skipped_read_only_status",
-        _ => "unknown",
+        "NotConfigured" => BLOB_STORAGE_CODE_NOT_CONFIGURED,
+        "ProjectAsPaymentAccount" => BLOB_STORAGE_CODE_PROJECT_AS_PAYMENT_ACCOUNT,
+        "NotRequested" => BLOB_STORAGE_CODE_NOT_REQUESTED,
+        "SkippedConfigMissing" => BLOB_STORAGE_CODE_SKIPPED_CONFIG_MISSING,
+        "SkippedReadOnlyStatus" => BLOB_STORAGE_CODE_SKIPPED_READ_ONLY_STATUS,
+        _ => BLOB_STORAGE_CODE_UNKNOWN,
     }
 }
 
 fn funding_status_code(variant: &str) -> &'static str {
     match variant {
-        "NotConfigured" => PAYMENT_MODEL_NOT_CONFIGURED,
-        "NotNeeded" => "not_needed",
-        "FundingRequired" => FUNDING_NEEDED,
-        "BalanceUnavailable" => CASHIER_BALANCE_UNAVAILABLE,
-        "BalanceMalformed" => CASHIER_RESPONSE_MALFORMED,
-        "ReserveWouldBeViolated" => PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
-        _ => "unknown",
+        "NotConfigured" => BLOB_STORAGE_CODE_NOT_CONFIGURED,
+        "NotNeeded" => BLOB_STORAGE_CODE_NOT_NEEDED,
+        "FundingRequired" => BLOB_STORAGE_CODE_FUNDING_NEEDED,
+        "BalanceUnavailable" => BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
+        "BalanceMalformed" => BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED,
+        "ReserveWouldBeViolated" => BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
+        _ => BLOB_STORAGE_CODE_UNKNOWN,
     }
 }
 
 fn readiness_blocker_code(variant: &str) -> &'static str {
     match variant {
-        "NotConfigured" => PAYMENT_MODEL_NOT_CONFIGURED,
-        "GatewayPrincipalsMissing" => GATEWAY_PRINCIPALS_EMPTY,
-        "CashierBalanceUnavailable" => CASHIER_BALANCE_UNAVAILABLE,
-        "CashierBalanceMalformed" => CASHIER_RESPONSE_MALFORMED,
-        "InsufficientCashierBalance" => CASHIER_BALANCE_BELOW_MIN,
-        "ReserveWouldBeViolated" => PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
-        _ => "unknown",
+        "NotConfigured" => BLOB_STORAGE_CODE_NOT_CONFIGURED,
+        "GatewayPrincipalsMissing" => BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY,
+        "CashierBalanceUnavailable" => BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
+        "CashierBalanceMalformed" => BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED,
+        "InsufficientCashierBalance" => BLOB_STORAGE_CODE_CASHIER_BALANCE_BELOW_MIN,
+        "ReserveWouldBeViolated" => BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
+        _ => BLOB_STORAGE_CODE_UNKNOWN,
     }
 }
 
 fn billing_warning_code(variant: &str) -> &'static str {
     match variant {
-        "GatewayPrincipalSetEmpty" => GATEWAY_PRINCIPALS_EMPTY,
-        "CashierBalanceUnavailable" => CASHIER_BALANCE_UNAVAILABLE,
-        "CashierBalanceMalformed" => CASHIER_RESPONSE_MALFORMED,
-        "SyncRequestedButStatusIsReadOnly" => "status_sync_request_ignored",
-        _ => "unknown",
+        "GatewayPrincipalSetEmpty" => BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY,
+        "CashierBalanceUnavailable" => BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
+        "CashierBalanceMalformed" => BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED,
+        "SyncRequestedButStatusIsReadOnly" => BLOB_STORAGE_CODE_STATUS_SYNC_REQUEST_IGNORED,
+        _ => BLOB_STORAGE_CODE_UNKNOWN,
     }
 }
