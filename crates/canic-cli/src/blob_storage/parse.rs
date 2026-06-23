@@ -130,7 +130,7 @@ fn next_actions(
             action: "sync_gateways".to_string(),
             reason: GATEWAY_PRINCIPALS_EMPTY.to_string(),
             command: Some(format!(
-                "canic blob-storage sync-gateways {deployment} {} --dry-run",
+                "canic blob-storage sync-gateways {deployment} {}",
                 target.input
             )),
         });

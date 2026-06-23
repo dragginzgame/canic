@@ -114,56 +114,77 @@ fn run_command(command: BlobStorageCommand) -> Result<(), BlobStorageCommandErro
 }
 
 fn run_status(options: &options::StatusOptions) -> Result<(), BlobStorageCommandError> {
-    let target = resolve_blob_storage_call_target(
-        &options.common,
-        &options.deployment,
-        &options.canister,
-        BLOB_STORAGE_STATUS,
-    )?;
+    let result = live_status_result(&options.common, &options.deployment, &options.canister)?;
+    write_status_result(options.json, &result)
+}
+
+fn live_status_result(
+    options: &options::CommonOptions,
+    deployment: &str,
+    canister: &str,
+) -> Result<model::BlobStorageStatusResult, BlobStorageCommandError> {
+    let target =
+        resolve_blob_storage_call_target(options, deployment, canister, BLOB_STORAGE_STATUS)?;
     let output = live_call_output(
-        &options.common,
+        options,
         &target,
         BLOB_STORAGE_STATUS,
         "(record { sync_gateway_principals = false })",
         Some("json"),
     )?;
-    let result = parse_status_result(&options.deployment, target.target, &output)
-        .ok_or(BlobStorageCommandError::ResponseParse)?;
-    write_status_result(options.json, &result)
+    parse_status_result(deployment, target.target, &output)
+        .ok_or(BlobStorageCommandError::ResponseParse)
 }
 
 fn run_sync_gateways(
     options: &options::SyncGatewaysOptions,
 ) -> Result<(), BlobStorageCommandError> {
-    if !options.dry_run {
-        return Err(BlobStorageCommandError::Usage(format!(
-            "blob-storage sync-gateways requires --dry-run in this implementation slice\n\n{}",
-            options::sync_gateways_usage_with_bin_name()
-        )));
-    }
-
     let target = resolve_blob_storage_call_target(
         &options.common,
         &options.deployment,
         &options.canister,
         BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
     )?;
+    let output = options.json.then_some("json");
     let command = dry_run_call_display(
         &options.common,
         &target,
         BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
         "()",
-        options.json.then_some("json"),
+        output,
     );
-    let result = BlobStorageActionResult::dry_run(
-        &options.deployment,
-        BlobStorageActionName::SyncGateways,
-        target.target,
-        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
-        target.method_mode.label(),
-        command,
-        None,
-    );
+    let result = if options.dry_run {
+        BlobStorageActionResult::dry_run(
+            &options.deployment,
+            BlobStorageActionName::SyncGateways,
+            target.target,
+            BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+            target.method_mode.label(),
+            command,
+            None,
+        )
+    } else {
+        let _output = live_call_output(
+            &options.common,
+            &target,
+            BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+            "()",
+            output,
+        )?;
+        let result = BlobStorageActionResult::completed(
+            &options.deployment,
+            BlobStorageActionName::SyncGateways,
+            target.target,
+            BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+            target.method_mode.label(),
+            command,
+            None,
+        );
+        match live_status_result(&options.common, &options.deployment, &options.canister) {
+            Ok(status) => result.with_post_status(status),
+            Err(_) => result.with_warning("post_status_unavailable"),
+        }
+    };
     write_action_result(options.json, &result)
 }
 
