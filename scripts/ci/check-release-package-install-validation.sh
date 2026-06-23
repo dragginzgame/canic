@@ -33,6 +33,8 @@ require_texts "$CHECKLIST" "$GUARD_LABEL" \
     "make test-installed-canic-cli" \
     "make test-packaged-downstream-cli" \
     "make test-packaged-downstream-wasm-store" \
+    "shipped operator command" \
+    "structured JSON error" \
     "cargo build --release --workspace --locked" \
     "make test-fleet-install" \
     "make test-canisters" \

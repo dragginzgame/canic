@@ -35,6 +35,7 @@ Examples:
   canic info metrics test
   canic info endpoints test app
   canic info medic test
+  canic info medic test --blob-storage backend
   canic info env test";
 const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "medic", "env"];
 
@@ -150,5 +151,13 @@ mod tests {
             parse_info_command(vec![OsString::from("unknown")]),
             Err(InfoCommandError::Usage(_))
         );
+    }
+
+    #[test]
+    fn info_usage_mentions_targeted_blob_storage_medic() {
+        let text = usage();
+
+        assert!(text.contains("canic info medic test"));
+        assert!(text.contains("canic info medic test --blob-storage backend"));
     }
 }

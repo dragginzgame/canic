@@ -15,9 +15,9 @@ mod tests;
 
 use crate::{
     blob_storage::{
-        model::{BlobStorageActionName, BlobStorageActionResult},
+        model::{BlobStorageActionName, BlobStorageActionResult, BlobStorageErrorResult},
         options::{BlobStorageCommand, BlobStorageOptions},
-        parse::parse_status_result,
+        parse::{parse_funding_report, parse_status_result},
         render::{render_action_result, render_dry_run_command, render_status_result},
         target::{BlobStorageMethodMode, resolve_blob_storage_call_target},
     },
@@ -87,8 +87,73 @@ pub enum BlobStorageCommandError {
     #[error("local Candid sidecar {path} does not define blob-storage method {method}")]
     MethodUnavailable { path: PathBuf, method: String },
 
-    #[error("failed to parse blob-storage status response")]
+    #[error("failed to parse blob-storage canister response")]
     ResponseParse,
+
+    #[error("{source}")]
+    JsonReported {
+        source: Box<Self>,
+        report_json: String,
+        exit_code: u8,
+    },
+}
+
+impl BlobStorageCommandError {
+    pub fn json_error_report(&self) -> Option<String> {
+        let Self::JsonReported { report_json, .. } = self else {
+            return None;
+        };
+        Some(report_json.clone())
+    }
+
+    pub const fn exit_code(&self) -> u8 {
+        match self {
+            Self::JsonReported { exit_code, .. } => *exit_code,
+            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => 2,
+            Self::ResponseParse => 3,
+            Self::Usage(_)
+            | Self::Json(_)
+            | Self::NoInstalledDeployment { .. }
+            | Self::InstallState(_)
+            | Self::UnknownTarget { .. }
+            | Self::AmbiguousRole { .. }
+            | Self::CandidUnavailable { .. }
+            | Self::CandidRead { .. }
+            | Self::CandidParse { .. }
+            | Self::MethodUnavailable { .. } => 1,
+        }
+    }
+
+    fn with_json_report(self, deployment: &str, target: &str) -> Self {
+        let code = self.command_error_code();
+        let exit_code = self.exit_code();
+        let message = self.to_string();
+        let report = BlobStorageErrorResult::new(deployment, target, code, message, exit_code);
+        Self::JsonReported {
+            source: Box::new(self),
+            report_json: serde_json::to_string_pretty(&report)
+                .expect("blob-storage error report should serialize"),
+            exit_code,
+        }
+    }
+
+    fn command_error_code(&self) -> &'static str {
+        match self {
+            Self::Usage(message) if message.contains("--cycles") => "invalid_cycles",
+            Self::Usage(_)
+            | Self::Json(_)
+            | Self::InstallState(_)
+            | Self::NoInstalledDeployment { .. }
+            | Self::UnknownTarget { .. }
+            | Self::AmbiguousRole { .. } => "target_resolution_failed",
+            Self::CandidUnavailable { .. } | Self::CandidRead { .. } => "candid_unavailable",
+            Self::MethodUnavailable { .. } => "method_unavailable",
+            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => "transport_failed",
+            Self::ResponseParse => "response_parse_failed",
+            Self::CandidParse { .. } => "candid_decode_failed",
+            Self::JsonReported { source, .. } => source.command_error_code(),
+        }
+    }
 }
 
 /// Run the blob-storage operator command group.
@@ -102,7 +167,89 @@ where
     }
 
     let command = BlobStorageOptions::parse(args)?;
-    run_command(command)
+    run_command_with_json_errors(command)
+}
+
+///
+/// BlobStorageMedicStatus
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlobStorageMedicStatus {
+    Ready,
+    Warning,
+    Blocked,
+}
+
+///
+/// BlobStorageMedicSummary
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BlobStorageMedicSummary {
+    pub status: BlobStorageMedicStatus,
+    pub detail: String,
+    pub next: String,
+}
+
+impl BlobStorageMedicSummary {
+    fn from_status(result: &model::BlobStorageStatusResult) -> Self {
+        let status = match result.readiness.state.as_str() {
+            "ready" => BlobStorageMedicStatus::Ready,
+            "warning" => BlobStorageMedicStatus::Warning,
+            _ => BlobStorageMedicStatus::Blocked,
+        };
+        let mut detail = vec![
+            format!("readiness={}", result.readiness.state),
+            format!("configured={}", result.configured),
+            format!("gateways={}", result.gateways.principal_count),
+            format!("funding={}", result.funding.status),
+        ];
+        if let Some(balance) = &result.cashier.balance_cycles {
+            detail.push(format!("cashier_balance={balance}"));
+        }
+        if !result.readiness.blockers.is_empty() {
+            detail.push(format!("blockers={}", result.readiness.blockers.join(",")));
+        }
+        if !result.readiness.warnings.is_empty() {
+            detail.push(format!("warnings={}", result.readiness.warnings.join(",")));
+        }
+
+        let next = result
+            .next
+            .iter()
+            .find_map(|action| action.command.clone())
+            .unwrap_or_else(|| {
+                if status == BlobStorageMedicStatus::Ready {
+                    "-".to_string()
+                } else {
+                    format!(
+                        "canic blob-storage status {} {}",
+                        result.deployment, result.target.input
+                    )
+                }
+            });
+
+        Self {
+            status,
+            detail: detail.join("; "),
+            next,
+        }
+    }
+}
+
+pub fn medic_summary(
+    deployment: &str,
+    canister: &str,
+    network: &str,
+    icp: &str,
+) -> Result<BlobStorageMedicSummary, BlobStorageCommandError> {
+    let options = options::CommonOptions {
+        network: network.to_string(),
+        icp: icp.to_string(),
+    };
+    live_status_result(&options, deployment, canister)
+        .map(|status| BlobStorageMedicSummary::from_status(&status))
 }
 
 fn run_command(command: BlobStorageCommand) -> Result<(), BlobStorageCommandError> {
@@ -110,6 +257,34 @@ fn run_command(command: BlobStorageCommand) -> Result<(), BlobStorageCommandErro
         BlobStorageCommand::Status(options) => run_status(&options),
         BlobStorageCommand::SyncGateways(options) => run_sync_gateways(&options),
         BlobStorageCommand::Fund(options) => run_fund(&options),
+    }
+}
+
+fn run_command_with_json_errors(
+    command: BlobStorageCommand,
+) -> Result<(), BlobStorageCommandError> {
+    let context = json_error_context(&command);
+    run_command(command).map_err(|err| {
+        if let Some((deployment, target)) = context {
+            err.with_json_report(&deployment, &target)
+        } else {
+            err
+        }
+    })
+}
+
+fn json_error_context(command: &BlobStorageCommand) -> Option<(String, String)> {
+    match command {
+        BlobStorageCommand::Status(options) if options.json => {
+            Some((options.deployment.clone(), options.canister.clone()))
+        }
+        BlobStorageCommand::SyncGateways(options) if options.json => {
+            Some((options.deployment.clone(), options.canister.clone()))
+        }
+        BlobStorageCommand::Fund(options) if options.json => {
+            Some((options.deployment.clone(), options.canister.clone()))
+        }
+        _ => None,
     }
 }
 
@@ -189,13 +364,6 @@ fn run_sync_gateways(
 }
 
 fn run_fund(options: &options::FundOptions) -> Result<(), BlobStorageCommandError> {
-    if !options.dry_run {
-        return Err(BlobStorageCommandError::Usage(format!(
-            "blob-storage fund requires --dry-run in this implementation slice\n\n{}",
-            options::fund_usage_with_bin_name()
-        )));
-    }
-
     let target = resolve_blob_storage_call_target(
         &options.common,
         &options.deployment,
@@ -203,22 +371,53 @@ fn run_fund(options: &options::FundOptions) -> Result<(), BlobStorageCommandErro
         BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
     )?;
     let arg = format!("({} : nat)", options.cycles);
+    let output = if options.dry_run {
+        options.json.then_some("json")
+    } else {
+        Some("json")
+    };
     let command = dry_run_call_display(
         &options.common,
         &target,
         BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
         &arg,
-        options.json.then_some("json"),
+        output,
     );
-    let result = BlobStorageActionResult::dry_run(
-        &options.deployment,
-        BlobStorageActionName::Fund,
-        target.target,
-        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
-        target.method_mode.label(),
-        command,
-        Some(options.cycles),
-    );
+    let result = if options.dry_run {
+        BlobStorageActionResult::dry_run(
+            &options.deployment,
+            BlobStorageActionName::Fund,
+            target.target,
+            BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+            target.method_mode.label(),
+            command,
+            Some(options.cycles),
+        )
+    } else {
+        let call_output = live_call_output(
+            &options.common,
+            &target,
+            BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+            &arg,
+            output,
+        )?;
+        let report =
+            parse_funding_report(&call_output).ok_or(BlobStorageCommandError::ResponseParse)?;
+        let result = BlobStorageActionResult::completed(
+            &options.deployment,
+            BlobStorageActionName::Fund,
+            target.target,
+            BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+            target.method_mode.label(),
+            command,
+            Some(options.cycles),
+        )
+        .with_funding_report(report);
+        match live_status_result(&options.common, &options.deployment, &options.canister) {
+            Ok(status) => result.with_post_status(status),
+            Err(_) => result.with_warning("post_status_unavailable"),
+        }
+    };
     write_action_result(options.json, &result)
 }
 

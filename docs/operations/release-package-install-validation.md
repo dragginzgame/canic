@@ -16,8 +16,10 @@ non-versioned package/install validation reference for current release work.
 This checklist covers:
 
 - publishable crate package creation;
-- installed CLI smoke validation;
-- packaged downstream CLI validation;
+- installed CLI smoke validation, including current shipped operator command
+  surfaces;
+- packaged downstream CLI validation, including current shipped operator
+  command surfaces;
 - packaged downstream `wasm_store` wrapper validation;
 - local ICP install/canister validation;
 - release artifact verification expectations;
@@ -42,8 +44,8 @@ not add new release behavior.
 | Gate | Command | Release question | When to run |
 | --- | --- | --- | --- |
 | Publishable crate package | `make package` | Can the workspace produce publishable package archives through `cargo package` from a clean worktree? | RC/final release. |
-| Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
-| Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
+| Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke and current retained operator CLI checks without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
+| Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
 | Packaged downstream wasm store | `make test-packaged-downstream-wasm-store` | Can the special packaged downstream `wasm_store` bootstrap wrapper build from packaged Canic crates outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Tag CI and RC validation. |
 | Local fleet install | `make test-fleet-install` | Can the full local test/reference topology install with the configured local ICP environment? | RC validation when local ICP/PocketIC/canister build prerequisites are available. |
@@ -71,6 +73,10 @@ RC and final release reports should account for these artifact expectations:
   repository crate paths.
 - Installed CLI proof must execute the temporary installed binary, not
   `target/debug/canic`.
+- Installed and packaged CLI proofs should cover shipped operator command
+  groups that are easy to regress at package boundaries. For blob-storage, the
+  retained proof includes command help and the stable structured JSON error
+  shape for an unresolved target.
 - Packaged `wasm_store` proof must exercise the generated wrapper path and
   verify the generated wrapper uses packaged Canic sibling crates instead of
   repository crate paths.

@@ -33,6 +33,7 @@ Examples:
   canic blob-storage status local backend
   canic blob-storage status local backend --json
   canic blob-storage sync-gateways local backend --dry-run
+  canic blob-storage fund local backend --cycles 1000000000000
   canic blob-storage fund local backend --cycles 1000000000000 --dry-run";
 
 ///
@@ -140,10 +141,6 @@ impl BlobStorageOptions {
 
 pub(super) fn usage() -> String {
     render_usage(blob_storage_command)
-}
-
-pub(super) fn fund_usage_with_bin_name() -> String {
-    render_usage(|| fund_command().bin_name("canic blob-storage fund"))
 }
 
 fn common_options(matches: &clap::ArgMatches) -> CommonOptions {

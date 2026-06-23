@@ -22,6 +22,21 @@ pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
             |cycles| format!("Requested cycles: {cycles}"),
         ),
     ];
+    if let Some(report) = &result.funding_report {
+        lines.push(format!("Attached cycles: {}", report.attached_cycles));
+        lines.push(format!(
+            "Project cycles: {} -> {}",
+            report.project_cycles_before, report.project_cycles_after
+        ));
+        lines.push(format!("Reserve cycles: {}", report.reserve_cycles));
+        lines.push(format!(
+            "Cashier total after: {}",
+            report.cashier_total_after
+        ));
+        if let Some(reason) = &report.skipped_reason {
+            lines.push(format!("Skipped reason: {reason}"));
+        }
+    }
     append_list(&mut lines, "Warnings", &result.warnings);
     if let Some(status) = &result.post_status {
         lines.push(String::new());

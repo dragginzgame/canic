@@ -33,6 +33,14 @@ assert_installed_binary_path() {
     fi
 }
 
+run_installed_canic() {
+    HOME="$PROOF_HOME" \
+        CARGO_HOME="$PROOF_CARGO_HOME" \
+        CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
+        TMPDIR="$PROOF_TMPDIR" \
+        "$BIN_ROOT/canic" "$@"
+}
+
 main() {
     cargo install --offline --locked --path "$ROOT/crates/canic-cli" --root "$INSTALL_ROOT" >/dev/null
 
@@ -49,6 +57,61 @@ main() {
     grep -q 'v1 readiness smoke passed' "$SMOKE_OUTPUT" || {
         echo "expected installed canic CLI to pass v1 readiness smoke" >&2
         sed -n '1,160p' "$SMOKE_OUTPUT" >&2
+        exit 1
+    }
+
+    run_installed_canic blob-storage help > "$TMP_ROOT/blob-storage-help.out"
+    if run_installed_canic blob-storage status downstream app --json \
+        > "$TMP_ROOT/blob-storage-status-json.out" \
+        2> "$TMP_ROOT/blob-storage-status-json.err"
+    then
+        echo "expected installed blob-storage JSON status without project state to fail" >&2
+        exit 1
+    fi
+
+    grep -q 'Inspect and provision blob-storage billing' "$TMP_ROOT/blob-storage-help.out" || {
+        echo "expected installed canic CLI to expose blob-storage help" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
+        exit 1
+    }
+    grep -q 'sync-gateways' "$TMP_ROOT/blob-storage-help.out" || {
+        echo "expected installed blob-storage help to list sync-gateways" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
+        exit 1
+    }
+    grep -q 'canic blob-storage fund local backend --cycles' "$TMP_ROOT/blob-storage-help.out" || {
+        echo "expected installed blob-storage help to show fund --cycles examples" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
+        exit 1
+    }
+    [ ! -s "$TMP_ROOT/blob-storage-status-json.out" ] || {
+        echo "expected installed blob-storage JSON failure to leave stdout empty" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.out" >&2
+        exit 1
+    }
+    grep -q '"schema_version": 1' "$TMP_ROOT/blob-storage-status-json.err" || {
+        echo "expected installed blob-storage JSON error to include schema_version" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
+        exit 1
+    }
+    grep -q '"kind": "blob_storage_error"' "$TMP_ROOT/blob-storage-status-json.err" || {
+        echo "expected installed blob-storage JSON error kind" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
+        exit 1
+    }
+    grep -q '"input": "app"' "$TMP_ROOT/blob-storage-status-json.err" || {
+        echo "expected installed blob-storage JSON error target input" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
+        exit 1
+    }
+    grep -q '"code": "target_resolution_failed"' "$TMP_ROOT/blob-storage-status-json.err" || {
+        echo "expected installed blob-storage JSON error code" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
+        exit 1
+    }
+    grep -q '"exit_code": 1' "$TMP_ROOT/blob-storage-status-json.err" || {
+        echo "expected installed blob-storage JSON error exit code" >&2
+        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
         exit 1
     }
 

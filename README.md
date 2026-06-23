@@ -22,6 +22,12 @@ cargo install --locked canic-cli --version <same-version-as-canic>
 canic --version
 ```
 
+Canic uses the installed `icp` binary for local replica and canister
+operations. If Canic reports an unsupported ICP CLI, check `icp --version`;
+`icp network update` updates only the local network launcher, not the `icp`
+CLI binary. See [INSTALLING.md](INSTALLING.md#icp-cli-compatibility) for the
+supported version range and upgrade command.
+
 When working from this checkout:
 
 ```bash

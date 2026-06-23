@@ -36,6 +36,12 @@ cargo install --locked canic-cli --version <version>
 Downstream projects should install the same `canic-cli` version as their
 `canic` crate dependency.
 
+Canic uses the installed `icp` binary for local replica, canister, snapshot,
+and restore operations. If a command reports an unsupported ICP CLI, check
+`icp --version`; `icp network update` updates the local network launcher, not
+the `icp` CLI binary. The supported version range and upgrade command are in
+the root `INSTALLING.md` guide.
+
 ## Compact V1 Operator Surface
 
 The maintained v1 command set keeps setup, build, evidence, policy, and local

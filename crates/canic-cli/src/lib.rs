@@ -161,5 +161,21 @@ pub const fn version_text() -> &'static str {
     VERSION_TEXT
 }
 
+#[must_use]
+pub fn render_cli_error(error: &CliError) -> String {
+    match error {
+        CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
+        _ => error.to_string(),
+    }
+}
+
+#[must_use]
+pub fn cli_error_exit_code(err: &CliError) -> i32 {
+    match err {
+        CliError::BlobStorage(err) => i32::from(err.exit_code()),
+        _ => 1,
+    }
+}
+
 #[cfg(test)]
 mod tests;

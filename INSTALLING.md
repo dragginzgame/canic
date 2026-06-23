@@ -21,6 +21,30 @@ repo helper binaries:
 make install-dev
 ```
 
+## ICP CLI Compatibility
+
+Canic shells out to the installed `icp` binary for local replica and canister
+operations. Canic releases that support the ICP CLI stable line require
+`icp-cli >=1.0.0, <2.0.0`; the maintainer toolchain currently pins `1.0.0`.
+
+Check the resolved binary and version:
+
+```bash
+which icp
+icp --version
+```
+
+Install or replace the supported CLI with the upstream installer:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dfinity/icp-cli/releases/download/v1.0.0/icp-cli-installer.sh | sh
+```
+
+`icp network update` updates the local network launcher, such as
+`icp-cli-network-launcher`, and does not replace the `icp` CLI binary itself.
+If multiple `icp` binaries are installed, put Cargo's bin directory first on
+`PATH`, or pass top-level `--icp /path/to/icp` for a single Canic command.
+
 Password-protected ICP CLI PEM identities can cache session delegations so
 operators do not re-enter the identity password for every command:
 
