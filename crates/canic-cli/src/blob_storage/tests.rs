@@ -81,14 +81,16 @@ fn top_level_forwards_global_icp_and_network() {
         OsString::from("--network"),
         OsString::from("local"),
         OsString::from("blob-storage"),
-        OsString::from("sync-gateways"),
+        OsString::from("fund"),
         OsString::from("demo"),
         OsString::from("backend"),
+        OsString::from("--cycles"),
+        OsString::from("100"),
     ])
     .expect_err("non-dry-run is not implemented yet");
 
     let message = err.to_string();
-    assert!(message.contains("blob-storage sync-gateways requires --dry-run"));
+    assert!(message.contains("blob-storage fund requires --dry-run"));
 }
 
 #[test]
@@ -124,6 +126,46 @@ fn renders_sync_gateways_dry_run_json_shape() {
     assert_eq!(value["action"]["name"], "sync_gateways");
     assert_eq!(value["action"]["mode"], "update");
     assert_eq!(value["action"]["dry_run"], true);
+}
+
+#[test]
+fn renders_sync_gateways_completed_json_shape() {
+    let target = model::BlobStorageTarget::resolved(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "installed_deployment",
+    );
+    let result = model::BlobStorageActionResult::completed(
+        "local",
+        model::BlobStorageActionName::SyncGateways,
+        target,
+        canic_core::protocol::BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+        "update",
+        "icp canister call backend _immutableObjectStorageUpdateGatewayPrincipals ()".to_string(),
+        None,
+    )
+    .with_post_status(sample_status_result())
+    .with_warning("post_status_unavailable");
+    let value = serde_json::to_value(&result).expect("serialize result");
+
+    assert_eq!(value["kind"], "blob_storage_sync_gateways_result");
+    assert_eq!(value["action"]["name"], "sync_gateways");
+    assert_eq!(value["action"]["dry_run"], false);
+    assert_eq!(value["action"]["success"], true);
+    assert_eq!(value["post_status"]["kind"], "blob_storage_status");
+    assert_eq!(
+        value["warnings"],
+        serde_json::json!(["post_status_unavailable"])
+    );
+    let text = render::render_action_result(&result);
+    assert_eq!(
+        text.lines().next().expect("first line"),
+        "Blob storage sync_gateways completed"
+    );
+    assert!(text.contains("Warnings:\n  - post_status_unavailable"));
+    assert!(text.contains("Post status:\n  Blob storage status: backend"));
+    assert!(text.contains("  Readiness: ready"));
 }
 
 #[test]
@@ -220,6 +262,10 @@ fn parses_status_json_into_stable_cli_shape() {
     );
     assert_eq!(value["next"][0]["action"], "sync_gateways");
     assert_eq!(
+        value["next"][0]["command"],
+        "canic blob-storage sync-gateways local backend"
+    );
+    assert_eq!(
         value["next"][1]["command"],
         "canic blob-storage fund local backend --cycles 900 --dry-run"
     );
@@ -279,4 +325,35 @@ fn renders_status_plain_text_with_blockers_and_next_actions() {
         ]
         .join("\n")
     );
+}
+
+fn sample_status_result() -> model::BlobStorageStatusResult {
+    let target = model::BlobStorageTarget::resolved(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "installed_deployment",
+    );
+    let output = serde_json::json!({
+        "Ok": {
+            "payment_model": { "ProjectAsPaymentAccount": null },
+            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
+            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
+            "cashier_balance": ["1000"],
+            "min_upload_balance": ["500"],
+            "target_upload_balance": ["1000"],
+            "project_cycles_reserve": ["2000"],
+            "project_cycles_available": "3000",
+            "gateway_principal_count": 1,
+            "last_gateway_principal_sync_at_ns": ["123"],
+            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
+            "funding_status": { "NotNeeded": null },
+            "ready": true,
+            "blockers": [],
+            "warnings": []
+        }
+    })
+    .to_string();
+
+    parse::parse_status_result("local", target, &output).expect("sample status")
 }

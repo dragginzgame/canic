@@ -7,8 +7,12 @@
 use crate::blob_storage::model::{BlobStorageActionResult, BlobStorageStatusResult};
 
 pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
-    [
-        format!("Blob storage {} dry run", result.action.name),
+    let mut lines = vec![
+        format!(
+            "Blob storage {} {}",
+            result.action.name,
+            action_status_label(result.action.dry_run)
+        ),
         format!("Deployment: {}", result.deployment),
         format!("Target: {}", result.target.input),
         format!("Method: {}", result.action.method),
@@ -17,12 +21,24 @@ pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
             || "Requested cycles: -".to_string(),
             |cycles| format!("Requested cycles: {cycles}"),
         ),
-    ]
-    .join("\n")
+    ];
+    append_list(&mut lines, "Warnings", &result.warnings);
+    if let Some(status) = &result.post_status {
+        lines.push(String::new());
+        lines.push("Post status:".to_string());
+        for line in render_status_result(status).lines() {
+            lines.push(format!("  {line}"));
+        }
+    }
+    lines.join("\n")
 }
 
 pub(super) fn render_dry_run_command(result: &BlobStorageActionResult) -> String {
     format!("Command: {}", result.action.command)
+}
+
+const fn action_status_label(dry_run: bool) -> &'static str {
+    if dry_run { "dry run" } else { "completed" }
 }
 
 pub(super) fn render_status_result(result: &BlobStorageStatusResult) -> String {

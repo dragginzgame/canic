@@ -39,14 +39,18 @@ inspect only the files needed for the current task.
   `canic blob-storage` command group, global `--icp`/`--network` forwarding,
   strict `--cycles` parsing, and `sync-gateways --dry-run` / `fund --dry-run`
   previews that resolve installed deployment targets, require local Candid
-  metadata, and derive method mode from Candid. The current `0.71.1` slice adds
-  live `canic blob-storage status`: it calls `get_blob_storage_status` with
+  metadata, and derive method mode from Candid. `0.71.1` added live
+  `canic blob-storage status`: it calls `get_blob_storage_status` with
   `sync_gateway_principals = false`, follows Candid-derived query/update mode,
   parses the 0.70 status response into stable CLI status JSON/plain output, and
-  maps readiness/funding codes without adding new runtime policy. Status
-  remediation commands point at the existing dry-run sync/fund previews until
-  the live mutation slices land. Live `sync-gateways` and live `fund` transport
-  remain the next implementation steps.
+  maps readiness/funding codes without adding new runtime policy. The current
+  `0.71.2` slice adds live `canic blob-storage sync-gateways`: it reuses the
+  same target/Candid validation path, executes the existing 0.70 gateway-sync
+  endpoint when `--dry-run` is absent, reports the shared action JSON/plain
+  shape with `dry_run = false`, attaches post-sync status diagnostics when
+  available without failing a successful sync if post-status is unavailable,
+  and updates status remediation to suggest the live sync command. Live `fund`
+  transport remains the next implementation step.
 
 - `0.70.16` is pushed as the post-`0.70.15` cleanup/audit closeout. A
   follow-up least-fresh recurring audit selected `ops-purity` and refreshed

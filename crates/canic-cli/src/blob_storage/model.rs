@@ -90,7 +90,7 @@ pub(super) struct BlobStorageActionResult {
     pub(super) deployment: String,
     pub(super) target: BlobStorageTarget,
     pub(super) action: BlobStorageAction,
-    pub(super) post_status: Option<serde_json::Value>,
+    pub(super) post_status: Option<BlobStorageStatusResult>,
     pub(super) warnings: Vec<String>,
 }
 
@@ -104,6 +104,47 @@ impl BlobStorageActionResult {
         command: String,
         requested_cycles: Option<u128>,
     ) -> Self {
+        Self::new(
+            deployment,
+            action_name,
+            target,
+            (method, mode),
+            true,
+            command,
+            requested_cycles,
+        )
+    }
+
+    pub(super) fn completed(
+        deployment: &str,
+        action_name: BlobStorageActionName,
+        target: BlobStorageTarget,
+        method: &str,
+        mode: &str,
+        command: String,
+        requested_cycles: Option<u128>,
+    ) -> Self {
+        Self::new(
+            deployment,
+            action_name,
+            target,
+            (method, mode),
+            false,
+            command,
+            requested_cycles,
+        )
+    }
+
+    fn new(
+        deployment: &str,
+        action_name: BlobStorageActionName,
+        target: BlobStorageTarget,
+        method_mode: (&str, &str),
+        dry_run: bool,
+        command: String,
+        requested_cycles: Option<u128>,
+    ) -> Self {
+        let (method, mode) = method_mode;
         Self {
             schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
             kind: action_name.kind().to_string(),
@@ -113,7 +154,7 @@ impl BlobStorageActionResult {
                 name: action_name.label().to_string(),
                 method: method.to_string(),
                 mode: mode.to_string(),
-                dry_run: true,
+                dry_run,
                 success: true,
                 command,
                 requested_cycles: requested_cycles.map(|value| value.to_string()),
@@ -121,6 +162,16 @@ impl BlobStorageActionResult {
             post_status: None,
             warnings: Vec::new(),
         }
+    }
+
+    pub(super) fn with_post_status(mut self, status: BlobStorageStatusResult) -> Self {
+        self.post_status = Some(status);
+        self
+    }
+
+    pub(super) fn with_warning(mut self, warning: &str) -> Self {
+        self.warnings.push(warning.to_string());
+        self
     }
 }
 
