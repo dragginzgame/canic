@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
 
+- `0.71.6` adds a read-only `canic blob-storage status --check-ready`
+  automation mode that preserves normal status output while exiting `4` when
+  uploads are not ready.
+
 - `0.71.5` cleans up the blob-storage CLI output contract by centralizing
   stable readiness, funding, warning, Candid-source, and command-error codes in
   the render-ready model layer while preserving the existing operator command

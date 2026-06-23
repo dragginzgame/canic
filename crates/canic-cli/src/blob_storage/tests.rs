@@ -26,6 +26,25 @@ fn parses_status_options_with_required_target() {
     assert_eq!(options.common.network, "local");
     assert_eq!(options.common.icp, "/bin/icp");
     assert!(options.json);
+    assert!(!options.check_ready);
+}
+
+#[test]
+fn parses_status_check_ready_option() {
+    let command = BlobStorageOptions::parse([
+        OsString::from("status"),
+        OsString::from("local"),
+        OsString::from("backend"),
+        OsString::from("--check-ready"),
+    ])
+    .expect("parse status check-ready options");
+
+    let options = match command {
+        options::BlobStorageCommand::Status(options) => options,
+        other => panic!("expected status options, got {other:?}"),
+    };
+
+    assert!(options.check_ready);
 }
 
 #[test]
@@ -477,6 +496,91 @@ fn parses_ready_status_with_warnings_as_warning_state() {
         vec![model::BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY.to_string()]
     );
     assert!(status.next.is_empty());
+    check_status_ready_for_upload(&status).expect("warning state is still ready for upload");
+}
+
+#[test]
+fn status_check_ready_fails_with_exit_4_when_upload_not_ready() {
+    let target = model::BlobStorageTarget::from_installed_deployment(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    );
+    let status = parse::parse_status_result("local", target, &status_response(0, false, "900"))
+        .expect("parse blocked status");
+
+    let err = check_status_ready_for_upload(&status).expect_err("status should be blocked");
+
+    assert_eq!(err.exit_code(), 4);
+    assert_eq!(
+        err.command_error_code(),
+        model::BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED
+    );
+    assert_eq!(
+        err.to_string(),
+        "readiness check failed: state=blocked; blockers=gateway_principals_empty"
+    );
+    std::assert_matches!(
+        err,
+        BlobStorageCommandError::ReadinessCheckFailed {
+            message: _,
+            state,
+            blockers,
+            warnings
+        } if state == model::BLOB_STORAGE_READINESS_BLOCKED
+            && blockers == vec![model::BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY.to_string()]
+            && warnings.is_empty()
+    );
+}
+
+#[test]
+fn status_check_ready_failure_message_includes_warnings_without_blockers() {
+    let target = model::BlobStorageTarget::from_installed_deployment(
+        "backend",
+        Some("backend".to_string()),
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    );
+    let output = serde_json::json!({
+        "Ok": {
+            "payment_model": { "ProjectAsPaymentAccount": null },
+            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
+            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
+            "cashier_balance": ["1000"],
+            "min_upload_balance": ["500"],
+            "target_upload_balance": ["1000"],
+            "project_cycles_reserve": ["2000"],
+            "project_cycles_available": "3000",
+            "gateway_principal_count": 1,
+            "last_gateway_principal_sync_at_ns": ["123"],
+            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
+            "funding_status": { "NotNeeded": null },
+            "ready": false,
+            "blockers": [],
+            "warnings": [
+                { "CashierBalanceUnavailable": null }
+            ]
+        }
+    })
+    .to_string();
+    let status = parse::parse_status_result("local", target, &output).expect("parse status");
+
+    let err = check_status_ready_for_upload(&status).expect_err("status should not be ready");
+
+    assert_eq!(
+        err.to_string(),
+        "readiness check failed: state=blocked; warnings=cashier_balance_unavailable"
+    );
+    std::assert_matches!(
+        err,
+        BlobStorageCommandError::ReadinessCheckFailed {
+            message: _,
+            state,
+            blockers,
+            warnings
+        } if state == model::BLOB_STORAGE_READINESS_BLOCKED
+            && blockers.is_empty()
+            && warnings == vec![model::BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE.to_string()]
+    );
 }
 
 #[test]

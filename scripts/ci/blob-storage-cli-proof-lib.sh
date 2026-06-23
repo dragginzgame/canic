@@ -120,6 +120,19 @@ run_blob_storage_cli_probe_commands() {
     "$runner" --network fixture --icp "$fake_icp" \
         blob-storage status downstream app --json \
         > "$proof_root/blob-storage-status-before.json"
+    set +e
+    "$runner" --network fixture --icp "$fake_icp" \
+        blob-storage status downstream app --check-ready --json \
+        > "$proof_root/blob-storage-status-check-ready-blocked.json" \
+        2> "$proof_root/blob-storage-status-check-ready-blocked.err"
+    check_ready_exit=$?
+    set -e
+    if [ "$check_ready_exit" -ne 4 ]; then
+        echo "expected blob-storage check-ready blocked status to exit 4, got $check_ready_exit" >&2
+        sed -n '1,220p' "$proof_root/blob-storage-status-check-ready-blocked.json" >&2
+        sed -n '1,80p' "$proof_root/blob-storage-status-check-ready-blocked.err" >&2
+        exit 1
+    fi
     "$runner" --network fixture --icp "$fake_icp" \
         blob-storage sync-gateways downstream app --json \
         > "$proof_root/blob-storage-sync-live.json"
@@ -129,6 +142,10 @@ run_blob_storage_cli_probe_commands() {
     "$runner" --network fixture --icp "$fake_icp" \
         blob-storage status downstream app --json \
         > "$proof_root/blob-storage-status-after.json"
+    "$runner" --network fixture --icp "$fake_icp" \
+        blob-storage status downstream app --check-ready --json \
+        > "$proof_root/blob-storage-status-check-ready-ready.json" \
+        2> "$proof_root/blob-storage-status-check-ready-ready.err"
 }
 
 assert_blob_storage_cli_file_contains() {
@@ -138,7 +155,7 @@ assert_blob_storage_cli_file_contains() {
     local path="$4"
     local preview_range="$5"
 
-    grep -Fq "$pattern" "$path" || {
+    grep -Fq -- "$pattern" "$path" || {
         echo "expected $proof_label $description" >&2
         sed -n "$preview_range" "$path" >&2
         exit 1
@@ -167,6 +184,12 @@ assert_blob_storage_cli_probe_outputs() {
         'canic blob-storage fund local backend --cycles' \
         "$proof_root/blob-storage-help.out" \
         '1,160p'
+    assert_blob_storage_cli_file_contains \
+        "$proof_label" \
+        "blob-storage help to list check-ready status" \
+        '--check-ready' \
+        "$proof_root/blob-storage-help.out" \
+        '1,180p'
     assert_blob_storage_cli_file_contains \
         "$proof_label" \
         "blob-storage sync dry-run JSON kind" \
@@ -223,6 +246,24 @@ assert_blob_storage_cli_probe_outputs() {
         '1,220p'
     assert_blob_storage_cli_file_contains \
         "$proof_label" \
+        "blob-storage check-ready blocked output to preserve status JSON" \
+        '"kind": "blob_storage_status"' \
+        "$proof_root/blob-storage-status-check-ready-blocked.json" \
+        '1,220p'
+    assert_blob_storage_cli_file_contains \
+        "$proof_label" \
+        "blob-storage check-ready blocked output to show not ready" \
+        '"ready_for_upload": false' \
+        "$proof_root/blob-storage-status-check-ready-blocked.json" \
+        '1,220p'
+    assert_blob_storage_cli_file_contains \
+        "$proof_label" \
+        "blob-storage check-ready blocked stderr to explain blocker codes" \
+        'readiness check failed: state=blocked; blockers=gateway_principals_empty,cashier_balance_below_min' \
+        "$proof_root/blob-storage-status-check-ready-blocked.err" \
+        '1,80p'
+    assert_blob_storage_cli_file_contains \
+        "$proof_label" \
         "blob-storage live sync JSON kind" \
         '"kind": "blob_storage_sync_gateways_result"' \
         "$proof_root/blob-storage-sync-live.json" \
@@ -263,6 +304,17 @@ assert_blob_storage_cli_probe_outputs() {
         '"ready_for_upload": true' \
         "$proof_root/blob-storage-status-after.json" \
         '1,220p'
+    assert_blob_storage_cli_file_contains \
+        "$proof_label" \
+        "blob-storage check-ready ready status" \
+        '"ready_for_upload": true' \
+        "$proof_root/blob-storage-status-check-ready-ready.json" \
+        '1,220p'
+    [ ! -s "$proof_root/blob-storage-status-check-ready-ready.err" ] || {
+        echo "expected $proof_label blob-storage ready check to leave stderr empty" >&2
+        sed -n '1,80p' "$proof_root/blob-storage-status-check-ready-ready.err" >&2
+        exit 1
+    }
 
     [ ! -s "$proof_root/blob-storage-status-json.out" ] || {
         echo "expected $proof_label blob-storage JSON failure to leave stdout empty" >&2
