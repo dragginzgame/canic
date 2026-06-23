@@ -9,6 +9,9 @@ PROOF_HOME="$TMP_ROOT/home"
 PROOF_CARGO_HOME="$TMP_ROOT/cargo-home"
 PROOF_TARGET_DIR="$TMP_ROOT/cargo-target"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
+DOWNSTREAM_ROOT="$TMP_ROOT/downstream-root"
+FAKE_ICP="$TMP_ROOT/fake-icp"
+FAKE_ICP_STATE="$TMP_ROOT/fake-icp-state"
 SMOKE_OUTPUT="$TMP_ROOT/v1-readiness-smoke.out"
 
 cleanup() {
@@ -16,6 +19,8 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+. "$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
 
 assert_installed_binary_path() {
     local canic_bin="$1"
@@ -39,6 +44,57 @@ run_installed_canic() {
         CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
         TMPDIR="$PROOF_TMPDIR" \
         "$BIN_ROOT/canic" "$@"
+}
+
+run_installed_canic_in_workspace() {
+    (
+        cd "$DOWNSTREAM_ROOT"
+        HOME="$PROOF_HOME" \
+            CARGO_HOME="$PROOF_CARGO_HOME" \
+            CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
+            TMPDIR="$PROOF_TMPDIR" \
+            FAKE_ICP_STATE="$FAKE_ICP_STATE" \
+            "$BIN_ROOT/canic" "$@"
+    )
+}
+
+prepare_blob_storage_workspace() {
+    mkdir -p \
+        "$DOWNSTREAM_ROOT/fleets/downstream/app" \
+        "$DOWNSTREAM_ROOT/fleets/downstream/root"
+
+    cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
+[workspace]
+members = []
+resolver = "2"
+
+[workspace.package]
+version = "0.0.0"
+EOF
+
+    cat > "$DOWNSTREAM_ROOT/fleets/downstream/canic.toml" <<'EOF'
+controllers = []
+app_index = ["app"]
+
+[fleet]
+name = "downstream"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+EOF
+
+    prepare_blob_storage_cli_fixture "$DOWNSTREAM_ROOT"
 }
 
 main() {
@@ -68,52 +124,11 @@ main() {
         echo "expected installed blob-storage JSON status without project state to fail" >&2
         exit 1
     fi
+    prepare_blob_storage_workspace
+    prepare_fake_blob_storage_icp "$FAKE_ICP" "$FAKE_ICP_STATE"
+    run_blob_storage_cli_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
 
-    grep -q 'Inspect and provision blob-storage billing' "$TMP_ROOT/blob-storage-help.out" || {
-        echo "expected installed canic CLI to expose blob-storage help" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
-        exit 1
-    }
-    grep -q 'sync-gateways' "$TMP_ROOT/blob-storage-help.out" || {
-        echo "expected installed blob-storage help to list sync-gateways" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
-        exit 1
-    }
-    grep -q 'canic blob-storage fund local backend --cycles' "$TMP_ROOT/blob-storage-help.out" || {
-        echo "expected installed blob-storage help to show fund --cycles examples" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
-        exit 1
-    }
-    [ ! -s "$TMP_ROOT/blob-storage-status-json.out" ] || {
-        echo "expected installed blob-storage JSON failure to leave stdout empty" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.out" >&2
-        exit 1
-    }
-    grep -q '"schema_version": 1' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected installed blob-storage JSON error to include schema_version" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"kind": "blob_storage_error"' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected installed blob-storage JSON error kind" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"input": "app"' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected installed blob-storage JSON error target input" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"code": "target_resolution_failed"' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected installed blob-storage JSON error code" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"exit_code": 1' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected installed blob-storage JSON error exit code" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
+    assert_blob_storage_cli_probe_outputs "installed" "$TMP_ROOT"
 
     echo "installed canic CLI probe passed"
 }

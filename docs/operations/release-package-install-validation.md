@@ -76,7 +76,8 @@ RC and final release reports should account for these artifact expectations:
 - Installed and packaged CLI proofs should cover shipped operator command
   groups that are easy to regress at package boundaries. For blob-storage, the
   retained proof includes command help and the stable structured JSON error
-  shape for an unresolved target.
+  shape for an unresolved target, plus fixture status, live sync, live fund,
+  and final status JSON output from a deployment with local Candid metadata.
 - Packaged `wasm_store` proof must exercise the generated wrapper path and
   verify the generated wrapper uses packaged Canic sibling crates instead of
   repository crate paths.

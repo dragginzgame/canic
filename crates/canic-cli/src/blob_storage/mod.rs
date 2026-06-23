@@ -260,6 +260,50 @@ fn run_command(command: BlobStorageCommand) -> Result<(), BlobStorageCommandErro
     }
 }
 
+trait BlobStorageRuntime {
+    fn resolve_call_target(
+        &self,
+        options: &options::CommonOptions,
+        deployment: &str,
+        canister: &str,
+        method: &str,
+    ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError>;
+
+    fn call_output(
+        &self,
+        options: &options::CommonOptions,
+        target: &target::BlobStorageCallTarget,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+    ) -> Result<String, BlobStorageCommandError>;
+}
+
+struct LiveBlobStorageRuntime;
+
+impl BlobStorageRuntime for LiveBlobStorageRuntime {
+    fn resolve_call_target(
+        &self,
+        options: &options::CommonOptions,
+        deployment: &str,
+        canister: &str,
+        method: &str,
+    ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError> {
+        resolve_blob_storage_call_target(options, deployment, canister, method)
+    }
+
+    fn call_output(
+        &self,
+        options: &options::CommonOptions,
+        target: &target::BlobStorageCallTarget,
+        method: &str,
+        arg: &str,
+        output: Option<&str>,
+    ) -> Result<String, BlobStorageCommandError> {
+        live_call_output(options, target, method, arg, output)
+    }
+}
+
 fn run_command_with_json_errors(
     command: BlobStorageCommand,
 ) -> Result<(), BlobStorageCommandError> {
@@ -298,9 +342,18 @@ fn live_status_result(
     deployment: &str,
     canister: &str,
 ) -> Result<model::BlobStorageStatusResult, BlobStorageCommandError> {
-    let target =
-        resolve_blob_storage_call_target(options, deployment, canister, BLOB_STORAGE_STATUS)?;
-    let output = live_call_output(
+    let runtime = LiveBlobStorageRuntime;
+    status_result_with_runtime(&runtime, options, deployment, canister)
+}
+
+fn status_result_with_runtime(
+    runtime: &impl BlobStorageRuntime,
+    options: &options::CommonOptions,
+    deployment: &str,
+    canister: &str,
+) -> Result<model::BlobStorageStatusResult, BlobStorageCommandError> {
+    let target = runtime.resolve_call_target(options, deployment, canister, BLOB_STORAGE_STATUS)?;
+    let output = runtime.call_output(
         options,
         &target,
         BLOB_STORAGE_STATUS,
@@ -314,7 +367,16 @@ fn live_status_result(
 fn run_sync_gateways(
     options: &options::SyncGatewaysOptions,
 ) -> Result<(), BlobStorageCommandError> {
-    let target = resolve_blob_storage_call_target(
+    let runtime = LiveBlobStorageRuntime;
+    let result = sync_gateways_result_with_runtime(&runtime, options)?;
+    write_action_result(options.json, &result)
+}
+
+fn sync_gateways_result_with_runtime(
+    runtime: &impl BlobStorageRuntime,
+    options: &options::SyncGatewaysOptions,
+) -> Result<BlobStorageActionResult, BlobStorageCommandError> {
+    let target = runtime.resolve_call_target(
         &options.common,
         &options.deployment,
         &options.canister,
@@ -339,7 +401,7 @@ fn run_sync_gateways(
             None,
         )
     } else {
-        let _output = live_call_output(
+        let _output = runtime.call_output(
             &options.common,
             &target,
             BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
@@ -355,16 +417,30 @@ fn run_sync_gateways(
             command,
             None,
         );
-        match live_status_result(&options.common, &options.deployment, &options.canister) {
+        match status_result_with_runtime(
+            runtime,
+            &options.common,
+            &options.deployment,
+            &options.canister,
+        ) {
             Ok(status) => result.with_post_status(status),
             Err(_) => result.with_warning("post_status_unavailable"),
         }
     };
-    write_action_result(options.json, &result)
+    Ok(result)
 }
 
 fn run_fund(options: &options::FundOptions) -> Result<(), BlobStorageCommandError> {
-    let target = resolve_blob_storage_call_target(
+    let runtime = LiveBlobStorageRuntime;
+    let result = fund_result_with_runtime(&runtime, options)?;
+    write_action_result(options.json, &result)
+}
+
+fn fund_result_with_runtime(
+    runtime: &impl BlobStorageRuntime,
+    options: &options::FundOptions,
+) -> Result<BlobStorageActionResult, BlobStorageCommandError> {
+    let target = runtime.resolve_call_target(
         &options.common,
         &options.deployment,
         &options.canister,
@@ -394,7 +470,7 @@ fn run_fund(options: &options::FundOptions) -> Result<(), BlobStorageCommandErro
             Some(options.cycles),
         )
     } else {
-        let call_output = live_call_output(
+        let call_output = runtime.call_output(
             &options.common,
             &target,
             BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
@@ -413,12 +489,17 @@ fn run_fund(options: &options::FundOptions) -> Result<(), BlobStorageCommandErro
             Some(options.cycles),
         )
         .with_funding_report(report);
-        match live_status_result(&options.common, &options.deployment, &options.canister) {
+        match status_result_with_runtime(
+            runtime,
+            &options.common,
+            &options.deployment,
+            &options.canister,
+        ) {
             Ok(status) => result.with_post_status(status),
             Err(_) => result.with_warning("post_status_unavailable"),
         }
     };
-    write_action_result(options.json, &result)
+    Ok(result)
 }
 
 fn icp_cli(options: &options::CommonOptions) -> IcpCli {

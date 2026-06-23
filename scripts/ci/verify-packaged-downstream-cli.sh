@@ -12,6 +12,8 @@ DOWNSTREAM_ROOT="$TOOL_ROOT/downstream-root"
 PROOF_HOME="$TMP_ROOT/home"
 PROOF_TARGET_DIR="$TMP_ROOT/cargo-target"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
+FAKE_ICP="$TMP_ROOT/fake-icp"
+FAKE_ICP_STATE="$TMP_ROOT/fake-icp-state"
 VERSION="$(
     cargo metadata --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
         jq -r '.packages[] | select(.name == "canic") | .version'
@@ -22,6 +24,8 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+. "$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
 
 ensure_packaged_crate() {
     local crate_name="$1"
@@ -168,6 +172,7 @@ run_packaged_canic() {
             CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
+            FAKE_ICP_STATE="$FAKE_ICP_STATE" \
             CANIC_WORKSPACE_ROOT="$DOWNSTREAM_ROOT" \
             cargo run --offline -q -p canic-cli --bin canic -- "$@"
     )
@@ -189,6 +194,8 @@ run_probe() {
         echo "expected packaged blob-storage JSON status without installed state to fail" >&2
         exit 1
     fi
+    prepare_blob_storage_cli_fixture "$DOWNSTREAM_ROOT"
+    run_blob_storage_cli_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
 }
 
 assert_probe_outputs() {
@@ -232,51 +239,7 @@ assert_probe_outputs() {
         sed -n '1,160p' "$TMP_ROOT/catalog.json" >&2
         exit 1
     }
-    grep -q 'Inspect and provision blob-storage billing' "$TMP_ROOT/blob-storage-help.out" || {
-        echo "expected packaged canic CLI to expose blob-storage help" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
-        exit 1
-    }
-    grep -q 'sync-gateways' "$TMP_ROOT/blob-storage-help.out" || {
-        echo "expected packaged blob-storage help to list sync-gateways" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
-        exit 1
-    }
-    grep -q 'canic blob-storage fund local backend --cycles' "$TMP_ROOT/blob-storage-help.out" || {
-        echo "expected packaged blob-storage help to show fund --cycles examples" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-help.out" >&2
-        exit 1
-    }
-    [ ! -s "$TMP_ROOT/blob-storage-status-json.out" ] || {
-        echo "expected packaged blob-storage JSON failure to leave stdout empty" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.out" >&2
-        exit 1
-    }
-    grep -q '"schema_version": 1' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected packaged blob-storage JSON error to include schema_version" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"kind": "blob_storage_error"' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected packaged blob-storage JSON error kind" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"input": "app"' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected packaged blob-storage JSON error target input" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"code": "target_resolution_failed"' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected packaged blob-storage JSON error code" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
-    grep -q '"exit_code": 1' "$TMP_ROOT/blob-storage-status-json.err" || {
-        echo "expected packaged blob-storage JSON error exit code" >&2
-        sed -n '1,160p' "$TMP_ROOT/blob-storage-status-json.err" >&2
-        exit 1
-    }
+    assert_blob_storage_cli_probe_outputs "packaged" "$TMP_ROOT"
 }
 
 main() {
@@ -291,6 +254,7 @@ main() {
 
     prepare_tool_root
     prepare_downstream_root
+    prepare_fake_blob_storage_icp "$FAKE_ICP" "$FAKE_ICP_STATE"
     run_probe
     assert_probe_outputs
 

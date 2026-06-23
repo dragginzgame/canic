@@ -35,6 +35,7 @@ require_texts "$CHECKLIST" "$GUARD_LABEL" \
     "make test-packaged-downstream-wasm-store" \
     "shipped operator command" \
     "structured JSON error" \
+    "live sync, live fund" \
     "cargo build --release --workspace --locked" \
     "make test-fleet-install" \
     "make test-canisters" \

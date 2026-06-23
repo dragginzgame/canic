@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
 
+- `0.71.4` closes the blob-storage operator-loop validation gap with a private
+  CLI runtime seam, scripted status/sync/fund/recheck coverage, and shared
+  packaged/installed CLI fixture proofs for dry-run, live sync, live fund, and
+  final readiness JSON output.
+
 - `0.71.3` hardens blob-storage operator-readiness release validation by
   extending installed and packaged CLI proofs to cover blob-storage help and
   structured JSON error output, while clarifying ICP CLI upgrade guidance.

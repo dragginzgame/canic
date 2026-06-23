@@ -1,6 +1,6 @@
 use super::*;
 use crate::{blob_storage::options::BlobStorageOptions, cli::globals, run};
-use std::ffi::OsString;
+use std::{cell::RefCell, collections::VecDeque, ffi::OsString, path::PathBuf};
 
 #[test]
 fn parses_status_options_with_required_target() {
@@ -396,6 +396,95 @@ fn parses_status_json_into_stable_cli_shape() {
 }
 
 #[test]
+fn scripted_operator_loop_proves_status_sync_fund_and_recheck_sequence() {
+    let runtime = ScriptedBlobStorageRuntime::new([
+        scripted_response(BLOB_STORAGE_STATUS, status_response(0, false, "900")),
+        scripted_response(BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, "{}".to_string()),
+        scripted_response(BLOB_STORAGE_STATUS, status_response(1, false, "900")),
+        scripted_response(
+            BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+            funding_report_response(900, 900),
+        ),
+        scripted_response(BLOB_STORAGE_STATUS, status_response(1, true, "0")),
+    ]);
+    let common = common_options();
+
+    let initial =
+        status_result_with_runtime(&runtime, &common, "local", "backend").expect("initial status");
+    let sync =
+        sync_gateways_result_with_runtime(&runtime, &sync_options(common.clone())).expect("sync");
+    let fund = fund_result_with_runtime(&runtime, &fund_options(common, 900)).expect("fund result");
+
+    assert_eq!(initial.gateways.principal_count, 0);
+    assert_eq!(initial.readiness.state, "blocked");
+    assert_eq!(
+        sync.post_status
+            .as_ref()
+            .expect("sync post status")
+            .gateways
+            .principal_count,
+        1
+    );
+    assert_eq!(
+        fund.funding_report
+            .as_ref()
+            .expect("funding report")
+            .attached_cycles,
+        "900"
+    );
+    assert!(
+        fund.post_status
+            .as_ref()
+            .expect("fund post status")
+            .readiness
+            .ready_for_upload
+    );
+    assert_eq!(
+        runtime.called_methods(),
+        vec![
+            BLOB_STORAGE_STATUS,
+            BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+            BLOB_STORAGE_STATUS,
+            BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+            BLOB_STORAGE_STATUS,
+        ]
+    );
+}
+
+#[test]
+fn mutating_commands_warn_when_post_status_diagnostic_fails() {
+    let sync_runtime = ScriptedBlobStorageRuntime::new([
+        scripted_response(BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS, "{}".to_string()),
+        scripted_response(BLOB_STORAGE_STATUS, "not-json".to_string()),
+    ]);
+    let fund_runtime = ScriptedBlobStorageRuntime::new([
+        scripted_response(
+            BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+            funding_report_response(900, 900),
+        ),
+        scripted_response(BLOB_STORAGE_STATUS, "not-json".to_string()),
+    ]);
+    let common = common_options();
+
+    let sync = sync_gateways_result_with_runtime(&sync_runtime, &sync_options(common.clone()))
+        .expect("sync should not fail on post-status diagnostic");
+    let fund = fund_result_with_runtime(&fund_runtime, &fund_options(common, 900))
+        .expect("fund should not fail on post-status diagnostic");
+
+    assert_eq!(sync.warnings, vec!["post_status_unavailable"]);
+    assert_eq!(sync.post_status, None);
+    assert_eq!(fund.warnings, vec!["post_status_unavailable"]);
+    assert_eq!(fund.post_status, None);
+    assert_eq!(
+        fund.funding_report
+            .as_ref()
+            .expect("funding report")
+            .attached_cycles,
+        "900"
+    );
+}
+
+#[test]
 fn renders_status_plain_text_with_blockers_and_next_actions() {
     let target = model::BlobStorageTarget::resolved(
         "backend",
@@ -480,4 +569,167 @@ fn sample_status_result() -> model::BlobStorageStatusResult {
     .to_string();
 
     parse::parse_status_result("local", target, &output).expect("sample status")
+}
+
+fn common_options() -> options::CommonOptions {
+    options::CommonOptions {
+        network: "local".to_string(),
+        icp: "icp".to_string(),
+    }
+}
+
+fn sync_options(common: options::CommonOptions) -> options::SyncGatewaysOptions {
+    options::SyncGatewaysOptions {
+        common,
+        deployment: "local".to_string(),
+        canister: "backend".to_string(),
+        json: true,
+        dry_run: false,
+    }
+}
+
+fn fund_options(common: options::CommonOptions, cycles: u128) -> options::FundOptions {
+    options::FundOptions {
+        common,
+        deployment: "local".to_string(),
+        canister: "backend".to_string(),
+        json: true,
+        dry_run: false,
+        cycles,
+    }
+}
+
+struct ScriptedBlobStorageRuntime {
+    responses: RefCell<VecDeque<ScriptedBlobStorageResponse>>,
+    calls: RefCell<Vec<String>>,
+}
+
+impl ScriptedBlobStorageRuntime {
+    fn new<const N: usize>(responses: [ScriptedBlobStorageResponse; N]) -> Self {
+        Self {
+            responses: RefCell::new(VecDeque::from(responses)),
+            calls: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn called_methods(&self) -> Vec<&'static str> {
+        self.calls
+            .borrow()
+            .iter()
+            .map(String::as_str)
+            .map(|method| match method {
+                BLOB_STORAGE_STATUS => BLOB_STORAGE_STATUS,
+                BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS => BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+                BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES => BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
+                _ => panic!("unexpected method {method}"),
+            })
+            .collect()
+    }
+}
+
+impl BlobStorageRuntime for ScriptedBlobStorageRuntime {
+    fn resolve_call_target(
+        &self,
+        _options: &options::CommonOptions,
+        _deployment: &str,
+        canister: &str,
+        method: &str,
+    ) -> Result<target::BlobStorageCallTarget, BlobStorageCommandError> {
+        Ok(target::BlobStorageCallTarget {
+            target: model::BlobStorageTarget::resolved(
+                canister,
+                Some(canister.to_string()),
+                "rrkah-fqaaa-aaaaa-aaaaq-cai",
+                "installed_deployment",
+            ),
+            method_mode: if method == BLOB_STORAGE_STATUS {
+                target::BlobStorageMethodMode::Query
+            } else {
+                target::BlobStorageMethodMode::Update
+            },
+            candid_path: PathBuf::from(".icp/local/canisters/backend/backend.did"),
+            icp_root: PathBuf::from("."),
+        })
+    }
+
+    fn call_output(
+        &self,
+        _options: &options::CommonOptions,
+        _target: &target::BlobStorageCallTarget,
+        method: &str,
+        _arg: &str,
+        _output: Option<&str>,
+    ) -> Result<String, BlobStorageCommandError> {
+        self.calls.borrow_mut().push(method.to_string());
+        let response = self
+            .responses
+            .borrow_mut()
+            .pop_front()
+            .expect("scripted response");
+
+        assert_eq!(response.method, method);
+        Ok(response.output)
+    }
+}
+
+struct ScriptedBlobStorageResponse {
+    method: &'static str,
+    output: String,
+}
+
+fn scripted_response(method: &'static str, output: String) -> ScriptedBlobStorageResponse {
+    ScriptedBlobStorageResponse { method, output }
+}
+
+fn status_response(gateway_count: u64, ready: bool, requested_cycles: &str) -> String {
+    let blockers = if ready {
+        serde_json::json!([])
+    } else {
+        serde_json::json!([{ "GatewayPrincipalsMissing": null }])
+    };
+    let funding_status = if requested_cycles == "0" {
+        serde_json::json!({ "NotNeeded": null })
+    } else {
+        serde_json::json!({
+            "FundingRequired": {
+                "requested_cycles": requested_cycles
+            }
+        })
+    };
+
+    serde_json::json!({
+        "Ok": {
+            "payment_model": { "ProjectAsPaymentAccount": null },
+            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
+            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
+            "cashier_balance": ["1000"],
+            "min_upload_balance": ["500"],
+            "target_upload_balance": ["1000"],
+            "project_cycles_reserve": ["2000"],
+            "project_cycles_available": "3000",
+            "gateway_principal_count": gateway_count,
+            "last_gateway_principal_sync_at_ns": null,
+            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
+            "funding_status": funding_status,
+            "ready": ready,
+            "blockers": blockers,
+            "warnings": []
+        }
+    })
+    .to_string()
+}
+
+fn funding_report_response(requested_cycles: u128, attached_cycles: u128) -> String {
+    serde_json::json!({
+        "Ok": {
+            "requested_cycles": requested_cycles.to_string(),
+            "attached_cycles": attached_cycles.to_string(),
+            "project_cycles_before": "3000",
+            "project_cycles_after": "2100",
+            "reserve_cycles": "2000",
+            "cashier_total_after": "1900",
+            "skipped_reason": null
+        }
+    })
+    .to_string()
 }
