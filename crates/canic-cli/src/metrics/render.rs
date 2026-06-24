@@ -315,8 +315,8 @@ mod tests {
         assert!(output.contains("AVG/CALL"));
         assert!(output.contains("AMOUNT"));
         assert!(output.contains("perf"));
-        assert!(output.contains("3"));
-        assert!(output.contains("5"));
+        assert!(output.contains('3'));
+        assert!(output.contains('5'));
         assert!(output.contains("..."));
         assert!(!output.contains("CANISTER_ID"));
         assert!(!output.contains("PRINCIPAL"));
