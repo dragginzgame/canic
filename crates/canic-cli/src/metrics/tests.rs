@@ -11,6 +11,7 @@ fn parses_metric_kind_selectors() {
         MetricsOptions::parse_info([OsString::from("test")]).expect("default metrics kind");
     assert_eq!(options.deployment, "test");
     assert_eq!(options.kind, MetricsKind::Core);
+    assert!(!options.verbose);
 
     let options = MetricsOptions::parse_info([
         OsString::from("test"),
@@ -47,12 +48,27 @@ fn parses_metric_kind_selectors() {
     );
 }
 
+// Ensure verbose metrics output is an explicit opt-in for wider diagnostics.
+#[test]
+fn parses_metrics_verbose_option() {
+    let options = MetricsOptions::parse_info([OsString::from("test"), OsString::from("--verbose")])
+        .expect("parse metrics verbose option");
+
+    assert!(options.verbose);
+
+    let options = MetricsOptions::parse_info([OsString::from("test"), OsString::from("-v")])
+        .expect("parse metrics short verbose option");
+
+    assert!(options.verbose);
+}
+
 #[test]
 fn metrics_usage_uses_deployment_target_wording() {
     let text = info_usage();
 
     assert!(text.contains("Usage: canic info metrics [OPTIONS] <deployment>"));
     assert!(text.contains("Installed deployment target name to inspect"));
+    assert!(text.contains("--verbose"));
     assert!(!text.contains("<fleet>"));
     assert!(!text.contains("Installed fleet"));
 }

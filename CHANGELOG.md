@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
 
+- `0.71.7` makes `canic info metrics` text output compact by default, splits
+  performance metric payloads into count and average-per-call columns, and
+  keeps full raw diagnostics available through `--verbose` and unchanged JSON.
+
 - `0.71.6` adds a read-only `canic blob-storage status --check-ready`
   automation mode that preserves normal status output while exiting `4` when
   uploads are not ready.
