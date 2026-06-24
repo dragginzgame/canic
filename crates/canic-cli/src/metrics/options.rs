@@ -26,6 +26,7 @@ pub(super) struct MetricsOptions {
     pub(super) nonzero: bool,
     pub(super) limit: u64,
     pub(super) json: bool,
+    pub(super) verbose: bool,
     pub(super) out: Option<PathBuf>,
     pub(super) network: String,
     pub(super) icp: String,
@@ -57,6 +58,7 @@ impl MetricsOptions {
             nonzero: matches.get_flag("nonzero"),
             limit: required_typed(&matches, "limit"),
             json: matches.get_flag("json"),
+            verbose: matches.get_flag("verbose"),
             out: path_option(&matches, "out"),
             network: string_option_or_else(&matches, "network", local_network),
             icp: string_option_or_else(&matches, "icp", default_icp),
@@ -113,6 +115,12 @@ fn metrics_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
         )
         .arg(flag_arg("nonzero").long("nonzero"))
         .arg(flag_arg("json").long("json"))
+        .arg(
+            flag_arg("verbose")
+                .long("verbose")
+                .short('v')
+                .help("Show canister ids, principal dimensions, and raw metric totals"),
+        )
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(internal_network_arg())
         .arg(internal_icp_arg())

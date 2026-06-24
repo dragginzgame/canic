@@ -14,6 +14,11 @@ Each row has:
 `CountAndU64` uses `count` as the event/sample count. The `value_u64`
 meaning is family-specific.
 
+`canic info metrics` keeps the default text table compact. It renders
+`CountAndU64` rows as `COUNT` plus `AVG/CALL`, omits raw totals, and keeps
+full canister ids, principal dimensions, and raw totals behind `--verbose`.
+`--json` preserves the raw metric payload shape.
+
 ## Query Perf Samples
 
 Query calls can update in-memory perf tables during the call, but those updates
