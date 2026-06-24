@@ -35,6 +35,8 @@ jobs:
           echo "RUSTUP_TOOLCHAIN=$CANIC_MSRV" >> "$GITHUB_ENV"
           rustup target add --toolchain "$CANIC_MSRV" wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
       - name: Check runner disk after Rust cache restore
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV after Rust cache restore" --min-free-mib 3072
@@ -61,6 +63,8 @@ jobs:
         with:
           node-version: 'lts/*'
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
       - name: Check runner disk after Rust cache restore
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks after Rust cache restore" --min-free-mib 3072
@@ -97,16 +101,6 @@ jobs:
           icp --version
           icq --version
           ic-wasm --version
-      - name: Cache PocketIC server
-        uses: actions/cache@v5
-        with:
-          path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
-          key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
-      - name: Install PocketIC server
-        shell: bash
-        run: |
-          BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
-          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Layering guards
         if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         shell: bash
@@ -140,17 +134,118 @@ jobs:
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096
       - run: make fmt-check
       - run: make clippy
+      - name: Report runner disk at checks finish
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "checks finish"
+
+  test-unit:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          clean: true
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+      - name: Check runner disk after Rust cache restore
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit after Rust cache restore" --min-free-mib 3072
+      - name: Install Rust test helper tools
+        run: cargo install candid-extractor --locked
+      - name: Install wasm target
+        shell: bash
+        run: |
+          echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
+          rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
+      - name: Install IC CLI tools
+        shell: bash
+        run: |
+          bash scripts/ci/install-icp-cli.sh
+          bash scripts/ci/install-ic-query.sh
+          npm install -g @icp-sdk/ic-wasm
+      - name: Check IC CLI tools
+        run: |
+          candid-extractor --version
+          icp --version
+          icq --version
+          ic-wasm --version
+      - name: Cache PocketIC server
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
+          key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
+      - name: Install PocketIC server
+        shell: bash
+        run: |
+          BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
+          echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Check runner disk before test-unit
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks before test-unit" --min-free-mib 3072
+        run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit before tests" --min-free-mib 4096
       - run: make test-unit
+      - name: Report runner disk at test-unit finish
+        if: ${{ always() }}
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit finish"
+
+  build:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          clean: true
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+      - name: Check runner disk after Rust cache restore
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "build after Rust cache restore" --min-free-mib 3072
+      - name: Install Rust build helper tools
+        run: cargo install candid-extractor --locked
+      - name: Install wasm target
+        shell: bash
+        run: |
+          echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
+          rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
+      - name: Install IC CLI tools
+        shell: bash
+        run: |
+          bash scripts/ci/install-icp-cli.sh
+          bash scripts/ci/install-ic-query.sh
+          npm install -g @icp-sdk/ic-wasm
+      - name: Check IC CLI tools
+        run: |
+          candid-extractor --version
+          icp --version
+          icq --version
+          ic-wasm --version
+      - name: Check runner disk before build
+        shell: bash
+        run: bash scripts/ci/check-runner-disk-space.sh --label "build before cargo build" --min-free-mib 4096
       - name: Build examples (default)
         if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         run: cargo build -p canic --examples --locked
       - name: Build release workspace
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: cargo build --release --workspace --locked
-      - name: Report runner disk at checks finish
+      - name: Report runner disk at build finish
         if: ${{ always() }}
         shell: bash
-        run: bash scripts/ci/check-runner-disk-space.sh --label "checks finish"
+        run: bash scripts/ci/check-runner-disk-space.sh --label "build finish"

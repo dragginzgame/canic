@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
 
+- `0.71.8` splits CI validation across fresh runner jobs for static checks,
+  full unit/PocketIC tests, and build validation, while disabling restored
+  `target/` caches so generated Rust/wasm artifacts no longer exhaust disk
+  space before tests start.
+
 - `0.71.7` makes `canic info metrics` text output compact by default, splits
   performance metric payloads into count and average-per-call columns, and
   keeps full raw diagnostics available through `--verbose` and unchanged JSON.
