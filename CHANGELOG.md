@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Updated the maintainer ICP CLI toolchain pin and install guidance to
+  `icp-cli 1.0.1`.
+
 ## [0.71.x] - 2026-06-23 - Blob Storage Operator Readiness
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)
