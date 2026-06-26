@@ -540,15 +540,15 @@ fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
     }
 
     assert!(
-        source.contains("canic_query(internal, name = \"_immutableObjectStorageBlobsAreLive\")")
-            && source
-                .contains("canic_query(internal, name = \"_immutableObjectStorageBlobsToDelete\")")
-            && source.contains(
-                "canic_update(internal, name = \"_immutableObjectStorageConfirmBlobDeletion\")"
-            )
-            && source.contains(
-                "canic_update(requires($guard), name = \"_immutableObjectStorageCreateCertificate\")"
-            ),
+        source.contains(
+            "canic_query(internal, public, name = \"_immutableObjectStorageBlobsAreLive\")"
+        ) && source.contains(
+            "canic_query(internal, public, name = \"_immutableObjectStorageBlobsToDelete\")"
+        ) && source.contains(
+            "canic_update(internal, public, name = \"_immutableObjectStorageConfirmBlobDeletion\")"
+        ) && source.contains(
+            "canic_update(requires($guard), name = \"_immutableObjectStorageCreateCertificate\")"
+        ),
         "blob-storage endpoint modes/guards must match the 0.69 gateway contract"
     );
 
@@ -557,11 +557,11 @@ fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
     let confirm_attr = preceding_attribute(&source, "fn canic_blob_storage_confirm_blob_deletion(");
     let create_attr = preceding_attribute(&source, "fn canic_blob_storage_create_certificate(");
     assert!(
-        live_attr.contains("canic_query(internal")
+        live_attr.contains("canic_query(internal, public")
             && !live_attr.contains("requires")
-            && to_delete_attr.contains("canic_query(internal")
+            && to_delete_attr.contains("canic_query(internal, public")
             && !to_delete_attr.contains("requires")
-            && confirm_attr.contains("canic_update(internal")
+            && confirm_attr.contains("canic_update(internal, public")
             && !confirm_attr.contains("requires"),
         "liveness and gateway scrubber endpoints must not use the host create-certificate guard"
     );
