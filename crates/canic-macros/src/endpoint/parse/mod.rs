@@ -101,8 +101,6 @@ pub struct ParsedArgs {
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
     pub requires: Vec<AccessExprAst>,
-    pub requires_async: bool,
-    pub requires_fallible: bool,
     pub internal: bool,
     pub public: bool,
     pub query_mode: QueryMode,
@@ -241,16 +239,11 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         ));
     }
 
-    let requires_async = !requires.is_empty();
-    let requires_fallible = !requires.is_empty();
-
     Ok(ParsedArgs {
         forwarded,
         export_name,
         payload_max_bytes,
         requires,
-        requires_async,
-        requires_fallible,
         internal,
         public,
         query_mode,
@@ -305,8 +298,6 @@ const fn empty() -> ParsedArgs {
         export_name: None,
         payload_max_bytes: None,
         requires: Vec::new(),
-        requires_async: false,
-        requires_fallible: false,
         internal: false,
         public: false,
         query_mode: QueryMode::Plain,
