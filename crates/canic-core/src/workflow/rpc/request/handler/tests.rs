@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
-    cdk::types::{Principal, TC},
+    cdk::types::{Cycles, Principal, TC},
+    config::schema::{CanisterKind, CyclesFundingPolicyConfig},
     dto::{
         error::ErrorCode,
         rpc::{
@@ -35,6 +36,7 @@ use crate::{
     storage::stable::env::{Env, EnvRecord},
     storage::stable::replay::ReplayReceiptRecord,
     storage::stable::state::app::{AppMode, AppStateRecord},
+    test::config::ConfigTestBuilder,
 };
 use candid::encode_one;
 use std::collections::HashMap;
@@ -639,6 +641,57 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
         mode: AppMode::Enabled,
         cycles_funding_enabled: true,
     });
+}
+
+#[test]
+fn authorize_request_cycles_uses_configured_child_funding_policy() {
+    CyclesFundingMetrics::reset();
+    CyclesFundingLedgerOps::reset_for_tests();
+
+    let self_pid = p(95);
+    let child = p(96);
+    let child_role = CanisterRole::new("funded_child");
+    let _restore = configure_root_env(self_pid);
+
+    let mut child_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    child_cfg.cycles_funding = CyclesFundingPolicyConfig {
+        max_per_request: Cycles::new(10),
+        max_per_child: Cycles::new(30),
+        cooldown_secs: 60,
+    };
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(child_role.clone(), child_cfg)
+        .install();
+
+    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
+        .expect("register child");
+
+    AppStateOps::import(AppStateRecord {
+        mode: AppMode::Enabled,
+        cycles_funding_enabled: true,
+    });
+
+    let ctx = RootContext {
+        caller: child,
+        self_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 1_000,
+    };
+    CyclesFundingLedgerOps::record_child_grant(child, 30, 1);
+
+    let req = CyclesRequest {
+        cycles: 1,
+        metadata: Some(meta(24, secs_to_ns(60))),
+    };
+
+    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req)
+        .expect_err("configured child budget must deny");
+    assert!(
+        err.to_string().contains("child budget"),
+        "expected configured budget denial, got: {err}"
+    );
 }
 
 #[test]

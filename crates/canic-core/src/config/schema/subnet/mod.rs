@@ -29,6 +29,18 @@ mod defaults {
     pub const fn topup_amount() -> Cycles {
         Cycles::new(5 * TC)
     }
+
+    pub const fn cycles_funding_max_per_request() -> Cycles {
+        Cycles::new(crate::domain::policy::cycles_funding::DEFAULT_MAX_PER_REQUEST)
+    }
+
+    pub const fn cycles_funding_max_per_child() -> Cycles {
+        Cycles::new(crate::domain::policy::cycles_funding::DEFAULT_MAX_PER_CHILD)
+    }
+
+    pub const fn cycles_funding_cooldown_secs() -> u64 {
+        crate::domain::policy::cycles_funding::DEFAULT_COOLDOWN_SECS
+    }
 }
 
 const IMPLICIT_WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
@@ -137,6 +149,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
+        cycles_funding: CyclesFundingPolicyConfig::default(),
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -212,6 +225,9 @@ pub struct CanisterConfig {
     pub topup: Option<TopupPolicy>,
 
     #[serde(default)]
+    pub cycles_funding: CyclesFundingPolicyConfig,
+
+    #[serde(default)]
     pub randomness: RandomnessConfig,
 
     #[serde(default)]
@@ -279,6 +295,42 @@ impl CanisterConfig {
             .chain(sharding_roles)
             .chain(directory_roles)
             .collect()
+    }
+}
+
+///
+/// CyclesFundingPolicyConfig
+///
+/// Parent funding limits applied when this role requests cycles from its parent.
+/// Owned by config schema and consumed by cycles funding authorization.
+///
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CyclesFundingPolicyConfig {
+    #[serde(
+        default = "defaults::cycles_funding_max_per_request",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub max_per_request: Cycles,
+
+    #[serde(
+        default = "defaults::cycles_funding_max_per_child",
+        deserialize_with = "Cycles::from_config"
+    )]
+    pub max_per_child: Cycles,
+
+    #[serde(default = "defaults::cycles_funding_cooldown_secs")]
+    pub cooldown_secs: u64,
+}
+
+impl Default for CyclesFundingPolicyConfig {
+    fn default() -> Self {
+        Self {
+            max_per_request: defaults::cycles_funding_max_per_request(),
+            max_per_child: defaults::cycles_funding_max_per_child(),
+            cooldown_secs: defaults::cycles_funding_cooldown_secs(),
+        }
     }
 }
 

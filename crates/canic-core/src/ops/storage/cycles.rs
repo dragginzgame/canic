@@ -5,6 +5,7 @@
 //! Boundary: storage ops convert stable records into DTO response shapes.
 
 use crate::{
+    domain::policy::cycles_funding::FundingLedgerSnapshot,
     dto::{
         cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
         page::Page,
@@ -12,7 +13,7 @@ use crate::{
     ops::prelude::*,
     storage::stable::cycles::{
         CycleTopupEventKey, CycleTopupEventRecord, CycleTopupEventStatusRecord, CycleTopupEvents,
-        CycleTracker,
+        CycleTracker, CyclesFundingLedger, CyclesFundingLedgerRecord,
     },
 };
 
@@ -75,6 +76,44 @@ impl CycleTrackerOps {
                 .collect(),
             total: page.total,
         }
+    }
+}
+
+///
+/// CyclesFundingLedgerStoreOps
+///
+/// Stable storage wrapper for child cycles funding budget state.
+/// Owned by storage ops and consumed by runtime funding ops.
+///
+
+pub struct CyclesFundingLedgerStoreOps;
+
+impl CyclesFundingLedgerStoreOps {
+    #[must_use]
+    pub fn snapshot(child: Principal) -> Option<FundingLedgerSnapshot> {
+        CyclesFundingLedger::snapshot(child).map(|record| FundingLedgerSnapshot {
+            granted_total: record.granted_total.to_u128(),
+            last_granted_at: record.last_granted_at,
+        })
+    }
+
+    pub fn record_child_grant(child: Principal, granted_cycles: u128, now_secs: u64) {
+        CyclesFundingLedger::record_child_grant(child, Cycles::new(granted_cycles), now_secs);
+    }
+
+    pub fn restore_child_snapshot(child: Principal, snapshot: FundingLedgerSnapshot) {
+        CyclesFundingLedger::set_snapshot(
+            child,
+            CyclesFundingLedgerRecord {
+                granted_total: Cycles::new(snapshot.granted_total),
+                last_granted_at: snapshot.last_granted_at,
+            },
+        );
+    }
+
+    #[cfg(test)]
+    pub fn reset_for_tests() {
+        CyclesFundingLedger::clear_for_tests();
     }
 }
 

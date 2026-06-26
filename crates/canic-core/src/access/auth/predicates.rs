@@ -33,8 +33,8 @@ pub(super) async fn is_controller(caller: Principal) -> Result<(), AccessError> 
     }
 }
 
-/// Require that the caller appears in the active whitelist (IC deployments).
-/// No-op on local builds; enforces whitelist on IC.
+/// Require that the caller appears in the configured whitelist.
+/// Missing whitelist configuration fails closed.
 #[expect(clippy::unused_async)]
 pub(super) async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
     let whitelisted = ConfigOps::is_whitelisted(&caller)

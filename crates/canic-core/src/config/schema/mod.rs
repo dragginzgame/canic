@@ -219,6 +219,7 @@ impl ConfigModel {
                 kind: CanisterKind::Root,
                 initial_cycles: crate::cdk::types::Cycles::new(0),
                 topup: None,
+                cycles_funding: CyclesFundingPolicyConfig::default(),
                 randomness: RandomnessConfig::default(),
                 scaling: None,
                 sharding: None,
@@ -254,7 +255,7 @@ impl ConfigModel {
         self.app
             .whitelist
             .as_ref()
-            .is_none_or(|w| w.principals.contains(&principal.to_string()))
+            .is_some_and(|w| w.principals.contains(&principal.to_string()))
     }
 }
 
@@ -288,7 +289,7 @@ pub struct AppConfig {
     /// Principal whitelist.
     ///
     /// Semantics:
-    /// - None  => allow all principals (default-open)
+    /// - None  => allow no principals (default-closed)
     /// - Some  => allow only listed principals (default-closed)
     #[serde(default)]
     pub whitelist: Option<Whitelist>,

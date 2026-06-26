@@ -6,8 +6,8 @@
 
 use crate::{
     config::schema::{
-        CanisterConfig, CanisterKind, ConfigSchemaError, NAME_MAX_BYTES, SubnetConfig, TopupPolicy,
-        Validate,
+        CanisterConfig, CanisterKind, ConfigSchemaError, CyclesFundingPolicyConfig, NAME_MAX_BYTES,
+        SubnetConfig, TopupPolicy, Validate,
     },
     ids::CanisterRole,
 };
@@ -42,6 +42,7 @@ impl Validate for SubnetConfig {
             }
 
             validate_kind(cfg, role)?;
+            validate_cycles_funding(&cfg.cycles_funding, role)?;
             validate_topup(cfg, role)?;
             validate_scaling(cfg, role, &self.canisters)?;
             validate_sharding(cfg, role, &self.canisters)?;
@@ -50,6 +51,40 @@ impl Validate for SubnetConfig {
 
         Ok(())
     }
+}
+
+fn validate_cycles_funding(
+    policy: &CyclesFundingPolicyConfig,
+    canister: &CanisterRole,
+) -> Result<(), ConfigSchemaError> {
+    let max_per_request = policy.max_per_request.to_u128();
+    let max_per_child = policy.max_per_child.to_u128();
+
+    if max_per_request == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' cycles_funding.max_per_request must be > 0",
+        )));
+    }
+
+    if max_per_child == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' cycles_funding.max_per_child must be > 0",
+        )));
+    }
+
+    if policy.cooldown_secs == 0 {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' cycles_funding.cooldown_secs must be > 0",
+        )));
+    }
+
+    if max_per_request > max_per_child {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' cycles_funding.max_per_request must be <= cycles_funding.max_per_child",
+        )));
+    }
+
+    Ok(())
 }
 
 fn validate_topup(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), ConfigSchemaError> {

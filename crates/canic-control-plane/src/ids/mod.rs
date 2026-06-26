@@ -307,6 +307,7 @@ pub enum WasmStoreGcMode {
     Normal,
     Prepared,
     InProgress,
+    Clearing,
     Complete,
 }
 

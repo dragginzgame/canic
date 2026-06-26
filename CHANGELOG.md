@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Updated the maintainer ICP CLI toolchain pin and install guidance to
   `icp-cli 1.0.1`.
 
+## [0.72.x] - 2026-06-26 - Security Defaults Hardening
+
+Detailed patch breakdown: [docs/changelog/0.72.md](docs/changelog/0.72.md)
+
+- `0.72.0` hardens access and funding defaults: endpoint openness must be
+  explicit, whitelists fail closed when absent, child cycles funding has finite
+  stable accounting, and wasm-store GC completion blocks concurrent clear runs.
+  Potentially breaking for code that relied on implicit public endpoints,
+  missing whitelist config, or unlimited child funding.
+
 ## [0.71.x] - 2026-06-23 - Blob Storage Operator Readiness
 
 Detailed patch breakdown: [docs/changelog/0.71.md](docs/changelog/0.71.md)

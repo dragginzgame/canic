@@ -1,4 +1,8 @@
-use crate::ids::CanisterRole;
+const TC: u128 = 1_000_000_000_000;
+
+pub const DEFAULT_MAX_PER_REQUEST: u128 = 5 * TC;
+pub const DEFAULT_MAX_PER_CHILD: u128 = 100 * TC;
+pub const DEFAULT_COOLDOWN_SECS: u64 = 60;
 
 ///
 /// FundingPolicy
@@ -111,21 +115,6 @@ pub enum FundingPolicyViolation {
     CooldownActive {
         retry_after_secs: u64,
     },
-}
-
-/// Resolve the effective policy for a child role from current config.
-#[must_use]
-pub const fn policy_for_child_role(_child_role: &CanisterRole) -> FundingPolicy {
-    default_policy()
-}
-
-// Fail-open defaults preserve existing behavior when role policy is absent.
-const fn default_policy() -> FundingPolicy {
-    FundingPolicy {
-        max_per_request: u128::MAX,
-        max_per_child: u128::MAX,
-        cooldown_secs: 0,
-    }
 }
 
 #[cfg(test)]

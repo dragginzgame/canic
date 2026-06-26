@@ -18,7 +18,7 @@ macro_rules! canic_emit_blob_storage_endpoints {
         );
 
         #[cfg(feature = "blob-storage")]
-        #[$crate::canic_query(internal, name = "_immutableObjectStorageBlobsAreLive")]
+        #[$crate::canic_query(internal, public, name = "_immutableObjectStorageBlobsAreLive")]
         fn canic_blob_storage_blobs_are_live(hash_bytes_list: Vec<Vec<u8>>) -> Vec<bool> {
             $crate::__internal::core::api::blob_storage::BlobStorageApi::blobs_are_live(
                 hash_bytes_list,
@@ -26,7 +26,7 @@ macro_rules! canic_emit_blob_storage_endpoints {
         }
 
         #[cfg(feature = "blob-storage")]
-        #[$crate::canic_query(internal, name = "_immutableObjectStorageBlobsToDelete")]
+        #[$crate::canic_query(internal, public, name = "_immutableObjectStorageBlobsToDelete")]
         fn canic_blob_storage_blobs_to_delete() -> Vec<String> {
             let caller = $crate::cdk::api::msg_caller();
             $crate::__internal::core::api::blob_storage::BlobStorageApi::pending_deletion_hashes_for_gateway(
@@ -35,7 +35,7 @@ macro_rules! canic_emit_blob_storage_endpoints {
         }
 
         #[cfg(feature = "blob-storage")]
-        #[$crate::canic_update(internal, name = "_immutableObjectStorageConfirmBlobDeletion")]
+        #[$crate::canic_update(internal, public, name = "_immutableObjectStorageConfirmBlobDeletion")]
         fn canic_blob_storage_confirm_blob_deletion(hash_bytes_list: Vec<Vec<u8>>) {
             let caller = $crate::cdk::api::msg_caller();
             $crate::__internal::core::api::blob_storage::BlobStorageApi::confirm_deleted_by_gateway_hash_bytes_batch(

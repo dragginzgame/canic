@@ -73,7 +73,7 @@ async fn blob_storage_cashier_mock_set_gateways(gateways: Vec<Principal>) -> Res
     Ok(())
 }
 
-#[canic_query]
+#[canic_query(public)]
 fn blob_storage_cashier_mock_last_top_up() -> Result<MockTopUpRecordView, Error> {
     Ok(LAST_TOP_UP.with_borrow(|record| {
         record.as_ref().map(|record| {

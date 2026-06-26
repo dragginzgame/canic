@@ -28,14 +28,14 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
 #[macro_export]
 macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
     () => {
-        #[$crate::canic_update]
+        #[$crate::canic_update(public)]
         async fn canic_prepare_delegated_token(
             request: ::canic::dto::auth::DelegatedTokenPrepareRequest,
         ) -> Result<::canic::dto::auth::DelegatedTokenPrepareResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::prepare_delegated_token(request)
         }
 
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         async fn canic_get_delegated_token(
             request: ::canic::dto::auth::DelegatedTokenGetRequest,
         ) -> Result<::canic::dto::auth::DelegatedToken, ::canic::Error> {
@@ -49,7 +49,7 @@ macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
             $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(request)
         }
 
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         async fn canic_active_delegation_proof_status()
         -> Result<::canic::dto::auth::ActiveDelegationProofStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::auth::AuthApi::active_delegation_proof_status()

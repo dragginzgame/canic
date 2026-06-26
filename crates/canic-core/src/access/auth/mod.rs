@@ -136,8 +136,8 @@ pub async fn is_controller(caller: Principal) -> Result<(), AccessError> {
     predicates::is_controller(caller).await
 }
 
-/// Require that the caller appears in the active whitelist (IC deployments).
-/// No-op on local builds; enforces whitelist on IC.
+/// Require that the caller appears in the configured whitelist.
+/// Missing whitelist configuration fails closed.
 pub async fn is_whitelisted(caller: Principal) -> Result<(), AccessError> {
     predicates::is_whitelisted(caller).await
 }

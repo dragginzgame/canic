@@ -107,7 +107,7 @@ async fn blob_storage_probe_cashier_top_up(
 }
 
 /// Return stored, pending-deletion, and gateway-principal counts for local tests.
-#[canic_query]
+#[canic_query(public)]
 fn blob_storage_probe_counts() -> Result<BlobStorageLocalCounters, Error> {
     Ok(canic::api::blob_storage::BlobStorageApi::local_counters())
 }
@@ -122,7 +122,7 @@ async fn blob_storage_probe_mark_pending_delete(root_hash: String) -> Result<boo
 }
 
 /// Return whether a blob is live and not pending deletion.
-#[canic_query]
+#[canic_query(public)]
 fn blob_storage_probe_is_live(root_hash: String) -> Result<bool, Error> {
     canic::api::blob_storage::BlobStorageApi::is_live(&root_hash)
 }

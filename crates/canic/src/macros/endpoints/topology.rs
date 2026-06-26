@@ -28,7 +28,7 @@ macro_rules! canic_emit_topology_state_endpoints {
 #[macro_export]
 macro_rules! canic_emit_topology_index_endpoints {
     () => {
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_app_index(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<
@@ -38,7 +38,7 @@ macro_rules! canic_emit_topology_index_endpoints {
             Ok($crate::__internal::core::api::topology::index::AppIndexApi::page(page))
         }
 
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_subnet_index(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<
@@ -54,7 +54,7 @@ macro_rules! canic_emit_topology_index_endpoints {
 #[macro_export]
 macro_rules! canic_emit_topology_children_endpoints {
     () => {
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_canister_children(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<::canic::dto::page::Page<::canic::dto::canister::CanisterInfo>, ::canic::Error>

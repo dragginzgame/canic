@@ -8,17 +8,17 @@
 #[macro_export]
 macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_cycle_balance() -> Result<u128, ::canic::Error> {
             Ok($crate::cdk::api::canister_cycle_balance())
         }
 
-        #[$crate::canic_query(internal)]
+        #[$crate::canic_query(internal, public)]
         fn canic_ready() -> bool {
             $crate::__internal::core::api::ready::ReadyApi::is_ready()
         }
 
-        #[$crate::canic_query(internal)]
+        #[$crate::canic_query(internal, public)]
         fn canic_bootstrap_status() -> ::canic::dto::state::BootstrapStatusResponse {
             $crate::__internal::core::api::ready::ReadyApi::bootstrap_status()
         }
@@ -29,13 +29,13 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
 #[macro_export]
 macro_rules! canic_emit_icrc_standards_endpoints {
     () => {
-        #[$crate::canic_query(internal)]
+        #[$crate::canic_query(internal, public)]
         pub fn icrc10_supported_standards() -> Vec<(String, String)> {
             $crate::__internal::core::api::icrc::Icrc10Query::supported_standards()
         }
 
         #[cfg(canic_icrc21_enabled)]
-        #[$crate::canic_query(internal)]
+        #[$crate::canic_query(internal, public)]
         async fn icrc21_canister_call_consent_message(
             req: ::canic::__internal::core::cdk::spec::standards::icrc::icrc21::ConsentMessageRequest,
         ) -> ::canic::__internal::core::cdk::spec::standards::icrc::icrc21::ConsentMessageResponse {
@@ -48,7 +48,7 @@ macro_rules! canic_emit_icrc_standards_endpoints {
 #[macro_export]
 macro_rules! canic_emit_canic_metadata_endpoints {
     () => {
-        #[$crate::canic_query(internal)]
+        #[$crate::canic_query(internal, public)]
         fn canic_metadata() -> ::canic::dto::metadata::CanicMetadataResponse {
             $crate::__internal::core::api::metadata::CanicMetadataApi::metadata_for(
                 env!("CARGO_PKG_NAME"),
@@ -95,7 +95,7 @@ macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
 #[macro_export]
 macro_rules! canic_emit_env_observability_endpoints {
     () => {
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_env() -> Result<::canic::dto::env::EnvSnapshotResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::env::EnvQuery::snapshot())
         }
@@ -135,7 +135,7 @@ macro_rules! canic_bundle_observability_endpoints {
 #[macro_export]
 macro_rules! canic_emit_metrics_endpoints {
     () => {
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_metrics(
             kind: ::canic::dto::metrics::MetricsKind,
             page: ::canic::dto::page::PageRequest,
@@ -186,7 +186,7 @@ macro_rules! canic_emit_auth_attestation_endpoints {
         }
 
         #[cfg(not(canic_is_root))]
-        #[$crate::canic_update(internal)]
+        #[$crate::canic_update(internal, public)]
         async fn canic_response_capability_v1(
             envelope: ::canic::dto::capability::NonrootCyclesCapabilityEnvelopeV1,
         ) -> Result<::canic::dto::capability::NonrootCyclesCapabilityResponseV1, ::canic::Error> {

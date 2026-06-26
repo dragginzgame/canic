@@ -18,7 +18,7 @@ async fn canic_install(_: Option<Vec<u8>>) {
 /// Run no-op upgrade handling for the runtime probe.
 async fn canic_upgrade() {}
 
-#[canic_update]
+#[canic_update(public)]
 async fn test() -> Result<(), Error> {
     Ok(())
 }

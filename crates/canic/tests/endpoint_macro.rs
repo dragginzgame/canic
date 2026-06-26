@@ -1,6 +1,6 @@
 use canic::{Error, canic_query};
 
-#[canic_query(composite)]
+#[canic_query(public, composite)]
 fn composite_probe() -> Result<(), Error> {
     Ok(())
 }

@@ -14,19 +14,19 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Echo payload length under the default update ingress limit.
-#[canic_update]
+#[canic_update(public)]
 fn default_echo(payload: String) -> Result<usize, Error> {
     Ok(payload.len())
 }
 
 /// Echo payload length under an explicit larger update ingress limit.
-#[canic_update(payload(max_bytes = 32 * 1024))]
+#[canic_update(public, payload(max_bytes = 32 * 1024))]
 fn explicit_echo(payload: String) -> Result<usize, Error> {
     Ok(payload.len())
 }
 
 /// Echo payload length under an explicit limit and exported method name.
-#[canic_update(name = "wire_named_echo", payload(max_bytes = 24 * 1024))]
+#[canic_update(public, name = "wire_named_echo", payload(max_bytes = 24 * 1024))]
 fn named_echo(payload: String) -> Result<usize, Error> {
     Ok(payload.len())
 }

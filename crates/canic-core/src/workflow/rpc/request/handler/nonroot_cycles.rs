@@ -11,12 +11,13 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    domain::policy::cycles_funding::{self, FundingPolicyViolation},
+    domain::policy::cycles_funding::FundingPolicyViolation,
     dto::rpc::{CyclesRequest, CyclesResponse},
     ids::CanisterRole,
     log,
     log::Topic,
     ops::{
+        config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
@@ -273,7 +274,7 @@ pub(super) fn authorize_request_cycles_inner(
         return Err(RpcWorkflowError::CyclesFundingDisabled.into());
     }
 
-    let policy = cycles_funding::policy_for_child_role(&child.role);
+    let policy = ConfigOps::cycles_funding_policy_for_child_role(&child.role)?;
     let ledger = CyclesFundingLedgerOps::snapshot(ctx.caller);
     let decision = match policy.evaluate(ledger, req.cycles, ctx.now) {
         Ok(decision) => decision,
@@ -340,10 +341,13 @@ pub(super) async fn execute_authorized_request_cycles(
 ) -> Result<CyclesResponse, InternalError> {
     let cost_permit = reserve_request_cycles_cost_guard(ctx, grant.approved_cycles)?;
     mark_request_cycles_external_effect(pending, ctx, grant.approved_cycles);
+    let ledger_before_grant = CyclesFundingLedgerOps::snapshot(ctx.caller);
+    CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
     if let Err(err) =
         MgmtOps::deposit_cycles_with_permit(&cost_permit, ctx.caller, grant.approved_cycles).await
     {
+        CyclesFundingLedgerOps::restore_child_snapshot(ctx.caller, ledger_before_grant);
         let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
         mark_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, &err);
         CyclesFundingMetrics::record_denied(
@@ -355,7 +359,6 @@ pub(super) async fn execute_authorized_request_cycles(
     }
 
     CyclesFundingMetrics::record_granted(ctx.caller, grant.approved_cycles);
-    CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
     if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
         replay_ops::mark_root_replay_recovery_required(

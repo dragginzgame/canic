@@ -409,8 +409,15 @@ impl WasmStoreCanisterApi {
             )));
         }
 
-        let stats = WasmStoreApi::execute_local_store_gc().await?;
-        WasmStoreGcOps::complete(now_secs)?;
+        WasmStoreGcOps::begin_clearing(now_secs)?;
+        let stats = match WasmStoreApi::execute_local_store_gc().await {
+            Ok(stats) => stats,
+            Err(err) => {
+                let _ = WasmStoreGcOps::begin(support::now_secs());
+                return Err(err);
+            }
+        };
+        WasmStoreGcOps::complete(support::now_secs())?;
 
         log!(
             Topic::Wasm,

@@ -14,6 +14,7 @@ fn parsed_authenticated() -> ParsedArgs {
         requires_async: true,
         requires_fallible: true,
         internal: false,
+        public: false,
         query_mode: QueryMode::Plain,
     }
 }
@@ -23,17 +24,13 @@ fn parsed_registered_to_subnet(internal: bool) -> ParsedArgs {
         forwarded: Vec::new(),
         export_name: None,
         payload_max_bytes: None,
-        requires: vec![AccessExprAst::Any(vec![
-            AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::CallerIsController,
-            )),
-            AccessExprAst::Not(Box::new(AccessExprAst::Pred(AccessPredicateAst::Builtin(
-                BuiltinPredicate::CallerIsRegisteredToSubnet,
-            )))),
-        ])],
+        requires: vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerIsRegisteredToSubnet,
+        ))],
         requires_async: true,
         requires_fallible: true,
         internal,
+        public: false,
         query_mode: QueryMode::Plain,
     }
 }
@@ -98,6 +95,49 @@ fn registered_to_subnet_is_allowed_for_internal_endpoint() {
 }
 
 #[test]
+fn negated_caller_predicate_is_rejected() {
+    let sig: Signature = syn::parse_quote!(async fn hello() -> Result<(), ::canic::Error>);
+    let parsed = ParsedArgs {
+        forwarded: Vec::new(),
+        export_name: None,
+        payload_max_bytes: None,
+        requires: vec![AccessExprAst::Not(Box::new(AccessExprAst::Pred(
+            AccessPredicateAst::Builtin(BuiltinPredicate::CallerIsController),
+        )))],
+        requires_async: true,
+        requires_fallible: true,
+        internal: false,
+        public: false,
+        query_mode: QueryMode::Plain,
+    };
+
+    let err = validate(EndpointKind::Update, parsed, &sig, true).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("not(...) must not wrap caller::* or auth::* predicates")
+    );
+}
+
+#[test]
+fn ungated_endpoint_without_public_marker_is_rejected() {
+    let sig: Signature = syn::parse_quote!(fn hello() -> Result<(), ::canic::Error>);
+    let parsed = ParsedArgs {
+        forwarded: Vec::new(),
+        export_name: None,
+        payload_max_bytes: None,
+        requires: Vec::new(),
+        requires_async: false,
+        requires_fallible: false,
+        internal: false,
+        public: false,
+        query_mode: QueryMode::Plain,
+    };
+
+    let err = validate(EndpointKind::Query, parsed, &sig, false).unwrap_err();
+    assert!(err.to_string().contains("endpoint access must be explicit"));
+}
+
+#[test]
 fn payload_limit_is_update_only() {
     let sig: Signature = syn::parse_quote!(fn hello() -> bool);
     let parsed = ParsedArgs {
@@ -108,6 +148,7 @@ fn payload_limit_is_update_only() {
         requires_async: false,
         requires_fallible: false,
         internal: false,
+        public: true,
         query_mode: QueryMode::Plain,
     };
 
@@ -129,6 +170,7 @@ fn composite_query_marker_is_query_only() {
         requires_async: false,
         requires_fallible: false,
         internal: false,
+        public: true,
         query_mode: QueryMode::Composite,
     };
 

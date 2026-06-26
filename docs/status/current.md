@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-23
+Last updated: 2026-06-26
 
 ## Purpose
 
@@ -8,6 +8,27 @@ This file is the compact handoff for new agent sessions. Read it first, then
 inspect only the files needed for the current task.
 
 ## Current Line
+
+- The current `0.72` hardening slice addresses the canic framework security
+  audit feedback without bumping package versions. Endpoint macros now reject
+  implicit-open declarations unless the endpoint is marked `public`, reject
+  `public` combined with `requires(...)`, and reject `not(...)` around caller
+  or delegated-auth predicates. Built-in public queries and test canisters were
+  annotated explicitly. Whitelist access now fails closed when no whitelist is
+  configured. Child cycles funding now has finite per-role config defaults
+  (`5T` per request, `100T` per child, `60s` cooldown), runtime authorization
+  resolves the policy from the current subnet config, and grant/cooldown state
+  is persisted in stable memory. The funding ledger is credited before the
+  external deposit call and restored only when the deposit returns an error.
+  Local wasm-store GC completion now transitions `InProgress -> Clearing`
+  before awaiting the clear operation, with `Clearing -> InProgress` retry
+  recovery on clear failure and `Clearing -> Complete` on success. Focused
+  validation run: `cargo check --locked -p canic-core -p canic -p
+  canic-control-plane -p canic-macros`, `cargo test --locked -p canic-macros`,
+  `cargo test --locked -p canic-core cycles_funding --lib`,
+  `cargo test --locked -p canic-control-plane gc --lib`,
+  `cargo test --locked -p canic-core missing_whitelist_fails_closed --lib`,
+  and `cargo test --locked -p canic --test endpoint_macro`.
 
 - `0.71` planning has started as a blob-storage operator-readiness cleanup
   line. The draft design lives at

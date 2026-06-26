@@ -9,7 +9,9 @@ use crate::{
     eager_static,
     storage::{
         prelude::*,
-        stable::memory::observability::{CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID},
+        stable::memory::observability::{
+            CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID,
+        },
     },
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
@@ -35,6 +37,16 @@ eager_static! {
         )));
 }
 
+eager_static! {
+    //
+    // CYCLES_FUNDING_LEDGER
+    //
+    static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
+        RefCell::new(CyclesFundingLedger::new(StableBtreeMap::init(
+            crate::ic_memory_key!("canic.core.cycles_funding_ledger.v1", CyclesFundingLedger, CYCLES_FUNDING_LEDGER_ID),
+        )));
+}
+
 ///
 /// CycleTracker
 ///
@@ -44,6 +56,77 @@ eager_static! {
 
 pub struct CycleTracker {
     map: StableBtreeMap<u64, Cycles, VirtualMemory<DefaultMemoryImpl>>,
+}
+
+///
+/// CyclesFundingLedgerRecord
+///
+/// Stable record for per-child funding budget and cooldown state.
+/// Owned by stable storage and projected through runtime funding ops.
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CyclesFundingLedgerRecord {
+    pub granted_total: Cycles,
+    pub last_granted_at: u64,
+}
+
+impl CyclesFundingLedgerRecord {
+    pub const STORABLE_MAX_SIZE: u32 = 64;
+}
+
+impl_storable_bounded!(
+    CyclesFundingLedgerRecord,
+    CyclesFundingLedgerRecord::STORABLE_MAX_SIZE,
+    false
+);
+
+///
+/// CyclesFundingLedger
+///
+/// Stable map facade for child funding budget and cooldown accounting.
+/// Owned by stable storage and wrapped by cycle storage ops.
+///
+
+pub struct CyclesFundingLedger {
+    map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, VirtualMemory<DefaultMemoryImpl>>,
+}
+
+impl CyclesFundingLedger {
+    pub const fn new(
+        map: StableBtreeMap<Principal, CyclesFundingLedgerRecord, VirtualMemory<DefaultMemoryImpl>>,
+    ) -> Self {
+        Self { map }
+    }
+
+    #[must_use]
+    pub(crate) fn snapshot(child: Principal) -> Option<CyclesFundingLedgerRecord> {
+        CYCLES_FUNDING_LEDGER.with_borrow(|ledger| ledger.map.get(&child))
+    }
+
+    pub(crate) fn record_child_grant(child: Principal, granted_cycles: Cycles, now_secs: u64) {
+        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
+            let mut record = ledger.map.get(&child).unwrap_or_default();
+            let granted_total = record
+                .granted_total
+                .to_u128()
+                .saturating_add(granted_cycles.to_u128());
+            record.granted_total = Cycles::new(granted_total);
+            record.last_granted_at = now_secs;
+            ledger.map.insert(child, record);
+        });
+    }
+
+    pub(crate) fn set_snapshot(child: Principal, record: CyclesFundingLedgerRecord) {
+        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
+            ledger.map.insert(child, record);
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_for_tests() {
+        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| ledger.map.clear_new());
+    }
 }
 
 ///

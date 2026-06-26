@@ -13,6 +13,7 @@ use crate::{
             RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
+    domain::policy::cycles_funding::FundingPolicy,
     ids::{CanisterRole, SubnetRole},
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::app::AppMode,
@@ -160,5 +161,19 @@ impl ConfigOps {
         let subnet_role = EnvOps::subnet_role()?;
 
         Self::try_get_canister(&subnet_role, canister_role)
+    }
+
+    /// Resolve parent funding limits for a child role in the current subnet.
+    pub(crate) fn cycles_funding_policy_for_child_role(
+        child_role: &CanisterRole,
+    ) -> Result<FundingPolicy, InternalError> {
+        let cfg = Self::current_subnet_canister(child_role)?;
+        let policy = cfg.cycles_funding;
+
+        Ok(FundingPolicy {
+            max_per_request: policy.max_per_request.to_u128(),
+            max_per_child: policy.max_per_child.to_u128(),
+            cooldown_secs: policy.cooldown_secs,
+        })
     }
 }

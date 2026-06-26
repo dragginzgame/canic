@@ -15,6 +15,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         kind,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
+        cycles_funding: CyclesFundingPolicyConfig::default(),
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -68,6 +69,35 @@ fn inline_empty_topup_table_enables_default_topup() {
     let topup = cfg.topup.expect("topup policy should be present");
     assert_eq!(topup.threshold.to_u128(), 10 * TC);
     assert_eq!(topup.amount.to_u128(), 5 * TC);
+}
+
+#[test]
+fn cycles_funding_defaults_are_finite() {
+    let cfg: CanisterConfig =
+        toml::from_str("kind = \"singleton\"\n").expect("canister config should parse");
+
+    assert_eq!(cfg.cycles_funding.max_per_request.to_u128(), 5 * TC);
+    assert_eq!(cfg.cycles_funding.max_per_child.to_u128(), 100 * TC);
+    assert_eq!(cfg.cycles_funding.cooldown_secs, 60);
+}
+
+#[test]
+fn cycles_funding_custom_values_parse() {
+    let cfg: CanisterConfig = toml::from_str(
+        r#"
+kind = "singleton"
+
+[cycles_funding]
+max_per_request = "2T"
+max_per_child = "11T"
+cooldown_secs = 17
+"#,
+    )
+    .expect("cycles funding policy should parse");
+
+    assert_eq!(cfg.cycles_funding.max_per_request.to_u128(), 2 * TC);
+    assert_eq!(cfg.cycles_funding.max_per_child.to_u128(), 11 * TC);
+    assert_eq!(cfg.cycles_funding.cooldown_secs, 17);
 }
 
 #[test]
@@ -916,6 +946,103 @@ fn default_topup_satisfies_half_threshold_invariant() {
     subnet
         .validate()
         .expect("expected default topup to satisfy half-threshold invariant");
+}
+
+#[test]
+fn cycles_funding_zero_max_per_request_fails() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        cycles_funding: CyclesFundingPolicyConfig {
+            max_per_request: Cycles::new(0),
+            ..Default::default()
+        },
+        ..base_canister_config(CanisterKind::Singleton)
+    };
+
+    canisters.insert(CanisterRole::from("app"), cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected zero max_per_request to fail");
+}
+
+#[test]
+fn cycles_funding_zero_max_per_child_fails() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        cycles_funding: CyclesFundingPolicyConfig {
+            max_per_child: Cycles::new(0),
+            ..Default::default()
+        },
+        ..base_canister_config(CanisterKind::Singleton)
+    };
+
+    canisters.insert(CanisterRole::from("app"), cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected zero max_per_child to fail");
+}
+
+#[test]
+fn cycles_funding_zero_cooldown_fails() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        cycles_funding: CyclesFundingPolicyConfig {
+            cooldown_secs: 0,
+            ..Default::default()
+        },
+        ..base_canister_config(CanisterKind::Singleton)
+    };
+
+    canisters.insert(CanisterRole::from("app"), cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected zero cooldown to fail");
+}
+
+#[test]
+fn cycles_funding_request_limit_cannot_exceed_child_budget() {
+    let mut canisters = BTreeMap::new();
+
+    let cfg = CanisterConfig {
+        cycles_funding: CyclesFundingPolicyConfig {
+            max_per_request: Cycles::new(11 * TC),
+            max_per_child: Cycles::new(10 * TC),
+            ..Default::default()
+        },
+        ..base_canister_config(CanisterKind::Singleton)
+    };
+
+    canisters.insert(CanisterRole::from("app"), cfg);
+
+    let subnet = SubnetConfig {
+        canisters,
+        ..Default::default()
+    };
+
+    subnet
+        .validate()
+        .expect_err("expected request limit above child budget to fail");
 }
 
 #[test]

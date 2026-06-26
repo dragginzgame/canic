@@ -34,18 +34,18 @@ async fn issuer_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update]
+#[canic_update(public)]
 async fn issuer_clear_delegated_session() -> Result<(), Error> {
     AuthApi::clear_delegated_session();
     Ok(())
 }
 
-#[canic_query]
+#[canic_query(public)]
 async fn issuer_delegated_session_subject() -> Result<Option<Principal>, Error> {
     Ok(AuthApi::delegated_session_subject())
 }
 
-#[canic_update]
+#[canic_update(public)]
 async fn issuer_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
