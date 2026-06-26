@@ -11,23 +11,23 @@ use canic_core::control_plane_support::{
 
 impl WasmStorePublicationWorkflow {
     // Import any already-registered wasm stores into runtime subnet state.
-    pub fn sync_registered_wasm_store_inventory() -> Vec<WasmStoreBinding> {
+    pub fn sync_registered_wasm_store_inventory() -> Result<Vec<WasmStoreBinding>, InternalError> {
         let mut bindings = Vec::new();
 
         for pid in SubnetRegistryOps::pids_for_role(&WASM_STORE_ROLE).unwrap_or_default() {
             let binding = Self::binding_for_store_pid(pid);
             let created_at = SubnetRegistryOps::get(pid).map_or(0, |record| record.created_at);
-            let _ = SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at);
+            SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at)?;
             bindings.push(binding);
         }
 
-        bindings
+        Ok(bindings)
     }
 
     // Snapshot the current writable store fleet and the current preferred write hint.
     pub(in crate::workflow::runtime::template::publication) async fn snapshot_publication_store_fleet()
     -> Result<PublicationStoreFleet, InternalError> {
-        Self::sync_registered_wasm_store_inventory();
+        Self::sync_registered_wasm_store_inventory()?;
 
         let preferred_binding = match SubnetStateOps::publication_store_binding() {
             Some(binding) if store_pid_for_binding(&binding).is_ok() => Some(binding),

@@ -32,7 +32,10 @@ use crate::{
     domain::auth::{
         DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
     },
-    dto::auth::DelegatedToken,
+    dto::{
+        auth::{ActiveDelegationProofStatus, DelegatedToken},
+        error::{Error, ErrorCode},
+    },
     ids::CanisterRole,
     ops::{
         auth::{AuthScopeError, AuthValidationError},
@@ -82,11 +85,8 @@ impl AuthOps {
 
         let local = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
-        let active_proof = Self::active_delegation_proof(now_ns).ok_or_else(|| {
-            AuthValidationError::Auth(
-                "active delegation proof is unavailable or expired".to_string(),
-            )
-        })?;
+        let active_proof = Self::active_delegation_proof(now_ns)
+            .ok_or_else(|| active_delegation_proof_unavailable_error(now_ns))?;
 
         if active_proof.proof.cert.issuer_pid != local {
             return Err(AuthScopeError::IssuerPidMismatch {
@@ -482,8 +482,37 @@ fn validate_network_root_key_pair(
     Ok(())
 }
 
+fn active_delegation_proof_unavailable_error(now_ns: u64) -> InternalError {
+    let status = AuthOps::active_delegation_proof_status(now_ns).status;
+    let (code, message) = match status {
+        ActiveDelegationProofStatus::Expired => (
+            ErrorCode::AuthProofExpired,
+            "active delegation proof expired; reprovision auth proof",
+        ),
+        ActiveDelegationProofStatus::Missing => (
+            ErrorCode::AuthMaterialStale,
+            "active delegation proof is unavailable; provision auth proof",
+        ),
+        ActiveDelegationProofStatus::RefreshNeeded | ActiveDelegationProofStatus::Valid => (
+            ErrorCode::AuthMaterialStale,
+            "active delegation proof is unavailable or stale; reprovision auth proof",
+        ),
+    };
+    InternalError::public(Error::new(code, message.to_string()))
+}
+
 fn map_prepare_delegated_token_error(err: PrepareDelegatedTokenError) -> InternalError {
-    AuthValidationError::Auth(err.to_string()).into()
+    match err {
+        PrepareDelegatedTokenError::CertExpired => InternalError::public(Error::new(
+            ErrorCode::AuthProofExpired,
+            "active delegation proof expired; reprovision auth proof".to_string(),
+        )),
+        PrepareDelegatedTokenError::TokenOutlivesCert => InternalError::public(Error::new(
+            ErrorCode::AuthMaterialStale,
+            "active delegation proof is too close to expiry; reprovision auth proof".to_string(),
+        )),
+        err => AuthValidationError::Auth(err.to_string()).into(),
+    }
 }
 
 fn map_verify_delegated_token_error(err: VerifyDelegatedTokenError) -> InternalError {
@@ -592,6 +621,41 @@ mod tests {
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
+    }
+
+    #[test]
+    fn active_delegation_proof_unavailable_maps_to_auth_material_stale() {
+        crate::ops::storage::auth::AuthStateOps::clear_active_delegation_proof();
+
+        let err = active_delegation_proof_unavailable_error(20);
+        let public = err
+            .public_error()
+            .expect("missing active proof must be public");
+
+        assert_eq!(public.code, ErrorCode::AuthMaterialStale);
+        assert!(public.message.contains("provision auth proof"));
+    }
+
+    #[test]
+    fn token_prepare_outliving_active_proof_maps_to_auth_material_stale() {
+        let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::TokenOutlivesCert);
+        let public = err
+            .public_error()
+            .expect("stale active proof must be public");
+
+        assert_eq!(public.code, ErrorCode::AuthMaterialStale);
+        assert!(public.message.contains("too close to expiry"));
+    }
+
+    #[test]
+    fn token_prepare_expired_active_proof_maps_to_auth_proof_expired() {
+        let err = map_prepare_delegated_token_error(PrepareDelegatedTokenError::CertExpired);
+        let public = err
+            .public_error()
+            .expect("expired active proof must be public");
+
+        assert_eq!(public.code, ErrorCode::AuthProofExpired);
+        assert!(public.message.contains("expired"));
     }
 
     #[test]

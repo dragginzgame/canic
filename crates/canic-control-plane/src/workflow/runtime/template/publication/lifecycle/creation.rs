@@ -29,7 +29,7 @@ impl WasmStorePublicationWorkflow {
         let binding = Self::binding_for_store_pid(pid);
         let created_at =
             SubnetRegistryOps::get(pid).map_or_else(IcOps::now_secs, |record| record.created_at);
-        let _ = SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at);
+        SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at)?;
 
         log!(Topic::Wasm, Ok, "ws created {} ({})", binding, pid);
 

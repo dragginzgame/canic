@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Updated the maintainer ICP CLI toolchain pin and install guidance to
-  `icp-cli 1.0.1`.
-
 ## [0.72.x] - 2026-06-26 - Security Defaults Hardening
 
 Detailed patch breakdown: [docs/changelog/0.72.md](docs/changelog/0.72.md)
+
+- `0.72.1` tightens post-hardening recovery behavior: delegated-token prepare
+  returns stable auth-proof error codes, wasm-store publication and clear calls
+  use bounded waits, inventory drift reports recoverable workflow errors, and
+  the maintainer ICP CLI pin moves to `icp-cli 1.0.1`.
 
 - `0.72.0` hardens access and funding defaults: endpoint openness must be
   explicit, whitelists fail closed when absent, child cycles funding has finite

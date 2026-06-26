@@ -87,7 +87,7 @@ impl MgmtInfra {
             canister_id: canister_pid,
         };
 
-        Call::unbounded_wait(Principal::management_canister(), "clear_chunk_store")
+        Call::bounded_wait(Principal::management_canister(), "clear_chunk_store")
             .with_arg(args)?
             .execute()
             .await?;

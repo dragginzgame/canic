@@ -4,9 +4,15 @@ use crate::{
     dto::{state::SubnetStateResponse, template::WasmStorePublicationStateResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
-    storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetState, WasmStoreRecord},
+    storage::stable::state::subnet::{
+        PublicationStoreStateRecord, SubnetState, WasmStoreInventoryConflict, WasmStoreRecord,
+        WasmStoreUpsertOutcome,
+    },
 };
-use canic_core::cdk::types::Principal;
+use canic_core::{
+    cdk::types::Principal,
+    control_plane_support::error::{InternalError, InternalErrorOrigin},
+};
 
 ///
 /// SubnetStateOps
@@ -56,9 +62,30 @@ impl SubnetStateOps {
     }
 
     /// Persist one runtime-managed wasm store record.
-    #[must_use]
-    pub fn upsert_wasm_store(binding: WasmStoreBinding, pid: Principal, created_at: u64) -> bool {
-        SubnetState::upsert_wasm_store(binding, pid, created_at)
+    pub fn upsert_wasm_store(
+        binding: WasmStoreBinding,
+        pid: Principal,
+        created_at: u64,
+    ) -> Result<(), InternalError> {
+        match SubnetState::upsert_wasm_store(binding, pid, created_at) {
+            WasmStoreUpsertOutcome::Inserted | WasmStoreUpsertOutcome::Existing => Ok(()),
+            WasmStoreUpsertOutcome::Conflict(conflict) => {
+                Err(Self::wasm_store_inventory_conflict_error(conflict))
+            }
+        }
+    }
+
+    fn wasm_store_inventory_conflict_error(conflict: WasmStoreInventoryConflict) -> InternalError {
+        InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!(
+                "wasm store inventory conflict: existing binding '{}' / pid {}; requested binding '{}' / pid {}",
+                conflict.existing_binding,
+                conflict.existing_pid,
+                conflict.requested_binding,
+                conflict.requested_pid,
+            ),
+        )
     }
 
     /// Remove one runtime-managed wasm store record by binding.
