@@ -65,6 +65,29 @@ pub struct WasmStoreRecord {
 }
 
 ///
+/// WasmStoreInventoryConflict
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WasmStoreInventoryConflict {
+    pub existing_binding: WasmStoreBinding,
+    pub existing_pid: Principal,
+    pub requested_binding: WasmStoreBinding,
+    pub requested_pid: Principal,
+}
+
+///
+/// WasmStoreUpsertOutcome
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WasmStoreUpsertOutcome {
+    Inserted,
+    Existing,
+    Conflict(WasmStoreInventoryConflict),
+}
+
+///
 /// SubnetStateRecord
 ///
 
@@ -257,7 +280,7 @@ impl SubnetState {
         binding: WasmStoreBinding,
         pid: Principal,
         created_at: u64,
-    ) -> bool {
+    ) -> WasmStoreUpsertOutcome {
         SUBNET_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
 
@@ -267,10 +290,15 @@ impl SubnetState {
                 .find(|record| record.binding == binding || record.pid == pid)
             {
                 if existing.binding == binding && existing.pid == pid {
-                    return false;
+                    return WasmStoreUpsertOutcome::Existing;
                 }
 
-                panic!("wasm store inventory conflict for binding '{binding}' / pid {pid}");
+                return WasmStoreUpsertOutcome::Conflict(WasmStoreInventoryConflict {
+                    existing_binding: existing.binding.clone(),
+                    existing_pid: existing.pid,
+                    requested_binding: binding,
+                    requested_pid: pid,
+                });
             }
 
             data.wasm_stores.push(WasmStoreRecord {
@@ -282,7 +310,7 @@ impl SubnetState {
             data.wasm_stores
                 .sort_by(|left, right| left.binding.cmp(&right.binding));
             cell.set(data);
-            true
+            WasmStoreUpsertOutcome::Inserted
         })
     }
 
@@ -506,6 +534,43 @@ mod tests {
         assert_eq!(SubnetState::publication_store_state().retired_at, 0);
         assert_eq!(SubnetState::publication_store_state().generation, 4);
         assert_eq!(SubnetState::publication_store_state().changed_at, 43);
+    }
+
+    #[test]
+    fn upsert_wasm_store_is_idempotent_and_reports_conflicts() {
+        SubnetState::import(SubnetStateRecord::default());
+
+        let binding = WasmStoreBinding::new("primary");
+        let pid = Principal::from_slice(&[1; 29]);
+        let other_pid = Principal::from_slice(&[2; 29]);
+
+        assert_eq!(
+            SubnetState::upsert_wasm_store(binding.clone(), pid, 50),
+            WasmStoreUpsertOutcome::Inserted
+        );
+        assert_eq!(
+            SubnetState::upsert_wasm_store(binding.clone(), pid, 51),
+            WasmStoreUpsertOutcome::Existing
+        );
+        assert_eq!(
+            SubnetState::upsert_wasm_store(binding.clone(), other_pid, 52),
+            WasmStoreUpsertOutcome::Conflict(WasmStoreInventoryConflict {
+                existing_binding: binding.clone(),
+                existing_pid: pid,
+                requested_binding: binding.clone(),
+                requested_pid: other_pid,
+            })
+        );
+        assert_eq!(
+            SubnetState::upsert_wasm_store(WasmStoreBinding::new("secondary"), pid, 53),
+            WasmStoreUpsertOutcome::Conflict(WasmStoreInventoryConflict {
+                existing_binding: binding,
+                existing_pid: pid,
+                requested_binding: WasmStoreBinding::new("secondary"),
+                requested_pid: pid,
+            })
+        );
+        assert_eq!(SubnetState::wasm_stores().len(), 1);
     }
 
     #[test]

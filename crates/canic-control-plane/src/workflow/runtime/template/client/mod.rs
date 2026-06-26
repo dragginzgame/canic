@@ -166,7 +166,7 @@ impl WasmStoreInternalClient {
         A: ArgumentEncoder,
     {
         debug_assert!(!endpoint.requires_internal_proof());
-        let call = CallOps::unbounded_wait(self.store_pid, endpoint.method)
+        let call = CallOps::bounded_wait(self.store_pid, endpoint.method)
             .with_args(arg)?
             .execute()
             .await?;
@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn root_update_endpoint_table_uses_direct_calls() {
+    fn root_update_endpoint_table_does_not_require_internal_proofs() {
         for endpoint in WasmStoreInternalClient::ENDPOINTS
             .iter()
             .filter(|endpoint| {

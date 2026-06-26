@@ -756,7 +756,7 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
 async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     let role = CanisterRole::WASM_STORE;
 
-    let existing_bindings = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();
+    let existing_bindings = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory()?;
     if !existing_bindings.is_empty() {
         CanisterOpsMetricsApi::record(
             CanisterOpsMetricOperation::Create,
@@ -778,7 +778,7 @@ async fn ensure_required_wasm_store_canister() -> Result<(), InternalError> {
     )
     .await?;
     canic_core::perf!("bootstrap_create_wasm_store");
-    let _ = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory();
+    let _ = WasmStorePublicationWorkflow::sync_registered_wasm_store_inventory()?;
     canic_core::perf!("bootstrap_sync_store_inventory");
 
     Ok(())

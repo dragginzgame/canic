@@ -469,7 +469,7 @@ fn assert_active_delegation_proof_refresh_and_expiry(
         (request,),
     );
     let err = prepared.expect_err("expired active proof must stop new delegated-token prepare");
-    assert_eq!(err.code, ErrorCode::Internal);
+    assert_eq!(err.code, ErrorCode::AuthProofExpired);
 }
 
 fn query_active_delegation_proof_status(
