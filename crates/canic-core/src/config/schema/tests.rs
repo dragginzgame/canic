@@ -23,6 +23,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         kind,
         initial_cycles: Cycles::new(0),
         topup: None,
+        cycles_funding: CyclesFundingPolicyConfig::default(),
         randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
@@ -458,4 +459,12 @@ fn invalid_whitelist_principal_is_rejected() {
 
     cfg.validate()
         .expect_err("expected invalid principal to fail");
+}
+
+#[test]
+fn missing_whitelist_fails_closed() {
+    let cfg = ConfigModel::test_default();
+    let caller = Principal::from_slice(&[42; 29]);
+
+    assert!(!cfg.is_whitelisted(&caller));
 }

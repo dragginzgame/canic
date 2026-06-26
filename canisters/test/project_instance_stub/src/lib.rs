@@ -16,7 +16,7 @@ async fn canic_install(_args: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
 /// Return this canister's own id so tests can confirm the instance is live.
-#[canic_query]
+#[canic_query(public)]
 async fn instance_id() -> Result<Principal, Error> {
     Ok(canic::cdk::api::canister_self())
 }

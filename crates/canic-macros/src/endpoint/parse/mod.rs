@@ -4,7 +4,7 @@ use syn::{
     Expr, Ident, LitStr, Meta, MetaNameValue, Path, Token, parse::Parser, punctuated::Punctuated,
 };
 
-const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must be expressed via requires(...), payload(...), internal, composite, or name = \"...\"";
+const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must be expressed via requires(...), public, payload(...), internal, composite, or name = \"...\"";
 
 //
 // ============================================================================
@@ -15,8 +15,8 @@ const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must be expressed via requ
 //
 //   #[canic_update(requires(...))]
 //
-// `requires(...)` is the only access-control surface.
-// All access semantics are expressed as AccessExprAst.
+// `requires(...)` is the only gated access-control surface.
+// Intentionally open endpoints must opt into `public`.
 //
 
 ///
@@ -104,6 +104,7 @@ pub struct ParsedArgs {
     pub requires_async: bool,
     pub requires_fallible: bool,
     pub internal: bool,
+    pub public: bool,
     pub query_mode: QueryMode,
 }
 
@@ -120,6 +121,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     let mut forwarded = Vec::new();
     let mut requires = Vec::new();
     let mut internal = false;
+    let mut public = false;
     let mut saw_name = false;
     let mut query_mode = QueryMode::Plain;
     let mut export_name = None;
@@ -147,6 +149,15 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                     ));
                 }
                 internal = true;
+            }
+            Meta::Path(path) if path.is_ident("public") => {
+                if public {
+                    return Err(syn::Error::new_spanned(
+                        path,
+                        "public endpoint marker must appear only once",
+                    ));
+                }
+                public = true;
             }
             Meta::Path(path) if path.is_ident("composite") => {
                 if query_mode.is_composite() {
@@ -182,6 +193,16 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
                 parse_true_marker(&nv, "internal")?;
                 internal = true;
             }
+            Meta::NameValue(nv) if nv.path.is_ident("public") => {
+                if public {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "public endpoint marker must appear only once",
+                    ));
+                }
+                parse_true_marker(&nv, "public")?;
+                public = true;
+            }
             Meta::NameValue(nv) if nv.path.is_ident("composite") => {
                 if query_mode.is_composite() {
                     return Err(syn::Error::new_spanned(
@@ -208,10 +229,15 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         }
     }
 
-    if requires.is_empty() && !internal && forwarded.is_empty() && payload_max_bytes.is_none() {
+    if requires.is_empty()
+        && !internal
+        && !public
+        && forwarded.is_empty()
+        && payload_max_bytes.is_none()
+    {
         return Err(syn::Error::new_spanned(
             attr,
-            "expected requires(...), internal, composite, name = \"...\", or payload(...)",
+            "expected requires(...), public, internal, composite, name = \"...\", or payload(...)",
         ));
     }
 
@@ -226,6 +252,7 @@ pub fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         requires_async,
         requires_fallible,
         internal,
+        public,
         query_mode,
     })
 }
@@ -281,6 +308,7 @@ const fn empty() -> ParsedArgs {
         requires_async: false,
         requires_fallible: false,
         internal: false,
+        public: false,
         query_mode: QueryMode::Plain,
     }
 }

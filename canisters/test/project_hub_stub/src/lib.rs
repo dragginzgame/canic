@@ -40,18 +40,18 @@ async fn verifier_verify_token_any(token: DelegatedToken) -> Result<(), Error> {
     Ok(())
 }
 
-#[canic_update]
+#[canic_update(public)]
 async fn verifier_clear_delegated_session() -> Result<(), Error> {
     AuthApi::clear_delegated_session();
     Ok(())
 }
 
-#[canic_query]
+#[canic_query(public)]
 async fn verifier_delegated_session_subject() -> Result<Option<Principal>, Error> {
     Ok(AuthApi::delegated_session_subject())
 }
 
-#[canic_update]
+#[canic_update(public)]
 async fn verifier_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
@@ -60,25 +60,25 @@ async fn verifier_verify_role_attestation(
 }
 
 /// Resolve one logical project key to a dedicated instance, creating it when absent.
-#[canic_update]
+#[canic_update(public)]
 async fn resolve_project(project_key: String) -> Result<DirectoryEntryStatusResponse, Error> {
     DirectoryApi::resolve_or_create(PROJECTS_POOL, project_key).await
 }
 
 /// Repair or release one directory entry after partial failure.
-#[canic_update]
+#[canic_update(public)]
 async fn recover_project(project_key: String) -> Result<DirectoryRecoveryResponse, Error> {
     DirectoryApi::recover_entry(PROJECTS_POOL, project_key).await
 }
 
 /// Look up the currently bound instance pid for one project key.
-#[canic_query]
+#[canic_query(public)]
 async fn lookup_project(project_key: String) -> Result<Option<Principal>, Error> {
     Ok(DirectoryApi::lookup_key(PROJECTS_POOL, &project_key))
 }
 
 /// Return the full directory entry state for one project key.
-#[canic_query]
+#[canic_query(public)]
 async fn lookup_project_entry(
     project_key: String,
 ) -> Result<Option<DirectoryEntryStatusResponse>, Error> {

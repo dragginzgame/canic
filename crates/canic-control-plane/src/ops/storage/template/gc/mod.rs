@@ -42,6 +42,11 @@ impl WasmStoreGcOps {
         Self::transition_to(WasmStoreGcMode::InProgress, changed_at)
     }
 
+    // Mark this local wasm store as clearing chunks and metadata.
+    pub fn begin_clearing(changed_at: u64) -> Result<(), Error> {
+        Self::transition_to(WasmStoreGcMode::Clearing, changed_at)
+    }
+
     // Mark this local wasm store as having completed the current local GC pass.
     pub fn complete(changed_at: u64) -> Result<(), Error> {
         Self::transition_to(WasmStoreGcMode::Complete, changed_at)
@@ -69,7 +74,9 @@ fn transition_record(
     match (current.mode, next) {
         (WasmStoreGcMode::Normal, WasmStoreGcMode::Prepared)
         | (WasmStoreGcMode::Prepared, WasmStoreGcMode::InProgress)
-        | (WasmStoreGcMode::InProgress, WasmStoreGcMode::Complete) => {
+        | (WasmStoreGcMode::InProgress, WasmStoreGcMode::Clearing)
+        | (WasmStoreGcMode::Clearing, WasmStoreGcMode::InProgress)
+        | (WasmStoreGcMode::Clearing, WasmStoreGcMode::Complete) => {
             let mut updated = current.clone();
             updated.mode = next;
             updated.changed_at = changed_at;
@@ -81,9 +88,12 @@ fn transition_record(
                     updated.completed_at = None;
                 }
                 WasmStoreGcMode::InProgress => {
-                    updated.started_at = Some(changed_at);
+                    if current.mode == WasmStoreGcMode::Prepared {
+                        updated.started_at = Some(changed_at);
+                    }
                     updated.completed_at = None;
                 }
+                WasmStoreGcMode::Clearing => {}
                 WasmStoreGcMode::Complete => {
                     updated.completed_at = Some(changed_at);
                     updated.runs_completed = updated.runs_completed.saturating_add(1);
@@ -133,14 +143,43 @@ mod tests {
         assert_eq!(in_progress.completed_at, None);
         assert_eq!(in_progress.runs_completed, 0);
 
-        let complete = transition_record(&in_progress, WasmStoreGcMode::Complete, 30)
-            .expect("in progress -> complete must succeed");
+        let clearing = transition_record(&in_progress, WasmStoreGcMode::Clearing, 30)
+            .expect("in progress -> clearing must succeed");
+        assert_eq!(clearing.mode, WasmStoreGcMode::Clearing);
+        assert_eq!(clearing.changed_at, 30);
+        assert_eq!(clearing.prepared_at, Some(10));
+        assert_eq!(clearing.started_at, Some(20));
+        assert_eq!(clearing.completed_at, None);
+        assert_eq!(clearing.runs_completed, 0);
+
+        let complete = transition_record(&clearing, WasmStoreGcMode::Complete, 40)
+            .expect("clearing -> complete must succeed");
         assert_eq!(complete.mode, WasmStoreGcMode::Complete);
-        assert_eq!(complete.changed_at, 30);
+        assert_eq!(complete.changed_at, 40);
         assert_eq!(complete.prepared_at, Some(10));
         assert_eq!(complete.started_at, Some(20));
-        assert_eq!(complete.completed_at, Some(30));
+        assert_eq!(complete.completed_at, Some(40));
         assert_eq!(complete.runs_completed, 1);
+    }
+
+    #[test]
+    fn transition_record_can_return_from_clearing_to_in_progress_for_retry() {
+        let current = WasmStoreGcStateRecord {
+            mode: WasmStoreGcMode::Clearing,
+            changed_at: 30,
+            prepared_at: Some(10),
+            started_at: Some(20),
+            completed_at: None,
+            runs_completed: 0,
+        };
+
+        let updated = transition_record(&current, WasmStoreGcMode::InProgress, 40)
+            .expect("clearing -> in progress retry transition must succeed");
+
+        assert_eq!(updated.mode, WasmStoreGcMode::InProgress);
+        assert_eq!(updated.changed_at, 40);
+        assert_eq!(updated.started_at, Some(20));
+        assert_eq!(updated.completed_at, None);
     }
 
     #[test]

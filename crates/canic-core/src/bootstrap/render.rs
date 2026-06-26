@@ -8,11 +8,11 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-        CanisterPool, ConfigModel, DelegatedTokenConfig, DiagnosticsCanisterConfig,
-        DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy, LogConfig,
-        MetricsCanisterConfig, MetricsProfile, PoolImport, RandomnessConfig, RandomnessSource,
-        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        CanisterPool, ConfigModel, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+        DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy,
+        LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport, RandomnessConfig,
+        RandomnessSource, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
+        ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
         StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
@@ -374,6 +374,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let kind = render_canister_kind(config.kind);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
+    let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
     let randomness = render_randomness_config(&config.randomness);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
@@ -388,6 +389,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             kind: #kind,
             initial_cycles: #initial_cycles,
             topup: #topup,
+            cycles_funding: #cycles_funding,
             randomness: #randomness,
             scaling: #scaling,
             sharding: #sharding,
@@ -396,6 +398,21 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             standards: #standards,
             diagnostics: #diagnostics,
             metrics: #metrics,
+        }
+    }
+}
+
+// Render parent-to-child cycles funding policy limits.
+fn render_cycles_funding_policy(policy: &CyclesFundingPolicyConfig) -> TokenStream {
+    let max_per_request = render_cycles(policy.max_per_request.to_u128());
+    let max_per_child = render_cycles(policy.max_per_child.to_u128());
+    let cooldown_secs = policy.cooldown_secs;
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::CyclesFundingPolicyConfig {
+            max_per_request: #max_per_request,
+            max_per_child: #max_per_child,
+            cooldown_secs: #cooldown_secs,
         }
     }
 }

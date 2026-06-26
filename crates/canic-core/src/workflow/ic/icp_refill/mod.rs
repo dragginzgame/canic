@@ -17,9 +17,8 @@ use crate::{
         types::{Cycles, Principal},
     },
     config::schema::{IcpRefillPolicy, TopupPolicy},
-    domain::policy::{
-        cycles_funding,
-        icp_refill::{IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_manual_refill},
+    domain::policy::icp_refill::{
+        IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_manual_refill,
     },
     dto::icp_refill::IcpRefillRequest,
     ids::BuildNetwork,
@@ -274,10 +273,12 @@ const fn policy_input(
 fn funding_cooldown_retry_after_secs(request: &IcpRefillRequest, now_secs: u64) -> Option<u64> {
     let role = direct_child_refill_role(request.target_canister, request.source_canister)?;
 
-    cycles_funding::policy_for_child_role(&role).cooldown_retry_after_secs(
-        CyclesFundingLedgerOps::snapshot(request.target_canister),
-        now_secs,
-    )
+    ConfigOps::cycles_funding_policy_for_child_role(&role)
+        .ok()?
+        .cooldown_retry_after_secs(
+            CyclesFundingLedgerOps::snapshot(request.target_canister),
+            now_secs,
+        )
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {

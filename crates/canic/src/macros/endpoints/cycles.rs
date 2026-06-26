@@ -8,7 +8,7 @@
 #[macro_export]
 macro_rules! canic_emit_cycle_tracker_endpoints {
     () => {
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_cycle_tracker(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>, ::canic::Error>
@@ -16,7 +16,7 @@ macro_rules! canic_emit_cycle_tracker_endpoints {
             Ok($crate::__internal::core::api::cycles::CycleTrackerQuery::page(page))
         }
 
-        #[$crate::canic_query]
+        #[$crate::canic_query(public)]
         fn canic_cycle_topups(
             page: ::canic::dto::page::PageRequest,
         ) -> Result<::canic::dto::page::Page<::canic::dto::cycles::CycleTopupEvent>, ::canic::Error>

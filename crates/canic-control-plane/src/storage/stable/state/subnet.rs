@@ -323,6 +323,7 @@ impl SubnetState {
                     record.gc.started_at = Some(changed_at);
                     record.gc.completed_at = None;
                 }
+                WasmStoreGcMode::Clearing => {}
                 WasmStoreGcMode::Complete => {
                     record.gc.completed_at = Some(changed_at);
                     record.gc.runs_completed = record.gc.runs_completed.saturating_add(1);

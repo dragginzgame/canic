@@ -28,7 +28,7 @@ async fn canic_setup() {}
 async fn canic_install() {}
 async fn canic_upgrade() {}
 
-#[canic_update]
+#[canic_update(public)]
 async fn root_verify_role_attestation(
     attestation: SignedRoleAttestation,
     min_accepted_epoch: u64,
@@ -36,12 +36,12 @@ async fn root_verify_role_attestation(
     AuthApi::verify_role_attestation(&attestation, min_accepted_epoch).await
 }
 
-#[canic_query]
+#[canic_query(public)]
 async fn root_now_secs() -> Result<u64, Error> {
     Ok(ic_cdk::api::time() / 1_000_000_000)
 }
 
-#[canic_update]
+#[canic_update(public)]
 async fn root_bootstrap_delegated_session(
     token: DelegatedToken,
     delegated_subject: candid::Principal,
@@ -50,13 +50,13 @@ async fn root_bootstrap_delegated_session(
     AuthApi::set_delegated_session_subject(delegated_subject, token, requested_ttl_ns)
 }
 
-#[canic_update]
+#[canic_update(public)]
 async fn root_clear_delegated_session() -> Result<(), Error> {
     AuthApi::clear_delegated_session();
     Ok(())
 }
 
-#[canic_query]
+#[canic_query(public)]
 async fn root_delegated_session_subject() -> Result<Option<candid::Principal>, Error> {
     Ok(AuthApi::delegated_session_subject())
 }

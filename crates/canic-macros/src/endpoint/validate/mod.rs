@@ -15,6 +15,7 @@ use syn::{FnArg, LitStr, Signature, Type};
 /// - fallible return requirements
 /// - authenticated predicate argument shape
 /// - internal-only predicate usage
+/// - explicit public-vs-gated access shape
 ///
 /// It does NOT interpret access semantics beyond structural checks.
 ///
@@ -60,6 +61,27 @@ pub fn validate(
         return Err(syn::Error::new_spanned(
             &sig.output,
             "this endpoint must return `Result<_, E>` where `E: From<canic::Error>`",
+        ));
+    }
+
+    if parsed.public && !parsed.requires.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "public endpoints must not also declare requires(...)",
+        ));
+    }
+
+    if !parsed.public && parsed.requires.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "endpoint access must be explicit: add requires(...) or public",
+        ));
+    }
+
+    if contains_negated_auth_or_caller_predicate(&parsed.requires) {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "not(...) must not wrap caller::* or auth::* predicates",
         ));
     }
 
@@ -115,6 +137,43 @@ fn access_expr_contains_authenticated(expr: &AccessExprAst) -> bool {
         AccessExprAst::Pred(AccessPredicateAst::Builtin(_) | AccessPredicateAst::Custom(_)) => {
             false
         }
+    }
+}
+
+fn contains_negated_auth_or_caller_predicate(requires: &[AccessExprAst]) -> bool {
+    requires.iter().any(access_expr_contains_negated_identity)
+}
+
+fn access_expr_contains_negated_identity(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(access_expr_contains_negated_identity)
+        }
+        AccessExprAst::Not(expr) => access_expr_contains_identity_predicate(expr),
+        AccessExprAst::Pred(_) => false,
+    }
+}
+
+fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(access_expr_contains_identity_predicate)
+        }
+        AccessExprAst::Not(expr) => access_expr_contains_identity_predicate(expr),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(builtin)) => {
+            matches!(
+                builtin,
+                BuiltinPredicate::CallerIsController
+                    | BuiltinPredicate::CallerIsParent
+                    | BuiltinPredicate::CallerIsChild
+                    | BuiltinPredicate::CallerIsRoot
+                    | BuiltinPredicate::CallerIsSameCanister
+                    | BuiltinPredicate::CallerIsRegisteredToSubnet
+                    | BuiltinPredicate::CallerIsWhitelisted
+                    | BuiltinPredicate::Authenticated { .. }
+            )
+        }
+        AccessExprAst::Pred(AccessPredicateAst::Custom(_)) => false,
     }
 }
 

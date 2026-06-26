@@ -99,8 +99,9 @@ pub mod memory {
         pub const LOG_INDEX_ID: u8 = 31;
         pub const LOG_DATA_ID: u8 = 32;
         pub const ICP_REFILL_RECORDS_ID: u8 = 33;
+        pub const CYCLES_FUNDING_LEDGER_ID: u8 = 34;
 
-        // Reserved: 34–38
+        // Reserved: 35–38
     }
 
     // ---------------------------------------------------------------------

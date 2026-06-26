@@ -41,6 +41,22 @@ fn composite_query_true_is_forwarded() {
 }
 
 #[test]
+fn public_marker_is_parsed() {
+    let parsed = parse_args(quote!(public)).expect("public marker should parse");
+
+    assert!(parsed.public);
+    assert!(parsed.requires.is_empty());
+    assert!(parsed.forwarded.is_empty());
+}
+
+#[test]
+fn public_false_marker_is_rejected() {
+    let err = parse_args(quote!(public = false)).expect_err("false public");
+
+    assert!(err.to_string().contains("public must be true"));
+}
+
+#[test]
 fn composite_query_false_is_rejected() {
     let err = parse_args(quote!(composite = false)).expect_err("false composite");
 
