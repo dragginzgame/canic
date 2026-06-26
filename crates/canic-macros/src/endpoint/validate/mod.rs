@@ -36,6 +36,8 @@ pub fn validate(
     sig: &Signature,
     asyncness: bool,
 ) -> syn::Result<ValidatedArgs> {
+    let requires_access = !parsed.requires.is_empty();
+
     if parsed.payload_max_bytes.is_some() && matches!(kind, EndpointKind::Query) {
         return Err(syn::Error::new_spanned(
             &sig.ident,
@@ -50,14 +52,14 @@ pub fn validate(
         ));
     }
 
-    if parsed.requires_async && !asyncness {
+    if requires_access && !asyncness {
         return Err(syn::Error::new_spanned(
             &sig.ident,
             "this endpoint requires `async fn` due to access predicates",
         ));
     }
 
-    if parsed.requires_fallible && !returns_fallible(sig) {
+    if requires_access && !returns_fallible(sig) {
         return Err(syn::Error::new_spanned(
             &sig.output,
             "this endpoint must return `Result<_, E>` where `E: From<canic::Error>`",
