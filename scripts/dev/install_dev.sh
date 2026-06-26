@@ -6,8 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 if {
     [ -z "${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}" ] ||
         [ -z "${CANIC_SHELLCHECK_VERSION:-}" ] ||
-        [ -z "${CANIC_ICP_CLI_VERSION:-}" ] ||
-        [ -z "${CANIC_ICQ_VERSION:-${CANIC_IC_QUERY_VERSION:-}}" ]
+        [ -z "${CANIC_ICP_CLI_VERSION:-}" ]
 } &&
     [ -f "$ROOT_DIR/tool-versions.env" ]; then
     # shellcheck source=tool-versions.env
@@ -20,12 +19,10 @@ ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_SHELLCHECK_VERSION="${CANIC_SHELLCHECK_VERSION:-}"
 SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_ICP_CLI_VERSION="${CANIC_ICP_CLI_VERSION:-}"
-CANIC_ICQ_VERSION="${CANIC_ICQ_VERSION:-${CANIC_IC_QUERY_VERSION:-}}"
 CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
 if [ -z "$CANIC_ACTIONLINT_VERSION" ] ||
     [ -z "$CANIC_SHELLCHECK_VERSION" ] ||
-    [ -z "$CANIC_ICP_CLI_VERSION" ] ||
-    [ -z "$CANIC_ICQ_VERSION" ]; then
+    [ -z "$CANIC_ICP_CLI_VERSION" ]; then
     echo "missing external tool version pin; expected tool-versions.env or explicit environment overrides" >&2
     exit 1
 fi
@@ -215,26 +212,6 @@ install_or_update_icp_cli() {
     fi
 }
 
-install_or_update_ic_query() {
-    local cargo_bin_dir
-    local icq_path=""
-
-    cargo_bin_dir="$(resolved_cargo_bin_dir)"
-    yellow "IC Query CLI:"
-    mkdir -p "$cargo_bin_dir"
-    export PATH="$cargo_bin_dir:$PATH"
-    hash -r 2>/dev/null || true
-    cyan_command "bash scripts/ci/install-ic-query.sh"
-    bash "$ROOT_DIR/scripts/ci/install-ic-query.sh"
-    hash -r 2>/dev/null || true
-    require_command icq
-    icq_path="$(command -v icq)"
-    green "icq ready: $(icq --version 2>&1) ($icq_path)"
-    if [ "$icq_path" != "$cargo_bin_dir/icq" ]; then
-        yellow "icq resolves to $icq_path; put $cargo_bin_dir before other bin directories in PATH."
-    fi
-}
-
 install_or_update_ic_wasm() {
     local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
     local path_had_npm_bin=0
@@ -276,14 +253,13 @@ configure_git_hooks_if_present() {
 
 main() {
     if [ "${1:-}" = "--update-prereqs" ]; then
-        blue "Checking Python, shell lint, workflow lint, ICP CLI, and IC query prerequisites"
+        blue "Checking Python, shell lint, workflow lint, and ICP CLI prerequisites"
         require_python
         install_or_update_shellcheck
         install_or_update_actionlint
         install_or_update_icp_cli
-        install_or_update_ic_query
         install_or_update_ic_wasm
-        green "Python, shell lint, workflow lint, ICP CLI, and IC query prerequisites ready."
+        green "Python, shell lint, workflow lint, and ICP CLI prerequisites ready."
         return 0
     fi
 
@@ -322,7 +298,6 @@ main() {
     install_or_update_shellcheck
     install_or_update_actionlint
     install_or_update_icp_cli
-    install_or_update_ic_query
     install_or_update_ic_wasm
 
     yellow "Canic CLI:"

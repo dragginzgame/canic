@@ -95,8 +95,9 @@ For a full local development setup, including ICP CLI, helper tools, and the
 
 ## Helper Tools
 
-Some Canic workflows use external helper tools such as `icq`; their command
-surfaces are documented with those tools, not in `canic-cli`.
+Canic uses the configured `icp` CLI for local replica and canister operations.
+Standalone NNS inspection helpers are optional and documented outside
+`canic-cli`.
 
 For password-protected ICP CLI PEM identities, use
 `icp settings session-length <duration>` and

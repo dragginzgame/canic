@@ -399,34 +399,41 @@ fn replay_returns_cached_response_for_identical_request() {
 }
 
 #[test]
-fn cycles_rejects_when_requested_above_root_balance() {
+fn cycles_request_above_default_policy_is_clamped_and_transferred() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
         .subnet_index
         .get(&canister::SCALE_HUB)
         .copied()
         .expect("scale_hub canister must exist");
+    let expected_grant = 5_000_000_000_000u128;
 
     let request = Request::Cycles(CyclesRequest {
         cycles: u128::MAX,
         metadata: Some(metadata([18u8; 32], 120_000_000_000)),
     });
 
-    let err = root_response_as(&setup, caller, request)
-        .expect_err("cycles above available root balance must reject");
-    assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("insufficient funding cycles"),
-        "expected insufficient funding cycles error, got: {err:?}"
+    let before = canister_cycle_balance(&setup, caller);
+    let response = root_response_as(&setup, caller, request)
+        .expect("request above default per-request policy must be clamped");
+    let after = canister_cycle_balance(&setup, caller);
+
+    match response {
+        Response::Cycles(response) => assert_eq!(response.cycles_transferred, expected_grant),
+        other => panic!("expected clamped cycles response, got: {other:?}"),
+    }
+    assert_eq!(
+        after.saturating_sub(before),
+        expected_grant,
+        "clamped root funding must increase the child balance by the approved grant"
     );
 
     let metrics = root_capability_metrics(&setup);
     assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "Denied"), 1);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 0);
+    assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 1);
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
-        0
+        1
     );
 }
 

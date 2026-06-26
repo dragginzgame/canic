@@ -8,14 +8,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.72.x] - 2026-06-26 - Security Defaults Hardening
+## [0.73.x] - 2026-06-26 - Post-Hardening Recovery Polish
 
-Detailed patch breakdown: [docs/changelog/0.72.md](docs/changelog/0.72.md)
+Detailed patch breakdown: [docs/changelog/0.73.md](docs/changelog/0.73.md)
 
-- `0.72.1` tightens post-hardening recovery behavior: delegated-token prepare
+- `0.73.1` replaces the root-subnet evidence check's `icq` process call with
+  the `ic-query` 0.5.11 shared library, removes repo-managed `icq` tooling, and
+  leaves standalone NNS inspection to the upstream `ic-query-cli` package.
+
+- `0.73.0` tightens post-hardening recovery behavior: delegated-token prepare
   returns stable auth-proof error codes, wasm-store publication and clear calls
   use bounded waits, inventory drift reports recoverable workflow errors, and
   the maintainer ICP CLI pin moves to `icp-cli 1.0.1`.
+
+## [0.72.x] - 2026-06-26 - Security Defaults Hardening
+
+Detailed patch breakdown: [docs/changelog/0.72.md](docs/changelog/0.72.md)
 
 - `0.72.0` hardens access and funding defaults: endpoint openness must be
   explicit, whitelists fail closed when absent, child cycles funding has finite

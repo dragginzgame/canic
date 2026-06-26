@@ -16,7 +16,7 @@ Options:
   --cycles-per-billion-instructions <cycles>
       Use an explicit operator-supplied rate. Wins over --estimate-node-count.
   --estimate-canister-principal <principal>
-      Resolve a canister principal through the cached icq mainnet subnet catalog.
+      Resolve a canister principal through the cached mainnet subnet catalog.
   --allow-stale-subnet-catalog
       Permit catalog-derived estimates from stale cached catalog data.
   --subnet-catalog-stale-after <duration>
