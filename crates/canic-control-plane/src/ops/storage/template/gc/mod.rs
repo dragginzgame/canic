@@ -73,9 +73,8 @@ fn transition_record(
 
     match (current.mode, next) {
         (WasmStoreGcMode::Normal, WasmStoreGcMode::Prepared)
-        | (WasmStoreGcMode::Prepared, WasmStoreGcMode::InProgress)
+        | (WasmStoreGcMode::Prepared | WasmStoreGcMode::Clearing, WasmStoreGcMode::InProgress)
         | (WasmStoreGcMode::InProgress, WasmStoreGcMode::Clearing)
-        | (WasmStoreGcMode::Clearing, WasmStoreGcMode::InProgress)
         | (WasmStoreGcMode::Clearing, WasmStoreGcMode::Complete) => {
             let mut updated = current.clone();
             updated.mode = next;
@@ -93,12 +92,11 @@ fn transition_record(
                     }
                     updated.completed_at = None;
                 }
-                WasmStoreGcMode::Clearing => {}
                 WasmStoreGcMode::Complete => {
                     updated.completed_at = Some(changed_at);
                     updated.runs_completed = updated.runs_completed.saturating_add(1);
                 }
-                WasmStoreGcMode::Normal => {}
+                WasmStoreGcMode::Clearing | WasmStoreGcMode::Normal => {}
             }
 
             Ok(updated)
