@@ -8,7 +8,7 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-#[canic_query]
+#[canic_query(public)]
 async fn demo_user_shard_overview(partition_key: Option<String>) -> Result<String, Error> {
     let mut lines = vec![
         "demo=user_shard".to_string(),
@@ -26,7 +26,7 @@ async fn demo_user_shard_overview(partition_key: Option<String>) -> Result<Strin
     Ok(lines.join("\n"))
 }
 
-#[canic_query]
+#[canic_query(public)]
 async fn demo_user_shard_describe(partition_key: String) -> Result<String, Error> {
     Ok(format!(
         "partition_key={partition_key}\npartition_key_bytes={}\nhandled_by={}\ncaller={}",

@@ -9,7 +9,7 @@ async fn canic_upgrade() {}
 canic::start!();
 
 /// Ask the configured parent for a direct cycles top-up.
-#[canic_update]
+#[canic_update(public)]
 async fn request_cycles_from_parent(cycles: u128) -> Result<u128, Error> {
     RpcApi::request_cycles(cycles)
         .await
