@@ -67,9 +67,9 @@ walkthrough.
   or teardown authority. See
   [v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md) and
   [v1-operator-walkthrough.md](docs/architecture/v1-operator-walkthrough.md).
-* **NNS inspection:** The `icq` binary can refresh and inspect cached public IC
-  subnet, node, node-operator, and node-provider metadata from the NNS registry
-  without mutating deployments or canisters.
+* **NNS evidence through shared libraries:** Canic host checks use `ic-query`
+  to read and refresh cached public IC subnet metadata without requiring the
+  standalone NNS inspection CLI.
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
   fleet configs and replica status, installs fleets, captures topology-aware
   snapshots, validates backup manifests, and drives guarded restore planning.
@@ -91,28 +91,11 @@ canic info env test
 canic info medic test
 ```
 
-To inspect public IC NNS metadata:
+For ad hoc public IC NNS inspection outside Canic, install the optional
+upstream CLI:
 
 ```bash
-icq nns subnet refresh
-icq nns registry version
-icq nns subnet list
-icq nns data-center list
-icq nns node list
-icq nns node list --data-center <data-center-prefix>
-icq nns node list --node-provider <node-provider-prefix>
-icq nns node-provider list
-icq nns node-operator list
-icq nns topology refresh
-icq nns topology summary
-icq nns topology coverage
-icq nns topology versions
-icq nns topology health
-icq nns topology gaps
-icq nns topology capacity
-icq nns topology regions
-icq nns topology providers
-icq nns subnet info <subnet|canister|subnet-prefix>
+cargo install --locked ic-query-cli
 ```
 
 Useful next reads:
@@ -127,9 +110,9 @@ Useful next reads:
   - compact v1-candidate commands, files, evidence outputs, and boundaries.
 * [crates/canic-cli/README.md](crates/canic-cli/README.md) - operator command
   guide, including backup and restore.
-* `ic-query` - IC metadata query commands, including the standalone `icq`
-  NNS inspection surface. Install `icq` with `make install-dev` or
-  `bash scripts/ci/install-ic-query.sh`.
+* `ic-query` - IC metadata query library used by Canic host checks. The
+  standalone NNS inspection CLI is optional and installed directly from the
+  upstream `ic-query-cli` package.
 * [crates/canic-host/README.md](crates/canic-host/README.md) - build profiles,
   split workspace/ICP roots, custom canister roots, and lower-level install
   commands.

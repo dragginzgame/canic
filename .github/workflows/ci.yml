@@ -94,12 +94,10 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
-          bash scripts/ci/install-ic-query.sh
           npm install -g @icp-sdk/ic-wasm
       - name: Check IC CLI tools
         run: |
           icp --version
-          icq --version
           ic-wasm --version
       - name: Layering guards
         if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
@@ -170,13 +168,11 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
-          bash scripts/ci/install-ic-query.sh
           npm install -g @icp-sdk/ic-wasm
       - name: Check IC CLI tools
         run: |
           candid-extractor --version
           icp --version
-          icq --version
           ic-wasm --version
       - name: Cache PocketIC server
         uses: actions/cache@v5
@@ -228,13 +224,11 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
-          bash scripts/ci/install-ic-query.sh
           npm install -g @icp-sdk/ic-wasm
       - name: Check IC CLI tools
         run: |
           candid-extractor --version
           icp --version
-          icq --version
           ic-wasm --version
       - name: Check runner disk before build
         shell: bash
