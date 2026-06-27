@@ -77,6 +77,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Deployment,
     },
     CommandSpec {
+        name: "auth",
+        about: "Run delegated-auth operator workflows",
+        scope: CommandScope::Deployment,
+    },
+    CommandSpec {
         name: "build",
         about: "Build one Canic canister artifact",
         scope: CommandScope::Deployment,

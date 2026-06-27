@@ -167,6 +167,11 @@ pub async fn is_registered_to_subnet(caller: Principal) -> Result<(), AccessErro
     predicates::is_registered_to_subnet(caller).await
 }
 
+/// Require that the caller is an enabled root-managed renewal provisioner.
+pub async fn is_delegation_renewal_provisioner(caller: Principal) -> Result<(), AccessError> {
+    predicates::is_delegation_renewal_provisioner(caller).await
+}
+
 fn dependency_unavailable(detail: &str) -> AccessError {
     AccessError::Denied(format!("access dependency unavailable: {detail}"))
 }

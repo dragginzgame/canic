@@ -9,8 +9,10 @@ use canic::{
             RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
             RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
             RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
-            RootDelegationProofInstallOutcome, RootIssuerPolicyResponse,
-            RootIssuerPolicyUpsertRequest,
+            RootDelegationProofInstallOutcome, RootDelegationRenewalBatchView,
+            RootDelegationRenewalProofBatchGetRequest, RootDelegationRenewalWorkListResponse,
+            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
         },
         error::ErrorCode,
         placement::sharding::ShardingRegistryResponse,
@@ -31,6 +33,7 @@ use std::time::Duration;
 
 const INERT_WASM: &[u8] = b"\0asm\x01\0\0\0";
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
+const SECOND_NS: u64 = 1_000_000_000;
 
 #[test]
 fn user_hub_sharding_profile_prewarms_first_user_shard() {
@@ -112,6 +115,49 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
     verify_issuer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
     assert_repeated_batch_install_is_idempotent(&setup, install_request);
     assert_active_delegation_proof_refresh_and_expiry(&setup, shard_pid, subject, &status);
+}
+
+#[test]
+fn root_scheduled_renewal_bridge_refreshes_user_shard_active_proof() {
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
+
+    let user_hub_pid = setup
+        .subnet_index
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user_hub must exist in sharding profile");
+    let verifier_pid = setup
+        .subnet_index
+        .get(&canister::TEST)
+        .copied()
+        .expect("test verifier must exist in sharding profile");
+    let subject = Principal::from_slice(&[61; 29]);
+    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    upsert_delegation_issuer(&setup, shard_pid);
+    upsert_delegation_renewal_template(&setup, shard_pid);
+
+    advance_pic_to_ns(
+        &setup,
+        setup
+            .pic
+            .current_time_nanos()
+            .saturating_add(31 * SECOND_NS),
+    );
+    let first_work = scheduled_renewal_work_for_issuer(&setup, shard_pid);
+    let first_status = bridge_scheduled_renewal_batch(&setup, first_work, shard_pid);
+    verify_issuer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &first_status);
+
+    advance_pic_to_ns(
+        &setup,
+        first_status
+            .refresh_after_ns
+            .expect("scheduled proof should expose refresh threshold"),
+    );
+    let refresh_work = scheduled_renewal_work_for_issuer(&setup, shard_pid);
+    let refresh_status = bridge_scheduled_renewal_batch(&setup, refresh_work, shard_pid);
+    assert_ne!(refresh_status.cert_hash, first_status.cert_hash);
+    verify_issuer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &refresh_status);
 }
 
 #[test]
@@ -285,6 +331,84 @@ fn upsert_delegation_issuer(setup: &RootSetup, issuer_pid: Principal) {
     assert!(registered.issuer.enabled);
 }
 
+fn upsert_delegation_renewal_template(setup: &RootSetup, issuer_pid: Principal) {
+    let response: Result<RootIssuerRenewalTemplateResponse, Error> =
+        setup.pic.update_call_or_panic(
+            setup.root_id,
+            protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
+            (RootIssuerRenewalTemplateUpsertRequest {
+                issuer_pid,
+                enabled: true,
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
+                cert_ttl_ns: 300_000_000_000,
+            },),
+        );
+    let response = response.expect("renewal template upsert application failed");
+    assert_eq!(response.template.issuer_pid, issuer_pid);
+    assert!(response.template.enabled);
+}
+
+fn scheduled_renewal_work_for_issuer(
+    setup: &RootSetup,
+    issuer_pid: Principal,
+) -> RootDelegationRenewalBatchView {
+    for _ in 0..5 {
+        let work: Result<RootDelegationRenewalWorkListResponse, Error> = setup
+            .pic
+            .query_call_or_panic(setup.root_id, protocol::CANIC_DELEGATION_RENEWAL_WORK, ());
+        let work = work.expect("renewal work query application failed");
+        if let Some(batch) = work.batches.into_iter().find(|batch| {
+            batch
+                .attempts
+                .iter()
+                .any(|attempt| attempt.issuer_pid == issuer_pid)
+        }) {
+            return batch;
+        }
+        setup.pic.tick();
+    }
+    panic!("scheduled renewal work was not prepared for issuer {issuer_pid}");
+}
+
+fn bridge_scheduled_renewal_batch(
+    setup: &RootSetup,
+    work: RootDelegationRenewalBatchView,
+    issuer_pid: Principal,
+) -> ActiveDelegationProofStatusResponse {
+    let attempt = work
+        .attempts
+        .iter()
+        .find(|attempt| attempt.issuer_pid == issuer_pid)
+        .unwrap_or_else(|| panic!("batch missing attempt for issuer {issuer_pid}"));
+    let retrieved: Result<RootDelegationProofBatchGetResponse, Error> =
+        setup.pic.query_call_or_panic(
+            setup.root_id,
+            protocol::CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
+            (RootDelegationRenewalProofBatchGetRequest {
+                batch_id: work.batch_id,
+            },),
+        );
+    let retrieved = retrieved.expect("scheduled renewal proof get application failed");
+    assert_eq!(retrieved.batch_id, work.batch_id);
+    assert_eq!(retrieved.proofs.len(), work.attempt_count as usize);
+
+    let installed = install_root_delegation_proof_batch(
+        setup,
+        RootDelegationProofBatchInstallRequest {
+            batch_id: retrieved.batch_id,
+            proofs: retrieved.proofs,
+        },
+    );
+    assert_install_outcome(
+        &installed,
+        issuer_pid,
+        RootDelegationProofInstallOutcome::Installed,
+    );
+
+    assert_active_delegation_proof_status_for_cert(setup, issuer_pid, attempt.prepared_cert_hash)
+}
+
 fn batch_prepare_entry(issuer_pid: Principal) -> RootDelegationProofBatchPrepareEntry {
     batch_prepare_entry_with_ttl(issuer_pid, 60_000_000_000)
 }
@@ -368,11 +492,19 @@ fn assert_active_delegation_proof_status(
     shard_pid: Principal,
     prepared: &RootDelegationProofBatchPrepareResponse,
 ) -> ActiveDelegationProofStatusResponse {
+    assert_active_delegation_proof_status_for_cert(setup, shard_pid, prepared.entries[0].cert_hash)
+}
+
+fn assert_active_delegation_proof_status_for_cert(
+    setup: &RootSetup,
+    shard_pid: Principal,
+    cert_hash: [u8; 32],
+) -> ActiveDelegationProofStatusResponse {
     let status = query_active_delegation_proof_status(setup, shard_pid);
     assert_eq!(status.status, ActiveDelegationProofStatus::Valid);
     assert_eq!(status.root_pid, Some(setup.root_id));
     assert_eq!(status.issuer_pid, Some(shard_pid));
-    assert_eq!(status.cert_hash, Some(prepared.entries[0].cert_hash));
+    assert_eq!(status.cert_hash, Some(cert_hash));
     status
 }
 

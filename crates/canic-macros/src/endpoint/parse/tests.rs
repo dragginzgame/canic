@@ -150,6 +150,23 @@ fn grouped_access_expression_is_unwrapped() {
 }
 
 #[test]
+fn delegation_renewal_provisioner_predicate_is_builtin() {
+    let parsed = parse_args(quote!(
+        requires(caller::is_delegation_renewal_provisioner())
+    ))
+    .expect("parse args");
+    let AccessExprAst::All(exprs) = &parsed.requires[0] else {
+        panic!("expected requires(all)");
+    };
+    let AccessExprAst::Pred(AccessPredicateAst::Builtin(
+        BuiltinPredicate::CallerIsDelegationRenewalProvisioner,
+    )) = &exprs[0]
+    else {
+        panic!("expected caller::is_delegation_renewal_provisioner predicate");
+    };
+}
+
+#[test]
 fn authenticated_allows_string_scope_argument() {
     let parsed =
         parse_args(quote!(requires(auth::authenticated("scope:test")))).expect("parse args");

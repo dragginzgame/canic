@@ -28,7 +28,15 @@ use canic::{
         RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
         RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
         RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
-        RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootProof,
+        RootDelegationRenewalBatchView, RootDelegationRenewalProofBatchGetRequest,
+        RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
+        RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalProvisionerView,
+        RootDelegationRenewalWorkListResponse, RootIssuerPolicyResponse,
+        RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootIssuerRenewalAttemptStatus,
+        RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
+        RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+        RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
@@ -75,6 +83,16 @@ fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {
         .rev()
         .find(|line| line.trim_start().starts_with("#["))
         .unwrap_or_else(|| panic!("{signature} should have a preceding attribute"))
+}
+
+fn preceding_attribute_context(source: &str, signature: &str) -> String {
+    let before = source
+        .split(signature)
+        .next()
+        .unwrap_or_else(|| panic!("source should contain {signature}"));
+    let mut lines = before.lines().rev().take(6).collect::<Vec<_>>();
+    lines.reverse();
+    lines.join("\n")
 }
 
 #[test]
@@ -655,39 +673,7 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
 
 #[test]
 fn root_delegation_proof_batch_surface_is_pinned() {
-    assert_eq!(
-        canic::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
-        canic_core::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY
-    );
-    assert_eq!(
-        canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
-        canic_core::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH
-    );
-    assert_eq!(
-        canic::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
-        canic_core::protocol::CANIC_GET_DELEGATION_PROOF_BATCH
-    );
-    assert_eq!(
-        canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-        canic_core::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH
-    );
-    assert_eq!(
-        canic::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
-        "canic_upsert_root_issuer_policy"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
-        "canic_prepare_delegation_proof_batch"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
-        "canic_get_delegation_proof_batch"
-    );
-    assert_eq!(
-        canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-        "canic_install_delegation_proof_batch"
-    );
-
+    assert_root_delegation_protocol_constants();
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
     assert!(
@@ -695,15 +681,113 @@ fn root_delegation_proof_batch_surface_is_pinned() {
             && !source.contains("fn canic_get_delegation_proof("),
         "legacy single-proof root delegation endpoints must stay removed"
     );
-    let upsert_attr = preceding_attribute(&source, "fn canic_upsert_root_issuer_policy(");
-    let prepare_attr = preceding_attribute(&source, "fn canic_prepare_delegation_proof_batch(");
-    let get_attr = preceding_attribute(&source, "fn canic_get_delegation_proof_batch(");
-    let install_attr = preceding_attribute(&source, "fn canic_install_delegation_proof_batch(");
+    assert_root_delegation_macro_guards(&source);
+    assert_root_delegation_endpoint_bindings(&source);
+}
+
+fn assert_root_delegation_protocol_constants() {
+    for (public, core, expected) in [
+        (
+            canic::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
+            canic_core::protocol::CANIC_UPSERT_ROOT_ISSUER_POLICY,
+            "canic_upsert_root_issuer_policy",
+        ),
+        (
+            canic::protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
+            canic_core::protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
+            "canic_upsert_root_issuer_renewal_template",
+        ),
+        (
+            canic::protocol::CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+            canic_core::protocol::CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+            "canic_root_issuer_renewal_status",
+        ),
+        (
+            canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
+            canic_core::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
+            "canic_prepare_delegation_proof_batch",
+        ),
+        (
+            canic::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
+            canic_core::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
+            "canic_get_delegation_proof_batch",
+        ),
+        (
+            canic::protocol::CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
+            canic_core::protocol::CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
+            "canic_get_delegation_renewal_proof_batch",
+        ),
+        (
+            canic::protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
+            canic_core::protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
+            "canic_upsert_delegation_renewal_provisioner",
+        ),
+        (
+            canic::protocol::CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+            canic_core::protocol::CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+            "canic_delegation_renewal_provisioners",
+        ),
+        (
+            canic::protocol::CANIC_DELEGATION_RENEWAL_WORK,
+            canic_core::protocol::CANIC_DELEGATION_RENEWAL_WORK,
+            "canic_delegation_renewal_work",
+        ),
+        (
+            canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+            canic_core::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+            "canic_install_delegation_proof_batch",
+        ),
+    ] {
+        assert_eq!(public, core);
+        assert_eq!(public, expected);
+    }
+}
+
+fn assert_root_delegation_macro_guards(source: &str) {
+    let upsert_attr = preceding_attribute(source, "fn canic_upsert_root_issuer_policy(");
+    let renewal_upsert_attr =
+        preceding_attribute(source, "fn canic_upsert_root_issuer_renewal_template(");
+    let renewal_status_attr = preceding_attribute(source, "fn canic_root_issuer_renewal_status(");
+    let provisioner_upsert_attr =
+        preceding_attribute(source, "fn canic_upsert_delegation_renewal_provisioner(");
+    let provisioner_list_attr =
+        preceding_attribute(source, "fn canic_delegation_renewal_provisioners(");
+    let prepare_attr = preceding_attribute(source, "fn canic_prepare_delegation_proof_batch(");
+    let get_attr = preceding_attribute(source, "fn canic_get_delegation_proof_batch(");
+    let renewal_get_attr =
+        preceding_attribute_context(source, "fn canic_get_delegation_renewal_proof_batch(");
+    let install_attr =
+        preceding_attribute_context(source, "fn canic_install_delegation_proof_batch(");
     assert!(
         upsert_attr.contains("canic_update")
             && upsert_attr.contains("caller::is_controller()")
             && !upsert_attr.contains("internal"),
         "root issuer policy upsert must remain a public controller-gated update"
+    );
+    assert!(
+        renewal_upsert_attr.contains("canic_update")
+            && renewal_upsert_attr.contains("caller::is_controller()")
+            && !renewal_upsert_attr.contains("internal"),
+        "root issuer renewal template upsert must remain a public controller-gated update"
+    );
+    assert!(
+        renewal_status_attr.contains("canic_query")
+            && renewal_status_attr.contains("caller::is_controller()")
+            && !renewal_status_attr.contains("internal")
+            && !renewal_status_attr.contains("caller::is_registered_to_subnet()"),
+        "root issuer renewal status must remain a public controller-gated query"
+    );
+    assert!(
+        provisioner_upsert_attr.contains("canic_update")
+            && provisioner_upsert_attr.contains("caller::is_controller()")
+            && !provisioner_upsert_attr.contains("internal"),
+        "delegation renewal provisioner upsert must remain a public controller-gated update"
+    );
+    assert!(
+        provisioner_list_attr.contains("canic_query")
+            && provisioner_list_attr.contains("caller::is_controller()")
+            && !provisioner_list_attr.contains("internal"),
+        "delegation renewal provisioner list must remain a public controller-gated query"
     );
     assert!(
         prepare_attr.contains("canic_update")
@@ -719,17 +803,71 @@ fn root_delegation_proof_batch_surface_is_pinned() {
         "root batch get must remain a direct controller-gated root query"
     );
     assert!(
+        renewal_get_attr.contains("canic_query")
+            && renewal_get_attr.contains("caller::is_controller()")
+            && renewal_get_attr.contains("caller::is_delegation_renewal_provisioner()")
+            && !renewal_get_attr.contains("internal")
+            && !renewal_get_attr.contains("caller::is_registered_to_subnet()"),
+        "root scheduled renewal batch get must allow controllers or renewal provisioners"
+    );
+    assert!(
         install_attr.contains("canic_update")
             && install_attr.contains("caller::is_controller()")
+            && install_attr.contains("caller::is_delegation_renewal_provisioner()")
             && !install_attr.contains("internal"),
-        "root batch install must remain a public controller-gated update"
+        "root batch install must allow controllers or renewal provisioners"
     );
+    let renewal_work_attr =
+        preceding_attribute_context(source, "fn canic_delegation_renewal_work(");
+    assert!(
+        renewal_work_attr.contains("canic_query")
+            && renewal_work_attr.contains("caller::is_controller()")
+            && renewal_work_attr.contains("caller::is_delegation_renewal_provisioner()")
+            && !renewal_work_attr.contains("internal"),
+        "root renewal work list must allow controllers or renewal provisioners"
+    );
+}
+
+fn assert_root_delegation_endpoint_bindings(source: &str) {
     assert!(
         source.contains("fn canic_upsert_root_issuer_policy(")
             && source.contains("RootIssuerPolicyUpsertRequest")
             && source.contains("RootIssuerPolicyResponse")
             && source.contains("AuthApi::upsert_root_issuer_policy_root"),
         "root auth endpoint bundle must expose issuer policy upsert"
+    );
+    assert!(
+        source.contains("fn canic_upsert_root_issuer_renewal_template(")
+            && source.contains("RootIssuerRenewalTemplateUpsertRequest")
+            && source.contains("RootIssuerRenewalTemplateResponse")
+            && source.contains("AuthApi::upsert_root_issuer_renewal_template_root"),
+        "root auth endpoint bundle must expose issuer renewal template upsert"
+    );
+    assert!(
+        source.contains("fn canic_root_issuer_renewal_status(")
+            && source.contains("RootIssuerRenewalStatusRequest")
+            && source.contains("RootIssuerRenewalStatusResponse")
+            && source.contains("AuthApi::root_issuer_renewal_status_root"),
+        "root auth endpoint bundle must expose issuer renewal status"
+    );
+    assert!(
+        source.contains("fn canic_upsert_delegation_renewal_provisioner(")
+            && source.contains("RootDelegationRenewalProvisionerUpsertRequest")
+            && source.contains("RootDelegationRenewalProvisionerResponse")
+            && source.contains("AuthApi::upsert_delegation_renewal_provisioner_root"),
+        "root auth endpoint bundle must expose renewal provisioner upsert"
+    );
+    assert!(
+        source.contains("fn canic_delegation_renewal_provisioners(")
+            && source.contains("RootDelegationRenewalProvisionerListResponse")
+            && source.contains("AuthApi::delegation_renewal_provisioners_root"),
+        "root auth endpoint bundle must expose renewal provisioner list"
+    );
+    assert!(
+        source.contains("fn canic_delegation_renewal_work(")
+            && source.contains("RootDelegationRenewalWorkListResponse")
+            && source.contains("AuthApi::delegation_renewal_work_root"),
+        "root auth endpoint bundle must expose scheduled renewal work list"
     );
     assert!(
         source.contains("fn canic_prepare_delegation_proof_batch(")
@@ -746,6 +884,13 @@ fn root_delegation_proof_batch_surface_is_pinned() {
         "root auth endpoint bundle must expose batch get"
     );
     assert!(
+        source.contains("fn canic_get_delegation_renewal_proof_batch(")
+            && source.contains("RootDelegationRenewalProofBatchGetRequest")
+            && source.contains("RootDelegationProofBatchGetResponse")
+            && source.contains("AuthApi::get_delegation_renewal_proof_batch_root"),
+        "root auth endpoint bundle must expose scheduled renewal batch get"
+    );
+    assert!(
         source.contains("fn canic_install_delegation_proof_batch(")
             && source.contains("RootDelegationProofBatchInstallRequest")
             && source.contains("RootDelegationProofBatchInstallResponse")
@@ -756,16 +901,128 @@ fn root_delegation_proof_batch_surface_is_pinned() {
 
 #[test]
 fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
+    assert_root_issuer_policy_dtos_roundtrip();
+    assert_root_issuer_renewal_dtos_roundtrip();
+    assert_root_delegation_provisioner_dtos_roundtrip();
+    assert_root_delegation_batch_dtos_roundtrip();
+    assert_active_delegation_proof_status_roundtrip();
+}
+
+fn assert_root_issuer_policy_dtos_roundtrip() {
+    let issuer_pid = Principal::from_slice(&[17; 29]);
+    let grant = test_delegated_role_grant();
+    let audience = DelegationAudience::Project("test".to_string());
+    let issuer_policy_request =
+        root_issuer_policy_upsert_request(issuer_pid, audience.clone(), grant.clone());
+    let issuer_policy_response = root_issuer_policy_response(issuer_pid, audience, grant);
+
+    assert_candid_roundtrip(issuer_policy_request);
+    assert_candid_roundtrip(issuer_policy_response);
+}
+
+fn assert_root_delegation_provisioner_dtos_roundtrip() {
+    let provisioner = RootDelegationRenewalProvisionerView {
+        principal: Principal::from_slice(&[24; 29]),
+        enabled: true,
+    };
+    let provisioner_request = RootDelegationRenewalProvisionerUpsertRequest {
+        principal: provisioner.principal,
+        enabled: provisioner.enabled,
+    };
+    let provisioner_response = RootDelegationRenewalProvisionerResponse {
+        provisioner: provisioner.clone(),
+    };
+    let provisioner_list_response = RootDelegationRenewalProvisionerListResponse {
+        provisioners: vec![provisioner],
+    };
+
+    assert_candid_roundtrip(provisioner_request);
+    assert_candid_roundtrip(provisioner_response);
+    assert_candid_roundtrip(provisioner_list_response);
+}
+
+fn assert_root_issuer_renewal_dtos_roundtrip() {
+    let issuer_pid = Principal::from_slice(&[17; 29]);
+    let batch_id = [19; 32];
+    let cert_hash = [20; 32];
+    let proof_ref = RootDelegationProofBatchProofRef {
+        issuer_pid,
+        cert_hash,
+    };
+    let renewal_attempt = RootIssuerRenewalAttemptView {
+        attempt_id: [23; 32],
+        issuer_pid,
+        template_fingerprint: [21; 32],
+        batch_id,
+        proof_ref,
+        status: RootIssuerRenewalAttemptStatus::Prepared,
+        prepared_at_ns: 60,
+        retrieval_expires_at_ns: 65,
+        install_deadline_ns: 70,
+        prepared_cert_hash: cert_hash,
+        prepared_expires_at_ns: 90,
+        prepared_refresh_after_ns: 72,
+        failure: Some(RootIssuerRenewalOutcome::RetrievalExpired),
+    };
+    let renewal_work_response = RootDelegationRenewalWorkListResponse {
+        batches: vec![RootDelegationRenewalBatchView {
+            batch_id,
+            attempt_count: 1,
+            prepared_at_ns: 60,
+            retrieval_expires_at_ns: 65,
+            install_deadline_ns: 70,
+            attempts: vec![renewal_attempt.clone()],
+        }],
+    };
+    let renewal_template = RootIssuerRenewalTemplateView {
+        issuer_pid,
+        enabled: true,
+        aud: DelegationAudience::Project("test".to_string()),
+        grants: vec![test_delegated_role_grant()],
+        cert_ttl_ns: 60,
+    };
+    let renewal_template_request = RootIssuerRenewalTemplateUpsertRequest {
+        issuer_pid,
+        enabled: renewal_template.enabled,
+        aud: renewal_template.aud.clone(),
+        grants: renewal_template.grants.clone(),
+        cert_ttl_ns: renewal_template.cert_ttl_ns,
+    };
+    let renewal_template_response = RootIssuerRenewalTemplateResponse {
+        template: renewal_template.clone(),
+    };
+    let renewal_status_request = RootIssuerRenewalStatusRequest { issuer_pid };
+    let renewal_status_response = RootIssuerRenewalStatusResponse {
+        template: Some(renewal_template),
+        state: Some(RootIssuerRenewalStateView {
+            issuer_pid,
+            template_fingerprint: [21; 32],
+            last_installed_cert_hash: Some(cert_hash),
+            last_installed_expires_at_ns: Some(90),
+            last_installed_refresh_after_ns: Some(72),
+            active_attempt_id: Some([22; 32]),
+            last_outcome: RootIssuerRenewalOutcome::RetrievalExpired,
+            consecutive_failures: 2,
+            next_attempt_after_ns: 80,
+            updated_at_ns: 70,
+        }),
+        active_attempt: Some(renewal_attempt),
+    };
+
+    assert_candid_roundtrip(renewal_template_request);
+    assert_candid_roundtrip(renewal_template_response);
+    assert_candid_roundtrip(renewal_status_request);
+    assert_candid_roundtrip(renewal_status_response);
+    assert_candid_roundtrip(renewal_work_response);
+}
+
+fn assert_root_delegation_batch_dtos_roundtrip() {
     let issuer_pid = Principal::from_slice(&[17; 29]);
     let root_pid = Principal::from_slice(&[18; 29]);
     let batch_id = [19; 32];
     let cert_hash = [20; 32];
     let grant = test_delegated_role_grant();
     let audience = DelegationAudience::Project("test".to_string());
-    let issuer_policy_request =
-        root_issuer_policy_upsert_request(issuer_pid, audience.clone(), grant.clone());
-    let issuer_policy_response =
-        root_issuer_policy_response(issuer_pid, audience.clone(), grant.clone());
     let prepare_entry =
         root_delegation_proof_batch_prepare_entry(issuer_pid, audience.clone(), grant.clone());
     let prepare_request = root_delegation_proof_batch_prepare_request(batch_id, &prepare_entry);
@@ -779,6 +1036,7 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
         batch_id,
         entries: vec![proof_ref],
     };
+    let renewal_get_request = RootDelegationRenewalProofBatchGetRequest { batch_id };
     let proof = root_delegation_proof(root_pid, issuer_pid, audience, grant);
     let batch_proof = RootDelegationProofBatchProof {
         issuer_pid,
@@ -801,6 +1059,21 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
             outcome: RootDelegationProofInstallOutcome::Installed,
         }],
     };
+
+    assert_candid_roundtrip(prepare_entry);
+    assert_candid_roundtrip(prepare_request);
+    assert_candid_roundtrip(prepare_response);
+    assert_candid_roundtrip(get_request);
+    assert_candid_roundtrip(renewal_get_request);
+    assert_candid_roundtrip(get_response);
+    assert_candid_roundtrip(install_request);
+    assert_candid_roundtrip(install_response);
+}
+
+fn assert_active_delegation_proof_status_roundtrip() {
+    let issuer_pid = Principal::from_slice(&[17; 29]);
+    let root_pid = Principal::from_slice(&[18; 29]);
+    let cert_hash = [20; 32];
     let status = ActiveDelegationProofStatusResponse {
         status: ActiveDelegationProofStatus::RefreshNeeded,
         root_pid: Some(root_pid),
@@ -810,15 +1083,6 @@ fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
         refresh_after_ns: Some(72),
     };
 
-    assert_candid_roundtrip(issuer_policy_request);
-    assert_candid_roundtrip(issuer_policy_response);
-    assert_candid_roundtrip(prepare_entry);
-    assert_candid_roundtrip(prepare_request);
-    assert_candid_roundtrip(prepare_response);
-    assert_candid_roundtrip(get_request);
-    assert_candid_roundtrip(get_response);
-    assert_candid_roundtrip(install_request);
-    assert_candid_roundtrip(install_response);
     assert_candid_roundtrip(status);
 }
 

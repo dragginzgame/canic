@@ -79,6 +79,47 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_upsert_root_issuer_renewal_template(
+            request: ::canic::dto::auth::RootIssuerRenewalTemplateUpsertRequest,
+        ) -> Result<::canic::dto::auth::RootIssuerRenewalTemplateResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_renewal_template_root(
+                request,
+            )
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_root_issuer_renewal_status(
+            request: ::canic::dto::auth::RootIssuerRenewalStatusRequest,
+        ) -> Result<::canic::dto::auth::RootIssuerRenewalStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::root_issuer_renewal_status_root(request)
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_upsert_delegation_renewal_provisioner(
+            request: ::canic::dto::auth::RootDelegationRenewalProvisionerUpsertRequest,
+        ) -> Result<::canic::dto::auth::RootDelegationRenewalProvisionerResponse, ::canic::Error>
+        {
+            $crate::__internal::core::api::auth::AuthApi::upsert_delegation_renewal_provisioner_root(request)
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_delegation_renewal_provisioners(
+        ) -> Result<::canic::dto::auth::RootDelegationRenewalProvisionerListResponse, ::canic::Error>
+        {
+            $crate::__internal::core::api::auth::AuthApi::delegation_renewal_provisioners_root()
+        }
+
+        #[$crate::canic_query(requires(any(
+            caller::is_controller(),
+            caller::is_delegation_renewal_provisioner()
+        )))]
+        async fn canic_delegation_renewal_work(
+        ) -> Result<::canic::dto::auth::RootDelegationRenewalWorkListResponse, ::canic::Error>
+        {
+            $crate::__internal::core::api::auth::AuthApi::delegation_renewal_work_root()
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_prepare_delegation_proof_batch(
             request: ::canic::dto::auth::RootDelegationProofBatchPrepareRequest,
         ) -> Result<::canic::dto::auth::RootDelegationProofBatchPrepareResponse, ::canic::Error> {
@@ -94,7 +135,22 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
             $crate::__internal::core::api::auth::AuthApi::get_delegation_proof_batch_root(request)
         }
 
-        #[$crate::canic_update(requires(caller::is_controller()))]
+        #[$crate::canic_query(requires(any(
+            caller::is_controller(),
+            caller::is_delegation_renewal_provisioner()
+        )))]
+        async fn canic_get_delegation_renewal_proof_batch(
+            request: ::canic::dto::auth::RootDelegationRenewalProofBatchGetRequest,
+        ) -> Result<::canic::dto::auth::RootDelegationProofBatchGetResponse, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::get_delegation_renewal_proof_batch_root(
+                request,
+            )
+        }
+
+        #[$crate::canic_update(requires(any(
+            caller::is_controller(),
+            caller::is_delegation_renewal_provisioner()
+        )))]
         async fn canic_install_delegation_proof_batch(
             request: ::canic::dto::auth::RootDelegationProofBatchInstallRequest,
         ) -> Result<::canic::dto::auth::RootDelegationProofBatchInstallResponse, ::canic::Error> {

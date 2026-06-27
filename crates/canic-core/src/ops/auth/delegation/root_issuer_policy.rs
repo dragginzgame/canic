@@ -44,6 +44,26 @@ pub(super) fn grant_policies(grants: &[DelegatedRoleGrant]) -> Vec<RootDelegated
     grants.iter().map(grant_policy).collect()
 }
 
+pub(super) fn delegation_audience_view(
+    policy: &RootDelegationAudiencePolicy,
+) -> DelegationAudience {
+    match policy {
+        RootDelegationAudiencePolicy::Canister(canister) => DelegationAudience::Canister(*canister),
+        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
+            DelegationAudience::CanicSubnet(*subnet)
+        }
+        RootDelegationAudiencePolicy::Project(project) => {
+            DelegationAudience::Project(project.clone())
+        }
+    }
+}
+
+pub(super) fn delegated_role_grant_views(
+    grants: &[RootDelegatedRoleGrantPolicy],
+) -> Vec<DelegatedRoleGrant> {
+    grants.iter().map(delegated_role_grant_view).collect()
+}
+
 fn validate_root_issuer_policy_upsert_request(
     request: &RootIssuerPolicyUpsertRequest,
 ) -> Result<(), InternalError> {
@@ -94,25 +114,9 @@ fn root_issuer_policy_view(policy: &RootIssuerPolicy) -> RootIssuerPolicyView {
             .iter()
             .map(delegation_audience_view)
             .collect(),
-        allowed_grants: policy
-            .allowed_grants
-            .iter()
-            .map(delegated_role_grant_view)
-            .collect(),
+        allowed_grants: delegated_role_grant_views(&policy.allowed_grants),
         max_cert_ttl_ns: policy.max_cert_ttl_ns,
         refresh_after_ratio_bps: policy.refresh_after_ratio_bps,
-    }
-}
-
-fn delegation_audience_view(policy: &RootDelegationAudiencePolicy) -> DelegationAudience {
-    match policy {
-        RootDelegationAudiencePolicy::Canister(canister) => DelegationAudience::Canister(*canister),
-        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
-            DelegationAudience::CanicSubnet(*subnet)
-        }
-        RootDelegationAudiencePolicy::Project(project) => {
-            DelegationAudience::Project(project.clone())
-        }
     }
 }
 

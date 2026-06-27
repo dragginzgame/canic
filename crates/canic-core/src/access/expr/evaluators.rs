@@ -23,6 +23,9 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
             "caller_is_registered_to_subnet"
         }
         BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => "caller_is_whitelisted",
+        BuiltinPredicate::Caller(CallerPredicate::IsDelegationRenewalProvisioner) => {
+            "caller_is_delegation_renewal_provisioner"
+        }
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsPrimeSubnet) => {
             "self_is_prime_subnet"
         }
@@ -77,6 +80,9 @@ pub(super) async fn evaluate(
         }
         BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => {
             access::auth::is_whitelisted(ctx.caller).await
+        }
+        BuiltinPredicate::Caller(CallerPredicate::IsDelegationRenewalProvisioner) => {
+            access::auth::is_delegation_renewal_provisioner(ctx.caller).await
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsPrimeSubnet) => {
             access::env::is_prime_subnet()

@@ -5,7 +5,7 @@
 //! Boundary: endpoint layer maps public DTOs into ops/workflow auth calls.
 
 use crate::{
-    cdk::types::Principal,
+    cdk::{api::is_controller as caller_is_controller, types::Principal},
     dto::{
         auth::{
             ActiveDelegationProofStatusResponse, DelegatedToken, DelegatedTokenGetRequest,
@@ -15,7 +15,13 @@ use crate::{
             RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
             RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
             RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, SignedRoleAttestation,
+            RootDelegationRenewalProofBatchGetRequest,
+            RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
+            RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalWorkListResponse,
+            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            SignedRoleAttestation,
         },
         error::Error,
     },
@@ -73,6 +79,20 @@ impl AuthApi {
         }
 
         Ok(())
+    }
+
+    fn require_delegation_renewal_provisioner_or_controller() -> Result<bool, Error> {
+        let caller = IcOps::msg_caller();
+        if caller_is_controller(&caller) {
+            return Ok(true);
+        }
+        if AuthOps::is_delegation_renewal_provisioner(caller) {
+            return Ok(false);
+        }
+
+        Err(Error::forbidden(
+            "caller is not a controller or enabled delegation renewal provisioner",
+        ))
     }
 
     // Verify delegated-token material and return the token subject.
@@ -141,6 +161,50 @@ impl AuthApi {
         AuthOps::upsert_root_issuer_policy(request).map_err(Self::map_auth_error)
     }
 
+    /// Upsert root-managed renewal template from the local root controller path.
+    pub fn upsert_root_issuer_renewal_template_root(
+        request: RootIssuerRenewalTemplateUpsertRequest,
+    ) -> Result<RootIssuerRenewalTemplateResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        let response =
+            AuthOps::upsert_root_issuer_renewal_template(request).map_err(Self::map_auth_error)?;
+        if response.template.enabled {
+            RuntimeAuthWorkflow::start_root_delegation_renewal_timer_if_configured()
+                .map_err(Self::map_auth_error)?;
+        }
+        Ok(response)
+    }
+
+    /// Report root-managed renewal template/state for one issuer.
+    pub fn root_issuer_renewal_status_root(
+        request: RootIssuerRenewalStatusRequest,
+    ) -> Result<RootIssuerRenewalStatusResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Ok(AuthOps::root_issuer_renewal_status(request))
+    }
+
+    /// Upsert a constrained root-managed renewal provisioner.
+    pub fn upsert_delegation_renewal_provisioner_root(
+        request: RootDelegationRenewalProvisionerUpsertRequest,
+    ) -> Result<RootDelegationRenewalProvisionerResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Ok(AuthOps::upsert_delegation_renewal_provisioner(request))
+    }
+
+    /// List constrained root-managed renewal provisioners.
+    pub fn delegation_renewal_provisioners_root()
+    -> Result<RootDelegationRenewalProvisionerListResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Ok(AuthOps::delegation_renewal_provisioners())
+    }
+
+    /// List root-scheduled renewal batches ready for a constrained provisioner.
+    pub fn delegation_renewal_work_root() -> Result<RootDelegationRenewalWorkListResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Self::require_delegation_renewal_provisioner_or_controller()?;
+        Ok(AuthOps::delegation_renewal_work(IcOps::now_nanos()))
+    }
+
     /// Prepare root delegation proof batch metadata from the local root update path.
     pub fn prepare_delegation_proof_batch_root(
         request: RootDelegationProofBatchPrepareRequest,
@@ -159,11 +223,25 @@ impl AuthApi {
         AuthOps::get_delegation_proof_batch(request).map_err(Self::map_auth_error)
     }
 
+    /// Retrieve root-scheduled renewal proofs from the local direct root query path.
+    pub fn get_delegation_renewal_proof_batch_root(
+        request: RootDelegationRenewalProofBatchGetRequest,
+    ) -> Result<RootDelegationProofBatchGetResponse, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        Self::require_delegation_renewal_provisioner_or_controller()?;
+        AuthOps::get_delegation_renewal_proof_batch(request).map_err(Self::map_auth_error)
+    }
+
     /// Install retrieved root delegation proof batches from the local root update path.
     pub async fn install_delegation_proof_batch_root(
         request: RootDelegationProofBatchInstallRequest,
     ) -> Result<RootDelegationProofBatchInstallResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
+        let caller_is_controller = Self::require_delegation_renewal_provisioner_or_controller()?;
+        if !caller_is_controller {
+            AuthOps::ensure_delegation_renewal_batch_scheduled(request.batch_id)
+                .map_err(Self::map_auth_error)?;
+        }
         RuntimeAuthWorkflow::install_delegation_proof_batch_root(request)
             .await
             .map_err(Self::map_auth_error)

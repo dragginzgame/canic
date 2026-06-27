@@ -142,6 +142,7 @@ pub fn apply_global_network(
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
         "blob-storage" | "cycles" | "status" | "token" => true,
+        "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
             tail.first().and_then(|arg| arg.to_str()),
@@ -157,6 +158,7 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
         "blob-storage" | "build" | "cycles" | "install" | "status" | "token" => true,
+        "auth" => auth_leaf_accepts_globals(tail),
         "deploy" => deploy_leaf_accepts_global_network(tail),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
@@ -165,6 +167,16 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,
     }
+}
+
+fn auth_leaf_accepts_globals(tail: &[OsString]) -> bool {
+    matches!(
+        (
+            tail.first().and_then(|arg| arg.to_str()),
+            tail.get(1).and_then(|arg| arg.to_str())
+        ),
+        (Some("renewal"), Some("run-once"))
+    )
 }
 
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {

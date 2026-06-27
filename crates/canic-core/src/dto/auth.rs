@@ -251,6 +251,76 @@ pub struct RootDelegationProofBatchGetRequest {
 }
 
 //
+// RootDelegationRenewalProofBatchGetRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalProofBatchGetRequest {
+    pub batch_id: [u8; 32],
+}
+
+//
+// RootDelegationRenewalBatchView
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalBatchView {
+    pub batch_id: [u8; 32],
+    pub attempt_count: u64,
+    pub prepared_at_ns: u64,
+    pub retrieval_expires_at_ns: u64,
+    pub install_deadline_ns: u64,
+    pub attempts: Vec<RootIssuerRenewalAttemptView>,
+}
+
+//
+// RootDelegationRenewalWorkListResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalWorkListResponse {
+    pub batches: Vec<RootDelegationRenewalBatchView>,
+}
+
+//
+// RootDelegationRenewalProvisionerUpsertRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalProvisionerUpsertRequest {
+    pub principal: Principal,
+    pub enabled: bool,
+}
+
+//
+// RootDelegationRenewalProvisionerView
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalProvisionerView {
+    pub principal: Principal,
+    pub enabled: bool,
+}
+
+//
+// RootDelegationRenewalProvisionerResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalProvisionerResponse {
+    pub provisioner: RootDelegationRenewalProvisionerView,
+}
+
+//
+// RootDelegationRenewalProvisionerListResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootDelegationRenewalProvisionerListResponse {
+    pub provisioners: Vec<RootDelegationRenewalProvisionerView>,
+}
+
+//
 // RootDelegationProofBatchProofRef
 //
 
@@ -361,6 +431,136 @@ pub struct RootIssuerPolicyView {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootIssuerPolicyResponse {
     pub issuer: RootIssuerPolicyView,
+}
+
+//
+// RootIssuerRenewalTemplateUpsertRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalTemplateUpsertRequest {
+    pub issuer_pid: Principal,
+    pub enabled: bool,
+    pub aud: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
+    pub cert_ttl_ns: u64,
+}
+
+//
+// RootIssuerRenewalTemplateView
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalTemplateView {
+    pub issuer_pid: Principal,
+    pub enabled: bool,
+    pub aud: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
+    pub cert_ttl_ns: u64,
+}
+
+//
+// RootIssuerRenewalTemplateResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalTemplateResponse {
+    pub template: RootIssuerRenewalTemplateView,
+}
+
+//
+// RootIssuerRenewalStatusRequest
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalStatusRequest {
+    pub issuer_pid: Principal,
+}
+
+//
+// RootIssuerRenewalOutcome
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootIssuerRenewalOutcome {
+    AlreadyInstalled,
+    DriftDetected,
+    InstallDeadlineExpired,
+    Installed,
+    IssuerCallFailed,
+    NeverRun,
+    PolicyRejected,
+    ProofMismatch,
+    QuotaExceeded,
+    RejectedByIssuer,
+    RetrievalExpired,
+    TemplateChanged,
+    TemplateDisabled,
+}
+
+//
+// RootIssuerRenewalAttemptStatus
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootIssuerRenewalAttemptStatus {
+    Prepared,
+    Installing,
+    Installed,
+    FailedRetryable,
+    FailedTerminal,
+    Disabled,
+    Expired,
+}
+
+//
+// RootIssuerRenewalAttemptView
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalAttemptView {
+    pub attempt_id: [u8; 32],
+    pub issuer_pid: Principal,
+    pub template_fingerprint: [u8; 32],
+    pub batch_id: [u8; 32],
+    pub proof_ref: RootDelegationProofBatchProofRef,
+    pub status: RootIssuerRenewalAttemptStatus,
+    pub prepared_at_ns: u64,
+    pub retrieval_expires_at_ns: u64,
+    pub install_deadline_ns: u64,
+    pub prepared_cert_hash: [u8; 32],
+    pub prepared_expires_at_ns: u64,
+    pub prepared_refresh_after_ns: u64,
+    pub failure: Option<RootIssuerRenewalOutcome>,
+}
+
+//
+// RootIssuerRenewalStateView
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalStateView {
+    pub issuer_pid: Principal,
+    pub template_fingerprint: [u8; 32],
+    pub last_installed_cert_hash: Option<[u8; 32]>,
+    pub last_installed_expires_at_ns: Option<u64>,
+    pub last_installed_refresh_after_ns: Option<u64>,
+    pub active_attempt_id: Option<[u8; 32]>,
+    pub last_outcome: RootIssuerRenewalOutcome,
+    pub consecutive_failures: u32,
+    pub next_attempt_after_ns: u64,
+    pub updated_at_ns: u64,
+}
+
+//
+// RootIssuerRenewalStatusResponse
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootIssuerRenewalStatusResponse {
+    pub template: Option<RootIssuerRenewalTemplateView>,
+    pub state: Option<RootIssuerRenewalStateView>,
+    pub active_attempt: Option<RootIssuerRenewalAttemptView>,
 }
 
 //

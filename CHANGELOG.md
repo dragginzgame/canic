@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### ➕ Added
+
+- Started the 0.74 root-managed delegation proof renewal implementation with
+  root issuer renewal template/status DTOs, scheduled attempt/batch state,
+  scheduled work listing, scheduled proof retrieval, root renewal sweep
+  startup, scheduled install state transitions, constrained renewal provisioner
+  ACLs, bounded delegated-auth renewal metrics/logs, expired-attempt cleanup
+  for bridge outages, policy validation, stable storage foundations, and the
+  first `canic auth renewal run-once` bridge command. Added the scheduled
+  renewal PocketIC scenario for the bridge loop; runtime execution still needs
+  a clean PocketIC server run.
+
+### 📚 Documentation
+
+- Added a draft 0.74 root-managed delegation proof renewal design covering
+  root-owned renewal templates, scheduled attempts, the required direct-query
+  bridge, renewal provisioner authorization, and operator validation.
+
 ## [0.73.x] - 2026-06-26 - Post-Hardening Recovery Polish
 
 Detailed patch breakdown: [docs/changelog/0.73.md](docs/changelog/0.73.md)

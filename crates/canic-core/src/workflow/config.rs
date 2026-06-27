@@ -26,6 +26,9 @@ pub const WORKFLOW_INTENT_CLEANUP_INTERVAL: Duration = Duration::from_hours(1);
 /// Pool check cadence (30 minutes).
 pub const WORKFLOW_POOL_CHECK_INTERVAL: Duration = Duration::from_mins(30);
 
+/// Root delegated-proof renewal sweep cadence (1 minute).
+pub const WORKFLOW_AUTH_RENEWAL_INTERVAL: Duration = Duration::from_mins(1);
+
 ///
 /// ConfigWorkflow
 ///
