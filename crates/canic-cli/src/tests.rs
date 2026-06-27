@@ -540,10 +540,33 @@ fn global_icp_is_forwarded_to_auth_renewal_commands() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ];
+    let mut provisioner_list_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("provisioner"),
+        OsString::from("list"),
+        OsString::from("downstream"),
+    ];
+    let mut provisioner_enable_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("provisioner"),
+        OsString::from("enable"),
+        OsString::from("downstream"),
+        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+    ];
     let mut help_tail = vec![OsString::from("help")];
 
     apply_global_icp("auth", &mut run_once_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("auth", &mut status_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp(
+        "auth",
+        &mut provisioner_list_tail,
+        Some("/tmp/icp".to_string()),
+    );
+    apply_global_icp(
+        "auth",
+        &mut provisioner_enable_tail,
+        Some("/tmp/icp".to_string()),
+    );
     apply_global_icp("auth", &mut help_tail, Some("/tmp/icp".to_string()));
 
     assert!(run_once_tail.ends_with(&[
@@ -551,6 +574,14 @@ fn global_icp_is_forwarded_to_auth_renewal_commands() {
         OsString::from("/tmp/icp")
     ]));
     assert!(status_tail.ends_with(&[
+        OsString::from(INTERNAL_ICP_OPTION),
+        OsString::from("/tmp/icp")
+    ]));
+    assert!(provisioner_list_tail.ends_with(&[
+        OsString::from(INTERNAL_ICP_OPTION),
+        OsString::from("/tmp/icp")
+    ]));
+    assert!(provisioner_enable_tail.ends_with(&[
         OsString::from(INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp")
     ]));
@@ -832,10 +863,33 @@ fn global_network_is_forwarded_to_auth_renewal_commands() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ];
+    let mut provisioner_list_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("provisioner"),
+        OsString::from("list"),
+        OsString::from("downstream"),
+    ];
+    let mut provisioner_disable_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("provisioner"),
+        OsString::from("disable"),
+        OsString::from("downstream"),
+        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+    ];
     let mut help_tail = vec![OsString::from("help")];
 
     apply_global_network("auth", &mut run_once_tail, Some("fixture".to_string()));
     apply_global_network("auth", &mut status_tail, Some("fixture".to_string()));
+    apply_global_network(
+        "auth",
+        &mut provisioner_list_tail,
+        Some("fixture".to_string()),
+    );
+    apply_global_network(
+        "auth",
+        &mut provisioner_disable_tail,
+        Some("fixture".to_string()),
+    );
     apply_global_network("auth", &mut help_tail, Some("fixture".to_string()));
 
     assert!(run_once_tail.ends_with(&[
@@ -843,6 +897,14 @@ fn global_network_is_forwarded_to_auth_renewal_commands() {
         OsString::from("fixture")
     ]));
     assert!(status_tail.ends_with(&[
+        OsString::from(INTERNAL_NETWORK_OPTION),
+        OsString::from("fixture")
+    ]));
+    assert!(provisioner_list_tail.ends_with(&[
+        OsString::from(INTERNAL_NETWORK_OPTION),
+        OsString::from("fixture")
+    ]));
+    assert!(provisioner_disable_tail.ends_with(&[
         OsString::from(INTERNAL_NETWORK_OPTION),
         OsString::from("fixture")
     ]));

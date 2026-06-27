@@ -19,9 +19,10 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::protocol::{
-    CANIC_ACTIVE_DELEGATION_PROOF_STATUS, CANIC_DELEGATION_RENEWAL_WORK,
-    CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH, CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-    CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+    CANIC_ACTIVE_DELEGATION_PROOF_STATUS, CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+    CANIC_DELEGATION_RENEWAL_WORK, CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
+    CANIC_INSTALL_DELEGATION_PROOF_BATCH, CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+    CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
 };
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
@@ -52,14 +53,22 @@ const COMMAND_NAME: &str = "auth";
 const RENEWAL_COMMAND: &str = "renewal";
 const RUN_ONCE_COMMAND: &str = "run-once";
 const STATUS_COMMAND: &str = "status";
+const PROVISIONER_COMMAND: &str = "provisioner";
+const LIST_COMMAND: &str = "list";
+const ENABLE_COMMAND: &str = "enable";
+const DISABLE_COMMAND: &str = "disable";
 const DEPLOYMENT_ARG: &str = "deployment";
 const ISSUER_ARG: &str = "issuer";
+const PRINCIPAL_ARG: &str = "principal";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
 const AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION: u16 = 1;
 const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 2;
+const AUTH_RENEWAL_PROVISIONER_SCHEMA_VERSION: u16 = 1;
 const AUTH_RENEWAL_RUN_ONCE_KIND: &str = "auth_renewal_run_once_result";
 const AUTH_RENEWAL_STATUS_KIND: &str = "auth_renewal_status";
+const AUTH_RENEWAL_PROVISIONER_LIST_KIND: &str = "auth_renewal_provisioners";
+const AUTH_RENEWAL_PROVISIONER_UPSERT_KIND: &str = "auth_renewal_provisioner_upsert_result";
 const AUTH_RENEWAL_STATUS_NO_WORK: &str = "no_work";
 const AUTH_RENEWAL_STATUS_INSTALLED: &str = "installed";
 const AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT: &str = "active_attempt";
@@ -75,7 +84,9 @@ Examples:
   canic auth renewal run-once local
   canic auth renewal run-once local --json
   canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai
-  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai --json";
+  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai --json
+  canic auth renewal provisioner list local
+  canic auth renewal provisioner enable local r7inp-6aaaa-aaaaa-aaabq-cai";
 
 ///
 /// AuthCommandError
@@ -110,6 +121,9 @@ pub enum AuthCommandError {
 
     #[error("issuer must be a valid principal: {issuer}")]
     InvalidIssuerPrincipal { issuer: String },
+
+    #[error("principal must be valid: {principal}")]
+    InvalidPrincipal { principal: String },
 
     #[error("failed to read local Candid sidecar {path}: {source}")]
     CandidRead { path: PathBuf, source: io::Error },
@@ -148,6 +162,7 @@ impl AuthCommandError {
             | Self::InstallState(_)
             | Self::CandidUnavailable { .. }
             | Self::InvalidIssuerPrincipal { .. }
+            | Self::InvalidPrincipal { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
@@ -164,6 +179,8 @@ impl AuthCommandError {
 enum AuthCommand {
     RenewalRunOnce(RenewalRunOnceOptions),
     RenewalStatus(RenewalStatusOptions),
+    RenewalProvisionerList(RenewalProvisionerListOptions),
+    RenewalProvisionerUpsert(RenewalProvisionerUpsertOptions),
 }
 
 ///
@@ -200,6 +217,30 @@ struct RenewalStatusOptions {
 }
 
 ///
+/// RenewalProvisionerListOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RenewalProvisionerListOptions {
+    deployment: String,
+    json: bool,
+    common: CommonOptions,
+}
+
+///
+/// RenewalProvisionerUpsertOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RenewalProvisionerUpsertOptions {
+    deployment: String,
+    principal: String,
+    enabled: bool,
+    json: bool,
+    common: CommonOptions,
+}
+
+///
 /// AuthOptions
 ///
 
@@ -229,6 +270,34 @@ impl AuthOptions {
                         common: common_options(matches),
                     }))
                 }
+                Some((PROVISIONER_COMMAND, matches)) => match matches.subcommand() {
+                    Some((LIST_COMMAND, matches)) => Ok(AuthCommand::RenewalProvisionerList(
+                        RenewalProvisionerListOptions {
+                            deployment: required_string(matches, DEPLOYMENT_ARG),
+                            json: matches.get_flag(JSON_ARG),
+                            common: common_options(matches),
+                        },
+                    )),
+                    Some((ENABLE_COMMAND, matches)) => Ok(AuthCommand::RenewalProvisionerUpsert(
+                        RenewalProvisionerUpsertOptions {
+                            deployment: required_string(matches, DEPLOYMENT_ARG),
+                            principal: required_string(matches, PRINCIPAL_ARG),
+                            enabled: true,
+                            json: matches.get_flag(JSON_ARG),
+                            common: common_options(matches),
+                        },
+                    )),
+                    Some((DISABLE_COMMAND, matches)) => Ok(AuthCommand::RenewalProvisionerUpsert(
+                        RenewalProvisionerUpsertOptions {
+                            deployment: required_string(matches, DEPLOYMENT_ARG),
+                            principal: required_string(matches, PRINCIPAL_ARG),
+                            enabled: false,
+                            json: matches.get_flag(JSON_ARG),
+                            common: common_options(matches),
+                        },
+                    )),
+                    _ => Err(AuthCommandError::Usage(usage())),
+                },
                 _ => Err(AuthCommandError::Usage(usage())),
             },
             _ => Err(AuthCommandError::Usage(usage())),
@@ -278,6 +347,7 @@ fn renewal_command() -> ClapCommand {
         .subcommand_required(true)
         .subcommand(run_once_command())
         .subcommand(status_command())
+        .subcommand(provisioner_command())
 }
 
 fn run_once_command() -> ClapCommand {
@@ -317,10 +387,66 @@ fn status_command() -> ClapCommand {
         .arg(internal_icp_arg())
 }
 
+fn provisioner_command() -> ClapCommand {
+    ClapCommand::new(PROVISIONER_COMMAND)
+        .disable_help_flag(true)
+        .about("Manage constrained delegation renewal provisioners")
+        .subcommand_required(true)
+        .subcommand(provisioner_list_command())
+        .subcommand(provisioner_enable_command())
+        .subcommand(provisioner_disable_command())
+}
+
+fn provisioner_list_command() -> ClapCommand {
+    ClapCommand::new(LIST_COMMAND)
+        .disable_help_flag(true)
+        .about("List principals allowed to complete scheduled renewal work")
+        .arg(
+            value_arg(DEPLOYMENT_ARG)
+                .value_name(DEPLOYMENT_ARG)
+                .required(true)
+                .help("Installed deployment target name"),
+        )
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
+}
+
+fn provisioner_enable_command() -> ClapCommand {
+    provisioner_upsert_command(ENABLE_COMMAND, "Enable a delegation renewal provisioner")
+}
+
+fn provisioner_disable_command() -> ClapCommand {
+    provisioner_upsert_command(DISABLE_COMMAND, "Disable a delegation renewal provisioner")
+}
+
+fn provisioner_upsert_command(name: &'static str, about: &'static str) -> ClapCommand {
+    ClapCommand::new(name)
+        .disable_help_flag(true)
+        .about(about)
+        .arg(
+            value_arg(DEPLOYMENT_ARG)
+                .value_name(DEPLOYMENT_ARG)
+                .required(true)
+                .help("Installed deployment target name"),
+        )
+        .arg(
+            value_arg(PRINCIPAL_ARG)
+                .value_name(PRINCIPAL_ARG)
+                .required(true)
+                .help("Provisioner principal"),
+        )
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
+}
+
 fn run_command(command: AuthCommand) -> Result<(), AuthCommandError> {
     match command {
         AuthCommand::RenewalRunOnce(options) => run_renewal_once(&options),
         AuthCommand::RenewalStatus(options) => run_renewal_status(&options),
+        AuthCommand::RenewalProvisionerList(options) => run_renewal_provisioner_list(&options),
+        AuthCommand::RenewalProvisionerUpsert(options) => run_renewal_provisioner_upsert(&options),
     }
 }
 
@@ -334,6 +460,22 @@ fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandE
     let runtime = LiveAuthRenewalRuntime;
     let result = renewal_status_result_with_runtime(&runtime, options)?;
     write_renewal_status_result(options.json, &result)
+}
+
+fn run_renewal_provisioner_list(
+    options: &RenewalProvisionerListOptions,
+) -> Result<(), AuthCommandError> {
+    let runtime = LiveAuthRenewalRuntime;
+    let result = renewal_provisioner_list_result_with_runtime(&runtime, options)?;
+    write_renewal_provisioner_list_result(options.json, &result)
+}
+
+fn run_renewal_provisioner_upsert(
+    options: &RenewalProvisionerUpsertOptions,
+) -> Result<(), AuthCommandError> {
+    let runtime = LiveAuthRenewalRuntime;
+    let result = renewal_provisioner_upsert_result_with_runtime(&runtime, options)?;
+    write_renewal_provisioner_upsert_result(options.json, &result)
 }
 
 pub fn renewal_medic_summary(
@@ -435,6 +577,67 @@ fn renewal_status_result_with_runtime(
         status: renewal_status_code(&status, &issuer_observation).to_string(),
         renewal: status,
         issuer_observation,
+    })
+}
+
+fn renewal_provisioner_list_result_with_runtime(
+    runtime: &impl AuthRenewalRuntime,
+    options: &RenewalProvisionerListOptions,
+) -> Result<AuthRenewalProvisionerListResult, AuthCommandError> {
+    let target = runtime.resolve_root_target(
+        &options.common,
+        &options.deployment,
+        CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+        AuthRenewalMethodMode::Query,
+    )?;
+    let output = runtime.query_output(
+        &options.common,
+        &target,
+        CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+        None,
+        Some("json"),
+    )?;
+    let provisioners =
+        parse_renewal_provisioners(&output).ok_or(AuthCommandError::ResponseParse)?;
+
+    Ok(AuthRenewalProvisionerListResult {
+        schema_version: AUTH_RENEWAL_PROVISIONER_SCHEMA_VERSION,
+        kind: AUTH_RENEWAL_PROVISIONER_LIST_KIND.to_string(),
+        deployment: options.deployment.clone(),
+        network: options.common.network.clone(),
+        target: target.target,
+        provisioners,
+    })
+}
+
+fn renewal_provisioner_upsert_result_with_runtime(
+    runtime: &impl AuthRenewalRuntime,
+    options: &RenewalProvisionerUpsertOptions,
+) -> Result<AuthRenewalProvisionerUpsertResult, AuthCommandError> {
+    let principal = parse_principal_text(&options.principal)?;
+    let target = runtime.resolve_root_target(
+        &options.common,
+        &options.deployment,
+        CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
+        AuthRenewalMethodMode::Update,
+    )?;
+    let output = runtime.call_output(
+        &options.common,
+        &target,
+        CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
+        &renewal_provisioner_upsert_arg(&principal, options.enabled),
+        Some("json"),
+    )?;
+    let provisioner =
+        parse_renewal_provisioner_response(&output).ok_or(AuthCommandError::ResponseParse)?;
+
+    Ok(AuthRenewalProvisionerUpsertResult {
+        schema_version: AUTH_RENEWAL_PROVISIONER_SCHEMA_VERSION,
+        kind: AUTH_RENEWAL_PROVISIONER_UPSERT_KIND.to_string(),
+        deployment: options.deployment.clone(),
+        network: options.common.network.clone(),
+        target: target.target,
+        provisioner,
     })
 }
 
@@ -665,6 +868,44 @@ struct AuthRenewalRunOnceResult {
     target: AuthRootTarget,
     status: String,
     batches: Vec<AuthRenewalBatchRunResult>,
+}
+
+///
+/// AuthRenewalProvisioner
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalProvisioner {
+    principal: String,
+    enabled: bool,
+}
+
+///
+/// AuthRenewalProvisionerListResult
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalProvisionerListResult {
+    schema_version: u16,
+    kind: String,
+    deployment: String,
+    network: String,
+    target: AuthRootTarget,
+    provisioners: Vec<AuthRenewalProvisioner>,
+}
+
+///
+/// AuthRenewalProvisionerUpsertResult
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalProvisionerUpsertResult {
+    schema_version: u16,
+    kind: String,
+    deployment: String,
+    network: String,
+    target: AuthRootTarget,
+    provisioner: AuthRenewalProvisioner,
 }
 
 ///
@@ -977,6 +1218,116 @@ fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
         .map_err(|_| AuthCommandError::InvalidIssuerPrincipal {
             issuer: issuer.to_string(),
         })
+}
+
+fn parse_principal_text(principal: &str) -> Result<String, AuthCommandError> {
+    Principal::from_text(principal)
+        .map(|principal| principal.to_text())
+        .map_err(|_| AuthCommandError::InvalidPrincipal {
+            principal: principal.to_string(),
+        })
+}
+
+fn parse_renewal_provisioners(output: &str) -> Option<Vec<AuthRenewalProvisioner>> {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(output) {
+        let payload = find_field(&value, "Ok").unwrap_or(&value);
+        if let Some(values) =
+            find_field(payload, "provisioners").and_then(serde_json::Value::as_array)
+        {
+            let mut provisioners = values
+                .iter()
+                .map(parse_renewal_provisioner_json)
+                .collect::<Option<Vec<_>>>()?;
+            sort_provisioners(&mut provisioners);
+            return Some(provisioners);
+        }
+        if let Some(candid) = response_candid(&value) {
+            return parse_renewal_provisioners_candid(candid);
+        }
+    }
+    parse_renewal_provisioners_candid(output)
+}
+
+fn parse_renewal_provisioner_response(output: &str) -> Option<AuthRenewalProvisioner> {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(output) {
+        let payload = find_field(&value, "Ok").unwrap_or(&value);
+        if let Some(provisioner) =
+            find_field(payload, "provisioner").and_then(parse_renewal_provisioner_json)
+        {
+            return Some(provisioner);
+        }
+        if let Some(candid) = response_candid(&value) {
+            return parse_renewal_provisioners_candid(candid)?
+                .into_iter()
+                .next();
+        }
+    }
+    parse_renewal_provisioners_candid(output)?
+        .into_iter()
+        .next()
+}
+
+fn parse_renewal_provisioner_json(value: &serde_json::Value) -> Option<AuthRenewalProvisioner> {
+    Some(AuthRenewalProvisioner {
+        principal: find_field(value, "principal").and_then(parse_principal_json)?,
+        enabled: find_field(value, "enabled").and_then(serde_json::Value::as_bool)?,
+    })
+}
+
+fn parse_principal_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(value) => Principal::from_text(value)
+            .ok()
+            .map(|principal| principal.to_text()),
+        serde_json::Value::Array(values) => values.iter().find_map(parse_principal_json),
+        serde_json::Value::Object(map) => map.values().find_map(parse_principal_json),
+        _ => None,
+    }
+}
+
+fn parse_renewal_provisioners_candid(output: &str) -> Option<Vec<AuthRenewalProvisioner>> {
+    if !output.contains("principal") || !output.contains("enabled") {
+        return None;
+    }
+    let mut provisioners = candid_record_blocks(output)
+        .into_iter()
+        .filter(|block| block.contains("principal") && block.contains("enabled"))
+        .filter_map(parse_renewal_provisioner_candid)
+        .collect::<Vec<_>>();
+    sort_provisioners(&mut provisioners);
+    provisioners.dedup_by(|left, right| left.principal == right.principal);
+    Some(provisioners)
+}
+
+fn parse_renewal_provisioner_candid(block: &str) -> Option<AuthRenewalProvisioner> {
+    Some(AuthRenewalProvisioner {
+        principal: field_value_after_equals(block, "principal").and_then(parse_candid_principal)?,
+        enabled: field_value_after_equals(block, "enabled").and_then(parse_candid_bool)?,
+    })
+}
+
+fn parse_candid_principal(value: &str) -> Option<String> {
+    let value = value.trim_start().strip_prefix("principal")?.trim_start();
+    let value = value.strip_prefix('"')?;
+    let end = value.find('"')?;
+    Principal::from_text(&value[..end])
+        .ok()
+        .map(|principal| principal.to_text())
+}
+
+fn parse_candid_bool(value: &str) -> Option<bool> {
+    let value = value.trim_start();
+    if value.starts_with("true") {
+        Some(true)
+    } else if value.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn sort_provisioners(provisioners: &mut [AuthRenewalProvisioner]) {
+    provisioners.sort_by(|left, right| left.principal.cmp(&right.principal));
 }
 
 fn parse_renewal_status_summary(output: &str) -> Option<AuthRenewalStatusSummary> {
@@ -1462,6 +1813,10 @@ fn root_issuer_renewal_status_arg(issuer_pid: &str) -> String {
     format!(r#"(record {{ issuer_pid = principal "{issuer_pid}" }})"#)
 }
 
+fn renewal_provisioner_upsert_arg(principal: &str, enabled: bool) -> String {
+    format!(r#"(record {{ principal = principal "{principal}"; enabled = {enabled} }})"#)
+}
+
 fn candid_blob32(bytes: &[u8; 32]) -> String {
     let mut rendered = String::from("blob \"");
     for byte in bytes {
@@ -1564,6 +1919,56 @@ fn write_renewal_status_result(
     Ok(())
 }
 
+fn write_renewal_provisioner_list_result(
+    json: bool,
+    result: &AuthRenewalProvisionerListResult,
+) -> Result<(), AuthCommandError> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(result)?);
+    } else if result.provisioners.is_empty() {
+        println!("No delegation renewal provisioners configured.");
+    } else {
+        println!("{}", render_renewal_provisioner_list_result(result));
+    }
+    Ok(())
+}
+
+fn write_renewal_provisioner_upsert_result(
+    json: bool,
+    result: &AuthRenewalProvisionerUpsertResult,
+) -> Result<(), AuthCommandError> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(result)?);
+    } else {
+        println!("{}", render_renewal_provisioner_upsert_result(result));
+    }
+    Ok(())
+}
+
+fn render_renewal_provisioner_list_result(result: &AuthRenewalProvisionerListResult) -> String {
+    let mut lines = vec![
+        format!("Auth renewal provisioners: {}", result.deployment),
+        format!("Root: {}", result.target.canister_id),
+    ];
+    for provisioner in &result.provisioners {
+        lines.push(format!(
+            "{} {}",
+            provisioner.principal,
+            render_enabled(provisioner.enabled)
+        ));
+    }
+    lines.join("\n")
+}
+
+fn render_renewal_provisioner_upsert_result(result: &AuthRenewalProvisionerUpsertResult) -> String {
+    format!(
+        "Auth renewal provisioner {} {} for {}.",
+        result.provisioner.principal,
+        render_enabled(result.provisioner.enabled),
+        result.deployment
+    )
+}
+
 fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> String {
     let mut lines = vec![
         format!("Auth renewal status: {}", result.issuer_pid),
@@ -1661,6 +2066,10 @@ fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> String {
     lines.join("\n")
 }
 
+const fn render_enabled(enabled: bool) -> &'static str {
+    if enabled { "enabled" } else { "disabled" }
+}
+
 const fn render_template_status(template: &AuthRenewalTemplateStatus) -> &'static str {
     match (template.present, template.enabled) {
         (false, _) => "missing",
@@ -1745,6 +2154,44 @@ mod tests {
     }
 
     #[test]
+    fn parses_renewal_provisioner_options() {
+        let list = AuthOptions::parse([
+            OsString::from("renewal"),
+            OsString::from("provisioner"),
+            OsString::from("list"),
+            OsString::from("local"),
+            OsString::from("--json"),
+            OsString::from(globals::INTERNAL_NETWORK_OPTION),
+            OsString::from("local"),
+            OsString::from(globals::INTERNAL_ICP_OPTION),
+            OsString::from("/bin/icp"),
+        ])
+        .expect("parse auth renewal provisioner list options");
+        let AuthCommand::RenewalProvisionerList(options) = list else {
+            panic!("expected renewal provisioner list command");
+        };
+        assert_eq!(options.deployment, "local");
+        assert_eq!(options.common.network, "local");
+        assert_eq!(options.common.icp, "/bin/icp");
+        assert!(options.json);
+
+        let disable = AuthOptions::parse([
+            OsString::from("renewal"),
+            OsString::from("provisioner"),
+            OsString::from("disable"),
+            OsString::from("local"),
+            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+        ])
+        .expect("parse auth renewal provisioner disable options");
+        let AuthCommand::RenewalProvisionerUpsert(options) = disable else {
+            panic!("expected renewal provisioner upsert command");
+        };
+        assert_eq!(options.deployment, "local");
+        assert_eq!(options.principal, "rrkah-fqaaa-aaaaa-aaaaq-cai");
+        assert!(!options.enabled);
+    }
+
+    #[test]
     fn top_level_forwards_auth_global_icp_and_network() {
         let err = run([
             OsString::from("--icp"),
@@ -1784,6 +2231,33 @@ mod tests {
             Some(vec![AuthRenewalBatchWork {
                 batch_id: [8; 32],
                 attempt_count: Some(1),
+            }])
+        );
+    }
+
+    #[test]
+    fn parses_renewal_provisioners_from_json_and_candid() {
+        let json = serde_json::json!({
+            "provisioners": [{
+                "principal": "rrkah-fqaaa-aaaaa-aaaaq-cai",
+                "enabled": true
+            }]
+        })
+        .to_string();
+        assert_eq!(
+            parse_renewal_provisioners(&json),
+            Some(vec![AuthRenewalProvisioner {
+                principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+                enabled: true,
+            }])
+        );
+
+        let candid = r#"{"response_candid":"(record { provisioners = vec { record { \"principal\" = principal \"rrkah-fqaaa-aaaaa-aaaaq-cai\"; enabled = false } } })"}"#;
+        assert_eq!(
+            parse_renewal_provisioners(candid),
+            Some(vec![AuthRenewalProvisioner {
+                principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+                enabled: false,
             }])
         );
     }
@@ -1870,6 +2344,87 @@ mod tests {
         assert_eq!(
             runtime.called_methods(),
             vec![CANIC_DELEGATION_RENEWAL_WORK]
+        );
+    }
+
+    #[test]
+    fn renewal_provisioner_list_queries_acl_endpoint() {
+        let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
+            CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+            None,
+            Some("json"),
+            serde_json::json!({
+                "provisioners": [{
+                    "principal": "rrkah-fqaaa-aaaaa-aaaaq-cai",
+                    "enabled": true
+                }]
+            })
+            .to_string(),
+        )]);
+
+        let result = renewal_provisioner_list_result_with_runtime(
+            &runtime,
+            &RenewalProvisionerListOptions {
+                deployment: "local".to_string(),
+                json: true,
+                common: CommonOptions {
+                    network: "local".to_string(),
+                    icp: "icp".to_string(),
+                },
+            },
+        )
+        .expect("provisioner list should query scripted endpoint");
+
+        assert_eq!(result.kind, AUTH_RENEWAL_PROVISIONER_LIST_KIND);
+        assert_eq!(result.provisioners.len(), 1);
+        assert_eq!(
+            result.provisioners[0].principal,
+            "rrkah-fqaaa-aaaaa-aaaaq-cai"
+        );
+        assert!(result.provisioners[0].enabled);
+        assert_eq!(
+            runtime.called_methods(),
+            vec![CANIC_DELEGATION_RENEWAL_PROVISIONERS]
+        );
+    }
+
+    #[test]
+    fn renewal_provisioner_upsert_calls_acl_endpoint() {
+        let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
+            CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
+            Some(renewal_provisioner_upsert_arg(principal, true)),
+            Some("json"),
+            serde_json::json!({
+                "provisioner": {
+                    "principal": principal,
+                    "enabled": true
+                }
+            })
+            .to_string(),
+        )]);
+
+        let result = renewal_provisioner_upsert_result_with_runtime(
+            &runtime,
+            &RenewalProvisionerUpsertOptions {
+                deployment: "local".to_string(),
+                principal: principal.to_string(),
+                enabled: true,
+                json: true,
+                common: CommonOptions {
+                    network: "local".to_string(),
+                    icp: "icp".to_string(),
+                },
+            },
+        )
+        .expect("provisioner upsert should call scripted endpoint");
+
+        assert_eq!(result.kind, AUTH_RENEWAL_PROVISIONER_UPSERT_KIND);
+        assert_eq!(result.provisioner.principal, principal);
+        assert!(result.provisioner.enabled);
+        assert_eq!(
+            runtime.called_methods(),
+            vec![CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER]
         );
     }
 
@@ -2123,6 +2678,10 @@ mod tests {
                     CANIC_INSTALL_DELEGATION_PROOF_BATCH => CANIC_INSTALL_DELEGATION_PROOF_BATCH,
                     CANIC_ROOT_ISSUER_RENEWAL_STATUS => CANIC_ROOT_ISSUER_RENEWAL_STATUS,
                     CANIC_ACTIVE_DELEGATION_PROOF_STATUS => CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+                    CANIC_DELEGATION_RENEWAL_PROVISIONERS => CANIC_DELEGATION_RENEWAL_PROVISIONERS,
+                    CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER => {
+                        CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER
+                    }
                     _ => panic!("unexpected method {method}"),
                 })
                 .collect()

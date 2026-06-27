@@ -170,13 +170,18 @@ fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
 }
 
 fn auth_leaf_accepts_globals(tail: &[OsString]) -> bool {
-    matches!(
-        (
-            tail.first().and_then(|arg| arg.to_str()),
-            tail.get(1).and_then(|arg| arg.to_str())
+    if !matches!(tail.first().and_then(|arg| arg.to_str()), Some("renewal")) {
+        return false;
+    }
+
+    match tail.get(1).and_then(|arg| arg.to_str()) {
+        Some("run-once" | "status") => true,
+        Some("provisioner") => matches!(
+            tail.get(2).and_then(|arg| arg.to_str()),
+            Some("list" | "enable" | "disable")
         ),
-        (Some("renewal"), Some("run-once" | "status"))
-    )
+        _ => false,
+    }
 }
 
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {

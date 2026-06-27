@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.4` adds `canic auth renewal provisioner` list/enable/disable commands
+  for the constrained renewal provisioner ACL and extends retained CLI proofs
+  across those operator flows.
+
 - `0.74.3` extends retained packaged/installed CLI proofs across auth renewal
   help, no-work bridge runs, drift status, and medic drift output, while
   fixing top-level `--network`/`--icp` forwarding for `auth renewal status`.
