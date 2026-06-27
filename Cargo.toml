@@ -47,7 +47,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.91.0"
 edition = "2024"
-version = "0.74.3"
+version = "0.74.4"
 license = "MIT"
 authors = ["borovan <84897664+borovan@users.noreply.github.com>"]
 description = "Canic — a canister orchestration and management toolkit for the Internet Computer"
@@ -61,14 +61,14 @@ readme = "README.md"
 async-trait = "0.1"
 candid = { version = "0.10", default-features = false }
 candid_parser = "0.3.1"
-canic = { version = "0.74.3", path = "crates/canic" }
-canic-backup = { version = "0.74.3", path = "crates/canic-backup" }
-canic-control-plane = { version = "0.74.3", path = "crates/canic-control-plane" }
-canic-core = { version = "0.74.3", path = "crates/canic-core" }
-canic-host = { version = "0.74.3", path = "crates/canic-host" }
-canic-macros = { version = "0.74.3", path = "crates/canic-macros" }
-canic-testing-internal = { version = "0.74.3", path = "crates/canic-testing-internal" }
-canic-wasm-store = { version = "0.74.3", path = "crates/canic-wasm-store" }
+canic = { version = "0.74.4", path = "crates/canic" }
+canic-backup = { version = "0.74.4", path = "crates/canic-backup" }
+canic-control-plane = { version = "0.74.4", path = "crates/canic-control-plane" }
+canic-core = { version = "0.74.4", path = "crates/canic-core" }
+canic-host = { version = "0.74.4", path = "crates/canic-host" }
+canic-macros = { version = "0.74.4", path = "crates/canic-macros" }
+canic-testing-internal = { version = "0.74.4", path = "crates/canic-testing-internal" }
+canic-wasm-store = { version = "0.74.4", path = "crates/canic-wasm-store" }
 clap = { version = "4.6.1", features = ["derive"] }
 criterion = "0.8"
 flate2 = { version = "1.1", default-features = false, features = [
