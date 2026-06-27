@@ -26,6 +26,7 @@ cleanup() {
 trap cleanup EXIT
 
 . "$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
+. "$ROOT/scripts/ci/auth-renewal-cli-proof-lib.sh"
 
 ensure_packaged_crate() {
     local crate_name="$1"
@@ -195,7 +196,9 @@ run_probe() {
         exit 1
     fi
     prepare_blob_storage_cli_fixture "$DOWNSTREAM_ROOT"
+    prepare_auth_renewal_cli_fixture "$DOWNSTREAM_ROOT"
     run_blob_storage_cli_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
+    run_auth_renewal_cli_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
 }
 
 assert_probe_outputs() {
@@ -240,6 +243,7 @@ assert_probe_outputs() {
         exit 1
     }
     assert_blob_storage_cli_probe_outputs "packaged" "$TMP_ROOT"
+    assert_auth_renewal_cli_probe_outputs "packaged" "$TMP_ROOT"
 }
 
 main() {

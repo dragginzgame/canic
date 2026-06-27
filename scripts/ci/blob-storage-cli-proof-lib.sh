@@ -68,6 +68,24 @@ for arg in "$@"; do
 JSON
             exit 0
             ;;
+        canic_delegation_renewal_work)
+            cat <<'JSON'
+{"batches":[]}
+JSON
+            exit 0
+            ;;
+        canic_root_issuer_renewal_status)
+            cat <<'JSON'
+{"template":{"enabled":true,"cert_ttl_ns":"300000000000"},"state":{"last_installed_cert_hash":["0303030303030303030303030303030303030303030303030303030303030303"],"last_outcome":"Installed","consecutive_failures":0,"last_installed_expires_at_ns":["1620329000000000000"],"last_installed_refresh_after_ns":["1620328900000000000"],"next_attempt_after_ns":"1620328900000000000","active_attempt_id":null},"active_attempt":null}
+JSON
+            exit 0
+            ;;
+        canic_active_delegation_proof_status)
+            cat <<'JSON'
+{"status":"Valid","root_pid":["ryjl3-tyaaa-aaaaa-aaaba-cai"],"issuer_pid":["rrkah-fqaaa-aaaaa-aaaaq-cai"],"cert_hash":["0404040404040404040404040404040404040404040404040404040404040404"],"expires_at_ns":["1620329000000000000"],"refresh_after_ns":["1620328900000000000"]}
+JSON
+            exit 0
+            ;;
         get_blob_storage_status)
             state="$(cat "$STATE_FILE")"
             if [ "$state" = "funded" ]; then

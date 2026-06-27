@@ -175,7 +175,7 @@ fn auth_leaf_accepts_globals(tail: &[OsString]) -> bool {
             tail.first().and_then(|arg| arg.to_str()),
             tail.get(1).and_then(|arg| arg.to_str())
         ),
-        (Some("renewal"), Some("run-once"))
+        (Some("renewal"), Some("run-once" | "status"))
     )
 }
 

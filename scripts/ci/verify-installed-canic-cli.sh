@@ -21,6 +21,7 @@ cleanup() {
 trap cleanup EXIT
 
 . "$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
+. "$ROOT/scripts/ci/auth-renewal-cli-proof-lib.sh"
 
 assert_installed_binary_path() {
     local canic_bin="$1"
@@ -125,10 +126,13 @@ main() {
         exit 1
     fi
     prepare_blob_storage_workspace
+    prepare_auth_renewal_cli_fixture "$DOWNSTREAM_ROOT"
     prepare_fake_blob_storage_icp "$FAKE_ICP" "$FAKE_ICP_STATE"
     run_blob_storage_cli_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
+    run_auth_renewal_cli_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
 
     assert_blob_storage_cli_probe_outputs "installed" "$TMP_ROOT"
+    assert_auth_renewal_cli_probe_outputs "installed" "$TMP_ROOT"
 
     echo "installed canic CLI probe passed"
 }

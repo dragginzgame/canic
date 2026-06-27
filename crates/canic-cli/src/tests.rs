@@ -527,6 +527,37 @@ fn global_icp_is_forwarded_to_info_query_commands() {
 }
 
 #[test]
+fn global_icp_is_forwarded_to_auth_renewal_commands() {
+    let mut run_once_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("run-once"),
+        OsString::from("downstream"),
+    ];
+    let mut status_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("status"),
+        OsString::from("downstream"),
+        OsString::from("--issuer"),
+        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+    ];
+    let mut help_tail = vec![OsString::from("help")];
+
+    apply_global_icp("auth", &mut run_once_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("auth", &mut status_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp("auth", &mut help_tail, Some("/tmp/icp".to_string()));
+
+    assert!(run_once_tail.ends_with(&[
+        OsString::from(INTERNAL_ICP_OPTION),
+        OsString::from("/tmp/icp")
+    ]));
+    assert!(status_tail.ends_with(&[
+        OsString::from(INTERNAL_ICP_OPTION),
+        OsString::from("/tmp/icp")
+    ]));
+    assert_eq!(help_tail, vec![OsString::from("help")]);
+}
+
+#[test]
 fn global_network_is_forwarded_to_commands_that_use_network() {
     let mut tail = vec![OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("balance")];
@@ -784,6 +815,37 @@ fn global_network_is_forwarded_to_info_query_commands() {
             OsString::from("local")
         ]
     );
+    assert_eq!(help_tail, vec![OsString::from("help")]);
+}
+
+#[test]
+fn global_network_is_forwarded_to_auth_renewal_commands() {
+    let mut run_once_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("run-once"),
+        OsString::from("downstream"),
+    ];
+    let mut status_tail = vec![
+        OsString::from("renewal"),
+        OsString::from("status"),
+        OsString::from("downstream"),
+        OsString::from("--issuer"),
+        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+    ];
+    let mut help_tail = vec![OsString::from("help")];
+
+    apply_global_network("auth", &mut run_once_tail, Some("fixture".to_string()));
+    apply_global_network("auth", &mut status_tail, Some("fixture".to_string()));
+    apply_global_network("auth", &mut help_tail, Some("fixture".to_string()));
+
+    assert!(run_once_tail.ends_with(&[
+        OsString::from(INTERNAL_NETWORK_OPTION),
+        OsString::from("fixture")
+    ]));
+    assert!(status_tail.ends_with(&[
+        OsString::from(INTERNAL_NETWORK_OPTION),
+        OsString::from("fixture")
+    ]));
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
