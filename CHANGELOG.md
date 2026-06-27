@@ -8,21 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Root-managed delegated-auth renewal now records prepare-stage quota and
-  policy failures on each due issuer's renewal state, preserving previous
-  install metadata while backing off retries.
-
-- Root-managed delegated-auth renewal sweeps now prune expired scheduled batch
-  transport records before preparing fresh work, while keeping issuer attempts
-  available for state expiry and status visibility.
-
-- Renewal provisioner installs now reject expired scheduled batches before
-  entering issuer-call workflow and immediately mark expired issuer attempts in
-  root-managed renewal state.
-
 ## [0.74.x] - 2026-06-27 - Root-Managed Delegation Renewal
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
+
+- `0.74.7` hardens root-managed renewal recovery by recording prepare-stage
+  failures per issuer, pruning expired scheduled batch transport records, and
+  rejecting expired provisioner installs before issuer calls.
 
 - `0.74.6` refreshes root-managed renewal state after successful
   controller/manual proof installs when the proof exactly matches the issuer's
