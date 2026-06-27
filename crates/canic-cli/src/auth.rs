@@ -19,8 +19,9 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::protocol::{
-    CANIC_DELEGATION_RENEWAL_WORK, CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-    CANIC_INSTALL_DELEGATION_PROOF_BATCH, CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+    CANIC_ACTIVE_DELEGATION_PROOF_STATUS, CANIC_DELEGATION_RENEWAL_WORK,
+    CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH, CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+    CANIC_ROOT_ISSUER_RENEWAL_STATUS,
 };
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
@@ -30,6 +31,7 @@ use canic_host::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
+    registry::RegistryEntry,
     response_parse::{
         candid_record_blocks, field_value_after_equals, find_field, parse_json_u64,
         parse_u64_digits, response_candid,
@@ -54,7 +56,8 @@ const DEPLOYMENT_ARG: &str = "deployment";
 const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
-const AUTH_RENEWAL_SCHEMA_VERSION: u16 = 1;
+const AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION: u16 = 1;
+const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 2;
 const AUTH_RENEWAL_RUN_ONCE_KIND: &str = "auth_renewal_run_once_result";
 const AUTH_RENEWAL_STATUS_KIND: &str = "auth_renewal_status";
 const AUTH_RENEWAL_STATUS_NO_WORK: &str = "no_work";
@@ -63,6 +66,8 @@ const AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT: &str = "active_attempt";
 const AUTH_RENEWAL_STATUS_CONFIGURED: &str = "configured";
 const AUTH_RENEWAL_STATUS_DISABLED: &str = "disabled";
 const AUTH_RENEWAL_STATUS_MISSING: &str = "missing";
+const AUTH_RENEWAL_STATUS_UNAVAILABLE: &str = "unavailable";
+const AUTH_RENEWAL_STATUS_DRIFT_DETECTED: &str = "drift_detected";
 const AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
 
 const HELP_AFTER: &str = "\
@@ -331,6 +336,28 @@ fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandE
     write_renewal_status_result(options.json, &result)
 }
 
+pub fn renewal_medic_summary(
+    deployment: &str,
+    issuer: &str,
+    network: &str,
+    icp: &str,
+) -> Result<AuthRenewalMedicSummary, AuthCommandError> {
+    let runtime = LiveAuthRenewalRuntime;
+    let result = renewal_status_result_with_runtime(
+        &runtime,
+        &RenewalStatusOptions {
+            deployment: deployment.to_string(),
+            issuer: issuer.to_string(),
+            json: true,
+            common: CommonOptions {
+                network: network.to_string(),
+                icp: icp.to_string(),
+            },
+        },
+    )?;
+    Ok(auth_renewal_medic_summary_from_result(&result))
+}
+
 trait AuthRenewalRuntime {
     fn resolve_root_target(
         &self,
@@ -346,6 +373,23 @@ trait AuthRenewalRuntime {
         target: &AuthRootCallTarget,
         method: &str,
         arg: Option<&str>,
+        output: Option<&str>,
+    ) -> Result<String, AuthCommandError>;
+
+    fn resolve_issuer_target(
+        &self,
+        options: &CommonOptions,
+        root_target: &AuthRootCallTarget,
+        issuer_pid: &str,
+        method: &str,
+        expected_mode: AuthRenewalMethodMode,
+    ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError>;
+
+    fn query_issuer_output(
+        &self,
+        options: &CommonOptions,
+        target: &AuthIssuerCallTarget,
+        method: &str,
         output: Option<&str>,
     ) -> Result<String, AuthCommandError>;
 
@@ -378,16 +422,19 @@ fn renewal_status_result_with_runtime(
         Some("json"),
     )?;
     let status = parse_renewal_status_summary(&output).ok_or(AuthCommandError::ResponseParse)?;
+    let issuer_observation =
+        issuer_observation_with_runtime(runtime, &options.common, &target, &issuer_pid, &status);
 
     Ok(AuthRenewalStatusResult {
-        schema_version: AUTH_RENEWAL_SCHEMA_VERSION,
+        schema_version: AUTH_RENEWAL_STATUS_SCHEMA_VERSION,
         kind: AUTH_RENEWAL_STATUS_KIND.to_string(),
         deployment: options.deployment.clone(),
         network: options.common.network.clone(),
         target: target.target,
         issuer_pid,
-        status: renewal_status_code(&status).to_string(),
+        status: renewal_status_code(&status, &issuer_observation).to_string(),
         renewal: status,
+        issuer_observation,
     })
 }
 
@@ -424,6 +471,27 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         output: Option<&str>,
     ) -> Result<String, AuthCommandError> {
         live_call_output(options, target, method, arg, output)
+    }
+
+    fn resolve_issuer_target(
+        &self,
+        options: &CommonOptions,
+        root_target: &AuthRootCallTarget,
+        issuer_pid: &str,
+        method: &str,
+        expected_mode: AuthRenewalMethodMode,
+    ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
+        resolve_auth_issuer_call_target(options, root_target, issuer_pid, method, expected_mode)
+    }
+
+    fn query_issuer_output(
+        &self,
+        options: &CommonOptions,
+        target: &AuthIssuerCallTarget,
+        method: &str,
+        output: Option<&str>,
+    ) -> Result<String, AuthCommandError> {
+        live_query_issuer_output(options, target, method, output)
     }
 }
 
@@ -485,7 +553,7 @@ fn renewal_once_result_with_runtime(
     }
 
     Ok(AuthRenewalRunOnceResult {
-        schema_version: AUTH_RENEWAL_SCHEMA_VERSION,
+        schema_version: AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION,
         kind: AUTH_RENEWAL_RUN_ONCE_KIND.to_string(),
         deployment: options.deployment.clone(),
         network: options.common.network.clone(),
@@ -533,6 +601,30 @@ struct AuthRootTarget {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AuthRootCallTarget {
     target: AuthRootTarget,
+    candid_path: PathBuf,
+    icp_root: PathBuf,
+    registry_entries: Vec<RegistryEntry>,
+}
+
+///
+/// AuthIssuerTarget
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthIssuerTarget {
+    input: String,
+    role: Option<String>,
+    canister_id: String,
+    candid_source: String,
+}
+
+///
+/// AuthIssuerCallTarget
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AuthIssuerCallTarget {
+    target: AuthIssuerTarget,
     candid_path: PathBuf,
     icp_root: PathBuf,
 }
@@ -593,6 +685,7 @@ struct AuthRenewalTemplateStatus {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct AuthRenewalStateStatus {
     present: bool,
+    last_installed_cert_hash: Option<String>,
     last_outcome: Option<String>,
     consecutive_failures: Option<u64>,
     last_installed_expires_at_ns: Option<String>,
@@ -626,6 +719,21 @@ struct AuthRenewalStatusSummary {
 }
 
 ///
+/// AuthIssuerObservation
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthIssuerObservation {
+    available: bool,
+    status: String,
+    drift_detected: bool,
+    reason: Option<String>,
+    cert_hash: Option<String>,
+    expires_at_ns: Option<String>,
+    refresh_after_ns: Option<String>,
+}
+
+///
 /// AuthRenewalStatusResult
 ///
 
@@ -639,6 +747,28 @@ struct AuthRenewalStatusResult {
     issuer_pid: String,
     status: String,
     renewal: AuthRenewalStatusSummary,
+    issuer_observation: AuthIssuerObservation,
+}
+
+///
+/// AuthRenewalMedicStatus
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthRenewalMedicStatus {
+    Ready,
+    Warning,
+}
+
+///
+/// AuthRenewalMedicSummary
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthRenewalMedicSummary {
+    pub status: AuthRenewalMedicStatus,
+    pub detail: String,
+    pub next: String,
 }
 
 fn resolve_auth_root_call_target(
@@ -681,7 +811,48 @@ fn resolve_auth_root_call_target(
         },
         candid_path,
         icp_root,
+        registry_entries: installed.registry.entries,
     })
+}
+
+fn resolve_auth_issuer_call_target(
+    options: &CommonOptions,
+    root_target: &AuthRootCallTarget,
+    issuer_pid: &str,
+    method: &str,
+    expected_mode: AuthRenewalMethodMode,
+) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
+    let Some(entry) = root_target
+        .registry_entries
+        .iter()
+        .find(|entry| entry.pid == issuer_pid)
+    else {
+        return Ok(None);
+    };
+    let Some(role) = entry.role.as_deref() else {
+        return Ok(None);
+    };
+    let Some(candid_path) = role_candid_path(Some(&root_target.icp_root), &options.network, role)
+    else {
+        return Ok(None);
+    };
+    let candid =
+        fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
+            path: candid_path.clone(),
+            source,
+        })?;
+    validate_auth_method_mode(&candid_path, &candid, method, expected_mode)?;
+
+    Ok(Some(AuthIssuerCallTarget {
+        target: AuthIssuerTarget {
+            input: issuer_pid.to_string(),
+            role: entry.role.clone(),
+            canister_id: issuer_pid.to_string(),
+            candid_source: AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string(),
+        },
+        candid_path,
+        icp_root: root_target.icp_root.clone(),
+    }))
 }
 
 fn validate_auth_method_mode(
@@ -753,6 +924,22 @@ fn live_query_output(
     result.map_err(auth_icp_error)
 }
 
+fn live_query_issuer_output(
+    options: &CommonOptions,
+    target: &AuthIssuerCallTarget,
+    method: &str,
+    output: Option<&str>,
+) -> Result<String, AuthCommandError> {
+    let icp = icp_cli(options).with_cwd(&target.icp_root);
+    icp.canister_query_output_with_candid(
+        &target.target.canister_id,
+        method,
+        output,
+        Some(target.candid_path.as_path()),
+    )
+    .map_err(auth_icp_error)
+}
+
 fn live_call_output(
     options: &CommonOptions,
     target: &AuthRootCallTarget,
@@ -812,6 +999,9 @@ fn parse_renewal_status_summary(output: &str) -> Option<AuthRenewalStatusSummary
         },
         state: AuthRenewalStateStatus {
             present: state.is_some(),
+            last_installed_cert_hash: state
+                .and_then(|value| find_field(value, "last_installed_cert_hash"))
+                .and_then(parse_optional_bytes32_hex),
             last_outcome: state
                 .and_then(|value| find_field(value, "last_outcome"))
                 .and_then(parse_variant_code),
@@ -853,6 +1043,110 @@ fn parse_renewal_status_summary(output: &str) -> Option<AuthRenewalStatusSummary
     })
 }
 
+fn issuer_observation_with_runtime(
+    runtime: &impl AuthRenewalRuntime,
+    options: &CommonOptions,
+    root_target: &AuthRootCallTarget,
+    issuer_pid: &str,
+    status: &AuthRenewalStatusSummary,
+) -> AuthIssuerObservation {
+    let target = match runtime.resolve_issuer_target(
+        options,
+        root_target,
+        issuer_pid,
+        CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+        AuthRenewalMethodMode::Query,
+    ) {
+        Ok(Some(target)) => target,
+        Ok(None) => return unavailable_issuer_observation("issuer_not_in_local_registry"),
+        Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
+    };
+    let Ok(output) = runtime.query_issuer_output(
+        options,
+        &target,
+        CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+        Some("json"),
+    ) else {
+        return unavailable_issuer_observation("issuer_status_query_failed");
+    };
+    let Some(observed) = parse_issuer_observed_status(&output) else {
+        return unavailable_issuer_observation("issuer_status_parse_failed");
+    };
+    issuer_observation_from_status(status, observed)
+}
+
+fn unavailable_issuer_observation(reason: &str) -> AuthIssuerObservation {
+    AuthIssuerObservation {
+        available: false,
+        status: AUTH_RENEWAL_STATUS_UNAVAILABLE.to_string(),
+        drift_detected: false,
+        reason: Some(reason.to_string()),
+        cert_hash: None,
+        expires_at_ns: None,
+        refresh_after_ns: None,
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AuthIssuerObservedStatus {
+    status: String,
+    cert_hash: Option<String>,
+    expires_at_ns: Option<String>,
+    refresh_after_ns: Option<String>,
+}
+
+fn parse_issuer_observed_status(output: &str) -> Option<AuthIssuerObservedStatus> {
+    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
+    let payload = find_field(&value, "Ok").unwrap_or(&value);
+
+    Some(AuthIssuerObservedStatus {
+        status: find_field(payload, "status").and_then(parse_variant_code)?,
+        cert_hash: find_field(payload, "cert_hash").and_then(parse_optional_bytes32_hex),
+        expires_at_ns: find_field(payload, "expires_at_ns")
+            .and_then(parse_optional_u64_deep)
+            .map(|value| value.to_string()),
+        refresh_after_ns: find_field(payload, "refresh_after_ns")
+            .and_then(parse_optional_u64_deep)
+            .map(|value| value.to_string()),
+    })
+}
+
+fn issuer_observation_from_status(
+    status: &AuthRenewalStatusSummary,
+    observed: AuthIssuerObservedStatus,
+) -> AuthIssuerObservation {
+    let drift_detected = issuer_observation_drift_detected(status, &observed);
+    AuthIssuerObservation {
+        available: true,
+        status: observed.status,
+        drift_detected,
+        reason: None,
+        cert_hash: observed.cert_hash,
+        expires_at_ns: observed.expires_at_ns,
+        refresh_after_ns: observed.refresh_after_ns,
+    }
+}
+
+fn issuer_observation_drift_detected(
+    status: &AuthRenewalStatusSummary,
+    observed: &AuthIssuerObservedStatus,
+) -> bool {
+    let root_has_installed = status.state.last_installed_cert_hash.is_some()
+        || status.state.last_installed_expires_at_ns.is_some();
+    let issuer_has_active = observed.cert_hash.is_some() || observed.expires_at_ns.is_some();
+
+    if root_has_installed != issuer_has_active {
+        return true;
+    }
+    if status.state.last_installed_cert_hash.is_some()
+        && status.state.last_installed_cert_hash != observed.cert_hash
+    {
+        return true;
+    }
+    status.state.last_installed_expires_at_ns.is_some()
+        && status.state.last_installed_expires_at_ns != observed.expires_at_ns
+}
+
 fn option_payload(value: &serde_json::Value) -> Option<&serde_json::Value> {
     match value {
         serde_json::Value::Null => None,
@@ -874,7 +1168,15 @@ fn parse_u64_deep(value: &serde_json::Value) -> Option<u64> {
 }
 
 fn parse_optional_bytes32_hex(value: &serde_json::Value) -> Option<String> {
-    option_payload(value).and_then(parse_bytes32_hex_deep)
+    if value.is_null() {
+        return None;
+    }
+    parse_bytes32_hex_deep(value).or_else(|| match value {
+        serde_json::Value::Array(values) if values.len() == 1 => {
+            parse_optional_bytes32_hex(&values[0])
+        }
+        _ => None,
+    })
 }
 
 fn parse_bytes32_hex_deep(value: &serde_json::Value) -> Option<String> {
@@ -913,8 +1215,13 @@ fn pascal_to_snake(value: &str) -> String {
     rendered
 }
 
-fn renewal_status_code(status: &AuthRenewalStatusSummary) -> &'static str {
-    if status.active_attempt.present {
+fn renewal_status_code(
+    status: &AuthRenewalStatusSummary,
+    issuer_observation: &AuthIssuerObservation,
+) -> &'static str {
+    if issuer_observation.drift_detected {
+        AUTH_RENEWAL_STATUS_DRIFT_DETECTED
+    } else if status.active_attempt.present {
         AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT
     } else if status.template.enabled == Some(false) {
         AUTH_RENEWAL_STATUS_DISABLED
@@ -922,6 +1229,51 @@ fn renewal_status_code(status: &AuthRenewalStatusSummary) -> &'static str {
         AUTH_RENEWAL_STATUS_CONFIGURED
     } else {
         AUTH_RENEWAL_STATUS_MISSING
+    }
+}
+
+fn auth_renewal_medic_summary_from_result(
+    result: &AuthRenewalStatusResult,
+) -> AuthRenewalMedicSummary {
+    let observation = &result.issuer_observation;
+    let status = if observation.available && !observation.drift_detected {
+        AuthRenewalMedicStatus::Ready
+    } else {
+        AuthRenewalMedicStatus::Warning
+    };
+    let root_cert_hash = result
+        .renewal
+        .state
+        .last_installed_cert_hash
+        .as_deref()
+        .unwrap_or("-");
+    let issuer_cert_hash = observation.cert_hash.as_deref().unwrap_or("-");
+    let detail = format!(
+        "status={}; issuer_observation={}; root_cert_hash={}; issuer_cert_hash={}; drift_detected={}",
+        result.status,
+        render_issuer_observation(observation),
+        root_cert_hash,
+        issuer_cert_hash,
+        observation.drift_detected
+    );
+    let next = if observation.drift_detected {
+        format!(
+            "run canic auth renewal status {} --issuer {}; if drift persists, run canic auth renewal run-once {} or repair the issuer active proof",
+            result.deployment, result.issuer_pid, result.deployment
+        )
+    } else if observation.available {
+        "-".to_string()
+    } else {
+        format!(
+            "run canic auth renewal status {} --issuer {}",
+            result.deployment, result.issuer_pid
+        )
+    };
+
+    AuthRenewalMedicSummary {
+        status,
+        detail,
+        next,
     }
 }
 
@@ -1282,6 +1634,30 @@ fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> String {
             lines.push(format!("Failure: {failure}"));
         }
     }
+    lines.push(format!(
+        "Issuer observation: {}",
+        render_issuer_observation(&result.issuer_observation)
+    ));
+    if result.issuer_observation.available {
+        lines.push(format!(
+            "Issuer cert hash: {}",
+            result
+                .issuer_observation
+                .cert_hash
+                .as_deref()
+                .unwrap_or("-")
+        ));
+        lines.push(format!(
+            "Issuer expires: {}",
+            result
+                .issuer_observation
+                .expires_at_ns
+                .as_deref()
+                .unwrap_or("-")
+        ));
+    } else if let Some(reason) = &result.issuer_observation.reason {
+        lines.push(format!("Issuer observation reason: {reason}"));
+    }
     lines.join("\n")
 }
 
@@ -1299,6 +1675,17 @@ fn render_active_attempt_status(attempt: &AuthRenewalActiveAttemptStatus) -> &st
         attempt.status.as_deref().unwrap_or("present")
     } else {
         "none"
+    }
+}
+
+fn render_issuer_observation(observation: &AuthIssuerObservation) -> String {
+    if observation.drift_detected {
+        format!(
+            "{} ({})",
+            AUTH_RENEWAL_STATUS_DRIFT_DETECTED, observation.status
+        )
+    } else {
+        observation.status.clone()
     }
 }
 
@@ -1444,6 +1831,7 @@ mod tests {
         .expect("run-once should retrieve and install scripted batch");
 
         assert_eq!(result.status, AUTH_RENEWAL_STATUS_INSTALLED);
+        assert_eq!(result.schema_version, AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION);
         assert_eq!(result.batches.len(), 1);
         assert_eq!(result.batches[0].batch_id, hex_bytes(&[9; 32]));
         assert_eq!(
@@ -1529,9 +1917,18 @@ mod tests {
         .expect("status should query scripted endpoint");
 
         assert_eq!(result.kind, AUTH_RENEWAL_STATUS_KIND);
+        assert_eq!(result.schema_version, AUTH_RENEWAL_STATUS_SCHEMA_VERSION);
         assert_eq!(result.issuer_pid, issuer);
         assert_eq!(result.status, AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT);
         assert_eq!(result.renewal.template.enabled, Some(true));
+        assert_eq!(
+            result.issuer_observation.status,
+            AUTH_RENEWAL_STATUS_UNAVAILABLE
+        );
+        assert_eq!(
+            result.issuer_observation.reason.as_deref(),
+            Some("issuer_not_in_local_registry")
+        );
         assert_eq!(
             result.renewal.state.last_outcome.as_deref(),
             Some("installed")
@@ -1544,6 +1941,73 @@ mod tests {
             runtime.called_methods(),
             vec![CANIC_ROOT_ISSUER_RENEWAL_STATUS]
         );
+    }
+
+    #[test]
+    fn renewal_status_reports_matching_issuer_observation() {
+        let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let runtime = ScriptedAuthRenewalRuntime::new([
+            scripted_response(
+                CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+                Some(root_issuer_renewal_status_arg(issuer)),
+                Some("json"),
+                renewal_status_response_json(issuer, [3; 32], "1620329000000000000"),
+            ),
+            scripted_response(
+                CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+                None,
+                Some("json"),
+                issuer_status_response_json([3; 32], "1620329000000000000"),
+            ),
+        ])
+        .with_issuer_available();
+
+        let result = renewal_status_result_with_runtime(&runtime, &renewal_status_options(issuer))
+            .expect("status should include issuer observation");
+
+        assert_eq!(result.status, AUTH_RENEWAL_STATUS_CONFIGURED);
+        assert!(result.issuer_observation.available);
+        assert!(!result.issuer_observation.drift_detected);
+        assert_eq!(
+            result.issuer_observation.cert_hash,
+            Some(hex_bytes(&[3; 32]))
+        );
+        assert_eq!(
+            runtime.called_methods(),
+            vec![
+                CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+                CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+            ]
+        );
+    }
+
+    #[test]
+    fn renewal_status_reports_root_issuer_drift() {
+        let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let runtime = ScriptedAuthRenewalRuntime::new([
+            scripted_response(
+                CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+                Some(root_issuer_renewal_status_arg(issuer)),
+                Some("json"),
+                renewal_status_response_json(issuer, [3; 32], "1620329000000000000"),
+            ),
+            scripted_response(
+                CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+                None,
+                Some("json"),
+                issuer_status_response_json([4; 32], "1620329000000000000"),
+            ),
+        ])
+        .with_issuer_available();
+
+        let result = renewal_status_result_with_runtime(&runtime, &renewal_status_options(issuer))
+            .expect("status should include drift observation");
+        let rendered = render_renewal_status_result(&result);
+
+        assert_eq!(result.status, AUTH_RENEWAL_STATUS_DRIFT_DETECTED);
+        assert!(result.issuer_observation.drift_detected);
+        assert!(rendered.contains("Issuer observation: drift_detected"));
+        assert!(rendered.contains(&hex_bytes(&[4; 32])));
     }
 
     #[test]
@@ -1570,9 +2034,58 @@ mod tests {
         assert!(runtime.called_methods().is_empty());
     }
 
+    fn renewal_status_options(issuer: &str) -> RenewalStatusOptions {
+        RenewalStatusOptions {
+            deployment: "local".to_string(),
+            issuer: issuer.to_string(),
+            json: true,
+            common: CommonOptions {
+                network: "local".to_string(),
+                icp: "icp".to_string(),
+            },
+        }
+    }
+
+    fn renewal_status_response_json(
+        _issuer: &str,
+        cert_hash: [u8; 32],
+        expires_at_ns: &str,
+    ) -> String {
+        serde_json::json!({
+            "template": {
+                "enabled": true,
+                "cert_ttl_ns": "300000000000"
+            },
+            "state": {
+                "last_installed_cert_hash": [cert_hash.to_vec()],
+                "last_outcome": "Installed",
+                "consecutive_failures": 0,
+                "last_installed_expires_at_ns": [expires_at_ns],
+                "last_installed_refresh_after_ns": ["1620328900000000000"],
+                "next_attempt_after_ns": "1620328900000000000",
+                "active_attempt_id": null
+            },
+            "active_attempt": null
+        })
+        .to_string()
+    }
+
+    fn issuer_status_response_json(cert_hash: [u8; 32], expires_at_ns: &str) -> String {
+        serde_json::json!({
+            "status": "Valid",
+            "root_pid": ["r7inp-6aaaa-aaaaa-aaabq-cai"],
+            "issuer_pid": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
+            "cert_hash": [cert_hash.to_vec()],
+            "expires_at_ns": [expires_at_ns],
+            "refresh_after_ns": ["1620328900000000000"]
+        })
+        .to_string()
+    }
+
     struct ScriptedAuthRenewalRuntime {
         responses: RefCell<VecDeque<ScriptedAuthRenewalResponse>>,
         calls: RefCell<Vec<String>>,
+        issuer_available: bool,
     }
 
     impl ScriptedAuthRenewalRuntime {
@@ -1580,6 +2093,7 @@ mod tests {
             Self {
                 responses: RefCell::new(VecDeque::new()),
                 calls: RefCell::new(Vec::new()),
+                issuer_available: false,
             }
         }
 
@@ -1587,7 +2101,13 @@ mod tests {
             Self {
                 responses: RefCell::new(VecDeque::from(responses)),
                 calls: RefCell::new(Vec::new()),
+                issuer_available: false,
             }
+        }
+
+        fn with_issuer_available(mut self) -> Self {
+            self.issuer_available = true;
+            self
         }
 
         fn called_methods(&self) -> Vec<&'static str> {
@@ -1602,6 +2122,7 @@ mod tests {
                     }
                     CANIC_INSTALL_DELEGATION_PROOF_BATCH => CANIC_INSTALL_DELEGATION_PROOF_BATCH,
                     CANIC_ROOT_ISSUER_RENEWAL_STATUS => CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+                    CANIC_ACTIVE_DELEGATION_PROOF_STATUS => CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
                     _ => panic!("unexpected method {method}"),
                 })
                 .collect()
@@ -1625,6 +2146,17 @@ mod tests {
                 },
                 candid_path: PathBuf::from(".icp/local/canisters/root/root.did"),
                 icp_root: PathBuf::from("."),
+                registry_entries: if self.issuer_available {
+                    vec![RegistryEntry {
+                        pid: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+                        role: Some("issuer".to_string()),
+                        kind: None,
+                        parent_pid: None,
+                        module_hash: None,
+                    }]
+                } else {
+                    Vec::new()
+                },
             })
         }
 
@@ -1648,6 +2180,44 @@ mod tests {
             output: Option<&str>,
         ) -> Result<String, AuthCommandError> {
             Ok(self.call(method, Some(arg), output))
+        }
+
+        fn resolve_issuer_target(
+            &self,
+            _options: &CommonOptions,
+            root_target: &AuthRootCallTarget,
+            issuer_pid: &str,
+            _method: &str,
+            _expected_mode: AuthRenewalMethodMode,
+        ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
+            if root_target
+                .registry_entries
+                .iter()
+                .any(|entry| entry.pid == issuer_pid)
+            {
+                Ok(Some(AuthIssuerCallTarget {
+                    target: AuthIssuerTarget {
+                        input: issuer_pid.to_string(),
+                        role: Some("issuer".to_string()),
+                        canister_id: issuer_pid.to_string(),
+                        candid_source: AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string(),
+                    },
+                    candid_path: PathBuf::from(".icp/local/canisters/issuer/issuer.did"),
+                    icp_root: PathBuf::from("."),
+                }))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn query_issuer_output(
+            &self,
+            _options: &CommonOptions,
+            _target: &AuthIssuerCallTarget,
+            method: &str,
+            output: Option<&str>,
+        ) -> Result<String, AuthCommandError> {
+            Ok(self.call(method, None, output))
         }
     }
 

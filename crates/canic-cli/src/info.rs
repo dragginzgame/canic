@@ -36,6 +36,7 @@ Examples:
   canic info endpoints test app
   canic info medic test
   canic info medic test --blob-storage backend
+  canic info medic test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai
   canic info env test";
 const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "medic", "env"];
 
@@ -159,5 +160,6 @@ mod tests {
 
         assert!(text.contains("canic info medic test"));
         assert!(text.contains("canic info medic test --blob-storage backend"));
+        assert!(text.contains("canic info medic test --auth-renewal"));
     }
 }

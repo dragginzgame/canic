@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- `canic auth renewal status` now passively compares locally resolvable issuer
+  active-proof status against root-managed renewal records and reports
+  schema-v2 `drift_detected`/`issuer_observation` without mutating root state;
+  `canic info medic --auth-renewal <issuer>` surfaces the same drift signal.
+
 ## [0.74.x] - 2026-06-27 - Root-Managed Delegation Renewal
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
