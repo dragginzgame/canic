@@ -1105,7 +1105,7 @@ mod tests {
             arg: Option<&str>,
             output: Option<&str>,
         ) -> Result<String, AuthCommandError> {
-            self.call(method, arg, output)
+            Ok(self.call(method, arg, output))
         }
 
         fn call_output(
@@ -1116,17 +1116,12 @@ mod tests {
             arg: &str,
             output: Option<&str>,
         ) -> Result<String, AuthCommandError> {
-            self.call(method, Some(arg), output)
+            Ok(self.call(method, Some(arg), output))
         }
     }
 
     impl ScriptedAuthRenewalRuntime {
-        fn call(
-            &self,
-            method: &str,
-            arg: Option<&str>,
-            output: Option<&str>,
-        ) -> Result<String, AuthCommandError> {
+        fn call(&self, method: &str, arg: Option<&str>, output: Option<&str>) -> String {
             self.calls.borrow_mut().push(method.to_string());
             let response = self
                 .responses
@@ -1137,7 +1132,7 @@ mod tests {
             assert_eq!(response.method, method);
             assert_eq!(response.arg.as_deref(), arg);
             assert_eq!(response.output, output);
-            Ok(response.body)
+            response.body
         }
     }
 
