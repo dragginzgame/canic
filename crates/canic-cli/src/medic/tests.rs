@@ -16,6 +16,7 @@ fn parses_medic_options() {
 
     assert_eq!(options.deployment, "demo");
     assert_eq!(options.blob_storage, None);
+    assert_eq!(options.auth_renewal, None);
     assert_eq!(options.network, "local");
     assert_eq!(options.icp, "/tmp/icp");
 }
@@ -34,6 +35,23 @@ fn parses_blob_storage_medic_target() {
     assert_eq!(options.blob_storage.as_deref(), Some("backend"));
 }
 
+// Ensure targeted auth-renewal medic diagnostics are opt-in.
+#[test]
+fn parses_auth_renewal_medic_target() {
+    let options = MedicOptions::parse_info([
+        OsString::from("demo"),
+        OsString::from("--auth-renewal"),
+        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+    ])
+    .expect("parse medic options");
+
+    assert_eq!(options.deployment, "demo");
+    assert_eq!(
+        options.auth_renewal.as_deref(),
+        Some("rrkah-fqaaa-aaaaa-aaaaq-cai")
+    );
+}
+
 // Ensure medic help explains the diagnostic command rather than printing a one-liner.
 #[test]
 fn medic_usage_includes_examples() {
@@ -43,6 +61,7 @@ fn medic_usage_includes_examples() {
     assert!(text.contains("Usage: canic info medic [OPTIONS] <deployment>"));
     assert!(text.contains("<deployment>"));
     assert!(text.contains("--blob-storage <canister-or-role>"));
+    assert!(text.contains("--auth-renewal <issuer-principal>"));
     assert!(!text.contains("--fleet <name>"));
     assert!(!text.contains("--network"));
     assert!(!text.contains("--icp"));
@@ -82,6 +101,22 @@ fn renders_blob_storage_medic_summary() {
     assert!(report.contains("blob-storage billing [warn]"));
     assert!(report.contains("readiness=blocked"));
     assert!(report.contains("canic blob-storage sync-gateways demo backend"));
+}
+
+// Ensure auth-renewal medic uses the shared auth summary without mutating renewal state.
+#[test]
+fn renders_auth_renewal_medic_summary() {
+    let check = auth_renewal_medic_check_from_summary(AuthRenewalMedicSummary {
+        status: AuthRenewalMedicStatus::Warning,
+        detail: "status=drift_detected; issuer_observation=drift_detected; drift_detected=true"
+            .to_string(),
+        next: "canic auth renewal status demo --issuer rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
+    });
+    let report = render_medic_report(&[check]);
+
+    assert!(report.contains("auth renewal [warn]"));
+    assert!(report.contains("status=drift_detected"));
+    assert!(report.contains("canic auth renewal status demo --issuer"));
 }
 
 // Ensure default medic can discover blob-storage-capable local Candid sidecars passively.
@@ -126,6 +161,7 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
     let options = MedicOptions {
         deployment: "demo".to_string(),
         blob_storage: None,
+        auth_renewal: None,
         network: "local".to_string(),
         icp: "icp".to_string(),
     };

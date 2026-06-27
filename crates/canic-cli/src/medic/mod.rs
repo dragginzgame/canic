@@ -10,6 +10,7 @@
 mod tests;
 
 use crate::{
+    auth::{self, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
     blob_storage::{self, BlobStorageMedicStatus, BlobStorageMedicSummary},
     cli::clap::{parse_matches, render_usage, required_string, string_option_or_else, value_arg},
     cli::defaults::{default_icp, local_network},
@@ -41,8 +42,10 @@ const ICP_SESSION_NEXT: &str =
 const INFO_MEDIC_HELP_AFTER: &str = "\
 Examples:
   canic info medic test
-  canic info medic test --blob-storage backend";
+  canic info medic test --blob-storage backend
+  canic info medic test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai";
 const BLOB_STORAGE_ARG: &str = "blob-storage";
+const AUTH_RENEWAL_ARG: &str = "auth-renewal";
 
 ///
 /// MedicCommandError
@@ -62,6 +65,7 @@ pub enum MedicCommandError {
 struct MedicOptions {
     deployment: String,
     blob_storage: Option<String>,
+    auth_renewal: Option<String>,
     network: String,
     icp: String,
 }
@@ -77,6 +81,7 @@ impl MedicOptions {
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
             blob_storage: crate::cli::clap::string_option(&matches, BLOB_STORAGE_ARG),
+            auth_renewal: crate::cli::clap::string_option(&matches, AUTH_RENEWAL_ARG),
             network: string_option_or_else(&matches, "network", local_network),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
@@ -117,6 +122,12 @@ fn info_medic_command() -> ClapCommand {
                 .long(BLOB_STORAGE_ARG)
                 .value_name("canister-or-role")
                 .help("Run targeted blob-storage billing readiness diagnostics"),
+        )
+        .arg(
+            value_arg(AUTH_RENEWAL_ARG)
+                .long(AUTH_RENEWAL_ARG)
+                .value_name("issuer-principal")
+                .help("Run targeted delegated-auth renewal drift diagnostics"),
         )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())
@@ -181,6 +192,9 @@ fn run_medic_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         && let Some(check) = check_blob_storage_passive_hint(options, root)
     {
         checks.push(check);
+    }
+    if let Some(issuer) = &options.auth_renewal {
+        checks.push(check_auth_renewal(options, issuer));
     }
 
     checks
@@ -331,6 +345,31 @@ fn blob_storage_medic_check_from_summary(summary: BlobStorageMedicSummary) -> Me
         }
         BlobStorageMedicStatus::Warning | BlobStorageMedicStatus::Blocked => {
             MedicCheck::warn("blob-storage billing", summary.detail, summary.next)
+        }
+    }
+}
+
+fn check_auth_renewal(options: &MedicOptions, issuer: &str) -> MedicCheck {
+    match auth::renewal_medic_summary(&options.deployment, issuer, &options.network, &options.icp) {
+        Ok(summary) => auth_renewal_medic_check_from_summary(summary),
+        Err(err) => MedicCheck::error(
+            "auth renewal",
+            err.to_string(),
+            format!(
+                "run canic auth renewal status {} --issuer {issuer}",
+                options.deployment
+            ),
+        ),
+    }
+}
+
+fn auth_renewal_medic_check_from_summary(summary: AuthRenewalMedicSummary) -> MedicCheck {
+    match summary.status {
+        AuthRenewalMedicStatus::Ready => {
+            MedicCheck::ok("auth renewal", summary.detail, summary.next)
+        }
+        AuthRenewalMedicStatus::Warning => {
+            MedicCheck::warn("auth renewal", summary.detail, summary.next)
         }
     }
 }
