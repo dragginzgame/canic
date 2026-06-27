@@ -48,6 +48,14 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_upsert_root_issuer_policy",
         "auth.upsert_root_issuer_policy.v1",
     ),
+    update_snapshot_convergent(
+        "canic_upsert_root_issuer_renewal_template",
+        "auth.upsert_root_issuer_renewal_template.v1",
+    ),
+    update_snapshot_convergent(
+        "canic_upsert_delegation_renewal_provisioner",
+        "auth.upsert_delegation_renewal_provisioner.v1",
+    ),
     update_replay_protected(
         "canic_prepare_delegation_proof_batch",
         "auth.prepare_delegation_proof_batch.v1",
