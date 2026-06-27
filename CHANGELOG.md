@@ -8,24 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-### ➕ Added
-
-- Added `canic auth renewal status <deployment> --issuer <principal>` with
-  stable JSON and compact text output for root-managed issuer renewal state,
-  covering template presence, last root outcome, active attempt status, and
-  scheduled timing fields.
-
-### 🩹 Fixed
-
-- Started the 0.74.1 follow-up by making the scheduled-renewal PocketIC
-  scenario use fresh delegated-token replay request ids after simulated time
-  advances, so the full bridge loop now validates the second
-  refresh/install/token issuance path instead of tripping expired replay
-  metadata.
-
 ## [0.74.x] - 2026-06-27 - Root-Managed Delegation Renewal
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
+
+- `0.74.1` adds an operator-facing auth renewal status command and fixes the
+  retained scheduled-renewal PocketIC scenario so it validates repeated renewal
+  cycles with fresh delegated-token replay request ids.
 
 - `0.74.0` adds root-managed delegated-auth proof renewal: root-owned issuer
   renewal templates/status, scheduled renewal attempts and constrained bridge
