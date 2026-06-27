@@ -33,6 +33,37 @@ fn delegation_proof_batch_prepare_is_manifested_as_implemented() {
 }
 
 #[test]
+fn root_delegation_renewal_config_upserts_are_snapshot_convergent() {
+    for (endpoint, command_kind) in [
+        (
+            "canic_upsert_root_issuer_renewal_template",
+            "auth.upsert_root_issuer_renewal_template.v1",
+        ),
+        (
+            "canic_upsert_delegation_renewal_provisioner",
+            "auth.upsert_delegation_renewal_provisioner.v1",
+        ),
+    ] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == endpoint)
+            .expect("root delegation renewal config policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
+        assert_eq!(
+            entry.replay_policy,
+            ReplayPolicy::SnapshotConvergent { command_kind }
+        );
+    }
+}
+
+#[test]
 fn active_delegation_proof_install_is_controller_maintenance() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
