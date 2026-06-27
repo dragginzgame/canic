@@ -239,8 +239,11 @@ impl AuthApi {
         EnvOps::require_root().map_err(Error::from)?;
         let caller_is_controller = Self::require_delegation_renewal_provisioner_or_controller()?;
         if !caller_is_controller {
-            AuthOps::ensure_delegation_renewal_batch_scheduled(request.batch_id)
-                .map_err(Self::map_auth_error)?;
+            AuthOps::ensure_delegation_renewal_batch_scheduled(
+                request.batch_id,
+                IcOps::now_nanos(),
+            )
+            .map_err(Self::map_auth_error)?;
         }
         RuntimeAuthWorkflow::install_delegation_proof_batch_root(request)
             .await

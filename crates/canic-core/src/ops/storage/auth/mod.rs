@@ -244,6 +244,10 @@ impl AuthStateOps {
         );
     }
 
+    pub fn prune_root_delegation_renewal_batches(now_ns: u64) -> usize {
+        AuthState::prune_root_delegation_renewal_batches(now_ns)
+    }
+
     #[must_use]
     pub fn root_delegation_renewal_provisioner(
         principal: Principal,
@@ -530,6 +534,32 @@ mod tests {
             1
         );
         assert_eq!(AuthStateOps::root_delegation_renewal_batch([12; 32]), None);
+    }
+
+    #[test]
+    fn root_delegation_renewal_batch_prune_removes_expired_batches() {
+        let expired_batch = RootDelegationRenewalBatch {
+            batch_id: [13; 32],
+            attempt_ids: vec![[14; 32]],
+            prepared_at_ns: 10,
+            retrieval_expires_at_ns: 20,
+        };
+        let fresh_batch = RootDelegationRenewalBatch {
+            batch_id: [15; 32],
+            attempt_ids: vec![[16; 32]],
+            prepared_at_ns: 10,
+            retrieval_expires_at_ns: 21,
+        };
+
+        AuthStateOps::upsert_root_delegation_renewal_batch(expired_batch);
+        AuthStateOps::upsert_root_delegation_renewal_batch(fresh_batch.clone());
+
+        assert_eq!(AuthStateOps::prune_root_delegation_renewal_batches(20), 1);
+        assert_eq!(AuthStateOps::root_delegation_renewal_batch([13; 32]), None);
+        assert_eq!(
+            AuthStateOps::root_delegation_renewal_batch([15; 32]),
+            Some(fresh_batch)
+        );
     }
 
     #[test]

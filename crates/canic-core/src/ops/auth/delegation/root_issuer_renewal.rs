@@ -23,19 +23,23 @@ use crate::{
         validate_root_delegation_proof_prepare_policy,
         validate_root_issuer_renewal_template_policy,
     },
-    dto::auth::{
-        AuthRequestMetadata, RootDelegationProofBatchGetRequest,
-        RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareEntry,
-        RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-        RootDelegationProofBatchProof, RootDelegationProofBatchProofRef,
-        RootDelegationProofInstallOutcome, RootDelegationRenewalBatchView,
-        RootDelegationRenewalProofBatchGetRequest, RootDelegationRenewalProvisionerListResponse,
-        RootDelegationRenewalProvisionerResponse, RootDelegationRenewalProvisionerUpsertRequest,
-        RootDelegationRenewalProvisionerView, RootDelegationRenewalWorkListResponse,
-        RootIssuerRenewalAttemptStatus, RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome,
-        RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest,
-        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
-        RootIssuerRenewalTemplateUpsertRequest, RootIssuerRenewalTemplateView,
+    dto::{
+        auth::{
+            AuthRequestMetadata, RootDelegationProofBatchGetRequest,
+            RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareEntry,
+            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
+            RootDelegationProofBatchProof, RootDelegationProofBatchProofRef,
+            RootDelegationProofInstallOutcome, RootDelegationRenewalBatchView,
+            RootDelegationRenewalProofBatchGetRequest,
+            RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
+            RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalProvisionerView,
+            RootDelegationRenewalWorkListResponse, RootIssuerRenewalAttemptStatus,
+            RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
+            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            RootIssuerRenewalTemplateView,
+        },
+        error::ErrorCode,
     },
     log::Topic,
     ops::{
@@ -187,14 +191,23 @@ pub(super) fn is_delegation_renewal_provisioner(principal: Principal) -> bool {
 
 pub(super) fn ensure_delegation_renewal_batch_scheduled(
     batch_id: [u8; 32],
+    now_ns: u64,
 ) -> Result<(), InternalError> {
-    AuthStateOps::root_delegation_renewal_batch(batch_id)
-        .map(|_| ())
-        .ok_or_else(|| {
-            InternalError::invalid_input(
-                "renewal provisioner may install only scheduled root delegation renewal batches",
-            )
-        })
+    let batch = AuthStateOps::root_delegation_renewal_batch(batch_id).ok_or_else(|| {
+        InternalError::invalid_input(
+            "renewal provisioner may install only scheduled root delegation renewal batches",
+        )
+    })?;
+    let attempts = scheduled_renewal_batch_install_attempts(&batch)?;
+    if scheduled_renewal_batch_install_deadline_expired(&attempts, now_ns) {
+        record_scheduled_renewal_batch_install_deadline_expired(attempts, now_ns);
+        prune_expired_renewal_batches(now_ns);
+        return Err(InternalError::invalid_input(
+            "root delegation renewal batch install deadline expired",
+        ));
+    }
+
+    Ok(())
 }
 
 pub(super) fn prepare_due_delegation_renewals(
@@ -213,6 +226,8 @@ fn prepare_due_delegation_renewals_with_prepare(
         RootDelegationProofBatchPrepareRequest,
     ) -> Result<RootDelegationProofBatchPrepareResponse, InternalError>,
 ) -> Result<RootDelegationRenewalSweepResult, InternalError> {
+    prune_expired_renewal_batches(now_ns);
+
     let mut due_templates = due_renewal_templates(now_ns);
     due_templates.sort_by(|left, right| {
         left.template
@@ -240,7 +255,17 @@ fn prepare_due_delegation_renewals_with_prepare(
             .map(|due| renewal_prepare_entry(&due.template))
             .collect(),
     };
-    let response = prepare_batch(request)?;
+    let response = match prepare_batch(request) {
+        Ok(response) => response,
+        Err(err) => {
+            record_due_renewal_prepare_failure(
+                now_ns,
+                &due_templates,
+                renewal_prepare_failure_outcome(&err),
+            );
+            return Err(err);
+        }
+    };
     persist_scheduled_renewal_batch(now_ns, &due_templates, &response)?;
 
     Ok(RootDelegationRenewalSweepResult {
@@ -248,6 +273,48 @@ fn prepare_due_delegation_renewals_with_prepare(
         prepared_attempts: response.entries.len(),
         skipped_templates: enabled_template_count().saturating_sub(response.entries.len()),
     })
+}
+
+fn prune_expired_renewal_batches(now_ns: u64) {
+    let pruned = AuthStateOps::prune_root_delegation_renewal_batches(now_ns);
+    if pruned > 0 {
+        crate::log!(
+            Topic::Auth,
+            Info,
+            "root delegated-proof renewal pruned expired batches count={}",
+            pruned
+        );
+    }
+}
+
+fn record_due_renewal_prepare_failure(
+    now_ns: u64,
+    due_templates: &[DueRenewalTemplate],
+    outcome: PolicyRenewalOutcome,
+) {
+    for due in due_templates {
+        AuthStateOps::upsert_root_issuer_renewal_state(renewal_state_for_prepare_failure(
+            now_ns, due, outcome,
+        ));
+        crate::log!(
+            Topic::Auth,
+            Warn,
+            "root delegated-proof renewal prepare failed issuer={} outcome={:?}",
+            due.template.issuer_pid,
+            outcome
+        );
+    }
+}
+
+fn renewal_prepare_failure_outcome(err: &InternalError) -> PolicyRenewalOutcome {
+    if err
+        .public_error()
+        .is_some_and(|public| public.code == ErrorCode::ResourceExhausted)
+    {
+        return PolicyRenewalOutcome::QuotaExceeded;
+    }
+
+    PolicyRenewalOutcome::PolicyRejected
 }
 
 pub(super) fn get_delegation_renewal_proof_batch(
@@ -359,6 +426,70 @@ fn scheduled_renewal_batch_attempts(
     }
 
     Ok(attempts)
+}
+
+fn scheduled_renewal_batch_install_attempts(
+    batch: &RootDelegationRenewalBatch,
+) -> Result<Vec<RootIssuerRenewalAttempt>, InternalError> {
+    if batch.attempt_ids.is_empty() {
+        return Err(InternalError::invalid_input(
+            "root delegation renewal batch has no scheduled attempts",
+        ));
+    }
+
+    let mut attempts = Vec::with_capacity(batch.attempt_ids.len());
+    for attempt_id in &batch.attempt_ids {
+        let attempt = AuthStateOps::root_issuer_renewal_attempt(*attempt_id).ok_or_else(|| {
+            InternalError::invalid_input("root delegation renewal attempt is not scheduled")
+        })?;
+        if attempt.batch_id != batch.batch_id {
+            return Err(InternalError::invariant(
+                crate::InternalErrorOrigin::Ops,
+                "root delegation renewal attempt batch mismatch",
+            ));
+        }
+        attempts.push(attempt);
+    }
+
+    Ok(attempts)
+}
+
+fn scheduled_renewal_batch_install_deadline_expired(
+    attempts: &[RootIssuerRenewalAttempt],
+    now_ns: u64,
+) -> bool {
+    attempts
+        .iter()
+        .any(|attempt| scheduled_renewal_attempt_install_deadline_expired(attempt, now_ns))
+}
+
+fn record_scheduled_renewal_batch_install_deadline_expired(
+    attempts: Vec<RootIssuerRenewalAttempt>,
+    now_ns: u64,
+) {
+    for attempt in attempts {
+        if scheduled_renewal_attempt_install_deadline_expired(&attempt, now_ns) {
+            record_scheduled_renewal_attempt_failure(
+                attempt,
+                PolicyRenewalOutcome::InstallDeadlineExpired,
+                PolicyRenewalAttemptStatus::Expired,
+                false,
+                now_ns,
+            );
+        }
+    }
+}
+
+const fn scheduled_renewal_attempt_install_deadline_expired(
+    attempt: &RootIssuerRenewalAttempt,
+    now_ns: u64,
+) -> bool {
+    matches!(
+        attempt.status,
+        PolicyRenewalAttemptStatus::Prepared
+            | PolicyRenewalAttemptStatus::Installing
+            | PolicyRenewalAttemptStatus::FailedRetryable
+    ) && (now_ns >= attempt.install_deadline_ns || now_ns >= attempt.prepared_expires_at_ns)
 }
 
 pub(super) fn preflight_delegation_renewal_proof_install(
@@ -1063,6 +1194,29 @@ fn renewal_state_for_prepared_attempt(
     }
 }
 
+fn renewal_state_for_prepare_failure(
+    now_ns: u64,
+    due: &DueRenewalTemplate,
+    outcome: PolicyRenewalOutcome,
+) -> RootIssuerRenewalState {
+    let existing = due.existing_state.as_ref();
+    RootIssuerRenewalState {
+        issuer_pid: due.template.issuer_pid,
+        template_fingerprint: due.template_fingerprint,
+        last_installed_cert_hash: existing.and_then(|state| state.last_installed_cert_hash),
+        last_installed_expires_at_ns: existing.and_then(|state| state.last_installed_expires_at_ns),
+        last_installed_refresh_after_ns: existing
+            .and_then(|state| state.last_installed_refresh_after_ns),
+        active_attempt_id: None,
+        last_outcome: outcome,
+        consecutive_failures: existing
+            .map_or(0, |state| state.consecutive_failures)
+            .saturating_add(1),
+        next_attempt_after_ns: now_ns.saturating_add(ROOT_DELEGATION_RENEWAL_RETRY_BACKOFF_NS),
+        updated_at_ns: now_ns,
+    }
+}
+
 fn renewal_template_fingerprint(template: &RootIssuerRenewalTemplate) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hash_renewal_bytes(&mut hasher, ROOT_ISSUER_RENEWAL_TEMPLATE_FINGERPRINT_DOMAIN);
@@ -1711,6 +1865,71 @@ mod tests {
     }
 
     #[test]
+    fn renewal_batch_install_gate_accepts_live_scheduled_work() {
+        let issuer_pid = p(144);
+        let batch_id = [144; 32];
+        let attempt_id = [145; 32];
+        schedule_install_attempt(issuer_pid, batch_id, attempt_id, [146; 32]);
+
+        ensure_delegation_renewal_batch_scheduled(batch_id, 30)
+            .expect("live scheduled renewal work should pass provisioner gate");
+
+        assert_eq!(
+            AuthStateOps::root_issuer_renewal_attempt(attempt_id)
+                .expect("attempt should remain stored")
+                .status,
+            PolicyRenewalAttemptStatus::Prepared
+        );
+        assert_eq!(
+            AuthStateOps::root_issuer_renewal_state(issuer_pid)
+                .expect("state should remain stored")
+                .active_attempt_id,
+            Some(attempt_id)
+        );
+    }
+
+    #[test]
+    fn renewal_batch_install_gate_expires_late_scheduled_work() {
+        let issuer_pid = p(147);
+        let batch_id = [147; 32];
+        let attempt_id = [148; 32];
+        schedule_install_attempt(issuer_pid, batch_id, attempt_id, [149; 32]);
+
+        let mut attempt = AuthStateOps::root_issuer_renewal_attempt(attempt_id)
+            .expect("attempt should be scheduled");
+        attempt.retrieval_expires_at_ns = 40;
+        attempt.install_deadline_ns = 40;
+        AuthStateOps::upsert_root_issuer_renewal_attempt(attempt);
+        let mut batch =
+            AuthStateOps::root_delegation_renewal_batch(batch_id).expect("batch should be stored");
+        batch.retrieval_expires_at_ns = 40;
+        AuthStateOps::upsert_root_delegation_renewal_batch(batch);
+
+        let err = ensure_delegation_renewal_batch_scheduled(batch_id, 40)
+            .expect_err("expired scheduled work should fail provisioner gate");
+
+        assert!(err.to_string().contains("install deadline expired"));
+        let attempt = AuthStateOps::root_issuer_renewal_attempt(attempt_id)
+            .expect("attempt should remain visible");
+        assert_eq!(attempt.status, PolicyRenewalAttemptStatus::Expired);
+        assert_eq!(
+            attempt.failure,
+            Some(PolicyRenewalOutcome::InstallDeadlineExpired)
+        );
+
+        let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
+            .expect("issuer renewal state should remain visible");
+        assert_eq!(state.active_attempt_id, None);
+        assert_eq!(
+            state.last_outcome,
+            PolicyRenewalOutcome::InstallDeadlineExpired
+        );
+        assert_eq!(state.consecutive_failures, 1);
+        assert_eq!(state.next_attempt_after_ns, 40);
+        assert_eq!(AuthStateOps::root_delegation_renewal_batch(batch_id), None);
+    }
+
+    #[test]
     fn delegation_renewal_work_lists_retrievable_batches_only() {
         let valid_batch_id = [210; 32];
         let valid_attempt_id = [211; 32];
@@ -1826,6 +2045,76 @@ mod tests {
     }
 
     #[test]
+    fn prepare_due_delegation_renewals_records_quota_prepare_failure() {
+        let issuer_pid = p(141);
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
+        upsert_root_issuer_renewal_template(upsert_request(issuer_pid), 10)
+            .expect("template should be accepted");
+        let template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
+        AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
+            issuer_pid,
+            template_fingerprint: renewal_template_fingerprint(&template),
+            last_installed_cert_hash: Some([142; 32]),
+            last_installed_expires_at_ns: Some(1_000),
+            last_installed_refresh_after_ns: Some(15),
+            active_attempt_id: None,
+            last_outcome: PolicyRenewalOutcome::Installed,
+            consecutive_failures: 2,
+            next_attempt_after_ns: 0,
+            updated_at_ns: 12,
+        });
+
+        let err = prepare_due_delegation_renewals_with_prepare(120_000_000_000, 20, |_| {
+            Err(InternalError::resource_exhausted(
+                "pending renewal quota exhausted",
+            ))
+        })
+        .expect_err("prepare quota failure should propagate");
+
+        assert_eq!(
+            err.public_error().map(|public| public.code),
+            Some(ErrorCode::ResourceExhausted)
+        );
+        let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
+            .expect("quota failure should update issuer renewal state");
+        assert_eq!(state.active_attempt_id, None);
+        assert_eq!(state.last_installed_cert_hash, Some([142; 32]));
+        assert_eq!(state.last_installed_expires_at_ns, Some(1_000));
+        assert_eq!(state.last_installed_refresh_after_ns, Some(15));
+        assert_eq!(state.last_outcome, PolicyRenewalOutcome::QuotaExceeded);
+        assert_eq!(state.consecutive_failures, 3);
+        assert_eq!(state.next_attempt_after_ns, 60_000_000_020);
+        assert_eq!(state.updated_at_ns, 20);
+    }
+
+    #[test]
+    fn prepare_due_delegation_renewals_records_policy_prepare_failure() {
+        let issuer_pid = p(143);
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
+        upsert_root_issuer_renewal_template(upsert_request(issuer_pid), 10)
+            .expect("template should be accepted");
+
+        let err = prepare_due_delegation_renewals_with_prepare(120_000_000_000, 30, |_| {
+            Err(InternalError::forbidden(
+                "root issuer policy rejected renewal",
+            ))
+        })
+        .expect_err("policy failure should propagate");
+
+        assert_eq!(
+            err.public_error().map(|public| public.code),
+            Some(ErrorCode::Forbidden)
+        );
+        let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
+            .expect("policy failure should update issuer renewal state");
+        assert_eq!(state.active_attempt_id, None);
+        assert_eq!(state.last_outcome, PolicyRenewalOutcome::PolicyRejected);
+        assert_eq!(state.consecutive_failures, 1);
+        assert_eq!(state.next_attempt_after_ns, 60_000_000_030);
+        assert_eq!(state.updated_at_ns, 30);
+    }
+
+    #[test]
     fn prepare_due_delegation_renewals_skips_fresh_or_active_attempts() {
         let fresh_issuer = p(102);
         let active_issuer = p(103);
@@ -1898,6 +2187,10 @@ mod tests {
         stale_attempt.retrieval_expires_at_ns = 40;
         stale_attempt.install_deadline_ns = 40;
         AuthStateOps::upsert_root_issuer_renewal_attempt(stale_attempt);
+        AuthStateOps::upsert_root_delegation_renewal_batch(renewal_batch(
+            stale_batch_id,
+            vec![stale_attempt_id],
+        ));
         AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
             issuer_pid,
             template_fingerprint: renewal_template_fingerprint(&template),
@@ -1929,6 +2222,10 @@ mod tests {
         assert_eq!(
             stale_attempt.failure,
             Some(PolicyRenewalOutcome::RetrievalExpired)
+        );
+        assert_eq!(
+            AuthStateOps::root_delegation_renewal_batch(stale_batch_id),
+            None
         );
 
         let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)

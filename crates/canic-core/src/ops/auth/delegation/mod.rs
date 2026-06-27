@@ -130,8 +130,9 @@ impl AuthOps {
 
     pub(crate) fn ensure_delegation_renewal_batch_scheduled(
         batch_id: [u8; 32],
+        now_ns: u64,
     ) -> Result<(), InternalError> {
-        root_issuer_renewal::ensure_delegation_renewal_batch_scheduled(batch_id)
+        root_issuer_renewal::ensure_delegation_renewal_batch_scheduled(batch_id, now_ns)
     }
 
     pub(crate) fn prepare_due_delegation_renewals(

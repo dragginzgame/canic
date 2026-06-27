@@ -358,6 +358,21 @@ impl AuthState {
         });
     }
 
+    // Remove expired root-managed renewal batch transport records.
+    pub(crate) fn prune_root_delegation_renewal_batches(now_ns: u64) -> usize {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let before = data.root_delegation_renewal_batches.len();
+            data.root_delegation_renewal_batches
+                .retain(|record| now_ns < record.retrieval_expires_at_ns);
+            let removed = before.saturating_sub(data.root_delegation_renewal_batches.len());
+            if removed > 0 {
+                cell.set(data);
+            }
+            removed
+        })
+    }
+
     // Resolve a root-managed delegation renewal provisioner by principal.
     #[must_use]
     pub(crate) fn get_root_provisioner(principal: Principal) -> Option<RootProvisionerRecord> {
