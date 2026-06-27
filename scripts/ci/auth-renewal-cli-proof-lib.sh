@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 AUTH_RENEWAL_PROOF_ISSUER="rrkah-fqaaa-aaaaa-aaaaq-cai"
+AUTH_RENEWAL_PROOF_PROVISIONER="r7inp-6aaaa-aaaaa-aaabq-cai"
 
 prepare_auth_renewal_cli_fixture() {
     local downstream_root="$1"
@@ -14,6 +15,8 @@ service : {
   canic_subnet_registry : () -> () query;
   canic_delegation_renewal_work : () -> () query;
   canic_root_issuer_renewal_status : (record { issuer_pid : principal }) -> () query;
+  canic_delegation_renewal_provisioners : () -> (record { provisioners : vec record { "principal" : principal; enabled : bool } }) query;
+  canic_upsert_delegation_renewal_provisioner : (record { "principal" : principal; enabled : bool }) -> (record { provisioner : record { "principal" : principal; enabled : bool } });
 }
 EOF
 
@@ -42,6 +45,15 @@ run_auth_renewal_cli_probe_commands() {
     "$runner" --network fixture --icp "$fake_icp" \
         info medic downstream --auth-renewal "$AUTH_RENEWAL_PROOF_ISSUER" \
         > "$proof_root/auth-renewal-medic-drift.out"
+    "$runner" --network fixture --icp "$fake_icp" \
+        auth renewal provisioner list downstream --json \
+        > "$proof_root/auth-renewal-provisioners.json"
+    "$runner" --network fixture --icp "$fake_icp" \
+        auth renewal provisioner enable downstream "$AUTH_RENEWAL_PROOF_PROVISIONER" --json \
+        > "$proof_root/auth-renewal-provisioner-enable.json"
+    "$runner" --network fixture --icp "$fake_icp" \
+        auth renewal provisioner disable downstream "$AUTH_RENEWAL_PROOF_PROVISIONER" --json \
+        > "$proof_root/auth-renewal-provisioner-disable.json"
 }
 
 assert_auth_renewal_cli_file_contains() {
@@ -80,6 +92,12 @@ assert_auth_renewal_cli_probe_outputs() {
         'status' \
         "$proof_root/auth-renewal-help.out" \
         '1,160p'
+    assert_auth_renewal_cli_file_contains \
+        "$proof_label" \
+        "auth renewal help to list provisioner commands" \
+        'provisioner' \
+        "$proof_root/auth-renewal-help.out" \
+        '1,180p'
     assert_auth_renewal_cli_file_contains \
         "$proof_label" \
         "auth renewal run-once JSON kind" \
@@ -133,5 +151,35 @@ assert_auth_renewal_cli_probe_outputs() {
         "auth renewal medic drift status" \
         'status=drift_detected' \
         "$proof_root/auth-renewal-medic-drift.out" \
+        '1,180p'
+    assert_auth_renewal_cli_file_contains \
+        "$proof_label" \
+        "auth renewal provisioner list JSON kind" \
+        '"kind": "auth_renewal_provisioners"' \
+        "$proof_root/auth-renewal-provisioners.json" \
+        '1,180p'
+    assert_auth_renewal_cli_file_contains \
+        "$proof_label" \
+        "auth renewal provisioner list principal" \
+        "\"principal\": \"$AUTH_RENEWAL_PROOF_PROVISIONER\"" \
+        "$proof_root/auth-renewal-provisioners.json" \
+        '1,180p'
+    assert_auth_renewal_cli_file_contains \
+        "$proof_label" \
+        "auth renewal provisioner enable JSON kind" \
+        '"kind": "auth_renewal_provisioner_upsert_result"' \
+        "$proof_root/auth-renewal-provisioner-enable.json" \
+        '1,180p'
+    assert_auth_renewal_cli_file_contains \
+        "$proof_label" \
+        "auth renewal provisioner enable flag" \
+        '"enabled": true' \
+        "$proof_root/auth-renewal-provisioner-enable.json" \
+        '1,180p'
+    assert_auth_renewal_cli_file_contains \
+        "$proof_label" \
+        "auth renewal provisioner disable flag" \
+        '"enabled": false' \
+        "$proof_root/auth-renewal-provisioner-disable.json" \
         '1,180p'
 }

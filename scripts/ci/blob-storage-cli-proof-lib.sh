@@ -80,6 +80,24 @@ JSON
 JSON
             exit 0
             ;;
+        canic_delegation_renewal_provisioners)
+            cat <<'JSON'
+{"provisioners":[{"principal":"r7inp-6aaaa-aaaaa-aaabq-cai","enabled":true}]}
+JSON
+            exit 0
+            ;;
+        canic_upsert_delegation_renewal_provisioner)
+            if printf '%s\n' "$*" | grep -q 'enabled = false'; then
+                cat <<'JSON'
+{"provisioner":{"principal":"r7inp-6aaaa-aaaaa-aaabq-cai","enabled":false}}
+JSON
+            else
+                cat <<'JSON'
+{"provisioner":{"principal":"r7inp-6aaaa-aaaaa-aaabq-cai","enabled":true}}
+JSON
+            fi
+            exit 0
+            ;;
         canic_active_delegation_proof_status)
             cat <<'JSON'
 {"status":"Valid","root_pid":["ryjl3-tyaaa-aaaaa-aaaba-cai"],"issuer_pid":["rrkah-fqaaa-aaaaa-aaaaq-cai"],"cert_hash":["0404040404040404040404040404040404040404040404040404040404040404"],"expires_at_ns":["1620329000000000000"],"refresh_after_ns":["1620328900000000000"]}
