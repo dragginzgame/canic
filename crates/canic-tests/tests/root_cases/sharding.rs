@@ -22,7 +22,8 @@ use canic::{
 };
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::{
-    CanicPicExt, create_user_shard, issue_delegated_token_from_active_proof, role_grant,
+    CanicPicExt, create_user_shard, issue_delegated_token_from_active_proof_with_request_nonce,
+    role_grant,
 };
 use canic_tests::root::{
     RootSetupProfile,
@@ -524,13 +525,14 @@ fn verify_issuer_local_delegated_token(
         .saturating_sub(1_000_000_000)
         .min(10_000_000_000);
     assert!(token_ttl_ns > 0, "active proof must have token lifetime");
-    let token = issue_delegated_token_from_active_proof(
+    let token = issue_delegated_token_from_active_proof_with_request_nonce(
         &setup.pic,
         shard_pid,
         subject,
         DelegationAudience::Project("test".to_string()),
         vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
         token_ttl_ns,
+        setup.pic.current_time_nanos(),
     );
     let verified: Result<(), Error> = setup.pic.update_call_as_or_panic(
         verifier_pid,

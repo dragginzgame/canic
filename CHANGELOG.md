@@ -10,21 +10,28 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### ➕ Added
 
-- Started the 0.74 root-managed delegation proof renewal implementation with
-  root issuer renewal template/status DTOs, scheduled attempt/batch state,
-  scheduled work listing, scheduled proof retrieval, root renewal sweep
-  startup, scheduled install state transitions, constrained renewal provisioner
-  ACLs, bounded delegated-auth renewal metrics/logs, expired-attempt cleanup
-  for bridge outages, policy validation, stable storage foundations, and the
-  first `canic auth renewal run-once` bridge command. Added the scheduled
-  renewal PocketIC scenario for the bridge loop; runtime execution still needs
-  a clean PocketIC server run.
+- Added `canic auth renewal status <deployment> --issuer <principal>` with
+  stable JSON and compact text output for root-managed issuer renewal state,
+  covering template presence, last root outcome, active attempt status, and
+  scheduled timing fields.
 
-### 📚 Documentation
+### 🩹 Fixed
 
-- Added a draft 0.74 root-managed delegation proof renewal design covering
-  root-owned renewal templates, scheduled attempts, the required direct-query
-  bridge, renewal provisioner authorization, and operator validation.
+- Started the 0.74.1 follow-up by making the scheduled-renewal PocketIC
+  scenario use fresh delegated-token replay request ids after simulated time
+  advances, so the full bridge loop now validates the second
+  refresh/install/token issuance path instead of tripping expired replay
+  metadata.
+
+## [0.74.x] - 2026-06-27 - Root-Managed Delegation Renewal
+
+Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
+
+- `0.74.0` adds root-managed delegated-auth proof renewal: root-owned issuer
+  renewal templates/status, scheduled renewal attempts and constrained bridge
+  retrieval/install flows, renewal provisioner ACLs, bounded renewal
+  metrics/logging, the `canic auth renewal run-once` bridge command, and the
+  design/operator notes for the direct-query renewal model.
 
 ## [0.73.x] - 2026-06-26 - Post-Hardening Recovery Polish
 
