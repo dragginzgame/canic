@@ -14,10 +14,13 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     domain::policy::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootDelegationRenewalBatch,
-        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
+        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
+        RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
+        RootDelegationRenewalBatch, RootIssuerRenewalAttempt,
+        RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
         RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalProofRef,
         RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        validate_root_delegation_proof_prepare_policy,
         validate_root_issuer_renewal_template_policy,
     },
     dto::auth::{
@@ -415,6 +418,113 @@ pub(super) fn record_delegation_renewal_install_preflight_outcome(
         return;
     };
     record_scheduled_renewal_install_outcome(attempt, outcome, now_ns);
+}
+
+pub(super) fn record_manual_delegation_renewal_install_outcome(
+    proof: &RootDelegationProofBatchProof,
+    outcome: RootDelegationProofInstallOutcome,
+    now_ns: u64,
+) {
+    if !matches!(
+        outcome,
+        RootDelegationProofInstallOutcome::Installed
+            | RootDelegationProofInstallOutcome::AlreadyInstalled
+    ) {
+        return;
+    }
+    let Some(template) = AuthStateOps::root_issuer_renewal_template(proof.issuer_pid) else {
+        return;
+    };
+    let Some(decision) = manual_installed_proof_matches_template(&template, proof) else {
+        return;
+    };
+    let existing_state = AuthStateOps::root_issuer_renewal_state(proof.issuer_pid);
+    if existing_state
+        .as_ref()
+        .is_some_and(|state| state.active_attempt_id.is_some())
+    {
+        return;
+    }
+
+    let template_fingerprint = renewal_template_fingerprint(&template);
+    let mut state = existing_state.unwrap_or(RootIssuerRenewalState {
+        issuer_pid: proof.issuer_pid,
+        template_fingerprint,
+        last_installed_cert_hash: None,
+        last_installed_expires_at_ns: None,
+        last_installed_refresh_after_ns: None,
+        active_attempt_id: None,
+        last_outcome: PolicyRenewalOutcome::NeverRun,
+        consecutive_failures: 0,
+        next_attempt_after_ns: 0,
+        updated_at_ns: now_ns,
+    });
+    state.template_fingerprint = template_fingerprint;
+    state.last_installed_cert_hash = Some(proof.cert_hash);
+    state.last_installed_expires_at_ns = Some(decision.expires_at_ns);
+    state.last_installed_refresh_after_ns = Some(decision.refresh_after_ns);
+    state.active_attempt_id = None;
+    state.last_outcome = if outcome == RootDelegationProofInstallOutcome::AlreadyInstalled {
+        PolicyRenewalOutcome::AlreadyInstalled
+    } else {
+        PolicyRenewalOutcome::Installed
+    };
+    state.consecutive_failures = 0;
+    state.next_attempt_after_ns = decision.refresh_after_ns;
+    state.updated_at_ns = now_ns;
+    AuthStateOps::upsert_root_issuer_renewal_state(state);
+    DelegatedAuthMetrics::record_renewal_install(
+        DelegatedAuthMetricOutcome::Completed,
+        DelegatedAuthMetricReason::Ok,
+    );
+    crate::log!(
+        Topic::Auth,
+        Info,
+        "root delegated-proof renewal state updated from manual install issuer={} cert_hash={:?} outcome={:?}",
+        proof.issuer_pid,
+        proof.cert_hash,
+        outcome
+    );
+}
+
+fn manual_installed_proof_matches_template(
+    template: &RootIssuerRenewalTemplate,
+    proof: &RootDelegationProofBatchProof,
+) -> Option<RootDelegationProofPreparePolicyDecision> {
+    if !template.enabled
+        || template.issuer_pid != proof.issuer_pid
+        || proof.proof.cert.issuer_pid != proof.issuer_pid
+        || audience_policy(&proof.proof.cert.aud) != template.audience
+        || grant_policies(&proof.proof.cert.grants) != template.grants
+    {
+        return None;
+    }
+    let cert_ttl_ns = proof
+        .proof
+        .cert
+        .expires_at_ns
+        .checked_sub(proof.proof.cert.issued_at_ns)?;
+    if cert_ttl_ns != template.cert_ttl_ns {
+        return None;
+    }
+
+    let policy = AuthStateOps::root_issuer_policy(template.issuer_pid);
+    let decision = validate_root_delegation_proof_prepare_policy(
+        policy.as_ref(),
+        RootDelegationProofPreparePolicyInput {
+            issuer_pid: template.issuer_pid,
+            audience: &template.audience,
+            grants: &template.grants,
+            cert_ttl_ns,
+            issued_at_ns: proof.proof.cert.issued_at_ns,
+        },
+    )
+    .ok()?;
+    if decision.expires_at_ns != proof.proof.cert.expires_at_ns {
+        return None;
+    }
+
+    Some(decision)
 }
 
 fn scheduled_renewal_attempt_for_proof(
@@ -1435,6 +1545,33 @@ mod tests {
             state.template_fingerprint,
             active_attempt.template_fingerprint
         );
+    }
+
+    #[test]
+    fn manual_delegation_install_success_updates_matching_renewal_state() {
+        let issuer_pid = p(230);
+        let cert_hash = [231; 32];
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
+        upsert_root_issuer_renewal_template(upsert_request(issuer_pid), 10)
+            .expect("template should be accepted");
+        let proof = proof_for(issuer_pid, cert_hash, 60_000_000_010);
+
+        record_manual_delegation_renewal_install_outcome(
+            &proof,
+            RootDelegationProofInstallOutcome::Installed,
+            20,
+        );
+
+        let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
+            .expect("manual install should record renewal state");
+        assert_eq!(state.last_installed_cert_hash, Some(cert_hash));
+        assert_eq!(state.last_installed_expires_at_ns, Some(60_000_000_010));
+        assert_eq!(state.last_installed_refresh_after_ns, Some(48_000_000_010));
+        assert_eq!(state.active_attempt_id, None);
+        assert_eq!(state.last_outcome, PolicyRenewalOutcome::Installed);
+        assert_eq!(state.consecutive_failures, 0);
+        assert_eq!(state.next_attempt_after_ns, 48_000_000_010);
+        assert_eq!(state.updated_at_ns, 20);
     }
 
     #[test]

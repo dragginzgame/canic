@@ -191,6 +191,16 @@ impl AuthOps {
         );
     }
 
+    pub(crate) fn record_manual_delegation_renewal_install_outcome(
+        proof: &RootDelegationProofBatchProof,
+        outcome: RootDelegationProofInstallOutcome,
+        now_ns: u64,
+    ) {
+        root_issuer_renewal::record_manual_delegation_renewal_install_outcome(
+            proof, outcome, now_ns,
+        );
+    }
+
     pub(crate) fn mark_delegation_proof_batch_installed(
         batch_id: [u8; 32],
         issuer_pid: Principal,
