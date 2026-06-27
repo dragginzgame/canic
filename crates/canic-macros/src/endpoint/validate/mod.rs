@@ -172,6 +172,7 @@ fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
                     | BuiltinPredicate::CallerIsSameCanister
                     | BuiltinPredicate::CallerIsRegisteredToSubnet
                     | BuiltinPredicate::CallerIsWhitelisted
+                    | BuiltinPredicate::CallerIsDelegationRenewalProvisioner
                     | BuiltinPredicate::Authenticated { .. }
             )
         }

@@ -12,11 +12,19 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
-    domain::policy::auth::RootIssuerPolicy,
+    domain::policy::auth::{
+        RootDelegationRenewalBatch, RootIssuerPolicy, RootIssuerRenewalAttempt,
+        RootIssuerRenewalState, RootIssuerRenewalTemplate,
+    },
     dto::auth::ActiveDelegationProof,
-    ops::storage::auth::mapper::{ActiveDelegationProofRecordMapper, RootIssuerPolicyRecordMapper},
+    ops::storage::auth::mapper::{
+        ActiveDelegationProofRecordMapper, RootDelegationRenewalBatchRecordMapper,
+        RootIssuerPolicyRecordMapper, RootIssuerRenewalAttemptRecordMapper,
+        RootIssuerRenewalStateRecordMapper, RootIssuerRenewalTemplateRecordMapper,
+    },
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
+        RootProvisionerRecord,
     },
 };
 
@@ -50,6 +58,18 @@ pub struct DelegatedSessionBootstrapBinding {
     pub token_fingerprint: [u8; 32],
     pub bound_at: u64,
     pub expires_at: u64,
+}
+
+///
+/// RootDelegationRenewalProvisioner
+///
+/// Storage-ops view of a principal allowed to complete root-scheduled renewal work.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootDelegationRenewalProvisioner {
+    pub principal: Principal,
+    pub enabled: bool,
 }
 
 ///
@@ -157,6 +177,98 @@ impl AuthStateOps {
     pub fn upsert_root_issuer_policy(policy: RootIssuerPolicy) {
         AuthState::upsert_root_issuer(RootIssuerPolicyRecordMapper::policy_to_record(policy));
     }
+
+    #[must_use]
+    pub fn root_issuer_renewal_template(
+        issuer_pid: Principal,
+    ) -> Option<RootIssuerRenewalTemplate> {
+        AuthState::get_root_issuer_renewal_template(issuer_pid)
+            .map(RootIssuerRenewalTemplateRecordMapper::record_to_template)
+    }
+
+    #[must_use]
+    pub fn root_issuer_renewal_templates() -> Vec<RootIssuerRenewalTemplate> {
+        AuthState::list_root_issuer_renewal_templates()
+            .into_iter()
+            .map(RootIssuerRenewalTemplateRecordMapper::record_to_template)
+            .collect()
+    }
+
+    pub fn upsert_root_issuer_renewal_template(template: RootIssuerRenewalTemplate) {
+        AuthState::upsert_root_issuer_renewal_template(
+            RootIssuerRenewalTemplateRecordMapper::template_to_record(template),
+        );
+    }
+
+    #[must_use]
+    pub fn root_issuer_renewal_state(issuer_pid: Principal) -> Option<RootIssuerRenewalState> {
+        AuthState::get_root_issuer_renewal_state(issuer_pid)
+            .map(RootIssuerRenewalStateRecordMapper::record_to_state)
+    }
+
+    pub fn upsert_root_issuer_renewal_state(state: RootIssuerRenewalState) {
+        AuthState::upsert_root_issuer_renewal_state(
+            RootIssuerRenewalStateRecordMapper::state_to_record(state),
+        );
+    }
+
+    #[must_use]
+    pub fn root_issuer_renewal_attempt(attempt_id: [u8; 32]) -> Option<RootIssuerRenewalAttempt> {
+        AuthState::get_root_issuer_renewal_attempt(attempt_id)
+            .map(RootIssuerRenewalAttemptRecordMapper::record_to_attempt)
+    }
+
+    pub fn upsert_root_issuer_renewal_attempt(attempt: RootIssuerRenewalAttempt) {
+        AuthState::upsert_root_issuer_renewal_attempt(
+            RootIssuerRenewalAttemptRecordMapper::attempt_to_record(attempt),
+        );
+    }
+
+    #[must_use]
+    pub fn root_delegation_renewal_batch(batch_id: [u8; 32]) -> Option<RootDelegationRenewalBatch> {
+        AuthState::get_root_delegation_renewal_batch(batch_id)
+            .map(RootDelegationRenewalBatchRecordMapper::record_to_batch)
+    }
+
+    #[must_use]
+    pub fn root_delegation_renewal_batches() -> Vec<RootDelegationRenewalBatch> {
+        AuthState::list_root_delegation_renewal_batches()
+            .into_iter()
+            .map(RootDelegationRenewalBatchRecordMapper::record_to_batch)
+            .collect()
+    }
+
+    pub fn upsert_root_delegation_renewal_batch(batch: RootDelegationRenewalBatch) {
+        AuthState::upsert_root_delegation_renewal_batch(
+            RootDelegationRenewalBatchRecordMapper::batch_to_record(batch),
+        );
+    }
+
+    #[must_use]
+    pub fn root_delegation_renewal_provisioner(
+        principal: Principal,
+    ) -> Option<RootDelegationRenewalProvisioner> {
+        AuthState::get_root_provisioner(principal).map(root_provisioner_record_to_view)
+    }
+
+    #[must_use]
+    pub fn root_delegation_renewal_provisioners() -> Vec<RootDelegationRenewalProvisioner> {
+        AuthState::list_root_provisioners()
+            .into_iter()
+            .map(root_provisioner_record_to_view)
+            .collect()
+    }
+
+    #[must_use]
+    pub fn is_root_delegation_renewal_provisioner(principal: Principal) -> bool {
+        Self::root_delegation_renewal_provisioner(principal).is_some_and(|view| view.enabled)
+    }
+
+    pub fn upsert_root_delegation_renewal_provisioner(
+        provisioner: RootDelegationRenewalProvisioner,
+    ) {
+        AuthState::upsert_root_provisioner(root_provisioner_view_to_record(provisioner));
+    }
 }
 
 const fn delegated_session_record_to_view(record: DelegatedSessionRecord) -> DelegatedSession {
@@ -203,6 +315,24 @@ const fn delegated_session_bootstrap_binding_view_to_record(
     }
 }
 
+const fn root_provisioner_record_to_view(
+    record: RootProvisionerRecord,
+) -> RootDelegationRenewalProvisioner {
+    RootDelegationRenewalProvisioner {
+        principal: record.principal,
+        enabled: record.enabled,
+    }
+}
+
+const fn root_provisioner_view_to_record(
+    view: RootDelegationRenewalProvisioner,
+) -> RootProvisionerRecord {
+    RootProvisionerRecord {
+        principal: view.principal,
+        enabled: view.enabled,
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -212,7 +342,10 @@ mod tests {
     use super::*;
     use crate::{
         domain::policy::auth::{
-            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootDelegationRenewalBatch,
+            RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus,
+            RootIssuerRenewalOutcome, RootIssuerRenewalProofRef, RootIssuerRenewalState,
+            RootIssuerRenewalTemplate,
         },
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
@@ -299,5 +432,128 @@ mod tests {
 
         assert_eq!(AuthStateOps::root_issuer_policy(p(31)), Some(policy));
         assert_eq!(AuthStateOps::root_issuer_policy(p(34)), None);
+    }
+
+    #[test]
+    fn root_issuer_renewal_template_round_trips_through_auth_state() {
+        let template = RootIssuerRenewalTemplate {
+            issuer_pid: p(41),
+            enabled: true,
+            audience: RootDelegationAudiencePolicy::Project("test".to_string()),
+            grants: vec![RootDelegatedRoleGrantPolicy {
+                target: CanisterRole::owned("project_instance".to_string()),
+                scopes: vec!["canic.read".to_string()],
+            }],
+            cert_ttl_ns: 120_000_000_000,
+        };
+
+        AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
+
+        assert_eq!(
+            AuthStateOps::root_issuer_renewal_template(p(41)),
+            Some(template)
+        );
+        assert_eq!(AuthStateOps::root_issuer_renewal_template(p(42)), None);
+    }
+
+    #[test]
+    fn root_issuer_renewal_state_round_trips_through_auth_state() {
+        let state = RootIssuerRenewalState {
+            issuer_pid: p(51),
+            template_fingerprint: [1; 32],
+            last_installed_cert_hash: Some([2; 32]),
+            last_installed_expires_at_ns: Some(200),
+            last_installed_refresh_after_ns: Some(160),
+            active_attempt_id: Some([3; 32]),
+            last_outcome: RootIssuerRenewalOutcome::RetrievalExpired,
+            consecutive_failures: 2,
+            next_attempt_after_ns: 90,
+            updated_at_ns: 80,
+        };
+
+        AuthStateOps::upsert_root_issuer_renewal_state(state.clone());
+
+        assert_eq!(AuthStateOps::root_issuer_renewal_state(p(51)), Some(state));
+        assert_eq!(AuthStateOps::root_issuer_renewal_state(p(52)), None);
+    }
+
+    #[test]
+    fn root_issuer_renewal_attempt_round_trips_through_auth_state() {
+        let attempt = RootIssuerRenewalAttempt {
+            attempt_id: [4; 32],
+            issuer_pid: p(61),
+            template_fingerprint: [5; 32],
+            batch_id: [6; 32],
+            proof_ref: RootIssuerRenewalProofRef {
+                issuer_pid: p(61),
+                cert_hash: [7; 32],
+            },
+            status: RootIssuerRenewalAttemptStatus::Prepared,
+            prepared_at_ns: 10,
+            retrieval_expires_at_ns: 70,
+            install_deadline_ns: 90,
+            prepared_cert_hash: [7; 32],
+            prepared_expires_at_ns: 200,
+            prepared_refresh_after_ns: 160,
+            failure: Some(RootIssuerRenewalOutcome::RetrievalExpired),
+        };
+
+        AuthStateOps::upsert_root_issuer_renewal_attempt(attempt.clone());
+
+        assert_eq!(
+            AuthStateOps::root_issuer_renewal_attempt([4; 32]),
+            Some(attempt)
+        );
+        assert_eq!(AuthStateOps::root_issuer_renewal_attempt([8; 32]), None);
+    }
+
+    #[test]
+    fn root_delegation_renewal_batch_round_trips_through_auth_state() {
+        let batch = RootDelegationRenewalBatch {
+            batch_id: [9; 32],
+            attempt_ids: vec![[10; 32], [11; 32]],
+            prepared_at_ns: 20,
+            retrieval_expires_at_ns: 80,
+        };
+
+        AuthStateOps::upsert_root_delegation_renewal_batch(batch.clone());
+
+        assert_eq!(
+            AuthStateOps::root_delegation_renewal_batch([9; 32]),
+            Some(batch)
+        );
+        assert_eq!(
+            AuthStateOps::root_delegation_renewal_batches()
+                .into_iter()
+                .filter(|candidate| candidate.batch_id == [9; 32])
+                .count(),
+            1
+        );
+        assert_eq!(AuthStateOps::root_delegation_renewal_batch([12; 32]), None);
+    }
+
+    #[test]
+    fn root_delegation_renewal_provisioner_round_trips_through_auth_state() {
+        let provisioner = RootDelegationRenewalProvisioner {
+            principal: p(61),
+            enabled: true,
+        };
+
+        AuthStateOps::upsert_root_delegation_renewal_provisioner(provisioner);
+
+        assert_eq!(
+            AuthStateOps::root_delegation_renewal_provisioner(p(61)),
+            Some(provisioner)
+        );
+        assert!(AuthStateOps::is_root_delegation_renewal_provisioner(p(61)));
+        assert!(!AuthStateOps::is_root_delegation_renewal_provisioner(p(62)));
+
+        AuthStateOps::upsert_root_delegation_renewal_provisioner(
+            RootDelegationRenewalProvisioner {
+                principal: p(61),
+                enabled: false,
+            },
+        );
+        assert!(!AuthStateOps::is_root_delegation_renewal_provisioner(p(61)));
     }
 }

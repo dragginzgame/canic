@@ -148,6 +148,7 @@ pub enum CallerPredicate {
     IsSameCanister,
     IsRegisteredToSubnet,
     IsWhitelisted,
+    IsDelegationRenewalProvisioner,
 }
 
 ///
@@ -277,6 +278,13 @@ pub mod caller {
     #[must_use]
     pub const fn is_whitelisted() -> AccessExpr {
         builtin(BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted))
+    }
+
+    #[must_use]
+    pub const fn is_delegation_renewal_provisioner() -> AccessExpr {
+        builtin(BuiltinPredicate::Caller(
+            CallerPredicate::IsDelegationRenewalProvisioner,
+        ))
     }
 }
 

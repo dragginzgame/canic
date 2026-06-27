@@ -15,7 +15,10 @@ mod root_provisioning;
 pub use root_provisioning::{
     RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
     RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-    RootIssuerPolicy, validate_root_delegation_proof_prepare_policy,
+    RootDelegationRenewalBatch, RootIssuerPolicy, RootIssuerRenewalAttempt,
+    RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome, RootIssuerRenewalProofRef,
+    RootIssuerRenewalState, RootIssuerRenewalTemplate,
+    validate_root_delegation_proof_prepare_policy, validate_root_issuer_renewal_template_policy,
 };
 
 ///

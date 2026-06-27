@@ -804,6 +804,11 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
         DelegatedAuthMetricOutcome::Failed,
         DelegatedAuthMetricReason::TokenExpired,
     );
+    DelegatedAuthMetrics::record_renewal_sweep_completed();
+    DelegatedAuthMetrics::record_renewal_install(
+        DelegatedAuthMetricOutcome::Failed,
+        DelegatedAuthMetricReason::IssuerProofUnavailable,
+    );
 
     let entries = entries(MetricsKind::Security);
 
@@ -832,6 +837,21 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
         &entries,
         &["delegated_auth", "verify_token", "failed", "token_expired"],
         2,
+    );
+    assert_metric_count(
+        &entries,
+        &["delegated_auth", "renewal_sweep", "completed", "ok"],
+        1,
+    );
+    assert_metric_count(
+        &entries,
+        &[
+            "delegated_auth",
+            "renewal_install",
+            "failed",
+            "issuer_proof_unavailable",
+        ],
+        1,
     );
 }
 

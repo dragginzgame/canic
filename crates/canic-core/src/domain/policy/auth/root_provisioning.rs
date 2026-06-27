@@ -37,6 +37,130 @@ pub struct RootIssuerPolicy {
 }
 
 ///
+/// RootIssuerRenewalTemplate
+///
+/// Root-managed desired renewal shape for one delegated-token issuer.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootIssuerRenewalTemplate {
+    pub issuer_pid: Principal,
+    pub enabled: bool,
+    pub audience: RootDelegationAudiencePolicy,
+    pub grants: Vec<RootDelegatedRoleGrantPolicy>,
+    pub cert_ttl_ns: u64,
+}
+
+///
+/// RootIssuerRenewalOutcome
+///
+/// Last root-managed renewal outcome for one delegated-token issuer.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootIssuerRenewalOutcome {
+    AlreadyInstalled,
+    DriftDetected,
+    InstallDeadlineExpired,
+    Installed,
+    IssuerCallFailed,
+    NeverRun,
+    PolicyRejected,
+    ProofMismatch,
+    QuotaExceeded,
+    RejectedByIssuer,
+    RetrievalExpired,
+    TemplateChanged,
+    TemplateDisabled,
+}
+
+///
+/// RootIssuerRenewalState
+///
+/// Root-owned scheduling state for one delegated-token issuer.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootIssuerRenewalState {
+    pub issuer_pid: Principal,
+    pub template_fingerprint: [u8; 32],
+    pub last_installed_cert_hash: Option<[u8; 32]>,
+    pub last_installed_expires_at_ns: Option<u64>,
+    pub last_installed_refresh_after_ns: Option<u64>,
+    pub active_attempt_id: Option<[u8; 32]>,
+    pub last_outcome: RootIssuerRenewalOutcome,
+    pub consecutive_failures: u32,
+    pub next_attempt_after_ns: u64,
+    pub updated_at_ns: u64,
+}
+
+///
+/// RootIssuerRenewalProofRef
+///
+/// Root-owned pointer to one prepared renewal proof.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootIssuerRenewalProofRef {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+}
+
+///
+/// RootIssuerRenewalAttemptStatus
+///
+/// Per-issuer lifecycle state for one scheduled renewal attempt.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootIssuerRenewalAttemptStatus {
+    Prepared,
+    Installing,
+    Installed,
+    FailedRetryable,
+    FailedTerminal,
+    Disabled,
+    Expired,
+}
+
+///
+/// RootIssuerRenewalAttempt
+///
+/// Root-owned issuer-level scheduled renewal attempt.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootIssuerRenewalAttempt {
+    pub attempt_id: [u8; 32],
+    pub issuer_pid: Principal,
+    pub template_fingerprint: [u8; 32],
+    pub batch_id: [u8; 32],
+    pub proof_ref: RootIssuerRenewalProofRef,
+    pub status: RootIssuerRenewalAttemptStatus,
+    pub prepared_at_ns: u64,
+    pub retrieval_expires_at_ns: u64,
+    pub install_deadline_ns: u64,
+    pub prepared_cert_hash: [u8; 32],
+    pub prepared_expires_at_ns: u64,
+    pub prepared_refresh_after_ns: u64,
+    pub failure: Option<RootIssuerRenewalOutcome>,
+}
+
+///
+/// RootDelegationRenewalBatch
+///
+/// Transport grouping for scheduled issuer-level renewal attempts.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootDelegationRenewalBatch {
+    pub batch_id: [u8; 32],
+    pub attempt_ids: Vec<[u8; 32]>,
+    pub prepared_at_ns: u64,
+    pub retrieval_expires_at_ns: u64,
+}
+
+///
 /// RootDelegationProofPreparePolicyInput
 ///
 
@@ -99,6 +223,28 @@ pub fn validate_root_delegation_proof_prepare_policy(
         expires_at_ns,
         refresh_after_ns,
     })
+}
+
+/// Validate an enabled root issuer renewal template against issuer policy.
+pub fn validate_root_issuer_renewal_template_policy(
+    issuer_policy: Option<&RootIssuerPolicy>,
+    template: &RootIssuerRenewalTemplate,
+) -> Result<(), AuthPolicyError> {
+    if !template.enabled {
+        return Ok(());
+    }
+
+    validate_root_delegation_proof_prepare_policy(
+        issuer_policy,
+        RootDelegationProofPreparePolicyInput {
+            issuer_pid: template.issuer_pid,
+            audience: &template.audience,
+            grants: &template.grants,
+            cert_ttl_ns: template.cert_ttl_ns,
+            issued_at_ns: 0,
+        },
+    )
+    .map(|_| ())
 }
 
 fn validate_root_issuer_grants(
@@ -215,6 +361,16 @@ mod tests {
             grants,
             cert_ttl_ns: 100_000_000_000,
             issued_at_ns: 10,
+        }
+    }
+
+    fn renewal_template() -> RootIssuerRenewalTemplate {
+        RootIssuerRenewalTemplate {
+            issuer_pid: p(2),
+            enabled: true,
+            audience: RootDelegationAudiencePolicy::Project("test".to_string()),
+            grants: vec![root_grant("project_instance", &[cap::READ])],
+            cert_ttl_ns: 100_000_000_000,
         }
     }
 
@@ -340,6 +496,43 @@ mod tests {
             Err(AuthPolicyError::RootIssuerRefreshRatioInvalid {
                 refresh_after_ratio_bps: 10_000,
             })
+        );
+    }
+
+    #[test]
+    fn renewal_template_policy_accepts_registered_enabled_template() {
+        let policy = issuer_policy();
+        let template = renewal_template();
+
+        assert_eq!(
+            validate_root_issuer_renewal_template_policy(Some(&policy), &template),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn renewal_template_policy_rejects_policy_violations_when_enabled() {
+        let policy = issuer_policy();
+        let mut template = renewal_template();
+        template.grants = vec![root_grant("project_instance", &[cap::ADMIN])];
+
+        assert_eq!(
+            validate_root_issuer_renewal_template_policy(Some(&policy), &template),
+            Err(AuthPolicyError::RootIssuerGrantNotAllowed {
+                role: CanisterRole::owned("project_instance".to_string()),
+                scope: cap::ADMIN.to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn disabled_renewal_template_does_not_require_registered_policy() {
+        let mut template = renewal_template();
+        template.enabled = false;
+
+        assert_eq!(
+            validate_root_issuer_renewal_template_policy(None, &template),
+            Ok(())
         );
     }
 }

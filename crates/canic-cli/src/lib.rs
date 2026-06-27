@@ -1,3 +1,4 @@
+mod auth;
 mod backup;
 mod blob_storage;
 mod build;
@@ -50,6 +51,9 @@ pub enum CliError {
 
     #[error("backup: {0}")]
     Backup(#[from] backup::BackupCommandError),
+
+    #[error("auth: {0}")]
+    Auth(#[from] auth::AuthCommandError),
 
     #[error("blob-storage: {0}")]
     BlobStorage(#[from] blob_storage::BlobStorageCommandError),
@@ -138,6 +142,7 @@ where
 
     match command {
         "backup" => backup::run(tail).map_err(CliError::from),
+        "auth" => auth::run(tail).map_err(CliError::from),
         "blob-storage" => blob_storage::run(tail).map_err(CliError::from),
         "build" => build::run(tail).map_err(CliError::from),
         "cycles" => cycles::run(tail).map_err(CliError::from),
@@ -172,6 +177,7 @@ pub fn render_cli_error(error: &CliError) -> String {
 #[must_use]
 pub fn cli_error_exit_code(err: &CliError) -> i32 {
     match err {
+        CliError::Auth(err) => i32::from(err.exit_code()),
         CliError::BlobStorage(err) => i32::from(err.exit_code()),
         _ => 1,
     }

@@ -63,28 +63,49 @@ where
     for proof in request.proofs {
         let issuer_pid = proof.issuer_pid;
         let cert_hash = proof.cert_hash;
+        let mut renewal_attempt_id = None;
         let outcome = match AuthOps::preflight_delegation_proof_batch_install_proof(
             request.batch_id,
             &proof,
             now_ns,
         ) {
-            Ok(()) => {
-                let outcome = install_issuer(
-                    issuer_pid,
-                    InstallActiveDelegationProofRequest { proof: proof.proof },
-                )
-                .await;
-                if outcome == RootDelegationProofInstallOutcome::Installed {
-                    AuthOps::mark_delegation_proof_batch_installed(
-                        request.batch_id,
+            Ok(()) => match AuthOps::preflight_delegation_renewal_proof_install(
+                request.batch_id,
+                &proof,
+                now_ns,
+            ) {
+                Ok(attempt_id) => {
+                    renewal_attempt_id = attempt_id;
+                    let outcome = install_issuer(
                         issuer_pid,
-                        cert_hash,
-                    );
+                        InstallActiveDelegationProofRequest { proof: proof.proof },
+                    )
+                    .await;
+                    if outcome == RootDelegationProofInstallOutcome::Installed {
+                        AuthOps::mark_delegation_proof_batch_installed(
+                            request.batch_id,
+                            issuer_pid,
+                            cert_hash,
+                        );
+                    }
+                    outcome
                 }
+                Err(outcome) => outcome,
+            },
+            Err(outcome) => {
+                AuthOps::record_delegation_renewal_install_preflight_outcome(
+                    request.batch_id,
+                    issuer_pid,
+                    cert_hash,
+                    outcome.clone(),
+                    now_ns,
+                );
                 outcome
             }
-            Err(outcome) => outcome,
         };
+        if let Some(attempt_id) = renewal_attempt_id {
+            AuthOps::record_delegation_renewal_install_outcome(attempt_id, outcome.clone(), now_ns);
+        }
         outcomes.push(RootDelegationProofBatchInstallResult {
             issuer_pid,
             cert_hash,

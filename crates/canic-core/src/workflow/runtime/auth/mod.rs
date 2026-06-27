@@ -6,6 +6,7 @@
 
 mod prepare;
 mod provisioning;
+mod renewal;
 
 use crate::{
     InternalError, InternalErrorOrigin,
@@ -37,6 +38,11 @@ use crate::{
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
+    /// Start root-managed delegated-proof renewal sweeps when templates exist.
+    pub fn start_root_delegation_renewal_timer_if_configured() -> Result<(), InternalError> {
+        renewal::RootDelegationRenewalWorkflow::start_if_configured()
+    }
+
     /// Fail fast when root delegated-auth config requires missing crypto support.
     pub fn ensure_root_crypto_contract() -> Result<(), InternalError> {
         let cfg = ConfigOps::get()?;

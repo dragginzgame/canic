@@ -25,6 +25,10 @@ thread_local! {
 pub enum DelegatedAuthMetricOperation {
     PrepareIssuerProof,
     PrepareRootProof,
+    RenewalInstall,
+    RenewalProofRetrieve,
+    RenewalProvisioner,
+    RenewalSweep,
     VerifyToken,
 }
 
@@ -35,6 +39,10 @@ impl DelegatedAuthMetricOperation {
         match self {
             Self::PrepareIssuerProof => "prepare_issuer_proof",
             Self::PrepareRootProof => "prepare_root_proof",
+            Self::RenewalInstall => "renewal_install",
+            Self::RenewalProofRetrieve => "renewal_proof_retrieve",
+            Self::RenewalProvisioner => "renewal_provisioner",
+            Self::RenewalSweep => "renewal_sweep",
             Self::VerifyToken => "verify_token",
         }
     }
@@ -280,6 +288,72 @@ impl DelegatedAuthMetrics {
         );
     }
 
+    /// Record that root-managed renewal sweep preparation started.
+    pub fn record_renewal_sweep_started() {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalSweep,
+            DelegatedAuthMetricOutcome::Started,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that root-managed renewal sweep preparation completed.
+    pub fn record_renewal_sweep_completed() {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalSweep,
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record that root-managed renewal sweep preparation failed.
+    pub fn record_renewal_sweep_failed() {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalSweep,
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::RootProofPrepareFailed,
+        );
+    }
+
+    /// Record a scheduled root renewal proof retrieval result.
+    pub fn record_renewal_proof_retrieve_completed() {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalProofRetrieve,
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
+    /// Record a scheduled root renewal proof retrieval failure.
+    pub fn record_renewal_proof_retrieve_failed(reason: DelegatedAuthMetricReason) {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalProofRetrieve,
+            DelegatedAuthMetricOutcome::Failed,
+            reason,
+        );
+    }
+
+    /// Record a scheduled root renewal install result.
+    pub fn record_renewal_install(
+        outcome: DelegatedAuthMetricOutcome,
+        reason: DelegatedAuthMetricReason,
+    ) {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalInstall,
+            outcome,
+            reason,
+        );
+    }
+
+    /// Record a root renewal provisioner ACL change.
+    pub fn record_renewal_provisioner_completed() {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalProvisioner,
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
+
     /// Record one delegated-auth verification event.
     pub fn record(
         operation: DelegatedAuthMetricOperation,
@@ -443,6 +517,94 @@ mod tests {
                 reason: DelegatedAuthMetricReason::TokenExpired,
             }),
             Some(&2)
+        );
+    }
+
+    #[test]
+    fn record_renewal_outcomes_increment() {
+        DelegatedAuthMetrics::reset();
+
+        DelegatedAuthMetrics::record_renewal_sweep_started();
+        DelegatedAuthMetrics::record_renewal_sweep_completed();
+        DelegatedAuthMetrics::record_renewal_sweep_failed();
+        DelegatedAuthMetrics::record_renewal_proof_retrieve_completed();
+        DelegatedAuthMetrics::record_renewal_proof_retrieve_failed(
+            DelegatedAuthMetricReason::InvalidState,
+        );
+        DelegatedAuthMetrics::record_renewal_install(
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+        DelegatedAuthMetrics::record_renewal_install(
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::IssuerProofUnavailable,
+        );
+        DelegatedAuthMetrics::record_renewal_provisioner_completed();
+
+        let map = event_snapshot_map();
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalSweep,
+                outcome: DelegatedAuthMetricOutcome::Started,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalSweep,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalSweep,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::RootProofPrepareFailed,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalProofRetrieve,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalProofRetrieve,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::InvalidState,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalInstall,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalInstall,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::IssuerProofUnavailable,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalProvisioner,
+                outcome: DelegatedAuthMetricOutcome::Completed,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
         );
     }
 }
