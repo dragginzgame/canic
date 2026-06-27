@@ -8,13 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Disabling a root issuer renewal template now cancels any active scheduled
-  renewal attempt by marking the attempt `Disabled`, clearing the issuer
-  `active_attempt_id`, and preserving the prior failure count.
-
 ## [0.74.x] - 2026-06-27 - Root-Managed Delegation Renewal
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
+
+- `0.74.6` refreshes root-managed renewal state after successful
+  controller/manual proof installs when the proof exactly matches the issuer's
+  enabled renewal template.
+
+- `0.74.5` makes renewal template disable deterministic by cancelling any
+  active scheduled issuer attempt and exposing it as `Disabled` without
+  increasing the failure count.
 
 - `0.74.4` adds `canic auth renewal provisioner` list/enable/disable commands
   for the constrained renewal provisioner ACL and extends retained CLI proofs

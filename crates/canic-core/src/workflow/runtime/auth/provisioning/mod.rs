@@ -61,6 +61,7 @@ where
 
     let mut outcomes = Vec::with_capacity(request.proofs.len());
     for proof in request.proofs {
+        let proof_for_renewal = proof.clone();
         let issuer_pid = proof.issuer_pid;
         let cert_hash = proof.cert_hash;
         let mut renewal_attempt_id = None;
@@ -105,6 +106,12 @@ where
         };
         if let Some(attempt_id) = renewal_attempt_id {
             AuthOps::record_delegation_renewal_install_outcome(attempt_id, outcome.clone(), now_ns);
+        } else {
+            AuthOps::record_manual_delegation_renewal_install_outcome(
+                &proof_for_renewal,
+                outcome.clone(),
+                now_ns,
+            );
         }
         outcomes.push(RootDelegationProofBatchInstallResult {
             issuer_pid,
