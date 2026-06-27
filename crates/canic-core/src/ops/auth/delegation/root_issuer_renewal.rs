@@ -54,6 +54,7 @@ const ROOT_ISSUER_RENEWAL_ATTEMPT_ID_DOMAIN: &[u8] = b"canic-root-issuer-renewal
 
 pub(super) fn upsert_root_issuer_renewal_template(
     request: RootIssuerRenewalTemplateUpsertRequest,
+    now_ns: u64,
 ) -> Result<RootIssuerRenewalTemplateResponse, InternalError> {
     validate_root_issuer_renewal_template_upsert_request(&request)?;
 
@@ -63,6 +64,16 @@ pub(super) fn upsert_root_issuer_renewal_template(
         .map_err(map_root_provisioning_policy_error)?;
 
     AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
+    if !template.enabled {
+        disable_active_renewal_attempt(&template, now_ns);
+    }
+    crate::log!(
+        Topic::Auth,
+        Info,
+        "root issuer renewal template updated issuer={} enabled={}",
+        template.issuer_pid,
+        template.enabled
+    );
 
     Ok(RootIssuerRenewalTemplateResponse {
         template: root_issuer_renewal_template_view(&template),
@@ -85,6 +96,32 @@ pub(super) fn root_issuer_renewal_status(
         state: state.map(|state| root_issuer_renewal_state_view(&state)),
         active_attempt,
     }
+}
+
+fn disable_active_renewal_attempt(template: &RootIssuerRenewalTemplate, now_ns: u64) {
+    let Some(mut state) = AuthStateOps::root_issuer_renewal_state(template.issuer_pid) else {
+        return;
+    };
+    if let Some(attempt_id) = state.active_attempt_id
+        && let Some(mut attempt) = AuthStateOps::root_issuer_renewal_attempt(attempt_id)
+        && matches!(
+            attempt.status,
+            PolicyRenewalAttemptStatus::Prepared
+                | PolicyRenewalAttemptStatus::Installing
+                | PolicyRenewalAttemptStatus::FailedRetryable
+        )
+    {
+        attempt.status = PolicyRenewalAttemptStatus::Disabled;
+        attempt.failure = Some(PolicyRenewalOutcome::TemplateDisabled);
+        AuthStateOps::upsert_root_issuer_renewal_attempt(attempt);
+    }
+
+    state.template_fingerprint = renewal_template_fingerprint(template);
+    state.active_attempt_id = None;
+    state.last_outcome = PolicyRenewalOutcome::TemplateDisabled;
+    state.next_attempt_after_ns = now_ns;
+    state.updated_at_ns = now_ns;
+    AuthStateOps::upsert_root_issuer_renewal_state(state);
 }
 
 pub(super) fn has_enabled_root_issuer_renewal_templates() -> bool {
@@ -1327,7 +1364,7 @@ mod tests {
         let issuer_pid = p(81);
         AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
 
-        let response = upsert_root_issuer_renewal_template(upsert_request(issuer_pid))
+        let response = upsert_root_issuer_renewal_template(upsert_request(issuer_pid), 10)
             .expect("template should be accepted");
 
         assert_eq!(response.template.issuer_pid, issuer_pid);
@@ -1345,7 +1382,7 @@ mod tests {
         let mut request = upsert_request(issuer_pid);
         request.grants = vec![grant("canic.admin")];
 
-        assert!(upsert_root_issuer_renewal_template(request).is_err());
+        assert!(upsert_root_issuer_renewal_template(request, 10).is_err());
     }
 
     #[test]
@@ -1355,7 +1392,7 @@ mod tests {
         request.enabled = false;
         request.grants.clear();
 
-        let response = upsert_root_issuer_renewal_template(request)
+        let response = upsert_root_issuer_renewal_template(request, 10)
             .expect("disabled template should not require an issuer policy");
 
         assert!(!response.template.enabled);
@@ -1366,8 +1403,43 @@ mod tests {
     }
 
     #[test]
-    fn root_issuer_renewal_status_reports_root_owned_state() {
+    fn disabling_root_issuer_renewal_template_clears_active_attempt() {
         let issuer_pid = p(84);
+        let batch_id = [84; 32];
+        let attempt_id = [85; 32];
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
+        let active_attempt = schedule_install_attempt(issuer_pid, batch_id, attempt_id, [86; 32]);
+        let mut request = upsert_request(issuer_pid);
+        request.enabled = false;
+
+        let response = upsert_root_issuer_renewal_template(request, 90)
+            .expect("disabled template should be accepted");
+
+        assert!(!response.template.enabled);
+        let attempt = AuthStateOps::root_issuer_renewal_attempt(attempt_id)
+            .expect("disabled attempt should remain observable");
+        assert_eq!(attempt.status, PolicyRenewalAttemptStatus::Disabled);
+        assert_eq!(
+            attempt.failure,
+            Some(PolicyRenewalOutcome::TemplateDisabled)
+        );
+
+        let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
+            .expect("issuer renewal state should remain observable");
+        assert_eq!(state.active_attempt_id, None);
+        assert_eq!(state.last_outcome, PolicyRenewalOutcome::TemplateDisabled);
+        assert_eq!(state.consecutive_failures, 0);
+        assert_eq!(state.next_attempt_after_ns, 90);
+        assert_eq!(state.updated_at_ns, 90);
+        assert_ne!(
+            state.template_fingerprint,
+            active_attempt.template_fingerprint
+        );
+    }
+
+    #[test]
+    fn root_issuer_renewal_status_reports_root_owned_state() {
+        let issuer_pid = p(87);
         let state = RootIssuerRenewalState {
             issuer_pid,
             template_fingerprint: [1; 32],
@@ -1572,9 +1644,9 @@ mod tests {
         let second_issuer = p(100);
         AuthStateOps::upsert_root_issuer_policy(policy(first_issuer));
         AuthStateOps::upsert_root_issuer_policy(policy(second_issuer));
-        upsert_root_issuer_renewal_template(upsert_request(first_issuer))
+        upsert_root_issuer_renewal_template(upsert_request(first_issuer), 10)
             .expect("first template should be accepted");
-        upsert_root_issuer_renewal_template(upsert_request(second_issuer))
+        upsert_root_issuer_renewal_template(upsert_request(second_issuer), 10)
             .expect("second template should be accepted");
 
         let result = prepare_due_delegation_renewals_with_prepare(120_000_000_000, 10, |request| {
@@ -1675,7 +1747,7 @@ mod tests {
         let stale_batch_id = [138; 32];
         let stale_cert_hash = [139; 32];
         AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
-        upsert_root_issuer_renewal_template(upsert_request(issuer_pid))
+        upsert_root_issuer_renewal_template(upsert_request(issuer_pid), 10)
             .expect("template should be accepted");
         let template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
 
