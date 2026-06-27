@@ -37,6 +37,33 @@ pub fn issue_delegated_token_from_active_proof(
     grants: Vec<DelegatedRoleGrant>,
     token_ttl_ns: u64,
 ) -> DelegatedToken {
+    issue_delegated_token_from_active_proof_with_request_nonce(
+        pic,
+        issuer_pid,
+        subject,
+        aud,
+        grants,
+        token_ttl_ns,
+        0,
+    )
+}
+
+/// Issue one delegated token using an explicit replay request nonce.
+///
+/// # Panics
+///
+/// Panics if delegated-token prepare/get transport fails or either application
+/// call returns an error.
+#[must_use]
+pub fn issue_delegated_token_from_active_proof_with_request_nonce(
+    pic: &Pic,
+    issuer_pid: Principal,
+    subject: Principal,
+    aud: DelegationAudience,
+    grants: Vec<DelegatedRoleGrant>,
+    token_ttl_ns: u64,
+    request_nonce: u64,
+) -> DelegatedToken {
     let request = DelegatedTokenPrepareRequest {
         metadata: Some(issue_token_request_metadata(
             issuer_pid,
@@ -44,6 +71,7 @@ pub fn issue_delegated_token_from_active_proof(
             &aud,
             &grants,
             token_ttl_ns,
+            request_nonce,
         )),
         subject,
         aud,
@@ -75,11 +103,13 @@ fn issue_token_request_metadata(
     aud: &DelegationAudience,
     grants: &[DelegatedRoleGrant],
     token_ttl_ns: u64,
+    request_nonce: u64,
 ) -> AuthRequestMetadata {
     let mut request_id = [0u8; 32];
     mix_principal(&mut request_id, 0, issuer_pid);
     mix_principal(&mut request_id, 7, subject);
     mix_audience(&mut request_id, 13, aud);
+    mix_u64(&mut request_id, 11, request_nonce);
     for (grant_index, grant) in grants.iter().enumerate() {
         for (byte_index, byte) in grant.target.as_str().as_bytes().iter().enumerate() {
             request_id[(grant_index + byte_index + 19) % request_id.len()] ^= *byte;

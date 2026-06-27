@@ -17,9 +17,10 @@ use crate::{
     support::candid::role_candid_path,
     version_text,
 };
+use candid::Principal;
 use canic_core::protocol::{
     CANIC_DELEGATION_RENEWAL_WORK, CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-    CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+    CANIC_INSTALL_DELEGATION_PROOF_BATCH, CANIC_ROOT_ISSUER_RENEWAL_STATUS,
 };
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
@@ -48,19 +49,28 @@ use thiserror::Error as ThisError;
 const COMMAND_NAME: &str = "auth";
 const RENEWAL_COMMAND: &str = "renewal";
 const RUN_ONCE_COMMAND: &str = "run-once";
+const STATUS_COMMAND: &str = "status";
 const DEPLOYMENT_ARG: &str = "deployment";
+const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
 const AUTH_RENEWAL_SCHEMA_VERSION: u16 = 1;
 const AUTH_RENEWAL_RUN_ONCE_KIND: &str = "auth_renewal_run_once_result";
+const AUTH_RENEWAL_STATUS_KIND: &str = "auth_renewal_status";
 const AUTH_RENEWAL_STATUS_NO_WORK: &str = "no_work";
 const AUTH_RENEWAL_STATUS_INSTALLED: &str = "installed";
+const AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT: &str = "active_attempt";
+const AUTH_RENEWAL_STATUS_CONFIGURED: &str = "configured";
+const AUTH_RENEWAL_STATUS_DISABLED: &str = "disabled";
+const AUTH_RENEWAL_STATUS_MISSING: &str = "missing";
 const AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
 
 const HELP_AFTER: &str = "\
 Examples:
   canic auth renewal run-once local
-  canic auth renewal run-once local --json";
+  canic auth renewal run-once local --json
+  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai
+  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai --json";
 
 ///
 /// AuthCommandError
@@ -92,6 +102,9 @@ pub enum AuthCommandError {
         "root target in deployment {deployment} has no local Candid sidecar; rebuild or register local metadata before using auth renewal commands"
     )]
     CandidUnavailable { deployment: String },
+
+    #[error("issuer must be a valid principal: {issuer}")]
+    InvalidIssuerPrincipal { issuer: String },
 
     #[error("failed to read local Candid sidecar {path}: {source}")]
     CandidRead { path: PathBuf, source: io::Error },
@@ -129,6 +142,7 @@ impl AuthCommandError {
             | Self::NoInstalledDeployment { .. }
             | Self::InstallState(_)
             | Self::CandidUnavailable { .. }
+            | Self::InvalidIssuerPrincipal { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
@@ -144,6 +158,7 @@ impl AuthCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthCommand {
     RenewalRunOnce(RenewalRunOnceOptions),
+    RenewalStatus(RenewalStatusOptions),
 }
 
 ///
@@ -168,6 +183,18 @@ struct RenewalRunOnceOptions {
 }
 
 ///
+/// RenewalStatusOptions
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RenewalStatusOptions {
+    deployment: String,
+    issuer: String,
+    json: bool,
+    common: CommonOptions,
+}
+
+///
 /// AuthOptions
 ///
 
@@ -185,6 +212,14 @@ impl AuthOptions {
                 Some((RUN_ONCE_COMMAND, matches)) => {
                     Ok(AuthCommand::RenewalRunOnce(RenewalRunOnceOptions {
                         deployment: required_string(matches, DEPLOYMENT_ARG),
+                        json: matches.get_flag(JSON_ARG),
+                        common: common_options(matches),
+                    }))
+                }
+                Some((STATUS_COMMAND, matches)) => {
+                    Ok(AuthCommand::RenewalStatus(RenewalStatusOptions {
+                        deployment: required_string(matches, DEPLOYMENT_ARG),
+                        issuer: required_string(matches, ISSUER_ARG),
                         json: matches.get_flag(JSON_ARG),
                         common: common_options(matches),
                     }))
@@ -237,6 +272,7 @@ fn renewal_command() -> ClapCommand {
         .about("Run root-managed delegation proof renewal workflows")
         .subcommand_required(true)
         .subcommand(run_once_command())
+        .subcommand(status_command())
 }
 
 fn run_once_command() -> ClapCommand {
@@ -254,9 +290,32 @@ fn run_once_command() -> ClapCommand {
         .arg(internal_icp_arg())
 }
 
+fn status_command() -> ClapCommand {
+    ClapCommand::new(STATUS_COMMAND)
+        .disable_help_flag(true)
+        .about("Show root-managed delegation proof renewal state for one issuer")
+        .arg(
+            value_arg(DEPLOYMENT_ARG)
+                .value_name(DEPLOYMENT_ARG)
+                .required(true)
+                .help("Installed deployment target name"),
+        )
+        .arg(
+            value_arg(ISSUER_ARG)
+                .long(ISSUER_ARG)
+                .value_name("principal")
+                .required(true)
+                .help("Issuer canister principal"),
+        )
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
+        .arg(internal_network_arg())
+        .arg(internal_icp_arg())
+}
+
 fn run_command(command: AuthCommand) -> Result<(), AuthCommandError> {
     match command {
         AuthCommand::RenewalRunOnce(options) => run_renewal_once(&options),
+        AuthCommand::RenewalStatus(options) => run_renewal_status(&options),
     }
 }
 
@@ -264,6 +323,12 @@ fn run_renewal_once(options: &RenewalRunOnceOptions) -> Result<(), AuthCommandEr
     let runtime = LiveAuthRenewalRuntime;
     let result = renewal_once_result_with_runtime(&runtime, options)?;
     write_renewal_once_result(options.json, &result)
+}
+
+fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandError> {
+    let runtime = LiveAuthRenewalRuntime;
+    let result = renewal_status_result_with_runtime(&runtime, options)?;
+    write_renewal_status_result(options.json, &result)
 }
 
 trait AuthRenewalRuntime {
@@ -292,6 +357,38 @@ trait AuthRenewalRuntime {
         arg: &str,
         output: Option<&str>,
     ) -> Result<String, AuthCommandError>;
+}
+
+fn renewal_status_result_with_runtime(
+    runtime: &impl AuthRenewalRuntime,
+    options: &RenewalStatusOptions,
+) -> Result<AuthRenewalStatusResult, AuthCommandError> {
+    let issuer_pid = parse_issuer_principal(&options.issuer)?;
+    let target = runtime.resolve_root_target(
+        &options.common,
+        &options.deployment,
+        CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+        AuthRenewalMethodMode::Query,
+    )?;
+    let output = runtime.query_output(
+        &options.common,
+        &target,
+        CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+        Some(&root_issuer_renewal_status_arg(&issuer_pid)),
+        Some("json"),
+    )?;
+    let status = parse_renewal_status_summary(&output).ok_or(AuthCommandError::ResponseParse)?;
+
+    Ok(AuthRenewalStatusResult {
+        schema_version: AUTH_RENEWAL_SCHEMA_VERSION,
+        kind: AUTH_RENEWAL_STATUS_KIND.to_string(),
+        deployment: options.deployment.clone(),
+        network: options.common.network.clone(),
+        target: target.target,
+        issuer_pid,
+        status: renewal_status_code(&status).to_string(),
+        renewal: status,
+    })
 }
 
 struct LiveAuthRenewalRuntime;
@@ -478,6 +575,72 @@ struct AuthRenewalRunOnceResult {
     batches: Vec<AuthRenewalBatchRunResult>,
 }
 
+///
+/// AuthRenewalTemplateStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalTemplateStatus {
+    present: bool,
+    enabled: Option<bool>,
+    cert_ttl_ns: Option<String>,
+}
+
+///
+/// AuthRenewalStateStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalStateStatus {
+    present: bool,
+    last_outcome: Option<String>,
+    consecutive_failures: Option<u64>,
+    last_installed_expires_at_ns: Option<String>,
+    last_installed_refresh_after_ns: Option<String>,
+    next_attempt_after_ns: Option<String>,
+    active_attempt_id: Option<String>,
+}
+
+///
+/// AuthRenewalActiveAttemptStatus
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalActiveAttemptStatus {
+    present: bool,
+    status: Option<String>,
+    batch_id: Option<String>,
+    prepared_expires_at_ns: Option<String>,
+    failure: Option<String>,
+}
+
+///
+/// AuthRenewalStatusSummary
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalStatusSummary {
+    template: AuthRenewalTemplateStatus,
+    state: AuthRenewalStateStatus,
+    active_attempt: AuthRenewalActiveAttemptStatus,
+}
+
+///
+/// AuthRenewalStatusResult
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct AuthRenewalStatusResult {
+    schema_version: u16,
+    kind: String,
+    deployment: String,
+    network: String,
+    target: AuthRootTarget,
+    issuer_pid: String,
+    status: String,
+    renewal: AuthRenewalStatusSummary,
+}
+
 fn resolve_auth_root_call_target(
     options: &CommonOptions,
     deployment: &str,
@@ -619,6 +782,147 @@ fn parse_work_batches(output: &str) -> Option<Vec<AuthRenewalBatchWork>> {
         }
     }
     parse_work_batches_candid(output)
+}
+
+fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
+    Principal::from_text(issuer)
+        .map(|principal| principal.to_text())
+        .map_err(|_| AuthCommandError::InvalidIssuerPrincipal {
+            issuer: issuer.to_string(),
+        })
+}
+
+fn parse_renewal_status_summary(output: &str) -> Option<AuthRenewalStatusSummary> {
+    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
+    let payload = find_field(&value, "Ok").unwrap_or(&value);
+    let template = find_field(payload, "template").and_then(option_payload);
+    let state = find_field(payload, "state").and_then(option_payload);
+    let active_attempt = find_field(payload, "active_attempt").and_then(option_payload);
+
+    Some(AuthRenewalStatusSummary {
+        template: AuthRenewalTemplateStatus {
+            present: template.is_some(),
+            enabled: template
+                .and_then(|value| find_field(value, "enabled"))
+                .and_then(serde_json::Value::as_bool),
+            cert_ttl_ns: template
+                .and_then(|value| find_field(value, "cert_ttl_ns"))
+                .and_then(parse_u64_deep)
+                .map(|value| value.to_string()),
+        },
+        state: AuthRenewalStateStatus {
+            present: state.is_some(),
+            last_outcome: state
+                .and_then(|value| find_field(value, "last_outcome"))
+                .and_then(parse_variant_code),
+            consecutive_failures: state
+                .and_then(|value| find_field(value, "consecutive_failures"))
+                .and_then(parse_u64_deep),
+            last_installed_expires_at_ns: state
+                .and_then(|value| find_field(value, "last_installed_expires_at_ns"))
+                .and_then(parse_optional_u64_deep)
+                .map(|value| value.to_string()),
+            last_installed_refresh_after_ns: state
+                .and_then(|value| find_field(value, "last_installed_refresh_after_ns"))
+                .and_then(parse_optional_u64_deep)
+                .map(|value| value.to_string()),
+            next_attempt_after_ns: state
+                .and_then(|value| find_field(value, "next_attempt_after_ns"))
+                .and_then(parse_u64_deep)
+                .map(|value| value.to_string()),
+            active_attempt_id: state
+                .and_then(|value| find_field(value, "active_attempt_id"))
+                .and_then(parse_optional_bytes32_hex),
+        },
+        active_attempt: AuthRenewalActiveAttemptStatus {
+            present: active_attempt.is_some(),
+            status: active_attempt
+                .and_then(|value| find_field(value, "status"))
+                .and_then(parse_variant_code),
+            batch_id: active_attempt
+                .and_then(|value| find_field(value, "batch_id"))
+                .and_then(parse_bytes32_hex_deep),
+            prepared_expires_at_ns: active_attempt
+                .and_then(|value| find_field(value, "prepared_expires_at_ns"))
+                .and_then(parse_u64_deep)
+                .map(|value| value.to_string()),
+            failure: active_attempt
+                .and_then(|value| find_field(value, "failure"))
+                .and_then(parse_optional_variant_code),
+        },
+    })
+}
+
+fn option_payload(value: &serde_json::Value) -> Option<&serde_json::Value> {
+    match value {
+        serde_json::Value::Null => None,
+        serde_json::Value::Array(values) => values.first().and_then(option_payload),
+        _ => Some(value),
+    }
+}
+
+fn parse_optional_u64_deep(value: &serde_json::Value) -> Option<u64> {
+    option_payload(value).and_then(parse_u64_deep)
+}
+
+fn parse_u64_deep(value: &serde_json::Value) -> Option<u64> {
+    parse_json_u64(value).or_else(|| match value {
+        serde_json::Value::Array(values) => values.iter().find_map(parse_u64_deep),
+        serde_json::Value::Object(map) => map.values().find_map(parse_u64_deep),
+        _ => None,
+    })
+}
+
+fn parse_optional_bytes32_hex(value: &serde_json::Value) -> Option<String> {
+    option_payload(value).and_then(parse_bytes32_hex_deep)
+}
+
+fn parse_bytes32_hex_deep(value: &serde_json::Value) -> Option<String> {
+    parse_bytes32_json(value).map(|bytes| hex_bytes(&bytes))
+}
+
+fn parse_optional_variant_code(value: &serde_json::Value) -> Option<String> {
+    option_payload(value).and_then(parse_variant_code)
+}
+
+fn parse_variant_code(value: &serde_json::Value) -> Option<String> {
+    parse_variant_name(value).map(|variant| pascal_to_snake(&variant))
+}
+
+fn parse_variant_name(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(value) => Some(value.clone()),
+        serde_json::Value::Object(map) => map.keys().next().cloned(),
+        serde_json::Value::Array(values) => values.iter().find_map(parse_variant_name),
+        _ => None,
+    }
+}
+
+fn pascal_to_snake(value: &str) -> String {
+    let mut rendered = String::with_capacity(value.len());
+    for (index, ch) in value.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            if index > 0 {
+                rendered.push('_');
+            }
+            rendered.push(ch.to_ascii_lowercase());
+        } else {
+            rendered.push(ch);
+        }
+    }
+    rendered
+}
+
+fn renewal_status_code(status: &AuthRenewalStatusSummary) -> &'static str {
+    if status.active_attempt.present {
+        AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT
+    } else if status.template.enabled == Some(false) {
+        AUTH_RENEWAL_STATUS_DISABLED
+    } else if status.template.present {
+        AUTH_RENEWAL_STATUS_CONFIGURED
+    } else {
+        AUTH_RENEWAL_STATUS_MISSING
+    }
 }
 
 fn parse_work_batches_json(values: &[serde_json::Value]) -> Option<Vec<AuthRenewalBatchWork>> {
@@ -802,6 +1106,10 @@ fn root_delegation_renewal_batch_get_arg(batch_id: [u8; 32]) -> String {
     format!("(record {{ batch_id = {} }})", candid_blob32(&batch_id))
 }
 
+fn root_issuer_renewal_status_arg(issuer_pid: &str) -> String {
+    format!(r#"(record {{ issuer_pid = principal "{issuer_pid}" }})"#)
+}
+
 fn candid_blob32(bytes: &[u8; 32]) -> String {
     let mut rendered = String::from("blob \"");
     for byte in bytes {
@@ -892,6 +1200,108 @@ fn write_renewal_once_result(
     Ok(())
 }
 
+fn write_renewal_status_result(
+    json: bool,
+    result: &AuthRenewalStatusResult,
+) -> Result<(), AuthCommandError> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(result)?);
+    } else {
+        println!("{}", render_renewal_status_result(result));
+    }
+    Ok(())
+}
+
+fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> String {
+    let mut lines = vec![
+        format!("Auth renewal status: {}", result.issuer_pid),
+        format!("Deployment: {}", result.deployment),
+        format!("Root: {}", result.target.canister_id),
+        format!("Status: {}", result.status),
+        format!(
+            "Template: {}",
+            render_template_status(&result.renewal.template)
+        ),
+    ];
+    if result.renewal.state.present {
+        lines.push(format!(
+            "Last outcome: {}",
+            result.renewal.state.last_outcome.as_deref().unwrap_or("-")
+        ));
+        lines.push(format!(
+            "Consecutive failures: {}",
+            result
+                .renewal
+                .state
+                .consecutive_failures
+                .map_or_else(|| "-".to_string(), |value| value.to_string())
+        ));
+        lines.push(format!(
+            "Last installed expires: {}",
+            result
+                .renewal
+                .state
+                .last_installed_expires_at_ns
+                .as_deref()
+                .unwrap_or("-")
+        ));
+        lines.push(format!(
+            "Refresh after: {}",
+            result
+                .renewal
+                .state
+                .last_installed_refresh_after_ns
+                .as_deref()
+                .unwrap_or("-")
+        ));
+        lines.push(format!(
+            "Next attempt after: {}",
+            result
+                .renewal
+                .state
+                .next_attempt_after_ns
+                .as_deref()
+                .unwrap_or("-")
+        ));
+    }
+    lines.push(format!(
+        "Active attempt: {}",
+        render_active_attempt_status(&result.renewal.active_attempt)
+    ));
+    if result.renewal.active_attempt.present {
+        lines.push(format!(
+            "Batch: {}",
+            result
+                .renewal
+                .active_attempt
+                .batch_id
+                .as_deref()
+                .unwrap_or("-")
+        ));
+        if let Some(failure) = &result.renewal.active_attempt.failure {
+            lines.push(format!("Failure: {failure}"));
+        }
+    }
+    lines.join("\n")
+}
+
+const fn render_template_status(template: &AuthRenewalTemplateStatus) -> &'static str {
+    match (template.present, template.enabled) {
+        (false, _) => "missing",
+        (true, Some(true)) => "enabled",
+        (true, Some(false)) => "disabled",
+        (true, None) => "configured",
+    }
+}
+
+fn render_active_attempt_status(attempt: &AuthRenewalActiveAttemptStatus) -> &str {
+    if attempt.present {
+        attempt.status.as_deref().unwrap_or("present")
+    } else {
+        "none"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -912,8 +1322,36 @@ mod tests {
         ])
         .expect("parse auth renewal run-once options");
 
-        let AuthCommand::RenewalRunOnce(options) = command;
+        let AuthCommand::RenewalRunOnce(options) = command else {
+            panic!("expected renewal run-once command");
+        };
         assert_eq!(options.deployment, "local");
+        assert_eq!(options.common.network, "local");
+        assert_eq!(options.common.icp, "/bin/icp");
+        assert!(options.json);
+    }
+
+    #[test]
+    fn parses_renewal_status_options() {
+        let command = AuthOptions::parse([
+            OsString::from("renewal"),
+            OsString::from("status"),
+            OsString::from("local"),
+            OsString::from("--issuer"),
+            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+            OsString::from("--json"),
+            OsString::from(globals::INTERNAL_NETWORK_OPTION),
+            OsString::from("local"),
+            OsString::from(globals::INTERNAL_ICP_OPTION),
+            OsString::from("/bin/icp"),
+        ])
+        .expect("parse auth renewal status options");
+
+        let AuthCommand::RenewalStatus(options) = command else {
+            panic!("expected renewal status command");
+        };
+        assert_eq!(options.deployment, "local");
+        assert_eq!(options.issuer, "rrkah-fqaaa-aaaaa-aaaaq-cai");
         assert_eq!(options.common.network, "local");
         assert_eq!(options.common.icp, "/bin/icp");
         assert!(options.json);
@@ -1047,12 +1485,104 @@ mod tests {
         );
     }
 
+    #[test]
+    fn renewal_status_queries_root_status_endpoint() {
+        let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
+            CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+            Some(root_issuer_renewal_status_arg(issuer)),
+            Some("json"),
+            serde_json::json!({
+                "template": {
+                    "enabled": true,
+                    "cert_ttl_ns": "300000000000"
+                },
+                "state": {
+                    "last_outcome": "Installed",
+                    "consecutive_failures": 0,
+                    "last_installed_expires_at_ns": ["1620329000000000000"],
+                    "last_installed_refresh_after_ns": ["1620328900000000000"],
+                    "next_attempt_after_ns": "1620328900000000000",
+                    "active_attempt_id": [vec![1_u8; 32]]
+                },
+                "active_attempt": {
+                    "status": "Prepared",
+                    "batch_id": vec![2_u8; 32],
+                    "prepared_expires_at_ns": "1620329000000000000",
+                    "failure": null
+                }
+            })
+            .to_string(),
+        )]);
+        let result = renewal_status_result_with_runtime(
+            &runtime,
+            &RenewalStatusOptions {
+                deployment: "local".to_string(),
+                issuer: issuer.to_string(),
+                json: true,
+                common: CommonOptions {
+                    network: "local".to_string(),
+                    icp: "icp".to_string(),
+                },
+            },
+        )
+        .expect("status should query scripted endpoint");
+
+        assert_eq!(result.kind, AUTH_RENEWAL_STATUS_KIND);
+        assert_eq!(result.issuer_pid, issuer);
+        assert_eq!(result.status, AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT);
+        assert_eq!(result.renewal.template.enabled, Some(true));
+        assert_eq!(
+            result.renewal.state.last_outcome.as_deref(),
+            Some("installed")
+        );
+        assert_eq!(
+            result.renewal.active_attempt.status.as_deref(),
+            Some("prepared")
+        );
+        assert_eq!(
+            runtime.called_methods(),
+            vec![CANIC_ROOT_ISSUER_RENEWAL_STATUS]
+        );
+    }
+
+    #[test]
+    fn renewal_status_rejects_invalid_issuer_principal() {
+        let runtime = ScriptedAuthRenewalRuntime::empty();
+        let err = renewal_status_result_with_runtime(
+            &runtime,
+            &RenewalStatusOptions {
+                deployment: "local".to_string(),
+                issuer: "not a principal".to_string(),
+                json: false,
+                common: CommonOptions {
+                    network: "local".to_string(),
+                    icp: "icp".to_string(),
+                },
+            },
+        )
+        .expect_err("invalid issuer principal should fail before transport");
+
+        assert!(matches!(
+            err,
+            AuthCommandError::InvalidIssuerPrincipal { .. }
+        ));
+        assert!(runtime.called_methods().is_empty());
+    }
+
     struct ScriptedAuthRenewalRuntime {
         responses: RefCell<VecDeque<ScriptedAuthRenewalResponse>>,
         calls: RefCell<Vec<String>>,
     }
 
     impl ScriptedAuthRenewalRuntime {
+        fn empty() -> Self {
+            Self {
+                responses: RefCell::new(VecDeque::new()),
+                calls: RefCell::new(Vec::new()),
+            }
+        }
+
         fn new<const N: usize>(responses: [ScriptedAuthRenewalResponse; N]) -> Self {
             Self {
                 responses: RefCell::new(VecDeque::from(responses)),
@@ -1071,6 +1601,7 @@ mod tests {
                         CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH
                     }
                     CANIC_INSTALL_DELEGATION_PROOF_BATCH => CANIC_INSTALL_DELEGATION_PROOF_BATCH,
+                    CANIC_ROOT_ISSUER_RENEWAL_STATUS => CANIC_ROOT_ISSUER_RENEWAL_STATUS,
                     _ => panic!("unexpected method {method}"),
                 })
                 .collect()
