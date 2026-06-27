@@ -391,7 +391,9 @@ fn bridge_scheduled_renewal_batch(
         );
     let retrieved = retrieved.expect("scheduled renewal proof get application failed");
     assert_eq!(retrieved.batch_id, work.batch_id);
-    assert_eq!(retrieved.proofs.len(), work.attempt_count as usize);
+    let attempt_count =
+        usize::try_from(work.attempt_count).expect("renewal attempt count fits usize");
+    assert_eq!(retrieved.proofs.len(), attempt_count);
 
     let installed = install_root_delegation_proof_batch(
         setup,
