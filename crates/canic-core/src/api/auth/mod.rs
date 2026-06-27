@@ -166,8 +166,8 @@ impl AuthApi {
         request: RootIssuerRenewalTemplateUpsertRequest,
     ) -> Result<RootIssuerRenewalTemplateResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        let response =
-            AuthOps::upsert_root_issuer_renewal_template(request).map_err(Self::map_auth_error)?;
+        let response = AuthOps::upsert_root_issuer_renewal_template(request, IcOps::now_nanos())
+            .map_err(Self::map_auth_error)?;
         if response.template.enabled {
             RuntimeAuthWorkflow::start_root_delegation_renewal_timer_if_configured()
                 .map_err(Self::map_auth_error)?;

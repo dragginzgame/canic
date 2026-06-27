@@ -88,8 +88,9 @@ impl AuthOps {
 
     pub(crate) fn upsert_root_issuer_renewal_template(
         request: RootIssuerRenewalTemplateUpsertRequest,
+        now_ns: u64,
     ) -> Result<RootIssuerRenewalTemplateResponse, InternalError> {
-        root_issuer_renewal::upsert_root_issuer_renewal_template(request)
+        root_issuer_renewal::upsert_root_issuer_renewal_template(request, now_ns)
     }
 
     pub(crate) fn root_issuer_renewal_status(
