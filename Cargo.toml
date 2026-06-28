@@ -60,7 +60,7 @@ readme = "README.md"
 [workspace.dependencies]
 async-trait = "0.1"
 candid = { version = "0.10", default-features = false }
-candid_parser = "0.3.1"
+candid_parser = "0.4.0"
 canic = { version = "0.74.9", path = "crates/canic" }
 canic-backup = { version = "0.74.9", path = "crates/canic-backup" }
 canic-control-plane = { version = "0.74.9", path = "crates/canic-control-plane" }
