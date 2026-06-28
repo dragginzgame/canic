@@ -117,6 +117,10 @@ fn disable_active_renewal_attempt(template: &RootIssuerRenewalTemplate, now_ns: 
         attempt.status = PolicyRenewalAttemptStatus::Disabled;
         attempt.failure = Some(PolicyRenewalOutcome::TemplateDisabled);
         AuthStateOps::upsert_root_issuer_renewal_attempt(attempt);
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::Disabled,
+        );
     }
 
     state.template_fingerprint = renewal_template_fingerprint(template);
@@ -292,6 +296,10 @@ fn record_due_renewal_prepare_failure(
         AuthStateOps::upsert_root_issuer_renewal_state(renewal_state_for_prepare_failure(
             now_ns, due, outcome,
         ));
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Failed,
+            delegated_auth_reason_from_renewal_attempt_outcome(outcome, false),
+        );
         crate::log!(
             Topic::Auth,
             Warn,
@@ -832,6 +840,7 @@ fn record_scheduled_renewal_attempt_success(
     outcome: RootDelegationProofInstallOutcome,
     now_ns: u64,
 ) {
+    let was_installed = attempt.status == PolicyRenewalAttemptStatus::Installed;
     attempt.status = PolicyRenewalAttemptStatus::Installed;
     attempt.failure = None;
     AuthStateOps::upsert_root_issuer_renewal_attempt(attempt.clone());
@@ -855,6 +864,12 @@ fn record_scheduled_renewal_attempt_success(
         DelegatedAuthMetricOutcome::Completed,
         DelegatedAuthMetricReason::Ok,
     );
+    if !was_installed {
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Completed,
+            DelegatedAuthMetricReason::Ok,
+        );
+    }
     crate::log!(
         Topic::Auth,
         Info,
@@ -891,6 +906,10 @@ fn record_scheduled_renewal_attempt_failure(
     DelegatedAuthMetrics::record_renewal_install(
         DelegatedAuthMetricOutcome::Failed,
         delegated_auth_reason_from_renewal_outcome(outcome),
+    );
+    DelegatedAuthMetrics::record_renewal_attempt(
+        DelegatedAuthMetricOutcome::Failed,
+        delegated_auth_reason_from_renewal_attempt_outcome(outcome, retryable),
     );
     crate::log!(
         Topic::Auth,
@@ -957,6 +976,33 @@ const fn delegated_auth_reason_from_renewal_outcome(
             DelegatedAuthMetricReason::CertExpired
         }
         PolicyRenewalOutcome::IssuerCallFailed => DelegatedAuthMetricReason::IssuerProofUnavailable,
+        PolicyRenewalOutcome::ProofMismatch => DelegatedAuthMetricReason::CertHashMismatch,
+        PolicyRenewalOutcome::RejectedByIssuer => DelegatedAuthMetricReason::IssuerProofInvalid,
+        PolicyRenewalOutcome::TemplateDisabled => DelegatedAuthMetricReason::Disabled,
+    }
+}
+
+const fn delegated_auth_reason_from_renewal_attempt_outcome(
+    outcome: PolicyRenewalOutcome,
+    retryable: bool,
+) -> DelegatedAuthMetricReason {
+    if retryable {
+        return DelegatedAuthMetricReason::RetryScheduled;
+    }
+
+    match outcome {
+        PolicyRenewalOutcome::AlreadyInstalled
+        | PolicyRenewalOutcome::Installed
+        | PolicyRenewalOutcome::NeverRun => DelegatedAuthMetricReason::Ok,
+        PolicyRenewalOutcome::DriftDetected => DelegatedAuthMetricReason::DriftDetected,
+        PolicyRenewalOutcome::InstallDeadlineExpired => {
+            DelegatedAuthMetricReason::InstallDeadlineExpired
+        }
+        PolicyRenewalOutcome::RetrievalExpired => DelegatedAuthMetricReason::RetrievalExpired,
+        PolicyRenewalOutcome::IssuerCallFailed => DelegatedAuthMetricReason::IssuerProofUnavailable,
+        PolicyRenewalOutcome::PolicyRejected
+        | PolicyRenewalOutcome::QuotaExceeded
+        | PolicyRenewalOutcome::TemplateChanged => DelegatedAuthMetricReason::InvalidState,
         PolicyRenewalOutcome::ProofMismatch => DelegatedAuthMetricReason::CertHashMismatch,
         PolicyRenewalOutcome::RejectedByIssuer => DelegatedAuthMetricReason::IssuerProofInvalid,
         PolicyRenewalOutcome::TemplateDisabled => DelegatedAuthMetricReason::Disabled,
@@ -1041,6 +1087,10 @@ fn expire_stale_active_renewal_attempt(
             DelegatedAuthMetricReason::CertExpired,
         ),
     }
+    DelegatedAuthMetrics::record_renewal_attempt(
+        DelegatedAuthMetricOutcome::Failed,
+        delegated_auth_reason_from_renewal_attempt_outcome(outcome, false),
+    );
     crate::log!(
         Topic::Auth,
         Warn,
@@ -1153,6 +1203,10 @@ fn persist_scheduled_renewal_batch(
 
         AuthStateOps::upsert_root_issuer_renewal_attempt(attempt);
         AuthStateOps::upsert_root_issuer_renewal_state(state);
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Started,
+            DelegatedAuthMetricReason::Ok,
+        );
         attempt_ids.push(attempt_id);
     }
 
@@ -1456,7 +1510,12 @@ mod tests {
         },
         dto::error::ErrorCode,
         ids::CanisterRole,
-        ops::storage::auth::AuthStateOps,
+        ops::{
+            runtime::metrics::delegated_auth::{
+                DelegatedAuthMetricKey, DelegatedAuthMetricOperation,
+            },
+            storage::auth::AuthStateOps,
+        },
     };
 
     fn p(id: u8) -> Principal {
@@ -1591,6 +1650,21 @@ mod tests {
         });
 
         attempt
+    }
+
+    fn renewal_attempt_metric_count(
+        outcome: DelegatedAuthMetricOutcome,
+        reason: DelegatedAuthMetricReason,
+    ) -> u64 {
+        let key = DelegatedAuthMetricKey {
+            operation: DelegatedAuthMetricOperation::RenewalAttempt,
+            outcome,
+            reason,
+        };
+        DelegatedAuthMetrics::event_snapshot()
+            .into_iter()
+            .find_map(|(event_key, count)| (event_key == key).then_some(count))
+            .unwrap_or(0)
     }
 
     fn fake_prepare_response(
@@ -1990,6 +2064,8 @@ mod tests {
 
     #[test]
     fn prepare_due_delegation_renewals_schedules_initial_enabled_templates() {
+        DelegatedAuthMetrics::reset();
+
         let first_issuer = p(101);
         let second_issuer = p(100);
         AuthStateOps::upsert_root_issuer_policy(policy(first_issuer));
@@ -2023,6 +2099,13 @@ mod tests {
             .expect("scheduler should persist renewal batch");
 
         assert!(result.prepared_attempts >= 2);
+        assert_eq!(
+            renewal_attempt_metric_count(
+                DelegatedAuthMetricOutcome::Started,
+                DelegatedAuthMetricReason::Ok,
+            ),
+            u64::try_from(result.prepared_attempts).expect("prepared attempt count should fit u64")
+        );
         assert!(batch.attempt_ids.len() >= 2);
         for issuer_pid in [first_issuer, second_issuer] {
             let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
@@ -2293,6 +2376,8 @@ mod tests {
 
     #[test]
     fn scheduled_renewal_install_call_failure_remains_retryable() {
+        DelegatedAuthMetrics::reset();
+
         let issuer_pid = p(128);
         let batch_id = [129; 32];
         let attempt_id = [130; 32];
@@ -2321,6 +2406,13 @@ mod tests {
         assert_eq!(state.last_outcome, PolicyRenewalOutcome::IssuerCallFailed);
         assert_eq!(state.consecutive_failures, 1);
         assert_eq!(state.next_attempt_after_ns, 90);
+        assert_eq!(
+            renewal_attempt_metric_count(
+                DelegatedAuthMetricOutcome::Failed,
+                DelegatedAuthMetricReason::RetryScheduled,
+            ),
+            1
+        );
     }
 
     #[test]
