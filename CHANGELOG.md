@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.11` stabilizes the retained scheduled-renewal PocketIC sharding
+  scenario by isolating its timer-dependent root setup from cached snapshot
+  restores while simplifying the shared sharding test setup helpers.
+
 - `0.74.10` closes out the 0.74 renewal design note so it reflects the shipped
   root-managed renewal surface and leaves daemon/host bridge operation as the
   remaining follow-up.
