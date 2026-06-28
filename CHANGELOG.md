@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.14` closes the follow-up structure/audit pass by completing the
+  root-renewal and blob-storage module splits, keeping public behavior
+  unchanged while recording the refreshed module-structure and change-friction
+  audit results.
+
 - `0.74.13` reduces root-managed renewal change friction by splitting the
   largest core renewal ops and CLI auth modules into smaller responsibility
   modules without changing operator behavior.

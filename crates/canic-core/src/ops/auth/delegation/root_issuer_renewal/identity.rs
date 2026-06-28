@@ -3,7 +3,6 @@
 //! Responsibility: derive deterministic renewal template, batch, and attempt identifiers.
 //! Does not own: storage mutation, scheduling decisions, or DTO conversion.
 
-use super::DueRenewalTemplate;
 use crate::{
     cdk::types::Principal,
     domain::policy::auth::{
@@ -28,14 +27,18 @@ pub(super) fn renewal_template_fingerprint(template: &RootIssuerRenewalTemplate)
     hasher.finalize().into()
 }
 
-pub(super) fn renewal_batch_id(now_ns: u64, due_templates: &[DueRenewalTemplate]) -> [u8; 32] {
+pub(super) fn renewal_batch_id(
+    now_ns: u64,
+    due_template_count: usize,
+    due_template_fingerprints: impl Iterator<Item = (Principal, [u8; 32])>,
+) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hash_renewal_bytes(&mut hasher, ROOT_DELEGATION_RENEWAL_BATCH_ID_DOMAIN);
     hash_renewal_u64(&mut hasher, now_ns);
-    hash_renewal_u64(&mut hasher, due_templates.len() as u64);
-    for due in due_templates {
-        hash_renewal_principal(&mut hasher, due.template.issuer_pid);
-        hash_renewal_bytes(&mut hasher, &due.template_fingerprint);
+    hash_renewal_u64(&mut hasher, due_template_count as u64);
+    for (issuer_pid, template_fingerprint) in due_template_fingerprints {
+        hash_renewal_principal(&mut hasher, issuer_pid);
+        hash_renewal_bytes(&mut hasher, &template_fingerprint);
     }
     hasher.finalize().into()
 }

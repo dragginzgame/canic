@@ -63,3 +63,24 @@ not rewritten.
 - Carry forward the 2026-06-28 capability-surface watchpoint: retained global
   `canic_*` methods stayed stable, but root-managed renewal added six
   root-only service methods and the protocol export table continued to grow.
+- Carry forward the 2026-06-28 change-friction watchpoints: keep the
+  `api::blob_storage` hash/lifecycle/gateway/billing split intact, keep
+  canonical blob root hash string conversion behind
+  `ops::blob_storage::conversion`, and watch `crates/canic-cli/src/auth/mod.rs`
+  after the 0.74 split.
+- Carry forward the 2026-06-28 module-structure watchpoints: keep
+  root-renewal schedule/retrieval/install/view children private and keep broad
+  auth DTO/API plus host deployment-truth support surfaces under review.
+- Carry forward the 2026-06-28 dependency-hygiene watchpoints: keep
+  blob-storage billing, auth proof, sharding, and control-plane surfaces
+  default-off, and keep blob-storage billing probes plus integration harnesses
+  unpublished.
+- Carry forward the 2026-06-28 DRY consolidation watchpoints: keep
+  root-renewal and blob-storage runtime/API splits private and phase-specific,
+  watch CLI auth/blob-storage command growth, and revisit evidence/proof
+  helper extraction only if emitters or shell isolation rules converge.
+- Carry forward the 2026-06-28 expiry/replay/single-use watchpoints: keep
+  delegated-token verification stateless, keep root proof batch replay keyed by
+  request id plus request fingerprint, keep exact-boundary expiry checks, and
+  keep root-renewal scheduled retrieval/install gates covered as that line
+  stabilizes.
