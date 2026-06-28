@@ -4,12 +4,16 @@ use crate::{
     domain::policy::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootDelegationRenewalBatch,
         RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalProofRef,
+        RootIssuerRenewalState,
     },
     dto::auth::{
         DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
         IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
-        RootDelegationProofBatchEntry, RootDelegationProofBatchProof,
-        RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome, RootProof,
+        RootDelegationProofBatchEntry, RootDelegationProofBatchGetResponse,
+        RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
+        RootDelegationProofBatchProof, RootDelegationProofBatchProofRef,
+        RootDelegationRenewalProofBatchGetRequest, RootIssuerRenewalAttemptStatus,
+        RootIssuerRenewalOutcome, RootProof,
     },
     dto::error::ErrorCode,
     ids::CanisterRole,

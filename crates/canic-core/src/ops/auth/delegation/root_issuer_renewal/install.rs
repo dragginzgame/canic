@@ -3,7 +3,7 @@
 //! Responsibility: validate and record root-managed renewal proof install outcomes.
 //! Does not own: renewal scheduling, proof retrieval, or DTO view conversion.
 
-use super::identity::renewal_template_fingerprint;
+use super::{ROOT_DELEGATION_RENEWAL_RETRY_BACKOFF_NS, identity::renewal_template_fingerprint};
 use crate::{
     cdk::types::Principal,
     domain::policy::auth::{
@@ -23,8 +23,6 @@ use crate::{
         storage::auth::AuthStateOps,
     },
 };
-
-const ROOT_DELEGATION_RENEWAL_RETRY_BACKOFF_NS: u64 = 60_000_000_000;
 
 pub(super) fn preflight_delegation_renewal_proof_install(
     batch_id: [u8; 32],

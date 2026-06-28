@@ -3,7 +3,7 @@
 //! Responsibility: project root issuer renewal policy records into boundary views.
 //! Does not own: storage mutation, scheduling decisions, or install outcome handling.
 
-use super::scheduled_renewal_batch_attempts;
+use super::retrieval::scheduled_renewal_batch_attempts;
 use crate::{
     domain::policy::auth::{
         RootDelegationRenewalBatch, RootIssuerRenewalAttempt,

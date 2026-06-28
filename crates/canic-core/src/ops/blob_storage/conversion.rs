@@ -25,6 +25,11 @@ impl BlobStorageConversionOps {
         BlobRootHash::try_from(value).map_err(BlobStorageConversionError::InvalidRootHash)
     }
 
+    /// Parse a Toko/Caffeine root hash string into canonical text form.
+    pub fn canonical_root_hash_text(value: &str) -> Result<String, BlobStorageConversionError> {
+        Self::root_hash_from_text(value).map(BlobRootHash::into_string)
+    }
+
     /// Convert one gateway 32-byte root hash argument into canonical model form.
     pub fn root_hash_from_bytes(bytes: &[u8]) -> Result<BlobRootHash, BlobStorageConversionError> {
         if bytes.len() != BLOB_ROOT_HASH_BYTE_LENGTH {
@@ -35,6 +40,11 @@ impl BlobStorageConversionOps {
 
         let value = format!("sha256:{}", hex_bytes(bytes));
         Self::root_hash_from_text(&value)
+    }
+
+    /// Convert one gateway 32-byte root hash argument into canonical text form.
+    pub fn canonical_root_hash_bytes(bytes: &[u8]) -> Result<String, BlobStorageConversionError> {
+        Self::root_hash_from_bytes(bytes).map(BlobRootHash::into_string)
     }
 }
 
@@ -87,6 +97,23 @@ mod tests {
         assert_eq!(
             hash.as_str(),
             "sha256:000102030405060708090a0b0c0d0e0ff0e0d0c0b0a0908070605040302010ff"
+        );
+    }
+
+    #[test]
+    fn canonical_text_helpers_return_boundary_strings() {
+        let bytes = [0xabu8; BLOB_ROOT_HASH_BYTE_LENGTH];
+
+        assert_eq!(
+            BlobStorageConversionOps::canonical_root_hash_text(
+                "sha256:ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
+            )
+            .expect("text converts"),
+            "sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        );
+        assert_eq!(
+            BlobStorageConversionOps::canonical_root_hash_bytes(&bytes).expect("bytes convert"),
+            "sha256:abababababababababababababababababababababababababababababababab"
         );
     }
 
