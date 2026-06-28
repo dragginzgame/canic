@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.13` reduces root-managed renewal change friction by splitting the
+  largest core renewal ops and CLI auth modules into smaller responsibility
+  modules without changing operator behavior.
+
 - `0.74.12` narrows internal RPC capability workflow handler visibility and
   refreshes the capability-scope audit so its counted capability-facing surface
   stays below the growing-surface threshold.
