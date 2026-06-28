@@ -12,6 +12,7 @@
 | `2026-06-13` | [2026-06-13/summary.md](2026-06-13/summary.md) | complete for reports retained on this day |
 | `2026-06-19` | [2026-06-19/summary.md](2026-06-19/summary.md) | complete for reports retained on this day |
 | `2026-06-22` | [2026-06-22/summary.md](2026-06-22/summary.md) | complete for reports retained on this day |
+| `2026-06-28` | [2026-06-28/summary.md](2026-06-28/summary.md) | complete for reports retained on this day |
 
 ## Month-Level Status
 
@@ -19,7 +20,7 @@ Status: `partial`.
 
 The month has retained report artifacts for `2026-06-01`, `2026-06-02`,
 `2026-06-04`, `2026-06-06`, `2026-06-08`, `2026-06-13`, `2026-06-19`, and
-`2026-06-22`.
+`2026-06-22`, and `2026-06-28`.
 This summary was created during the `2026-06-02` modular MSH run and updated as
 additional audit reports were added; older reports without day summaries were
 not rewritten.
@@ -53,3 +54,12 @@ not rewritten.
   pressure remains open.
 - Continue modular MSH down the CLI tree with focused low-risk modules before
   entering backup/restore recovery surfaces that require a larger Tier 2 pass.
+- Keep `verify_token_material(...)` private and keep role-attestation/root
+  proof provisioning out of delegated-token endpoint authorization. Rerun the
+  supplemental PocketIC role-attestation verification path after the local
+  PocketIC runner is known healthy.
+- Keep capability DTOs passive, endpoint macros thin, and replay/
+  authorization sequencing covered when the root capability surface changes.
+- Carry forward the 2026-06-28 capability-surface watchpoint: retained global
+  `canic_*` methods stayed stable, but root-managed renewal added six
+  root-only service methods and the protocol export table continued to grow.

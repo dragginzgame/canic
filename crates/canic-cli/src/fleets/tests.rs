@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::temp_dir;
+use crate::test_support::TempDir;
 use canic_host::adoption::{
     AdoptionArtifactStateV1, AdoptionObservationStateV1, AdoptionPackageStateV1, AdoptionProfileV1,
 };
@@ -346,14 +346,13 @@ fn confirm_delete_fleet_requires_exact_name() {
 // Ensure delete resolves the fleet config parent, not an arbitrary path.
 #[test]
 fn delete_target_resolves_config_parent() {
-    let root = temp_dir("canic-fleet-delete-target");
+    let root = TempDir::new("canic-fleet-delete-target");
     let demo = write_fleet_config(&root, "demo");
     let staging = write_fleet_config(&root, "staging");
     let choices = vec![demo.join("canic.toml"), staging.join("canic.toml")];
 
     let target = delete_target_dir_from_choices(&root, &choices, "staging").expect("delete target");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(target, staging);
 }
 
@@ -527,7 +526,7 @@ fn renders_renamed_role_output() {
 // Ensure text adoption reports summarize lifecycle state without mutating config.
 #[test]
 fn renders_adoption_report_text_for_declared_only_roles() {
-    let root = temp_dir("canic-fleet-adoption-report");
+    let root = TempDir::new("canic-fleet-adoption-report");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let before = fs::read_to_string(&config_path).expect("read config before report");
@@ -549,7 +548,6 @@ fn renders_adoption_report_text_for_declared_only_roles() {
     let text = render_adoption_report(&report);
     let after = fs::read_to_string(&config_path).expect("read config after report");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(after, before);
     assert!(text.contains("Adoption report:"));
     assert!(text.contains("profile: brownfield"));
@@ -570,7 +568,7 @@ fn renders_adoption_report_text_for_declared_only_roles() {
 // Ensure adoption report --output writes only the requested JSON report artifact.
 #[test]
 fn writes_adoption_report_json_output_file() {
-    let root = temp_dir("canic-fleet-adoption-json");
+    let root = TempDir::new("canic-fleet-adoption-json");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let out = root.join("reports/adoption.json");
@@ -593,7 +591,6 @@ fn writes_adoption_report_json_output_file() {
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(&out).expect("read report")).expect("parse report");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(value["fleet"], "demo");
     assert_eq!(value["profile"], "Minimal");
     assert_eq!(value["summary"]["mutating_actions_performed"], 0);
@@ -603,7 +600,7 @@ fn writes_adoption_report_json_output_file() {
 // Ensure envelope JSON wraps the raw adoption report with stable provenance fields.
 #[test]
 fn writes_adoption_report_envelope_json_output_file() {
-    let root = temp_dir("canic-fleet-adoption-envelope-json");
+    let root = TempDir::new("canic-fleet-adoption-envelope-json");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let evidence = write_adoption_evidence_files(&root);
@@ -629,7 +626,6 @@ fn writes_adoption_report_envelope_json_output_file() {
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(&out).expect("read report")).expect("parse envelope");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(after, before);
     assert_eq!(value["envelope_schema"]["id"], "canic.evidence_envelope.v1");
     assert_eq!(value["envelope_schema"]["stability"], "stable");
@@ -684,7 +680,7 @@ fn writes_adoption_report_envelope_json_output_file() {
 // Ensure explicit evidence files are read and passed to the host adoption builder.
 #[test]
 fn adoption_report_reads_explicit_evidence_files() {
-    let root = temp_dir("canic-fleet-adoption-evidence");
+    let root = TempDir::new("canic-fleet-adoption-evidence");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let evidence = write_adoption_evidence_files(&root);
@@ -710,7 +706,6 @@ fn adoption_report_reads_explicit_evidence_files() {
         .find(|finding| finding.role == "store")
         .expect("store finding");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
     assert_eq!(
         report.inputs.artifact_manifest_id.as_deref(),
@@ -728,7 +723,7 @@ fn adoption_report_reads_explicit_evidence_files() {
 // Ensure deployment-check evidence can supply inventory without live discovery.
 #[test]
 fn adoption_report_reads_inventory_from_deployment_check_file() {
-    let root = temp_dir("canic-fleet-adoption-check-evidence");
+    let root = TempDir::new("canic-fleet-adoption-check-evidence");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let evidence = write_adoption_evidence_files(&root);
@@ -754,7 +749,6 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
         .find(|finding| finding.role == "store")
         .expect("store finding");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
     assert_eq!(
         report.inputs.artifact_manifest_id.as_deref(),
@@ -770,7 +764,7 @@ fn adoption_report_reads_inventory_from_deployment_check_file() {
 // Ensure explicit artifact-manifest evidence wins over deployment-check plan artifacts.
 #[test]
 fn adoption_report_artifact_manifest_overrides_deployment_check_artifacts() {
-    let root = temp_dir("canic-fleet-adoption-artifact-precedence");
+    let root = TempDir::new("canic-fleet-adoption-artifact-precedence");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let evidence = write_adoption_evidence_files(&root);
@@ -801,7 +795,6 @@ fn adoption_report_artifact_manifest_overrides_deployment_check_artifacts() {
         .find(|finding| finding.role == "store")
         .expect("store finding");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(report.inputs.inventory_id.as_deref(), Some("inventory-1"));
     assert_eq!(
         report.inputs.artifact_manifest_id.as_deref(),
@@ -819,7 +812,7 @@ fn adoption_report_artifact_manifest_overrides_deployment_check_artifacts() {
 // Ensure text adoption reports expose observed canister evidence details.
 #[test]
 fn renders_adoption_report_text_with_observed_canister_evidence() {
-    let root = temp_dir("canic-fleet-adoption-observed-text");
+    let root = TempDir::new("canic-fleet-adoption-observed-text");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let evidence = write_adoption_evidence_files(&root);
@@ -841,7 +834,6 @@ fn renders_adoption_report_text_with_observed_canister_evidence() {
         build_adoption_report_from_config_path(&config_path, &options, "unix:8").expect("report");
     let text = render_adoption_report(&report);
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert!(text.contains("Observed canisters:"));
     assert!(text.contains("aaaaa-aa: role=store, confidence=candidate"));
     assert!(text.contains("controllers: controller-a"));
@@ -852,7 +844,7 @@ fn renders_adoption_report_text_with_observed_canister_evidence() {
 // Ensure cargo metadata evidence can supply package role metadata without live Cargo.
 #[test]
 fn adoption_report_reads_package_metadata_from_cargo_metadata_file() {
-    let root = temp_dir("canic-fleet-adoption-cargo-metadata");
+    let root = TempDir::new("canic-fleet-adoption-cargo-metadata");
     let demo = write_fleet_config(&root, "demo");
     let config_path = demo.join("canic.toml");
     let evidence = write_adoption_evidence_files(&root);
@@ -878,7 +870,6 @@ fn adoption_report_reads_package_metadata_from_cargo_metadata_file() {
         .find(|finding| finding.role == "store")
         .expect("store finding");
 
-    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(report.inputs.package_metadata_count, 1);
     assert_eq!(store.package_state, AdoptionPackageStateV1::Matches);
 }

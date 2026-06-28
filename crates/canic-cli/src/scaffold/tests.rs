@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::temp_dir;
+use crate::test_support::TempDir;
 
 // Ensure scaffold options parse the project name.
 #[test]
@@ -33,7 +33,7 @@ fn parses_canister_scaffold_options() {
 // Ensure confirmation accepts an explicit yes response.
 #[test]
 fn confirm_scaffold_accepts_yes() {
-    let root = temp_dir("canic-cli-scaffold-confirm-yes");
+    let root = TempDir::new("canic-cli-scaffold-confirm-yes");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: false,
@@ -52,7 +52,7 @@ fn confirm_scaffold_accepts_yes() {
 // Ensure confirmation defaults to no on empty input.
 #[test]
 fn confirm_scaffold_rejects_empty_response() {
-    let root = temp_dir("canic-cli-scaffold-confirm-no");
+    let root = TempDir::new("canic-cli-scaffold-confirm-no");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: false,
@@ -97,7 +97,7 @@ fn rejects_invalid_canister_scaffold_role_names() {
 // Ensure scaffold writes the expected minimal root and app files.
 #[test]
 fn scaffold_project_writes_root_and_app_files() {
-    let root = temp_dir("canic-cli-scaffold");
+    let root = TempDir::new("canic-cli-scaffold");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: true,
@@ -112,7 +112,6 @@ fn scaffold_project_writes_root_and_app_files() {
     let app_manifest =
         fs::read_to_string(result.app_dir.join("Cargo.toml")).expect("read app manifest");
 
-    fs::remove_dir_all(root).expect("remove scaffold temp root");
     assert!(config.contains("controllers = []"));
     assert!(config.contains("app_index = []"));
     assert!(config.contains("[fleet]"));
@@ -150,7 +149,7 @@ fn scaffold_project_writes_root_and_app_files() {
 // Ensure canister scaffold writes a declared-only canister role under one fleet.
 #[test]
 fn scaffold_canister_writes_declared_only_role_files() {
-    let root = temp_dir("canic-cli-scaffold-canister");
+    let root = TempDir::new("canic-cli-scaffold-canister");
     let fleet_dir = root.join("fleets/demo");
     fs::create_dir_all(&fleet_dir).expect("create fleet dir");
     fs::write(
@@ -171,7 +170,6 @@ fn scaffold_canister_writes_declared_only_role_files() {
     let build_rs = fs::read_to_string(fleet_dir.join("store/build.rs")).expect("read build");
     let lib = fs::read_to_string(fleet_dir.join("store/src/lib.rs")).expect("read lib");
 
-    fs::remove_dir_all(root).expect("remove scaffold temp root");
     assert_eq!(result.fleet, "demo");
     assert_eq!(result.role, "store");
     assert_eq!(result.package, "store");
@@ -209,7 +207,7 @@ fn append_workspace_member_source_updates_compact_members_array() {
 // Ensure canister scaffold refuses to overwrite an existing role crate.
 #[test]
 fn scaffold_canister_rejects_existing_target() {
-    let root = temp_dir("canic-cli-scaffold-canister-existing");
+    let root = TempDir::new("canic-cli-scaffold-canister-existing");
     let fleet_dir = root.join("fleets/demo");
     fs::create_dir_all(fleet_dir.join("store")).expect("create existing canister dir");
     fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
@@ -220,14 +218,13 @@ fn scaffold_canister_rejects_existing_target() {
 
     let err = scaffold_canister_at(&root, &options).expect_err("existing scaffold should fail");
 
-    fs::remove_dir_all(root).expect("remove scaffold temp root");
     std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));
 }
 
 // Ensure canister scaffold rejects an existing declaration before writing files.
 #[test]
 fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
-    let root = temp_dir("canic-cli-scaffold-canister-declared");
+    let root = TempDir::new("canic-cli-scaffold-canister-declared");
     let fleet_dir = root.join("fleets/demo");
     fs::create_dir_all(&fleet_dir).expect("create fleet dir");
     fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
@@ -240,7 +237,6 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
 
     std::assert_matches!(err, ScaffoldCommandError::Usage(_));
     assert!(!fleet_dir.join("app").exists());
-    fs::remove_dir_all(root).expect("remove scaffold temp root");
 }
 
 // Ensure canister scaffold help exposes the declared-only workflow.
@@ -256,7 +252,7 @@ fn scaffold_canister_usage_lists_fleet_and_role() {
 // Ensure scaffold refuses to overwrite an existing project directory.
 #[test]
 fn scaffold_project_rejects_existing_target() {
-    let root = temp_dir("canic-cli-scaffold-existing");
+    let root = TempDir::new("canic-cli-scaffold-existing");
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: true,
@@ -265,6 +261,5 @@ fn scaffold_project_rejects_existing_target() {
 
     let err = scaffold_project_at(&root, &options).expect_err("existing scaffold should fail");
 
-    fs::remove_dir_all(root).expect("remove scaffold temp root");
     std::assert_matches!(err, ScaffoldCommandError::TargetExists(_));
 }

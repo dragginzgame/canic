@@ -56,7 +56,7 @@ const MIN_ROOT_REQUEST_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
 /// Owned by RPC workflow and called after endpoint/root metadata handling.
 ///
 
-pub struct NonrootCyclesCapabilityWorkflow;
+pub(in crate::workflow::rpc) struct NonrootCyclesCapabilityWorkflow;
 
 ///
 /// AuthorizedCyclesGrant
@@ -85,7 +85,7 @@ pub(super) struct ResolvedCyclesChild {
 
 impl NonrootCyclesCapabilityWorkflow {
     /// Execute the non-root cycles capability path with replay-first semantics.
-    pub async fn response_replay_first(
+    pub(in crate::workflow::rpc) async fn response_replay_first(
         req: CyclesRequest,
     ) -> Result<CyclesResponse, InternalError> {
         response_replay_first_with_planner(

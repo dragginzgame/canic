@@ -384,35 +384,25 @@ fn parses_status_json_into_stable_cli_shape() {
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
-    let output = serde_json::json!({
-        "Ok": {
-            "payment_model": { "ProjectAsPaymentAccount": null },
-            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
-            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
-            "cashier_balance": ["100"],
-            "min_upload_balance": ["500"],
-            "target_upload_balance": ["1000"],
-            "project_cycles_reserve": ["2000"],
-            "project_cycles_available": "3000",
-            "gateway_principal_count": 0,
-            "last_gateway_principal_sync_at_ns": null,
-            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
-            "funding_status": {
-                "FundingRequired": {
-                    "requested_cycles": "900"
-                }
-            },
-            "ready": false,
-            "blockers": [
-                { "GatewayPrincipalsMissing": null },
-                { "InsufficientCashierBalance": null }
-            ],
-            "warnings": [
-                { "GatewayPrincipalSetEmpty": null }
-            ]
-        }
-    })
-    .to_string();
+    let output = status_response_from(StatusResponseFixture {
+        cashier_balance: serde_json::json!(["100"]),
+        gateway_principal_count: 0,
+        last_gateway_principal_sync_at_ns: serde_json::json!(null),
+        funding_status: serde_json::json!({
+            "FundingRequired": {
+                "requested_cycles": "900"
+            }
+        }),
+        ready: false,
+        blockers: serde_json::json!([
+            { "GatewayPrincipalsMissing": null },
+            { "InsufficientCashierBalance": null }
+        ]),
+        warnings: serde_json::json!([
+            { "GatewayPrincipalSetEmpty": null }
+        ]),
+        ..StatusResponseFixture::default()
+    });
 
     let status = parse::parse_status_result("local", target, &output).expect("parse status");
     let value = serde_json::to_value(&status).expect("serialize status");
@@ -461,28 +451,14 @@ fn parses_ready_status_with_warnings_as_warning_state() {
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
-    let output = serde_json::json!({
-        "Ok": {
-            "payment_model": { "ProjectAsPaymentAccount": null },
-            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
-            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
-            "cashier_balance": ["1000"],
-            "min_upload_balance": ["500"],
-            "target_upload_balance": ["1000"],
-            "project_cycles_reserve": ["2000"],
-            "project_cycles_available": "3000",
-            "gateway_principal_count": 0,
-            "last_gateway_principal_sync_at_ns": null,
-            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
-            "funding_status": { "NotNeeded": null },
-            "ready": true,
-            "blockers": [],
-            "warnings": [
-                { "GatewayPrincipalSetEmpty": null }
-            ]
-        }
-    })
-    .to_string();
+    let output = status_response_from(StatusResponseFixture {
+        gateway_principal_count: 0,
+        last_gateway_principal_sync_at_ns: serde_json::json!(null),
+        warnings: serde_json::json!([
+            { "GatewayPrincipalSetEmpty": null }
+        ]),
+        ..StatusResponseFixture::default()
+    });
 
     let status = parse::parse_status_result("local", target, &output).expect("parse status");
 
@@ -540,28 +516,13 @@ fn status_check_ready_failure_message_includes_warnings_without_blockers() {
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
-    let output = serde_json::json!({
-        "Ok": {
-            "payment_model": { "ProjectAsPaymentAccount": null },
-            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
-            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
-            "cashier_balance": ["1000"],
-            "min_upload_balance": ["500"],
-            "target_upload_balance": ["1000"],
-            "project_cycles_reserve": ["2000"],
-            "project_cycles_available": "3000",
-            "gateway_principal_count": 1,
-            "last_gateway_principal_sync_at_ns": ["123"],
-            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
-            "funding_status": { "NotNeeded": null },
-            "ready": false,
-            "blockers": [],
-            "warnings": [
-                { "CashierBalanceUnavailable": null }
-            ]
-        }
-    })
-    .to_string();
+    let output = status_response_from(StatusResponseFixture {
+        ready: false,
+        warnings: serde_json::json!([
+            { "CashierBalanceUnavailable": null }
+        ]),
+        ..StatusResponseFixture::default()
+    });
     let status = parse::parse_status_result("local", target, &output).expect("parse status");
 
     let err = check_status_ready_for_upload(&status).expect_err("status should not be ready");
@@ -688,28 +649,24 @@ fn renders_status_plain_text_with_blockers_and_next_actions() {
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
-    let output = serde_json::json!({
-        "Ok": {
-            "payment_model": { "NotConfigured": null },
-            "cashier_canister_id": null,
-            "payment_account": null,
-            "cashier_balance": null,
-            "min_upload_balance": null,
-            "target_upload_balance": null,
-            "project_cycles_reserve": null,
-            "project_cycles_available": "3000",
-            "gateway_principal_count": 0,
-            "last_gateway_principal_sync_at_ns": null,
-            "gateway_principal_sync_action": { "SkippedConfigMissing": null },
-            "funding_status": { "NotConfigured": null },
-            "ready": false,
-            "blockers": [
-                { "NotConfigured": null }
-            ],
-            "warnings": []
-        }
-    })
-    .to_string();
+    let output = status_response_from(StatusResponseFixture {
+        payment_model: serde_json::json!({ "NotConfigured": null }),
+        cashier_canister_id: serde_json::json!(null),
+        payment_account: serde_json::json!(null),
+        cashier_balance: serde_json::json!(null),
+        min_upload_balance: serde_json::json!(null),
+        target_upload_balance: serde_json::json!(null),
+        project_cycles_reserve: serde_json::json!(null),
+        gateway_principal_count: 0,
+        last_gateway_principal_sync_at_ns: serde_json::json!(null),
+        gateway_principal_sync_action: serde_json::json!({ "SkippedConfigMissing": null }),
+        funding_status: serde_json::json!({ "NotConfigured": null }),
+        ready: false,
+        blockers: serde_json::json!([
+            { "NotConfigured": null }
+        ]),
+        ..StatusResponseFixture::default()
+    });
 
     let status = parse::parse_status_result("local", target, &output).expect("parse status");
 
@@ -742,26 +699,7 @@ fn sample_status_result() -> model::BlobStorageStatusResult {
         Some("backend".to_string()),
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
-    let output = serde_json::json!({
-        "Ok": {
-            "payment_model": { "ProjectAsPaymentAccount": null },
-            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
-            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
-            "cashier_balance": ["1000"],
-            "min_upload_balance": ["500"],
-            "target_upload_balance": ["1000"],
-            "project_cycles_reserve": ["2000"],
-            "project_cycles_available": "3000",
-            "gateway_principal_count": 1,
-            "last_gateway_principal_sync_at_ns": ["123"],
-            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
-            "funding_status": { "NotNeeded": null },
-            "ready": true,
-            "blockers": [],
-            "warnings": []
-        }
-    })
-    .to_string();
+    let output = status_response_from(StatusResponseFixture::default());
 
     parse::parse_status_result("local", target, &output).expect("sample status")
 }
@@ -875,6 +813,46 @@ fn scripted_response(method: &'static str, output: String) -> ScriptedBlobStorag
     ScriptedBlobStorageResponse { method, output }
 }
 
+struct StatusResponseFixture {
+    payment_model: serde_json::Value,
+    cashier_canister_id: serde_json::Value,
+    payment_account: serde_json::Value,
+    cashier_balance: serde_json::Value,
+    min_upload_balance: serde_json::Value,
+    target_upload_balance: serde_json::Value,
+    project_cycles_reserve: serde_json::Value,
+    project_cycles_available: &'static str,
+    gateway_principal_count: u64,
+    last_gateway_principal_sync_at_ns: serde_json::Value,
+    gateway_principal_sync_action: serde_json::Value,
+    funding_status: serde_json::Value,
+    ready: bool,
+    blockers: serde_json::Value,
+    warnings: serde_json::Value,
+}
+
+impl Default for StatusResponseFixture {
+    fn default() -> Self {
+        Self {
+            payment_model: serde_json::json!({ "ProjectAsPaymentAccount": null }),
+            cashier_canister_id: serde_json::json!(["ryjl3-tyaaa-aaaaa-aaaba-cai"]),
+            payment_account: serde_json::json!(["rrkah-fqaaa-aaaaa-aaaaq-cai"]),
+            cashier_balance: serde_json::json!(["1000"]),
+            min_upload_balance: serde_json::json!(["500"]),
+            target_upload_balance: serde_json::json!(["1000"]),
+            project_cycles_reserve: serde_json::json!(["2000"]),
+            project_cycles_available: "3000",
+            gateway_principal_count: 1,
+            last_gateway_principal_sync_at_ns: serde_json::json!(["123"]),
+            gateway_principal_sync_action: serde_json::json!({ "SkippedReadOnlyStatus": null }),
+            funding_status: serde_json::json!({ "NotNeeded": null }),
+            ready: true,
+            blockers: serde_json::json!([]),
+            warnings: serde_json::json!([]),
+        }
+    }
+}
+
 fn status_response(gateway_count: u64, ready: bool, requested_cycles: &str) -> String {
     let blockers = if ready {
         serde_json::json!([])
@@ -891,23 +869,34 @@ fn status_response(gateway_count: u64, ready: bool, requested_cycles: &str) -> S
         })
     };
 
+    status_response_from(StatusResponseFixture {
+        gateway_principal_count: gateway_count,
+        last_gateway_principal_sync_at_ns: serde_json::json!(null),
+        funding_status,
+        ready,
+        blockers,
+        ..StatusResponseFixture::default()
+    })
+}
+
+fn status_response_from(fixture: StatusResponseFixture) -> String {
     serde_json::json!({
         "Ok": {
-            "payment_model": { "ProjectAsPaymentAccount": null },
-            "cashier_canister_id": ["ryjl3-tyaaa-aaaaa-aaaba-cai"],
-            "payment_account": ["rrkah-fqaaa-aaaaa-aaaaq-cai"],
-            "cashier_balance": ["1000"],
-            "min_upload_balance": ["500"],
-            "target_upload_balance": ["1000"],
-            "project_cycles_reserve": ["2000"],
-            "project_cycles_available": "3000",
-            "gateway_principal_count": gateway_count,
-            "last_gateway_principal_sync_at_ns": null,
-            "gateway_principal_sync_action": { "SkippedReadOnlyStatus": null },
-            "funding_status": funding_status,
-            "ready": ready,
-            "blockers": blockers,
-            "warnings": []
+            "payment_model": fixture.payment_model,
+            "cashier_canister_id": fixture.cashier_canister_id,
+            "payment_account": fixture.payment_account,
+            "cashier_balance": fixture.cashier_balance,
+            "min_upload_balance": fixture.min_upload_balance,
+            "target_upload_balance": fixture.target_upload_balance,
+            "project_cycles_reserve": fixture.project_cycles_reserve,
+            "project_cycles_available": fixture.project_cycles_available,
+            "gateway_principal_count": fixture.gateway_principal_count,
+            "last_gateway_principal_sync_at_ns": fixture.last_gateway_principal_sync_at_ns,
+            "gateway_principal_sync_action": fixture.gateway_principal_sync_action,
+            "funding_status": fixture.funding_status,
+            "ready": fixture.ready,
+            "blockers": fixture.blockers,
+            "warnings": fixture.warnings
         }
     })
     .to_string()

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.12` narrows internal RPC capability workflow handler visibility and
+  refreshes the capability-scope audit so its counted capability-facing surface
+  stays below the growing-surface threshold.
+
 - `0.74.11` stabilizes the retained scheduled-renewal PocketIC sharding
   scenario by isolating its timer-dependent root setup from cached snapshot
   restores while simplifying the shared sharding test setup helpers.
