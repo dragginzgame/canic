@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.10` closes out the 0.74 renewal design note so it reflects the shipped
+  root-managed renewal surface and leaves daemon/host bridge operation as the
+  remaining follow-up.
+
 - `0.74.9` adds bounded issuer-level renewal attempt metrics so root-managed
   renewal exposes scheduled, completed, retryable, expired, disabled, and
   drift-capable outcomes alongside the existing sweep/retrieval/install
