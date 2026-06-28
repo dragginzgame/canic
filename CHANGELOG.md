@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.75.x] - 2026-06-28 - Release Publishing Recovery
+
+Detailed patch breakdown: [docs/changelog/0.75.md](docs/changelog/0.75.md)
+
+Note: `0.75.0` was accidentally published and yanked. `0.75.1` is the first
+supported `0.75` release.
+
+- `0.75.1` fixes release publishing resumptions by checking exact crates.io
+  versions instead of search results, so patch-line recovery can continue after
+  a newer or yanked version exists.
+
 ## [0.74.x] - 2026-06-27 - Root-Managed Delegation Renewal
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)

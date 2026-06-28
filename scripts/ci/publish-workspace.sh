@@ -46,17 +46,7 @@ registry_has_version() {
     local crate="$1"
     local version="$2"
 
-    cargo search "$crate" --limit 20 2>/dev/null |
-        awk -v crate="$crate" -v version="$version" '
-            $1 == crate {
-                gsub(/"/, "", $3);
-                if ($3 == version) {
-                    found = 1;
-                    exit 0;
-                }
-            }
-            END { exit(found ? 0 : 1) }
-        '
+    cargo info "$crate@$version" --registry crates-io >/dev/null 2>&1
 }
 
 # Waits until crates.io exposes the freshly published version.
