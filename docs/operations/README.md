@@ -27,8 +27,9 @@ validation notes.
 ## Auth Operations
 
 - [Root proof provisioning runbook](root-proof-provisioning.md)
-  records the explicit prepare -> direct root query -> install operating model
-  for the delegated-token root proof provisioning MVP.
+  records the manual prepare -> direct root query -> install model plus the
+  root-managed delegated-auth renewal bridge, provisioner, outage recovery, and
+  repair guidance.
 
 ## Blob Storage Operations
 

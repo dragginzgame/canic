@@ -225,10 +225,24 @@ Uninstalled pending entries are removed after their retrieval window expires;
 installed entries remain available for idempotent reinstall until certificate
 expiry. Signature-map leaf pruning is not part of the current MVP.
 
+Root-managed renewal reuses the batch proof contract for scheduled issuer
+refresh. Root stores enabled issuer renewal templates, scheduled per-issuer
+attempts, and scheduled renewal batches. A renewal provisioner may retrieve
+proof material only through `canic_get_delegation_renewal_proof_batch`, where
+root resolves the scheduled proof references from the batch id; provisioners
+may not supply arbitrary proof references or retrieve manually prepared
+batches. Scheduled installs through `canic_install_delegation_proof_batch`
+remain bound to the active renewal batch, issuer, certificate hash, template
+fingerprint, and install deadline.
+
 `canic_get_delegation_proof_batch` is not separately replay-protected. It is a
 direct root query over existing pending batch metadata. The requested
 `batch_id`, issuer, and `cert_hash` must match pending metadata, and
 `now_ns < retrieval_expires_at_ns`.
+
+`canic_get_delegation_renewal_proof_batch` is also a direct root query, but
+its request carries only the scheduled renewal `batch_id`. Retrieval fails
+after the batch or issuer attempt retrieval window expires.
 
 The retired single-proof root prepare/get endpoints are not part of the active
 protocol. Root proof retrieval must not be hidden behind issuer composite-query

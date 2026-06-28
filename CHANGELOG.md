@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.8` finishes the operator documentation pass for root-managed renewal
+  and tightens renewal startup/error-code hygiene, including prompt sweeps after
+  enabling templates and auth-layer public-error constructors.
+
 - `0.74.7` hardens root-managed renewal recovery by recording prepare-stage
   failures per issuer, pruning expired scheduled batch transport records, and
   rejecting expired provisioner installs before issuer calls.

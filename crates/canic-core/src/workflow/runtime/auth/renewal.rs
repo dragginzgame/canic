@@ -30,6 +30,14 @@ pub(super) struct RootDelegationRenewalWorkflow;
 
 impl RootDelegationRenewalWorkflow {
     pub(super) fn start_if_configured() -> Result<(), InternalError> {
+        Self::start_if_configured_after(WORKFLOW_INIT_DELAY)
+    }
+
+    pub(super) fn start_soon_if_configured() -> Result<(), InternalError> {
+        Self::start_if_configured_after(Duration::ZERO)
+    }
+
+    fn start_if_configured_after(init_delay: Duration) -> Result<(), InternalError> {
         if !EnvOps::is_root() {
             return Ok(());
         }
@@ -47,7 +55,7 @@ impl RootDelegationRenewalWorkflow {
 
         let _ = TimerWorkflow::set_guarded_interval(
             &RENEWAL_TIMER,
-            WORKFLOW_INIT_DELAY,
+            init_delay,
             "auth_renewal:init",
             || async {
                 let _ = Self::sweep();

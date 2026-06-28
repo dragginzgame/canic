@@ -23,23 +23,19 @@ use crate::{
         validate_root_delegation_proof_prepare_policy,
         validate_root_issuer_renewal_template_policy,
     },
-    dto::{
-        auth::{
-            AuthRequestMetadata, RootDelegationProofBatchGetRequest,
-            RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareEntry,
-            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-            RootDelegationProofBatchProof, RootDelegationProofBatchProofRef,
-            RootDelegationProofInstallOutcome, RootDelegationRenewalBatchView,
-            RootDelegationRenewalProofBatchGetRequest,
-            RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
-            RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalProvisionerView,
-            RootDelegationRenewalWorkListResponse, RootIssuerRenewalAttemptStatus,
-            RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
-            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
-            RootIssuerRenewalTemplateView,
-        },
-        error::ErrorCode,
+    dto::auth::{
+        AuthRequestMetadata, RootDelegationProofBatchGetRequest,
+        RootDelegationProofBatchGetResponse, RootDelegationProofBatchPrepareEntry,
+        RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
+        RootDelegationProofBatchProof, RootDelegationProofBatchProofRef,
+        RootDelegationProofInstallOutcome, RootDelegationRenewalBatchView,
+        RootDelegationRenewalProofBatchGetRequest, RootDelegationRenewalProvisionerListResponse,
+        RootDelegationRenewalProvisionerResponse, RootDelegationRenewalProvisionerUpsertRequest,
+        RootDelegationRenewalProvisionerView, RootDelegationRenewalWorkListResponse,
+        RootIssuerRenewalAttemptStatus, RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome,
+        RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest,
+        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+        RootIssuerRenewalTemplateUpsertRequest, RootIssuerRenewalTemplateView,
     },
     log::Topic,
     ops::{
@@ -307,10 +303,7 @@ fn record_due_renewal_prepare_failure(
 }
 
 fn renewal_prepare_failure_outcome(err: &InternalError) -> PolicyRenewalOutcome {
-    if err
-        .public_error()
-        .is_some_and(|public| public.code == ErrorCode::ResourceExhausted)
-    {
+    if err.is_public_resource_exhausted() {
         return PolicyRenewalOutcome::QuotaExceeded;
     }
 
@@ -1461,6 +1454,7 @@ mod tests {
             IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
             RootDelegationProofBatchEntry, RootDelegationProofBatchProof, RootProof,
         },
+        dto::error::ErrorCode,
         ids::CanisterRole,
         ops::storage::auth::AuthStateOps,
     };

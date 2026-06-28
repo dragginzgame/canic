@@ -31,7 +31,9 @@ if rg "crate::dto::|use crate::dto|\bdto::" crates/canic-core/src/domain crates/
     exit 1
 fi
 
-if rg "dto::error::Error|crate::dto::error|ErrorCode|InternalError::public\(" crates/canic-core/src/ops/auth --glob '*.rs' --glob '!**/tests.rs'; then
+if find crates/canic-core/src/ops/auth -name '*.rs' ! -name 'tests.rs' -print0 \
+    | xargs -0 awk 'FNR == 1 { in_test = 0 } /^#\[cfg\(test\)\]/ { in_test = 1 } !in_test { print FILENAME ":" FNR ":" $0 }' \
+    | rg "dto::error::Error|crate::dto::error|ErrorCode|InternalError::public\("; then
     echo "auth ops must use internal error constructors, not public error DTOs" >&2
     exit 1
 fi
