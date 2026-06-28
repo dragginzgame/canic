@@ -25,6 +25,7 @@ thread_local! {
 pub enum DelegatedAuthMetricOperation {
     PrepareIssuerProof,
     PrepareRootProof,
+    RenewalAttempt,
     RenewalInstall,
     RenewalProofRetrieve,
     RenewalProvisioner,
@@ -39,6 +40,7 @@ impl DelegatedAuthMetricOperation {
         match self {
             Self::PrepareIssuerProof => "prepare_issuer_proof",
             Self::PrepareRootProof => "prepare_root_proof",
+            Self::RenewalAttempt => "renewal_attempt",
             Self::RenewalInstall => "renewal_install",
             Self::RenewalProofRetrieve => "renewal_proof_retrieve",
             Self::RenewalProvisioner => "renewal_provisioner",
@@ -92,7 +94,9 @@ pub enum DelegatedAuthMetricReason {
     CertNotYetValid,
     CertPolicy,
     Disabled,
+    DriftDetected,
     GrantsNotSubset,
+    InstallDeadlineExpired,
     InvalidState,
     IssuerPidMismatch,
     IssuerProofInvalid,
@@ -100,6 +104,8 @@ pub enum DelegatedAuthMetricReason {
     IssuerProofUnavailable,
     MissingLocalRole,
     Ok,
+    RetrievalExpired,
+    RetryScheduled,
     RootKey,
     RootProofInvalid,
     RootProofPrepareFailed,
@@ -128,7 +134,9 @@ impl DelegatedAuthMetricReason {
             Self::CertNotYetValid => "cert_not_yet_valid",
             Self::CertPolicy => "cert_policy",
             Self::Disabled => "disabled",
+            Self::DriftDetected => "drift_detected",
             Self::GrantsNotSubset => "grants_not_subset",
+            Self::InstallDeadlineExpired => "install_deadline_expired",
             Self::InvalidState => "invalid_state",
             Self::IssuerPidMismatch => "issuer_pid_mismatch",
             Self::IssuerProofInvalid => "issuer_proof_invalid",
@@ -136,6 +144,8 @@ impl DelegatedAuthMetricReason {
             Self::IssuerProofUnavailable => "issuer_proof_unavailable",
             Self::MissingLocalRole => "missing_local_role",
             Self::Ok => "ok",
+            Self::RetrievalExpired => "retrieval_expired",
+            Self::RetryScheduled => "retry_scheduled",
             Self::RootKey => "root_key",
             Self::RootProofPrepareFailed => "root_proof_prepare_failed",
             Self::RootProofInvalid => "root_proof_invalid",
@@ -329,6 +339,18 @@ impl DelegatedAuthMetrics {
         Self::record(
             DelegatedAuthMetricOperation::RenewalProofRetrieve,
             DelegatedAuthMetricOutcome::Failed,
+            reason,
+        );
+    }
+
+    /// Record a scheduled issuer-level root renewal attempt lifecycle event.
+    pub fn record_renewal_attempt(
+        outcome: DelegatedAuthMetricOutcome,
+        reason: DelegatedAuthMetricReason,
+    ) {
+        Self::record(
+            DelegatedAuthMetricOperation::RenewalAttempt,
+            outcome,
             reason,
         );
     }
@@ -531,6 +553,18 @@ mod tests {
         DelegatedAuthMetrics::record_renewal_proof_retrieve_failed(
             DelegatedAuthMetricReason::InvalidState,
         );
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Started,
+            DelegatedAuthMetricReason::Ok,
+        );
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::RetryScheduled,
+        );
+        DelegatedAuthMetrics::record_renewal_attempt(
+            DelegatedAuthMetricOutcome::Failed,
+            DelegatedAuthMetricReason::DriftDetected,
+        );
         DelegatedAuthMetrics::record_renewal_install(
             DelegatedAuthMetricOutcome::Completed,
             DelegatedAuthMetricReason::Ok,
@@ -579,6 +613,30 @@ mod tests {
                 operation: DelegatedAuthMetricOperation::RenewalProofRetrieve,
                 outcome: DelegatedAuthMetricOutcome::Failed,
                 reason: DelegatedAuthMetricReason::InvalidState,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalAttempt,
+                outcome: DelegatedAuthMetricOutcome::Started,
+                reason: DelegatedAuthMetricReason::Ok,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalAttempt,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::RetryScheduled,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            map.get(&DelegatedAuthMetricKey {
+                operation: DelegatedAuthMetricOperation::RenewalAttempt,
+                outcome: DelegatedAuthMetricOutcome::Failed,
+                reason: DelegatedAuthMetricReason::DriftDetected,
             }),
             Some(&1)
         );

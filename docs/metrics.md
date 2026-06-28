@@ -130,11 +130,13 @@ use the existing family-specific dimensions:
 | `scaling` | `[operation, outcome, reason]` | `None` | `Count` |
 
 Delegated-auth renewal rows use the existing `delegated_auth` family with
-bounded operation labels: `renewal_sweep`, `renewal_proof_retrieve`,
-`renewal_install`, and `renewal_provisioner`. Outcomes are
+bounded operation labels: `renewal_sweep`, `renewal_attempt`,
+`renewal_proof_retrieve`, `renewal_install`, and `renewal_provisioner`.
+Outcomes are
 `started`/`completed`/`failed`; reasons reuse bounded auth reasons such as
 `ok`, `invalid_state`, `cert_expired`, `issuer_proof_unavailable`,
-`cert_hash_mismatch`, and `disabled`.
+`cert_hash_mismatch`, `disabled`, `retry_scheduled`, `retrieval_expired`,
+`install_deadline_expired`, and `drift_detected`.
 | `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
 | `timer` | `[mode, label]` | `None` | `CountAndU64` |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.74.md](docs/changelog/0.74.md)
 
+- `0.74.9` adds bounded issuer-level renewal attempt metrics so root-managed
+  renewal exposes scheduled, completed, retryable, expired, disabled, and
+  drift-capable outcomes alongside the existing sweep/retrieval/install
+  counters.
+
 - `0.74.8` finishes the operator documentation pass for root-managed renewal
   and tightens renewal startup/error-code hygiene, including prompt sweeps after
   enabling templates and auth-layer public-error constructors.
