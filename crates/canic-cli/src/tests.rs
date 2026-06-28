@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::test_support::temp_dir;
+use crate::test_support::TempDir;
 
 fn strip_ansi(text: &str) -> String {
     let mut plain = String::new();
@@ -180,7 +180,7 @@ fn icp_backed_command_rejects_unparseable_icp_cli_before_running_subcommand() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
 
-    let root = temp_dir("canic-cli-unsupported-icp");
+    let root = TempDir::new("canic-cli-unsupported-icp");
     fs::create_dir_all(&root).expect("create temp dir");
     let icp_path = root.join("icp");
     fs::write(
@@ -203,8 +203,6 @@ fn icp_backed_command_rejects_unparseable_icp_cli_before_running_subcommand() {
     assert!(text.contains("found: icp development build"));
     assert!(text.contains("required: icp-cli >=1.0.0, <2.0.0"));
     assert!(!text.contains("unsupported replica command ran"));
-
-    fs::remove_dir_all(root).expect("remove temp dir");
 }
 
 // Ensure version flags are accepted at the top level and command-family level.

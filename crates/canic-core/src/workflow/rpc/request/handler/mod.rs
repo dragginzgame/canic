@@ -31,7 +31,7 @@ use crate::{
 
 use capability::{RootCapability, RootReplayInput};
 
-pub use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
+pub(in crate::workflow::rpc) use nonroot_cycles::NonrootCyclesCapabilityWorkflow;
 
 const REPLAY_PURGE_SCAN_LIMIT: usize = 256;
 const MAX_ROOT_REPLAY_ENTRIES: usize = 10_000;
@@ -97,12 +97,14 @@ enum AuthorizationPipelineOrder {
 /// Workflow entry point for root-bound request execution.
 ///
 
-pub struct RootResponseWorkflow;
+pub(in crate::workflow::rpc) struct RootResponseWorkflow;
 
 impl RootResponseWorkflow {
     /// Handle a root-bound orchestration request using replay-before-policy
     /// ordering for capability-envelope execution.
-    pub async fn response_replay_first(req: Request) -> Result<Response, InternalError> {
+    pub(in crate::workflow::rpc) async fn response_replay_first(
+        req: Request,
+    ) -> Result<Response, InternalError> {
         if let Request::Cycles(req) = req {
             let response = nonroot_cycles::response_replay_first_root(req).await?;
             return Ok(Response::Cycles(response));

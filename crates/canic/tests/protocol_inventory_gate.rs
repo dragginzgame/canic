@@ -1,6 +1,7 @@
 use std::{
     fmt::Write as _,
     fs,
+    ops::Deref,
     path::{Path, PathBuf},
     process::{Command, Output},
     time::{SystemTime, UNIX_EPOCH},
@@ -56,14 +57,38 @@ fn write_file(root: &Path, relative: &str, contents: &str) {
     fs::write(&path, contents).unwrap_or_else(|err| panic!("failed to write {relative}: {err}"));
 }
 
-fn create_temp_workspace(name: &str) -> PathBuf {
-    let root = unique_temp_repo(name);
-    fs::create_dir_all(&root).expect("temp workspace should be created");
-    write_file(&root, "Cargo.toml", "[workspace]\n");
-    fs::create_dir_all(root.join("crates")).expect("crates directory should be created");
-    fs::create_dir_all(root.join("canisters")).expect("canisters directory should be created");
-    fs::create_dir_all(root.join("fleets")).expect("fleets directory should be created");
-    root
+struct TempWorkspace {
+    root: PathBuf,
+}
+
+impl TempWorkspace {
+    fn new(name: &str) -> Self {
+        let root = unique_temp_repo(name);
+        fs::create_dir_all(&root).expect("temp workspace should be created");
+        write_file(&root, "Cargo.toml", "[workspace]\n");
+        fs::create_dir_all(root.join("crates")).expect("crates directory should be created");
+        fs::create_dir_all(root.join("canisters")).expect("canisters directory should be created");
+        fs::create_dir_all(root.join("fleets")).expect("fleets directory should be created");
+        Self { root }
+    }
+}
+
+impl Deref for TempWorkspace {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        &self.root
+    }
+}
+
+impl Drop for TempWorkspace {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+fn create_temp_workspace(name: &str) -> TempWorkspace {
+    TempWorkspace::new(name)
 }
 
 fn run_gate(root: &Path, inventory: &Path) -> Output {
@@ -419,6 +444,101 @@ fn complete_billing_inventory_with_method_section(
     inventory
 }
 
+struct IncompleteGateRejectionCase {
+    name: &'static str,
+    setup: fn(&Path),
+    expected_text: &'static str,
+}
+
+fn setup_gateway_feature_metadata(root: &Path) {
+    write_file(
+        root,
+        "crates/example/Cargo.toml",
+        &format!("[features]\n{} = []\n", blob_storage_feature_name()),
+    );
+}
+
+fn setup_gateway_source_path(root: &Path) {
+    write_file(
+        root,
+        &format!("crates/example/src/{}_{}_client/mod.rs", "blob", "storage"),
+        "pub fn marker() {}\n",
+    );
+}
+
+fn setup_gateway_method_literal(root: &Path) {
+    write_file(
+        root,
+        "crates/example/src/lib.rs",
+        &format!(
+            "pub const METHOD: &str = {:?};\n",
+            gateway_method_name(REQUIRED_METHODS[0])
+        ),
+    );
+}
+
+fn setup_gateway_public_api(root: &Path) {
+    write_file(
+        root,
+        "crates/example/src/lib.rs",
+        &format!("pub struct {}{}Api;\n", "Blob", "Storage"),
+    );
+}
+
+fn setup_gateway_billing_surface(root: &Path) {
+    write_file(
+        root,
+        "crates/example/src/lib.rs",
+        &format!(
+            "pub struct BillingClient;\npub fn get_{}{}() {{}}\n",
+            "blob_storage_", "status"
+        ),
+    );
+}
+
+fn setup_billing_method_literal(root: &Path) {
+    write_file(
+        root,
+        "crates/example/src/lib.rs",
+        &format!(
+            "pub const METHOD: &str = {:?};\n",
+            billing_method_name(REQUIRED_BILLING_METHODS[0])
+        ),
+    );
+}
+
+fn setup_billing_endpoint_literal(root: &Path) {
+    write_file(
+        root,
+        "crates/example/src/lib.rs",
+        &format!("pub fn get_{}{}() {{}}\n", "blob_storage_", "status"),
+    );
+}
+
+fn setup_billing_feature_metadata(root: &Path) {
+    write_file(
+        root,
+        "crates/example/Cargo.toml",
+        &format!("[features]\n{} = []\n", billing_feature_name()),
+    );
+}
+
+fn setup_billing_source_path(root: &Path) {
+    write_file(
+        root,
+        &format!("crates/example/src/{}{}_client/mod.rs", "ca", "shier"),
+        "pub fn marker() {}\n",
+    );
+}
+
+fn setup_billing_public_type(root: &Path) {
+    write_file(
+        root,
+        "crates/example/src/lib.rs",
+        &format!("pub struct {}{}{}Config;\n", "Blob", "Storage", "Billing"),
+    );
+}
+
 #[test]
 fn incomplete_inventory_allows_design_only_workspace() {
     let root = create_temp_workspace("blob-gate-clean");
@@ -432,7 +552,6 @@ fn incomplete_inventory_allows_design_only_workspace() {
         "gate should allow no implementation surface while inventory is incomplete\n{}",
         output_text(&output)
     );
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -452,126 +571,56 @@ fn incomplete_inventory_missing_ripgrep_reports_setup_action() {
     assert!(text.contains("make install-dev"));
     assert!(text.contains("make update-dev"));
     assert!(!text.contains("command not found"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn incomplete_inventory_rejects_feature_metadata() {
-    let root = create_temp_workspace("blob-gate-feature");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/Cargo.toml",
-        &format!("[features]\n{} = []\n", blob_storage_feature_name()),
-    );
+fn incomplete_inventory_rejects_forbidden_gateway_surfaces() {
+    for case in [
+        IncompleteGateRejectionCase {
+            name: "feature",
+            setup: setup_gateway_feature_metadata,
+            expected_text: "feature or dependency metadata",
+        },
+        IncompleteGateRejectionCase {
+            name: "path",
+            setup: setup_gateway_source_path,
+            expected_text: "source/module path",
+        },
+        IncompleteGateRejectionCase {
+            name: "method",
+            setup: setup_gateway_method_literal,
+            expected_text: "gateway method literal",
+        },
+        IncompleteGateRejectionCase {
+            name: "public-api",
+            setup: setup_gateway_public_api,
+            expected_text: "internal blob-storage API/model type",
+        },
+        IncompleteGateRejectionCase {
+            name: "billing",
+            setup: setup_gateway_billing_surface,
+            expected_text: "implementation surface",
+        },
+    ] {
+        let root = create_temp_workspace(&format!("blob-gate-{}", case.name));
+        let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
+        fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
+        (case.setup)(&root);
 
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
+        let output = run_gate(&root, &inventory);
+        let text = output_text(&output);
 
-    assert!(
-        !output.status.success(),
-        "gate should reject blob-storage feature metadata while inventory is incomplete"
-    );
-    assert!(text.contains("feature or dependency metadata"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_inventory_rejects_source_path() {
-    let root = create_temp_workspace("blob-gate-path");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        &format!("crates/example/src/{}_{}_client/mod.rs", "blob", "storage"),
-        "pub fn marker() {}\n",
-    );
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject blob-storage source paths while inventory is incomplete"
-    );
-    assert!(text.contains("source/module path"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_inventory_rejects_gateway_method_surface() {
-    let root = create_temp_workspace("blob-gate-method");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/src/lib.rs",
-        &format!(
-            "pub const METHOD: &str = {:?};\n",
-            gateway_method_name(REQUIRED_METHODS[0])
-        ),
-    );
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject gateway method literals while inventory is incomplete"
-    );
-    assert!(text.contains("gateway method literal"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_inventory_rejects_public_api_surface() {
-    let root = create_temp_workspace("blob-gate-public-api");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/src/lib.rs",
-        &format!("pub struct {}{}Api;\n", "Blob", "Storage"),
-    );
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject public blob-storage API types while inventory is incomplete"
-    );
-    assert!(text.contains("internal blob-storage API/model type"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_inventory_rejects_billing_surface() {
-    let root = create_temp_workspace("blob-gate-billing");
-    let inventory = root.join("BLOB_STORAGE_INVENTORY.md");
-    fs::write(&inventory, incomplete_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/src/lib.rs",
-        &format!(
-            "pub struct BillingClient;\npub fn get_{}{}() {{}}\n",
-            "blob_storage_", "status"
-        ),
-    );
-
-    let output = run_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "gate should reject billing surface while inventory is incomplete"
-    );
-    assert!(text.contains(&format!(
-        "blob-storage billing/{}{} implementation surface",
-        "Ca", "shier"
-    )));
-    let _ = fs::remove_dir_all(root);
+        assert!(
+            !output.status.success(),
+            "gate should reject {} while inventory is incomplete",
+            case.name
+        );
+        assert!(
+            text.contains(case.expected_text),
+            "expected output to contain {:?}, got:\n{text}",
+            case.expected_text
+        );
+    }
 }
 
 #[test]
@@ -592,7 +641,6 @@ fn complete_inventory_rejects_incomplete_method_status() {
         "gate should reject a required gateway method that is not complete"
     );
     assert!(text.contains("method is not complete"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -616,7 +664,6 @@ fn complete_inventory_rejects_unresolved_method_fields() {
         "gate should reject unresolved required gateway method fields"
     );
     assert!(text.contains("method still has TBD fields"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -641,7 +688,6 @@ fn complete_inventory_rejects_placeholder_method_evidence() {
         "gate should reject placeholder method evidence"
     );
     assert!(text.contains("method still has placeholder evidence"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -666,7 +712,6 @@ fn complete_inventory_rejects_invalid_source_commit_sha() {
         "gate should reject invalid method source commit SHA"
     );
     assert!(text.contains("method has invalid source commit SHA"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -687,7 +732,6 @@ fn complete_inventory_rejects_skeletal_method_section() {
         "gate should reject method sections without required evidence fields"
     );
     assert!(text.contains("method missing required field"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -708,7 +752,6 @@ fn complete_inventory_rejects_missing_method_section() {
         "gate should reject a Complete inventory missing a gateway method"
     );
     assert!(text.contains("missing method section"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -729,7 +772,6 @@ fn complete_inventory_rejects_unresolved_toko_fields() {
         "gate should reject unresolved Toko fields in a Complete inventory"
     );
     assert!(text.contains("Toko compatibility notes still have TBD fields"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -750,7 +792,6 @@ fn complete_inventory_rejects_missing_toko_evidence_fields() {
         "gate should reject Toko compatibility notes without required evidence fields"
     );
     assert!(text.contains("Toko compatibility notes missing required field"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -775,7 +816,6 @@ fn complete_inventory_rejects_invalid_toko_source_commit_sha() {
         "gate should reject invalid Toko source commit SHA"
     );
     assert!(text.contains("Toko compatibility notes have invalid source commit SHA"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -793,7 +833,6 @@ fn complete_inventory_rejects_missing_toko_section() {
         "gate should reject a Complete inventory without Toko compatibility notes"
     );
     assert!(text.contains("missing Toko compatibility section"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -813,7 +852,6 @@ fn complete_inventory_allows_resolved_inventory() {
         "gate should accept a resolved Complete gateway inventory\n{}",
         output_text(&output)
     );
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -829,7 +867,6 @@ fn incomplete_billing_inventory_allows_design_only_workspace() {
         "billing gate should allow no implementation surface while inventory is incomplete\n{}",
         output_text(&output)
     );
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -849,123 +886,56 @@ fn incomplete_billing_inventory_missing_ripgrep_reports_setup_action() {
     assert!(text.contains("make install-dev"));
     assert!(text.contains("make update-dev"));
     assert!(!text.contains("command not found"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn incomplete_billing_inventory_rejects_method_surface() {
-    let root = create_temp_workspace("billing-gate-method");
-    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
-    fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/src/lib.rs",
-        &format!(
-            "pub const METHOD: &str = {:?};\n",
-            billing_method_name(REQUIRED_BILLING_METHODS[0])
-        ),
-    );
+fn incomplete_billing_inventory_rejects_forbidden_billing_surfaces() {
+    for case in [
+        IncompleteGateRejectionCase {
+            name: "method",
+            setup: setup_billing_method_literal,
+            expected_text: "implementation surface",
+        },
+        IncompleteGateRejectionCase {
+            name: "endpoint",
+            setup: setup_billing_endpoint_literal,
+            expected_text: "billing endpoint literal",
+        },
+        IncompleteGateRejectionCase {
+            name: "feature",
+            setup: setup_billing_feature_metadata,
+            expected_text: "feature or dependency metadata",
+        },
+        IncompleteGateRejectionCase {
+            name: "path",
+            setup: setup_billing_source_path,
+            expected_text: "source/module path",
+        },
+        IncompleteGateRejectionCase {
+            name: "public-type",
+            setup: setup_billing_public_type,
+            expected_text: "public",
+        },
+    ] {
+        let root = create_temp_workspace(&format!("billing-gate-{}", case.name));
+        let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
+        fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
+        (case.setup)(&root);
 
-    let output = run_billing_gate(&root, &inventory);
-    let text = output_text(&output);
+        let output = run_billing_gate(&root, &inventory);
+        let text = output_text(&output);
 
-    assert!(
-        !output.status.success(),
-        "billing gate should reject method literals while inventory is incomplete"
-    );
-    assert!(text.contains(&format!(
-        "forbidden blob-storage {}{} implementation surface",
-        "Ca", "shier"
-    )));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_billing_inventory_rejects_billing_endpoint_surface() {
-    let root = create_temp_workspace("billing-gate-endpoint");
-    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
-    fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/src/lib.rs",
-        &format!("pub fn get_{}{}() {{}}\n", "blob_storage_", "status"),
-    );
-
-    let output = run_billing_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "billing gate should reject billing endpoint literals while inventory is incomplete"
-    );
-    assert!(text.contains("billing endpoint literal"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_billing_inventory_rejects_feature_metadata() {
-    let root = create_temp_workspace("billing-gate-feature");
-    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
-    fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/Cargo.toml",
-        &format!("[features]\n{} = []\n", billing_feature_name()),
-    );
-
-    let output = run_billing_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "billing gate should reject feature metadata while inventory is incomplete"
-    );
-    assert!(text.contains("feature or dependency metadata"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_billing_inventory_rejects_source_path() {
-    let root = create_temp_workspace("billing-gate-path");
-    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
-    fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        &format!("crates/example/src/{}{}_client/mod.rs", "ca", "shier"),
-        "pub fn marker() {}\n",
-    );
-
-    let output = run_billing_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "billing gate should reject source paths while inventory is incomplete"
-    );
-    assert!(text.contains("source/module path"));
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn incomplete_billing_inventory_rejects_public_billing_type() {
-    let root = create_temp_workspace("billing-gate-public-type");
-    let inventory = root.join("BLOB_STORAGE_CASHIER_INVENTORY.md");
-    fs::write(&inventory, incomplete_billing_inventory()).expect("inventory should be written");
-    write_file(
-        &root,
-        "crates/example/src/lib.rs",
-        &format!("pub struct {}{}{}Config;\n", "Blob", "Storage", "Billing"),
-    );
-
-    let output = run_billing_gate(&root, &inventory);
-    let text = output_text(&output);
-
-    assert!(
-        !output.status.success(),
-        "billing gate should reject public billing types while inventory is incomplete"
-    );
-    assert!(text.contains("public"));
-    let _ = fs::remove_dir_all(root);
+        assert!(
+            !output.status.success(),
+            "billing gate should reject {} while inventory is incomplete",
+            case.name
+        );
+        assert!(
+            text.contains(case.expected_text),
+            "expected output to contain {:?}, got:\n{text}",
+            case.expected_text
+        );
+    }
 }
 
 #[test]
@@ -988,7 +958,6 @@ fn complete_billing_inventory_rejects_unresolved_optional_fields() {
         "billing gate should reject unresolved optional-method fields"
     );
     assert!(text.contains("optional methods section still has TBD fields"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1010,7 +979,6 @@ fn complete_billing_inventory_rejects_incomplete_method_status() {
         "billing gate should reject a required method that is not complete"
     );
     assert!(text.contains("method is not complete"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1035,7 +1003,6 @@ fn complete_billing_inventory_rejects_unresolved_method_fields() {
         "billing gate should reject unresolved required-method fields"
     );
     assert!(text.contains("method still has TBD fields"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1058,7 +1025,6 @@ fn complete_billing_inventory_rejects_missing_gateway_list_behavior_fields() {
     );
     assert!(text.contains("method missing required field"));
     assert!(text.contains("Empty-list behavior"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1084,7 +1050,6 @@ fn complete_billing_inventory_rejects_unsafe_empty_gateway_list_behavior() {
         "billing gate should reject unsafe empty gateway-list behavior"
     );
     assert!(text.contains("invalid empty-list behavior"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1105,7 +1070,6 @@ fn complete_billing_inventory_rejects_missing_method_section() {
         "billing gate should reject a Complete inventory missing a required method"
     );
     assert!(text.contains("missing method section"));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1127,5 +1091,4 @@ fn complete_billing_inventory_allows_resolved_inventory() {
         "billing gate should accept a resolved Complete inventory\n{}",
         output_text(&output)
     );
-    let _ = fs::remove_dir_all(root);
 }
