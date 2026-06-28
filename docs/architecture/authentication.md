@@ -228,6 +228,11 @@ canic_get_delegation_proof_batch query
 
 canic_install_delegation_proof_batch update
   -> root broadcasts canic_install_active_delegation_proof to issuers
+
+root-managed renewal timer
+  -> prepares due issuer renewal attempts from enabled templates
+  -> bridge retrieves canic_get_delegation_renewal_proof_batch by direct query
+  -> bridge submits canic_install_delegation_proof_batch for scheduled work
 ```
 
 Root issuance steps:
@@ -299,10 +304,23 @@ install. Uninstalled entries are removed after their retrieval window expires;
 installed entries remain available for idempotent reinstall until certificate
 expiry. The current MVP does not prune canister-signature map leaves.
 
+Root-managed renewal reuses the same proof preparation and install machinery
+but stores root-owned renewal templates, per-issuer attempts, and scheduled
+batch transport records. Renewal provisioners can retrieve and install only
+root-scheduled renewal batches; they cannot prepare arbitrary root proofs,
+create renewal intent, widen issuer policy, or change audience/grant/TTL
+shape. Expired renewal batch transport records are pruned before fresh work is
+prepared, while issuer attempts remain observable for expiry and repair status.
+
 `canic_get_delegation_proof_batch` is a direct root query over existing pending
 batch metadata and is not separately replay-protected. The requested
 `batch_id`, issuer, and `cert_hash` must match pending metadata, and
 `now_ns < retrieval_expires_at_ns`.
+
+`canic_get_delegation_renewal_proof_batch` is the constrained bridge retrieval
+surface. It accepts only a scheduled renewal batch id, resolves proof
+references from root state, and is valid only while the batch and issuer
+attempt retrieval/install windows are open.
 
 The retired single-proof `canic_prepare_delegation_proof` and
 `canic_get_delegation_proof` root endpoints are removed from the active

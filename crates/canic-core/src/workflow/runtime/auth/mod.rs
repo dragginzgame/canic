@@ -43,6 +43,11 @@ impl RuntimeAuthWorkflow {
         renewal::RootDelegationRenewalWorkflow::start_if_configured()
     }
 
+    /// Start root-managed delegated-proof renewal sweeps promptly after template changes.
+    pub fn start_root_delegation_renewal_timer_soon_if_configured() -> Result<(), InternalError> {
+        renewal::RootDelegationRenewalWorkflow::start_soon_if_configured()
+    }
+
     /// Fail fast when root delegated-auth config requires missing crypto support.
     pub fn ensure_root_crypto_contract() -> Result<(), InternalError> {
         let cfg = ConfigOps::get()?;

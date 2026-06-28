@@ -1,5 +1,5 @@
 use crate::access::AccessError;
-use crate::dto::error::Error as PublicError;
+use crate::dto::error::{Error as PublicError, ErrorCode as PublicErrorCode};
 use std::fmt;
 use thiserror::Error as ThisError;
 
@@ -62,6 +62,20 @@ impl InternalError {
         Self::public(PublicError::exhausted(message))
     }
 
+    pub fn auth_material_stale(message: impl Into<String>) -> Self {
+        Self::public(PublicError::new(
+            PublicErrorCode::AuthMaterialStale,
+            message.into(),
+        ))
+    }
+
+    pub fn auth_proof_expired(message: impl Into<String>) -> Self {
+        Self::public(PublicError::new(
+            PublicErrorCode::AuthProofExpired,
+            message.into(),
+        ))
+    }
+
     #[must_use]
     pub fn operation_id_required() -> Self {
         Self::public(PublicError::operation_id_required())
@@ -110,6 +124,13 @@ impl InternalError {
     #[must_use]
     pub const fn public_error(&self) -> Option<&PublicError> {
         self.public_error.as_ref()
+    }
+
+    #[must_use]
+    pub fn is_public_resource_exhausted(&self) -> bool {
+        self.public_error
+            .as_ref()
+            .is_some_and(|err| err.code == PublicErrorCode::ResourceExhausted)
     }
 }
 

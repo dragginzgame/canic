@@ -29,6 +29,7 @@ use crate::{
         RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
         RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome, RootProof,
     },
+    dto::error::ErrorCode,
     ids::{CanisterRole, cap},
     ops::{auth::AuthOps, storage::auth::AuthStateOps},
 };
@@ -72,9 +73,9 @@ fn active_proof() -> ActiveDelegationProof {
     }
 }
 
-fn assert_public_error_code(err: &InternalError, expected: &str) {
+fn assert_public_error_code(err: &InternalError, expected: ErrorCode) {
     let public = err.public_error().expect("expected public error");
-    assert_eq!(format!("{:?}", public.code), expected);
+    assert_eq!(public.code, expected);
 }
 
 fn batch_prepare_entry(
@@ -225,7 +226,7 @@ fn batch_prepare_preflight_rejects_ttl_above_max() {
         10,
     )
     .expect_err("ttl above max must fail preflight");
-    assert_public_error_code(&err, "Forbidden");
+    assert_public_error_code(&err, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -235,7 +236,7 @@ fn batch_prepare_preflight_rejects_unregistered_issuer() {
         10,
     )
     .expect_err("unregistered issuer must fail preflight");
-    assert_public_error_code(&err, "Forbidden");
+    assert_public_error_code(&err, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -249,7 +250,7 @@ fn batch_prepare_preflight_rejects_disabled_issuer() {
         10,
     )
     .expect_err("disabled issuer must fail preflight");
-    assert_public_error_code(&err, "Forbidden");
+    assert_public_error_code(&err, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -263,7 +264,7 @@ fn batch_prepare_preflight_rejects_grant_outside_issuer_policy() {
         10,
     )
     .expect_err("grant outside issuer policy must fail preflight");
-    assert_public_error_code(&err, "Forbidden");
+    assert_public_error_code(&err, ErrorCode::Forbidden);
 }
 
 #[test]
@@ -276,7 +277,7 @@ fn batch_prepare_rejects_missing_metadata() {
         10,
     )
     .expect_err("batch prepare requires request id metadata");
-    assert_public_error_code(&err, "OperationIdRequired");
+    assert_public_error_code(&err, ErrorCode::OperationIdRequired);
 }
 
 #[test]
@@ -288,7 +289,7 @@ fn batch_prepare_rejects_empty_entries() {
 
     let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
         .expect_err("empty batch must fail");
-    assert_public_error_code(&err, "InvalidInput");
+    assert_public_error_code(&err, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -300,7 +301,7 @@ fn batch_prepare_rejects_invalid_metadata_ttl() {
 
     let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
         .expect_err("zero metadata ttl must fail");
-    assert_public_error_code(&err, "InvalidInput");
+    assert_public_error_code(&err, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -317,7 +318,7 @@ fn batch_prepare_rejects_batch_size_above_mvp_limit() {
 
     let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
         .expect_err("oversized batch must fail before policy validation");
-    assert_public_error_code(&err, "ResourceExhausted");
+    assert_public_error_code(&err, ErrorCode::ResourceExhausted);
 }
 
 #[test]
@@ -332,7 +333,7 @@ fn batch_prepare_rejects_pending_issuer_quota_exhaustion() {
 
     let err = AuthOps::prepare_delegation_proof_batch(request, 120_000_000_000, 10)
         .expect_err("pending issuer quota exhaustion must fail before preparing proof leaves");
-    assert_public_error_code(&err, "ResourceExhausted");
+    assert_public_error_code(&err, ErrorCode::ResourceExhausted);
 }
 
 #[test]
@@ -451,7 +452,7 @@ fn batch_prepare_rejects_conflicting_request_id_reuse() {
         },
     )
     .expect_err("request id reuse with a different payload must fail");
-    assert_public_error_code(&err, "InvalidInput");
+    assert_public_error_code(&err, ErrorCode::InvalidInput);
 }
 
 #[test]
@@ -466,7 +467,7 @@ fn batch_get_rejects_empty_entries() {
         |_cert_hash| panic!("empty get request must not request a root proof"),
     )
     .expect_err("empty get request must fail");
-    assert_public_error_code(&err, "InvalidInput");
+    assert_public_error_code(&err, ErrorCode::InvalidInput);
 }
 
 #[test]

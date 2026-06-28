@@ -233,6 +233,7 @@ impl From<AuthExpiryError> for InternalError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::error::ErrorCode;
 
     #[test]
     fn root_data_certificate_unavailable_maps_to_public_code() {
@@ -241,9 +242,6 @@ mod tests {
             .public_error()
             .expect("missing root data certificate must be public");
 
-        assert_eq!(
-            format!("{:?}", public.code),
-            "RootDataCertificateUnavailable"
-        );
+        assert_eq!(public.code, ErrorCode::RootDataCertificateUnavailable);
     }
 }

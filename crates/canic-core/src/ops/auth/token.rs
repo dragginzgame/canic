@@ -32,10 +32,7 @@ use crate::{
     domain::auth::{
         DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
     },
-    dto::{
-        auth::{ActiveDelegationProofStatus, DelegatedToken},
-        error::{Error, ErrorCode},
-    },
+    dto::auth::{ActiveDelegationProofStatus, DelegatedToken},
     ids::CanisterRole,
     ops::{
         auth::{AuthScopeError, AuthValidationError},
@@ -484,33 +481,29 @@ fn validate_network_root_key_pair(
 
 fn active_delegation_proof_unavailable_error(now_ns: u64) -> InternalError {
     let status = AuthOps::active_delegation_proof_status(now_ns).status;
-    let (code, message) = match status {
-        ActiveDelegationProofStatus::Expired => (
-            ErrorCode::AuthProofExpired,
+    match status {
+        ActiveDelegationProofStatus::Expired => InternalError::auth_proof_expired(
             "active delegation proof expired; reprovision auth proof",
         ),
-        ActiveDelegationProofStatus::Missing => (
-            ErrorCode::AuthMaterialStale,
+        ActiveDelegationProofStatus::Missing => InternalError::auth_material_stale(
             "active delegation proof is unavailable; provision auth proof",
         ),
-        ActiveDelegationProofStatus::RefreshNeeded | ActiveDelegationProofStatus::Valid => (
-            ErrorCode::AuthMaterialStale,
-            "active delegation proof is unavailable or stale; reprovision auth proof",
-        ),
-    };
-    InternalError::public(Error::new(code, message.to_string()))
+        ActiveDelegationProofStatus::RefreshNeeded | ActiveDelegationProofStatus::Valid => {
+            InternalError::auth_material_stale(
+                "active delegation proof is unavailable or stale; reprovision auth proof",
+            )
+        }
+    }
 }
 
 fn map_prepare_delegated_token_error(err: PrepareDelegatedTokenError) -> InternalError {
     match err {
-        PrepareDelegatedTokenError::CertExpired => InternalError::public(Error::new(
-            ErrorCode::AuthProofExpired,
-            "active delegation proof expired; reprovision auth proof".to_string(),
-        )),
-        PrepareDelegatedTokenError::TokenOutlivesCert => InternalError::public(Error::new(
-            ErrorCode::AuthMaterialStale,
-            "active delegation proof is too close to expiry; reprovision auth proof".to_string(),
-        )),
+        PrepareDelegatedTokenError::CertExpired => InternalError::auth_proof_expired(
+            "active delegation proof expired; reprovision auth proof",
+        ),
+        PrepareDelegatedTokenError::TokenOutlivesCert => InternalError::auth_material_stale(
+            "active delegation proof is too close to expiry; reprovision auth proof",
+        ),
         err => AuthValidationError::Auth(err.to_string()).into(),
     }
 }
@@ -583,6 +576,7 @@ mod tests {
             schema::{CanisterAuthConfig, CanisterKind},
         },
         domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
+        dto::error::ErrorCode,
         ids::SubnetRole,
         storage::stable::env::{Env, EnvRecord},
         test::config::ConfigTestBuilder,
