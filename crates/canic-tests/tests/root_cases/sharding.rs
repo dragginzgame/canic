@@ -28,7 +28,7 @@ use canic_testing_internal::pic::{
 use canic_tests::root::{
     RootSetupProfile,
     assertions::assert_registry_parents,
-    harness::{RootSetup, setup_cached_root},
+    harness::{RootSetup, setup_cached_root, setup_root},
 };
 use std::time::Duration;
 
@@ -49,11 +49,7 @@ fn user_hub_sharding_profile_prewarms_first_user_shard() {
         "sharding profile should not boot scale_hub",
     );
 
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
+    let user_hub_pid = user_hub_pid(&setup);
 
     let registry: Result<Result<ShardingRegistryResponse, Error>, _> =
         setup
@@ -98,18 +94,9 @@ fn user_hub_sharding_profile_prewarms_first_user_shard() {
 fn root_batch_provisioning_installs_active_proof_on_user_shard() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
-    let verifier_pid = setup
-        .subnet_index
-        .get(&canister::TEST)
-        .copied()
-        .expect("test verifier must exist in sharding profile");
-    let subject = Principal::from_slice(&[56; 29]);
-    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+    let verifier_pid = test_verifier_pid(&setup);
+    let subject = test_subject(56);
+    let shard_pid = create_user_shard_for_subject(&setup, subject);
 
     let (prepared, install_request) = install_root_batch_delegation_proof(&setup, shard_pid);
     let status = assert_active_delegation_proof_status(&setup, shard_pid, &prepared);
@@ -120,20 +107,11 @@ fn root_batch_provisioning_installs_active_proof_on_user_shard() {
 
 #[test]
 fn root_scheduled_renewal_bridge_refreshes_user_shard_active_proof() {
-    let setup = setup_cached_root(RootSetupProfile::Sharding);
+    let setup = setup_root(RootSetupProfile::Sharding);
 
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
-    let verifier_pid = setup
-        .subnet_index
-        .get(&canister::TEST)
-        .copied()
-        .expect("test verifier must exist in sharding profile");
-    let subject = Principal::from_slice(&[61; 29]);
-    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+    let verifier_pid = test_verifier_pid(&setup);
+    let subject = test_subject(61);
+    let shard_pid = create_user_shard_for_subject(&setup, subject);
 
     upsert_delegation_issuer(&setup, shard_pid);
     upsert_delegation_renewal_template(&setup, shard_pid);
@@ -165,13 +143,8 @@ fn root_scheduled_renewal_bridge_refreshes_user_shard_active_proof() {
 fn root_batch_install_reports_partial_failure_and_retry() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
-    let subject = Principal::from_slice(&[58; 29]);
-    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+    let subject = test_subject(58);
+    let shard_pid = create_user_shard_for_subject(&setup, subject);
     let missing_issuer_pid = Principal::from_slice(&[159; 29]);
 
     upsert_delegation_issuer(&setup, shard_pid);
@@ -220,18 +193,9 @@ fn root_batch_install_reports_partial_failure_and_retry() {
 fn root_unavailable_after_batch_install_does_not_break_issuer_local_issuance() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
-    let user_hub_pid = setup
-        .subnet_index
-        .get(&canister::USER_HUB)
-        .copied()
-        .expect("user_hub must exist in sharding profile");
-    let verifier_pid = setup
-        .subnet_index
-        .get(&canister::TEST)
-        .copied()
-        .expect("test verifier must exist in sharding profile");
-    let subject = Principal::from_slice(&[60; 29]);
-    let shard_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+    let verifier_pid = test_verifier_pid(&setup);
+    let subject = test_subject(60);
+    let shard_pid = create_user_shard_for_subject(&setup, subject);
 
     upsert_delegation_issuer(&setup, shard_pid);
 
@@ -272,6 +236,30 @@ fn root_unavailable_after_batch_install_does_not_break_issuer_local_issuance() {
     );
 
     verify_issuer_local_delegated_token(&setup, verifier_pid, shard_pid, subject, &status);
+}
+
+fn user_hub_pid(setup: &RootSetup) -> Principal {
+    sharding_profile_pid(setup, &canister::USER_HUB, "user_hub")
+}
+
+fn test_verifier_pid(setup: &RootSetup) -> Principal {
+    sharding_profile_pid(setup, &canister::TEST, "test verifier")
+}
+
+fn sharding_profile_pid(setup: &RootSetup, role: &CanisterRole, label: &str) -> Principal {
+    setup
+        .subnet_index
+        .get(role)
+        .copied()
+        .unwrap_or_else(|| panic!("{label} must exist in sharding profile"))
+}
+
+const fn test_subject(byte: u8) -> Principal {
+    Principal::from_slice(&[byte; 29])
+}
+
+fn create_user_shard_for_subject(setup: &RootSetup, subject: Principal) -> Principal {
+    create_user_shard(&setup.pic, user_hub_pid(setup), subject)
 }
 
 fn install_root_batch_delegation_proof(
