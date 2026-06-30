@@ -2,6 +2,11 @@
 
 Date: 2026-06-29
 
+Superseded: this audit describes the pre-0.76 bridge-backed
+canister-signature renewal design. It is retained as historical evidence only.
+The active 0.76 delegated-auth path is chain-key batch renewal and must not use
+the bridge/direct-root-query flow described below.
+
 Scope: Canic delegated auth root proof renewal, external liveness
 dependencies, and migration impact for a bridge-free chain-key root proof.
 

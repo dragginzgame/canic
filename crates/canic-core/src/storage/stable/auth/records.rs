@@ -85,16 +85,6 @@ pub struct DelegationCertRecord {
 }
 
 ///
-/// IcCanisterSignatureProofRecord
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IcCanisterSignatureProofRecord {
-    pub signature_cbor: Vec<u8>,
-    pub public_key_der: Vec<u8>,
-}
-
-///
 /// ChainKeyAlgorithmRecord
 ///
 
@@ -252,13 +242,8 @@ pub struct ChainKeyRootDelegationBatchRecord {
 /// RootProofRecord
 ///
 
-#[expect(
-    clippy::large_enum_variant,
-    reason = "RootProofRecord mirrors the stable delegated-auth proof schema; boxing would change the persisted record shape"
-)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProofRecord {
-    IcCanisterSignatureV1(IcCanisterSignatureProofRecord),
     IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofRecord),
 }
 
@@ -400,32 +385,6 @@ pub struct RootIssuerRenewalAttemptRecord {
 }
 
 ///
-/// RootDelegationRenewalBatchRecord
-///
-/// Historical bridge-backed renewal batch state retained only for stable-state
-/// decode. Active 0.76 renewal state uses `ChainKeyRootDelegationBatchRecord`.
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootDelegationRenewalBatchRecord {
-    pub batch_id: [u8; 32],
-    pub attempt_ids: Vec<[u8; 32]>,
-    pub prepared_at_ns: u64,
-    pub retrieval_expires_at_ns: u64,
-}
-
-///
-/// RootProvisionerRecord
-///
-/// Historical renewal-provisioner ACL state retained only for stable-state
-/// decode. Active 0.76 delegated auth has no provisioner ACL.
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootProvisionerRecord {
-    pub principal: Principal,
-    pub enabled: bool,
-}
-
-///
 /// AuthStateRecord
 ///
 
@@ -456,36 +415,15 @@ pub struct AuthStateRecord {
     #[serde(default)]
     pub root_issuer_renewal_attempts: Vec<RootIssuerRenewalAttemptRecord>,
 
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub root_delegation_renewal_batches: Vec<RootDelegationRenewalBatchRecord>,
-
     #[serde(default)]
     pub chain_key_root_delegation_batches: Vec<ChainKeyRootDelegationBatchRecord>,
-
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub root_provisioners: Vec<RootProvisionerRecord>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::Serialize;
     use serde_cbor::{Value, value::to_value};
     use std::collections::BTreeSet;
-
-    #[derive(Serialize)]
-    struct AuthStateRecordWithoutHistoricalBridgeFields {
-        delegated_sessions: Vec<DelegatedSessionRecord>,
-        delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
-        active_delegation_proof: Option<ActiveDelegationProofRecord>,
-        root_issuers: Vec<RootIssuerRecord>,
-        delegated_auth_registry_epoch: u64,
-        delegated_auth_proof_epoch: u64,
-        root_issuer_renewal_templates: Vec<RootIssuerRenewalTemplateRecord>,
-        root_issuer_renewal_states: Vec<RootIssuerRenewalStateRecord>,
-        root_issuer_renewal_attempts: Vec<RootIssuerRenewalAttemptRecord>,
-        chain_key_root_delegation_batches: Vec<ChainKeyRootDelegationBatchRecord>,
-    }
 
     fn auth_state_keys(record: &AuthStateRecord) -> BTreeSet<String> {
         let value = to_value(record).expect("auth state should serialize to CBOR value");
@@ -504,68 +442,10 @@ mod tests {
     }
 
     #[test]
-    fn empty_historical_bridge_auth_state_is_not_serialized() {
+    fn historical_bridge_auth_state_fields_are_not_serialized() {
         let keys = auth_state_keys(&AuthStateRecord::default());
 
         assert!(!keys.contains("root_delegation_renewal_batches"));
         assert!(!keys.contains("root_provisioners"));
-    }
-
-    #[test]
-    fn missing_historical_bridge_auth_state_decodes_to_empty_defaults() {
-        let encoded = serde_cbor::to_vec(&AuthStateRecordWithoutHistoricalBridgeFields {
-            delegated_sessions: Vec::new(),
-            delegated_session_bootstrap_bindings: Vec::new(),
-            active_delegation_proof: None,
-            root_issuers: Vec::new(),
-            delegated_auth_registry_epoch: 7,
-            delegated_auth_proof_epoch: 8,
-            root_issuer_renewal_templates: Vec::new(),
-            root_issuer_renewal_states: Vec::new(),
-            root_issuer_renewal_attempts: Vec::new(),
-            chain_key_root_delegation_batches: Vec::new(),
-        })
-        .expect("auth state without historical bridge fields should encode");
-
-        let decoded: AuthStateRecord = serde_cbor::from_slice(&encoded)
-            .expect("auth state should decode without bridge fields");
-
-        assert_eq!(decoded.delegated_auth_registry_epoch, 7);
-        assert_eq!(decoded.delegated_auth_proof_epoch, 8);
-        assert!(decoded.root_delegation_renewal_batches.is_empty());
-        assert!(decoded.root_provisioners.is_empty());
-    }
-
-    #[test]
-    fn nonempty_historical_bridge_auth_state_still_round_trips() {
-        let record = AuthStateRecord {
-            root_delegation_renewal_batches: vec![RootDelegationRenewalBatchRecord {
-                batch_id: [1; 32],
-                attempt_ids: vec![[2; 32]],
-                prepared_at_ns: 3,
-                retrieval_expires_at_ns: 4,
-            }],
-            root_provisioners: vec![RootProvisionerRecord {
-                principal: Principal::from_slice(&[5; 29]),
-                enabled: true,
-            }],
-            ..AuthStateRecord::default()
-        };
-        let keys = auth_state_keys(&record);
-
-        assert!(keys.contains("root_delegation_renewal_batches"));
-        assert!(keys.contains("root_provisioners"));
-
-        let encoded = serde_cbor::to_vec(&record).expect("auth state should encode");
-        let decoded: AuthStateRecord =
-            serde_cbor::from_slice(&encoded).expect("auth state should decode");
-
-        assert_eq!(decoded.root_delegation_renewal_batches.len(), 1);
-        assert_eq!(decoded.root_delegation_renewal_batches[0].batch_id, [1; 32]);
-        assert_eq!(decoded.root_provisioners.len(), 1);
-        assert_eq!(
-            decoded.root_provisioners[0].principal,
-            Principal::from_slice(&[5; 29])
-        );
     }
 }

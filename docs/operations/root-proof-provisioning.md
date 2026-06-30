@@ -13,7 +13,8 @@ bridge-backed canister-signature flow.
 | Public auth API adapters | `crates/canic-core/src/api/auth/mod.rs` |
 | Chain-key batch proof state and lookup | `crates/canic-core/src/ops/auth/delegation/chain_key_batch.rs` |
 | Root issuer renewal templates, attempts, and status | `crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/` |
-| Root chain-key signing orchestration | `crates/canic-core/src/workflow/runtime/auth/chain_key_signing.rs` |
+| Root renewal timer orchestration | `crates/canic-core/src/workflow/runtime/auth/renewal.rs` |
+| Root chain-key management-canister signing | `crates/canic-core/src/ops/auth/delegated/chain_key_signing.rs` |
 | Root batch install broadcast workflow | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs` |
 | Issuer active proof verification | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` |
 | Issuer-local canister-signature proof support | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` |
@@ -89,8 +90,10 @@ observational; it does not mutate root or issuer state.
 
 Root renewal and chain-key proof state are bounded:
 
-- max 64 issuers per root signing batch
-- max 128 pending chain-key proof batches
+- max 64 issuers per root signing batch; additional due issuers wait for a
+  later batch after the current batch is signed and installed
+- max 128 non-expired, non-installed chain-key proof batches; a full pending
+  batch queue rejects new batch creation with resource exhaustion
 - max one active renewal attempt per issuer
 - certificate TTL bounded by the enabled renewal template and root policy
 - signing retry-after recorded after retryable management-canister failures

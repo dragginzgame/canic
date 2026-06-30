@@ -16,9 +16,8 @@ pub use records::{
     ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
     ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
     DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
-    IcCanisterSignatureProofRecord, IcChainKeyBatchSignatureProofRecord,
-    IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord,
-    RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
+    IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
+    RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
     RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord,
     RootIssuerRenewalTemplateRecord, RootProofRecord,
 };

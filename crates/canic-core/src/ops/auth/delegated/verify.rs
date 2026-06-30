@@ -420,10 +420,7 @@ mod tests {
     }
 
     fn root_proof(byte: u8) -> RootProof {
-        RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![byte; 8],
-            public_key_der: vec![byte; 4],
-        })
+        crate::ops::auth::test_fixtures::chain_key_root_proof(byte)
     }
 
     fn verify_root_ok(
@@ -436,16 +433,8 @@ mod tests {
             if cert.root_pid != p(1) {
                 return Err("root pid mismatch".to_string());
             }
-            match proof {
-                RootProof::IcCanisterSignatureV1(proof)
-                    if !proof.signature_cbor.is_empty() && !proof.public_key_der.is_empty() =>
-                {
-                    Ok(())
-                }
-                RootProof::IcCanisterSignatureV1(_) | RootProof::IcChainKeyBatchSignatureV1(_) => {
-                    Err("root proof missing".to_string())
-                }
-            }
+            let RootProof::IcChainKeyBatchSignatureV1(_) = proof;
+            Ok(())
         }
     }
 
@@ -497,10 +486,7 @@ mod tests {
     #[test]
     fn verify_delegated_token_cached_proof_identity_accepts_cached_exact_token_identity() {
         let mut token = token();
-        token.proof.root_proof = RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: Vec::new(),
-            public_key_der: Vec::new(),
-        });
+        token.proof.root_proof = crate::ops::auth::test_fixtures::chain_key_root_proof(0);
         token.issuer_proof = IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
             signature_cbor: Vec::new(),
             public_key_der: Vec::new(),

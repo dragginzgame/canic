@@ -151,7 +151,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        dto::auth::{IcCanisterSignatureProofV1, RootProof},
+        dto::auth::{IcCanisterSignatureProofV1, RoleAttestationRootProof},
         test::config::ConfigTestBuilder,
     };
 
@@ -178,10 +178,12 @@ mod tests {
                 expires_at_ns: 20,
                 epoch: 0,
             },
-            root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                signature_cbor: vec![1, 2, 3],
-                public_key_der: vec![4, 5, 6],
-            }),
+            root_proof: RoleAttestationRootProof::IcCanisterSignatureV1(
+                IcCanisterSignatureProofV1 {
+                    signature_cbor: vec![1, 2, 3],
+                    public_key_der: vec![4, 5, 6],
+                },
+            ),
         };
 
         let err = AuthOps::verify_role_attestation_cached(&attestation, p(2), p(3), None, 15, 0)
@@ -213,10 +215,12 @@ mod tests {
                 expires_at_ns: 20,
                 epoch: 0,
             },
-            root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                signature_cbor: vec![1, 2, 3],
-                public_key_der: vec![4, 5, 6],
-            }),
+            root_proof: RoleAttestationRootProof::IcCanisterSignatureV1(
+                IcCanisterSignatureProofV1 {
+                    signature_cbor: vec![1, 2, 3],
+                    public_key_der: vec![4, 5, 6],
+                },
+            ),
         };
 
         let err = AuthOps::verify_role_attestation_cached(&attestation, p(2), p(3), None, 15, 0)

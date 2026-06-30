@@ -18,8 +18,8 @@ use crate::{
         ActiveDelegationProof, ChainKeyAlgorithm, ChainKeyBatchHeaderV1,
         ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1,
         ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant, DelegationAudience,
-        DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
-        IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+        DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
+        IssuerProofBinding, RootProof,
     },
     storage::stable::auth::{
         ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,
@@ -27,9 +27,9 @@ use crate::{
         ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
         ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
         ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
-        DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
-        IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-        RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
+        DelegationCertRecord, DelegationProofRecord, IcChainKeyBatchSignatureProofRecord,
+        IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord,
+        RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
         RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord,
         RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootProofRecord,
     },
@@ -361,12 +361,6 @@ fn delegation_cert_record_to_dto(record: DelegationCertRecord) -> DelegationCert
 
 fn root_proof_to_record(proof: RootProof) -> RootProofRecord {
     match proof {
-        RootProof::IcCanisterSignatureV1(proof) => {
-            RootProofRecord::IcCanisterSignatureV1(IcCanisterSignatureProofRecord {
-                signature_cbor: proof.signature_cbor,
-                public_key_der: proof.public_key_der,
-            })
-        }
         RootProof::IcChainKeyBatchSignatureV1(proof) => {
             RootProofRecord::IcChainKeyBatchSignatureV1(chain_key_proof_to_record(proof))
         }
@@ -375,12 +369,6 @@ fn root_proof_to_record(proof: RootProof) -> RootProofRecord {
 
 fn root_proof_record_to_dto(record: RootProofRecord) -> RootProof {
     match record {
-        RootProofRecord::IcCanisterSignatureV1(proof) => {
-            RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                signature_cbor: proof.signature_cbor,
-                public_key_der: proof.public_key_der,
-            })
-        }
         RootProofRecord::IcChainKeyBatchSignatureV1(proof) => {
             RootProof::IcChainKeyBatchSignatureV1(chain_key_proof_record_to_dto(proof))
         }

@@ -137,7 +137,7 @@ mod tests {
         dto::auth::{
             DelegatedRoleGrant, DelegatedTokenClaims, DelegationAudience, DelegationCert,
             DelegationProof, IcCanisterSignatureProofV1, IssuerProof, IssuerProofAlgorithm,
-            IssuerProofBinding, RootProof,
+            IssuerProofBinding,
         },
         ids::CanisterRole,
         ops::auth::delegated::canonical::{cert_hash, issuer_proof_binding_hash},
@@ -188,10 +188,7 @@ mod tests {
             },
             proof: DelegationProof {
                 cert,
-                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                    signature_cbor: vec![12; 64],
-                    public_key_der: vec![13; 32],
-                }),
+                root_proof: crate::ops::auth::test_fixtures::chain_key_root_proof(12),
             },
             issuer_proof: sample_issuer_proof(14),
         }

@@ -799,13 +799,7 @@ mod tests {
             schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
         },
         domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
-        dto::{
-            auth::{
-                DelegatedRoleGrant, DelegationAudience, IcCanisterSignatureProofV1,
-                IssuerProofAlgorithm, IssuerProofBinding,
-            },
-            error::ErrorCode,
-        },
+        dto::error::ErrorCode,
         ids::SubnetRole,
         ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
         storage::stable::env::{Env, EnvRecord},
@@ -878,25 +872,6 @@ mod tests {
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
-    }
-
-    fn delegation_cert() -> DelegationCert {
-        DelegationCert {
-            root_pid: root_pid(),
-            issuer_pid: p(2),
-            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
-            issuer_proof_binding_hash: [4; 32],
-            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] },
-            issued_at_ns: 10,
-            not_before_ns: 10,
-            expires_at_ns: 1_000,
-            max_token_ttl_ns: 60,
-            aud: DelegationAudience::CanicSubnet(p(9)),
-            grants: vec![DelegatedRoleGrant {
-                target: CanisterRole::owned("project_instance".to_string()),
-                scopes: vec!["read".to_string()],
-            }],
-        }
     }
 
     #[test]
@@ -1218,32 +1193,6 @@ mod tests {
 
         assert!(
             err.to_string().contains("allow_test_key must be true"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn chain_key_root_proof_mode_rejects_legacy_canister_signature_root_proof() {
-        let mut cfg = chain_key_cfg("local", local_key(), "test_key_1");
-        cfg.chain_key_root_proof.allow_test_key = true;
-        let verifier =
-            AuthOps::auth_proof_verifier_config_from(&cfg).expect("chain-key config should pass");
-        let root_proof = RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![1],
-            public_key_der: vec![2],
-        });
-
-        let err = AuthOps::verify_delegation_root_proof(
-            &delegation_cert(),
-            [0; 32],
-            &root_proof,
-            &verifier,
-            20,
-        )
-        .expect_err("chain-key mode must reject legacy root proofs");
-
-        assert!(
-            err.contains("rejected legacy canister-signature proof"),
             "unexpected error: {err}"
         );
     }

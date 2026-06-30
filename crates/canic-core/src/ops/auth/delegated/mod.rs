@@ -13,4 +13,6 @@ pub(super) mod chain_key;
 pub(super) mod chain_key_signing;
 pub(super) mod delegation_cert;
 pub(super) mod prepare;
+#[cfg(test)]
+pub(crate) mod test_fixtures;
 pub(super) mod verify;

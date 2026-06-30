@@ -161,40 +161,22 @@ inspect only the files needed for the current task.
   (6 passed, 0 failed, 0 ignored).
   The `0.76.3` release changelog is prepared in the root ledger and detailed
   0.76 notes for this cleanup.
-  Post-`0.76.3` cleanup removed unused delegated-auth root-key policy and
-  registry snapshot stable-record mappers and their test-only round-trip
-  scaffold because those records were never persisted in `AuthStateRecord`.
-  The retained historical `root_delegation_renewal_batches` and
-  `root_provisioners` stable fields are now documented as decode-only bridge
-  state, while active 0.76 renewal state remains on
-  `ChainKeyRootDelegationBatchRecord`. Focused validation passing for this
-  cleanup: `cargo fmt --all`, `cargo fmt --all -- --check`,
-  `cargo check --locked -p canic-core`,
-  `cargo test --locked -p canic-core ops::storage::auth --lib`,
-  `cargo clippy --locked -p canic-core --lib --all-features -- -D warnings`,
-  `cargo test --locked -p canic-core chain_key --lib` (68 passed),
-  `cargo test --locked -p canic --test changelog_governance`, and
-  `git diff --check`.
-  The `0.76.4` release changelog is prepared in the root ledger and detailed
-  0.76 notes for this cleanup.
-  Post-`0.76.4` cleanup keeps the historical bridge
+  Post-`0.76.3`/`0.76.4` cleanup first marked historical bridge
   `root_delegation_renewal_batches` and `root_provisioners` auth stable fields
-  decode-compatible, but skips serializing those fields when they are empty so
-  fresh active 0.76 auth state no longer carries empty legacy bridge slots.
-  Focused validation passing for this cleanup: `cargo fmt --all -- --check`,
-  `cargo check --locked -p canic-core`,
-  `cargo test --locked -p canic-core storage::stable::auth::records --lib`
-  (3 passed),
-  `cargo clippy --locked -p canic-core --lib --all-features -- -D warnings`,
-  `cargo test --locked -p canic --test changelog_governance`, and
-  `git diff --check`.
+  as decode-only, then the later hard-cut cleanup removed those fields from the
+  active `AuthStateRecord` shape entirely. Active 0.76 renewal state remains on
+  `ChainKeyRootDelegationBatchRecord`.
   The `0.76.5` release changelog is prepared in the root ledger and detailed
   0.76 notes for this cleanup.
-  Post-`0.76.5` source-hygiene cleanup clarified active auth ops module
-  headers so delegated-token and role-attestation ops are described as auth
-  facades rather than "bridge" modules, and renamed the 0.76 PocketIC legacy
-  surface test so it describes absent bridge root-proof methods rather than
-  rejected root-proof material.
+  Post-`0.76.5` cleanup clarified active auth ops module headers so
+  delegated-token and role-attestation ops are described as auth facades rather
+  than "bridge" modules, renamed the 0.76 PocketIC legacy surface test so it
+  describes absent bridge root-proof methods rather than rejected root-proof
+  material, then hard-cut delegated root-proof survivorship by making
+  delegated `RootProof`/`RootProofRecord` chain-key-only, moving root
+  canister-signature role-attestation material to `RoleAttestationRootProof`,
+  and removing historical bridge/provisioner auth stable fields from active
+  `AuthStateRecord`.
   Focused validation passing for this cleanup: `cargo fmt --all -- --check`,
   `cargo check --locked -p canic-core`,
   `cargo check --locked -p canic-tests --test root_suite`,

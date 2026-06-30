@@ -385,8 +385,8 @@ mod tests {
             ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
             ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId,
             ChainKeyRootSignatureV1, DelegatedRoleGrant, DelegationAudience, DelegationCert,
-            DelegationProof, IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1,
-            IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+            DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
+            IssuerProofBinding, RootProof,
         },
         ids::CanisterRole,
     };
@@ -417,10 +417,7 @@ mod tests {
                         scopes: vec!["read".to_string(), "write".to_string()],
                     }],
                 },
-                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                    signature_cbor: vec![8; 64],
-                    public_key_der: vec![9; 32],
-                }),
+                root_proof: RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(p(1), p(2))),
             },
             cert_hash: [10; 32],
             not_before_ns: 20,
@@ -429,16 +426,6 @@ mod tests {
             installed_at_ns: 15,
             installed_by: p(11),
         }
-    }
-
-    fn chain_key_active_proof() -> ActiveDelegationProof {
-        let mut proof = active_proof();
-        proof.proof.root_proof = RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(
-            proof.proof.cert.root_pid,
-            proof.proof.cert.issuer_pid,
-        ));
-        proof.cert_hash = [44; 32];
-        proof
     }
 
     fn chain_key_root_proof(
@@ -515,18 +502,6 @@ mod tests {
 
         AuthStateOps::clear_active_delegation_proof();
         assert_eq!(AuthStateOps::active_delegation_proof(20), None);
-    }
-
-    #[test]
-    fn chain_key_active_delegation_proof_round_trips_through_auth_state() {
-        AuthStateOps::clear_active_delegation_proof();
-        let proof = chain_key_active_proof();
-
-        AuthStateOps::set_active_delegation_proof(proof.clone());
-
-        assert_eq!(AuthStateOps::active_delegation_proof(20), Some(proof));
-
-        AuthStateOps::clear_active_delegation_proof();
     }
 
     #[test]

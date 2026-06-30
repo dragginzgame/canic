@@ -49,6 +49,8 @@ use sha2::{Digest, Sha256};
 
 const CHAIN_KEY_BATCH_SCHEMA_VERSION_V1: u16 = 1;
 const CHAIN_KEY_BATCH_ID_DOMAIN: &[u8] = b"CANIC_ROOT_DELEGATION_CHAIN_KEY_BATCH_ID_V1";
+const MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS: usize = 64;
+const MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES: usize = 128;
 const CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS: u64 = 60_000_000_000;
 
 ///
@@ -135,6 +137,7 @@ pub(in crate::ops::auth) fn prepare_due_chain_key_root_delegation_batch(
             .as_slice()
             .cmp(right.template.issuer_pid.as_slice())
     });
+    cap_due_chain_key_templates(&mut due_templates);
 
     if due_templates.is_empty() {
         return Ok(PrepareDueChainKeyRootDelegationBatchResult {
@@ -143,6 +146,13 @@ pub(in crate::ops::auth) fn prepare_due_chain_key_root_delegation_batch(
             skipped_templates: enabled_template_count(),
             reused_in_flight: false,
         });
+    }
+
+    let pending_batches = pending_chain_key_root_delegation_batch_count(input.now_ns);
+    if pending_batches >= MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES {
+        return Err(chain_key_root_delegation_batch_quota_exceeded(
+            pending_batches,
+        ));
     }
 
     let proof_epoch =
@@ -730,6 +740,12 @@ fn due_chain_key_templates(
         .collect()
 }
 
+fn cap_due_chain_key_templates(due_templates: &mut Vec<DueChainKeyTemplate>) {
+    if due_templates.len() > MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS {
+        due_templates.truncate(MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS);
+    }
+}
+
 fn chain_key_template_due(
     now_ns: u64,
     template_fingerprint: [u8; 32],
@@ -754,6 +770,20 @@ fn enabled_template_count() -> usize {
         .into_iter()
         .filter(|template| template.enabled)
         .count()
+}
+
+fn pending_chain_key_root_delegation_batch_count(now_ns: u64) -> usize {
+    AuthStateOps::chain_key_root_delegation_batches()
+        .into_iter()
+        .filter(|batch| now_ns < batch.header.expires_at_ns)
+        .filter(|batch| batch.status != ChainKeyRootDelegationBatchStatus::Installed)
+        .count()
+}
+
+fn chain_key_root_delegation_batch_quota_exceeded(pending_batches: usize) -> InternalError {
+    InternalError::resource_exhausted(format!(
+        "chain-key root delegation batch quota exceeded: pending_batches={pending_batches} max_pending_batches={MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES}"
+    ))
 }
 
 fn build_chain_key_root_delegation_batch(
@@ -1459,6 +1489,73 @@ mod tests {
         .expect_err("duplicate issuer leaves must reject");
 
         assert!(err.to_string().contains("duplicate issuer"));
+    }
+
+    #[test]
+    fn chain_key_batch_due_template_cap_limits_one_batch_to_sixty_four_issuers() {
+        let mut due_templates = (0..=MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS)
+            .map(|index| DueChainKeyTemplate {
+                template: template(
+                    p(u8::try_from(100 + index).expect("test issuer id should fit in u8")),
+                    60_000_000_000,
+                ),
+            })
+            .collect::<Vec<_>>();
+        let excluded_issuer = due_templates
+            .last()
+            .expect("test should include one issuer over the cap")
+            .template
+            .issuer_pid;
+
+        cap_due_chain_key_templates(&mut due_templates);
+
+        assert_eq!(
+            due_templates.len(),
+            MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS
+        );
+        assert!(
+            due_templates
+                .iter()
+                .all(|due| due.template.issuer_pid != excluded_issuer)
+        );
+    }
+
+    #[test]
+    fn chain_key_batch_prepare_rejects_new_batch_when_pending_quota_is_full() {
+        AuthStateOps::prune_chain_key_root_delegation_batches(u64::MAX);
+        let signing_policy = signing_policy();
+        let issuer = p(190);
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer));
+        AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
+
+        let mut stale_input = input(&signing_policy);
+        stale_input.registry_hash = [99; 32];
+        let base_batch = build_chain_key_root_delegation_batch(
+            stale_input,
+            &[DueChainKeyTemplate {
+                template: template(issuer, 60_000_000_000),
+            }],
+            10,
+        )
+        .expect("base batch should build for quota fixture");
+
+        for index in 0..MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES {
+            let mut batch = base_batch.clone();
+            let id_byte = u8::try_from(index).expect("quota fixture index should fit in u8");
+            batch.batch_id = [id_byte; 32];
+            batch.header.batch_id = batch.batch_id;
+            batch.prepared_at_ns = u64::try_from(index).expect("quota fixture index fits u64");
+            batch.status = ChainKeyRootDelegationBatchStatus::Prepared;
+            AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+        }
+
+        let err = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+            .expect_err("full pending state must reject a new chain-key batch");
+
+        assert!(err.is_public_resource_exhausted());
+        assert!(err.to_string().contains("quota exceeded"));
+        assert!(err.to_string().contains("max_pending_batches=128"));
+        AuthStateOps::prune_chain_key_root_delegation_batches(u64::MAX);
     }
 
     #[test]

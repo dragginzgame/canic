@@ -65,7 +65,6 @@ pub struct ChainKeyKeyId {
 }
 
 pub enum RootProof {
-    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
     IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1),
 }
 
@@ -255,10 +254,10 @@ with `DelegationCert` for issuer id, issuer proof algorithm and binding,
 audience, grants, time window, max token TTL, registry epoch, and registry
 hash.
 
-`RootProof::IcCanisterSignatureV1` is a retained historical variant and is
-rejected for 0.76 delegated-token root proof verification. It remains relevant
-only to non-delegated-token surfaces that still use root canister signatures,
-such as role attestation.
+Delegated-token `RootProof` is chain-key-only in 0.76. Root canister-signature
+proof material remains relevant only to non-delegated-token surfaces that use
+separate proof DTOs, such as role attestation, and to issuer-local token proof
+verification through `IssuerProof`.
 
 ## Issuance Flow
 
@@ -462,7 +461,7 @@ The auth architecture must not introduce:
   or client-side provisioning dependency for delegated-auth liveness
 - per-login, per-user, per-token, or per-session root threshold signing
 - legacy `root_sig` verifier branches
-- legacy `RootProof::IcCanisterSignatureV1` acceptance for delegated-token root
+- legacy canister-signature root proof acceptance for delegated-token root
   proofs
 - `SubnetState.auth.delegated_root_public_key` as delegated-token root proof
   authority
