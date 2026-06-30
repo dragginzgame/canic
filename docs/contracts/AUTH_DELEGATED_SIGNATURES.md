@@ -308,10 +308,11 @@ proof epoch, installs issuer-specific active proof material, retries partial
 install failures, discards stale signing callbacks after registry changes, and
 prunes expired batches before install.
 
-The retained bridge-backed canister-signature provisioning endpoints are not
-part of the 0.76 delegated-token root proof contract. In
-`root_proof_mode = "chain_key_batch"`, those legacy endpoints reject rather
-than provide an alternate liveness path.
+The old bridge-backed canister-signature provisioning endpoints are not part of
+the active delegated-token root proof contract. In
+`root_proof_mode = "chain_key_batch"`, delegated-token liveness comes from root
+timer renewal and issuer lazy repair through chain-key batch proofs, not from
+external bridge or direct-query install workflows.
 
 The retired single-proof root prepare/get endpoints are not part of the active
 protocol. Root proof retrieval must not be hidden behind issuer composite-query

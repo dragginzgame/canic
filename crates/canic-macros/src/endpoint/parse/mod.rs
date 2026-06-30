@@ -46,7 +46,6 @@ pub enum BuiltinPredicate {
     CallerIsSameCanister,
     CallerIsRegisteredToSubnet,
     CallerIsWhitelisted,
-    CallerIsDelegationRenewalProvisioner,
     Authenticated {
         required_scope: Option<AuthScopeArg>,
     },
@@ -549,9 +548,6 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
         ("caller", "is_same_canister") => Some(BuiltinPredicate::CallerIsSameCanister),
         ("caller", "is_registered_to_subnet") => Some(BuiltinPredicate::CallerIsRegisteredToSubnet),
         ("caller", "is_whitelisted") => Some(BuiltinPredicate::CallerIsWhitelisted),
-        ("caller", "is_delegation_renewal_provisioner") => {
-            Some(BuiltinPredicate::CallerIsDelegationRenewalProvisioner)
-        }
         ("env", "build_ic_only") => Some(BuiltinPredicate::BuildIcOnly),
         ("env", "build_local_only") => Some(BuiltinPredicate::BuildLocalOnly),
         _ => None,

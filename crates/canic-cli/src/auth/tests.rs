@@ -1,29 +1,7 @@
+use super::codec::hex_bytes;
 use super::*;
 use crate::{cli::globals, run};
 use std::{cell::RefCell, collections::VecDeque};
-
-#[test]
-fn parses_renewal_run_once_options() {
-    let command = AuthOptions::parse([
-        OsString::from("renewal"),
-        OsString::from("run-once"),
-        OsString::from("local"),
-        OsString::from("--json"),
-        OsString::from(globals::INTERNAL_NETWORK_OPTION),
-        OsString::from("local"),
-        OsString::from(globals::INTERNAL_ICP_OPTION),
-        OsString::from("/bin/icp"),
-    ])
-    .expect("parse auth renewal run-once options");
-
-    let AuthCommand::RenewalRunOnce(options) = command else {
-        panic!("expected renewal run-once command");
-    };
-    assert_eq!(options.deployment, "local");
-    assert_eq!(options.common.network, "local");
-    assert_eq!(options.common.icp, "/bin/icp");
-    assert!(options.json);
-}
 
 #[test]
 fn parses_renewal_status_options() {
@@ -41,52 +19,12 @@ fn parses_renewal_status_options() {
     ])
     .expect("parse auth renewal status options");
 
-    let AuthCommand::RenewalStatus(options) = command else {
-        panic!("expected renewal status command");
-    };
+    let AuthCommand::RenewalStatus(options) = command;
     assert_eq!(options.deployment, "local");
     assert_eq!(options.issuer, "rrkah-fqaaa-aaaaa-aaaaq-cai");
     assert_eq!(options.common.network, "local");
     assert_eq!(options.common.icp, "/bin/icp");
     assert!(options.json);
-}
-
-#[test]
-fn parses_renewal_provisioner_options() {
-    let list = AuthOptions::parse([
-        OsString::from("renewal"),
-        OsString::from("provisioner"),
-        OsString::from("list"),
-        OsString::from("local"),
-        OsString::from("--json"),
-        OsString::from(globals::INTERNAL_NETWORK_OPTION),
-        OsString::from("local"),
-        OsString::from(globals::INTERNAL_ICP_OPTION),
-        OsString::from("/bin/icp"),
-    ])
-    .expect("parse auth renewal provisioner list options");
-    let AuthCommand::RenewalProvisionerList(options) = list else {
-        panic!("expected renewal provisioner list command");
-    };
-    assert_eq!(options.deployment, "local");
-    assert_eq!(options.common.network, "local");
-    assert_eq!(options.common.icp, "/bin/icp");
-    assert!(options.json);
-
-    let disable = AuthOptions::parse([
-        OsString::from("renewal"),
-        OsString::from("provisioner"),
-        OsString::from("disable"),
-        OsString::from("local"),
-        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-    ])
-    .expect("parse auth renewal provisioner disable options");
-    let AuthCommand::RenewalProvisionerUpsert(options) = disable else {
-        panic!("expected renewal provisioner upsert command");
-    };
-    assert_eq!(options.deployment, "local");
-    assert_eq!(options.principal, "rrkah-fqaaa-aaaaa-aaaaq-cai");
-    assert!(!options.enabled);
 }
 
 #[test]
@@ -98,232 +36,11 @@ fn top_level_forwards_auth_global_icp_and_network() {
         OsString::from("local"),
         OsString::from("auth"),
         OsString::from("renewal"),
-        OsString::from("run-once"),
+        OsString::from("status"),
     ])
-    .expect_err("missing deployment should be parsed after global options");
+    .expect_err("missing status arguments should be parsed after global options");
 
     assert!(err.to_string().contains("Usage: canic auth"));
-}
-
-#[test]
-fn parses_work_batches_from_json_and_candid() {
-    let json = serde_json::json!({
-        "batches": [{
-            "batch_id": vec![7_u8; 32],
-            "attempt_count": "2",
-            "attempts": []
-        }]
-    })
-    .to_string();
-    assert_eq!(
-        parse_work_batches(&json),
-        Some(vec![AuthRenewalBatchWork {
-            batch_id: [7; 32],
-            attempt_count: Some(2),
-        }])
-    );
-
-    let candid = r#"{"response_candid":"(record { batches = vec { record { batch_id = blob \"\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\\08\"; attempt_count = 1 : nat64; attempts = vec {} } } })"}"#;
-    assert_eq!(
-        parse_work_batches(candid),
-        Some(vec![AuthRenewalBatchWork {
-            batch_id: [8; 32],
-            attempt_count: Some(1),
-        }])
-    );
-}
-
-#[test]
-fn parses_renewal_provisioners_from_json_and_candid() {
-    let json = serde_json::json!({
-        "provisioners": [{
-            "principal": "rrkah-fqaaa-aaaaa-aaaaq-cai",
-            "enabled": true
-        }]
-    })
-    .to_string();
-    assert_eq!(
-        parse_renewal_provisioners(&json),
-        Some(vec![AuthRenewalProvisioner {
-            principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
-            enabled: true,
-        }])
-    );
-
-    let candid = r#"{"response_candid":"(record { provisioners = vec { record { \"principal\" = principal \"rrkah-fqaaa-aaaaa-aaaaq-cai\"; enabled = false } } })"}"#;
-    assert_eq!(
-        parse_renewal_provisioners(candid),
-        Some(vec![AuthRenewalProvisioner {
-            principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
-            enabled: false,
-        }])
-    );
-}
-
-#[test]
-fn run_once_retrieves_and_installs_scheduled_batches() {
-    let runtime = ScriptedAuthRenewalRuntime::new([
-        scripted_response(
-            CANIC_DELEGATION_RENEWAL_WORK,
-            None,
-            Some("json"),
-            serde_json::json!({
-                "batches": [{
-                    "batch_id": vec![9_u8; 32],
-                    "attempt_count": 1,
-                    "attempts": []
-                }]
-            })
-            .to_string(),
-        ),
-        scripted_response(
-            CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-            Some(root_delegation_renewal_batch_get_arg([9; 32])),
-            None,
-            "(record { batch_id = blob \"\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\"; proofs = vec {} })".to_string(),
-        ),
-        scripted_response(
-            CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-            Some("(record { batch_id = blob \"\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\\09\"; proofs = vec {} })".to_string()),
-            Some("json"),
-            "{}".to_string(),
-        ),
-    ]);
-    let result = renewal_once_result_with_runtime(
-        &runtime,
-        &RenewalRunOnceOptions {
-            deployment: "local".to_string(),
-            json: true,
-            common: CommonOptions {
-                network: "local".to_string(),
-                icp: "icp".to_string(),
-            },
-        },
-    )
-    .expect("run-once should retrieve and install scripted batch");
-
-    assert_eq!(result.status, AUTH_RENEWAL_STATUS_INSTALLED);
-    assert_eq!(result.schema_version, AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION);
-    assert_eq!(result.batches.len(), 1);
-    assert_eq!(result.batches[0].batch_id, hex_bytes(&[9; 32]));
-    assert_eq!(
-        runtime.called_methods(),
-        vec![
-            CANIC_DELEGATION_RENEWAL_WORK,
-            CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-            CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-        ]
-    );
-}
-
-#[test]
-fn run_once_noops_when_no_work_is_scheduled() {
-    let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
-        CANIC_DELEGATION_RENEWAL_WORK,
-        None,
-        Some("json"),
-        serde_json::json!({ "batches": [] }).to_string(),
-    )]);
-    let result = renewal_once_result_with_runtime(
-        &runtime,
-        &RenewalRunOnceOptions {
-            deployment: "local".to_string(),
-            json: false,
-            common: CommonOptions {
-                network: "local".to_string(),
-                icp: "icp".to_string(),
-            },
-        },
-    )
-    .expect("run-once should tolerate empty work");
-
-    assert_eq!(result.status, AUTH_RENEWAL_STATUS_NO_WORK);
-    assert!(result.batches.is_empty());
-    assert_eq!(
-        runtime.called_methods(),
-        vec![CANIC_DELEGATION_RENEWAL_WORK]
-    );
-}
-
-#[test]
-fn renewal_provisioner_list_queries_acl_endpoint() {
-    let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
-        CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-        None,
-        Some("json"),
-        serde_json::json!({
-            "provisioners": [{
-                "principal": "rrkah-fqaaa-aaaaa-aaaaq-cai",
-                "enabled": true
-            }]
-        })
-        .to_string(),
-    )]);
-
-    let result = renewal_provisioner_list_result_with_runtime(
-        &runtime,
-        &RenewalProvisionerListOptions {
-            deployment: "local".to_string(),
-            json: true,
-            common: CommonOptions {
-                network: "local".to_string(),
-                icp: "icp".to_string(),
-            },
-        },
-    )
-    .expect("provisioner list should query scripted endpoint");
-
-    assert_eq!(result.kind, AUTH_RENEWAL_PROVISIONER_LIST_KIND);
-    assert_eq!(result.provisioners.len(), 1);
-    assert_eq!(
-        result.provisioners[0].principal,
-        "rrkah-fqaaa-aaaaa-aaaaq-cai"
-    );
-    assert!(result.provisioners[0].enabled);
-    assert_eq!(
-        runtime.called_methods(),
-        vec![CANIC_DELEGATION_RENEWAL_PROVISIONERS]
-    );
-}
-
-#[test]
-fn renewal_provisioner_upsert_calls_acl_endpoint() {
-    let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
-    let runtime = ScriptedAuthRenewalRuntime::new([scripted_response(
-        CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
-        Some(renewal_provisioner_upsert_arg(principal, true)),
-        Some("json"),
-        serde_json::json!({
-            "provisioner": {
-                "principal": principal,
-                "enabled": true
-            }
-        })
-        .to_string(),
-    )]);
-
-    let result = renewal_provisioner_upsert_result_with_runtime(
-        &runtime,
-        &RenewalProvisionerUpsertOptions {
-            deployment: "local".to_string(),
-            principal: principal.to_string(),
-            enabled: true,
-            json: true,
-            common: CommonOptions {
-                network: "local".to_string(),
-                icp: "icp".to_string(),
-            },
-        },
-    )
-    .expect("provisioner upsert should call scripted endpoint");
-
-    assert_eq!(result.kind, AUTH_RENEWAL_PROVISIONER_UPSERT_KIND);
-    assert_eq!(result.provisioner.principal, principal);
-    assert!(result.provisioner.enabled);
-    assert_eq!(
-        runtime.called_methods(),
-        vec![CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER]
-    );
 }
 
 #[test]
@@ -565,17 +282,8 @@ impl ScriptedAuthRenewalRuntime {
             .iter()
             .map(String::as_str)
             .map(|method| match method {
-                CANIC_DELEGATION_RENEWAL_WORK => CANIC_DELEGATION_RENEWAL_WORK,
-                CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH => {
-                    CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH
-                }
-                CANIC_INSTALL_DELEGATION_PROOF_BATCH => CANIC_INSTALL_DELEGATION_PROOF_BATCH,
                 CANIC_ROOT_ISSUER_RENEWAL_STATUS => CANIC_ROOT_ISSUER_RENEWAL_STATUS,
                 CANIC_ACTIVE_DELEGATION_PROOF_STATUS => CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
-                CANIC_DELEGATION_RENEWAL_PROVISIONERS => CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-                CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER => {
-                    CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER
-                }
                 _ => panic!("unexpected method {method}"),
             })
             .collect()
@@ -622,17 +330,6 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
         output: Option<&str>,
     ) -> Result<String, AuthCommandError> {
         Ok(self.call(method, arg, output))
-    }
-
-    fn call_output(
-        &self,
-        _options: &CommonOptions,
-        _target: &AuthRootCallTarget,
-        method: &str,
-        arg: &str,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError> {
-        Ok(self.call(method, Some(arg), output))
     }
 
     fn resolve_issuer_target(

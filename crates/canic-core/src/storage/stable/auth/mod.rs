@@ -19,10 +19,9 @@ pub use records::{
     DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationAudienceRecord,
     DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
     IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-    RootDelegationRenewalBatchRecord, RootIssuerRecord, RootIssuerRenewalAttemptRecord,
-    RootIssuerRenewalAttemptStatusRecord, RootIssuerRenewalOutcomeRecord,
-    RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord,
-    RootKeyPolicyRecord, RootProofModeRecord, RootProofRecord, RootProvisionerRecord,
+    RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
+    RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord,
+    RootIssuerRenewalTemplateRecord, RootKeyPolicyRecord, RootProofModeRecord, RootProofRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -372,62 +371,6 @@ impl AuthState {
         });
     }
 
-    // Resolve a scheduled root-managed renewal batch by batch id.
-    #[must_use]
-    pub(crate) fn get_root_delegation_renewal_batch(
-        batch_id: [u8; 32],
-    ) -> Option<RootDelegationRenewalBatchRecord> {
-        AUTH_STATE.with_borrow(|cell| {
-            cell.get()
-                .root_delegation_renewal_batches
-                .iter()
-                .find(|record| record.batch_id == batch_id)
-                .cloned()
-        })
-    }
-
-    // List scheduled root-managed renewal batches.
-    #[must_use]
-    pub(crate) fn list_root_delegation_renewal_batches() -> Vec<RootDelegationRenewalBatchRecord> {
-        AUTH_STATE.with_borrow(|cell| cell.get().root_delegation_renewal_batches.clone())
-    }
-
-    // Upsert a scheduled root-managed renewal batch.
-    #[allow(
-        dead_code,
-        reason = "pre-0.76 bridge-backed renewal batch writer is retained for historical scheduler code during the hard-cut migration"
-    )]
-    pub(crate) fn upsert_root_delegation_renewal_batch(record: RootDelegationRenewalBatchRecord) {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            if let Some(existing) = data
-                .root_delegation_renewal_batches
-                .iter_mut()
-                .find(|existing| existing.batch_id == record.batch_id)
-            {
-                *existing = record;
-            } else {
-                data.root_delegation_renewal_batches.push(record);
-            }
-            cell.set(data);
-        });
-    }
-
-    // Remove expired root-managed renewal batch transport records.
-    pub(crate) fn prune_root_delegation_renewal_batches(now_ns: u64) -> usize {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            let before = data.root_delegation_renewal_batches.len();
-            data.root_delegation_renewal_batches
-                .retain(|record| now_ns < record.retrieval_expires_at_ns);
-            let removed = before.saturating_sub(data.root_delegation_renewal_batches.len());
-            if removed > 0 {
-                cell.set(data);
-            }
-            removed
-        })
-    }
-
     // Resolve a chain-key root delegation batch by batch id.
     #[must_use]
     #[allow(
@@ -485,40 +428,5 @@ impl AuthState {
             }
             removed
         })
-    }
-
-    // Resolve a root-managed delegation renewal provisioner by principal.
-    #[must_use]
-    pub(crate) fn get_root_provisioner(principal: Principal) -> Option<RootProvisionerRecord> {
-        AUTH_STATE.with_borrow(|cell| {
-            cell.get()
-                .root_provisioners
-                .iter()
-                .find(|record| record.principal == principal)
-                .copied()
-        })
-    }
-
-    // List root-managed delegation renewal provisioners.
-    #[must_use]
-    pub(crate) fn list_root_provisioners() -> Vec<RootProvisionerRecord> {
-        AUTH_STATE.with_borrow(|cell| cell.get().root_provisioners.clone())
-    }
-
-    // Upsert a root-managed delegation renewal provisioner.
-    pub(crate) fn upsert_root_provisioner(record: RootProvisionerRecord) {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            if let Some(existing) = data
-                .root_provisioners
-                .iter_mut()
-                .find(|existing| existing.principal == record.principal)
-            {
-                *existing = record;
-            } else {
-                data.root_provisioners.push(record);
-            }
-            cell.set(data);
-        });
     }
 }

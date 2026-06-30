@@ -23,10 +23,7 @@ use crate::{
     version_text,
 };
 use canic_core::protocol::{
-    CANIC_ACTIVE_DELEGATION_PROOF_STATUS, CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-    CANIC_DELEGATION_RENEWAL_WORK, CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-    CANIC_INSTALL_DELEGATION_PROOF_BATCH, CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-    CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
+    CANIC_ACTIVE_DELEGATION_PROOF_STATUS, CANIC_ROOT_ISSUER_RENEWAL_STATUS,
 };
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
@@ -48,38 +45,20 @@ use std::{
 use thiserror::Error as ThisError;
 
 use codec::{
-    hex_bytes, parse_issuer_observed_status, parse_issuer_principal, parse_principal_text,
-    parse_renewal_provisioner_response, parse_renewal_provisioners, parse_renewal_status_summary,
-    parse_work_batches, renewal_provisioner_upsert_arg, root_delegation_renewal_batch_get_arg,
+    parse_issuer_observed_status, parse_issuer_principal, parse_renewal_status_summary,
     root_issuer_renewal_status_arg,
 };
-use render::{
-    render_issuer_observation, write_renewal_once_result, write_renewal_provisioner_list_result,
-    write_renewal_provisioner_upsert_result, write_renewal_status_result,
-};
+use render::{render_issuer_observation, write_renewal_status_result};
 
 const COMMAND_NAME: &str = "auth";
 const RENEWAL_COMMAND: &str = "renewal";
-const RUN_ONCE_COMMAND: &str = "run-once";
 const STATUS_COMMAND: &str = "status";
-const PROVISIONER_COMMAND: &str = "provisioner";
-const LIST_COMMAND: &str = "list";
-const ENABLE_COMMAND: &str = "enable";
-const DISABLE_COMMAND: &str = "disable";
 const DEPLOYMENT_ARG: &str = "deployment";
 const ISSUER_ARG: &str = "issuer";
-const PRINCIPAL_ARG: &str = "principal";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
-const AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION: u16 = 1;
 const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 2;
-const AUTH_RENEWAL_PROVISIONER_SCHEMA_VERSION: u16 = 1;
-const AUTH_RENEWAL_RUN_ONCE_KIND: &str = "auth_renewal_run_once_result";
 const AUTH_RENEWAL_STATUS_KIND: &str = "auth_renewal_status";
-const AUTH_RENEWAL_PROVISIONER_LIST_KIND: &str = "auth_renewal_provisioners";
-const AUTH_RENEWAL_PROVISIONER_UPSERT_KIND: &str = "auth_renewal_provisioner_upsert_result";
-const AUTH_RENEWAL_STATUS_NO_WORK: &str = "no_work";
-const AUTH_RENEWAL_STATUS_INSTALLED: &str = "installed";
 const AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT: &str = "active_attempt";
 const AUTH_RENEWAL_STATUS_CONFIGURED: &str = "configured";
 const AUTH_RENEWAL_STATUS_DISABLED: &str = "disabled";
@@ -90,12 +69,8 @@ const AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deploym
 
 const HELP_AFTER: &str = "\
 Examples:
-  canic auth renewal run-once local
-  canic auth renewal run-once local --json
   canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai
-  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai --json
-  canic auth renewal provisioner list local
-  canic auth renewal provisioner enable local r7inp-6aaaa-aaaaa-aaabq-cai";
+  canic auth renewal status local --issuer rrkah-fqaaa-aaaaa-aaaaq-cai --json";
 
 ///
 /// AuthCommandError
@@ -131,9 +106,6 @@ pub enum AuthCommandError {
     #[error("issuer must be a valid principal: {issuer}")]
     InvalidIssuerPrincipal { issuer: String },
 
-    #[error("principal must be valid: {principal}")]
-    InvalidPrincipal { principal: String },
-
     #[error("failed to read local Candid sidecar {path}: {source}")]
     CandidRead { path: PathBuf, source: io::Error },
 
@@ -156,7 +128,7 @@ pub enum AuthCommandError {
         actual: &'static str,
     },
 
-    #[error("failed to parse root delegation renewal work response")]
+    #[error("failed to parse auth renewal response")]
     ResponseParse,
 }
 
@@ -171,7 +143,6 @@ impl AuthCommandError {
             | Self::InstallState(_)
             | Self::CandidUnavailable { .. }
             | Self::InvalidIssuerPrincipal { .. }
-            | Self::InvalidPrincipal { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
@@ -186,10 +157,7 @@ impl AuthCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthCommand {
-    RenewalRunOnce(RenewalRunOnceOptions),
     RenewalStatus(RenewalStatusOptions),
-    RenewalProvisionerList(RenewalProvisionerListOptions),
-    RenewalProvisionerUpsert(RenewalProvisionerUpsertOptions),
 }
 
 ///
@@ -203,17 +171,6 @@ struct CommonOptions {
 }
 
 ///
-/// RenewalRunOnceOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RenewalRunOnceOptions {
-    deployment: String,
-    json: bool,
-    common: CommonOptions,
-}
-
-///
 /// RenewalStatusOptions
 ///
 
@@ -221,30 +178,6 @@ struct RenewalRunOnceOptions {
 struct RenewalStatusOptions {
     deployment: String,
     issuer: String,
-    json: bool,
-    common: CommonOptions,
-}
-
-///
-/// RenewalProvisionerListOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RenewalProvisionerListOptions {
-    deployment: String,
-    json: bool,
-    common: CommonOptions,
-}
-
-///
-/// RenewalProvisionerUpsertOptions
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RenewalProvisionerUpsertOptions {
-    deployment: String,
-    principal: String,
-    enabled: bool,
     json: bool,
     common: CommonOptions,
 }
@@ -264,13 +197,6 @@ impl AuthOptions {
             parse_matches(auth_command(), args).map_err(|_| AuthCommandError::Usage(usage()))?;
         match matches.subcommand() {
             Some((RENEWAL_COMMAND, matches)) => match matches.subcommand() {
-                Some((RUN_ONCE_COMMAND, matches)) => {
-                    Ok(AuthCommand::RenewalRunOnce(RenewalRunOnceOptions {
-                        deployment: required_string(matches, DEPLOYMENT_ARG),
-                        json: matches.get_flag(JSON_ARG),
-                        common: common_options(matches),
-                    }))
-                }
                 Some((STATUS_COMMAND, matches)) => {
                     Ok(AuthCommand::RenewalStatus(RenewalStatusOptions {
                         deployment: required_string(matches, DEPLOYMENT_ARG),
@@ -279,34 +205,6 @@ impl AuthOptions {
                         common: common_options(matches),
                     }))
                 }
-                Some((PROVISIONER_COMMAND, matches)) => match matches.subcommand() {
-                    Some((LIST_COMMAND, matches)) => Ok(AuthCommand::RenewalProvisionerList(
-                        RenewalProvisionerListOptions {
-                            deployment: required_string(matches, DEPLOYMENT_ARG),
-                            json: matches.get_flag(JSON_ARG),
-                            common: common_options(matches),
-                        },
-                    )),
-                    Some((ENABLE_COMMAND, matches)) => Ok(AuthCommand::RenewalProvisionerUpsert(
-                        RenewalProvisionerUpsertOptions {
-                            deployment: required_string(matches, DEPLOYMENT_ARG),
-                            principal: required_string(matches, PRINCIPAL_ARG),
-                            enabled: true,
-                            json: matches.get_flag(JSON_ARG),
-                            common: common_options(matches),
-                        },
-                    )),
-                    Some((DISABLE_COMMAND, matches)) => Ok(AuthCommand::RenewalProvisionerUpsert(
-                        RenewalProvisionerUpsertOptions {
-                            deployment: required_string(matches, DEPLOYMENT_ARG),
-                            principal: required_string(matches, PRINCIPAL_ARG),
-                            enabled: false,
-                            json: matches.get_flag(JSON_ARG),
-                            common: common_options(matches),
-                        },
-                    )),
-                    _ => Err(AuthCommandError::Usage(usage())),
-                },
                 _ => Err(AuthCommandError::Usage(usage())),
             },
             _ => Err(AuthCommandError::Usage(usage())),
@@ -354,24 +252,7 @@ fn renewal_command() -> ClapCommand {
         .disable_help_flag(true)
         .about("Run root-managed delegation proof renewal workflows")
         .subcommand_required(true)
-        .subcommand(run_once_command())
         .subcommand(status_command())
-        .subcommand(provisioner_command())
-}
-
-fn run_once_command() -> ClapCommand {
-    ClapCommand::new(RUN_ONCE_COMMAND)
-        .disable_help_flag(true)
-        .about("Retrieve and install currently scheduled root delegation renewal proofs")
-        .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
-                .required(true)
-                .help("Installed deployment target name"),
-        )
-        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
-        .arg(internal_network_arg())
-        .arg(internal_icp_arg())
 }
 
 fn status_command() -> ClapCommand {
@@ -396,95 +277,16 @@ fn status_command() -> ClapCommand {
         .arg(internal_icp_arg())
 }
 
-fn provisioner_command() -> ClapCommand {
-    ClapCommand::new(PROVISIONER_COMMAND)
-        .disable_help_flag(true)
-        .about("Manage constrained delegation renewal provisioners")
-        .subcommand_required(true)
-        .subcommand(provisioner_list_command())
-        .subcommand(provisioner_enable_command())
-        .subcommand(provisioner_disable_command())
-}
-
-fn provisioner_list_command() -> ClapCommand {
-    ClapCommand::new(LIST_COMMAND)
-        .disable_help_flag(true)
-        .about("List principals allowed to complete scheduled renewal work")
-        .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
-                .required(true)
-                .help("Installed deployment target name"),
-        )
-        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
-        .arg(internal_network_arg())
-        .arg(internal_icp_arg())
-}
-
-fn provisioner_enable_command() -> ClapCommand {
-    provisioner_upsert_command(ENABLE_COMMAND, "Enable a delegation renewal provisioner")
-}
-
-fn provisioner_disable_command() -> ClapCommand {
-    provisioner_upsert_command(DISABLE_COMMAND, "Disable a delegation renewal provisioner")
-}
-
-fn provisioner_upsert_command(name: &'static str, about: &'static str) -> ClapCommand {
-    ClapCommand::new(name)
-        .disable_help_flag(true)
-        .about(about)
-        .arg(
-            value_arg(DEPLOYMENT_ARG)
-                .value_name(DEPLOYMENT_ARG)
-                .required(true)
-                .help("Installed deployment target name"),
-        )
-        .arg(
-            value_arg(PRINCIPAL_ARG)
-                .value_name(PRINCIPAL_ARG)
-                .required(true)
-                .help("Provisioner principal"),
-        )
-        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
-        .arg(internal_network_arg())
-        .arg(internal_icp_arg())
-}
-
 fn run_command(command: AuthCommand) -> Result<(), AuthCommandError> {
     match command {
-        AuthCommand::RenewalRunOnce(options) => run_renewal_once(&options),
         AuthCommand::RenewalStatus(options) => run_renewal_status(&options),
-        AuthCommand::RenewalProvisionerList(options) => run_renewal_provisioner_list(&options),
-        AuthCommand::RenewalProvisionerUpsert(options) => run_renewal_provisioner_upsert(&options),
     }
-}
-
-fn run_renewal_once(options: &RenewalRunOnceOptions) -> Result<(), AuthCommandError> {
-    let runtime = LiveAuthRenewalRuntime;
-    let result = renewal_once_result_with_runtime(&runtime, options)?;
-    write_renewal_once_result(options.json, &result)
 }
 
 fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandError> {
     let runtime = LiveAuthRenewalRuntime;
     let result = renewal_status_result_with_runtime(&runtime, options)?;
     write_renewal_status_result(options.json, &result)
-}
-
-fn run_renewal_provisioner_list(
-    options: &RenewalProvisionerListOptions,
-) -> Result<(), AuthCommandError> {
-    let runtime = LiveAuthRenewalRuntime;
-    let result = renewal_provisioner_list_result_with_runtime(&runtime, options)?;
-    write_renewal_provisioner_list_result(options.json, &result)
-}
-
-fn run_renewal_provisioner_upsert(
-    options: &RenewalProvisionerUpsertOptions,
-) -> Result<(), AuthCommandError> {
-    let runtime = LiveAuthRenewalRuntime;
-    let result = renewal_provisioner_upsert_result_with_runtime(&runtime, options)?;
-    write_renewal_provisioner_upsert_result(options.json, &result)
 }
 
 pub fn renewal_medic_summary(
@@ -543,15 +345,6 @@ trait AuthRenewalRuntime {
         method: &str,
         output: Option<&str>,
     ) -> Result<String, AuthCommandError>;
-
-    fn call_output(
-        &self,
-        options: &CommonOptions,
-        target: &AuthRootCallTarget,
-        method: &str,
-        arg: &str,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError>;
 }
 
 fn renewal_status_result_with_runtime(
@@ -589,67 +382,6 @@ fn renewal_status_result_with_runtime(
     })
 }
 
-fn renewal_provisioner_list_result_with_runtime(
-    runtime: &impl AuthRenewalRuntime,
-    options: &RenewalProvisionerListOptions,
-) -> Result<AuthRenewalProvisionerListResult, AuthCommandError> {
-    let target = runtime.resolve_root_target(
-        &options.common,
-        &options.deployment,
-        CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-        AuthRenewalMethodMode::Query,
-    )?;
-    let output = runtime.query_output(
-        &options.common,
-        &target,
-        CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-        None,
-        Some("json"),
-    )?;
-    let provisioners =
-        parse_renewal_provisioners(&output).ok_or(AuthCommandError::ResponseParse)?;
-
-    Ok(AuthRenewalProvisionerListResult {
-        schema_version: AUTH_RENEWAL_PROVISIONER_SCHEMA_VERSION,
-        kind: AUTH_RENEWAL_PROVISIONER_LIST_KIND.to_string(),
-        deployment: options.deployment.clone(),
-        network: options.common.network.clone(),
-        target: target.target,
-        provisioners,
-    })
-}
-
-fn renewal_provisioner_upsert_result_with_runtime(
-    runtime: &impl AuthRenewalRuntime,
-    options: &RenewalProvisionerUpsertOptions,
-) -> Result<AuthRenewalProvisionerUpsertResult, AuthCommandError> {
-    let principal = parse_principal_text(&options.principal)?;
-    let target = runtime.resolve_root_target(
-        &options.common,
-        &options.deployment,
-        CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
-        AuthRenewalMethodMode::Update,
-    )?;
-    let output = runtime.call_output(
-        &options.common,
-        &target,
-        CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
-        &renewal_provisioner_upsert_arg(&principal, options.enabled),
-        Some("json"),
-    )?;
-    let provisioner =
-        parse_renewal_provisioner_response(&output).ok_or(AuthCommandError::ResponseParse)?;
-
-    Ok(AuthRenewalProvisionerUpsertResult {
-        schema_version: AUTH_RENEWAL_PROVISIONER_SCHEMA_VERSION,
-        kind: AUTH_RENEWAL_PROVISIONER_UPSERT_KIND.to_string(),
-        deployment: options.deployment.clone(),
-        network: options.common.network.clone(),
-        target: target.target,
-        provisioner,
-    })
-}
-
 struct LiveAuthRenewalRuntime;
 
 impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
@@ -674,17 +406,6 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         live_query_output(options, target, method, arg, output)
     }
 
-    fn call_output(
-        &self,
-        options: &CommonOptions,
-        target: &AuthRootCallTarget,
-        method: &str,
-        arg: &str,
-        output: Option<&str>,
-    ) -> Result<String, AuthCommandError> {
-        live_call_output(options, target, method, arg, output)
-    }
-
     fn resolve_issuer_target(
         &self,
         options: &CommonOptions,
@@ -707,89 +428,15 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
     }
 }
 
-fn renewal_once_result_with_runtime(
-    runtime: &impl AuthRenewalRuntime,
-    options: &RenewalRunOnceOptions,
-) -> Result<AuthRenewalRunOnceResult, AuthCommandError> {
-    let work_target = runtime.resolve_root_target(
-        &options.common,
-        &options.deployment,
-        CANIC_DELEGATION_RENEWAL_WORK,
-        AuthRenewalMethodMode::Query,
-    )?;
-    let work_output = runtime.query_output(
-        &options.common,
-        &work_target,
-        CANIC_DELEGATION_RENEWAL_WORK,
-        None,
-        Some("json"),
-    )?;
-    let work_batches = parse_work_batches(&work_output).ok_or(AuthCommandError::ResponseParse)?;
-
-    let mut batches = Vec::with_capacity(work_batches.len());
-    for work in work_batches {
-        let get_target = runtime.resolve_root_target(
-            &options.common,
-            &options.deployment,
-            CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-            AuthRenewalMethodMode::Query,
-        )?;
-        let batch_arg = root_delegation_renewal_batch_get_arg(work.batch_id);
-        let proof_arg = runtime.query_output(
-            &options.common,
-            &get_target,
-            CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-            Some(&batch_arg),
-            None,
-        )?;
-        let install_target = runtime.resolve_root_target(
-            &options.common,
-            &options.deployment,
-            CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-            AuthRenewalMethodMode::Update,
-        )?;
-        let _install_output = runtime.call_output(
-            &options.common,
-            &install_target,
-            CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-            proof_arg.trim(),
-            Some("json"),
-        )?;
-        batches.push(AuthRenewalBatchRunResult {
-            batch_id: hex_bytes(&work.batch_id),
-            attempt_count: work.attempt_count,
-            status: AUTH_RENEWAL_STATUS_INSTALLED.to_string(),
-            retrieved: true,
-            installed: true,
-        });
-    }
-
-    Ok(AuthRenewalRunOnceResult {
-        schema_version: AUTH_RENEWAL_RUN_ONCE_SCHEMA_VERSION,
-        kind: AUTH_RENEWAL_RUN_ONCE_KIND.to_string(),
-        deployment: options.deployment.clone(),
-        network: options.common.network.clone(),
-        target: work_target.target,
-        status: if batches.is_empty() {
-            AUTH_RENEWAL_STATUS_NO_WORK.to_string()
-        } else {
-            AUTH_RENEWAL_STATUS_INSTALLED.to_string()
-        },
-        batches,
-    })
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AuthRenewalMethodMode {
     Query,
-    Update,
 }
 
 impl AuthRenewalMethodMode {
     const fn label(self) -> &'static str {
         match self {
             Self::Query => "query",
-            Self::Update => "update",
         }
     }
 }
@@ -839,82 +486,6 @@ struct AuthIssuerCallTarget {
     target: AuthIssuerTarget,
     candid_path: PathBuf,
     icp_root: PathBuf,
-}
-
-///
-/// AuthRenewalBatchWork
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct AuthRenewalBatchWork {
-    batch_id: [u8; 32],
-    attempt_count: Option<u64>,
-}
-
-///
-/// AuthRenewalBatchRunResult
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthRenewalBatchRunResult {
-    batch_id: String,
-    attempt_count: Option<u64>,
-    status: String,
-    retrieved: bool,
-    installed: bool,
-}
-
-///
-/// AuthRenewalRunOnceResult
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthRenewalRunOnceResult {
-    schema_version: u16,
-    kind: String,
-    deployment: String,
-    network: String,
-    target: AuthRootTarget,
-    status: String,
-    batches: Vec<AuthRenewalBatchRunResult>,
-}
-
-///
-/// AuthRenewalProvisioner
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthRenewalProvisioner {
-    principal: String,
-    enabled: bool,
-}
-
-///
-/// AuthRenewalProvisionerListResult
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthRenewalProvisionerListResult {
-    schema_version: u16,
-    kind: String,
-    deployment: String,
-    network: String,
-    target: AuthRootTarget,
-    provisioners: Vec<AuthRenewalProvisioner>,
-}
-
-///
-/// AuthRenewalProvisionerUpsertResult
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthRenewalProvisionerUpsertResult {
-    schema_version: u16,
-    kind: String,
-    deployment: String,
-    network: String,
-    target: AuthRootTarget,
-    provisioner: AuthRenewalProvisioner,
 }
 
 ///
@@ -1130,7 +701,12 @@ fn validate_auth_method_mode(
     {
         AuthRenewalMethodMode::Query
     } else {
-        AuthRenewalMethodMode::Update
+        return Err(AuthCommandError::MethodModeMismatch {
+            path: path.to_path_buf(),
+            method: method.to_string(),
+            expected: expected_mode.label(),
+            actual: "update",
+        });
     };
     if actual_mode != expected_mode {
         return Err(AuthCommandError::MethodModeMismatch {
@@ -1190,23 +766,6 @@ fn live_query_issuer_output(
     .map_err(auth_icp_error)
 }
 
-fn live_call_output(
-    options: &CommonOptions,
-    target: &AuthRootCallTarget,
-    method: &str,
-    arg: &str,
-    output: Option<&str>,
-) -> Result<String, AuthCommandError> {
-    let icp = icp_cli(options).with_cwd(&target.icp_root);
-    icp.canister_call_arg_output_with_candid(
-        &target.target.canister_id,
-        method,
-        arg,
-        output,
-        Some(target.candid_path.as_path()),
-    )
-    .map_err(auth_icp_error)
-}
 fn issuer_observation_with_runtime(
     runtime: &impl AuthRenewalRuntime,
     options: &CommonOptions,
@@ -1336,8 +895,8 @@ fn auth_renewal_medic_summary_from_result(
     );
     let next = if observation.drift_detected {
         format!(
-            "run canic auth renewal status {} --issuer {}; if drift persists, run canic auth renewal run-once {} or repair the issuer active proof",
-            result.deployment, result.issuer_pid, result.deployment
+            "run canic auth renewal status {} --issuer {}; if drift persists, repair the issuer active proof through root chain-key renewal or lazy repair",
+            result.deployment, result.issuer_pid
         )
     } else if observation.available {
         "-".to_string()

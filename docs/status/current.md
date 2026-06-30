@@ -11,20 +11,24 @@ inspect only the files needed for the current task.
 
 - The current `0.76` line is implementing the bridge-free delegated-auth hard
   cut. `RootProof::IcChainKeyBatchSignatureV1` is the target root proof shape;
-  legacy bridge-backed canister-signature renewal remains only as retained
-  historical code and is not used for 0.76 auth liveness. The worktree now has
+  the old bridge-backed canister-signature renewal path now remains only as
+  historical documentation and stable snapshot decode records, not as public
+  runtime/API/CLI code. The worktree now has
   chain-key batch DTO/canonical/verifier support, management-canister ECDSA
   signing wrappers, persisted chain-key root delegation batch state, delegated
   auth registry/proof epoch state, root timer prepare/sign/install
   orchestration, issuer install result recording, hard-cut config validation
   for `root_proof_mode = "chain_key_batch"`, explicit local test-fleet
   `chain_key_batch` trust-anchor policy, secp256k1 SEC1 public-key validation
-  in config and runtime chain-key policy builders, issuer delegated-token lazy
-  repair through the internal
+  in config and runtime chain-key policy builders, removal of the old
+  bridge-backed delegated-auth root-proof provisioning endpoints/DTOs/API
+  wrappers/replay rows/provisioner access predicate/CLI bridge commands,
+  issuer delegated-token lazy repair through the internal
   `canic_get_or_create_chain_key_delegation_proof` root update, signer-side
   normalization of high-s management-canister ECDSA signatures before proof
-  persistence, a live PocketIC hard-cut gate proving retained bridge-backed
-  canister-signature provisioning endpoints reject in `chain_key_batch` mode,
+  persistence, a live PocketIC hard-cut gate proving old bridge-backed
+  canister-signature provisioning methods are absent from the active root
+  surface,
   a live PocketIC no-external-liveness gate proving root timer renewal signs,
   installs issuer active proof material, and supports delegated-token verifier
   acceptance without the legacy bridge, a live issuer lazy-repair PocketIC gate
@@ -54,12 +58,12 @@ inspect only the files needed for the current task.
   cross-language fixtures are deferred until such a consumer is added.
   Standing delegated-auth contract and architecture docs now describe
   `RootProof::IcChainKeyBatchSignatureV1` as the current root proof contract,
-  with legacy bridge-backed canister-signature root proof renewal explicitly
-  rejected in `chain_key_batch` mode rather than retained as compatibility.
+  with legacy bridge-backed canister-signature root proof renewal removed from
+  the active protocol rather than retained as compatibility.
   Passive 0.76 cutover DTO/stable records with `LegacyBridge`/`DualCode`/
   `ChainKeyPreferred`/`ChainKeyOnly` states were removed so there is no
   dormant compatibility state to accidentally wire later.
-  Remaining follow-up PocketIC acceptance gates live under
+  The closed 0.76 PocketIC acceptance gates live under
   `crates/canic-tests/tests/root_cases/auth_076.rs`.
   Focused validation passing: `cargo check --locked -p canic-core -p canic`,
   `cargo test --locked -p canic-core chain_key --lib` (65 passing),
@@ -89,7 +93,7 @@ inspect only the files needed for the current task.
   `cargo test --locked -p canic --test changelog_governance`,
   `cargo check --locked -p canic-core -p canic`, and
   `cargo check --locked -p canic-tests --test root_suite`.
-  The current `0.76.1` worktree starts post-release hardening by preserving
+  The `0.76.1` patch started post-release hardening by preserving
   local PocketIC wasm build caches during `make test` unless CI or
   `CANIC_CLEAR_PIC_WASM_TARGETS` asks for aggressive cleanup, by keeping
   chain-key batch install state terminal when a stale issuer install failure
@@ -106,7 +110,42 @@ inspect only the files needed for the current task.
   `cargo test --locked -p canic-core chain_key_batch --lib`,
   `cargo test --locked -p canic --test changelog_governance`, and
   `git diff --check`.
-  No 0.76.1-specific local gate remains open in this workspace; broader
+  Post-`0.76.1` local cleanup removed the now-stale chain-key timer wrapper
+  `dead_code` allowances and narrowed the verifier module's broad
+  non-test `dead_code` expectation to the two ECDSA callback fields that are
+  intentionally carried after structural proof binding but not read by the
+  algorithm-specific verifier. Focused validation passing for this cleanup:
+  `cargo fmt --all -- --check`,
+  `cargo check --locked -p canic-core -p canic`,
+  `cargo clippy --locked -p canic-core --lib --all-features -- -D warnings`,
+  `cargo test --locked -p canic-core chain_key --lib`,
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_legacy_canister_signature_root_proof_rejected_for_chain_key_only_issuers -- --nocapture`,
+  and
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_chain_key_batch_renews_without_external_liveness -- --nocapture`.
+  Audit note: old bridge-backed root-proof provisioning endpoint/DTO/API/CLI
+  surfaces, replay rows, and the renewal provisioner access predicate are now
+  physically removed from the active 0.76 line. Stable snapshot records for old
+  state remain only so historical snapshots can decode.
+  Focused validation passing for this removal slice:
+  `bash -n scripts/ci/auth-renewal-cli-proof-lib.sh`,
+  `bash -n scripts/ci/blob-storage-cli-proof-lib.sh`,
+  `bash -n scripts/ci/verify-packaged-downstream-cli.sh`,
+  `bash -n scripts/ci/verify-installed-canic-cli.sh`,
+  `cargo fmt --all -- --check`,
+  `cargo check --locked -p canic-core -p canic -p canic-macros -p canic-cli`,
+  `cargo check --locked -p canic-tests --test root_suite`,
+  `cargo check --locked -p canic-tests --test instruction_audit`,
+  `cargo test --locked -p canic-cli auth`,
+  `cargo test --locked -p canic --test protocol_surface`,
+  `cargo test --locked -p canic --test changelog_governance`,
+  `cargo test --locked -p canic-macros`,
+  `cargo test --locked -p canic-core root_issuer_renewal --lib`,
+  `cargo test --locked -p canic-core delegated_auth_metrics --lib`,
+  `cargo test --locked -p canic-core record_renewal --lib`, and
+  `cargo test --locked -p canic-core chain_key --lib`.
+  The `0.76.2` release changelog is prepared in the root ledger and detailed
+  0.76 notes for this removal slice.
+  No 0.76.2-specific local gate remains open in this workspace; broader
   release validation remains maintainer-run. The earlier local
   trust-anchor blocker is resolved for
   public-key discovery: the current PocketIC harness exposes

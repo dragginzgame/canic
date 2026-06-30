@@ -4,12 +4,9 @@ use canic::{
     cdk::{types::Principal, utils::hash::wasm_hash},
     dto::{
         auth::{
-            AuthRequestMetadata, DelegatedToken, DelegationAudience,
-            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
-            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
-            RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
-            RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProofRef,
-            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, DelegatedToken,
+            DelegationAudience, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
         },
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
@@ -49,6 +46,7 @@ use std::{
     convert::TryFrom,
     env, fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 mod estimates;

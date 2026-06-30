@@ -147,20 +147,6 @@ pub struct RootIssuerRenewalAttempt {
 }
 
 ///
-/// RootDelegationRenewalBatch
-///
-/// Transport grouping for scheduled issuer-level renewal attempts.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RootDelegationRenewalBatch {
-    pub batch_id: [u8; 32],
-    pub attempt_ids: Vec<[u8; 32]>,
-    pub prepared_at_ns: u64,
-    pub retrieval_expires_at_ns: u64,
-}
-
-///
 /// RootDelegationProofPreparePolicyInput
 ///
 

@@ -355,13 +355,11 @@ changes during signing invalidate the pending batch, partial issuer install
 failure is retried, and unknown signing outcomes are retryable without treating
 a reject as proof that no signature exists.
 
-The retained bridge-backed `canic_prepare_delegation_proof_batch`,
-`canic_get_delegation_proof_batch`,
-`canic_get_delegation_renewal_proof_batch`, and
-`canic_install_delegation_proof_batch` canister-signature provisioning surfaces
-are not part of the 0.76 delegated-token root proof contract. In
-`root_proof_mode = "chain_key_batch"`, they reject rather than provide an
-alternate liveness path.
+The old bridge-backed canister-signature root proof provisioning surfaces are
+not part of the active protocol. In `root_proof_mode = "chain_key_batch"`,
+delegated-token liveness comes from root timer renewal and issuer lazy repair
+through chain-key batch proofs, not from external direct root query or install
+workflows.
 
 The retired single-proof `canic_prepare_delegation_proof` and
 `canic_get_delegation_proof` root endpoints are removed from the active

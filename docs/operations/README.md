@@ -27,9 +27,8 @@ validation notes.
 ## Auth Operations
 
 - [Root proof provisioning runbook](root-proof-provisioning.md)
-  records the manual prepare -> direct root query -> install model plus the
-  root-managed delegated-auth renewal bridge, provisioner, outage recovery, and
-  repair guidance.
+  records the active chain-key root proof renewal, issuer lazy-repair, status,
+  and repair guidance.
 
 ## Blob Storage Operations
 

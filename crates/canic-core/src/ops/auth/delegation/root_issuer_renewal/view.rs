@@ -3,25 +3,19 @@
 //! Responsibility: project root issuer renewal policy records into boundary views.
 //! Does not own: storage mutation, scheduling decisions, or install outcome handling.
 
-use super::retrieval::scheduled_renewal_batch_attempts;
 use crate::{
     domain::policy::auth::{
-        RootDelegationRenewalBatch, RootIssuerRenewalAttempt,
-        RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
+        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
         RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalState,
         RootIssuerRenewalTemplate,
     },
     dto::auth::{
-        RootDelegationProofBatchProofRef, RootDelegationRenewalBatchView,
-        RootDelegationRenewalProvisionerView, RootIssuerRenewalAttemptStatus,
+        RootDelegationProofBatchProofRef, RootIssuerRenewalAttemptStatus,
         RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
         RootIssuerRenewalTemplateView,
     },
-    ops::{
-        auth::delegation::root_issuer_policy::{
-            delegated_role_grant_views, delegation_audience_view,
-        },
-        storage::auth::RootDelegationRenewalProvisioner,
+    ops::auth::delegation::root_issuer_policy::{
+        delegated_role_grant_views, delegation_audience_view,
     },
 };
 
@@ -34,39 +28,6 @@ pub(super) fn root_issuer_renewal_template_view(
         aud: delegation_audience_view(&template.audience),
         grants: delegated_role_grant_views(&template.grants),
         cert_ttl_ns: template.cert_ttl_ns,
-    }
-}
-
-pub(super) fn root_delegation_renewal_batch_view(
-    batch: &RootDelegationRenewalBatch,
-    now_ns: u64,
-) -> Option<RootDelegationRenewalBatchView> {
-    let attempts = scheduled_renewal_batch_attempts(batch, now_ns).ok()?;
-    let install_deadline_ns = attempts
-        .iter()
-        .map(|attempt| attempt.install_deadline_ns)
-        .min()
-        .unwrap_or(batch.retrieval_expires_at_ns);
-
-    Some(RootDelegationRenewalBatchView {
-        batch_id: batch.batch_id,
-        attempt_count: attempts.len() as u64,
-        prepared_at_ns: batch.prepared_at_ns,
-        retrieval_expires_at_ns: batch.retrieval_expires_at_ns,
-        install_deadline_ns,
-        attempts: attempts
-            .iter()
-            .map(root_issuer_renewal_attempt_view)
-            .collect(),
-    })
-}
-
-pub(super) const fn delegation_renewal_provisioner_view(
-    provisioner: RootDelegationRenewalProvisioner,
-) -> RootDelegationRenewalProvisionerView {
-    RootDelegationRenewalProvisionerView {
-        principal: provisioner.principal,
-        enabled: provisioner.enabled,
     }
 }
 

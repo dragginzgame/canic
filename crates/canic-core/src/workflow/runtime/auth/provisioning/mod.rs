@@ -12,8 +12,7 @@ use crate::{
     dto::{
         auth::{
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
-            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
-            RootDelegationProofBatchInstallResult, RootDelegationProofBatchProof,
+            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
             RootDelegationProofInstallOutcome,
         },
         error::Error,
@@ -58,20 +57,6 @@ impl RuntimeAuthWorkflow {
                 "chain-key root delegation proof is not available yet; retry",
             ))
         })
-    }
-
-    /// Install retrieved root delegation proofs on issuer canisters.
-    pub async fn install_delegation_proof_batch_root(
-        request: RootDelegationProofBatchInstallRequest,
-    ) -> Result<RootDelegationProofBatchInstallResponse, InternalError> {
-        EnvOps::require_root()?;
-        let now_ns = IcOps::now_nanos();
-        install_delegation_proof_batch_with_issuer_install(
-            request,
-            now_ns,
-            install_delegation_proof_on_issuer,
-        )
-        .await
     }
 }
 
@@ -126,89 +111,6 @@ where
         }
     }
     Ok(installed_any)
-}
-
-async fn install_delegation_proof_batch_with_issuer_install<F, Fut>(
-    request: RootDelegationProofBatchInstallRequest,
-    now_ns: u64,
-    mut install_issuer: F,
-) -> Result<RootDelegationProofBatchInstallResponse, InternalError>
-where
-    F: FnMut(Principal, InstallActiveDelegationProofRequest) -> Fut,
-    Fut: Future<Output = RootDelegationProofInstallOutcome>,
-{
-    if request.proofs.is_empty() {
-        return Err(InternalError::public(Error::invalid(
-            "root delegation proof batch install must contain at least one proof",
-        )));
-    }
-
-    let mut outcomes = Vec::with_capacity(request.proofs.len());
-    for proof in request.proofs {
-        let proof_for_renewal = proof.clone();
-        let issuer_pid = proof.issuer_pid;
-        let cert_hash = proof.cert_hash;
-        let mut renewal_attempt_id = None;
-        let outcome = match AuthOps::preflight_delegation_proof_batch_install_proof(
-            request.batch_id,
-            &proof,
-            now_ns,
-        ) {
-            Ok(()) => match AuthOps::preflight_delegation_renewal_proof_install(
-                request.batch_id,
-                &proof,
-                now_ns,
-            ) {
-                Ok(attempt_id) => {
-                    renewal_attempt_id = attempt_id;
-                    let outcome = install_issuer(
-                        issuer_pid,
-                        InstallActiveDelegationProofRequest { proof: proof.proof },
-                    )
-                    .await;
-                    if outcome == RootDelegationProofInstallOutcome::Installed {
-                        AuthOps::mark_delegation_proof_batch_installed(
-                            request.batch_id,
-                            issuer_pid,
-                            cert_hash,
-                        );
-                    }
-                    outcome
-                }
-                Err(outcome) => outcome,
-            },
-            Err(outcome) => {
-                AuthOps::record_delegation_renewal_install_preflight_outcome(
-                    request.batch_id,
-                    issuer_pid,
-                    cert_hash,
-                    outcome.clone(),
-                    now_ns,
-                );
-                outcome
-            }
-        };
-        if let Some(attempt_id) = renewal_attempt_id {
-            AuthOps::record_delegation_renewal_install_outcome(attempt_id, outcome.clone(), now_ns);
-        } else {
-            AuthOps::record_manual_delegation_renewal_install_outcome(
-                &proof_for_renewal,
-                outcome.clone(),
-                now_ns,
-            );
-        }
-        outcomes.push(RootDelegationProofBatchInstallResult {
-            issuer_pid,
-            cert_hash,
-            outcome,
-        });
-    }
-    AuthOps::prune_expired_delegation_proof_batch_metadata(now_ns);
-
-    Ok(RootDelegationProofBatchInstallResponse {
-        batch_id: request.batch_id,
-        outcomes,
-    })
 }
 
 async fn install_delegation_proof_on_issuer(
@@ -299,6 +201,7 @@ mod tests {
         ids::{CanisterRole, cap},
     };
     use futures::executor::block_on;
+    use std::cell::Cell;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -336,39 +239,42 @@ mod tests {
     }
 
     #[test]
-    fn install_batch_rejects_empty_request() {
-        let err = block_on(install_delegation_proof_batch_with_issuer_install(
-            RootDelegationProofBatchInstallRequest {
-                batch_id: [1; 32],
-                proofs: vec![],
-            },
-            20,
-            |_issuer_pid, _request| async { RootDelegationProofInstallOutcome::Installed },
-        ))
-        .expect_err("empty install batch must fail");
-        let public = err.public_error().expect("public install error");
+    fn install_chain_key_batch_empty_request_is_noop() {
+        let installed = block_on(
+            install_chain_key_delegation_proof_batch_with_issuer_install(
+                RootDelegationProofBatchInstallRequest {
+                    batch_id: [1; 32],
+                    proofs: vec![],
+                },
+                20,
+                |_issuer_pid, _request| async { RootDelegationProofInstallOutcome::Installed },
+            ),
+        )
+        .expect("empty chain-key install batch should be a no-op");
 
-        assert_eq!(public.code, crate::dto::error::ErrorCode::InvalidInput);
+        assert!(!installed);
     }
 
     #[test]
-    fn install_batch_does_not_call_issuer_when_local_validation_fails() {
-        let response = block_on(install_delegation_proof_batch_with_issuer_install(
-            RootDelegationProofBatchInstallRequest {
-                batch_id: [2; 32],
-                proofs: vec![proof()],
-            },
-            20,
-            |_issuer_pid, _request| async { panic!("invalid local proof must not be broadcast") },
-        ))
-        .expect("invalid proof should be returned as a per-issuer outcome");
+    fn install_chain_key_batch_broadcasts_proofs_to_issuers() {
+        let calls = Cell::new(0);
+        let installed = block_on(
+            install_chain_key_delegation_proof_batch_with_issuer_install(
+                RootDelegationProofBatchInstallRequest {
+                    batch_id: [2; 32],
+                    proofs: vec![proof()],
+                },
+                20,
+                |issuer_pid, _request| {
+                    assert_eq!(issuer_pid, p(2));
+                    calls.set(calls.get() + 1);
+                    async { RootDelegationProofInstallOutcome::CallFailed }
+                },
+            ),
+        )
+        .expect("chain-key proof should be broadcast to the issuer");
 
-        assert_eq!(response.batch_id, [2; 32]);
-        assert_eq!(response.outcomes.len(), 1);
-        assert_eq!(response.outcomes[0].issuer_pid, p(2));
-        assert_eq!(
-            response.outcomes[0].outcome,
-            RootDelegationProofInstallOutcome::ProofMismatch
-        );
+        assert_eq!(calls.get(), 1);
+        assert!(!installed);
     }
 }

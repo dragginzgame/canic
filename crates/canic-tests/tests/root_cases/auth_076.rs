@@ -3,7 +3,7 @@
 //! These tests keep the first production implementation driven by executable
 //! acceptance criteria, not only by the design doc.
 
-use candid::{CandidType, decode_one, encode_args, utils::ArgumentEncoder};
+use candid::{decode_one, encode_args};
 use canic::{
     Error,
     cdk::types::Principal,
@@ -11,15 +11,10 @@ use canic::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
             DelegatedToken, DelegatedTokenGetRequest, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationAudience, RootDelegationProofBatchGetRequest,
-            RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
-            RootDelegationProofBatchInstallResponse, RootDelegationProofBatchPrepareRequest,
-            RootDelegationProofBatchPrepareResponse, RootDelegationRenewalProofBatchGetRequest,
-            RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
-            RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalWorkListResponse,
-            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerPolicyResponse,
+            RootIssuerPolicyUpsertRequest, RootIssuerRenewalStatusRequest,
+            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+            RootIssuerRenewalTemplateUpsertRequest,
         },
         error::ErrorCode,
         metrics::{MetricEntry, MetricValue, MetricsKind},
@@ -36,9 +31,7 @@ use canic_tests::root::{
     RootSetupProfile,
     harness::{RootSetup, setup_cached_root, setup_root},
 };
-use serde::de::DeserializeOwned;
 
-const LEGACY_ROOT_PROOF_DISABLED: &str = "bridge-backed canister-signature root proof provisioning is disabled in 0.76 chain_key_batch mode";
 const CHAIN_KEY_PROOF_NOT_AVAILABLE: &str =
     "chain-key root delegation proof is not available yet; retry";
 const TEST_CHAIN_KEY_ECDSA_PUBLIC_KEY: &str = "test_chain_key_ecdsa_public_key";
@@ -92,55 +85,14 @@ fn auth_076_chain_key_batch_renews_without_external_liveness() {
 #[test]
 fn auth_076_legacy_canister_signature_root_proof_rejected_for_chain_key_only_issuers() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
-    let batch_id = [0; 32];
 
-    assert_legacy_update_rejected::<RootDelegationRenewalProvisionerResponse, _>(
-        &setup,
-        protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
-        (RootDelegationRenewalProvisionerUpsertRequest {
-            principal: Principal::anonymous(),
-            enabled: true,
-        },),
-    );
-    assert_legacy_query_rejected::<RootDelegationRenewalProvisionerListResponse, _>(
-        &setup,
-        protocol::CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-        (),
-    );
-    assert_legacy_query_rejected::<RootDelegationRenewalWorkListResponse, _>(
-        &setup,
-        protocol::CANIC_DELEGATION_RENEWAL_WORK,
-        (),
-    );
-    assert_legacy_update_rejected::<RootDelegationProofBatchPrepareResponse, _>(
-        &setup,
-        protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
-        (RootDelegationProofBatchPrepareRequest {
-            metadata: None,
-            entries: Vec::new(),
-        },),
-    );
-    assert_legacy_query_rejected::<RootDelegationProofBatchGetResponse, _>(
-        &setup,
-        protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
-        (RootDelegationProofBatchGetRequest {
-            batch_id,
-            entries: Vec::new(),
-        },),
-    );
-    assert_legacy_query_rejected::<RootDelegationProofBatchGetResponse, _>(
-        &setup,
-        protocol::CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-        (RootDelegationRenewalProofBatchGetRequest { batch_id },),
-    );
-    assert_legacy_update_rejected::<RootDelegationProofBatchInstallResponse, _>(
-        &setup,
-        protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-        (RootDelegationProofBatchInstallRequest {
-            batch_id,
-            proofs: Vec::new(),
-        },),
-    );
+    assert_legacy_update_absent(&setup, "canic_upsert_delegation_renewal_provisioner");
+    assert_legacy_query_absent(&setup, "canic_delegation_renewal_provisioners");
+    assert_legacy_query_absent(&setup, "canic_delegation_renewal_work");
+    assert_legacy_update_absent(&setup, "canic_prepare_delegation_proof_batch");
+    assert_legacy_query_absent(&setup, "canic_get_delegation_proof_batch");
+    assert_legacy_query_absent(&setup, "canic_get_delegation_renewal_proof_batch");
+    assert_legacy_update_absent(&setup, "canic_install_delegation_proof_batch");
 }
 
 #[test]
@@ -347,30 +299,20 @@ fn auth_076_timer_batches_multiple_issuers_with_one_signature() {
     );
 }
 
-fn assert_legacy_update_rejected<T, A>(setup: &RootSetup, method: &str, args: A)
-where
-    T: CandidType + DeserializeOwned,
-    A: ArgumentEncoder,
-{
-    let result: Result<T, Error> = setup.pic.update_call_or_panic(setup.root_id, method, args);
-    assert_legacy_rejected(method, result);
+fn assert_legacy_update_absent(setup: &RootSetup, method: &str) {
+    let result: Result<Result<(), Error>, _> = setup.pic.update_call(setup.root_id, method, ());
+    assert!(
+        result.is_err(),
+        "{method} must not remain as a callable bridge root-proof update endpoint",
+    );
 }
 
-fn assert_legacy_query_rejected<T, A>(setup: &RootSetup, method: &str, args: A)
-where
-    T: CandidType + DeserializeOwned,
-    A: ArgumentEncoder,
-{
-    let result: Result<T, Error> = setup.pic.query_call_or_panic(setup.root_id, method, args);
-    assert_legacy_rejected(method, result);
-}
-
-fn assert_legacy_rejected<T>(method: &str, result: Result<T, Error>) {
-    let Err(err) = result else {
-        panic!("{method} unexpectedly accepted legacy bridge root-proof provisioning");
-    };
-    assert_eq!(err.code, ErrorCode::Forbidden, "{method} error code");
-    assert_eq!(err.message, LEGACY_ROOT_PROOF_DISABLED, "{method} message");
+fn assert_legacy_query_absent(setup: &RootSetup, method: &str) {
+    let result: Result<Result<(), Error>, _> = setup.pic.query_call(setup.root_id, method, ());
+    assert!(
+        result.is_err(),
+        "{method} must not remain as a callable bridge root-proof query endpoint",
+    );
 }
 
 fn upsert_root_issuer_policy(setup: &RootSetup, issuer_pid: Principal) {

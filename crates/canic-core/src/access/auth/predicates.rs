@@ -16,9 +16,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
-        storage::{
-            auth::AuthStateOps, children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps,
-        },
+        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
 };
 
@@ -117,19 +115,5 @@ pub(super) async fn is_registered_to_subnet(caller: Principal) -> Result<(), Acc
         Ok(())
     } else {
         Err(caller_not_registered_denial(caller))
-    }
-}
-
-/// Require that the caller is an enabled root-managed renewal provisioner.
-#[expect(clippy::unused_async)]
-pub(super) async fn is_delegation_renewal_provisioner(
-    caller: Principal,
-) -> Result<(), AccessError> {
-    if AuthStateOps::is_root_delegation_renewal_provisioner(caller) {
-        Ok(())
-    } else {
-        Err(AccessError::Denied(format!(
-            "caller '{caller}' is not an enabled delegation renewal provisioner"
-        )))
     }
 }

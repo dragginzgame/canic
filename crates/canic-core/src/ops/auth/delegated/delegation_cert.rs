@@ -9,11 +9,13 @@ use super::{
     canonical::{CanonicalAuthError, cert_hash, issuer_proof_binding_hash},
     cert_rules::{CertRuleError, DelegatedAuthTtlLimits},
 };
+#[cfg(test)]
+use crate::dto::auth::{DelegationProof, RootProof};
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
-        IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+        DelegatedRoleGrant, DelegationAudience, DelegationCert, IssuerProofAlgorithm,
+        IssuerProofBinding,
     },
 };
 use thiserror::Error;
@@ -44,6 +46,7 @@ pub struct PrepareDelegationCertInput {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct FinalizedDelegationProof {
     pub proof: DelegationProof,
     pub cert_hash: [u8; 32],
@@ -134,6 +137,7 @@ pub fn prepare_delegation_cert(
 }
 
 /// Combine a prepared certificate with its root proof.
+#[cfg(test)]
 pub fn finish_delegation_proof(
     prepared: PreparedDelegationCert,
     root_proof: RootProof,

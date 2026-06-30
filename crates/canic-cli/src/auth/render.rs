@@ -5,32 +5,8 @@
 
 use super::{
     AUTH_RENEWAL_STATUS_DRIFT_DETECTED, AuthCommandError, AuthIssuerObservation,
-    AuthRenewalActiveAttemptStatus, AuthRenewalProvisionerListResult,
-    AuthRenewalProvisionerUpsertResult, AuthRenewalRunOnceResult, AuthRenewalStatusResult,
-    AuthRenewalTemplateStatus,
+    AuthRenewalActiveAttemptStatus, AuthRenewalStatusResult, AuthRenewalTemplateStatus,
 };
-
-pub(super) fn write_renewal_once_result(
-    json: bool,
-    result: &AuthRenewalRunOnceResult,
-) -> Result<(), AuthCommandError> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(result)?);
-    } else if result.batches.is_empty() {
-        println!("No scheduled delegation renewal work.");
-    } else {
-        for batch in &result.batches {
-            match batch.attempt_count {
-                Some(attempts) => println!(
-                    "Installed renewal batch {} (attempts: {attempts})",
-                    batch.batch_id
-                ),
-                None => println!("Installed renewal batch {}", batch.batch_id),
-            }
-        }
-    }
-    Ok(())
-}
 
 pub(super) fn write_renewal_status_result(
     json: bool,
@@ -42,56 +18,6 @@ pub(super) fn write_renewal_status_result(
         println!("{}", render_renewal_status_result(result));
     }
     Ok(())
-}
-
-pub(super) fn write_renewal_provisioner_list_result(
-    json: bool,
-    result: &AuthRenewalProvisionerListResult,
-) -> Result<(), AuthCommandError> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(result)?);
-    } else if result.provisioners.is_empty() {
-        println!("No delegation renewal provisioners configured.");
-    } else {
-        println!("{}", render_renewal_provisioner_list_result(result));
-    }
-    Ok(())
-}
-
-pub(super) fn write_renewal_provisioner_upsert_result(
-    json: bool,
-    result: &AuthRenewalProvisionerUpsertResult,
-) -> Result<(), AuthCommandError> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(result)?);
-    } else {
-        println!("{}", render_renewal_provisioner_upsert_result(result));
-    }
-    Ok(())
-}
-
-fn render_renewal_provisioner_list_result(result: &AuthRenewalProvisionerListResult) -> String {
-    let mut lines = vec![
-        format!("Auth renewal provisioners: {}", result.deployment),
-        format!("Root: {}", result.target.canister_id),
-    ];
-    for provisioner in &result.provisioners {
-        lines.push(format!(
-            "{} {}",
-            provisioner.principal,
-            render_enabled(provisioner.enabled)
-        ));
-    }
-    lines.join("\n")
-}
-
-fn render_renewal_provisioner_upsert_result(result: &AuthRenewalProvisionerUpsertResult) -> String {
-    format!(
-        "Auth renewal provisioner {} {} for {}.",
-        result.provisioner.principal,
-        render_enabled(result.provisioner.enabled),
-        result.deployment
-    )
 }
 
 pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> String {
@@ -189,10 +115,6 @@ pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> 
         lines.push(format!("Issuer observation reason: {reason}"));
     }
     lines.join("\n")
-}
-
-const fn render_enabled(enabled: bool) -> &'static str {
-    if enabled { "enabled" } else { "disabled" }
 }
 
 const fn render_template_status(template: &AuthRenewalTemplateStatus) -> &'static str {

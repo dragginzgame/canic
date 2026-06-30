@@ -8,8 +8,8 @@ use crate::{
     cdk::types::Principal,
     domain::auth::DelegatedAuthNetwork,
     dto::auth::{
-        DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert, RoleAttestation,
-        RootKeyPolicyV1, RootProofMode,
+        DelegatedRoleGrant, DelegatedToken, DelegationAudience, RoleAttestation, RootKeyPolicyV1,
+        RootProofMode,
     },
     ids::BuildNetwork,
     ids::CanisterRole,
@@ -49,29 +49,12 @@ pub struct PrepareRootRoleAttestationInput {
 }
 
 ///
-/// PreparedRootDelegationProof
-///
-/// Prepared root delegation proof material and retrieval expiry.
-///
-
-#[derive(Clone)]
-pub struct PreparedRootDelegationProof {
-    pub cert: DelegationCert,
-    pub cert_hash: [u8; 32],
-    pub retrieval_expires_at_ns: u64,
-}
-
-///
 /// PrepareChainKeyRootDelegationBatchInput
 ///
 /// Runtime input for preparing one due chain-key root delegation batch.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "0.76 chain-key timer wiring follows registry epoch/hash source wiring"
-)]
 pub struct PrepareChainKeyRootDelegationBatchInput {
     pub build_network: BuildNetwork,
     pub max_cert_ttl_ns: u64,
@@ -86,10 +69,6 @@ pub struct PrepareChainKeyRootDelegationBatchInput {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "0.76 chain-key timer wiring follows registry epoch/hash source wiring"
-)]
 pub struct ChainKeyRootDelegationBatchSweepResult {
     pub batch_id: Option<[u8; 32]>,
     pub prepared_issuers: usize,
@@ -104,10 +83,6 @@ pub struct ChainKeyRootDelegationBatchSweepResult {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "0.76 chain-key timer wiring follows registry epoch/hash source wiring"
-)]
 pub struct ChainKeyRootDelegationBatchSigningResult {
     pub batch_id: Option<[u8; 32]>,
     pub signed: bool,
