@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.9` cleans up host/operator diagnostics and active auth docs after the
+  hard cut, replacing stale canister-signature and deployment-state wording,
+  clarifying removed auth command-tail tests, and centralizing touched
+  warning/finding identifiers without changing runtime auth behavior.
+
 - `0.76.8` finishes the post-release auth structure pass by keeping delegated
   auth on the chain-key path while splitting protocol/API ownership into
   smaller concern modules, aligning active configuration docs, compacting the

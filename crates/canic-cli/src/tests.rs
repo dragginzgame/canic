@@ -525,8 +525,8 @@ fn global_icp_is_forwarded_to_info_query_commands() {
 }
 
 #[test]
-fn global_icp_is_forwarded_to_auth_renewal_commands() {
-    let mut run_once_tail = vec![
+fn global_icp_is_forwarded_only_to_active_auth_renewal_status() {
+    let mut removed_run_once_tail = vec![
         OsString::from("renewal"),
         OsString::from("run-once"),
         OsString::from("downstream"),
@@ -538,13 +538,13 @@ fn global_icp_is_forwarded_to_auth_renewal_commands() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ];
-    let mut provisioner_list_tail = vec![
+    let mut removed_provisioner_list_tail = vec![
         OsString::from("renewal"),
         OsString::from("provisioner"),
         OsString::from("list"),
         OsString::from("downstream"),
     ];
-    let mut provisioner_enable_tail = vec![
+    let mut removed_provisioner_enable_tail = vec![
         OsString::from("renewal"),
         OsString::from("provisioner"),
         OsString::from("enable"),
@@ -553,31 +553,41 @@ fn global_icp_is_forwarded_to_auth_renewal_commands() {
     ];
     let mut help_tail = vec![OsString::from("help")];
 
-    let original_run_once_tail = run_once_tail.clone();
-    let original_provisioner_list_tail = provisioner_list_tail.clone();
-    let original_provisioner_enable_tail = provisioner_enable_tail.clone();
+    let original_removed_run_once_tail = removed_run_once_tail.clone();
+    let original_removed_provisioner_list_tail = removed_provisioner_list_tail.clone();
+    let original_removed_provisioner_enable_tail = removed_provisioner_enable_tail.clone();
 
-    apply_global_icp("auth", &mut run_once_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp(
+        "auth",
+        &mut removed_run_once_tail,
+        Some("/tmp/icp".to_string()),
+    );
     apply_global_icp("auth", &mut status_tail, Some("/tmp/icp".to_string()));
     apply_global_icp(
         "auth",
-        &mut provisioner_list_tail,
+        &mut removed_provisioner_list_tail,
         Some("/tmp/icp".to_string()),
     );
     apply_global_icp(
         "auth",
-        &mut provisioner_enable_tail,
+        &mut removed_provisioner_enable_tail,
         Some("/tmp/icp".to_string()),
     );
     apply_global_icp("auth", &mut help_tail, Some("/tmp/icp".to_string()));
 
-    assert_eq!(run_once_tail, original_run_once_tail);
+    assert_eq!(removed_run_once_tail, original_removed_run_once_tail);
     assert!(status_tail.ends_with(&[
         OsString::from(INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp")
     ]));
-    assert_eq!(provisioner_list_tail, original_provisioner_list_tail);
-    assert_eq!(provisioner_enable_tail, original_provisioner_enable_tail);
+    assert_eq!(
+        removed_provisioner_list_tail,
+        original_removed_provisioner_list_tail
+    );
+    assert_eq!(
+        removed_provisioner_enable_tail,
+        original_removed_provisioner_enable_tail
+    );
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
@@ -843,8 +853,8 @@ fn global_network_is_forwarded_to_info_query_commands() {
 }
 
 #[test]
-fn global_network_is_forwarded_to_auth_renewal_commands() {
-    let mut run_once_tail = vec![
+fn global_network_is_forwarded_only_to_active_auth_renewal_status() {
+    let mut removed_run_once_tail = vec![
         OsString::from("renewal"),
         OsString::from("run-once"),
         OsString::from("downstream"),
@@ -856,13 +866,13 @@ fn global_network_is_forwarded_to_auth_renewal_commands() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ];
-    let mut provisioner_list_tail = vec![
+    let mut removed_provisioner_list_tail = vec![
         OsString::from("renewal"),
         OsString::from("provisioner"),
         OsString::from("list"),
         OsString::from("downstream"),
     ];
-    let mut provisioner_disable_tail = vec![
+    let mut removed_provisioner_disable_tail = vec![
         OsString::from("renewal"),
         OsString::from("provisioner"),
         OsString::from("disable"),
@@ -871,31 +881,41 @@ fn global_network_is_forwarded_to_auth_renewal_commands() {
     ];
     let mut help_tail = vec![OsString::from("help")];
 
-    let original_run_once_tail = run_once_tail.clone();
-    let original_provisioner_list_tail = provisioner_list_tail.clone();
-    let original_provisioner_disable_tail = provisioner_disable_tail.clone();
+    let original_removed_run_once_tail = removed_run_once_tail.clone();
+    let original_removed_provisioner_list_tail = removed_provisioner_list_tail.clone();
+    let original_removed_provisioner_disable_tail = removed_provisioner_disable_tail.clone();
 
-    apply_global_network("auth", &mut run_once_tail, Some("fixture".to_string()));
+    apply_global_network(
+        "auth",
+        &mut removed_run_once_tail,
+        Some("fixture".to_string()),
+    );
     apply_global_network("auth", &mut status_tail, Some("fixture".to_string()));
     apply_global_network(
         "auth",
-        &mut provisioner_list_tail,
+        &mut removed_provisioner_list_tail,
         Some("fixture".to_string()),
     );
     apply_global_network(
         "auth",
-        &mut provisioner_disable_tail,
+        &mut removed_provisioner_disable_tail,
         Some("fixture".to_string()),
     );
     apply_global_network("auth", &mut help_tail, Some("fixture".to_string()));
 
-    assert_eq!(run_once_tail, original_run_once_tail);
+    assert_eq!(removed_run_once_tail, original_removed_run_once_tail);
     assert!(status_tail.ends_with(&[
         OsString::from(INTERNAL_NETWORK_OPTION),
         OsString::from("fixture")
     ]));
-    assert_eq!(provisioner_list_tail, original_provisioner_list_tail);
-    assert_eq!(provisioner_disable_tail, original_provisioner_disable_tail);
+    assert_eq!(
+        removed_provisioner_list_tail,
+        original_removed_provisioner_list_tail
+    );
+    assert_eq!(
+        removed_provisioner_disable_tail,
+        original_removed_provisioner_disable_tail
+    );
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 

@@ -11,14 +11,18 @@ use std::{
 
 const MAINNET_NETWORK: &str = "ic";
 const CLOUD_ENGINE_SUBNET_KIND: &str = "cloud_engine";
+pub(in crate::deployment_truth) const ROOT_AUTH_SUBNET_EVIDENCE_MISSING_CODE: &str =
+    "root_auth_subnet_evidence_missing";
+pub(in crate::deployment_truth) const ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE: &str =
+    "root_auth_cloud_engine_subnet";
 
-pub(in crate::deployment_truth) fn apply_root_canister_signature_subnet_check(
+pub(in crate::deployment_truth) fn apply_root_auth_signer_subnet_check(
     diff: &mut DeploymentDiffV1,
     inventory: &DeploymentInventoryV1,
     network: &str,
     icp_root: &Path,
 ) {
-    apply_root_canister_signature_subnet_check_with_source(
+    apply_root_auth_signer_subnet_check_with_source(
         diff,
         inventory,
         network,
@@ -27,7 +31,7 @@ pub(in crate::deployment_truth) fn apply_root_canister_signature_subnet_check(
     );
 }
 
-pub(in crate::deployment_truth) fn apply_root_canister_signature_subnet_check_with_source(
+pub(in crate::deployment_truth) fn apply_root_auth_signer_subnet_check_with_source(
     diff: &mut DeploymentDiffV1,
     inventory: &DeploymentInventoryV1,
     network: &str,
@@ -45,9 +49,9 @@ pub(in crate::deployment_truth) fn apply_root_canister_signature_subnet_check_wi
         Ok(evidence) => evidence,
         Err(err) => {
             diff.hard_failures.push(finding(
-                "root_auth_subnet_evidence_missing",
+                ROOT_AUTH_SUBNET_EVIDENCE_MISSING_CODE,
                 format!(
-                    "cannot verify root canister-signature subnet kind for {} with the NNS subnet catalog: {err}",
+                    "cannot verify root-auth signer subnet kind for {} with the NNS subnet catalog: {err}",
                     root.observed_canister_id
                 ),
                 SafetySeverityV1::HardFailure,
@@ -59,9 +63,9 @@ pub(in crate::deployment_truth) fn apply_root_canister_signature_subnet_check_wi
     };
     if evidence.subnet_kind == CLOUD_ENGINE_SUBNET_KIND {
         diff.hard_failures.push(finding(
-            "root_auth_cloud_engine_subnet",
+            ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE,
             format!(
-                "root canister {} resolves to cloud_engine subnet {}; IC canister signatures from cloud_engine subnets are invalid",
+                "root canister {} resolves to cloud_engine subnet {}; Canic root-auth policy does not allow root signing canisters on cloud_engine subnets",
                 root.observed_canister_id, evidence.subnet_principal
             ),
             SafetySeverityV1::HardFailure,
