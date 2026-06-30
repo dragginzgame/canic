@@ -1,9 +1,12 @@
 use canic_core::{
     cdk::{candid, types::Principal},
     dto::auth::{
+        ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
+        ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
         DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
-        DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof,
-        IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+        DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
+        IcChainKeyBatchSignatureProofV1, IssuerProof, IssuerProofAlgorithm, IssuerProofBinding,
+        RootProof,
     },
     ids::CanisterRole,
 };
@@ -119,16 +122,68 @@ fn sample_delegated_token() -> DelegatedToken {
         claims,
         proof: DelegationProof {
             cert,
-            root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                signature_cbor: vec![1; 1_024],
-                public_key_der: vec![2; 96],
-            }),
+            root_proof: sample_chain_key_root_proof(),
         },
         issuer_proof: IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
             signature_cbor: vec![3; 256],
             public_key_der: vec![4; 96],
         }),
     }
+}
+
+fn sample_chain_key_root_proof() -> RootProof {
+    let key_id = ChainKeyKeyId {
+        name: "key_1".to_string(),
+    };
+    RootProof::IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1 {
+        header: ChainKeyBatchHeaderV1 {
+            schema_version: 1,
+            root_canister_id: p(1),
+            batch_id: [10; 32],
+            proof_epoch: 11,
+            registry_epoch: 12,
+            registry_hash: [13; 32],
+            tree_root: [14; 32],
+            not_before_ns: 100_000_000_000,
+            expires_at_ns: 700_000_000_000,
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: key_id.clone(),
+            derivation_path_hash: [15; 32],
+            key_version: 1,
+        },
+        delegation_cert: ChainKeyDelegationCertV1 {
+            root_canister_id: p(1),
+            issuer_canister_id: p(2),
+            proof_epoch: 11,
+            issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [7; 32],
+            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [4; 32] },
+            max_token_ttl_ns: 120_000_000_000,
+            audience: DelegationAudience::Project("test".to_string()),
+            grants: vec![
+                grant("project_hub", &["read", "upload"]),
+                grant("project_instance", &["read"]),
+                grant("user_shard", &["session"]),
+            ],
+            not_before_ns: 100_000_000_000,
+            expires_at_ns: 700_000_000_000,
+            registry_epoch: 12,
+            registry_hash: [13; 32],
+        },
+        issuer_witness: ChainKeyBatchWitnessV1 {
+            steps: vec![
+                ChainKeyBatchWitnessStepV1::LeftSibling([16; 32]),
+                ChainKeyBatchWitnessStepV1::RightSibling([17; 32]),
+            ],
+        },
+        signature: ChainKeyRootSignatureV1 {
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id,
+            derivation_path: vec![b"canic".to_vec(), b"delegation".to_vec()],
+            public_key: vec![18; 33],
+            signature: vec![19; 64],
+        },
+    })
 }
 
 fn sample_cert() -> DelegationCert {

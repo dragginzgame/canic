@@ -22,7 +22,7 @@ mod types;
 mod verify;
 pub use boundary::DelegatedSessionExpiryClamp;
 #[cfg(test)]
-pub(crate) use delegated::test_fixtures;
+pub use delegated::test_fixtures;
 pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
