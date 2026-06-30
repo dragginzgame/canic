@@ -4,14 +4,6 @@
 //! Does not own: management-canister signing, endpoint auth, or issuer proof verification.
 //! Boundary: pure delegated-auth helper used before algorithm-specific signature checks.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "0.76 chain-key verifier wiring follows the algorithm gate"
-    )
-)]
-
 use super::canonical::{
     CanonicalAuthError, chain_key_batch_header_hash, chain_key_delegation_cert_hash,
     chain_key_derivation_path_hash,
@@ -86,7 +78,21 @@ pub(in crate::ops::auth) struct VerifyChainKeyBatchRootProofInput<'a> {
 
 pub(in crate::ops::auth) struct ChainKeySignatureVerificationInput<'a> {
     pub algorithm: ChainKeyAlgorithm,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "structural chain-key proof verification already checks key id before ECDSA verification"
+        )
+    )]
     pub key_id: &'a ChainKeyKeyId,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "structural chain-key proof verification already checks derivation path before ECDSA verification"
+        )
+    )]
     pub derivation_path: &'a [Vec<u8>],
     pub public_key: &'a [u8],
     pub message_hash: [u8; 32],

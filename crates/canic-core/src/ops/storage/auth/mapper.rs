@@ -10,10 +10,9 @@ use super::{
 };
 use crate::{
     domain::policy::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootDelegationRenewalBatch,
-        RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus,
-        RootIssuerRenewalOutcome, RootIssuerRenewalProofRef, RootIssuerRenewalState,
-        RootIssuerRenewalTemplate,
+        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
+        RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
     dto::auth::{
         ActiveDelegationProof, ChainKeyAlgorithm, ChainKeyBatchHeaderV1,
@@ -33,10 +32,10 @@ use crate::{
         DelegatedAuthRegistrySnapshotRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
         DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
         IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-        RootDelegationRenewalBatchRecord, RootIssuerRecord, RootIssuerRenewalAttemptRecord,
-        RootIssuerRenewalAttemptStatusRecord, RootIssuerRenewalOutcomeRecord,
-        RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord,
-        RootIssuerRenewalTemplateRecord, RootKeyPolicyRecord, RootProofModeRecord, RootProofRecord,
+        RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
+        RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord,
+        RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootKeyPolicyRecord,
+        RootProofModeRecord, RootProofRecord,
     },
 };
 
@@ -386,40 +385,6 @@ impl RootIssuerRenewalAttemptRecordMapper {
             prepared_expires_at_ns: attempt.prepared_expires_at_ns,
             prepared_refresh_after_ns: attempt.prepared_refresh_after_ns,
             failure: attempt.failure.map(renewal_outcome_policy_to_record),
-        }
-    }
-}
-
-///
-/// RootDelegationRenewalBatchRecordMapper
-///
-/// Storage-ops mapper for scheduled root-managed renewal batches.
-///
-
-pub struct RootDelegationRenewalBatchRecordMapper;
-
-impl RootDelegationRenewalBatchRecordMapper {
-    #[must_use]
-    pub fn record_to_batch(record: RootDelegationRenewalBatchRecord) -> RootDelegationRenewalBatch {
-        RootDelegationRenewalBatch {
-            batch_id: record.batch_id,
-            attempt_ids: record.attempt_ids,
-            prepared_at_ns: record.prepared_at_ns,
-            retrieval_expires_at_ns: record.retrieval_expires_at_ns,
-        }
-    }
-
-    #[must_use]
-    #[allow(
-        dead_code,
-        reason = "pre-0.76 bridge-backed renewal batch mapper is retained for historical scheduler code during the hard-cut migration"
-    )]
-    pub fn batch_to_record(batch: RootDelegationRenewalBatch) -> RootDelegationRenewalBatchRecord {
-        RootDelegationRenewalBatchRecord {
-            batch_id: batch.batch_id,
-            attempt_ids: batch.attempt_ids,
-            prepared_at_ns: batch.prepared_at_ns,
-            retrieval_expires_at_ns: batch.retrieval_expires_at_ns,
         }
     }
 }

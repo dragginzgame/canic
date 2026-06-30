@@ -68,34 +68,10 @@ for arg in "$@"; do
 JSON
             exit 0
             ;;
-        canic_delegation_renewal_work)
-            cat <<'JSON'
-{"batches":[]}
-JSON
-            exit 0
-            ;;
         canic_root_issuer_renewal_status)
             cat <<'JSON'
 {"template":{"enabled":true,"cert_ttl_ns":"300000000000"},"state":{"last_installed_cert_hash":["0303030303030303030303030303030303030303030303030303030303030303"],"last_outcome":"Installed","consecutive_failures":0,"last_installed_expires_at_ns":["1620329000000000000"],"last_installed_refresh_after_ns":["1620328900000000000"],"next_attempt_after_ns":"1620328900000000000","active_attempt_id":null},"active_attempt":null}
 JSON
-            exit 0
-            ;;
-        canic_delegation_renewal_provisioners)
-            cat <<'JSON'
-{"provisioners":[{"principal":"r7inp-6aaaa-aaaaa-aaabq-cai","enabled":true}]}
-JSON
-            exit 0
-            ;;
-        canic_upsert_delegation_renewal_provisioner)
-            if printf '%s\n' "$*" | grep -q 'enabled = false'; then
-                cat <<'JSON'
-{"provisioner":{"principal":"r7inp-6aaaa-aaaaa-aaabq-cai","enabled":false}}
-JSON
-            else
-                cat <<'JSON'
-{"provisioner":{"principal":"r7inp-6aaaa-aaaaa-aaabq-cai","enabled":true}}
-JSON
-            fi
             exit 0
             ;;
         canic_active_delegation_proof_status)

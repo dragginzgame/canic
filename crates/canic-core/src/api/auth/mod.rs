@@ -5,20 +5,14 @@
 //! Boundary: endpoint layer maps public DTOs into ops/workflow auth calls.
 
 use crate::{
-    cdk::{api::is_controller as caller_is_controller, types::Principal},
+    cdk::types::Principal,
     dto::{
         auth::{
             ActiveDelegationProofStatusResponse, DelegatedToken, DelegatedTokenGetRequest,
             DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse,
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
-            RootDelegationProofBatchGetRequest, RootDelegationProofBatchGetResponse,
-            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
-            RootDelegationProofBatchPrepareRequest, RootDelegationProofBatchPrepareResponse,
-            RootDelegationProofBatchProof, RootDelegationRenewalProofBatchGetRequest,
-            RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
-            RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalWorkListResponse,
-            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
             RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
             RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
             SignedRoleAttestation,
@@ -52,7 +46,6 @@ impl AuthApi {
     const DELEGATED_TOKENS_DISABLED: &str =
         "delegated token auth disabled; set auth.delegated_tokens.enabled=true in canic.toml";
     const DELEGATED_TOKEN_ISSUER_DISABLED: &str = "delegated token issuer disabled for this canister; set subnets.<subnet>.canisters.<role>.auth.delegated_token_issuer=true in canic.toml";
-    const LEGACY_ROOT_PROOF_PROVISIONING_DISABLED: &str = "bridge-backed canister-signature root proof provisioning is disabled in 0.76 chain_key_batch mode";
     const MAX_DELEGATED_SESSION_TTL_SECS: u64 = 24 * 60 * 60;
     const SESSION_BOOTSTRAP_TOKEN_FINGERPRINT_DOMAIN: &[u8] =
         b"canic-session-bootstrap-token-fingerprint";
@@ -79,30 +72,6 @@ impl AuthApi {
             return Err(Error::forbidden(Self::DELEGATED_TOKEN_ISSUER_DISABLED));
         }
 
-        Ok(())
-    }
-
-    fn require_delegation_renewal_provisioner_or_controller() -> Result<bool, Error> {
-        let caller = IcOps::msg_caller();
-        if caller_is_controller(&caller) {
-            return Ok(true);
-        }
-        if AuthOps::is_delegation_renewal_provisioner(caller) {
-            return Ok(false);
-        }
-
-        Err(Error::forbidden(
-            "caller is not a controller or enabled delegation renewal provisioner",
-        ))
-    }
-
-    fn require_legacy_root_proof_provisioning_enabled() -> Result<(), Error> {
-        let cfg = ConfigOps::delegated_tokens_config().map_err(Self::map_auth_error)?;
-        if cfg.root_proof_mode.trim() == "chain_key_batch" {
-            return Err(Error::forbidden(
-                Self::LEGACY_ROOT_PROOF_PROVISIONING_DISABLED,
-            ));
-        }
         Ok(())
     }
 
@@ -160,7 +129,7 @@ impl AuthApi {
         Ok(InstallActiveDelegationProofResponse { active_proof })
     }
 
-    /// Report non-secret issuer-local active proof lifecycle status for provisioners.
+    /// Report non-secret issuer-local active proof lifecycle status for operators.
     pub fn active_delegation_proof_status() -> Result<ActiveDelegationProofStatusResponse, Error> {
         Self::require_delegated_token_issuer_enabled()?;
         Ok(AuthOps::active_delegation_proof_status(IcOps::now_nanos()))
@@ -195,80 +164,6 @@ impl AuthApi {
     ) -> Result<RootIssuerRenewalStatusResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
         Ok(AuthOps::root_issuer_renewal_status(request))
-    }
-
-    /// Upsert a constrained root-managed renewal provisioner.
-    pub fn upsert_delegation_renewal_provisioner_root(
-        request: RootDelegationRenewalProvisionerUpsertRequest,
-    ) -> Result<RootDelegationRenewalProvisionerResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        Ok(AuthOps::upsert_delegation_renewal_provisioner(request))
-    }
-
-    /// List constrained root-managed renewal provisioners.
-    pub fn delegation_renewal_provisioners_root()
-    -> Result<RootDelegationRenewalProvisionerListResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        Ok(AuthOps::delegation_renewal_provisioners())
-    }
-
-    /// List root-scheduled renewal batches ready for a constrained provisioner.
-    pub fn delegation_renewal_work_root() -> Result<RootDelegationRenewalWorkListResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        Self::require_delegation_renewal_provisioner_or_controller()?;
-        Ok(AuthOps::delegation_renewal_work(IcOps::now_nanos()))
-    }
-
-    /// Prepare root delegation proof batch metadata from the local root update path.
-    pub fn prepare_delegation_proof_batch_root(
-        request: RootDelegationProofBatchPrepareRequest,
-    ) -> Result<RootDelegationProofBatchPrepareResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        let max_cert_ttl_ns = Self::delegated_token_max_ttl_ns()?;
-        AuthOps::prepare_delegation_proof_batch(request, max_cert_ttl_ns, IcOps::now_nanos())
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Retrieve root delegation proofs from the local direct root query path.
-    pub fn get_delegation_proof_batch_root(
-        request: RootDelegationProofBatchGetRequest,
-    ) -> Result<RootDelegationProofBatchGetResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        AuthOps::get_delegation_proof_batch(request).map_err(Self::map_auth_error)
-    }
-
-    /// Retrieve root-scheduled renewal proofs from the local direct root query path.
-    pub fn get_delegation_renewal_proof_batch_root(
-        request: RootDelegationRenewalProofBatchGetRequest,
-    ) -> Result<RootDelegationProofBatchGetResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        Self::require_delegation_renewal_provisioner_or_controller()?;
-        AuthOps::get_delegation_renewal_proof_batch(request).map_err(Self::map_auth_error)
-    }
-
-    /// Install retrieved root delegation proof batches from the local root update path.
-    pub async fn install_delegation_proof_batch_root(
-        request: RootDelegationProofBatchInstallRequest,
-    ) -> Result<RootDelegationProofBatchInstallResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Self::require_legacy_root_proof_provisioning_enabled()?;
-        let caller_is_controller = Self::require_delegation_renewal_provisioner_or_controller()?;
-        if !caller_is_controller {
-            AuthOps::ensure_delegation_renewal_batch_scheduled(
-                request.batch_id,
-                IcOps::now_nanos(),
-            )
-            .map_err(Self::map_auth_error)?;
-        }
-        RuntimeAuthWorkflow::install_delegation_proof_batch_root(request)
-            .await
-            .map_err(Self::map_auth_error)
     }
 
     /// Return or create a chain-key root delegation proof for the registered issuer caller.

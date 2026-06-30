@@ -807,11 +807,7 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
     DelegatedAuthMetrics::record_renewal_sweep_completed();
     DelegatedAuthMetrics::record_renewal_attempt(
         DelegatedAuthMetricOutcome::Failed,
-        DelegatedAuthMetricReason::RetryScheduled,
-    );
-    DelegatedAuthMetrics::record_renewal_install(
-        DelegatedAuthMetricOutcome::Failed,
-        DelegatedAuthMetricReason::IssuerProofUnavailable,
+        DelegatedAuthMetricReason::RootProofPrepareFailed,
     );
 
     let entries = entries(MetricsKind::Security);
@@ -853,17 +849,7 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
             "delegated_auth",
             "renewal_attempt",
             "failed",
-            "retry_scheduled",
-        ],
-        1,
-    );
-    assert_metric_count(
-        &entries,
-        &[
-            "delegated_auth",
-            "renewal_install",
-            "failed",
-            "issuer_proof_unavailable",
+            "root_proof_prepare_failed",
         ],
         1,
     );

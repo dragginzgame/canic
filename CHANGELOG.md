@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.2` removes the old bridge-backed delegated-auth root-proof
+  provisioning endpoints, DTO/API/CLI surfaces, replay rows, and provisioner
+  access predicate, leaving delegated-token liveness on chain-key renewal and
+  issuer lazy repair only.
+
 - `0.76.1` hardens chain-key batch retry/install state and makes local
   workspace test runs avoid redundant clippy and PocketIC wasm cache churn
   while preserving CI cleanup behavior.

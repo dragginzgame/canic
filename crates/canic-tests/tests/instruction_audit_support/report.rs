@@ -525,7 +525,7 @@ pub(super) fn write_report(
 
     out.push_str("## Hub Module Pressure\n\n");
     out.push_str("- `root::canic_response_capability_v1` now has measured replay/cycles stage deltas, so root capability work no longer has to be treated as an opaque endpoint total.\n");
-    out.push_str("- `root::canic_prepare_delegation_proof_batch` remains the main root proof provisioning update hotspot in the retained audit lane, so further optimization work should stay focused on shared runtime/auth cost rather than demo provisioning flows.\n");
+    out.push_str("- `root::canic_get_or_create_chain_key_delegation_proof` is the retained root proof provisioning lane after the bridge-backed batch endpoints were removed, so further optimization work should stay focused on chain-key renewal/lazy repair rather than demo provisioning flows.\n");
     out.push_str("- `scale_hub::plan_create_worker` stays in the matrix as an audit-only dry-run probe, which keeps placement-policy visibility without turning demo `create_*` flows into default audit targets.\n");
     out.push_str("- `test::test` provides the current chain-key-free update floor on a non-root child canister. Drift there points back to shared runtime/update overhead rather than topology-specific logic.\n");
     out.push_str("- Root state/registry reads stay separate from the leaf floor. They matter for operator paths, but they should not be confused with the shared ordinary-leaf baseline.\n\n");
@@ -593,7 +593,7 @@ pub(super) fn write_report(
     }
     out.push_str("2. Owner boundary: `shared update hotspots`\n");
     out.push_str(&format!(
-        "   Action: compare `root::canic_prepare_delegation_proof_batch`, `root::canic_response_capability_v1`, and the local `test::test` update floor before/after any shared-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
+        "   Action: compare `root::canic_get_or_create_chain_key_delegation_proof`, `root::canic_response_capability_v1`, and the local `test::test` update floor before/after any shared-runtime cleanup, using this report as the `{minor_line}` baseline.\n"
     ));
     out.push_str("3. Owner boundary: `shared observability floor`\n");
     out.push_str("   Action: keep the internal standalone query probes in the matrix so shared-runtime drift does not hide behind root-only or coordinator-only endpoints.\n\n");
@@ -712,8 +712,8 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
             "Internal audit raw time probe",
             "[leaf_probe](/home/adam/projects/canic/canisters/audit/leaf_probe/src/lib.rs)",
         ),
-        "canic_prepare_delegation_proof_batch" => (
-            "Root proof batch provisioning path",
+        "canic_get_or_create_chain_key_delegation_proof" => (
+            "Chain-key root proof lazy-repair path",
             "[root endpoints](/home/adam/projects/canic/crates/canic/src/macros/endpoints/root.rs), [auth ops](/home/adam/projects/canic/crates/canic-core/src/ops/auth/delegation/mod.rs)",
         ),
         "canic_template_stage_manifest_admin"

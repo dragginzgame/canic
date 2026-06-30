@@ -34,7 +34,6 @@ const DATA_CERTIFICATE_UNAVAILABLE_FRAGMENT: &str =
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootPayloadKind {
-    DelegationCert,
     RoleAttestation,
 }
 
@@ -82,7 +81,6 @@ impl PendingRootProofKey {
 ))]
 pub const fn root_canister_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
-        RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
         RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
     }
 }
@@ -94,7 +92,6 @@ pub const fn root_canister_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
 ))]
 pub const fn root_canister_sig_domain(kind: RootPayloadKind) -> &'static [u8] {
     match kind {
-        RootPayloadKind::DelegationCert => b"canic-root-delegation-cert",
         RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
     }
 }
@@ -378,8 +375,8 @@ mod tests {
 
     #[test]
     fn verification_message_prefixes_domain_length_and_domain() {
-        let msg = root_canister_sig_verification_message(RootPayloadKind::DelegationCert, [7; 32]);
-        let domain = root_canister_sig_domain(RootPayloadKind::DelegationCert);
+        let msg = root_canister_sig_verification_message(RootPayloadKind::RoleAttestation, [7; 32]);
+        let domain = root_canister_sig_domain(RootPayloadKind::RoleAttestation);
         let domain_len = u8::try_from(domain.len()).unwrap();
         let domain_start = 1;
         let domain_end = domain_start + domain.len();
@@ -390,14 +387,14 @@ mod tests {
     }
 
     #[test]
-    fn role_attestation_uses_distinct_seed_and_domain() {
-        assert_ne!(
+    fn role_attestation_uses_expected_seed_and_domain() {
+        assert_eq!(
             root_canister_sig_seed(RootPayloadKind::RoleAttestation),
-            root_canister_sig_seed(RootPayloadKind::DelegationCert)
+            b"canic-root-role-attestation"
         );
-        assert_ne!(
+        assert_eq!(
             root_canister_sig_domain(RootPayloadKind::RoleAttestation),
-            root_canister_sig_domain(RootPayloadKind::DelegationCert)
+            b"canic-root-role-attestation"
         );
     }
 

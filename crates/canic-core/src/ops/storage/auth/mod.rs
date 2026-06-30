@@ -13,8 +13,8 @@ pub mod mapper;
 use crate::{
     cdk::types::Principal,
     domain::policy::auth::{
-        RootDelegationRenewalBatch, RootIssuerPolicy, RootIssuerRenewalAttempt,
-        RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalState,
+        RootIssuerRenewalTemplate,
     },
     dto::auth::{
         ActiveDelegationProof, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessV1,
@@ -22,13 +22,11 @@ use crate::{
     },
     ops::storage::auth::mapper::{
         ActiveDelegationProofRecordMapper, ChainKeyRootDelegationBatchRecordMapper,
-        RootDelegationRenewalBatchRecordMapper, RootIssuerPolicyRecordMapper,
-        RootIssuerRenewalAttemptRecordMapper, RootIssuerRenewalStateRecordMapper,
-        RootIssuerRenewalTemplateRecordMapper,
+        RootIssuerPolicyRecordMapper, RootIssuerRenewalAttemptRecordMapper,
+        RootIssuerRenewalStateRecordMapper, RootIssuerRenewalTemplateRecordMapper,
     },
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
-        RootProvisionerRecord,
     },
 };
 
@@ -62,18 +60,6 @@ pub struct DelegatedSessionBootstrapBinding {
     pub token_fingerprint: [u8; 32],
     pub bound_at: u64,
     pub expires_at: u64,
-}
-
-///
-/// RootDelegationRenewalProvisioner
-///
-/// Storage-ops view of a principal allowed to complete root-scheduled renewal work.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RootDelegationRenewalProvisioner {
-    pub principal: Principal,
-    pub enabled: bool,
 }
 
 ///
@@ -312,34 +298,6 @@ impl AuthStateOps {
     }
 
     #[must_use]
-    pub fn root_delegation_renewal_batch(batch_id: [u8; 32]) -> Option<RootDelegationRenewalBatch> {
-        AuthState::get_root_delegation_renewal_batch(batch_id)
-            .map(RootDelegationRenewalBatchRecordMapper::record_to_batch)
-    }
-
-    #[must_use]
-    pub fn root_delegation_renewal_batches() -> Vec<RootDelegationRenewalBatch> {
-        AuthState::list_root_delegation_renewal_batches()
-            .into_iter()
-            .map(RootDelegationRenewalBatchRecordMapper::record_to_batch)
-            .collect()
-    }
-
-    #[allow(
-        dead_code,
-        reason = "pre-0.76 bridge-backed renewal batch writer is retained for historical scheduler code during the hard-cut migration"
-    )]
-    pub fn upsert_root_delegation_renewal_batch(batch: RootDelegationRenewalBatch) {
-        AuthState::upsert_root_delegation_renewal_batch(
-            RootDelegationRenewalBatchRecordMapper::batch_to_record(batch),
-        );
-    }
-
-    pub fn prune_root_delegation_renewal_batches(now_ns: u64) -> usize {
-        AuthState::prune_root_delegation_renewal_batches(now_ns)
-    }
-
-    #[must_use]
     pub fn chain_key_root_delegation_batch(
         batch_id: [u8; 32],
     ) -> Option<ChainKeyRootDelegationBatch> {
@@ -363,32 +321,6 @@ impl AuthStateOps {
 
     pub fn prune_chain_key_root_delegation_batches(now_ns: u64) -> usize {
         AuthState::prune_chain_key_root_delegation_batches(now_ns)
-    }
-
-    #[must_use]
-    pub fn root_delegation_renewal_provisioner(
-        principal: Principal,
-    ) -> Option<RootDelegationRenewalProvisioner> {
-        AuthState::get_root_provisioner(principal).map(root_provisioner_record_to_view)
-    }
-
-    #[must_use]
-    pub fn root_delegation_renewal_provisioners() -> Vec<RootDelegationRenewalProvisioner> {
-        AuthState::list_root_provisioners()
-            .into_iter()
-            .map(root_provisioner_record_to_view)
-            .collect()
-    }
-
-    #[must_use]
-    pub fn is_root_delegation_renewal_provisioner(principal: Principal) -> bool {
-        Self::root_delegation_renewal_provisioner(principal).is_some_and(|view| view.enabled)
-    }
-
-    pub fn upsert_root_delegation_renewal_provisioner(
-        provisioner: RootDelegationRenewalProvisioner,
-    ) {
-        AuthState::upsert_root_provisioner(root_provisioner_view_to_record(provisioner));
     }
 }
 
@@ -436,24 +368,6 @@ const fn delegated_session_bootstrap_binding_view_to_record(
     }
 }
 
-const fn root_provisioner_record_to_view(
-    record: RootProvisionerRecord,
-) -> RootDelegationRenewalProvisioner {
-    RootDelegationRenewalProvisioner {
-        principal: record.principal,
-        enabled: record.enabled,
-    }
-}
-
-const fn root_provisioner_view_to_record(
-    view: RootDelegationRenewalProvisioner,
-) -> RootProvisionerRecord {
-    RootProvisionerRecord {
-        principal: view.principal,
-        enabled: view.enabled,
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -463,10 +377,9 @@ mod tests {
     use super::*;
     use crate::{
         domain::policy::auth::{
-            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootDelegationRenewalBatch,
-            RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus,
-            RootIssuerRenewalOutcome, RootIssuerRenewalProofRef, RootIssuerRenewalState,
-            RootIssuerRenewalTemplate,
+            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+            RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
+            RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
         },
         dto::auth::{
             ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
@@ -798,81 +711,5 @@ mod tests {
             Some(attempt)
         );
         assert_eq!(AuthStateOps::root_issuer_renewal_attempt([8; 32]), None);
-    }
-
-    #[test]
-    fn root_delegation_renewal_batch_round_trips_through_auth_state() {
-        let batch = RootDelegationRenewalBatch {
-            batch_id: [9; 32],
-            attempt_ids: vec![[10; 32], [11; 32]],
-            prepared_at_ns: 20,
-            retrieval_expires_at_ns: 80,
-        };
-
-        AuthStateOps::upsert_root_delegation_renewal_batch(batch.clone());
-
-        assert_eq!(
-            AuthStateOps::root_delegation_renewal_batch([9; 32]),
-            Some(batch)
-        );
-        assert_eq!(
-            AuthStateOps::root_delegation_renewal_batches()
-                .into_iter()
-                .filter(|candidate| candidate.batch_id == [9; 32])
-                .count(),
-            1
-        );
-        assert_eq!(AuthStateOps::root_delegation_renewal_batch([12; 32]), None);
-    }
-
-    #[test]
-    fn root_delegation_renewal_batch_prune_removes_expired_batches() {
-        let expired_batch = RootDelegationRenewalBatch {
-            batch_id: [13; 32],
-            attempt_ids: vec![[14; 32]],
-            prepared_at_ns: 10,
-            retrieval_expires_at_ns: 20,
-        };
-        let fresh_batch = RootDelegationRenewalBatch {
-            batch_id: [15; 32],
-            attempt_ids: vec![[16; 32]],
-            prepared_at_ns: 10,
-            retrieval_expires_at_ns: 21,
-        };
-
-        AuthStateOps::upsert_root_delegation_renewal_batch(expired_batch);
-        AuthStateOps::upsert_root_delegation_renewal_batch(fresh_batch.clone());
-
-        assert_eq!(AuthStateOps::prune_root_delegation_renewal_batches(20), 1);
-        assert_eq!(AuthStateOps::root_delegation_renewal_batch([13; 32]), None);
-        assert_eq!(
-            AuthStateOps::root_delegation_renewal_batch([15; 32]),
-            Some(fresh_batch)
-        );
-    }
-
-    #[test]
-    fn root_delegation_renewal_provisioner_round_trips_through_auth_state() {
-        let provisioner = RootDelegationRenewalProvisioner {
-            principal: p(61),
-            enabled: true,
-        };
-
-        AuthStateOps::upsert_root_delegation_renewal_provisioner(provisioner);
-
-        assert_eq!(
-            AuthStateOps::root_delegation_renewal_provisioner(p(61)),
-            Some(provisioner)
-        );
-        assert!(AuthStateOps::is_root_delegation_renewal_provisioner(p(61)));
-        assert!(!AuthStateOps::is_root_delegation_renewal_provisioner(p(62)));
-
-        AuthStateOps::upsert_root_delegation_renewal_provisioner(
-            RootDelegationRenewalProvisioner {
-                principal: p(61),
-                enabled: false,
-            },
-        );
-        assert!(!AuthStateOps::is_root_delegation_renewal_provisioner(p(61)));
     }
 }

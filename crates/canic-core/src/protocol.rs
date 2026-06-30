@@ -7,17 +7,8 @@ pub const CANIC_UPSERT_ROOT_ISSUER_POLICY: &str = "canic_upsert_root_issuer_poli
 pub const CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE: &str =
     "canic_upsert_root_issuer_renewal_template";
 pub const CANIC_ROOT_ISSUER_RENEWAL_STATUS: &str = "canic_root_issuer_renewal_status";
-pub const CANIC_PREPARE_DELEGATION_PROOF_BATCH: &str = "canic_prepare_delegation_proof_batch";
-pub const CANIC_GET_DELEGATION_PROOF_BATCH: &str = "canic_get_delegation_proof_batch";
-pub const CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH: &str =
-    "canic_get_delegation_renewal_proof_batch";
 pub const CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF: &str =
     "canic_get_or_create_chain_key_delegation_proof";
-pub const CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER: &str =
-    "canic_upsert_delegation_renewal_provisioner";
-pub const CANIC_DELEGATION_RENEWAL_PROVISIONERS: &str = "canic_delegation_renewal_provisioners";
-pub const CANIC_DELEGATION_RENEWAL_WORK: &str = "canic_delegation_renewal_work";
-pub const CANIC_INSTALL_DELEGATION_PROOF_BATCH: &str = "canic_install_delegation_proof_batch";
 pub const CANIC_PREPARE_DELEGATED_TOKEN: &str = "canic_prepare_delegated_token";
 pub const CANIC_GET_DELEGATED_TOKEN: &str = "canic_get_delegated_token";
 pub const CANIC_ACTIVE_DELEGATION_PROOF_STATUS: &str = "canic_active_delegation_proof_status";

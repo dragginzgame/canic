@@ -1,12 +1,9 @@
 //! Module: ops::auth::delegation::root_issuer_renewal
 //!
-//! Responsibility: map and validate root-managed issuer renewal boundary DTOs.
-//! Does not own: renewal scheduling, proof retrieval, or issuer install calls.
+//! Responsibility: map and validate root-managed issuer renewal templates.
+//! Does not own: renewal scheduling, signing, proof retrieval, or issuer install calls.
 
 mod identity;
-mod install;
-mod retrieval;
-mod schedule;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -17,16 +14,12 @@ use super::{
 };
 use crate::{
     InternalError,
-    cdk::types::Principal,
     domain::policy::auth::{
         RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
         RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalTemplate,
         validate_root_issuer_renewal_template_policy,
     },
     dto::auth::{
-        RootDelegationProofBatchProof, RootDelegationProofInstallOutcome,
-        RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
-        RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalWorkListResponse,
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
@@ -35,26 +28,15 @@ use crate::{
         runtime::metrics::delegated_auth::{
             DelegatedAuthMetricOutcome, DelegatedAuthMetricReason, DelegatedAuthMetrics,
         },
-        storage::auth::{AuthStateOps, RootDelegationRenewalProvisioner},
+        storage::auth::AuthStateOps,
     },
 };
 
 pub(in crate::ops::auth::delegation) use identity::renewal_template_fingerprint;
-#[cfg(test)]
-use retrieval::get_delegation_renewal_proof_batch_with_getter;
-pub(super) use retrieval::{
-    ensure_delegation_renewal_batch_scheduled, get_delegation_renewal_proof_batch,
-};
-pub(super) use schedule::prepare_due_delegation_renewals;
-#[cfg(test)]
-use schedule::{prepare_due_delegation_renewals_with_prepare, renewal_template_due};
 use view::{
-    delegation_renewal_provisioner_view, root_delegation_renewal_batch_view,
     root_issuer_renewal_attempt_view, root_issuer_renewal_state_view,
     root_issuer_renewal_template_view,
 };
-
-const ROOT_DELEGATION_RENEWAL_RETRY_BACKOFF_NS: u64 = 60_000_000_000;
 
 pub(super) fn upsert_root_issuer_renewal_template(
     request: RootIssuerRenewalTemplateUpsertRequest,
@@ -137,94 +119,6 @@ pub(super) fn has_enabled_root_issuer_renewal_templates() -> bool {
     AuthStateOps::root_issuer_renewal_templates()
         .iter()
         .any(|template| template.enabled)
-}
-
-pub(super) fn upsert_delegation_renewal_provisioner(
-    request: RootDelegationRenewalProvisionerUpsertRequest,
-) -> RootDelegationRenewalProvisionerResponse {
-    let provisioner = RootDelegationRenewalProvisioner {
-        principal: request.principal,
-        enabled: request.enabled,
-    };
-    AuthStateOps::upsert_root_delegation_renewal_provisioner(provisioner);
-    DelegatedAuthMetrics::record_renewal_provisioner_completed();
-    crate::log!(
-        Topic::Auth,
-        Info,
-        "root delegated-proof renewal provisioner updated principal={} enabled={}",
-        provisioner.principal,
-        provisioner.enabled
-    );
-
-    RootDelegationRenewalProvisionerResponse {
-        provisioner: delegation_renewal_provisioner_view(provisioner),
-    }
-}
-
-pub(super) fn delegation_renewal_provisioners() -> RootDelegationRenewalProvisionerListResponse {
-    let mut provisioners = AuthStateOps::root_delegation_renewal_provisioners();
-    provisioners.sort_by(|left, right| left.principal.as_slice().cmp(right.principal.as_slice()));
-
-    RootDelegationRenewalProvisionerListResponse {
-        provisioners: provisioners
-            .into_iter()
-            .map(delegation_renewal_provisioner_view)
-            .collect(),
-    }
-}
-
-pub(super) fn delegation_renewal_work(now_ns: u64) -> RootDelegationRenewalWorkListResponse {
-    let mut batches = AuthStateOps::root_delegation_renewal_batches()
-        .into_iter()
-        .filter_map(|batch| root_delegation_renewal_batch_view(&batch, now_ns))
-        .collect::<Vec<_>>();
-    batches.sort_by(|left, right| {
-        left.prepared_at_ns
-            .cmp(&right.prepared_at_ns)
-            .then_with(|| left.batch_id.cmp(&right.batch_id))
-    });
-
-    RootDelegationRenewalWorkListResponse { batches }
-}
-
-pub(super) fn is_delegation_renewal_provisioner(principal: Principal) -> bool {
-    AuthStateOps::is_root_delegation_renewal_provisioner(principal)
-}
-
-pub(super) fn preflight_delegation_renewal_proof_install(
-    batch_id: [u8; 32],
-    proof: &RootDelegationProofBatchProof,
-    now_ns: u64,
-) -> Result<Option<[u8; 32]>, RootDelegationProofInstallOutcome> {
-    install::preflight_delegation_renewal_proof_install(batch_id, proof, now_ns)
-}
-
-pub(super) fn record_delegation_renewal_install_outcome(
-    attempt_id: [u8; 32],
-    outcome: RootDelegationProofInstallOutcome,
-    now_ns: u64,
-) {
-    install::record_delegation_renewal_install_outcome(attempt_id, outcome, now_ns);
-}
-
-pub(super) fn record_delegation_renewal_install_preflight_outcome(
-    batch_id: [u8; 32],
-    issuer_pid: Principal,
-    cert_hash: [u8; 32],
-    outcome: RootDelegationProofInstallOutcome,
-    now_ns: u64,
-) {
-    install::record_delegation_renewal_install_preflight_outcome(
-        batch_id, issuer_pid, cert_hash, outcome, now_ns,
-    );
-}
-
-pub(super) fn record_manual_delegation_renewal_install_outcome(
-    proof: &RootDelegationProofBatchProof,
-    outcome: RootDelegationProofInstallOutcome,
-    now_ns: u64,
-) {
-    install::record_manual_delegation_renewal_install_outcome(proof, outcome, now_ns);
 }
 
 fn validate_root_issuer_renewal_template_upsert_request(

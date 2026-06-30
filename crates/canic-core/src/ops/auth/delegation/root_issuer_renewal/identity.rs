@@ -1,6 +1,6 @@
 //! Module: ops::auth::delegation::root_issuer_renewal::identity
 //!
-//! Responsibility: derive deterministic renewal template, batch, and attempt identifiers.
+//! Responsibility: derive deterministic renewal template identifiers.
 //! Does not own: storage mutation, scheduling decisions, or DTO conversion.
 
 use crate::{
@@ -13,8 +13,6 @@ use sha2::{Digest, Sha256};
 
 const ROOT_ISSUER_RENEWAL_TEMPLATE_FINGERPRINT_DOMAIN: &[u8] =
     b"canic-root-issuer-renewal-template:v1";
-const ROOT_DELEGATION_RENEWAL_BATCH_ID_DOMAIN: &[u8] = b"canic-root-delegation-renewal-batch:v1";
-const ROOT_ISSUER_RENEWAL_ATTEMPT_ID_DOMAIN: &[u8] = b"canic-root-issuer-renewal-attempt:v1";
 
 pub(in crate::ops::auth::delegation) fn renewal_template_fingerprint(
     template: &RootIssuerRenewalTemplate,
@@ -26,35 +24,6 @@ pub(in crate::ops::auth::delegation) fn renewal_template_fingerprint(
     hash_renewal_policy_audience(&mut hasher, &template.audience);
     hash_renewal_policy_grants(&mut hasher, &template.grants);
     hash_renewal_u64(&mut hasher, template.cert_ttl_ns);
-    hasher.finalize().into()
-}
-
-pub(super) fn renewal_batch_id(
-    now_ns: u64,
-    due_template_count: usize,
-    due_template_fingerprints: impl Iterator<Item = (Principal, [u8; 32])>,
-) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hash_renewal_bytes(&mut hasher, ROOT_DELEGATION_RENEWAL_BATCH_ID_DOMAIN);
-    hash_renewal_u64(&mut hasher, now_ns);
-    hash_renewal_u64(&mut hasher, due_template_count as u64);
-    for (issuer_pid, template_fingerprint) in due_template_fingerprints {
-        hash_renewal_principal(&mut hasher, issuer_pid);
-        hash_renewal_bytes(&mut hasher, &template_fingerprint);
-    }
-    hasher.finalize().into()
-}
-
-pub(super) fn renewal_attempt_id(
-    batch_id: [u8; 32],
-    issuer_pid: Principal,
-    cert_hash: [u8; 32],
-) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hash_renewal_bytes(&mut hasher, ROOT_ISSUER_RENEWAL_ATTEMPT_ID_DOMAIN);
-    hash_renewal_bytes(&mut hasher, &batch_id);
-    hash_renewal_principal(&mut hasher, issuer_pid);
-    hash_renewal_bytes(&mut hasher, &cert_hash);
     hasher.finalize().into()
 }
 

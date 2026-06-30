@@ -19,27 +19,19 @@ use canic::dto::blob_storage::{
 use canic::{
     cdk::types::Principal,
     dto::auth::{
-        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
-        ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
-        ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
+        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
+        ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
+        ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
         DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant,
         DelegationAudience, DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
         IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
-        RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
-        RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
-        RootDelegationProofBatchInstallResponse, RootDelegationProofBatchInstallResult,
-        RootDelegationProofBatchPrepareEntry, RootDelegationProofBatchPrepareRequest,
-        RootDelegationProofBatchPrepareResponse, RootDelegationProofBatchProof,
-        RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome,
-        RootDelegationRenewalBatchView, RootDelegationRenewalProofBatchGetRequest,
-        RootDelegationRenewalProvisionerListResponse, RootDelegationRenewalProvisionerResponse,
-        RootDelegationRenewalProvisionerUpsertRequest, RootDelegationRenewalProvisionerView,
-        RootDelegationRenewalWorkListResponse, RootIssuerPolicyResponse,
-        RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootIssuerRenewalAttemptStatus,
-        RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
-        RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
-        RootIssuerRenewalTemplateView, RootKeyPolicyV1, RootProof, RootProofMode,
+        RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
+        RootDelegationProofBatchProofRef, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+        RootIssuerPolicyView, RootIssuerRenewalAttemptStatus, RootIssuerRenewalAttemptView,
+        RootIssuerRenewalOutcome, RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest,
+        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+        RootIssuerRenewalTemplateUpsertRequest, RootIssuerRenewalTemplateView, RootKeyPolicyV1,
+        RootProof, RootProofMode,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
@@ -706,44 +698,9 @@ fn assert_root_delegation_protocol_constants() {
             "canic_root_issuer_renewal_status",
         ),
         (
-            canic::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
-            canic_core::protocol::CANIC_PREPARE_DELEGATION_PROOF_BATCH,
-            "canic_prepare_delegation_proof_batch",
-        ),
-        (
-            canic::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
-            canic_core::protocol::CANIC_GET_DELEGATION_PROOF_BATCH,
-            "canic_get_delegation_proof_batch",
-        ),
-        (
-            canic::protocol::CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-            canic_core::protocol::CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH,
-            "canic_get_delegation_renewal_proof_batch",
-        ),
-        (
             canic::protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
             canic_core::protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
             "canic_get_or_create_chain_key_delegation_proof",
-        ),
-        (
-            canic::protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
-            canic_core::protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
-            "canic_upsert_delegation_renewal_provisioner",
-        ),
-        (
-            canic::protocol::CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-            canic_core::protocol::CANIC_DELEGATION_RENEWAL_PROVISIONERS,
-            "canic_delegation_renewal_provisioners",
-        ),
-        (
-            canic::protocol::CANIC_DELEGATION_RENEWAL_WORK,
-            canic_core::protocol::CANIC_DELEGATION_RENEWAL_WORK,
-            "canic_delegation_renewal_work",
-        ),
-        (
-            canic::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-            canic_core::protocol::CANIC_INSTALL_DELEGATION_PROOF_BATCH,
-            "canic_install_delegation_proof_batch",
         ),
     ] {
         assert_eq!(public, core);
@@ -756,16 +713,6 @@ fn assert_root_delegation_macro_guards(source: &str) {
     let renewal_upsert_attr =
         preceding_attribute(source, "fn canic_upsert_root_issuer_renewal_template(");
     let renewal_status_attr = preceding_attribute(source, "fn canic_root_issuer_renewal_status(");
-    let provisioner_upsert_attr =
-        preceding_attribute(source, "fn canic_upsert_delegation_renewal_provisioner(");
-    let provisioner_list_attr =
-        preceding_attribute(source, "fn canic_delegation_renewal_provisioners(");
-    let prepare_attr = preceding_attribute(source, "fn canic_prepare_delegation_proof_batch(");
-    let get_attr = preceding_attribute(source, "fn canic_get_delegation_proof_batch(");
-    let renewal_get_attr =
-        preceding_attribute_context(source, "fn canic_get_delegation_renewal_proof_batch(");
-    let install_attr =
-        preceding_attribute_context(source, "fn canic_install_delegation_proof_batch(");
     let lazy_repair_attr =
         preceding_attribute_context(source, "fn canic_get_or_create_chain_key_delegation_proof(");
     assert!(
@@ -788,46 +735,6 @@ fn assert_root_delegation_macro_guards(source: &str) {
         "root issuer renewal status must remain a public controller-gated query"
     );
     assert!(
-        provisioner_upsert_attr.contains("canic_update")
-            && provisioner_upsert_attr.contains("caller::is_controller()")
-            && !provisioner_upsert_attr.contains("internal"),
-        "delegation renewal provisioner upsert must remain a public controller-gated update"
-    );
-    assert!(
-        provisioner_list_attr.contains("canic_query")
-            && provisioner_list_attr.contains("caller::is_controller()")
-            && !provisioner_list_attr.contains("internal"),
-        "delegation renewal provisioner list must remain a public controller-gated query"
-    );
-    assert!(
-        prepare_attr.contains("canic_update")
-            && prepare_attr.contains("caller::is_controller()")
-            && !prepare_attr.contains("internal"),
-        "root batch prepare must remain a public controller-gated update"
-    );
-    assert!(
-        get_attr.contains("canic_query")
-            && get_attr.contains("caller::is_controller()")
-            && !get_attr.contains("internal")
-            && !get_attr.contains("caller::is_registered_to_subnet()"),
-        "root batch get must remain a direct controller-gated root query"
-    );
-    assert!(
-        renewal_get_attr.contains("canic_query")
-            && renewal_get_attr.contains("caller::is_controller()")
-            && renewal_get_attr.contains("caller::is_delegation_renewal_provisioner()")
-            && !renewal_get_attr.contains("internal")
-            && !renewal_get_attr.contains("caller::is_registered_to_subnet()"),
-        "root scheduled renewal batch get must allow controllers or renewal provisioners"
-    );
-    assert!(
-        install_attr.contains("canic_update")
-            && install_attr.contains("caller::is_controller()")
-            && install_attr.contains("caller::is_delegation_renewal_provisioner()")
-            && !install_attr.contains("internal"),
-        "root batch install must allow controllers or renewal provisioners"
-    );
-    assert!(
         lazy_repair_attr.contains("canic_update")
             && lazy_repair_attr.contains("internal")
             && lazy_repair_attr.contains("caller::is_registered_to_subnet()")
@@ -835,15 +742,7 @@ fn assert_root_delegation_macro_guards(source: &str) {
             && !lazy_repair_attr.contains("caller::is_delegation_renewal_provisioner()"),
         "root chain-key lazy repair must remain an internal subnet-issuer update"
     );
-    let renewal_work_attr =
-        preceding_attribute_context(source, "fn canic_delegation_renewal_work(");
-    assert!(
-        renewal_work_attr.contains("canic_query")
-            && renewal_work_attr.contains("caller::is_controller()")
-            && renewal_work_attr.contains("caller::is_delegation_renewal_provisioner()")
-            && !renewal_work_attr.contains("internal"),
-        "root renewal work list must allow controllers or renewal provisioners"
-    );
+    assert_bridge_backed_root_proof_endpoints_absent(source);
 }
 
 fn assert_root_delegation_endpoint_bindings(source: &str) {
@@ -869,65 +768,36 @@ fn assert_root_delegation_endpoint_bindings(source: &str) {
         "root auth endpoint bundle must expose issuer renewal status"
     );
     assert!(
-        source.contains("fn canic_upsert_delegation_renewal_provisioner(")
-            && source.contains("RootDelegationRenewalProvisionerUpsertRequest")
-            && source.contains("RootDelegationRenewalProvisionerResponse")
-            && source.contains("AuthApi::upsert_delegation_renewal_provisioner_root"),
-        "root auth endpoint bundle must expose renewal provisioner upsert"
-    );
-    assert!(
-        source.contains("fn canic_delegation_renewal_provisioners(")
-            && source.contains("RootDelegationRenewalProvisionerListResponse")
-            && source.contains("AuthApi::delegation_renewal_provisioners_root"),
-        "root auth endpoint bundle must expose renewal provisioner list"
-    );
-    assert!(
-        source.contains("fn canic_delegation_renewal_work(")
-            && source.contains("RootDelegationRenewalWorkListResponse")
-            && source.contains("AuthApi::delegation_renewal_work_root"),
-        "root auth endpoint bundle must expose scheduled renewal work list"
-    );
-    assert!(
-        source.contains("fn canic_prepare_delegation_proof_batch(")
-            && source.contains("RootDelegationProofBatchPrepareRequest")
-            && source.contains("RootDelegationProofBatchPrepareResponse")
-            && source.contains("AuthApi::prepare_delegation_proof_batch_root"),
-        "root auth endpoint bundle must expose batch prepare"
-    );
-    assert!(
-        source.contains("fn canic_get_delegation_proof_batch(")
-            && source.contains("RootDelegationProofBatchGetRequest")
-            && source.contains("RootDelegationProofBatchGetResponse")
-            && source.contains("AuthApi::get_delegation_proof_batch_root"),
-        "root auth endpoint bundle must expose batch get"
-    );
-    assert!(
-        source.contains("fn canic_get_delegation_renewal_proof_batch(")
-            && source.contains("RootDelegationRenewalProofBatchGetRequest")
-            && source.contains("RootDelegationProofBatchGetResponse")
-            && source.contains("AuthApi::get_delegation_renewal_proof_batch_root"),
-        "root auth endpoint bundle must expose scheduled renewal batch get"
-    );
-    assert!(
-        source.contains("fn canic_install_delegation_proof_batch(")
-            && source.contains("RootDelegationProofBatchInstallRequest")
-            && source.contains("RootDelegationProofBatchInstallResponse")
-            && source.contains("AuthApi::install_delegation_proof_batch_root"),
-        "root auth endpoint bundle must expose batch install"
-    );
-    assert!(
         source.contains("fn canic_get_or_create_chain_key_delegation_proof(")
             && source.contains("RootDelegationProofBatchProof")
             && source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"),
         "root auth endpoint bundle must expose chain-key lazy repair"
     );
+    assert_bridge_backed_root_proof_endpoints_absent(source);
+}
+
+fn assert_bridge_backed_root_proof_endpoints_absent(source: &str) {
+    for removed in [
+        "fn canic_upsert_delegation_renewal_provisioner(",
+        "fn canic_delegation_renewal_provisioners(",
+        "fn canic_delegation_renewal_work(",
+        "fn canic_prepare_delegation_proof_batch(",
+        "fn canic_get_delegation_proof_batch(",
+        "fn canic_get_delegation_renewal_proof_batch(",
+        "fn canic_install_delegation_proof_batch(",
+        "caller::is_delegation_renewal_provisioner()",
+    ] {
+        assert!(
+            !source.contains(removed),
+            "bridge-backed root proof surface must stay removed: {removed}"
+        );
+    }
 }
 
 #[test]
 fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
     assert_root_issuer_policy_dtos_roundtrip();
     assert_root_issuer_renewal_dtos_roundtrip();
-    assert_root_delegation_provisioner_dtos_roundtrip();
     assert_root_delegation_batch_dtos_roundtrip();
     assert_active_delegation_proof_status_roundtrip();
 }
@@ -942,27 +812,6 @@ fn assert_root_issuer_policy_dtos_roundtrip() {
 
     assert_candid_roundtrip(issuer_policy_request);
     assert_candid_roundtrip(issuer_policy_response);
-}
-
-fn assert_root_delegation_provisioner_dtos_roundtrip() {
-    let provisioner = RootDelegationRenewalProvisionerView {
-        principal: Principal::from_slice(&[24; 29]),
-        enabled: true,
-    };
-    let provisioner_request = RootDelegationRenewalProvisionerUpsertRequest {
-        principal: provisioner.principal,
-        enabled: provisioner.enabled,
-    };
-    let provisioner_response = RootDelegationRenewalProvisionerResponse {
-        provisioner: provisioner.clone(),
-    };
-    let provisioner_list_response = RootDelegationRenewalProvisionerListResponse {
-        provisioners: vec![provisioner],
-    };
-
-    assert_candid_roundtrip(provisioner_request);
-    assert_candid_roundtrip(provisioner_response);
-    assert_candid_roundtrip(provisioner_list_response);
 }
 
 fn assert_root_issuer_renewal_dtos_roundtrip() {
@@ -987,16 +836,6 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
         prepared_expires_at_ns: 90,
         prepared_refresh_after_ns: 72,
         failure: Some(RootIssuerRenewalOutcome::RetrievalExpired),
-    };
-    let renewal_work_response = RootDelegationRenewalWorkListResponse {
-        batches: vec![RootDelegationRenewalBatchView {
-            batch_id,
-            attempt_count: 1,
-            prepared_at_ns: 60,
-            retrieval_expires_at_ns: 65,
-            install_deadline_ns: 70,
-            attempts: vec![renewal_attempt.clone()],
-        }],
     };
     let renewal_template = RootIssuerRenewalTemplateView {
         issuer_pid,
@@ -1037,7 +876,6 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
     assert_candid_roundtrip(renewal_template_response);
     assert_candid_roundtrip(renewal_status_request);
     assert_candid_roundtrip(renewal_status_response);
-    assert_candid_roundtrip(renewal_work_response);
 }
 
 fn assert_root_delegation_batch_dtos_roundtrip() {
@@ -1047,20 +885,6 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
     let cert_hash = [20; 32];
     let grant = test_delegated_role_grant();
     let audience = DelegationAudience::Project("test".to_string());
-    let prepare_entry =
-        root_delegation_proof_batch_prepare_entry(issuer_pid, audience.clone(), grant.clone());
-    let prepare_request = root_delegation_proof_batch_prepare_request(batch_id, &prepare_entry);
-    let prepare_response =
-        root_delegation_proof_batch_prepare_response(batch_id, issuer_pid, cert_hash);
-    let proof_ref = RootDelegationProofBatchProofRef {
-        issuer_pid,
-        cert_hash,
-    };
-    let get_request = RootDelegationProofBatchGetRequest {
-        batch_id,
-        entries: vec![proof_ref],
-    };
-    let renewal_get_request = RootDelegationRenewalProofBatchGetRequest { batch_id };
     let proof = root_delegation_proof(root_pid, issuer_pid, audience, grant);
     let chain_key_proof =
         RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(root_pid, issuer_pid));
@@ -1106,34 +930,15 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
         cert_hash,
         proof,
     };
-    let get_response = RootDelegationProofBatchGetResponse {
-        batch_id,
-        proofs: vec![batch_proof.clone()],
-    };
     let install_request = RootDelegationProofBatchInstallRequest {
         batch_id,
         proofs: vec![batch_proof],
     };
-    let install_response = RootDelegationProofBatchInstallResponse {
-        batch_id,
-        outcomes: vec![RootDelegationProofBatchInstallResult {
-            issuer_pid,
-            cert_hash,
-            outcome: RootDelegationProofInstallOutcome::Installed,
-        }],
-    };
 
-    assert_candid_roundtrip(prepare_entry);
-    assert_candid_roundtrip(prepare_request);
-    assert_candid_roundtrip(prepare_response);
     assert_candid_roundtrip(chain_key_proof);
     assert_candid_roundtrip(root_key_policy);
     assert_candid_roundtrip(registry_snapshot);
-    assert_candid_roundtrip(get_request);
-    assert_candid_roundtrip(renewal_get_request);
-    assert_candid_roundtrip(get_response);
     assert_candid_roundtrip(install_request);
-    assert_candid_roundtrip(install_response);
 }
 
 fn assert_active_delegation_proof_status_roundtrip() {
@@ -1188,49 +993,6 @@ fn root_issuer_policy_response(
             max_cert_ttl_ns: 60,
             refresh_after_ratio_bps: 8_000,
         },
-    }
-}
-
-fn root_delegation_proof_batch_prepare_entry(
-    issuer_pid: Principal,
-    audience: DelegationAudience,
-    grant: DelegatedRoleGrant,
-) -> RootDelegationProofBatchPrepareEntry {
-    RootDelegationProofBatchPrepareEntry {
-        issuer_pid,
-        aud: audience,
-        grants: vec![grant],
-        cert_ttl_ns: 60,
-    }
-}
-
-fn root_delegation_proof_batch_prepare_request(
-    batch_id: [u8; 32],
-    entry: &RootDelegationProofBatchPrepareEntry,
-) -> RootDelegationProofBatchPrepareRequest {
-    RootDelegationProofBatchPrepareRequest {
-        metadata: Some(AuthRequestMetadata {
-            request_id: batch_id,
-            ttl_ns: 30,
-        }),
-        entries: vec![entry.clone()],
-    }
-}
-
-fn root_delegation_proof_batch_prepare_response(
-    batch_id: [u8; 32],
-    issuer_pid: Principal,
-    cert_hash: [u8; 32],
-) -> RootDelegationProofBatchPrepareResponse {
-    RootDelegationProofBatchPrepareResponse {
-        batch_id,
-        entries: vec![RootDelegationProofBatchEntry {
-            issuer_pid,
-            cert_hash,
-            expires_at_ns: 90,
-            refresh_after_ns: 72,
-        }],
-        retrieval_expires_at_ns: 45,
     }
 }
 

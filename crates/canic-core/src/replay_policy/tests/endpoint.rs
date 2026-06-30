@@ -8,29 +8,20 @@ use super::*;
 use crate::replay_policy::quota::ROOT_CHAIN_KEY_SIGNING_QUOTA_V1;
 
 #[test]
-fn delegation_proof_batch_prepare_is_manifested_as_implemented() {
-    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-        .iter()
-        .find(|entry| entry.endpoint == "canic_prepare_delegation_proof_batch")
-        .expect("delegation batch prepare endpoint policy entry");
-
-    assert_eq!(
-        entry.implementation_status,
-        ReplayImplementationStatus::Implemented
-    );
-    assert_eq!(entry.cost_class, CostClass::RootCanisterSignaturePrepare);
-    assert_eq!(
-        entry.quota_policy,
-        Some(ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1)
-    );
-    assert_eq!(entry.cycle_reserve_policy, None);
-    assert_eq!(
-        entry.replay_policy,
-        ReplayPolicy::ReplayProtected {
-            command_kind: "auth.prepare_delegation_proof_batch.v1",
-            requires_operation_id: true,
-        }
-    );
+fn bridge_backed_root_proof_endpoints_are_removed_from_manifest() {
+    for endpoint in [
+        "canic_upsert_delegation_renewal_provisioner",
+        "canic_prepare_delegation_proof_batch",
+        "canic_get_delegation_proof_batch",
+        "canic_install_delegation_proof_batch",
+    ] {
+        assert!(
+            ENDPOINT_REPLAY_POLICY_MANIFEST
+                .iter()
+                .all(|entry| entry.endpoint != endpoint),
+            "{endpoint} must not remain in the active replay manifest",
+        );
+    }
 }
 
 #[test]
@@ -57,34 +48,25 @@ fn chain_key_lazy_repair_is_manifested_as_costed_snapshot_convergent() {
 }
 
 #[test]
-fn root_delegation_renewal_config_upserts_are_snapshot_convergent() {
-    for (endpoint, command_kind) in [
-        (
-            "canic_upsert_root_issuer_renewal_template",
-            "auth.upsert_root_issuer_renewal_template.v1",
-        ),
-        (
-            "canic_upsert_delegation_renewal_provisioner",
-            "auth.upsert_delegation_renewal_provisioner.v1",
-        ),
-    ] {
-        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
-            .iter()
-            .find(|entry| entry.endpoint == endpoint)
-            .expect("root delegation renewal config policy entry");
+fn root_issuer_renewal_template_upsert_is_snapshot_convergent() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_upsert_root_issuer_renewal_template")
+        .expect("root issuer renewal template policy entry");
 
-        assert_eq!(
-            entry.implementation_status,
-            ReplayImplementationStatus::Implemented
-        );
-        assert_eq!(entry.cost_class, CostClass::None);
-        assert_eq!(entry.quota_policy, None);
-        assert_eq!(entry.cycle_reserve_policy, None);
-        assert_eq!(
-            entry.replay_policy,
-            ReplayPolicy::SnapshotConvergent { command_kind }
-        );
-    }
+    assert_eq!(
+        entry.implementation_status,
+        ReplayImplementationStatus::Implemented
+    );
+    assert_eq!(entry.cost_class, CostClass::None);
+    assert_eq!(entry.quota_policy, None);
+    assert_eq!(entry.cycle_reserve_policy, None);
+    assert_eq!(
+        entry.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: "auth.upsert_root_issuer_renewal_template.v1",
+        }
+    );
 }
 
 #[test]
