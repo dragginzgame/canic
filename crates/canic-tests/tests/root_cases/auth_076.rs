@@ -83,7 +83,7 @@ fn auth_076_chain_key_batch_renews_without_external_liveness() {
 }
 
 #[test]
-fn auth_076_legacy_canister_signature_root_proof_rejected_for_chain_key_only_issuers() {
+fn auth_076_legacy_bridge_root_proof_surface_absent_for_chain_key_only_issuers() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
 
     assert_legacy_update_absent(&setup, "canic_upsert_delegation_renewal_provisioner");
