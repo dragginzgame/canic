@@ -87,19 +87,41 @@ Configure log retention for every canister.
 
 ### `[auth.delegated_tokens]`
 
-Root/issuer canister-signature delegated token authentication
-(cert -> root proof -> issuer proof -> token).
+Root/issuer delegated token authentication
+(cert -> chain-key root proof -> issuer proof -> token).
 
-- `enabled: bool` – enable delegated token auth (default `true`).
-- `root_canister_id: string` – optional verifier trust anchor for root canister-signature proofs. If omitted, runtime verification uses the initialized Canic root env.
-- `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider.
+- `enabled: bool` – enable delegated token auth (default `false`).
+- `root_canister_id: string` – optional root canister trust anchor. If omitted, runtime verification uses the initialized Canic root env.
+- `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider for issuer canister-signature proof verification.
+- `root_proof_mode: "chain_key_batch"` – required active delegated root proof mode in the 0.76 line. Other values are rejected.
 - `network: "mainnet" | "local" | "pocketic" | "testnet"` – operator label for the configured verifier trust anchor (default `"mainnet"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
 
 When delegated-token verification is enabled on a non-root endpoint canister,
-startup requires IC canister-signature verification support and an effective
-root canister id plus raw IC root public key. The verifier does not read
-`SubnetState.auth.delegated_root_public_key` for root proof verification.
+startup requires issuer canister-signature verification support, an effective
+root canister id, the raw IC root public key for the configured network, and a
+complete chain-key root proof policy. The verifier does not read
+`SubnetState.auth.delegated_root_public_key` for delegated-token root proof
+verification.
+
+#### `[auth.delegated_tokens.chain_key_root_proof]`
+
+Trust anchor for `RootProof::IcChainKeyBatchSignatureV1`.
+
+These fields are required when delegated tokens are enabled:
+
+- `key_id: string` – IC chain-key ECDSA key id, such as `"key_1"`.
+- `derivation_path_hash_hex: string` – canonical 32-byte hash of the derivation path, encoded as hex.
+- `derivation_path_hex: [string, ...]` – derivation path components encoded as hex strings.
+- `public_key_hex: string` – SEC1 secp256k1 public key for the configured root canister, key id, and derivation path.
+- `key_version: u64` – configured signing key version expected in root proof headers.
+- `min_accepted_key_version: u64` – verifier floor for accepted key versions.
+- `min_accepted_proof_epoch: u64` – verifier floor for root proof epochs.
+- `min_accepted_registry_epoch: u64` – verifier floor for delegated-auth registry epochs.
+- `valid_from_ns: u64` – first accepted proof-policy time in nanoseconds.
+- `accept_until_ns: u64` – last accepted proof-policy time in nanoseconds; must be greater than `valid_from_ns`.
+- `max_revocation_latency_ns: u64` – maximum accepted policy revocation lag; must be greater than zero.
+- `allow_test_key: bool` – allow `test_key_1` outside mainnet (default `false`). Mainnet always rejects `test_key_1`.
 
 ### `[auth.role_attestation]`
 
@@ -177,7 +199,7 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
 - `auth.delegated_token_issuer = true` – mark this role as a delegated-token issuer; Canic requires local issuer canister-signature support for token issuance.
-- `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and local `SubnetState`, not this flag.
+- `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and `auth.delegated_tokens`, not this flag.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
 
 The `wasm_store` role is reserved and implicit.
@@ -243,10 +265,25 @@ controllers = ["aaaaa-aa"]
 app_index = ["user_hub", "scale_hub"]
 
 [auth.delegated_tokens]
-enabled = true
+enabled = false
 # root_canister_id = "..."
 # ic_root_public_key_raw_hex = "..."
 network = "local"
+# root_proof_mode = "chain_key_batch"
+#
+# [auth.delegated_tokens.chain_key_root_proof]
+# key_id = "key_1"
+# derivation_path_hash_hex = "..."
+# derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
+# public_key_hex = "..."
+# key_version = 1
+# min_accepted_key_version = 1
+# min_accepted_proof_epoch = 1
+# min_accepted_registry_epoch = 1
+# valid_from_ns = 1
+# accept_until_ns = 4102444800000000000
+# max_revocation_latency_ns = 60000000000
+# allow_test_key = true
 
 [standards]
 icrc21 = true

@@ -6,32 +6,24 @@
 
 use crate::{
     cdk::types::Principal,
-    dto::{
-        auth::{
-            ActiveDelegationProofStatusResponse, DelegatedToken, DelegatedTokenGetRequest,
-            DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse,
-            InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
-            RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
-            RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
-            SignedRoleAttestation,
-        },
-        error::Error,
-    },
+    dto::{auth::DelegatedToken, error::Error},
     error::InternalErrorClass,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
         ic::IcOps,
-        runtime::env::EnvOps,
     },
-    workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
 // Internal auth pipeline:
+// - `attestation` owns role-attestation endpoint adapters.
+// - `root` owns root-only issuer policy, renewal, and chain-key proof adapters.
 // - `session` owns delegated-session ingress and replay/session state handling.
+// - `token` owns issuer-local delegated-token endpoint adapters.
+mod attestation;
+mod root;
 mod session;
+mod token;
 
 ///
 /// AuthApi
@@ -95,114 +87,6 @@ impl AuthApi {
             now_ns,
         })
         .map(|verified| verified.subject)
-        .map_err(Self::map_auth_error)
-    }
-
-    /// Prepare a delegated token from the issuer-local active delegation proof.
-    pub async fn prepare_delegated_token(
-        request: DelegatedTokenPrepareRequest,
-    ) -> Result<DelegatedTokenPrepareResponse, Error> {
-        Self::require_delegated_token_issuer_enabled()?;
-        RuntimeAuthWorkflow::prepare_delegated_token(request)
-            .await
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Retrieve a prepared delegated token with its issuer canister-signature proof.
-    pub fn get_delegated_token(request: DelegatedTokenGetRequest) -> Result<DelegatedToken, Error> {
-        Self::require_delegated_token_issuer_enabled()?;
-
-        AuthOps::get_delegated_token_issuer_proof(request.claims_hash, IcOps::msg_caller())
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Install validated root-certified delegation material for issuer-local token issuance.
-    pub fn install_active_delegation_proof(
-        request: InstallActiveDelegationProofRequest,
-    ) -> Result<InstallActiveDelegationProofResponse, Error> {
-        Self::require_delegated_token_issuer_enabled()?;
-
-        let active_proof =
-            AuthOps::install_active_delegation_proof(request.proof, IcOps::msg_caller())
-                .map_err(Self::map_auth_error)?;
-
-        Ok(InstallActiveDelegationProofResponse { active_proof })
-    }
-
-    /// Report non-secret issuer-local active proof lifecycle status for operators.
-    pub fn active_delegation_proof_status() -> Result<ActiveDelegationProofStatusResponse, Error> {
-        Self::require_delegated_token_issuer_enabled()?;
-        Ok(AuthOps::active_delegation_proof_status(IcOps::now_nanos()))
-    }
-
-    /// Upsert root issuer policy from the local root controller path.
-    pub fn upsert_root_issuer_policy_root(
-        request: RootIssuerPolicyUpsertRequest,
-    ) -> Result<RootIssuerPolicyResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        AuthOps::upsert_root_issuer_policy(request, IcOps::now_nanos())
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Upsert root-managed renewal template from the local root controller path.
-    pub fn upsert_root_issuer_renewal_template_root(
-        request: RootIssuerRenewalTemplateUpsertRequest,
-    ) -> Result<RootIssuerRenewalTemplateResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        let response = AuthOps::upsert_root_issuer_renewal_template(request, IcOps::now_nanos())
-            .map_err(Self::map_auth_error)?;
-        if response.template.enabled {
-            RuntimeAuthWorkflow::start_root_delegation_renewal_timer_soon_if_configured()
-                .map_err(Self::map_auth_error)?;
-        }
-        Ok(response)
-    }
-
-    /// Report root-managed renewal template/state for one issuer.
-    pub fn root_issuer_renewal_status_root(
-        request: RootIssuerRenewalStatusRequest,
-    ) -> Result<RootIssuerRenewalStatusResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        Ok(AuthOps::root_issuer_renewal_status(request))
-    }
-
-    /// Return or create a chain-key root delegation proof for the registered issuer caller.
-    pub async fn get_or_create_chain_key_delegation_proof_root()
-    -> Result<RootDelegationProofBatchProof, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        RuntimeAuthWorkflow::get_or_create_chain_key_delegation_proof_for_issuer_root(
-            IcOps::msg_caller(),
-        )
-        .await
-        .map_err(Self::map_auth_error)
-    }
-
-    /// Prepare a root-certified role attestation from the local root update path.
-    pub fn prepare_role_attestation_root(
-        request: RoleAttestationRequest,
-    ) -> Result<RoleAttestationPrepareResponse, Error> {
-        RuntimeAuthWorkflow::prepare_role_attestation_root(request).map_err(Self::map_auth_error)
-    }
-
-    /// Retrieve a prepared role attestation with its root canister-signature proof.
-    pub fn get_role_attestation_root(
-        request: RoleAttestationGetRequest,
-    ) -> Result<SignedRoleAttestation, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        AuthOps::get_role_attestation(IcOps::msg_caller(), request.payload_hash)
-            .map_err(Self::map_auth_error)
-    }
-
-    /// Verify a role attestation locally from its embedded root proof.
-    pub async fn verify_role_attestation(
-        attestation: &SignedRoleAttestation,
-        min_accepted_epoch: u64,
-    ) -> Result<(), Error> {
-        crate::workflow::runtime::auth::RuntimeAuthWorkflow::verify_role_attestation(
-            attestation,
-            min_accepted_epoch,
-        )
-        .await
         .map_err(Self::map_auth_error)
     }
 
