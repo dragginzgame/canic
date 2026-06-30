@@ -59,8 +59,8 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  test-fleet-install  Install the full local test/reference topology with fast wasm by default"
-	@echo "  test             Run clippy + workspace tests (PocketIC/Cargo only)"
-	@echo "  test-wasm        Run clippy + fast non-PocketIC tests for wasm iteration"
+	@echo "  test             Run workspace tests (PocketIC/Cargo only)"
+	@echo "  test-wasm        Run fast non-PocketIC tests for wasm iteration"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
 	@echo "  clippy           Run clippy checks"
@@ -76,7 +76,7 @@ help:
 	@echo "  make release-patch # Bump, stage, commit, tag, and push patch release"
 	@echo "  make release-stage release-commit release-push # Finish reviewed manual bump"
 	@echo "  make test-fleet-install # Fast local install using fast wasm (override with CANIC_WASM_PROFILE=debug|fast|release)"
-	@echo "  make test        # Run clippy and workspace tests"
+	@echo "  make test        # Run workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
 
@@ -135,7 +135,7 @@ patch: ensure-clean fmt test-bump
 minor: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh minor
 
-major: ensure-clean fmt test
+major: ensure-clean fmt clippy test
 	@scripts/ci/bump-version.sh major
 
 release-patch: patch release-stage release-commit release-push
@@ -184,12 +184,12 @@ test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --profile "$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" test
 
-test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate clippy test-unit
+test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 
 # Fast iteration path for wasm work.
 # Skips integration tests under `tests/`, which is where the PocketIC-heavy
 # suites live today.
-test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate clippy test-unit-fast
+test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit-fast
 
 # Version-bump gate.
 # Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
