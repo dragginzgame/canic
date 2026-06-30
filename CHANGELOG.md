@@ -8,13 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Removes unused delegated-auth root-key policy and registry snapshot stable
-  record mappers that were never persisted, and labels the retained historical
-  bridge renewal/provisioner stable fields as decode-only.
-
 ## [0.76.x] - 2026-06-30 - Bridge-Free Delegated Auth
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
+
+- `0.76.5` stops serializing empty historical bridge delegated-auth stable
+  fields while keeping populated legacy values decode-compatible for upgrades.
+
+- `0.76.4` removes unused delegated-auth stable-record scaffolding for
+  non-persisted root-key policy and registry snapshots, and documents the
+  retained bridge renewal/provisioner stable fields as decode-only.
 
 - `0.76.3` removes the remaining top-level CLI global-option forwarding
   compatibility for the deleted `auth renewal run-once` and

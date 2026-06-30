@@ -175,7 +175,22 @@ inspect only the files needed for the current task.
   `cargo test --locked -p canic-core chain_key --lib` (68 passed),
   `cargo test --locked -p canic --test changelog_governance`, and
   `git diff --check`.
-  No 0.76.3-specific local gate remains open in this workspace; broader
+  The `0.76.4` release changelog is prepared in the root ledger and detailed
+  0.76 notes for this cleanup.
+  Post-`0.76.4` cleanup keeps the historical bridge
+  `root_delegation_renewal_batches` and `root_provisioners` auth stable fields
+  decode-compatible, but skips serializing those fields when they are empty so
+  fresh active 0.76 auth state no longer carries empty legacy bridge slots.
+  Focused validation passing for this cleanup: `cargo fmt --all -- --check`,
+  `cargo check --locked -p canic-core`,
+  `cargo test --locked -p canic-core storage::stable::auth::records --lib`
+  (3 passed),
+  `cargo clippy --locked -p canic-core --lib --all-features -- -D warnings`,
+  `cargo test --locked -p canic --test changelog_governance`, and
+  `git diff --check`.
+  The `0.76.5` release changelog is prepared in the root ledger and detailed
+  0.76 notes for this cleanup.
+  No 0.76.5-specific local gate remains open in this workspace; broader
   release validation remains maintainer-run. The earlier local
   trust-anchor blocker is resolved for
   public-key discovery: the current PocketIC harness exposes
