@@ -78,14 +78,23 @@ fn mainnet_deployment_check_blocks_cloud_engine_root_auth_signer() {
         }),
     };
 
-    crate::deployment_truth::report::apply_root_canister_signature_subnet_check_with_source(
+    crate::deployment_truth::report::apply_root_auth_signer_subnet_check_with_source(
         &mut diff, &inventory, "ic", &root, &source,
     );
 
     let _ = fs::remove_dir_all(root);
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
     assert!(diff.hard_failures.iter().any(|finding| {
-        finding.code == "root_auth_cloud_engine_subnet"
+        finding.code == crate::deployment_truth::report::ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE
             && finding.subject.as_deref() == Some(root_canister)
     }));
+    let finding = diff
+        .hard_failures
+        .iter()
+        .find(|finding| {
+            finding.code == crate::deployment_truth::report::ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE
+        })
+        .expect("cloud-engine root auth finding");
+    assert!(!finding.message.contains("canister-signature"));
+    assert!(finding.message.contains("root-auth policy"));
 }

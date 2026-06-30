@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is post-`0.76.7` bridge-free delegated auth hardening.
+- The active line is `0.76.9` bridge-free delegated auth cleanup.
   Delegated-token `RootProof` is chain-key-only:
   `RootProof::IcChainKeyBatchSignatureV1`. The old bridge-backed
   canister-signature delegated root-proof renewal path is historical
@@ -35,12 +35,18 @@ before this compaction is archived at
   chain-key batch renewal implementation was split into private `batch_id`,
   `install`, `merkle`, and `selection` helper modules.
 
-- Current post-`0.76.7` local cleanup is continuing that structure/docs work:
+- The `0.76.8` release completed the structure/docs continuation:
   active config docs now describe the required chain-key batch trust-anchor
   fields, auth DTO/API surfaces are split by concern while preserving
   `dto::auth::*` and `AuthApi::*` call paths, chain-key batch signing and tests
   have separate private modules, and focused Makefile validation targets cover
   auth, chain-key auth, CLI, and fast runtime checks.
+
+- The `0.76.9` cleanup slice clarifies host/operator diagnostics and active
+  auth docs after the hard cut: root-auth signer subnet wording, removed auth
+  command-tail tests, role-attestation DTO docs, chain-key batch source-map
+  docs, and deployment-target state diagnostics. It does not change
+  delegated-auth runtime behavior.
 
 ## Open Work
 

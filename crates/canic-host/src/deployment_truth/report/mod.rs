@@ -19,11 +19,12 @@ use controllers::compare_authority_profile;
 use module_hashes::compare_module_hashes;
 use pools::{compare_observed_canister_pool_role_conflicts, compare_pools};
 pub use receipt_resume::compare_plan_inventory_and_receipt;
-pub(super) use root_subnet::apply_root_canister_signature_subnet_check;
+#[cfg(test)]
+pub(super) use root_subnet::ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE;
+pub(super) use root_subnet::apply_root_auth_signer_subnet_check;
 #[cfg(test)]
 pub(super) use root_subnet::{
-    RootSubnetEvidence, RootSubnetEvidenceSource,
-    apply_root_canister_signature_subnet_check_with_source,
+    RootSubnetEvidence, RootSubnetEvidenceSource, apply_root_auth_signer_subnet_check_with_source,
 };
 pub use safety::safety_report_from_diff;
 pub(in crate::deployment_truth::report) use safety::{resume_safety_reasons, safety_status};
@@ -76,12 +77,7 @@ pub fn check_local_deployment(
         observed_at: request.observed_at.clone(),
     })?;
     let mut diff = compare_plan_to_inventory(&plan, &inventory);
-    apply_root_canister_signature_subnet_check(
-        &mut diff,
-        &inventory,
-        &request.network,
-        &request.icp_root,
-    );
+    apply_root_auth_signer_subnet_check(&mut diff, &inventory, &request.network, &request.icp_root);
     let report = safety_report_from_diff(
         format!(
             "local:{}:{}:report",

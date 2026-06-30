@@ -51,7 +51,7 @@ fn catalog_returns_empty_warning_when_deployment_state_is_missing() {
         report
             .warnings
             .iter()
-            .any(|warning| warning.code == "catalog.no_deployment_state")
+            .any(|warning| warning.code == NO_DEPLOYMENT_STATE_WARNING_CODE)
     );
 }
 
@@ -71,7 +71,13 @@ fn catalog_ignores_legacy_fleet_state() {
         report
             .warnings
             .iter()
-            .any(|warning| warning.code == "catalog.legacy_fleet_state_ignored")
+            .any(|warning| warning.code == LEGACY_FLEET_STATE_IGNORED_WARNING_CODE)
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.message == LEGACY_FLEET_STATE_IGNORED_WARNING_MESSAGE)
     );
 }
 
@@ -92,7 +98,7 @@ fn catalog_warns_and_keeps_valid_entries_when_one_entry_is_malformed() {
         report
             .warnings
             .iter()
-            .any(|warning| warning.code == "catalog.malformed_deployment_state")
+            .any(|warning| warning.code == MALFORMED_DEPLOYMENT_STATE_WARNING_CODE)
     );
 }
 

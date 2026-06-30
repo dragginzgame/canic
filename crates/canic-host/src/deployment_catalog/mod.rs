@@ -13,6 +13,11 @@ use std::{
 use thiserror::Error as ThisError;
 
 pub const DEPLOYMENT_CATALOG_REPORT_SCHEMA_ID: &str = "canic.deployment_catalog_report.v1";
+const NO_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.no_deployment_state";
+const LOCAL_STATE_FINGERPRINT_FAILED_WARNING_CODE: &str = "catalog.local_state_fingerprint_failed";
+const LEGACY_FLEET_STATE_IGNORED_WARNING_CODE: &str = "catalog.legacy_fleet_state_ignored";
+const LEGACY_FLEET_STATE_IGNORED_WARNING_MESSAGE: &str = "legacy fleet-named install state was ignored; catalog entries come only from current deployment-target state";
+const MALFORMED_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.malformed_deployment_state";
 
 ///
 /// DeploymentCatalogRequest
@@ -87,7 +92,7 @@ pub fn build_deployment_catalog_report(
 
     if !deployments_dir.exists() {
         warnings.push(catalog_warning(
-            "catalog.no_deployment_state",
+            NO_DEPLOYMENT_STATE_WARNING_CODE,
             format!(
                 "no deployment-target state exists for network {}",
                 request.network
@@ -257,7 +262,7 @@ fn catalog_entry_from_path(
             Err(err) => (
                 None,
                 vec![catalog_warning(
-                    "catalog.local_state_fingerprint_failed",
+                    LOCAL_STATE_FINGERPRINT_FAILED_WARNING_CODE,
                     format!("failed to fingerprint deployment state: {err}"),
                     Some(path_subject(path, root)),
                 )],
@@ -280,8 +285,8 @@ fn append_legacy_state_warning(root: &Path, network: &str, warnings: &mut Vec<Ev
     let path = root.join(".canic").join(network).join("fleets");
     if path.exists() {
         warnings.push(catalog_warning(
-            "catalog.legacy_fleet_state_ignored",
-            "legacy fleet-named install state was ignored; catalog entries come only from deployment-target state",
+            LEGACY_FLEET_STATE_IGNORED_WARNING_CODE,
+            LEGACY_FLEET_STATE_IGNORED_WARNING_MESSAGE,
             Some(path_subject(&path, root)),
         ));
     }
@@ -314,7 +319,7 @@ fn malformed_state_warning(
     message: impl Into<String>,
 ) -> EvidenceMessageV1 {
     catalog_warning(
-        "catalog.malformed_deployment_state",
+        MALFORMED_DEPLOYMENT_STATE_WARNING_CODE,
         message,
         Some(path_subject(path, root)),
     )

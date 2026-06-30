@@ -11,7 +11,7 @@ bridge-backed canister-signature flow.
 | Root endpoint macro surface | `crates/canic/src/macros/endpoints/root.rs` |
 | Issuer endpoint macro surface | `crates/canic/src/macros/endpoints/nonroot.rs` |
 | Public auth API adapters | `crates/canic-core/src/api/auth/mod.rs` |
-| Chain-key batch proof state and lookup | `crates/canic-core/src/ops/auth/delegation/chain_key_batch.rs` |
+| Chain-key batch proof state and lookup | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs` |
 | Root issuer renewal templates, attempts, and status | `crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/` |
 | Root renewal timer orchestration | `crates/canic-core/src/workflow/runtime/auth/renewal.rs` |
 | Root chain-key management-canister signing | `crates/canic-core/src/ops/auth/delegated/chain_key_signing.rs` |

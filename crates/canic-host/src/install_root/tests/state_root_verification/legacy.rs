@@ -37,6 +37,7 @@ fn legacy_fleet_state_is_rejected_as_deployment_truth() {
     let message = err.to_string();
 
     assert!(message.contains("legacy fleet install state found"));
+    assert!(message.contains(CURRENT_DEPLOYMENT_STATE_BOUNDARY_MESSAGE));
     assert!(message.contains(
         "canic deploy register demo --fleet-template <fleet-template> --root <principal> --allow-unverified"
     ));

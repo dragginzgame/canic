@@ -24,7 +24,7 @@ Canic has three auth surfaces:
    - endpoint-required scope must appear in the token grant for the local role
 3. Role-attestation endpoint auth:
    - caller supplies a `SignedRoleAttestation`
-   - endpoint guard validates the embedded root canister-signature proof
+   - endpoint guard validates the embedded role-attestation root proof
    - service-role checks stay local and make no root or management-canister call
 
 Auth code lives at the boundary:
@@ -536,9 +536,13 @@ pub struct RoleAttestation {
     pub epoch: u64,
 }
 
+pub enum RoleAttestationRootProof {
+    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
+}
+
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
-    pub root_proof: RootProof,
+    pub root_proof: RoleAttestationRootProof,
 }
 ```
 
@@ -557,7 +561,7 @@ Issuance flow:
 Verifier behavior:
 
 - hash the canonical `RoleAttestation` payload
-- verify the embedded root canister-signature proof against the configured root
+- verify the embedded role-attestation root proof against the configured root
   canister id and raw IC root public key
 - enforce subject, role, audience, subnet, time window, and minimum accepted
   epoch locally; `issued_at_ns` may be at most
