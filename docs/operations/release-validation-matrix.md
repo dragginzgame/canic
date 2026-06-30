@@ -142,6 +142,22 @@ cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocaptur
 cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
 ```
 
+For normal local iteration, these Make aliases group the most common focused
+auth/runtime surfaces without replacing the explicit command inventory above:
+
+```text
+make test-auth
+make test-auth-chain-key
+make test-cli
+make test-runtime-fast
+```
+
+`test-auth` covers delegated-auth/role-attestation unit and protocol-surface
+checks. `test-auth-chain-key` covers the 0.76 chain-key batch renewal and lazy
+repair unit gates. `test-cli` covers CLI behavior plus public install/reference
+surface checks. `test-runtime-fast` is the named alias for the existing fast
+deterministic workspace lane.
+
 If the slice touches stable memory, replay receipt state, or upgrade/state
 compatibility, also run the relevant focused stable-state gates:
 

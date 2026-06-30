@@ -34,7 +34,7 @@ presents it downstream.
 
 ## Canonical Payloads
 
-Source: `crates/canic-core/src/dto/auth.rs`.
+Source: `crates/canic-core/src/dto/auth/`.
 
 ```rust
 pub enum DelegationAudience {

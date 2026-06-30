@@ -174,6 +174,15 @@ make clippy
 make test
 ```
 
+Focused local checks:
+
+```bash
+make test-auth
+make test-auth-chain-key
+make test-cli
+make test-runtime-fast
+```
+
 [rust-toolchain.toml](rust-toolchain.toml) pins the internal toolchain so CI and
 local builds stay in sync. Published crates declare MSRV `1.91.0` in
 [Cargo.toml](Cargo.toml).

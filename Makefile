@@ -7,6 +7,7 @@
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
+        test-auth test-auth-chain-key test-cli test-runtime-fast \
         test-canisters fmt-core cloc
 
 TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
@@ -61,6 +62,10 @@ help:
 	@echo "  test-fleet-install  Install the full local test/reference topology with fast wasm by default"
 	@echo "  test             Run workspace tests (PocketIC/Cargo only)"
 	@echo "  test-wasm        Run fast non-PocketIC tests for wasm iteration"
+	@echo "  test-auth        Run focused delegated-auth, role-attestation, and protocol auth gates"
+	@echo "  test-auth-chain-key  Run focused chain-key batch renewal gates"
+	@echo "  test-cli         Run focused CLI and public surface tests"
+	@echo "  test-runtime-fast  Run the fast deterministic runtime test lane"
 	@echo "  build            Build all crates"
 	@echo "  check            Run cargo check"
 	@echo "  clippy           Run clippy checks"
@@ -215,6 +220,24 @@ test-unit:
 test-unit-fast:
 	@mkdir -p "$(TEST_TMPDIR)"
 	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
+
+test-auth:
+	$(CARGO_ENV) cargo test --locked -p canic-core auth --lib
+	$(CARGO_ENV) cargo test --locked -p canic-macros
+	$(CARGO_ENV) cargo test --locked -p canic --test protocol_surface
+
+test-auth-chain-key:
+	$(CARGO_ENV) cargo test --locked -p canic-core chain_key_batch --lib
+	$(CARGO_ENV) cargo test --locked -p canic-core chain_key_lazy_repair --lib
+	$(CARGO_ENV) cargo test --locked -p canic-core delegated_token_lazy_repair --lib
+	$(CARGO_ENV) cargo test --locked -p canic-core workflow::runtime::auth --lib
+
+test-cli:
+	$(CARGO_ENV) cargo test --locked -p canic-cli
+	$(CARGO_ENV) cargo test --locked -p canic --test install_script_surface
+	$(CARGO_ENV) cargo test --locked -p canic --test reference_surface
+
+test-runtime-fast: test-unit-fast
 
 test-canisters: test-fleet-install
 	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" icp canister -n "$(ICP_ENVIRONMENT)" call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
