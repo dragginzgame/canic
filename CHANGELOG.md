@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.76.x] - 2026-06-30 - Bridge-Free Delegated Auth
+
+Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
+
+- `0.76.0` replaces bridge-backed delegated-auth renewal with chain-key batch
+  root proofs signed by root through management-canister ECDSA, including
+  timer renewal, issuer lazy repair, explicit `chain_key_batch` trust anchors,
+  multi-issuer batching, and hard rejection of legacy bridge root-proof
+  provisioning in chain-key mode. Potentially breaking for deployments or
+  tooling that still depend on bridge-backed root proof renewal.
+
 ## [0.75.x] - 2026-06-28 - Release Publishing Recovery
 
 Detailed patch breakdown: [docs/changelog/0.75.md](docs/changelog/0.75.md)

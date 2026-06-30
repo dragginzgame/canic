@@ -17,11 +17,13 @@ use crate::{
 
 pub(super) fn upsert_root_issuer_policy(
     request: RootIssuerPolicyUpsertRequest,
+    _now_ns: u64,
 ) -> Result<RootIssuerPolicyResponse, InternalError> {
     validate_root_issuer_policy_upsert_request(&request)?;
 
     let policy = root_issuer_policy_from_request(request);
     AuthStateOps::upsert_root_issuer_policy(policy.clone());
+    AuthStateOps::advance_delegated_auth_registry_epoch();
 
     Ok(RootIssuerPolicyResponse {
         issuer: root_issuer_policy_view(&policy),

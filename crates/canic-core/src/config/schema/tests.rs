@@ -6,8 +6,7 @@
 
 use super::*;
 use crate::{cdk::types::Cycles, domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
-use std::collections::BTreeMap;
-use std::fmt::Write as _;
+use std::{collections::BTreeMap, fmt::Write as _, fs, path::PathBuf};
 
 fn hex(bytes: impl AsRef<[u8]>) -> String {
     let bytes = bytes.as_ref();
@@ -16,6 +15,14 @@ fn hex(bytes: impl AsRef<[u8]>) -> String {
         write!(&mut out, "{byte:02x}").expect("hex write should not fail");
     }
     out
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|path| path.parent())
+        .expect("canic-core should live under workspace crates/")
+        .to_path_buf()
 }
 
 fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
@@ -88,6 +95,44 @@ fn fleet_name_is_required() {
         err.to_string().contains("fleet config is required"),
         "expected fleet error, got: {err}"
     );
+}
+
+#[test]
+fn test_fleet_configs_validate_with_chain_key_batch_policy() {
+    let root = workspace_root();
+    for rel_path in [
+        "fleets/test/canic.toml",
+        "fleets/test/test-configs/root-capability.toml",
+        "fleets/test/test-configs/root-scaling.toml",
+        "fleets/test/test-configs/root-sharding.toml",
+    ] {
+        let path = root.join(rel_path);
+        let source =
+            fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {rel_path} failed: {err}"));
+        let cfg = crate::bootstrap::parse_config_model(&source)
+            .unwrap_or_else(|err| panic!("{rel_path} should parse and validate: {err}"));
+
+        assert_eq!(
+            cfg.auth.delegated_tokens.root_proof_mode, "chain_key_batch",
+            "{rel_path} should use the 0.76 hard-cut root proof mode",
+        );
+        assert_eq!(
+            cfg.auth
+                .delegated_tokens
+                .chain_key_root_proof
+                .key_id
+                .as_deref(),
+            Some("key_1"),
+            "{rel_path} should use the PocketIC-exposed local chain-key id",
+        );
+        assert!(
+            !cfg.auth
+                .delegated_tokens
+                .chain_key_root_proof
+                .allow_test_key,
+            "{rel_path} should not require the test-key exemption",
+        );
+    }
 }
 
 #[test]
@@ -393,6 +438,148 @@ fn delegated_tokens_network_must_be_known() {
 
     cfg.validate()
         .expect_err("expected invalid network to fail");
+}
+
+#[test]
+fn delegated_tokens_root_proof_mode_must_be_chain_key_batch() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.root_proof_mode = "canister_signature".to_string();
+
+    let err = cfg
+        .validate()
+        .expect_err("expected legacy root proof mode to fail");
+
+    assert!(
+        err.to_string().contains("must be chain_key_batch"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delegated_tokens_chain_key_batch_requires_key_policy() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
+    cfg.auth.delegated_tokens.network = "local".to_string();
+    cfg.auth.delegated_tokens.chain_key_root_proof = ChainKeyRootProofConfig::default();
+
+    let err = cfg
+        .validate()
+        .expect_err("expected missing chain-key policy to fail");
+
+    assert!(
+        err.to_string().contains("chain_key_root_proof.key_id"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delegated_tokens_chain_key_batch_requires_derivation_path() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .derivation_path_hex = None;
+
+    let err = cfg
+        .validate()
+        .expect_err("expected missing derivation path to fail");
+
+    assert!(
+        err.to_string().contains("derivation_path_hex"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delegated_tokens_chain_key_derivation_path_must_be_hex() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .derivation_path_hex = Some(vec!["not hex".to_string()]);
+
+    let err = cfg
+        .validate()
+        .expect_err("expected invalid derivation path hex to fail");
+
+    assert!(
+        err.to_string().contains("derivation_path_hex[0]"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delegated_tokens_chain_key_public_key_must_be_sec1_secp256k1() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .public_key_hex = Some("00".repeat(33));
+
+    let err = cfg
+        .validate()
+        .expect_err("expected invalid chain-key public key to fail");
+
+    assert!(
+        err.to_string()
+            .contains("must be a secp256k1 SEC1 public key"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn delegated_tokens_chain_key_mainnet_rejects_test_key() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
+    cfg.auth.delegated_tokens.network = "mainnet".to_string();
+    cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("test_key_1".to_string());
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .derivation_path_hash_hex =
+        Some("fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16".to_string());
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .derivation_path_hex = Some(vec![
+        "63616e6963".to_string(),
+        "64656c65676174696f6e".to_string(),
+    ]);
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .public_key_hex = Some("02".repeat(33));
+    cfg.auth.delegated_tokens.chain_key_root_proof.key_version = Some(1);
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .min_accepted_key_version = Some(1);
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .min_accepted_proof_epoch = Some(1);
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .min_accepted_registry_epoch = Some(1);
+    cfg.auth.delegated_tokens.chain_key_root_proof.valid_from_ns = Some(1);
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .accept_until_ns = Some(2);
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .max_revocation_latency_ns = Some(1);
+
+    let err = cfg
+        .validate()
+        .expect_err("expected mainnet test key to fail");
+
+    assert!(
+        err.to_string().contains("must not be test_key_1"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]

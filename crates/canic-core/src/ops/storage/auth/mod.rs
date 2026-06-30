@@ -16,11 +16,15 @@ use crate::{
         RootDelegationRenewalBatch, RootIssuerPolicy, RootIssuerRenewalAttempt,
         RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
-    dto::auth::ActiveDelegationProof,
+    dto::auth::{
+        ActiveDelegationProof, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessV1,
+        ChainKeyDelegationCertV1, ChainKeyRootSignatureV1, DelegationCert,
+    },
     ops::storage::auth::mapper::{
-        ActiveDelegationProofRecordMapper, RootDelegationRenewalBatchRecordMapper,
-        RootIssuerPolicyRecordMapper, RootIssuerRenewalAttemptRecordMapper,
-        RootIssuerRenewalStateRecordMapper, RootIssuerRenewalTemplateRecordMapper,
+        ActiveDelegationProofRecordMapper, ChainKeyRootDelegationBatchRecordMapper,
+        RootDelegationRenewalBatchRecordMapper, RootIssuerPolicyRecordMapper,
+        RootIssuerRenewalAttemptRecordMapper, RootIssuerRenewalStateRecordMapper,
+        RootIssuerRenewalTemplateRecordMapper,
     },
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
@@ -70,6 +74,62 @@ pub struct DelegatedSessionBootstrapBinding {
 pub struct RootDelegationRenewalProvisioner {
     pub principal: Principal,
     pub enabled: bool,
+}
+
+///
+/// ChainKeyRootDelegationBatchStatus
+///
+/// Persisted lifecycle state for one root-signed chain-key delegation batch.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChainKeyRootDelegationBatchStatus {
+    Prepared,
+    Signing,
+    Signed,
+    Installing,
+    Installed,
+    FailedRetryable,
+}
+
+///
+/// ChainKeyRootDelegationBatchIssuer
+///
+/// Per-issuer proof material carried by one chain-key root delegation batch.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChainKeyRootDelegationBatchIssuer {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+    pub delegation_cert: DelegationCert,
+    pub chain_key_delegation_cert: ChainKeyDelegationCertV1,
+    pub issuer_witness: ChainKeyBatchWitnessV1,
+    pub refresh_after_ns: u64,
+    pub installed_at_ns: Option<u64>,
+    pub last_failure: Option<String>,
+}
+
+///
+/// ChainKeyRootDelegationBatch
+///
+/// Root-owned persisted batch state for bridge-free chain-key renewal.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChainKeyRootDelegationBatch {
+    pub batch_id: [u8; 32],
+    pub status: ChainKeyRootDelegationBatchStatus,
+    pub header_hash: [u8; 32],
+    pub header: ChainKeyBatchHeaderV1,
+    pub signature: Option<ChainKeyRootSignatureV1>,
+    pub issuers: Vec<ChainKeyRootDelegationBatchIssuer>,
+    pub prepared_at_ns: u64,
+    pub signed_at_ns: Option<u64>,
+    pub install_started_at_ns: Option<u64>,
+    pub installed_at_ns: Option<u64>,
+    pub retry_after_ns: Option<u64>,
+    pub failure: Option<String>,
 }
 
 ///
@@ -174,8 +234,35 @@ impl AuthStateOps {
         AuthState::get_root_issuer(issuer_pid).map(RootIssuerPolicyRecordMapper::record_to_policy)
     }
 
+    #[must_use]
+    pub fn root_issuer_policies() -> Vec<RootIssuerPolicy> {
+        AuthState::list_root_issuers()
+            .into_iter()
+            .map(RootIssuerPolicyRecordMapper::record_to_policy)
+            .collect()
+    }
+
     pub fn upsert_root_issuer_policy(policy: RootIssuerPolicy) {
         AuthState::upsert_root_issuer(RootIssuerPolicyRecordMapper::policy_to_record(policy));
+    }
+
+    #[must_use]
+    pub fn delegated_auth_registry_epoch() -> u64 {
+        AuthState::delegated_auth_registry_epoch()
+    }
+
+    pub fn advance_delegated_auth_registry_epoch() -> u64 {
+        AuthState::advance_delegated_auth_registry_epoch()
+    }
+
+    #[must_use]
+    #[cfg(test)]
+    pub fn delegated_auth_proof_epoch() -> u64 {
+        AuthState::delegated_auth_proof_epoch()
+    }
+
+    pub fn advance_delegated_auth_proof_epoch_at_least(min_epoch: u64) -> u64 {
+        AuthState::advance_delegated_auth_proof_epoch_at_least(min_epoch)
     }
 
     #[must_use]
@@ -238,6 +325,10 @@ impl AuthStateOps {
             .collect()
     }
 
+    #[allow(
+        dead_code,
+        reason = "pre-0.76 bridge-backed renewal batch writer is retained for historical scheduler code during the hard-cut migration"
+    )]
     pub fn upsert_root_delegation_renewal_batch(batch: RootDelegationRenewalBatch) {
         AuthState::upsert_root_delegation_renewal_batch(
             RootDelegationRenewalBatchRecordMapper::batch_to_record(batch),
@@ -246,6 +337,36 @@ impl AuthStateOps {
 
     pub fn prune_root_delegation_renewal_batches(now_ns: u64) -> usize {
         AuthState::prune_root_delegation_renewal_batches(now_ns)
+    }
+
+    #[must_use]
+    #[allow(
+        dead_code,
+        reason = "0.76 chain-key install and lazy-repair wiring will use direct batch lookup"
+    )]
+    pub fn chain_key_root_delegation_batch(
+        batch_id: [u8; 32],
+    ) -> Option<ChainKeyRootDelegationBatch> {
+        AuthState::get_chain_key_root_delegation_batch(batch_id)
+            .map(ChainKeyRootDelegationBatchRecordMapper::record_to_batch)
+    }
+
+    #[must_use]
+    pub fn chain_key_root_delegation_batches() -> Vec<ChainKeyRootDelegationBatch> {
+        AuthState::list_chain_key_root_delegation_batches()
+            .into_iter()
+            .map(ChainKeyRootDelegationBatchRecordMapper::record_to_batch)
+            .collect()
+    }
+
+    pub fn upsert_chain_key_root_delegation_batch(batch: ChainKeyRootDelegationBatch) {
+        AuthState::upsert_chain_key_root_delegation_batch(
+            ChainKeyRootDelegationBatchRecordMapper::batch_to_record(batch),
+        );
+    }
+
+    pub fn prune_chain_key_root_delegation_batches(now_ns: u64) -> usize {
+        AuthState::prune_chain_key_root_delegation_batches(now_ns)
     }
 
     #[must_use]
@@ -352,10 +473,15 @@ mod tests {
             RootIssuerRenewalTemplate,
         },
         dto::auth::{
-            DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
-            IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+            ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
+            ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId,
+            ChainKeyRootSignatureV1, DelegatedAuthIssuerPolicySnapshotV1,
+            DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegationAudience,
+            DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
+            IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
+            RootKeyPolicyV1, RootProof, RootProofMode,
         },
-        ids::CanisterRole,
+        ids::{BuildNetwork, CanisterRole},
     };
 
     fn p(id: u8) -> Principal {
@@ -398,6 +524,128 @@ mod tests {
         }
     }
 
+    fn chain_key_active_proof() -> ActiveDelegationProof {
+        let mut proof = active_proof();
+        proof.proof.root_proof = RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(
+            proof.proof.cert.root_pid,
+            proof.proof.cert.issuer_pid,
+        ));
+        proof.cert_hash = [44; 32];
+        proof
+    }
+
+    fn chain_key_root_proof(
+        root_canister_id: Principal,
+        issuer_canister_id: Principal,
+    ) -> IcChainKeyBatchSignatureProofV1 {
+        let key_id = ChainKeyKeyId {
+            name: "test_key_1".to_string(),
+        };
+
+        IcChainKeyBatchSignatureProofV1 {
+            header: ChainKeyBatchHeaderV1 {
+                schema_version: 1,
+                root_canister_id,
+                batch_id: [31; 32],
+                proof_epoch: 2,
+                registry_epoch: 3,
+                registry_hash: [32; 32],
+                tree_root: [33; 32],
+                not_before_ns: 20,
+                expires_at_ns: 100,
+                algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+                key_id: key_id.clone(),
+                derivation_path_hash: [34; 32],
+                key_version: 4,
+            },
+            delegation_cert: ChainKeyDelegationCertV1 {
+                root_canister_id,
+                issuer_canister_id,
+                proof_epoch: 2,
+                issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
+                issuer_proof_binding_hash: [35; 32],
+                issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
+                    seed_hash: [36; 32],
+                },
+                max_token_ttl_ns: 30,
+                audience: DelegationAudience::CanicSubnet(p(7)),
+                grants: vec![DelegatedRoleGrant {
+                    target: CanisterRole::owned("project_instance".to_string()),
+                    scopes: vec!["read".to_string(), "write".to_string()],
+                }],
+                not_before_ns: 20,
+                expires_at_ns: 100,
+                registry_epoch: 3,
+                registry_hash: [32; 32],
+            },
+            issuer_witness: ChainKeyBatchWitnessV1 {
+                steps: vec![
+                    ChainKeyBatchWitnessStepV1::LeftSibling([37; 32]),
+                    ChainKeyBatchWitnessStepV1::RightSibling([38; 32]),
+                ],
+            },
+            signature: ChainKeyRootSignatureV1 {
+                algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+                key_id,
+                derivation_path: vec![b"canic".to_vec(), b"delegation".to_vec()],
+                public_key: vec![39; 33],
+                signature: vec![40; 64],
+            },
+        }
+    }
+
+    fn root_key_policy() -> RootKeyPolicyV1 {
+        RootKeyPolicyV1 {
+            root_canister_id: p(1),
+            proof_mode: RootProofMode::ChainKeyBatch,
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: ChainKeyKeyId {
+                name: "test_key_1".to_string(),
+            },
+            derivation_path_hash: [50; 32],
+            public_key: vec![51; 33],
+            key_version: 4,
+            min_accepted_key_version: 4,
+            min_accepted_proof_epoch: 2,
+            min_accepted_registry_epoch: 3,
+            max_revocation_latency_ns: 600,
+            valid_from_ns: 20,
+            accept_until_ns: 1_000,
+            build_network: BuildNetwork::Local,
+        }
+    }
+
+    fn registry_snapshot() -> DelegatedAuthRegistrySnapshotV1 {
+        DelegatedAuthRegistrySnapshotV1 {
+            schema_version: 1,
+            root_canister_id: p(1),
+            registry_epoch: 3,
+            proof_mode: RootProofMode::ChainKeyBatch,
+            root_key_policy_hash: [52; 32],
+            issuer_policies: vec![registry_issuer_policy(p(2)), registry_issuer_policy(p(3))],
+        }
+    }
+
+    fn registry_issuer_policy(
+        issuer_canister_id: Principal,
+    ) -> DelegatedAuthIssuerPolicySnapshotV1 {
+        DelegatedAuthIssuerPolicySnapshotV1 {
+            issuer_canister_id,
+            enabled: true,
+            preferred_proof_mode: RootProofMode::ChainKeyBatch,
+            allowed_audiences: vec![DelegationAudience::CanicSubnet(p(7))],
+            allowed_grants: vec![DelegatedRoleGrant {
+                target: CanisterRole::owned("project_instance".to_string()),
+                scopes: vec!["read".to_string(), "write".to_string()],
+            }],
+            max_root_proof_ttl_ns: 600,
+            max_token_ttl_ns: 30,
+            issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [53; 32],
+            renewal_template_hash: [54; 32],
+        }
+    }
+
     #[test]
     fn active_delegation_proof_round_trips_and_filters_by_time() {
         AuthStateOps::clear_active_delegation_proof();
@@ -412,6 +660,51 @@ mod tests {
 
         AuthStateOps::clear_active_delegation_proof();
         assert_eq!(AuthStateOps::active_delegation_proof(20), None);
+    }
+
+    #[test]
+    fn chain_key_active_delegation_proof_round_trips_through_auth_state() {
+        AuthStateOps::clear_active_delegation_proof();
+        let proof = chain_key_active_proof();
+
+        AuthStateOps::set_active_delegation_proof(proof.clone());
+
+        assert_eq!(AuthStateOps::active_delegation_proof(20), Some(proof));
+
+        AuthStateOps::clear_active_delegation_proof();
+    }
+
+    #[test]
+    fn delegated_auth_proof_epoch_advances_monotonically_from_minimum() {
+        let before = AuthStateOps::delegated_auth_proof_epoch();
+        let minimum = before.saturating_add(5);
+
+        let first = AuthStateOps::advance_delegated_auth_proof_epoch_at_least(minimum);
+        let second = AuthStateOps::advance_delegated_auth_proof_epoch_at_least(1);
+
+        assert_eq!(first, minimum);
+        assert_eq!(second, first.saturating_add(1));
+        assert_eq!(AuthStateOps::delegated_auth_proof_epoch(), second);
+    }
+
+    #[test]
+    fn chain_key_policy_and_registry_snapshot_round_trip_through_records() {
+        let policy = root_key_policy();
+        let policy_record = mapper::RootKeyPolicyRecordMapper::dto_to_record(policy.clone());
+
+        assert_eq!(
+            mapper::RootKeyPolicyRecordMapper::record_to_dto(policy_record),
+            policy
+        );
+
+        let snapshot = registry_snapshot();
+        let snapshot_record =
+            mapper::DelegatedAuthRegistrySnapshotRecordMapper::dto_to_record(snapshot.clone());
+
+        assert_eq!(
+            mapper::DelegatedAuthRegistrySnapshotRecordMapper::record_to_dto(snapshot_record),
+            snapshot
+        );
     }
 
     #[test]

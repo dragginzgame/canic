@@ -20,8 +20,11 @@ use canic::{
     cdk::types::Principal,
     dto::auth::{
         ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
-        DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
-        IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
+        ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
+        ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
+        DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant,
+        DelegationAudience, DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
+        IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
         RootDelegationProofBatchEntry, RootDelegationProofBatchGetRequest,
         RootDelegationProofBatchGetResponse, RootDelegationProofBatchInstallRequest,
         RootDelegationProofBatchInstallResponse, RootDelegationProofBatchInstallResult,
@@ -36,11 +39,11 @@ use canic::{
         RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
-        RootIssuerRenewalTemplateView, RootProof,
+        RootIssuerRenewalTemplateView, RootKeyPolicyV1, RootProof, RootProofMode,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
-    ids::CanisterRole,
+    ids::{BuildNetwork, CanisterRole},
 };
 
 // Returns the repository root so wire-surface fixtures can be read from disk.
@@ -718,6 +721,11 @@ fn assert_root_delegation_protocol_constants() {
             "canic_get_delegation_renewal_proof_batch",
         ),
         (
+            canic::protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
+            canic_core::protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
+            "canic_get_or_create_chain_key_delegation_proof",
+        ),
+        (
             canic::protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
             canic_core::protocol::CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER,
             "canic_upsert_delegation_renewal_provisioner",
@@ -758,6 +766,8 @@ fn assert_root_delegation_macro_guards(source: &str) {
         preceding_attribute_context(source, "fn canic_get_delegation_renewal_proof_batch(");
     let install_attr =
         preceding_attribute_context(source, "fn canic_install_delegation_proof_batch(");
+    let lazy_repair_attr =
+        preceding_attribute_context(source, "fn canic_get_or_create_chain_key_delegation_proof(");
     assert!(
         upsert_attr.contains("canic_update")
             && upsert_attr.contains("caller::is_controller()")
@@ -816,6 +826,14 @@ fn assert_root_delegation_macro_guards(source: &str) {
             && install_attr.contains("caller::is_delegation_renewal_provisioner()")
             && !install_attr.contains("internal"),
         "root batch install must allow controllers or renewal provisioners"
+    );
+    assert!(
+        lazy_repair_attr.contains("canic_update")
+            && lazy_repair_attr.contains("internal")
+            && lazy_repair_attr.contains("caller::is_registered_to_subnet()")
+            && !lazy_repair_attr.contains("caller::is_controller()")
+            && !lazy_repair_attr.contains("caller::is_delegation_renewal_provisioner()"),
+        "root chain-key lazy repair must remain an internal subnet-issuer update"
     );
     let renewal_work_attr =
         preceding_attribute_context(source, "fn canic_delegation_renewal_work(");
@@ -896,6 +914,12 @@ fn assert_root_delegation_endpoint_bindings(source: &str) {
             && source.contains("RootDelegationProofBatchInstallResponse")
             && source.contains("AuthApi::install_delegation_proof_batch_root"),
         "root auth endpoint bundle must expose batch install"
+    );
+    assert!(
+        source.contains("fn canic_get_or_create_chain_key_delegation_proof(")
+            && source.contains("RootDelegationProofBatchProof")
+            && source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"),
+        "root auth endpoint bundle must expose chain-key lazy repair"
     );
 }
 
@@ -1038,6 +1062,45 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
     };
     let renewal_get_request = RootDelegationRenewalProofBatchGetRequest { batch_id };
     let proof = root_delegation_proof(root_pid, issuer_pid, audience, grant);
+    let chain_key_proof =
+        RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(root_pid, issuer_pid));
+    let root_key_policy = RootKeyPolicyV1 {
+        root_canister_id: root_pid,
+        proof_mode: RootProofMode::ChainKeyBatch,
+        algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+        key_id: ChainKeyKeyId {
+            name: "test_key_1".to_string(),
+        },
+        derivation_path_hash: [41; 32],
+        public_key: vec![42; 33],
+        key_version: 4,
+        min_accepted_key_version: 4,
+        min_accepted_proof_epoch: 2,
+        min_accepted_registry_epoch: 3,
+        max_revocation_latency_ns: 600,
+        valid_from_ns: 1,
+        accept_until_ns: 1_000,
+        build_network: BuildNetwork::Local,
+    };
+    let registry_snapshot = DelegatedAuthRegistrySnapshotV1 {
+        schema_version: 1,
+        root_canister_id: root_pid,
+        registry_epoch: 3,
+        proof_mode: RootProofMode::ChainKeyBatch,
+        root_key_policy_hash: [43; 32],
+        issuer_policies: vec![DelegatedAuthIssuerPolicySnapshotV1 {
+            issuer_canister_id: issuer_pid,
+            enabled: true,
+            preferred_proof_mode: RootProofMode::ChainKeyBatch,
+            allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
+            allowed_grants: vec![test_delegated_role_grant()],
+            max_root_proof_ttl_ns: 600,
+            max_token_ttl_ns: 60,
+            issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [44; 32],
+            renewal_template_hash: [45; 32],
+        }],
+    };
     let batch_proof = RootDelegationProofBatchProof {
         issuer_pid,
         cert_hash,
@@ -1063,6 +1126,9 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
     assert_candid_roundtrip(prepare_entry);
     assert_candid_roundtrip(prepare_request);
     assert_candid_roundtrip(prepare_response);
+    assert_candid_roundtrip(chain_key_proof);
+    assert_candid_roundtrip(root_key_policy);
+    assert_candid_roundtrip(registry_snapshot);
     assert_candid_roundtrip(get_request);
     assert_candid_roundtrip(renewal_get_request);
     assert_candid_roundtrip(get_response);
@@ -1194,6 +1260,64 @@ fn root_delegation_proof(
             signature_cbor: vec![1, 2, 3],
             public_key_der: vec![4, 5, 6],
         }),
+    }
+}
+
+fn chain_key_root_proof(
+    root_canister_id: Principal,
+    issuer_canister_id: Principal,
+) -> IcChainKeyBatchSignatureProofV1 {
+    let key_id = ChainKeyKeyId {
+        name: "test_key_1".to_string(),
+    };
+    let grant = test_delegated_role_grant();
+
+    IcChainKeyBatchSignatureProofV1 {
+        header: ChainKeyBatchHeaderV1 {
+            schema_version: 1,
+            root_canister_id,
+            batch_id: [31; 32],
+            proof_epoch: 2,
+            registry_epoch: 3,
+            registry_hash: [32; 32],
+            tree_root: [33; 32],
+            not_before_ns: 10,
+            expires_at_ns: 110,
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: key_id.clone(),
+            derivation_path_hash: [34; 32],
+            key_version: 4,
+        },
+        delegation_cert: ChainKeyDelegationCertV1 {
+            root_canister_id,
+            issuer_canister_id,
+            proof_epoch: 2,
+            issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [35; 32],
+            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
+                seed_hash: [36; 32],
+            },
+            max_token_ttl_ns: 60,
+            audience: DelegationAudience::Project("test".to_string()),
+            grants: vec![grant],
+            not_before_ns: 10,
+            expires_at_ns: 110,
+            registry_epoch: 3,
+            registry_hash: [32; 32],
+        },
+        issuer_witness: ChainKeyBatchWitnessV1 {
+            steps: vec![
+                ChainKeyBatchWitnessStepV1::LeftSibling([37; 32]),
+                ChainKeyBatchWitnessStepV1::RightSibling([38; 32]),
+            ],
+        },
+        signature: ChainKeyRootSignatureV1 {
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id,
+            derivation_path: vec![b"canic".to_vec(), b"root-delegation".to_vec()],
+            public_key: vec![39; 33],
+            signature: vec![40; 64],
+        },
     }
 }
 

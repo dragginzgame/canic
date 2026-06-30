@@ -161,6 +161,13 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
         }
 
         #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
+        async fn canic_get_or_create_chain_key_delegation_proof(
+        ) -> Result<::canic::dto::auth::RootDelegationProofBatchProof, ::canic::Error> {
+            $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()
+                .await
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_registered_to_subnet()))]
         async fn canic_prepare_role_attestation(
             request: ::canic::dto::auth::RoleAttestationRequest,
         ) -> Result<::canic::dto::auth::RoleAttestationPrepareResponse, ::canic::Error> {

@@ -9,7 +9,9 @@ use crate::{
     domain::auth::DelegatedAuthNetwork,
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegationAudience, DelegationCert, RoleAttestation,
+        RootKeyPolicyV1, RootProofMode,
     },
+    ids::BuildNetwork,
     ids::CanisterRole,
     ops::auth::delegated::prepare::PreparedDelegatedToken,
 };
@@ -20,6 +22,7 @@ use crate::{
 /// Auth-ops input for preparing an issuer-local delegated token proof.
 ///
 
+#[derive(Clone)]
 pub struct PrepareDelegatedTokenIssuerProofInput {
     pub subject: Principal,
     pub audience: DelegationAudience,
@@ -59,6 +62,60 @@ pub struct PreparedRootDelegationProof {
 }
 
 ///
+/// PrepareChainKeyRootDelegationBatchInput
+///
+/// Runtime input for preparing one due chain-key root delegation batch.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    dead_code,
+    reason = "0.76 chain-key timer wiring follows registry epoch/hash source wiring"
+)]
+pub struct PrepareChainKeyRootDelegationBatchInput {
+    pub build_network: BuildNetwork,
+    pub max_cert_ttl_ns: u64,
+    pub min_accepted_proof_epoch: u64,
+    pub now_ns: u64,
+}
+
+///
+/// ChainKeyRootDelegationBatchSweepResult
+///
+/// Summary of one chain-key root delegation preparation sweep.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    dead_code,
+    reason = "0.76 chain-key timer wiring follows registry epoch/hash source wiring"
+)]
+pub struct ChainKeyRootDelegationBatchSweepResult {
+    pub batch_id: Option<[u8; 32]>,
+    pub prepared_issuers: usize,
+    pub skipped_templates: usize,
+    pub reused_in_flight: bool,
+}
+
+///
+/// ChainKeyRootDelegationBatchSigningResult
+///
+/// Summary of one chain-key root delegation signing step.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    dead_code,
+    reason = "0.76 chain-key timer wiring follows registry epoch/hash source wiring"
+)]
+pub struct ChainKeyRootDelegationBatchSigningResult {
+    pub batch_id: Option<[u8; 32]>,
+    pub signed: bool,
+    pub reused_signed: bool,
+    pub signing_in_flight: bool,
+}
+
+///
 /// PreparedRootRoleAttestation
 ///
 /// Prepared role attestation material and retrieval expiry.
@@ -86,7 +143,7 @@ pub struct PreparedDelegatedTokenIssuerProof {
 ///
 /// AuthProofVerifierConfig
 ///
-/// Runtime verifier trust-anchor configuration for canister-signature proofs.
+/// Runtime verifier trust-anchor configuration for delegated auth proofs.
 ///
 
 #[derive(Debug)]
@@ -94,6 +151,20 @@ pub struct AuthProofVerifierConfig {
     pub network: DelegatedAuthNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,
+    pub root_proof_mode: RootProofMode,
+    pub chain_key_root: Option<AuthChainKeyRootVerifierConfig>,
+}
+
+///
+/// AuthChainKeyRootVerifierConfig
+///
+/// Runtime verifier trust-anchor configuration for chain-key batch root proofs.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthChainKeyRootVerifierConfig {
+    pub policy: RootKeyPolicyV1,
+    pub allow_test_chain_key: bool,
 }
 
 ///

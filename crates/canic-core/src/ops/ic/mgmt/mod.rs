@@ -6,6 +6,7 @@
 
 mod cycles;
 mod lifecycle;
+mod signing;
 mod snapshots;
 mod status_settings;
 mod types;
@@ -48,13 +49,15 @@ use std::future::Future;
 pub use types::UpgradeFlags;
 pub use types::{
     CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterSnapshot,
-    CanisterStatus, CanisterStatusType, EnvironmentVariable, LogVisibility, MemoryMetricsSnapshot,
-    QueryStatsSnapshot, UpdateSettingsArgs,
+    CanisterStatus, CanisterStatusType, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs,
+    EcdsaPublicKeyResult, EnvironmentVariable, LogVisibility, MemoryMetricsSnapshot,
+    QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult, UpdateSettingsArgs,
 };
 
 use types::{
-    canister_snapshot_from_infra, canister_status_from_infra, install_mode_to_infra,
-    update_settings_to_infra,
+    canister_snapshot_from_infra, canister_status_from_infra, ecdsa_public_key_args_to_infra,
+    ecdsa_public_key_from_infra, install_mode_to_infra, sign_with_ecdsa_args_to_infra,
+    sign_with_ecdsa_from_infra, update_settings_to_infra,
 };
 
 ///

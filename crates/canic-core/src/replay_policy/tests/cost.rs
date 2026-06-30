@@ -20,6 +20,7 @@ fn costed_manifest_entries_declare_guards() {
         );
         assert!(
             entry.cost_class == CostClass::RootCanisterSignaturePrepare
+                || entry.cost_class == CostClass::RootChainKeySigning
                 || entry.cost_class == CostClass::IssuerCanisterSignaturePrepare
                 || entry.cycle_reserve_policy.is_some(),
             "costed entry {} missing cycle-reserve policy",

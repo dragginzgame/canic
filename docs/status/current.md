@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-26
+Last updated: 2026-06-30
 
 ## Purpose
 
@@ -8,6 +8,100 @@ This file is the compact handoff for new agent sessions. Read it first, then
 inspect only the files needed for the current task.
 
 ## Current Line
+
+- The current `0.76` line is implementing the bridge-free delegated-auth hard
+  cut. `RootProof::IcChainKeyBatchSignatureV1` is the target root proof shape;
+  legacy bridge-backed canister-signature renewal remains only as retained
+  historical code and is not used for 0.76 auth liveness. The worktree now has
+  chain-key batch DTO/canonical/verifier support, management-canister ECDSA
+  signing wrappers, persisted chain-key root delegation batch state, delegated
+  auth registry/proof epoch state, root timer prepare/sign/install
+  orchestration, issuer install result recording, hard-cut config validation
+  for `root_proof_mode = "chain_key_batch"`, explicit local test-fleet
+  `chain_key_batch` trust-anchor policy, secp256k1 SEC1 public-key validation
+  in config and runtime chain-key policy builders, issuer delegated-token lazy
+  repair through the internal
+  `canic_get_or_create_chain_key_delegation_proof` root update, signer-side
+  normalization of high-s management-canister ECDSA signatures before proof
+  persistence, a live PocketIC hard-cut gate proving retained bridge-backed
+  canister-signature provisioning endpoints reject in `chain_key_batch` mode,
+  a live PocketIC no-external-liveness gate proving root timer renewal signs,
+  installs issuer active proof material, and supports delegated-token verifier
+  acceptance without the legacy bridge, a live issuer lazy-repair PocketIC gate
+  proving missing-proof token preparation reaches a valid issuer-local proof
+  and repeated login under that proof adds no root management signing work, and
+  a live multi-issuer PocketIC signing-volume gate proving one root chain-key
+  signing operation covers two due issuer canisters in the same timer batch,
+  and a live concurrent lazy-repair PocketIC gate proving simultaneous
+  missing-proof login updates collapse to one root chain-key signing operation
+  while retries and fresh-proof reuse add no additional threshold signatures.
+  Focused fake-signer state-machine coverage now proves signing retry-after
+  recovery, duplicate signing ticks, stale registry changes during signing,
+  expired pre-install pruning, partial issuer install retry, and stale callback
+  discard before returned signatures are persisted. Focused chain-key verifier
+  negatives now cover wrong public key/key id/derivation path/root canister,
+  helper-key signature failure, invalid witnesses, altered grants/certs,
+  leaf-window mismatch, duplicate issuer leaves, and legacy proof rejection;
+  the stale ignored 0.76 root-suite TODO placeholders were removed. The
+  platform-spec pass is now recorded against the official IC management
+  canister contract for `ecdsa_public_key`, `sign_with_ecdsa`, and
+  `sign_with_schnorr`: ECDSA signs exactly a 32-byte message hash, secp256k1
+  signatures are raw `r || s`, public-key derivation is bound to canister id,
+  derivation path, and key id, `sign_with_ecdsa` requires explicit cycles, and
+  unknown/canister-error rejects cannot be treated as proof that no signature
+  exists. The non-Rust verifier fixture decision is also closed for the first
+  0.76 slice: the repo has no Motoko or TypeScript verifier consumer today, so
+  cross-language fixtures are deferred until such a consumer is added.
+  Standing delegated-auth contract and architecture docs now describe
+  `RootProof::IcChainKeyBatchSignatureV1` as the current root proof contract,
+  with legacy bridge-backed canister-signature root proof renewal explicitly
+  rejected in `chain_key_batch` mode rather than retained as compatibility.
+  Passive 0.76 cutover DTO/stable records with `LegacyBridge`/`DualCode`/
+  `ChainKeyPreferred`/`ChainKeyOnly` states were removed so there is no
+  dormant compatibility state to accidentally wire later.
+  Remaining follow-up PocketIC acceptance gates live under
+  `crates/canic-tests/tests/root_cases/auth_076.rs`.
+  Focused validation passing: `cargo check --locked -p canic-core -p canic`,
+  `cargo test --locked -p canic-core chain_key --lib` (65 passing),
+  `cargo test --locked -p canic-core chain_key_lazy_repair --lib`, `cargo test
+  --locked -p canic-core delegated_token_lazy_repair --lib` (4 passing),
+  `cargo test --locked -p canic-core workflow::runtime::auth --lib` (24
+  passing), `cargo test --locked -p canic-core delegated_auth_proof_epoch --lib`,
+  `cargo test --locked -p canic-core test_fleet_configs_validate_with_chain_key_batch_policy --lib`,
+  `cargo test --locked -p canic-core chain_key_signer --lib`,
+  `cargo test --locked -p canic-core chain_key_batch --lib` (33 passing),
+  `cargo test --locked -p canic-core --lib` (761 passing),
+  `cargo test --locked -p canic --test protocol_surface`,
+  `cargo check --locked -p canic-tests --test root_suite`,
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_chain_key_management_public_key_matches_test_fleet_trust_anchor -- --nocapture`,
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_legacy_canister_signature_root_proof_rejected_for_chain_key_only_issuers -- --nocapture`,
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_chain_key_batch_renews_without_external_liveness -- --nocapture`, and
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_lazy_repair_uses_cached_batch_and_does_not_sign_per_login -- --nocapture`, and
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_timer_batches_multiple_issuers_with_one_signature -- --nocapture`, and
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_concurrent_missing_proof_repairs_collapse_to_one_signature -- --nocapture`.
+  The full 0.76 PocketIC acceptance slice also passes serially outside the
+  network-restricted sandbox:
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076 -- --nocapture --test-threads=1`
+  (6 passed, 0 failed, 0 ignored).
+  The `0.76.0` release changelog is prepared in the root ledger and detailed
+  0.76 notes. Fresh close-out validation after the changelog pass:
+  `git diff --check`, `cargo fmt --all -- --check`,
+  `cargo test --locked -p canic --test changelog_governance`,
+  `cargo check --locked -p canic-core -p canic`, and
+  `cargo check --locked -p canic-tests --test root_suite`.
+  No design-lock gates remain open before 0.76 bridge-free close-out; the next
+  work is implementation close-out or broader validation. The earlier local
+  trust-anchor blocker is resolved for
+  public-key discovery: the current PocketIC harness exposes
+  `ecdsa:Secp256k1:key_1` and the local fleet now embeds the actual
+  root-derived
+  `ecdsa_public_key(key_1, ["canic", "delegation"]) =
+  02f1a0a900c4b9d53ff5ec024c0e37e7a54174c6ae1d0a77312aebea349adc0b7a`.
+  The next 0.76 step is not timer-only renewal, single-issuer lazy repair, live
+  multi-issuer batching, concurrent lazy-repair signing-volume proofing,
+  verifier-negative coverage, retry/failure state-machine coverage,
+  platform-spec pass, or the non-Rust verifier fixture decision; those gates
+  are closed.
 
 - The current `0.72` hardening slice addresses the canic framework security
   audit feedback without bumping package versions. Endpoint macros now reject

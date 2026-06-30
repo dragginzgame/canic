@@ -4,9 +4,12 @@
 //! Does not own: renewal policy, proof preparation internals, or issuer installs.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
+    config::schema::DelegatedTokenConfig,
+    domain::auth::DelegatedAuthNetwork,
+    ids::BuildNetwork,
     ops::{
-        auth::AuthOps,
+        auth::{AuthOps, PrepareChainKeyRootDelegationBatchInput},
         config::ConfigOps,
         ic::IcOps,
         runtime::{env::EnvOps, metrics::delegated_auth::DelegatedAuthMetrics, timer::TimerId},
@@ -14,7 +17,7 @@ use crate::{
     workflow::{
         config::{WORKFLOW_AUTH_RENEWAL_INTERVAL, WORKFLOW_INIT_DELAY},
         prelude::*,
-        runtime::timer::TimerWorkflow,
+        runtime::{auth::provisioning, timer::TimerWorkflow},
     },
 };
 use std::{cell::RefCell, time::Duration};
@@ -44,7 +47,8 @@ impl RootDelegationRenewalWorkflow {
         if !AuthOps::has_enabled_root_issuer_renewal_templates() {
             return Ok(());
         }
-        if !ConfigOps::delegated_tokens_config()?.enabled {
+        let config = ConfigOps::delegated_tokens_config()?;
+        if !config.enabled {
             log!(
                 Topic::Auth,
                 Warn,
@@ -52,57 +56,120 @@ impl RootDelegationRenewalWorkflow {
             );
             return Ok(());
         }
+        require_chain_key_root_proof_mode(&config)?;
 
         let _ = TimerWorkflow::set_guarded_interval(
             &RENEWAL_TIMER,
             init_delay,
             "auth_renewal:init",
             || async {
-                let _ = Self::sweep();
+                let _ = Self::sweep().await;
             },
             RENEWAL_INTERVAL,
             "auth_renewal:interval",
             || async {
-                let _ = Self::sweep();
+                let _ = Self::sweep().await;
             },
         );
 
         Ok(())
     }
 
-    pub(super) fn sweep() -> Result<bool, InternalError> {
+    pub(super) async fn sweep() -> Result<bool, InternalError> {
         if !AuthOps::has_enabled_root_issuer_renewal_templates() {
             return Ok(false);
         }
 
+        let config = ConfigOps::delegated_tokens_config()?;
+        if !config.enabled {
+            return Ok(false);
+        }
+        require_chain_key_root_proof_mode(&config)?;
+        let build_network = build_network_from_delegated_auth_config(&config)?;
+        let min_accepted_proof_epoch = chain_key_min_accepted_proof_epoch(&config)?;
         let max_cert_ttl_ns = delegated_token_max_ttl_ns()?;
         let now_ns = IcOps::now_nanos();
         DelegatedAuthMetrics::record_renewal_sweep_started();
-        let result = match AuthOps::prepare_due_delegation_renewals(max_cert_ttl_ns, now_ns) {
-            Ok(result) => {
-                DelegatedAuthMetrics::record_renewal_sweep_completed();
-                result
-            }
+        let prepared = match AuthOps::prepare_due_chain_key_root_delegation_batch(
+            PrepareChainKeyRootDelegationBatchInput {
+                build_network,
+                max_cert_ttl_ns,
+                min_accepted_proof_epoch,
+                now_ns,
+            },
+        ) {
+            Ok(result) => result,
             Err(err) => {
                 DelegatedAuthMetrics::record_renewal_sweep_failed();
                 return Err(err);
             }
         };
+        let signed =
+            match AuthOps::sign_next_chain_key_root_delegation_batch(build_network, now_ns).await {
+                Ok(result) => result,
+                Err(err) => {
+                    DelegatedAuthMetrics::record_renewal_sweep_failed();
+                    return Err(err);
+                }
+            };
+        let installed = match AuthOps::start_next_chain_key_root_delegation_batch_install(now_ns)? {
+            Some(request) => {
+                provisioning::install_chain_key_delegation_proof_batch(request, now_ns).await?
+            }
+            None => false,
+        };
+        DelegatedAuthMetrics::record_renewal_sweep_completed();
 
-        if let Some(batch_id) = result.prepared_batch_id {
+        if let Some(batch_id) = prepared.batch_id {
             log!(
                 Topic::Auth,
                 Info,
-                "root delegated-proof renewal prepared batch_id={:?} attempts={} skipped={}",
+                "root chain-key delegated-proof renewal prepared batch_id={:?} issuers={} skipped={}",
                 batch_id,
-                result.prepared_attempts,
-                result.skipped_templates
+                prepared.prepared_issuers,
+                prepared.skipped_templates
             );
-            return Ok(true);
         }
 
-        Ok(false)
+        Ok(prepared.batch_id.is_some() || signed.signed || signed.reused_signed || installed)
     }
+}
+
+fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<(), InternalError> {
+    if config.root_proof_mode.trim() == "chain_key_batch" {
+        return Ok(());
+    }
+    Err(InternalError::invariant(
+        InternalErrorOrigin::Workflow,
+        "0.76 delegated-auth renewal requires root_proof_mode=\"chain_key_batch\"",
+    ))
+}
+
+fn build_network_from_delegated_auth_config(
+    config: &DelegatedTokenConfig,
+) -> Result<BuildNetwork, InternalError> {
+    let network = DelegatedAuthNetwork::parse(config.network.trim()).ok_or_else(|| {
+        InternalError::invalid_input(
+            "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet",
+        )
+    })?;
+    if network.is_mainnet() {
+        Ok(BuildNetwork::Ic)
+    } else {
+        Ok(BuildNetwork::Local)
+    }
+}
+
+fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {
+    config
+        .chain_key_root_proof
+        .min_accepted_proof_epoch
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "auth.delegated_tokens.chain_key_root_proof.min_accepted_proof_epoch is required for chain-key renewal",
+            )
+        })
 }
 
 fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {

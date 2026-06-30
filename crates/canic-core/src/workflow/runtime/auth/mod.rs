@@ -51,15 +51,6 @@ impl RuntimeAuthWorkflow {
     /// Fail fast when root delegated-auth config requires missing crypto support.
     pub fn ensure_root_crypto_contract() -> Result<(), InternalError> {
         let cfg = ConfigOps::get()?;
-        if root_requires_delegated_token_proofs(&cfg)
-            && !AuthOps::root_canister_sig_create_enabled()
-        {
-            return Err(InternalError::invariant(
-                InternalErrorOrigin::Workflow,
-                "delegated token proof issuance is configured in canic.toml, but this root build does not include IC canister-signature creation support; enable the `auth-root-canister-sig-create` feature for the root canister build".to_string(),
-            ));
-        }
-
         if root_requires_role_attestation_proofs(&cfg)
             && !AuthOps::root_canister_sig_create_enabled()
         {
@@ -103,11 +94,12 @@ impl RuntimeAuthWorkflow {
             return Ok(());
         }
 
-        if !AuthOps::root_canister_sig_verify_enabled() {
+        if canister_cfg.auth.role_attestation_cache && !AuthOps::root_canister_sig_verify_enabled()
+        {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' has auth proof verification enabled, but this build does not include root IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
+                    "canister '{canister_role}' has role-attestation cache enabled, but this build does not include root IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
                 ),
             ));
         }
@@ -226,14 +218,6 @@ fn log_attestation_verifier_rejection(
     );
 }
 
-fn root_requires_delegated_token_proofs(cfg: &ConfigModel) -> bool {
-    cfg.subnets.values().any(|subnet| {
-        subnet.canisters.values().any(|canister| {
-            cfg.auth.delegated_tokens.enabled && canister.auth.delegated_token_issuer
-        })
-    })
-}
-
 fn root_requires_role_attestation_proofs(cfg: &ConfigModel) -> bool {
     cfg.subnets.values().any(|subnet| {
         subnet
@@ -268,8 +252,7 @@ mod tests {
     use super::{
         RuntimeAuthWorkflow, nonroot_requires_delegated_token_issuer,
         nonroot_requires_issuer_proof_verifier_support,
-        nonroot_requires_root_proof_verifier_support, root_requires_delegated_token_proofs,
-        root_requires_role_attestation_proofs,
+        nonroot_requires_root_proof_verifier_support, root_requires_role_attestation_proofs,
     };
     use crate::{
         config::schema::{CanisterAuthConfig, CanisterKind},
@@ -278,7 +261,7 @@ mod tests {
     };
 
     #[test]
-    fn root_requires_canister_signature_proofs_for_delegated_issuer_when_enabled() {
+    fn root_does_not_require_canister_signature_proofs_for_delegated_issuer_when_enabled() {
         let mut issuer_cfg = ConfigTestBuilder::canister_config(CanisterKind::Shard);
         issuer_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: true,
@@ -294,7 +277,6 @@ mod tests {
             .with_prime_canister("user_shard", issuer_cfg)
             .build();
 
-        assert!(root_requires_delegated_token_proofs(&cfg));
         assert!(!root_requires_role_attestation_proofs(&cfg));
     }
 
@@ -317,7 +299,6 @@ mod tests {
             .build();
         cfg.auth.delegated_tokens.enabled = false;
 
-        assert!(!root_requires_delegated_token_proofs(&cfg));
         assert!(root_requires_role_attestation_proofs(&cfg));
     }
 
@@ -339,7 +320,6 @@ mod tests {
             .build();
         cfg.auth.delegated_tokens.enabled = false;
 
-        assert!(!root_requires_delegated_token_proofs(&cfg));
         assert!(!root_requires_role_attestation_proofs(&cfg));
     }
 
@@ -347,12 +327,11 @@ mod tests {
     fn root_does_not_require_auth_crypto_without_auth_roles() {
         let cfg = ConfigTestBuilder::new().build();
 
-        assert!(!root_requires_delegated_token_proofs(&cfg));
         assert!(!root_requires_role_attestation_proofs(&cfg));
     }
 
     #[test]
-    fn verifier_only_nonroot_requires_root_and_issuer_proof_verifier_support() {
+    fn verifier_only_nonroot_requires_chain_key_root_and_issuer_proof_verifier_support() {
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {
             delegated_token_issuer: false,
@@ -417,7 +396,7 @@ mod tests {
 
     #[cfg(not(feature = "auth-root-canister-sig-verify"))]
     #[test]
-    fn delegated_token_verifier_startup_requires_canister_signature_verify_feature() {
+    fn role_attestation_cache_startup_requires_root_canister_signature_verify_feature() {
         let _ = ConfigTestBuilder::new().install();
         let mut verifier_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
         verifier_cfg.auth = CanisterAuthConfig {

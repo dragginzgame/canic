@@ -5,6 +5,7 @@
 //! Boundary: test-only checks over endpoint manifest rows.
 
 use super::*;
+use crate::replay_policy::quota::ROOT_CHAIN_KEY_SIGNING_QUOTA_V1;
 
 #[test]
 fn delegation_proof_batch_prepare_is_manifested_as_implemented() {
@@ -28,6 +29,29 @@ fn delegation_proof_batch_prepare_is_manifested_as_implemented() {
         ReplayPolicy::ReplayProtected {
             command_kind: "auth.prepare_delegation_proof_batch.v1",
             requires_operation_id: true,
+        }
+    );
+}
+
+#[test]
+fn chain_key_lazy_repair_is_manifested_as_costed_snapshot_convergent() {
+    let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == "canic_get_or_create_chain_key_delegation_proof")
+        .expect("chain-key lazy repair endpoint policy entry");
+
+    assert_eq!(
+        entry.implementation_status,
+        ReplayImplementationStatus::Implemented
+    );
+    assert_eq!(entry.endpoint_kind, EndpointKind::Update);
+    assert_eq!(entry.cost_class, CostClass::RootChainKeySigning);
+    assert_eq!(entry.quota_policy, Some(ROOT_CHAIN_KEY_SIGNING_QUOTA_V1));
+    assert_eq!(entry.cycle_reserve_policy, None);
+    assert_eq!(
+        entry.replay_policy,
+        ReplayPolicy::SnapshotConvergent {
+            command_kind: "auth.get_or_create_chain_key_delegation_proof.v1",
         }
     );
 }

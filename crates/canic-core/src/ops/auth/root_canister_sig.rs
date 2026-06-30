@@ -328,7 +328,12 @@ fn verify_root_canister_signature_proof(
     expected_root_pid: Principal,
     ic_root_public_key_raw: &[u8],
 ) -> Result<(), InternalError> {
-    let RootProof::IcCanisterSignatureV1(proof) = proof;
+    let RootProof::IcCanisterSignatureV1(proof) = proof else {
+        return Err(AuthSignatureError::ProofInvalid(
+            "root proof is not an IC canister signature".to_string(),
+        )
+        .into());
+    };
     let (canister_id, seed) = parse_canister_sig_public_key_der(&proof.public_key_der)
         .map_err(AuthSignatureError::ProofInvalid)?;
     if canister_id != expected_root_pid {
