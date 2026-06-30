@@ -17,25 +17,21 @@ use crate::{
     dto::auth::{
         ActiveDelegationProof, ChainKeyAlgorithm, ChainKeyBatchHeaderV1,
         ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1,
-        ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedAuthIssuerPolicySnapshotV1,
-        DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegationAudience, DelegationCert,
-        DelegationProof, IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1,
-        IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1, RootProof, RootProofMode,
+        ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant, DelegationAudience,
+        DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
+        IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding, RootProof,
     },
-    ids::BuildNetwork,
     storage::stable::auth::{
-        ActiveDelegationProofRecord, BuildNetworkRecord, ChainKeyAlgorithmRecord,
-        ChainKeyBatchHeaderRecord, ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord,
-        ChainKeyDelegationCertRecord, ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
+        ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,
+        ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord, ChainKeyDelegationCertRecord,
+        ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
         ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
-        ChainKeyRootSignatureRecord, DelegatedAuthIssuerPolicySnapshotRecord,
-        DelegatedAuthRegistrySnapshotRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
+        ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
         DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
         IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
         RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
         RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord,
-        RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootKeyPolicyRecord,
-        RootProofModeRecord, RootProofRecord,
+        RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootProofRecord,
     },
 };
 
@@ -72,78 +68,6 @@ impl ActiveDelegationProofRecordMapper {
             installed_at_ns: record.installed_at_ns,
             installed_by: record.installed_by,
         }
-    }
-}
-
-///
-/// RootKeyPolicyRecordMapper
-///
-/// Storage-ops mapper for root chain-key verifier policy records.
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-pub struct RootKeyPolicyRecordMapper;
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-impl RootKeyPolicyRecordMapper {
-    #[must_use]
-    pub fn dto_to_record(policy: RootKeyPolicyV1) -> RootKeyPolicyRecord {
-        root_key_policy_to_record(policy)
-    }
-
-    #[must_use]
-    pub fn record_to_dto(record: RootKeyPolicyRecord) -> RootKeyPolicyV1 {
-        root_key_policy_record_to_dto(record)
-    }
-}
-
-///
-/// DelegatedAuthRegistrySnapshotRecordMapper
-///
-/// Storage-ops mapper for delegated-auth registry snapshot records.
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-pub struct DelegatedAuthRegistrySnapshotRecordMapper;
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-impl DelegatedAuthRegistrySnapshotRecordMapper {
-    #[must_use]
-    pub fn dto_to_record(
-        snapshot: DelegatedAuthRegistrySnapshotV1,
-    ) -> DelegatedAuthRegistrySnapshotRecord {
-        delegated_auth_registry_snapshot_to_record(snapshot)
-    }
-
-    #[must_use]
-    pub fn record_to_dto(
-        record: DelegatedAuthRegistrySnapshotRecord,
-    ) -> DelegatedAuthRegistrySnapshotV1 {
-        delegated_auth_registry_snapshot_record_to_dto(record)
     }
 }
 
@@ -733,226 +657,6 @@ fn chain_key_key_id_to_record(key_id: ChainKeyKeyId) -> ChainKeyKeyIdRecord {
 
 fn chain_key_key_id_record_to_dto(record: ChainKeyKeyIdRecord) -> ChainKeyKeyId {
     ChainKeyKeyId { name: record.name }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-fn root_key_policy_to_record(policy: RootKeyPolicyV1) -> RootKeyPolicyRecord {
-    RootKeyPolicyRecord {
-        root_canister_id: policy.root_canister_id,
-        proof_mode: root_proof_mode_to_record(policy.proof_mode),
-        algorithm: chain_key_algorithm_to_record(policy.algorithm),
-        key_id: chain_key_key_id_to_record(policy.key_id),
-        derivation_path_hash: policy.derivation_path_hash,
-        public_key: policy.public_key,
-        key_version: policy.key_version,
-        min_accepted_key_version: policy.min_accepted_key_version,
-        min_accepted_proof_epoch: policy.min_accepted_proof_epoch,
-        min_accepted_registry_epoch: policy.min_accepted_registry_epoch,
-        max_revocation_latency_ns: policy.max_revocation_latency_ns,
-        valid_from_ns: policy.valid_from_ns,
-        accept_until_ns: policy.accept_until_ns,
-        build_network: build_network_to_record(policy.build_network),
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-fn root_key_policy_record_to_dto(record: RootKeyPolicyRecord) -> RootKeyPolicyV1 {
-    RootKeyPolicyV1 {
-        root_canister_id: record.root_canister_id,
-        proof_mode: root_proof_mode_record_to_dto(record.proof_mode),
-        algorithm: chain_key_algorithm_record_to_dto(record.algorithm),
-        key_id: chain_key_key_id_record_to_dto(record.key_id),
-        derivation_path_hash: record.derivation_path_hash,
-        public_key: record.public_key,
-        key_version: record.key_version,
-        min_accepted_key_version: record.min_accepted_key_version,
-        min_accepted_proof_epoch: record.min_accepted_proof_epoch,
-        min_accepted_registry_epoch: record.min_accepted_registry_epoch,
-        max_revocation_latency_ns: record.max_revocation_latency_ns,
-        valid_from_ns: record.valid_from_ns,
-        accept_until_ns: record.accept_until_ns,
-        build_network: build_network_record_to_dto(record.build_network),
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-fn delegated_auth_registry_snapshot_to_record(
-    snapshot: DelegatedAuthRegistrySnapshotV1,
-) -> DelegatedAuthRegistrySnapshotRecord {
-    DelegatedAuthRegistrySnapshotRecord {
-        schema_version: snapshot.schema_version,
-        root_canister_id: snapshot.root_canister_id,
-        registry_epoch: snapshot.registry_epoch,
-        proof_mode: root_proof_mode_to_record(snapshot.proof_mode),
-        root_key_policy_hash: snapshot.root_key_policy_hash,
-        issuer_policies: snapshot
-            .issuer_policies
-            .into_iter()
-            .map(delegated_auth_issuer_policy_snapshot_to_record)
-            .collect(),
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-fn delegated_auth_registry_snapshot_record_to_dto(
-    record: DelegatedAuthRegistrySnapshotRecord,
-) -> DelegatedAuthRegistrySnapshotV1 {
-    DelegatedAuthRegistrySnapshotV1 {
-        schema_version: record.schema_version,
-        root_canister_id: record.root_canister_id,
-        registry_epoch: record.registry_epoch,
-        proof_mode: root_proof_mode_record_to_dto(record.proof_mode),
-        root_key_policy_hash: record.root_key_policy_hash,
-        issuer_policies: record
-            .issuer_policies
-            .into_iter()
-            .map(delegated_auth_issuer_policy_snapshot_record_to_dto)
-            .collect(),
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-fn delegated_auth_issuer_policy_snapshot_to_record(
-    policy: DelegatedAuthIssuerPolicySnapshotV1,
-) -> DelegatedAuthIssuerPolicySnapshotRecord {
-    DelegatedAuthIssuerPolicySnapshotRecord {
-        issuer_canister_id: policy.issuer_canister_id,
-        enabled: policy.enabled,
-        preferred_proof_mode: root_proof_mode_to_record(policy.preferred_proof_mode),
-        allowed_audiences: policy
-            .allowed_audiences
-            .into_iter()
-            .map(audience_to_record)
-            .collect(),
-        allowed_grants: policy
-            .allowed_grants
-            .into_iter()
-            .map(grant_to_record)
-            .collect(),
-        max_root_proof_ttl_ns: policy.max_root_proof_ttl_ns,
-        max_token_ttl_ns: policy.max_token_ttl_ns,
-        issuer_proof_algorithm: issuer_proof_alg_to_record(policy.issuer_proof_algorithm),
-        issuer_proof_binding_hash: policy.issuer_proof_binding_hash,
-        renewal_template_hash: policy.renewal_template_hash,
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-fn delegated_auth_issuer_policy_snapshot_record_to_dto(
-    record: DelegatedAuthIssuerPolicySnapshotRecord,
-) -> DelegatedAuthIssuerPolicySnapshotV1 {
-    DelegatedAuthIssuerPolicySnapshotV1 {
-        issuer_canister_id: record.issuer_canister_id,
-        enabled: record.enabled,
-        preferred_proof_mode: root_proof_mode_record_to_dto(record.preferred_proof_mode),
-        allowed_audiences: record
-            .allowed_audiences
-            .into_iter()
-            .map(audience_record_to_dto)
-            .collect(),
-        allowed_grants: record
-            .allowed_grants
-            .into_iter()
-            .map(grant_record_to_dto)
-            .collect(),
-        max_root_proof_ttl_ns: record.max_root_proof_ttl_ns,
-        max_token_ttl_ns: record.max_token_ttl_ns,
-        issuer_proof_algorithm: issuer_proof_alg_record_to_dto(record.issuer_proof_algorithm),
-        issuer_proof_binding_hash: record.issuer_proof_binding_hash,
-        renewal_template_hash: record.renewal_template_hash,
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 proof-mode stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-const fn root_proof_mode_to_record(mode: RootProofMode) -> RootProofModeRecord {
-    match mode {
-        RootProofMode::IcCanisterSignature => RootProofModeRecord::IcCanisterSignature,
-        RootProofMode::ChainKeyBatch => RootProofModeRecord::ChainKeyBatch,
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 proof-mode stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-const fn root_proof_mode_record_to_dto(record: RootProofModeRecord) -> RootProofMode {
-    match record {
-        RootProofModeRecord::IcCanisterSignature => RootProofMode::IcCanisterSignature,
-        RootProofModeRecord::ChainKeyBatch => RootProofMode::ChainKeyBatch,
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-const fn build_network_to_record(network: BuildNetwork) -> BuildNetworkRecord {
-    match network {
-        BuildNetwork::Ic => BuildNetworkRecord::Ic,
-        BuildNetwork::Local => BuildNetworkRecord::Local,
-    }
-}
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable mapping is passive until chain-key renewal state is wired"
-    )
-)]
-const fn build_network_record_to_dto(record: BuildNetworkRecord) -> BuildNetwork {
-    match record {
-        BuildNetworkRecord::Ic => BuildNetwork::Ic,
-        BuildNetworkRecord::Local => BuildNetwork::Local,
-    }
 }
 
 fn audience_to_record(audience: DelegationAudience) -> DelegationAudienceRecord {
