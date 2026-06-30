@@ -250,7 +250,7 @@ fn auth_command() -> ClapCommand {
 fn renewal_command() -> ClapCommand {
     ClapCommand::new(RENEWAL_COMMAND)
         .disable_help_flag(true)
-        .about("Run root-managed delegation proof renewal workflows")
+        .about("Inspect root-managed chain-key delegation proof renewal")
         .subcommand_required(true)
         .subcommand(status_command())
 }
@@ -258,7 +258,7 @@ fn renewal_command() -> ClapCommand {
 fn status_command() -> ClapCommand {
     ClapCommand::new(STATUS_COMMAND)
         .disable_help_flag(true)
-        .about("Show root-managed delegation proof renewal state for one issuer")
+        .about("Show chain-key delegation proof renewal state for one issuer")
         .arg(
             value_arg(DEPLOYMENT_ARG)
                 .value_name(DEPLOYMENT_ARG)
@@ -895,7 +895,7 @@ fn auth_renewal_medic_summary_from_result(
     );
     let next = if observation.drift_detected {
         format!(
-            "run canic auth renewal status {} --issuer {}; if drift persists, repair the issuer active proof through root chain-key renewal or lazy repair",
+            "run canic auth renewal status {} --issuer {}; if drift persists, wait for root chain-key renewal or retry an issuer login/update so lazy repair can run",
             result.deployment, result.issuer_pid
         )
     } else if observation.available {

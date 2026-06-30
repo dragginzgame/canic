@@ -4,6 +4,11 @@
 //! Does not own: management-canister signing, timers, issuer install calls, or endpoint guards.
 //! Boundary: deterministic preparation state for the 0.76 bridge-free renewal workflow.
 
+mod batch_id;
+mod install;
+mod merkle;
+mod selection;
+
 use super::{
     errors::{map_prepare_delegation_cert_error, map_root_provisioning_policy_error},
     root_issuer_policy::{delegated_role_grant_views, delegation_audience_view},
@@ -14,14 +19,12 @@ use crate::{
     cdk::types::Principal,
     domain::policy::auth::{
         RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-        RootIssuerRenewalOutcome, RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        RootIssuerRenewalOutcome, RootIssuerRenewalState,
         validate_root_delegation_proof_prepare_policy,
     },
     dto::auth::{
-        ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
-        ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyRootSignatureV1, DelegationCert,
-        DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
-        RootDelegationProofBatchProof, RootDelegationProofInstallOutcome, RootProof,
+        ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, IssuerProofAlgorithm, IssuerProofBinding,
+        RootDelegationProofBatchProof, RootDelegationProofInstallOutcome,
     },
     ops::{
         auth::{
@@ -45,10 +48,18 @@ use crate::{
         },
     },
 };
-use sha2::{Digest, Sha256};
+use batch_id::{ChainKeyBatchIdInput, chain_key_batch_id};
+use install::{
+    materialize_chain_key_delegation_proof, signed_chain_key_delegation_proof_for_issuer,
+};
+use merkle::{ChainKeyBatchLeaf, merkle_root_and_witnesses, reject_duplicate_chain_key_issuers};
+use selection::{
+    DueChainKeyTemplate, cap_due_chain_key_templates,
+    chain_key_root_delegation_batch_quota_exceeded, due_chain_key_templates,
+    enabled_template_count, pending_chain_key_root_delegation_batch_count,
+};
 
 const CHAIN_KEY_BATCH_SCHEMA_VERSION_V1: u16 = 1;
-const CHAIN_KEY_BATCH_ID_DOMAIN: &[u8] = b"CANIC_ROOT_DELEGATION_CHAIN_KEY_BATCH_ID_V1";
 const MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS: usize = 64;
 const MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES: usize = 128;
 const CHAIN_KEY_SIGNING_RETRY_BACKOFF_NS: u64 = 60_000_000_000;
@@ -513,72 +524,6 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
     true
 }
 
-fn signed_chain_key_delegation_proof_for_issuer(
-    issuer_pid: Principal,
-    now_ns: u64,
-    registry_epoch: u64,
-    registry_hash: [u8; 32],
-) -> Option<RootDelegationProofBatchProof> {
-    let mut batches = AuthStateOps::chain_key_root_delegation_batches()
-        .into_iter()
-        .filter(|batch| now_ns < batch.header.expires_at_ns)
-        .filter(|batch| batch_matches_registry(batch, registry_epoch, registry_hash))
-        .filter(|batch| {
-            matches!(
-                batch.status,
-                ChainKeyRootDelegationBatchStatus::Signed
-                    | ChainKeyRootDelegationBatchStatus::Installing
-                    | ChainKeyRootDelegationBatchStatus::Installed
-            )
-        })
-        .filter(|batch| batch.signature.is_some())
-        .collect::<Vec<_>>();
-    batches.sort_by(|left, right| {
-        right
-            .header
-            .proof_epoch
-            .cmp(&left.header.proof_epoch)
-            .then_with(|| right.prepared_at_ns.cmp(&left.prepared_at_ns))
-            .then_with(|| right.batch_id.cmp(&left.batch_id))
-    });
-
-    for batch in batches {
-        let Some(signature) = batch.signature.clone() else {
-            continue;
-        };
-        if let Some(issuer) = batch
-            .issuers
-            .iter()
-            .find(|issuer| issuer.issuer_pid == issuer_pid)
-        {
-            return Some(materialize_chain_key_delegation_proof(
-                &batch, issuer, &signature,
-            ));
-        }
-    }
-    None
-}
-
-fn materialize_chain_key_delegation_proof(
-    batch: &ChainKeyRootDelegationBatch,
-    issuer: &ChainKeyRootDelegationBatchIssuer,
-    signature: &ChainKeyRootSignatureV1,
-) -> RootDelegationProofBatchProof {
-    RootDelegationProofBatchProof {
-        issuer_pid: issuer.issuer_pid,
-        cert_hash: issuer.cert_hash,
-        proof: DelegationProof {
-            cert: issuer.delegation_cert.clone(),
-            root_proof: RootProof::IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1 {
-                header: batch.header.clone(),
-                delegation_cert: issuer.chain_key_delegation_cert.clone(),
-                issuer_witness: issuer.issuer_witness.clone(),
-                signature: signature.clone(),
-            }),
-        },
-    }
-}
-
 fn next_chain_key_batch_for_signing(now_ns: u64) -> Option<ChainKeyRootDelegationBatch> {
     let mut batches = AuthStateOps::chain_key_root_delegation_batches()
         .into_iter()
@@ -716,76 +661,6 @@ fn batch_matches_registry(
     batch.header.registry_epoch == registry_epoch && batch.header.registry_hash == registry_hash
 }
 
-#[derive(Clone)]
-struct DueChainKeyTemplate {
-    template: RootIssuerRenewalTemplate,
-}
-
-fn due_chain_key_templates(
-    now_ns: u64,
-    required_issuer_pid: Option<Principal>,
-) -> Vec<DueChainKeyTemplate> {
-    AuthStateOps::root_issuer_renewal_templates()
-        .into_iter()
-        .filter(|template| template.enabled)
-        .filter_map(|template| {
-            if required_issuer_pid.is_some_and(|issuer_pid| issuer_pid == template.issuer_pid) {
-                return Some(DueChainKeyTemplate { template });
-            }
-            let template_fingerprint = renewal_template_fingerprint(&template);
-            let state = AuthStateOps::root_issuer_renewal_state(template.issuer_pid);
-            chain_key_template_due(now_ns, template_fingerprint, state.as_ref())
-                .then_some(DueChainKeyTemplate { template })
-        })
-        .collect()
-}
-
-fn cap_due_chain_key_templates(due_templates: &mut Vec<DueChainKeyTemplate>) {
-    if due_templates.len() > MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS {
-        due_templates.truncate(MAX_CHAIN_KEY_ROOT_DELEGATION_BATCH_ISSUERS);
-    }
-}
-
-fn chain_key_template_due(
-    now_ns: u64,
-    template_fingerprint: [u8; 32],
-    state: Option<&RootIssuerRenewalState>,
-) -> bool {
-    let Some(state) = state else {
-        return true;
-    };
-    if now_ns < state.next_attempt_after_ns {
-        return false;
-    }
-    if state.template_fingerprint != template_fingerprint {
-        return true;
-    }
-    state
-        .last_installed_refresh_after_ns
-        .is_none_or(|refresh_after_ns| now_ns >= refresh_after_ns)
-}
-
-fn enabled_template_count() -> usize {
-    AuthStateOps::root_issuer_renewal_templates()
-        .into_iter()
-        .filter(|template| template.enabled)
-        .count()
-}
-
-fn pending_chain_key_root_delegation_batch_count(now_ns: u64) -> usize {
-    AuthStateOps::chain_key_root_delegation_batches()
-        .into_iter()
-        .filter(|batch| now_ns < batch.header.expires_at_ns)
-        .filter(|batch| batch.status != ChainKeyRootDelegationBatchStatus::Installed)
-        .count()
-}
-
-fn chain_key_root_delegation_batch_quota_exceeded(pending_batches: usize) -> InternalError {
-    InternalError::resource_exhausted(format!(
-        "chain-key root delegation batch quota exceeded: pending_batches={pending_batches} max_pending_batches={MAX_PENDING_CHAIN_KEY_ROOT_DELEGATION_BATCHES}"
-    ))
-}
-
 fn build_chain_key_root_delegation_batch(
     input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
     due_templates: &[DueChainKeyTemplate],
@@ -900,14 +775,6 @@ fn shared_batch_cert_ttl_ns(
     Ok(ttl_ns)
 }
 
-struct ChainKeyBatchLeaf {
-    delegation_cert: DelegationCert,
-    chain_key_delegation_cert: ChainKeyDelegationCertV1,
-    cert_hash: [u8; 32],
-    leaf_hash: [u8; 32],
-    refresh_after_ns: u64,
-}
-
 fn build_chain_key_batch_leaf(
     input: &PrepareDueChainKeyRootDelegationBatchInput<'_>,
     due: &DueChainKeyTemplate,
@@ -995,176 +862,21 @@ fn ensure_policy_decision_matches_shared_window(
     Ok(())
 }
 
-fn reject_duplicate_chain_key_issuers(leaves: &[ChainKeyBatchLeaf]) -> Result<(), InternalError> {
-    let mut previous: Option<Principal> = None;
-    for leaf in leaves {
-        if previous.is_some_and(|issuer| issuer == leaf.delegation_cert.issuer_pid) {
-            return Err(InternalError::invalid_input(
-                "chain-key root delegation batch contains duplicate issuer",
-            ));
-        }
-        previous = Some(leaf.delegation_cert.issuer_pid);
-    }
-    Ok(())
-}
-
-fn merkle_root_and_witnesses(
-    leaf_hashes: &[[u8; 32]],
-) -> Result<([u8; 32], Vec<ChainKeyBatchWitnessV1>), InternalError> {
-    if leaf_hashes.is_empty() {
-        return Err(InternalError::invalid_input(
-            "chain-key Merkle batch must contain at least one leaf",
-        ));
-    }
-
-    let mut witnesses = vec![Vec::new(); leaf_hashes.len()];
-    let mut level = leaf_hashes
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(index, hash)| MerkleNode {
-            hash,
-            leaf_indices: vec![index],
-        })
-        .collect::<Vec<_>>();
-
-    while level.len() > 1 {
-        let mut next = Vec::with_capacity(level.len().div_ceil(2));
-        for pair in level.chunks(2) {
-            if pair.len() == 1 {
-                next.push(pair[0].clone());
-                continue;
-            }
-
-            let left = &pair[0];
-            let right = &pair[1];
-            for index in &left.leaf_indices {
-                witnesses[*index].push(ChainKeyBatchWitnessStepV1::RightSibling(right.hash));
-            }
-            for index in &right.leaf_indices {
-                witnesses[*index].push(ChainKeyBatchWitnessStepV1::LeftSibling(left.hash));
-            }
-            let mut leaf_indices =
-                Vec::with_capacity(left.leaf_indices.len() + right.leaf_indices.len());
-            leaf_indices.extend_from_slice(&left.leaf_indices);
-            leaf_indices.extend_from_slice(&right.leaf_indices);
-            next.push(MerkleNode {
-                hash: chain_key_batch_node_hash(left.hash, right.hash),
-                leaf_indices,
-            });
-        }
-        level = next;
-    }
-
-    Ok((
-        level[0].hash,
-        witnesses
-            .into_iter()
-            .map(|steps| ChainKeyBatchWitnessV1 { steps })
-            .collect(),
-    ))
-}
-
-#[derive(Clone)]
-struct MerkleNode {
-    hash: [u8; 32],
-    leaf_indices: Vec<usize>,
-}
-
-fn chain_key_batch_node_hash(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update([1]);
-    hasher.update(left);
-    hasher.update(right);
-    hasher.finalize().into()
-}
-
-struct ChainKeyBatchIdInput<'a> {
-    root_canister_id: Principal,
-    proof_epoch: u64,
-    registry_epoch: u64,
-    registry_hash: [u8; 32],
-    tree_root: [u8; 32],
-    not_before_ns: u64,
-    expires_at_ns: u64,
-    algorithm: ChainKeyAlgorithm,
-    key_id_name: &'a str,
-    derivation_path_hash: [u8; 32],
-    key_version: u64,
-}
-
-fn chain_key_batch_id(input: ChainKeyBatchIdInput<'_>) -> [u8; 32] {
-    let mut payload = Vec::with_capacity(256);
-    encode_principal(&mut payload, input.root_canister_id);
-    encode_u64(&mut payload, input.proof_epoch);
-    encode_u64(&mut payload, input.registry_epoch);
-    encode_fixed_32(&mut payload, input.registry_hash);
-    encode_fixed_32(&mut payload, input.tree_root);
-    encode_u64(&mut payload, input.not_before_ns);
-    encode_u64(&mut payload, input.expires_at_ns);
-    encode_chain_key_algorithm(&mut payload, input.algorithm);
-    encode_string(&mut payload, input.key_id_name);
-    encode_fixed_32(&mut payload, input.derivation_path_hash);
-    encode_u64(&mut payload, input.key_version);
-
-    let mut hasher = Sha256::new();
-    hasher.update(CHAIN_KEY_BATCH_ID_DOMAIN);
-    encode_bytes_for_hash(&mut hasher, &payload);
-    hasher.finalize().into()
-}
-
-fn encode_chain_key_algorithm(out: &mut Vec<u8>, algorithm: ChainKeyAlgorithm) {
-    let tag = match algorithm {
-        ChainKeyAlgorithm::EcdsaSecp256k1 => 1,
-    };
-    out.push(tag);
-}
-
-fn encode_principal(out: &mut Vec<u8>, principal: Principal) {
-    encode_bytes(out, principal.as_slice());
-}
-
-fn encode_string(out: &mut Vec<u8>, value: &str) {
-    encode_bytes(out, value.as_bytes());
-}
-
-fn encode_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
-    encode_len(out, bytes.len());
-    out.extend_from_slice(bytes);
-}
-
-fn encode_fixed_32(out: &mut Vec<u8>, bytes: [u8; 32]) {
-    out.extend_from_slice(&bytes);
-}
-
-fn encode_u64(out: &mut Vec<u8>, value: u64) {
-    out.extend_from_slice(&value.to_be_bytes());
-}
-
-fn encode_len(out: &mut Vec<u8>, len: usize) {
-    let len = u32::try_from(len).expect("chain-key canonical vector length exceeds u32");
-    out.extend_from_slice(&len.to_be_bytes());
-}
-
-fn encode_bytes_for_hash(hasher: &mut Sha256, bytes: &[u8]) {
-    let len = u32::try_from(bytes.len()).expect("chain-key canonical vector length exceeds u32");
-    hasher.update(len.to_be_bytes());
-    hasher.update(bytes);
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
+    use super::merkle::chain_key_batch_node_hash;
+    use super::selection::chain_key_template_due;
     use super::*;
     use crate::{
         domain::policy::auth::{
             RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-            RootIssuerRenewalOutcome,
+            RootIssuerRenewalOutcome, RootIssuerRenewalTemplate,
         },
-        dto::auth::ChainKeyKeyId,
+        dto::auth::{ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyKeyId},
         ids::{BuildNetwork, CanisterRole},
         ops::auth::delegated::chain_key::{
             ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,

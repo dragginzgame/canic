@@ -148,8 +148,8 @@ git log --name-only -n 20 -- crates/
 | `ops/auth/delegated/active_proof.rs` | `install_active_delegation_proof` | binds active proof cert issuer to the local signer canister and verifies trusted root proof before storage | High |
 | `ops/auth/delegation/active.rs` | `install_active_delegation_proof` | supplies current canister/root verifier context before persisting active proof | High |
 | `domain/policy/auth/root_provisioning.rs` | `validate_root_delegation_proof_prepare_policy` | root issuer registry policy enforces issuer, enabled state, allowed audiences, allowed grants, TTL, and refresh policy before root proof batch prepare | High |
-| `ops/auth/delegation/batch.rs` | `preflight_delegation_proof_batch_prepare_request` | maps root proof batch prepare DTOs into root issuer policy decisions before preparing proof metadata | High |
-| `ops/auth/delegation/batch.rs` | `preflight_delegation_proof_batch_install_proof` | rejects retrieved proofs whose issuer/cert hash/cert payload do not match pending batch metadata | High |
+| `ops/auth/delegation/chain_key_batch.rs` | `build_chain_key_batch_leaf`, `prepare_due_chain_key_root_delegation_batch` | maps root renewal templates into root issuer policy decisions before preparing canonical chain-key batch leaves | High |
+| `ops/auth/delegated/chain_key.rs` | `verify_cert_leaf_binding` | rejects root proofs whose signed leaf audience/grants/issuer binding do not exactly match the embedded delegation cert | High |
 | `ops/auth/verify/attestation.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
 | `ops/rpc/capability.rs` | `root_capability_hash` | canonical root capability hash binding to target canister, capability version, service, and canonical payload | High |
 | `workflow/rpc/capability/proof.rs` | `verify_capability_hash_binding`, structural proof helpers | test-visible target hash verification and runtime structural proof checks | Medium |

@@ -11,9 +11,9 @@ inspect only the files needed for the current task.
 
 - The current `0.76` line is implementing the bridge-free delegated-auth hard
   cut. `RootProof::IcChainKeyBatchSignatureV1` is the target root proof shape;
-  the old bridge-backed canister-signature renewal path now remains only as
-  historical documentation and stable snapshot decode records, not as public
-  runtime/API/CLI code. The worktree now has
+  the old bridge-backed canister-signature renewal path now remains historical
+  documentation only, not as public runtime/API/CLI code or active auth stable
+  state. The worktree now has
   chain-key batch DTO/canonical/verifier support, management-canister ECDSA
   signing wrappers, persisted chain-key root delegation batch state, delegated
   auth registry/proof epoch state, root timer prepare/sign/install
@@ -60,6 +60,13 @@ inspect only the files needed for the current task.
   `RootProof::IcChainKeyBatchSignatureV1` as the current root proof contract,
   with legacy bridge-backed canister-signature root proof renewal removed from
   the active protocol rather than retained as compatibility.
+  The pre-1.0 cleanup pass for `0.76.7` refreshed active recurring audit
+  templates, clarified chain-key auth operator wording, narrowed the
+  role-attestation data-certificate error message, and split the chain-key
+  batch renewal implementation into private `batch_id`, `install`, `merkle`,
+  and `selection` helper modules under
+  `crates/canic-core/src/ops/auth/delegation/chain_key_batch/` without changing
+  behavior.
   Passive 0.76 cutover DTO/stable records with `LegacyBridge`/`DualCode`/
   `ChainKeyPreferred`/`ChainKeyOnly` states were removed so there is no
   dormant compatibility state to accidentally wire later.
@@ -1369,7 +1376,8 @@ inspect only the files needed for the current task.
   query; prepare validates caller/subject/role/subnet/TTL, replay-protects the
   request under `auth.prepare_role_attestation.v1`, caches caller-bound pending
   payload metadata, and commits the root `"sig"` certified-data tree. Get
-  returns the prepared payload with `RootProof::IcCanisterSignatureV1`.
+  returns the prepared payload with
+  `RoleAttestationRootProof::IcCanisterSignatureV1`.
   Runtime role-attestation verification now verifies the embedded root proof
   against the configured root canister id plus raw IC root key and performs
   local subject/audience/subnet/time/epoch checks with no root refresh or

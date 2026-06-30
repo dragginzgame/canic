@@ -80,12 +80,12 @@ Confirm:
 Search terms:
 
 ```text
-RootProof::IcCanisterSignatureV1
-verify_root_canister_signature_proof
-root_canister_sig_seed
-root_canister_sig_domain
-root_canister_sig_verification_message
-RootPayloadKind::DelegationCert
+RootProof::IcChainKeyBatchSignatureV1
+verify_chain_key_batch_root_proof
+ChainKeyRootVerifierPolicy
+ChainKeyBatchHeaderV1
+ChainKeyDelegationCertV1
+RoleAttestationRootProof
 RootPayloadKind::RoleAttestation
 cert_hash
 ```
@@ -224,7 +224,8 @@ Detection commands (run and record output references):
 
 ```bash
 rg -n 'AuthProofVerifierConfig|auth_proof_verifier_config|validate_network_root_key_pair|ic_root_public_key_raw|root_canister_id' crates/canic-core/src -g '*.rs'
-rg -n 'verify_root_canister_signature_proof|root_canister_sig_seed|root_canister_sig_domain|RootPayloadKind|RootProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
+rg -n 'verify_chain_key_batch_root_proof|ChainKeyRootVerifierPolicy|RootProof::IcChainKeyBatchSignatureV1|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates/canic-core/src -g '*.rs'
+rg -n 'RoleAttestationRootProof|verify_root_canister_signature_proof|root_canister_sig_seed|root_canister_sig_domain|RootPayloadKind::RoleAttestation' crates/canic-core/src -g '*.rs'
 rg -n 'verify_issuer_canister_signature_proof|issuer_canister_sig_seed|issuer_canister_sig_seed_hash|IssuerPayloadKind|IssuerProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
 rg -n 'cert_hash|claims_hash|issuer_proof_binding_hash|VerifyDelegatedTokenError|IssuerPidMismatch|CertHashMismatch' crates/canic-core/src/ops/auth -g '*.rs'
 git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/src/api/auth crates/canic-core/src/config/validation/auth.rs crates/canic-core/src/domain/auth.rs crates/canic-tests/tests/root_cases crates/canic-tests/tests/pic_role_attestation_cases
@@ -234,7 +235,8 @@ git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/sr
 | --- | --- | --- | --- |
 | `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token`, `auth_proof_verifier_config_from`, `verify_with_embedded_proofs` | runtime config, root key, root proof, and issuer proof orchestration | High |
 | `crates/canic-core/src/ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_claims` | pure cert/claims/root/issuer verification ordering | High |
-| `crates/canic-core/src/ops/auth/root_canister_sig.rs` | `verify_root_canister_signature_proof` | root proof canister id, seed/domain, message, and IC root-key verification | High |
+| `crates/canic-core/src/ops/auth/delegated/chain_key.rs` | `verify_chain_key_batch_root_proof` | delegated root proof policy, chain-key public key, signature, Merkle witness, and certificate equality | High |
+| `crates/canic-core/src/ops/auth/root_canister_sig.rs` | `verify_root_canister_signature_proof` | role-attestation root proof canister id, seed/domain, message, and IC root-key verification | Medium |
 | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` | `verify_issuer_canister_signature_proof` | issuer proof canister id, seed/domain, message, and IC root-key verification | High |
 | `crates/canic-core/src/ops/auth/delegated/cert_rules.rs` | `validate_cert_issuance_rules` | root pid, TTL, audience/grant shape, and issuer binding hash checks | High |
 | `crates/canic-core/src/ops/auth/delegated/canonical.rs` | `cert_hash`, `claims_hash`, `issuer_proof_binding_hash` | canonical hash material for root and issuer signatures | High |
@@ -295,7 +297,8 @@ Detection scans (run and record output references):
 
 ```bash
 rg -l 'AuthProofVerifierConfig|auth_proof_verifier_config|ic_root_public_key_raw|validate_network_root_key_pair' crates canisters fleets -g '*.rs' | wc -l
-rg -l 'verify_root_canister_signature_proof|RootPayloadKind|RootProof::IcCanisterSignatureV1|root_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'verify_chain_key_batch_root_proof|RootProof::IcChainKeyBatchSignatureV1|ChainKeyRootVerifierPolicy|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'RoleAttestationRootProof|verify_root_canister_signature_proof|RootPayloadKind::RoleAttestation|root_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'verify_issuer_canister_signature_proof|IssuerPayloadKind|IssuerProof::IcCanisterSignatureV1|issuer_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'cert_hash|claims_hash|issuer_proof_binding_hash|DelegationCert|DelegatedTokenClaims' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'DelegatedToken|DelegationProof|RootProof|IssuerProof|ActiveDelegationProof|SignedRoleAttestation' crates canisters fleets -g '*.rs' | wc -l

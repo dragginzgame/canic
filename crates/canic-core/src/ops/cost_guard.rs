@@ -372,8 +372,7 @@ mod tests {
     fn request(now_secs: u64) -> CostGuardRequest {
         CostGuardRequest {
             cost_class: CostClass::ManagementDeployment,
-            command_kind: CommandKind::new("auth.prepare_delegation_proof_batch.v1")
-                .expect("command"),
+            command_kind: CommandKind::new("test.management_deployment.v1").expect("command"),
             quota_subject: p(1),
             payer: p(2),
             now_secs,

@@ -128,13 +128,13 @@ Expected:
 
 ### 4. Endpoint/Auth Semantics
 
-Ops may verify token material, prepare/retrieve canister-signature proof
-material, consume replay state, and perform key/platform operations. Ops must
-not own endpoint subject binding, generated endpoint authorization semantics,
-or root proof install broadcast orchestration.
+Ops may verify token material, prepare/verify proof material, consume replay
+state, and perform key/platform operations. Ops must not own endpoint subject
+binding, generated endpoint authorization semantics, or root proof install
+broadcast orchestration.
 
 ```bash
-rg -n 'verify_caller|authenticated_with_scope|requires\(|canic_update|canic_query|endpoint|DelegatedToken|verify_delegated_token|install_delegation_proof_batch|CallOps::|unbounded_wait' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
+rg -n 'verify_caller|authenticated_with_scope|requires\(|canic_update|canic_query|endpoint|DelegatedToken|verify_delegated_token|install_active_delegation_proof|start_next_chain_key_root_delegation_batch_install|CallOps::|unbounded_wait' crates/canic-core/src/ops -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
@@ -150,7 +150,7 @@ Expected:
 ### 4a. Root Proof Provisioning Split
 
 ```bash
-rg -n 'prepare_delegation_proof_batch|get_delegation_proof_batch|install_delegation_proof_batch|install_active_delegation_proof|mark_delegation_proof_batch_installed|CallOps::|unbounded_wait|root_issuer_policy|validate_root_delegation_proof_prepare_policy' crates/canic-core/src/ops/auth crates/canic-core/src/workflow/runtime/auth crates/canic-core/src/api/auth -g '*.rs' --glob '!**/tests.rs'
+rg -n 'prepare_due_chain_key_root_delegation_batch|sign_next_chain_key_root_delegation_batch|get_or_create_chain_key_delegation_proof|start_next_chain_key_root_delegation_batch_install|install_active_delegation_proof|record_chain_key_root_delegation_install|CallOps::|unbounded_wait|root_issuer_policy|validate_root_delegation_proof_prepare_policy' crates/canic-core/src/ops/auth crates/canic-core/src/workflow/runtime/auth crates/canic-core/src/api/auth -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:

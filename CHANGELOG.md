@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.7` completes the pre-1.0 auth cleanup pass by tightening
+  chain-key auth operator wording, clarifying role-attestation data-certificate
+  errors, refreshing recurring audit templates, and splitting the chain-key
+  batch implementation into smaller private modules without behavior changes.
+
 - `0.76.6` hard-cuts delegated-auth root proof survivorship by making
   delegated `RootProof` chain-key-only, splitting role-attestation root proof
   material into a separate DTO, removing historical bridge/provisioner auth
