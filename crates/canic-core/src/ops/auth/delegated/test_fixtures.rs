@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-pub(crate) fn chain_key_root_proof(byte: u8) -> RootProof {
+pub fn chain_key_root_proof(byte: u8) -> RootProof {
     let root_canister_id = principal(byte);
     let issuer_canister_id = principal(byte.saturating_add(1));
     let issuer_proof_algorithm = IssuerProofAlgorithm::IcCanisterSignatureV1;
