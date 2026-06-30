@@ -41,12 +41,12 @@ The Token Trust Chain Invariant verifies issuer authenticity and chain validity.
 - clock skew policy changes
 - update/query authentication boundary changes
 - replay capacity or per-caller reservation limit changes
-- root proof provisioning prepare/get/install changes
+- root proof renewal, lazy repair, and install changes
 - active delegation proof install/status changes
 
 ## Current Focus Questions
 
-For the current root proof provisioning and delegated-token tree, this audit
+For the current root proof renewal and delegated-token tree, this audit
 must explicitly check:
 
 - delegated tokens remain TTL-bounded bearer credentials; verifier-local token
@@ -56,12 +56,14 @@ must explicitly check:
 - active root delegation proofs reject not-yet-valid and expired certificates
   during install, and status reports `RefreshNeeded`/`Expired` from explicit
   `refresh_after_ns` and `expires_at_ns` boundaries.
-- root delegation proof batch prepare is replay/idempotency protected by
-  `AuthRequestMetadata.request_id`, request fingerprint, and bounded replay TTL.
-- root delegation proof batch get/install reject expired retrieval windows,
-  expired certificates, proof mismatches, and superseded pending metadata.
+- root chain-key delegation batch prepare/sign/install is persisted and
+  idempotent across duplicate timer ticks, retry-after windows, stale registry
+  changes, and partial issuer installs.
+- root lazy repair is cache-first and returns pending/retryable status rather
+  than issuing tokens without a valid active proof.
 - replay policy manifests classify update endpoints that mutate or prepare
-  scarce proof material, while direct root query retrieval remains read-only.
+  scarce proof material, while delegated-token get/status queries remain
+  read-only.
 - root replay capacity still checks per-caller capacity before global capacity.
 
 ## Report Preamble (Required)
@@ -106,8 +108,9 @@ Confirm:
 - query and update delegated-token verification have the same bearer-token reuse
   semantics
 - freshness logic is not optional in production paths
-- root delegation proof batch prepare/get/install enforce request-id replay,
-  retrieval expiry, certificate expiry, and pending metadata cleanup semantics
+- root chain-key delegation batch prepare/sign/install enforce batch expiry,
+  certificate expiry, retry-after, stale-batch cleanup, and partial-install
+  retry semantics
 
 ### 2. Verify State Interaction
 
@@ -118,11 +121,11 @@ For delegated-token authentication, confirm endpoint verification does not write
 verifier-local token-use state. Replay-sensitive mutations must use domain
 operation receipts.
 
-For root proof provisioning, confirm `request_id` replay state is keyed to the
-prepare request fingerprint and expires on a bounded TTL. Query retrieval must
-not mutate or consume replay state; install must validate submitted proof
-freshness against pending metadata without assembling new proofs in the update
-call.
+For root proof renewal, confirm persisted batch state is keyed to canonical
+batch metadata/header hash and expires on bounded proof/certificate windows.
+Install planning must reuse signed batch state, retry only remaining issuers
+after partial failure, and never assemble a fresh payload signature during an
+install retry.
 
 For root capability requests, confirm per-caller replay reservation limits are
 checked before global capacity so one caller cannot fill the shared replay

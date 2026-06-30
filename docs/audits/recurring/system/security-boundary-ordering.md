@@ -12,9 +12,10 @@ This audit tracks the current hard-cut boundary split:
   stable `DelegationAudience::{Canister, CanicSubnet, Project}`, signed
   local-role grant scope checks, subject/caller binding, and bearer-token
   verification without verifier-local token-use writes;
-- root proof provisioning uses controller/root-only update paths for policy,
-  prepare, and install, a direct root query path for proof retrieval, and
-  issuer-local active proof installation only after root proof verification;
+- root proof renewal uses controller/root-only issuer policy/template updates,
+  root timer or internal registered-issuer updates for chain-key batch
+  prepare/sign/install, and issuer-local active proof installation only after
+  root proof verification;
 - signed role-attestation verification is explicit and local before any
   caller trusts an embedded attestation;
 - endpoint multi-role policy is not delegated-token multi-role audience.
@@ -40,16 +41,16 @@ For endpoint delegated tokens, the required order is:
 7. dispatch the endpoint implementation;
 8. record bounded success/denial metrics at the owning boundary.
 
-For root proof provisioning, the required order is:
+For root proof renewal, the required order is:
 
-1. root policy upsert and batch prepare are root/controller update paths before
-   state mutation;
-2. batch prepare validates request metadata, quotas, issuer registry policy,
-   certificate TTL, audiences, and grants before committing pending metadata;
-3. batch proof retrieval is a direct root query path that checks pending
-   metadata and retrieval expiry before assembling proof material;
-4. batch install validates submitted proofs against pending metadata, cert hash,
-   issuer, and expiry before issuer-canister calls;
+1. root policy/template updates are root/controller update paths before state
+   mutation;
+2. batch prepare validates quotas, issuer registry policy, certificate TTL,
+   audiences, and grants before persisting canonical chain-key batch metadata;
+3. signing checks signer policy and persists one threshold signature over the
+   canonical batch header;
+4. install planning materializes issuer-specific proof/witness payloads from the
+   signed batch without re-signing;
 5. issuer install verifies the root proof against configured root trust anchors
    and local issuer binding before storing active proof state;
 6. normal delegated-token prepare/get stays issuer-local after active proof
@@ -122,7 +123,7 @@ Expected:
 ### 3. Delegated Token Material Verification
 
 ```bash
-rg -n 'verify_delegated_token|verify_claims|verify_audience|verify_scopes|auth_proof_verifier_config|verify_root_canister_signature_proof|verify_issuer_canister_signature_proof|positive_cache|record_verify' crates/canic-core/src/ops/auth -g '*.rs'
+rg -n 'verify_delegated_token|verify_claims|verify_audience|verify_scopes|auth_proof_verifier_config|verify_chain_key_batch_root_proof|verify_issuer_canister_signature_proof|positive_cache|record_verify' crates/canic-core/src/ops/auth -g '*.rs'
 ```
 
 Expected:
@@ -141,25 +142,26 @@ Expected:
 - no role/principal or plural role audience DTO is accepted;
 - metrics record bounded outcomes but are not authorization inputs.
 
-### 3a. Root Proof Provisioning Ordering
+### 3a. Root Proof Renewal Ordering
 
 ```bash
-rg -n 'upsert_root_issuer_policy|prepare_delegation_proof_batch|get_delegation_proof_batch|install_delegation_proof_batch|install_active_delegation_proof|preflight_delegation_proof_batch|pending_delegation_proof_batch|data_certificate|RootDataCertificateUnavailable' crates/canic-core/src/api/auth crates/canic-core/src/ops/auth/delegation crates/canic-core/src/workflow/runtime/auth crates/canic/src -g '*.rs'
+rg -n 'upsert_root_issuer_policy|upsert_root_issuer_renewal_template|prepare_due_chain_key_root_delegation_batch|sign_next_chain_key_root_delegation_batch|get_or_create_chain_key_delegation_proof|start_next_chain_key_root_delegation_batch_install|install_active_delegation_proof|ChainKeyRootDelegationBatch|RootDelegationProofBatch' crates/canic-core/src/api/auth crates/canic-core/src/ops/auth/delegation crates/canic-core/src/workflow/runtime/auth crates/canic/src -g '*.rs'
 ```
 
 Expected:
 
-- root policy upsert, batch prepare, direct root get, and root batch install
-  require root/controller authority before state mutation or proof broadcast;
-- batch prepare validates request metadata, replay/idempotency, quotas, issuer
-  policy, TTL, audience, and grants before root proof preparation;
-- direct root query get validates pending metadata and retrieval expiry before
-  assembling proofs from root certified data;
-- install preflight validates submitted proof issuer, cert hash, expiry, and
-  pending metadata before issuer install calls;
+- root policy/template updates require root/controller authority before state
+  mutation;
+- timer renewal and internal registered-issuer lazy repair validate chain-key
+  mode, signer policy, quotas, issuer policy, TTL, audience, and grants before
+  root proof preparation;
+- root signing covers canonical batch header material only, not login/session
+  payloads;
+- install planning validates persisted signed batch state and materializes
+  issuer proof/witness payloads before issuer install calls;
 - issuer install verifies the root proof and local issuer binding before
   storing active proof state;
-- nested issuer-to-root query retrieval is not treated as a supported proof
+- bridge/direct-query root proof retrieval is not treated as a supported proof
   assembly path.
 
 ### 3b. Delegated Token Issuer Prepare/Get Ordering

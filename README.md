@@ -49,10 +49,10 @@ walkthrough.
 * **Topology-aware config:** [CONFIG.md](CONFIG.md) covers `canic.toml`
   subnets, roles, singleton/replica/shard/instance placement, warm pools,
   scaling pools, sharding pools, and directory pools.
-* **Delegated auth:** Root prepares canister-signature delegation proofs,
-  issuer canisters sign reusable delegated tokens, and endpoint verifiers check
-  the self-contained token, embedded root proof, issuer proof, audience,
-  subject, and scopes locally. See
+* **Delegated auth:** Root renews chain-key batch delegation proofs, issuer
+  canisters sign reusable delegated tokens, and endpoint verifiers check the
+  self-contained token, embedded root proof, issuer proof, audience, subject,
+  and scopes locally. See
   [AUTH_DELEGATED_SIGNATURES.md](docs/contracts/AUTH_DELEGATED_SIGNATURES.md).
 * **Thin-root install flow:** The CLI stages ordinary child artifacts through
   the implicit `wasm_store` and keeps child artifacts out of the root Wasm. See

@@ -24,7 +24,7 @@ logic, not local formatting or tests that intentionally keep setup nearby.
 - evidence envelope, provenance, policy-gate, or catalog output changes
 - packaged or installed release-proof script changes
 - large module splits or follow-up cleanup passes
-- root proof provisioning prepare/get/install, active proof status, or
+- root proof renewal, chain-key lazy repair, active proof status, or
   delegated-token proof lifecycle changes
 
 ## Report Preamble
@@ -107,7 +107,7 @@ rg -n "target/debug/canic|CARGO_HOME|CARGO_TARGET_DIR|TMPDIR|mktemp|cargo packag
 Root proof provisioning and delegated-auth lifecycle ownership:
 
 ```bash
-rg -n "RootDelegationProofBatch|DelegationProofBatch|ActiveDelegationProof|RootIssuerPolicy|prepare_delegation_proof_batch|get_delegation_proof_batch|install_delegation_proof_batch|install_active_delegation_proof|active_delegation_proof_status|AuthProofVerifierConfig" crates/canic-core/src crates/canic/src crates/canic-control-plane/src -g '*.rs'
+rg -n "RootDelegationProofBatch|ChainKeyRootDelegationBatch|ActiveDelegationProof|RootIssuerPolicy|prepare_due_chain_key_root_delegation_batch|get_or_create_chain_key_delegation_proof|start_next_chain_key_root_delegation_batch_install|install_active_delegation_proof|active_delegation_proof_status|AuthProofVerifierConfig" crates/canic-core/src crates/canic/src crates/canic-control-plane/src -g '*.rs'
 ```
 
 ## Evaluation Checklist

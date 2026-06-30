@@ -127,7 +127,7 @@ fn info_medic_command() -> ClapCommand {
             value_arg(AUTH_RENEWAL_ARG)
                 .long(AUTH_RENEWAL_ARG)
                 .value_name("issuer-principal")
-                .help("Run targeted delegated-auth renewal drift diagnostics"),
+                .help("Run targeted chain-key auth renewal drift diagnostics"),
         )
         .arg(internal_network_arg())
         .arg(internal_icp_arg())

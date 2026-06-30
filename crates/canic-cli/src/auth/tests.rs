@@ -28,6 +28,16 @@ fn parses_renewal_status_options() {
 }
 
 #[test]
+fn renewal_help_names_chain_key_status_surface() {
+    let text = render_usage(renewal_command);
+
+    assert!(text.contains("Inspect root-managed chain-key delegation proof renewal"));
+    assert!(text.contains("status"));
+    assert!(!text.contains("run-once"));
+    assert!(!text.contains("provisioner"));
+}
+
+#[test]
 fn top_level_forwards_auth_global_icp_and_network() {
     let err = run([
         OsString::from("--icp"),

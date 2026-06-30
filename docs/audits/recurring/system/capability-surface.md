@@ -216,7 +216,7 @@ Suggested scans:
 
 ```bash
 rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_' crates/canic/src/macros/endpoints -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^  canic_.*_admin :' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
 ```
@@ -226,7 +226,9 @@ Required checks:
 - admin/controller-only endpoints are not exposed outside intended bundles
 - shared parent/cycles receiver surface exists where expected
 - root-only families are not present on non-root canisters unless explicitly intended
-- root proof provisioning endpoints are root-only and controller-gated
+- root issuer policy/template/status endpoints are root-only and controller-gated
+- chain-key lazy-repair proof retrieval is root-only, internal, and
+  registered-subnet gated
 - issuer-local delegated-token endpoints are not present on root unless explicitly intended
 - protocol constant removals/renames are called out in compatibility notes
 
@@ -308,9 +310,9 @@ roles.
 Suggested scans:
 
 ```bash
-rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```
 
 For each notable endpoint family, record:
@@ -322,10 +324,10 @@ For each notable endpoint family, record:
 
 At minimum, classify these auth/provisioning families when present:
 
-- root proof provisioning: `canic_upsert_root_issuer_policy`,
-  `canic_prepare_delegation_proof_batch`,
-  `canic_get_delegation_proof_batch`,
-  `canic_install_delegation_proof_batch`
+- root delegated-auth renewal: `canic_upsert_root_issuer_policy`,
+  `canic_upsert_root_issuer_renewal_template`,
+  `canic_root_issuer_renewal_status`,
+  `canic_get_or_create_chain_key_delegation_proof`
 - issuer-local delegated token: `canic_prepare_delegated_token`,
   `canic_get_delegated_token`, `canic_install_active_delegation_proof`,
   `canic_active_delegation_proof_status`
@@ -567,7 +569,7 @@ rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^pub const ' crates/canic-core/src/protocol.rs
 rg -n '^pub const ' crates/canic/src/protocol.rs
 rg -n '^  canic_' .icp/local/canisters -g '*.did'
-rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_prepare_delegation_proof_batch|canic_get_delegation_proof_batch|canic_install_delegation_proof_batch|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 

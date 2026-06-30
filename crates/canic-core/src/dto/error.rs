@@ -78,12 +78,12 @@ impl Error {
         Self::new(ErrorCode::Unavailable, message.into())
     }
 
-    // 503 – Root proof retrieval was not run in a direct root query context.
+    // 503 – Role-attestation proof retrieval was not run in a direct root query context.
     #[must_use]
     pub fn root_data_certificate_unavailable() -> Self {
         Self::new(
             ErrorCode::RootDataCertificateUnavailable,
-            "root data certificate unavailable for delegation proof retrieval".to_string(),
+            "root data certificate unavailable for role-attestation proof retrieval".to_string(),
         )
     }
 }

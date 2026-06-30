@@ -196,9 +196,9 @@ Expected:
 - delegated-token prepare workflow may validate the public self-prepare policy
   through `domain::policy` and request issuer proof material from `AuthOps`.
   It must not verify inbound endpoint tokens.
-- root proof provisioning workflow may require root through env ops and ask
-  auth ops to validate pending batch metadata; issuer registry policy,
-  certificate hash verification, active proof verification, and retrieval ACLs
+- root proof renewal workflow may require root through env ops and ask auth ops
+  to prepare/sign/plan persisted chain-key batches; issuer registry policy,
+  certificate equality, active proof verification, and signer policy checks
   remain outside workflow.
 
 ### 6. Blob-Storage Billing Boundary
@@ -247,7 +247,7 @@ Workflow may orchestrate replay, cost guards, and durable intents, but ownership
 of replay/cost/intent state and codec behavior must remain below workflow.
 
 ```bash
-rg -n 'ReplayReceipt|ReplayReceiptDecision|ReplayReceiptToken|reserve_or_replay|commit_receipt|abort_reserved|mark_recovery_required|CostGuardOps|CostGuardRequest|CostGuardPermit|IntentStoreOps|try_reserve|commit_at|abort\\(|request_id|prepare_delegation_proof_batch|install_delegation_proof_batch|preflight_delegation_proof_batch_install_proof' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
+rg -n 'ReplayReceipt|ReplayReceiptDecision|ReplayReceiptToken|reserve_or_replay|commit_receipt|abort_reserved|mark_recovery_required|CostGuardOps|CostGuardRequest|CostGuardPermit|IntentStoreOps|try_reserve|commit_at|abort\\(|request_id|prepare_due_chain_key_root_delegation_batch|sign_next_chain_key_root_delegation_batch|start_next_chain_key_root_delegation_batch_install|get_or_create_chain_key_delegation_proof' crates/canic-core/src/workflow -g '*.rs' --glob '!**/tests.rs'
 ```
 
 Expected:
