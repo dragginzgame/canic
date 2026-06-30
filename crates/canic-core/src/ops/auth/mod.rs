@@ -25,7 +25,9 @@ pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
 pub use types::{
-    AuthProofVerifierConfig, PrepareDelegatedTokenIssuerProofInput,
+    AuthChainKeyRootVerifierConfig, AuthProofVerifierConfig,
+    ChainKeyRootDelegationBatchSigningResult, ChainKeyRootDelegationBatchSweepResult,
+    PrepareChainKeyRootDelegationBatchInput, PrepareDelegatedTokenIssuerProofInput,
     PrepareRootRoleAttestationInput, PreparedDelegatedTokenIssuerProof,
     PreparedRootDelegationProof, PreparedRootRoleAttestation, VerifyDelegatedTokenRuntimeInput,
 };

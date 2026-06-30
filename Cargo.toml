@@ -85,6 +85,7 @@ ic-query = { version = "0.5.23", default-features = false, features = ["host"] }
 ic-signature-verification = "0.3.0"
 ic-testkit = "0.1.11"
 icrc-ledger-types = { version = "0.2", default-features = false }
+k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 remain = "0.2"

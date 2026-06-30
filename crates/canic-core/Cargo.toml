@@ -38,6 +38,7 @@ ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
 ic-signature-verification = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }
+k256 = { workspace = true }
 remain = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }

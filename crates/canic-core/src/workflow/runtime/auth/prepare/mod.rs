@@ -14,15 +14,18 @@ use crate::{
         auth::{
             AuthRequestMetadata, DelegatedRoleGrant, DelegatedTokenPrepareRequest,
             DelegatedTokenPrepareResponse, DelegationAudience, RoleAttestationPrepareResponse,
-            RoleAttestationRequest,
+            RoleAttestationRequest, RootDelegationProofBatchProof,
         },
-        error::Error,
+        error::{Error, ErrorCode},
         rpc::RootRequestMetadata,
     },
     ops::{
         auth::{AuthOps, PrepareDelegatedTokenIssuerProofInput, PrepareRootRoleAttestationInput},
         config::ConfigOps,
-        ic::IcOps,
+        ic::{
+            IcOps,
+            call::{CallOps, CallResult},
+        },
         replay::{
             self as replay_ops, DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
@@ -40,8 +43,10 @@ use crate::{
         runtime::env::EnvOps,
         storage::registry::subnet::SubnetRegistryOps,
     },
+    protocol,
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
+use std::future::Future;
 
 const ROLE_ATTESTATION_REPLAY_COMMAND_KIND: &str = "auth.prepare_role_attestation.v1";
 const MAX_ROLE_ATTESTATION_REPLAY_TTL_NS: u64 = 300_000_000_000;
@@ -50,7 +55,7 @@ const MAX_TOKEN_REPLAY_TTL_NS: u64 = 300_000_000_000;
 
 impl RuntimeAuthWorkflow {
     /// Prepare a delegated token from issuer-local root-certified delegation material.
-    pub fn prepare_delegated_token(
+    pub async fn prepare_delegated_token(
         request: DelegatedTokenPrepareRequest,
     ) -> Result<DelegatedTokenPrepareResponse, InternalError> {
         let label = "delegated token prepare";
@@ -78,17 +83,20 @@ impl RuntimeAuthWorkflow {
             decision => return map_token_prepare_replay_decision(decision),
         };
 
-        let prepared = match AuthOps::prepare_delegated_token_issuer_proof(
-            PrepareDelegatedTokenIssuerProofInput {
-                subject: request.subject,
-                audience: request.aud,
-                grants: request.grants,
-                ttl_ns: request.ttl_ns,
-                ext: request.ext,
-            },
+        let prepare_input = PrepareDelegatedTokenIssuerProofInput {
+            subject: request.subject,
+            audience: request.aud,
+            grants: request.grants,
+            ttl_ns: request.ttl_ns,
+            ext: request.ext,
+        };
+        let prepared = match prepare_delegated_token_with_lazy_repair(
+            prepare_input,
             metadata.request_id,
             caller,
-        ) {
+        )
+        .await
+        {
             Ok(prepared) => prepared,
             Err(err) => {
                 abort_reserved_receipt(&token);
@@ -195,6 +203,77 @@ impl RuntimeAuthWorkflow {
         );
         Ok(response)
     }
+}
+
+async fn prepare_delegated_token_with_lazy_repair(
+    input: PrepareDelegatedTokenIssuerProofInput,
+    operation_id: [u8; 32],
+    prepared_by: Principal,
+) -> Result<crate::ops::auth::PreparedDelegatedTokenIssuerProof, InternalError> {
+    prepare_delegated_token_with_lazy_repair_using(
+        input,
+        operation_id,
+        prepared_by,
+        AuthOps::prepare_delegated_token_issuer_proof,
+        repair_active_delegation_proof_from_root,
+    )
+    .await
+}
+
+async fn prepare_delegated_token_with_lazy_repair_using<T, P, R, Fut>(
+    input: PrepareDelegatedTokenIssuerProofInput,
+    operation_id: [u8; 32],
+    prepared_by: Principal,
+    mut prepare: P,
+    repair: R,
+) -> Result<T, InternalError>
+where
+    P: FnMut(
+        PrepareDelegatedTokenIssuerProofInput,
+        [u8; 32],
+        Principal,
+    ) -> Result<T, InternalError>,
+    R: FnOnce() -> Fut,
+    Fut: Future<Output = Result<(), InternalError>>,
+{
+    match prepare(input.clone(), operation_id, prepared_by) {
+        Ok(prepared) => Ok(prepared),
+        Err(err) if delegated_token_prepare_error_allows_lazy_repair(&err) => {
+            repair().await?;
+            prepare(input, operation_id, prepared_by)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn delegated_token_prepare_error_allows_lazy_repair(err: &InternalError) -> bool {
+    err.public_error().is_some_and(|public| {
+        matches!(
+            public.code,
+            ErrorCode::AuthMaterialStale | ErrorCode::AuthProofExpired
+        )
+    })
+}
+
+async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError> {
+    let verifier = AuthOps::auth_proof_verifier_config()?;
+    let root_canister_id = verifier.root_canister_id;
+    let call = CallOps::unbounded_wait(
+        root_canister_id,
+        protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
+    )
+    .execute()
+    .await?;
+    let proof = chain_key_delegation_proof_from_root_call(call)?;
+    AuthOps::install_active_delegation_proof(proof.proof, root_canister_id)?;
+    Ok(())
+}
+
+fn chain_key_delegation_proof_from_root_call(
+    call: CallResult,
+) -> Result<RootDelegationProofBatchProof, InternalError> {
+    let result: Result<RootDelegationProofBatchProof, Error> = call.candid()?;
+    result.map_err(InternalError::public)
 }
 
 fn validate_role_attestation_request(
@@ -579,6 +658,8 @@ mod tests {
         dto::error::ErrorCode,
         ids::{CanisterRole, cap},
     };
+    use futures::executor::block_on;
+    use std::cell::Cell;
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -607,6 +688,146 @@ mod tests {
             ttl_ns: 30_000_000_000,
             ext: None,
         }
+    }
+
+    fn token_prepare_input() -> PrepareDelegatedTokenIssuerProofInput {
+        let request = token_prepare_request(1);
+        PrepareDelegatedTokenIssuerProofInput {
+            subject: request.subject,
+            audience: request.aud,
+            grants: request.grants,
+            ttl_ns: request.ttl_ns,
+            ext: request.ext,
+        }
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_retries_once_after_stale_material() {
+        let input = token_prepare_input();
+        let operation_id = [7; 32];
+        let prepared_by = p(8);
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+
+        let prepared = block_on(prepare_delegated_token_with_lazy_repair_using(
+            input.clone(),
+            operation_id,
+            prepared_by,
+            |observed, observed_operation_id, observed_prepared_by| {
+                assert_eq!(observed.subject, input.subject);
+                assert_eq!(observed.ttl_ns, input.ttl_ns);
+                assert_eq!(observed_operation_id, operation_id);
+                assert_eq!(observed_prepared_by, prepared_by);
+                let call = prepare_calls.get();
+                prepare_calls.set(call + 1);
+                if call == 0 {
+                    Err(InternalError::auth_material_stale(
+                        "active delegation proof is stale",
+                    ))
+                } else {
+                    Ok(42_u8)
+                }
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Ok(())
+            },
+        ))
+        .expect("lazy repair should retry and return prepared material");
+
+        assert_eq!(prepared, 42);
+        assert_eq!(prepare_calls.get(), 2);
+        assert_eq!(repair_calls.get(), 1);
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_does_not_call_root_when_prepare_succeeds() {
+        let input = token_prepare_input();
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+
+        let prepared = block_on(prepare_delegated_token_with_lazy_repair_using(
+            input,
+            [10; 32],
+            p(8),
+            |_, _, _| {
+                prepare_calls.set(prepare_calls.get() + 1);
+                Ok(7_u8)
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Ok(())
+            },
+        ))
+        .expect("fresh local active proof should prepare without root repair");
+
+        assert_eq!(prepared, 7);
+        assert_eq!(prepare_calls.get(), 1);
+        assert_eq!(repair_calls.get(), 0);
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_returns_pending_without_second_prepare_attempt() {
+        let input = token_prepare_input();
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+
+        let err = block_on(prepare_delegated_token_with_lazy_repair_using(
+            input,
+            [8; 32],
+            p(8),
+            |_, _, _| -> Result<u8, InternalError> {
+                prepare_calls.set(prepare_calls.get() + 1);
+                Err(InternalError::auth_proof_expired(
+                    "active delegation proof expired",
+                ))
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Err(InternalError::public(Error::unavailable(
+                    "chain-key root delegation proof is not available yet; retry",
+                )))
+            },
+        ))
+        .expect_err("pending root repair must not issue a token");
+
+        assert_eq!(
+            err.public_error().expect("public error").code,
+            ErrorCode::Unavailable
+        );
+        assert_eq!(prepare_calls.get(), 1);
+        assert_eq!(repair_calls.get(), 1);
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_does_not_run_for_non_repairable_errors() {
+        let input = token_prepare_input();
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+
+        let err = block_on(prepare_delegated_token_with_lazy_repair_using(
+            input,
+            [9; 32],
+            p(8),
+            |_, _, _| -> Result<u8, InternalError> {
+                prepare_calls.set(prepare_calls.get() + 1);
+                Err(InternalError::public(Error::forbidden(
+                    "delegated token prepare subject must match caller",
+                )))
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Ok(())
+            },
+        ))
+        .expect_err("non-repairable error should pass through");
+
+        assert_eq!(
+            err.public_error().expect("public error").code,
+            ErrorCode::Forbidden
+        );
+        assert_eq!(prepare_calls.get(), 1);
+        assert_eq!(repair_calls.get(), 0);
     }
 
     #[test]

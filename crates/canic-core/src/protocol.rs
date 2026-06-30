@@ -11,6 +11,8 @@ pub const CANIC_PREPARE_DELEGATION_PROOF_BATCH: &str = "canic_prepare_delegation
 pub const CANIC_GET_DELEGATION_PROOF_BATCH: &str = "canic_get_delegation_proof_batch";
 pub const CANIC_GET_DELEGATION_RENEWAL_PROOF_BATCH: &str =
     "canic_get_delegation_renewal_proof_batch";
+pub const CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF: &str =
+    "canic_get_or_create_chain_key_delegation_proof";
 pub const CANIC_UPSERT_DELEGATION_RENEWAL_PROVISIONER: &str =
     "canic_upsert_delegation_renewal_provisioner";
 pub const CANIC_DELEGATION_RENEWAL_PROVISIONERS: &str = "canic_delegation_renewal_provisioners";

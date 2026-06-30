@@ -6,15 +6,19 @@
 //! broadcast issuer-local install requests.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
+    config::schema::DelegatedTokenConfig,
+    domain::auth::DelegatedAuthNetwork,
     dto::{
         auth::{
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             RootDelegationProofBatchInstallRequest, RootDelegationProofBatchInstallResponse,
-            RootDelegationProofBatchInstallResult, RootDelegationProofInstallOutcome,
+            RootDelegationProofBatchInstallResult, RootDelegationProofBatchProof,
+            RootDelegationProofInstallOutcome,
         },
         error::Error,
     },
+    ids::BuildNetwork,
     ops::{
         auth::AuthOps,
         ic::{
@@ -29,6 +33,33 @@ use crate::{
 use std::future::Future;
 
 impl RuntimeAuthWorkflow {
+    /// Return or create one chain-key root delegation proof for the calling issuer.
+    pub async fn get_or_create_chain_key_delegation_proof_for_issuer_root(
+        issuer_pid: Principal,
+    ) -> Result<RootDelegationProofBatchProof, InternalError> {
+        EnvOps::require_root()?;
+        let config = crate::ops::config::ConfigOps::delegated_tokens_config()?;
+        require_chain_key_root_proof_mode(&config)?;
+        let build_network = build_network_from_delegated_auth_config(&config)?;
+        let max_cert_ttl_ns = delegated_token_max_ttl_ns(&config)?;
+        let min_accepted_proof_epoch = chain_key_min_accepted_proof_epoch(&config)?;
+        let now_ns = IcOps::now_nanos();
+
+        AuthOps::get_or_create_chain_key_delegation_proof_for_issuer(
+            issuer_pid,
+            build_network,
+            max_cert_ttl_ns,
+            min_accepted_proof_epoch,
+            now_ns,
+        )
+        .await?
+        .ok_or_else(|| {
+            InternalError::public(Error::unavailable(
+                "chain-key root delegation proof is not available yet; retry",
+            ))
+        })
+    }
+
     /// Install retrieved root delegation proofs on issuer canisters.
     pub async fn install_delegation_proof_batch_root(
         request: RootDelegationProofBatchInstallRequest,
@@ -42,6 +73,59 @@ impl RuntimeAuthWorkflow {
         )
         .await
     }
+}
+
+pub(super) async fn install_chain_key_delegation_proof_batch(
+    request: RootDelegationProofBatchInstallRequest,
+    now_ns: u64,
+) -> Result<bool, InternalError> {
+    install_chain_key_delegation_proof_batch_with_issuer_install(
+        request,
+        now_ns,
+        install_delegation_proof_on_issuer,
+    )
+    .await
+}
+
+async fn install_chain_key_delegation_proof_batch_with_issuer_install<F, Fut>(
+    request: RootDelegationProofBatchInstallRequest,
+    now_ns: u64,
+    mut install_issuer: F,
+) -> Result<bool, InternalError>
+where
+    F: FnMut(Principal, InstallActiveDelegationProofRequest) -> Fut,
+    Fut: Future<Output = RootDelegationProofInstallOutcome>,
+{
+    let mut installed_any = false;
+    for proof in request.proofs {
+        let issuer_pid = proof.issuer_pid;
+        let cert_hash = proof.cert_hash;
+        let outcome = install_issuer(
+            issuer_pid,
+            InstallActiveDelegationProofRequest { proof: proof.proof },
+        )
+        .await;
+        match outcome {
+            RootDelegationProofInstallOutcome::Installed
+            | RootDelegationProofInstallOutcome::AlreadyInstalled => {
+                installed_any = AuthOps::record_chain_key_root_delegation_install_success(
+                    request.batch_id,
+                    issuer_pid,
+                    cert_hash,
+                    now_ns,
+                ) || installed_any;
+            }
+            outcome => {
+                AuthOps::record_chain_key_root_delegation_install_failure(
+                    request.batch_id,
+                    issuer_pid,
+                    cert_hash,
+                    outcome,
+                );
+            }
+        }
+    }
+    Ok(installed_any)
 }
 
 async fn install_delegation_proof_batch_with_issuer_install<F, Fut>(
@@ -152,6 +236,50 @@ fn issuer_install_outcome(call: CallResult) -> RootDelegationProofInstallOutcome
         Ok(_) => RootDelegationProofInstallOutcome::Installed,
         Err(_) => RootDelegationProofInstallOutcome::RejectedBySigner,
     }
+}
+
+fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<(), InternalError> {
+    if config.root_proof_mode.trim() == "chain_key_batch" {
+        return Ok(());
+    }
+    Err(InternalError::invariant(
+        InternalErrorOrigin::Workflow,
+        "0.76 delegated-auth lazy repair requires root_proof_mode=\"chain_key_batch\"",
+    ))
+}
+
+fn build_network_from_delegated_auth_config(
+    config: &DelegatedTokenConfig,
+) -> Result<BuildNetwork, InternalError> {
+    let network = DelegatedAuthNetwork::parse(config.network.trim()).ok_or_else(|| {
+        InternalError::invalid_input(
+            "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet",
+        )
+    })?;
+    if network.is_mainnet() {
+        Ok(BuildNetwork::Ic)
+    } else {
+        Ok(BuildNetwork::Local)
+    }
+}
+
+fn delegated_token_max_ttl_ns(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {
+    let max_ttl_secs = config.max_ttl_secs.unwrap_or(24 * 60 * 60);
+    max_ttl_secs.checked_mul(1_000_000_000).ok_or_else(|| {
+        InternalError::invalid_input("auth.delegated_tokens.max_ttl_secs overflows nanoseconds")
+    })
+}
+
+fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {
+    config
+        .chain_key_root_proof
+        .min_accepted_proof_epoch
+        .ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "auth.delegated_tokens.chain_key_root_proof.min_accepted_proof_epoch is required for chain-key lazy repair",
+            )
+        })
 }
 
 // -----------------------------------------------------------------------------

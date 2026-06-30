@@ -8,12 +8,12 @@ use crate::{
     cdk::candid::Principal,
     config::schema::{
         AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-        CanisterPool, ConfigModel, CyclesFundingPolicyConfig, DelegatedTokenConfig,
-        DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy,
-        LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport, RandomnessConfig,
-        RandomnessSource, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
-        ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        CanisterPool, ChainKeyRootProofConfig, ConfigModel, CyclesFundingPolicyConfig,
+        DelegatedTokenConfig, DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool,
+        FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
+        RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
+        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
+        ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{CanisterRole, SubnetRole},
 };
@@ -218,7 +218,9 @@ fn render_standards(standards: &Standards) -> TokenStream {
 fn render_log_config(config: &LogConfig) -> TokenStream {
     let max_entries = config.max_entries;
     let max_entry_bytes = config.max_entry_bytes;
-    let max_age_secs = render_option(config.max_age_secs.as_ref(), |value| quote!(#value));
+    let max_age_secs = render_option(config.max_age_secs.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::LogConfig {
@@ -252,16 +254,81 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
         render_option(config.ic_root_public_key_raw_hex.as_ref(), |value| {
             render_owned_string(value)
         });
+    let root_proof_mode = render_owned_string(&config.root_proof_mode);
+    let chain_key_root_proof = render_chain_key_root_proof_config(&config.chain_key_root_proof);
     let network = render_owned_string(&config.network);
-    let max_ttl_secs = render_option(config.max_ttl_secs.as_ref(), |value| quote!(#value));
+    let max_ttl_secs = render_option(config.max_ttl_secs.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::DelegatedTokenConfig {
             enabled: #enabled,
             root_canister_id: #root_canister_id,
             ic_root_public_key_raw_hex: #ic_root_public_key_raw_hex,
+            root_proof_mode: #root_proof_mode,
+            chain_key_root_proof: #chain_key_root_proof,
             network: #network,
             max_ttl_secs: #max_ttl_secs,
+        }
+    }
+}
+
+fn render_chain_key_root_proof_config(config: &ChainKeyRootProofConfig) -> TokenStream {
+    let key_id = render_option(config.key_id.as_ref(), |value| render_owned_string(value));
+    let derivation_path_hash_hex =
+        render_option(config.derivation_path_hash_hex.as_ref(), |value| {
+            render_owned_string(value)
+        });
+    let derivation_path_hex = render_option(config.derivation_path_hex.as_ref(), |components| {
+        render_vec(components.iter(), |component| {
+            render_owned_string(component)
+        })
+    });
+    let public_key_hex = render_option(config.public_key_hex.as_ref(), |value| {
+        render_owned_string(value)
+    });
+    let key_version = render_option(config.key_version.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
+    let min_accepted_key_version =
+        render_option(config.min_accepted_key_version.as_ref(), |value| {
+            render_u64_literal(*value)
+        });
+    let min_accepted_proof_epoch =
+        render_option(config.min_accepted_proof_epoch.as_ref(), |value| {
+            render_u64_literal(*value)
+        });
+    let min_accepted_registry_epoch =
+        render_option(config.min_accepted_registry_epoch.as_ref(), |value| {
+            render_u64_literal(*value)
+        });
+    let valid_from_ns = render_option(config.valid_from_ns.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
+    let accept_until_ns = render_option(config.accept_until_ns.as_ref(), |value| {
+        render_u64_literal(*value)
+    });
+    let max_revocation_latency_ns =
+        render_option(config.max_revocation_latency_ns.as_ref(), |value| {
+            render_u64_literal(*value)
+        });
+    let allow_test_key = config.allow_test_key;
+
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::ChainKeyRootProofConfig {
+            key_id: #key_id,
+            derivation_path_hash_hex: #derivation_path_hash_hex,
+            derivation_path_hex: #derivation_path_hex,
+            public_key_hex: #public_key_hex,
+            key_version: #key_version,
+            min_accepted_key_version: #min_accepted_key_version,
+            min_accepted_proof_epoch: #min_accepted_proof_epoch,
+            min_accepted_registry_epoch: #min_accepted_registry_epoch,
+            valid_from_ns: #valid_from_ns,
+            accept_until_ns: #accept_until_ns,
+            max_revocation_latency_ns: #max_revocation_latency_ns,
+            allow_test_key: #allow_test_key,
         }
     }
 }
@@ -272,7 +339,7 @@ fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream
     let min_accepted_epoch_by_role = render_btree_map(
         config.min_accepted_epoch_by_role.iter(),
         |role| render_owned_string(role),
-        |epoch| quote!(#epoch),
+        |epoch| render_u64_literal(*epoch),
     );
 
     quote! {
@@ -343,7 +410,9 @@ fn render_subnet_config(config: &SubnetConfig) -> TokenStream {
 
 // Render the pool import config for spare canister pools.
 fn render_pool_import(config: &PoolImport) -> TokenStream {
-    let initial = render_option(config.initial.as_ref(), |value| quote!(#value));
+    let initial = render_option(config.initial.as_ref(), |value| {
+        render_u64_literal(u64::from(*value))
+    });
     let local = render_vec(config.local.iter(), render_principal);
     let ic = render_vec(config.ic.iter(), render_principal);
 
@@ -515,6 +584,27 @@ fn render_u128_literal(value: u128) -> TokenStream {
         .expect("valid u128 literal")
 }
 
+// Render a u64 literal with separators so generated code stays clippy-clean.
+fn render_u64_literal(value: u64) -> TokenStream {
+    let digits = value.to_string();
+    let grouped = digits
+        .chars()
+        .rev()
+        .enumerate()
+        .fold(String::new(), |mut acc, (index, ch)| {
+            if index > 0 && index % 3 == 0 {
+                acc.push('_');
+            }
+            acc.push(ch);
+            acc
+        })
+        .chars()
+        .rev()
+        .collect::<String>();
+
+    format!("{grouped}_u64").parse().expect("valid u64 literal")
+}
+
 // Render the automatic top-up policy.
 fn render_topup(policy: &TopupPolicy) -> TokenStream {
     let threshold = render_cycles(policy.threshold.to_u128());
@@ -535,10 +625,10 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
     let enabled = policy.enabled;
     let min_hub_cycles_before_refill = render_cycles(policy.min_hub_cycles_before_refill.to_u128());
     let max_refill_e8s_per_call = policy.max_refill_e8s_per_call;
-    let min_xdr_permyriad_per_icp = render_option(
-        policy.min_xdr_permyriad_per_icp.as_ref(),
-        |value| quote!(#value),
-    );
+    let min_xdr_permyriad_per_icp =
+        render_option(policy.min_xdr_permyriad_per_icp.as_ref(), |value| {
+            render_u64_literal(*value)
+        });
     let ledger_canister_id = render_option(policy.ledger_canister_id.as_ref(), render_principal);
     let cmc_canister_id = render_option(policy.cmc_canister_id.as_ref(), render_principal);
     let allow_ic_system_canister_overrides = policy.allow_ic_system_canister_overrides;

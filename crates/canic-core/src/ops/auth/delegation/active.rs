@@ -13,13 +13,9 @@ use crate::{
         DelegationProof,
     },
     ops::{
-        auth::{
-            AuthValidationError,
-            delegated::active_proof::{
-                InstallActiveDelegationProofInput,
-                install_active_delegation_proof as build_active_delegation_proof,
-            },
-            root_canister_sig::RootPayloadKind,
+        auth::delegated::active_proof::{
+            InstallActiveDelegationProofInput,
+            install_active_delegation_proof as build_active_delegation_proof,
         },
         ic::IcOps,
         storage::auth::AuthStateOps,
@@ -39,22 +35,8 @@ pub(super) fn install_active_delegation_proof(
             this_canister: IcOps::canister_self(),
             now_ns,
         },
-        |cert_hash, root_proof, root_pid| {
-            if root_pid != cfg.root_canister_id {
-                return Err(AuthValidationError::InvalidRootAuthority {
-                    expected: cfg.root_canister_id,
-                    found: root_pid,
-                }
-                .to_string());
-            }
-            AuthOps::verify_root_canister_signature_proof(
-                RootPayloadKind::DelegationCert,
-                cert_hash,
-                root_proof,
-                cfg.root_canister_id,
-                &cfg.ic_root_public_key_raw,
-            )
-            .map_err(|err| err.to_string())
+        |cert, cert_hash, root_proof| {
+            AuthOps::verify_delegation_root_proof(cert, cert_hash, root_proof, &cfg, now_ns)
         },
     )
     .map_err(map_install_active_delegation_proof_error)?;

@@ -7,7 +7,7 @@
 use super::canonical::{CanonicalAuthError, cert_hash};
 use crate::{
     cdk::types::Principal,
-    dto::auth::{ActiveDelegationProof, DelegationProof, RootProof},
+    dto::auth::{ActiveDelegationProof, DelegationCert, DelegationProof, RootProof},
 };
 use thiserror::Error;
 
@@ -49,7 +49,7 @@ pub fn install_active_delegation_proof<V>(
     mut verify_root_proof: V,
 ) -> Result<ActiveDelegationProof, InstallActiveDelegationProofError>
 where
-    V: FnMut([u8; 32], &RootProof, Principal) -> Result<(), String>,
+    V: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), String>,
 {
     let cert = &input.proof.cert;
     if cert.issuer_pid != input.this_canister {
@@ -63,7 +63,7 @@ where
     }
 
     let cert_hash = cert_hash(cert)?;
-    verify_root_proof(cert_hash, &input.proof.root_proof, cert.root_pid)
+    verify_root_proof(cert, cert_hash, &input.proof.root_proof)
         .map_err(InstallActiveDelegationProofError::RootProofInvalid)?;
 
     let not_before_ns = cert.not_before_ns;

@@ -1,6 +1,6 @@
 # Authentication Subnet-State Addendum
 
-- **Status:** superseded by the current canister-signature delegated-token contract
+- **Status:** superseded by the current chain-key batch delegated-token contract
 - **Applies to:** historical ECDSA delegated-token root trust-anchor distribution
 - **Canonical parent:** [Authentication](authentication.md)
 
@@ -13,13 +13,16 @@ The ECDSA-era model distributed
 `SubnetState.auth.delegated_root_public_key` so endpoint guards could verify a
 root ECDSA signature over `DelegationCert` without fetching key material during
 queries. That was correct for the old root-threshold-ECDSA design, but 0.65
-hard-cuts delegated root proofs to IC canister signatures.
+hard-cut delegated root proofs to IC canister signatures and 0.76 hard-cuts
+delegated-token root proofs again to IC chain-key batch signatures.
 
 Current delegated-token verification uses:
 
 - configured root canister id
-- configured network label paired with the effective raw IC root public key
-- embedded `RootProof::IcCanisterSignatureV1`
+- configured chain-key root verifier policy
+- embedded `RootProof::IcChainKeyBatchSignatureV1`
+- configured network label paired with the effective raw IC root public key for
+  issuer canister-signature proof verification
 - embedded `IssuerProof::IcCanisterSignatureV1`
 
 It does not read `SubnetState.auth.delegated_root_public_key` for delegated-token
@@ -33,6 +36,8 @@ The following constraints still apply:
 - delegated-token verification must not require proof fanout or proof catch-up
 - caches are performance hints, not authority
 - root-provided role-attestation key material must not be retagged locally
+- delegated-token liveness must not depend on bridge-backed or direct-query
+  root proof renewal
 
 The `SubnetState` root-public-key fields may remain in code for unrelated
 historical or capability paths until the full auth churn cleanup removes or

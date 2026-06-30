@@ -9,8 +9,10 @@ use crate::{
     infra::ic::mgmt::{
         InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterSnapshot,
         InfraCanisterStatusResult, InfraCanisterStatusType, InfraDefiniteCanisterSettings,
+        InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult,
         InfraEnvironmentVariable, InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats,
-        InfraUpdateSettingsArgs, InfraUpgradeFlags, InfraWasmMemoryPersistence,
+        InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult, InfraUpdateSettingsArgs,
+        InfraUpgradeFlags, InfraWasmMemoryPersistence,
     },
     ops::prelude::*,
 };
@@ -97,6 +99,79 @@ pub struct UpdateSettingsArgs {
     pub canister_id: Principal,
     pub settings: CanisterSettings,
     pub sender_canister_version: Option<u64>,
+}
+
+///
+/// EcdsaCurve
+///
+/// Operations-layer ECDSA curve selector for management-canister chain-key calls.
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum EcdsaCurve {
+    #[default]
+    Secp256k1,
+}
+
+///
+/// EcdsaKeyId
+///
+/// Operations-layer ECDSA key id for management-canister chain-key calls.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EcdsaKeyId {
+    pub curve: EcdsaCurve,
+    pub name: String,
+}
+
+///
+/// EcdsaPublicKeyArgs
+///
+/// Operations-layer arguments for the management-canister ECDSA public-key API.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EcdsaPublicKeyArgs {
+    pub canister_id: Option<Principal>,
+    pub derivation_path: Vec<Vec<u8>>,
+    pub key_id: EcdsaKeyId,
+}
+
+///
+/// EcdsaPublicKeyResult
+///
+/// Operations-layer result for the management-canister ECDSA public-key API.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EcdsaPublicKeyResult {
+    pub public_key: Vec<u8>,
+    pub chain_code: Vec<u8>,
+}
+
+///
+/// SignWithEcdsaArgs
+///
+/// Operations-layer arguments for the management-canister ECDSA signing API.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignWithEcdsaArgs {
+    pub message_hash: [u8; 32],
+    pub derivation_path: Vec<Vec<u8>>,
+    pub key_id: EcdsaKeyId,
+}
+
+///
+/// SignWithEcdsaResult
+///
+/// Operations-layer result for the management-canister ECDSA signing API.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignWithEcdsaResult {
+    pub signature: Vec<u8>,
 }
 
 ///
@@ -338,5 +413,49 @@ pub(super) fn update_settings_to_infra(args: &UpdateSettingsArgs) -> InfraUpdate
         canister_id: args.canister_id,
         settings: settings_to_infra(&args.settings),
         sender_canister_version: Some(cdk::api::canister_version()),
+    }
+}
+
+pub(super) fn ecdsa_public_key_args_to_infra(args: &EcdsaPublicKeyArgs) -> InfraEcdsaPublicKeyArgs {
+    InfraEcdsaPublicKeyArgs {
+        canister_id: args.canister_id,
+        derivation_path: args.derivation_path.clone(),
+        key_id: ecdsa_key_id_to_infra(&args.key_id),
+    }
+}
+
+pub(super) fn ecdsa_public_key_from_infra(
+    result: InfraEcdsaPublicKeyResult,
+) -> EcdsaPublicKeyResult {
+    EcdsaPublicKeyResult {
+        public_key: result.public_key,
+        chain_code: result.chain_code,
+    }
+}
+
+pub(super) fn sign_with_ecdsa_args_to_infra(args: &SignWithEcdsaArgs) -> InfraSignWithEcdsaArgs {
+    InfraSignWithEcdsaArgs {
+        message_hash: args.message_hash.to_vec(),
+        derivation_path: args.derivation_path.clone(),
+        key_id: ecdsa_key_id_to_infra(&args.key_id),
+    }
+}
+
+pub(super) fn sign_with_ecdsa_from_infra(result: InfraSignWithEcdsaResult) -> SignWithEcdsaResult {
+    SignWithEcdsaResult {
+        signature: result.signature,
+    }
+}
+
+fn ecdsa_key_id_to_infra(key_id: &EcdsaKeyId) -> InfraEcdsaKeyId {
+    InfraEcdsaKeyId {
+        curve: ecdsa_curve_to_infra(key_id.curve),
+        name: key_id.name.clone(),
+    }
+}
+
+const fn ecdsa_curve_to_infra(curve: EcdsaCurve) -> InfraEcdsaCurve {
+    match curve {
+        EcdsaCurve::Secp256k1 => InfraEcdsaCurve::Secp256k1,
     }
 }

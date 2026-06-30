@@ -6,6 +6,7 @@
 
 pub(super) const ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: &str =
     "root_canister_signature_prepare.quota.v1";
+pub(super) const ROOT_CHAIN_KEY_SIGNING_QUOTA_V1: &str = "root_chain_key_signing.quota.v1";
 pub(super) const ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1: &str =
     "issuer_canister_signature_prepare.quota.v1";
 pub(super) const DEPLOYMENT_QUOTA_V1: &str = "deployment.quota.v1";

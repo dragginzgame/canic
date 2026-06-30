@@ -9,18 +9,22 @@ Canonical trust chain:
 
 ```text
 configured root principal
-  + configured raw IC root public key
-  -> embedded root canister-signature proof
-  -> root-certified DelegationCert
+  + configured chain-key root verifier policy
+  -> embedded RootProof::IcChainKeyBatchSignatureV1
+  -> root-signed batch header
+  -> issuer Merkle witness
+  -> root-authorized DelegationCert
   -> issuer canister-signature proof
   -> reusable DelegatedToken
 ```
 
-Root no longer signs `DelegationCert` with root threshold ECDSA. Verifiers do
+Root delegation proofs are IC chain-key threshold ECDSA proofs over a canonical
+delegation batch, not IC certified-data canister-signature proofs. Verifiers do
 not read `SubnetState.auth.delegated_root_public_key` when verifying a delegated
 token root proof. A verifier validates locally from the token, configured root
-principal, configured or runtime IC root public key, local project/role config,
-and current IC time.
+principal, configured chain-key root verifier policy, configured or runtime IC
+root public key for the issuer canister-signature proof, local project/role
+config, and current IC time.
 
 Delegated tokens are bearer tokens for the presenting principal. A valid token
 is not consumed by verification and may authorize multiple update or query
@@ -52,13 +56,73 @@ pub enum IssuerProofBinding {
     IcCanisterSignatureV1 { seed_hash: [u8; 32] },
 }
 
+pub enum ChainKeyAlgorithm {
+    EcdsaSecp256k1,
+}
+
+pub struct ChainKeyKeyId {
+    pub name: String,
+}
+
 pub enum RootProof {
     IcCanisterSignatureV1(IcCanisterSignatureProofV1),
+    IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1),
 }
 
 pub struct IcCanisterSignatureProofV1 {
     pub signature_cbor: Vec<u8>,
     pub public_key_der: Vec<u8>,
+}
+
+pub struct IcChainKeyBatchSignatureProofV1 {
+    pub header: ChainKeyBatchHeaderV1,
+    pub delegation_cert: ChainKeyDelegationCertV1,
+    pub issuer_witness: ChainKeyBatchWitnessV1,
+    pub signature: ChainKeyRootSignatureV1,
+}
+
+pub struct ChainKeyBatchHeaderV1 {
+    pub schema_version: u16,
+    pub root_canister_id: Principal,
+    pub batch_id: [u8; 32],
+    pub proof_epoch: u64,
+    pub registry_epoch: u64,
+    pub registry_hash: [u8; 32],
+    pub tree_root: [u8; 32],
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub algorithm: ChainKeyAlgorithm,
+    pub key_id: ChainKeyKeyId,
+    pub derivation_path_hash: [u8; 32],
+    pub key_version: u64,
+}
+
+pub struct ChainKeyDelegationCertV1 {
+    pub root_canister_id: Principal,
+    pub issuer_canister_id: Principal,
+    pub proof_epoch: u64,
+    pub issuer_proof_algorithm: IssuerProofAlgorithm,
+    pub issuer_proof_binding_hash: [u8; 32],
+    pub issuer_proof_binding: IssuerProofBinding,
+    pub max_token_ttl_ns: u64,
+    pub audience: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub registry_epoch: u64,
+    pub registry_hash: [u8; 32],
+}
+
+pub struct ChainKeyRootSignatureV1 {
+    pub algorithm: ChainKeyAlgorithm,
+    pub key_id: ChainKeyKeyId,
+    pub derivation_path: Vec<Vec<u8>>,
+    pub public_key: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+
+pub struct ChainKeyBatchWitnessV1 {
+    pub steps: Vec<ChainKeyBatchWitnessStepV1>,
 }
 
 pub struct DelegationCert {
@@ -131,6 +195,10 @@ Signed structures use `CanicAuthCanonical` rules from
 ```text
 cert_hash     = sha256(canonical_bytes(DelegationCert))
 claims_hash   = sha256(canonical_bytes(DelegatedTokenClaims))
+chain_key_batch_header_hash =
+  sha256(canonical_bytes(ChainKeyBatchHeaderV1))
+chain_key_delegation_cert_hash =
+  sha256(canonical_bytes(ChainKeyDelegationCertV1))
 issuer_proof_binding_hash =
   sha256("canic-issuer-proof-binding-v1" ||
          issuer_pid ||
@@ -146,57 +214,79 @@ noncanonical payloads instead of normalizing them.
 in canonical claims bytes, bounded to 4096 bytes, and interpreted only by
 application endpoints after core delegated-token verification succeeds.
 
-## Root Canister Signature
+## Root Chain-Key Batch Proof
 
-Root proof creation uses the IC canister-signature helper with a single
-certified-data tree under the `"sig"` label.
+Delegated-token root proof creation uses IC management-canister chain-key
+threshold ECDSA. The root canister signs the canonical
+`ChainKeyBatchHeaderV1`, and each issuer receives an issuer-specific
+`ChainKeyDelegationCertV1` plus Merkle witness proving that issuer leaf is
+covered by the signed batch `tree_root`.
 
-Creation input:
-
-```rust
-CanisterSigInputs {
-    seed: b"canic-root-delegation-cert",
-    domain: b"canic-root-delegation-cert",
-    message: &cert_hash,
-}
-```
-
-The signature map stores the hash of:
+The root signing message is:
 
 ```text
-domain_len || domain || cert_hash
+sha256(canonical_bytes(ChainKeyBatchHeaderV1))
 ```
 
-Verification therefore passes those exact message bytes to
-`ic_signature_verification::verify_canister_sig`, not raw `cert_hash`:
+The batch header binds:
 
-```rust
-verify_canister_sig(
-    domain_len || domain || cert_hash,
-    signature_cbor,
-    public_key_der,
-    ic_root_public_key_raw,
-)
-```
+- root canister id
+- batch id
+- proof epoch
+- registry epoch and registry hash
+- Merkle tree root
+- batch validity window
+- algorithm
+- key id
+- derivation path hash
+- key version
 
-`ic_root_public_key_raw` is the 96-byte raw IC BLS root key. TOML may encode it
-as hex, and local/PocketIC tests must use the local root key instead of silently
-using the mainnet key.
+`ChainKeyRootSignatureV1.signature` is the raw secp256k1 ECDSA `r || s`
+signature returned by `sign_with_ecdsa` after signer-side low-s normalization.
+Verifiers reject malformed length, zero components, and high-s signatures.
+`ChainKeyRootSignatureV1.public_key` is the configured SEC1 chain-key public
+key for the root canister, key id, and derivation path. The verifier must not
+treat the proof-supplied public key as authority; it must match configured
+policy.
+
+`DelegationCert` remains the token-facing root certificate and is still hashed
+into `claims.cert_hash`. The embedded `ChainKeyDelegationCertV1` must cohere
+with `DelegationCert` for issuer id, issuer proof algorithm and binding,
+audience, grants, time window, max token TTL, registry epoch, and registry
+hash.
+
+`RootProof::IcCanisterSignatureV1` is a retained historical variant and is
+rejected for 0.76 delegated-token root proof verification. It remains relevant
+only to non-delegated-token surfaces that still use root canister signatures,
+such as role attestation.
 
 ## Issuance Flow
 
-Root proof issuance is update-then-query because IC certified data is committed
-during update execution and the data certificate is available during query
-execution.
+Root proof issuance and renewal are canister-owned. Auth liveness must not
+depend on a bridge worker, CLI, cron job, host daemon, external signer, direct
+root query, or client-side provisioning step.
 
 ```text
-1. provisioner    -> root canic_prepare_delegation_proof_batch update
-2. provisioner    -> root canic_get_delegation_proof_batch direct query
-3. provisioner    -> root canic_install_delegation_proof_batch update
-4. root           -> issuer canic_install_active_delegation_proof update
-5. caller/session -> issuer canic_prepare_delegated_token update
-6. caller/session -> issuer canic_get_delegated_token query
-7. caller/session -> endpoint with DelegatedToken
+1. root timer/update
+   -> prepare due issuer renewal templates
+   -> build canonical chain-key batch
+   -> call management canister sign_with_ecdsa
+   -> persist signed batch
+   -> install issuer-specific proof/witness on issuer canisters
+2. caller/session -> issuer canic_prepare_delegated_token update
+3. caller/session -> issuer canic_get_delegated_token query
+4. caller/session -> endpoint with DelegatedToken
+```
+
+Lazy repair uses the same proof primitive:
+
+```text
+1. issuer canic_prepare_delegated_token update sees missing/stale active proof
+2. issuer -> root canic_get_or_create_chain_key_delegation_proof update
+3. root returns a cached signed proof when possible
+4. root signs at most one in-flight batch when no valid batch exists
+5. issuer verifies and stores the proof
+6. token preparation continues or the retry uses the stored proof
 ```
 
 The public delegated-token prepare endpoint is a login/session materialization
@@ -211,53 +301,32 @@ or updates the issuer policy used by batch prepare. It records the issuer
 principal, enabled state, allowed audiences, allowed grants, maximum
 certificate TTL, and refresh-after ratio.
 
-`canic_prepare_delegation_proof_batch` is request-id keyed. The same provision
-request id and payload returns the same prepared batch metadata; the same
-request id with a different payload is a replay conflict. The first fresh
-prepare adds signature-map entries, refreshes certified data, and stores
-pending batch metadata. Prepare rejects issuers that have not first been
-registered through root issuer policy.
+Root-managed renewal stores enabled issuer renewal templates, a delegated-auth
+registry epoch/hash, proof epoch state, and signed chain-key root delegation
+batches. The root timer prepares due issuer templates, signs a batch once per
+proof epoch, installs issuer-specific active proof material, retries partial
+install failures, discards stale signing callbacks after registry changes, and
+prunes expired batches before install.
 
-Root batch provisioning is bounded in the MVP: 64 issuers per batch, 128
-pending batches, and 16 pending root delegation proofs per issuer. Expired
-pending metadata is pruned opportunistically during prepare and install.
-Uninstalled pending entries are removed after their retrieval window expires;
-installed entries remain available for idempotent reinstall until certificate
-expiry. Signature-map leaf pruning is not part of the current MVP.
-
-Root-managed renewal reuses the batch proof contract for scheduled issuer
-refresh. Root stores enabled issuer renewal templates, scheduled per-issuer
-attempts, and scheduled renewal batches. A renewal provisioner may retrieve
-proof material only through `canic_get_delegation_renewal_proof_batch`, where
-root resolves the scheduled proof references from the batch id; provisioners
-may not supply arbitrary proof references or retrieve manually prepared
-batches. Scheduled installs through `canic_install_delegation_proof_batch`
-remain bound to the active renewal batch, issuer, certificate hash, template
-fingerprint, and install deadline.
-
-`canic_get_delegation_proof_batch` is not separately replay-protected. It is a
-direct root query over existing pending batch metadata. The requested
-`batch_id`, issuer, and `cert_hash` must match pending metadata, and
-`now_ns < retrieval_expires_at_ns`.
-
-`canic_get_delegation_renewal_proof_batch` is also a direct root query, but
-its request carries only the scheduled renewal `batch_id`. Retrieval fails
-after the batch or issuer attempt retrieval window expires.
+The retained bridge-backed canister-signature provisioning endpoints are not
+part of the 0.76 delegated-token root proof contract. In
+`root_proof_mode = "chain_key_batch"`, those legacy endpoints reject rather
+than provide an alternate liveness path.
 
 The retired single-proof root prepare/get endpoints are not part of the active
 protocol. Root proof retrieval must not be hidden behind issuer composite-query
-wrappers because root needs its direct query data certificate to assemble the
-canister-signature proof.
+wrappers, and the current root proof flow must not require root query data
+certificates.
 
 The normal auth surface does not expose a one-shot fresh-proof `mint_token`
 path. Client/test helpers may choreograph the calls above, but they must not
-hide query certificate retrieval inside one update.
+hide bridge-backed or direct-query root proof renewal inside one update.
 
 ## Issuer Token Proof
 
-Issuer token proofs use the same canister-signature update-then-query
-mechanics as root proofs. The issuer signs the canonical claims hash, not a
-secp256k1 payload.
+Issuer token proofs still use canister-signature update-then-query mechanics.
+The root delegation proof no longer uses this primitive. The issuer signs the
+canonical claims hash, not a secp256k1 payload.
 
 ```text
 claims_hash = sha256(canonical_bytes(DelegatedTokenClaims))
@@ -272,10 +341,13 @@ issuer proof public key DER embeds `cert.issuer_pid` and the expected seed, and
 uses the configured raw IC root key.
 
 The 0.65 hard cut removes management-canister ECDSA from normal delegated auth.
-The expected usage model is to reuse root proofs and delegated tokens for their
-TTL. Protected endpoint verification may use a bounded positive cache for the
-expensive root and issuer canister-signature checks, but endpoint-specific
-authorization still runs after cache hits.
+The 0.76 hard cut reintroduces management-canister ECDSA only at root renewal
+and lazy-repair batch boundaries. `prepare_delegated_token` and protected
+endpoint verification must not call management-canister signing. The expected
+usage model is to reuse root proofs and delegated tokens for their TTL.
+Protected endpoint verification may use a bounded positive cache for the
+expensive root chain-key and issuer canister-signature checks, but
+endpoint-specific authorization still runs after cache hits.
 
 ## Verification Contract
 
@@ -288,10 +360,19 @@ Checks before authorization:
 - delegated token decodes from ingress first argument
 - `cert_hash` and `claims_hash` recompute from canonical bytes
 - `cert.root_pid` equals configured root canister id
-- root proof variant is `RootProof::IcCanisterSignatureV1`
-- root canister-signature public key DER embeds the configured root canister id
-  and expected seed
-- root canister signature verifies under the configured raw IC root key
+- root proof variant is `RootProof::IcChainKeyBatchSignatureV1`
+- configured chain-key root policy is valid for verifier time
+- root proof header, delegation cert leaf, and `DelegationCert` all bind the
+  configured root canister id
+- header algorithm, key id, derivation path hash, key version, proof epoch,
+  registry epoch, and root public key match configured policy
+- proof epoch, key version, and registry epoch meet configured minimums
+- batch and delegation cert windows are valid and do not exceed
+  `max_revocation_latency_ns`
+- issuer Merkle witness reconstructs the signed batch tree root
+- raw secp256k1 signature is well formed, low-s, and verifies over
+  `sha256(canonical_bytes(ChainKeyBatchHeaderV1))`
+- `ChainKeyDelegationCertV1` coheres with `DelegationCert`
 - `cert.issuer_pid` matches `claims.issuer_pid`
 - `cert.issuer_proof_alg == IssuerProofAlgorithm::IcCanisterSignatureV1`
 - `cert.issuer_proof_binding` carries the expected issuer seed hash
@@ -327,22 +408,48 @@ root_canister_id = "..."
 ic_root_public_key_raw_hex = "..."
 network = "mainnet"
 max_ttl_secs = 3600
+root_proof_mode = "chain_key_batch"
+
+[auth.delegated_tokens.chain_key_root_proof]
+key_id = "key_1"
+derivation_path_hash_hex = "..."
+derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
+public_key_hex = "..."
+key_version = 1
+min_accepted_key_version = 1
+min_accepted_proof_epoch = 1
+min_accepted_registry_epoch = 1
+valid_from_ns = 0
+accept_until_ns = 4102444800000000000
+max_revocation_latency_ns = 60000000000
 ```
 
 `root_canister_id` may fall back to initialized Canic root env. The raw IC root
-key is paired with `network`: mainnet requires the configured known mainnet raw
-key, while local/PocketIC/test verification requires a non-mainnet raw root key
-from `ic_root_public_key_raw_hex` and rejects the mainnet key. If delegated-token
-verification is enabled, startup must have root and
-issuer canister-signature verification features, an effective root principal
-plus raw IC root key, and the current canister must set
-`delegated_token_verifier = true` before endpoint token verification can
-proceed.
+key is paired with `network` for issuer canister-signature verification:
+mainnet requires the configured known mainnet raw key, while local/PocketIC/test
+verification requires a non-mainnet raw root key from
+`ic_root_public_key_raw_hex` and rejects the mainnet key.
+
+0.76 delegated-token auth requires `root_proof_mode = "chain_key_batch"`.
+`chain_key_root_proof` is the root delegation proof trust anchor. Its
+`public_key_hex` must be a secp256k1 SEC1 public key for the configured root
+canister id, `key_id`, and `derivation_path_hex`; `derivation_path_hash_hex`
+must match the canonical hash of `derivation_path_hex`. Mainnet rejects
+`test_key_1`; local/test use of `test_key_1` requires `allow_test_key = true`.
+
+If delegated-token verification is enabled, startup must have chain-key root
+proof verification support, issuer canister-signature verification support, an
+effective root principal, a raw IC root key for issuer proof verification, a
+complete chain-key root proof policy, and
+`delegated_token_verifier = true` on the current canister before endpoint token
+verification can proceed.
 
 ## Revocation and TTL
 
-Delegated proofs and tokens are self-contained. A verifier with the token and
-configured IC root key can verify without online root or issuer state.
+Delegated proofs and tokens are self-contained. A verifier with the token,
+configured chain-key root policy, and configured IC root key for issuer
+canister-signature proof verification can verify without online root or issuer
+state.
 Emergency revocation before `expires_at_ns` is not guaranteed. The hard-cut
 mitigation is short cert/token TTLs and strict `max_ttl_secs`.
 
@@ -350,10 +457,15 @@ mitigation is short cert/token TTLs and strict `max_ttl_secs`.
 
 The auth architecture must not introduce:
 
-- root threshold ECDSA signing for delegated root proofs
+- bridge, worker, CLI, cron, host daemon, external signer, direct root query,
+  or client-side provisioning dependency for delegated-auth liveness
+- per-login, per-user, per-token, or per-session root threshold signing
 - legacy `root_sig` verifier branches
+- legacy `RootProof::IcCanisterSignatureV1` acceptance for delegated-token root
+  proofs
 - `SubnetState.auth.delegated_root_public_key` as delegated-token root proof
   authority
+- proof-supplied chain-key public key as delegated-token root proof authority
 - verifier-local proof lookup as an acceptance condition
 - proof distribution as an authentication correctness requirement
 - query-time root or management calls from endpoint guards
@@ -361,7 +473,10 @@ The auth architecture must not introduce:
 - single-call fresh-proof `mint_token` on the normal auth surface
 - relay envelope auth modes that skip delegated subject binding
 
-Normal delegated-token auth must not call management-canister threshold ECDSA.
+Normal delegated-token prepare/get and protected endpoint auth must not call
+management-canister threshold ECDSA. Only root renewal and lazy-repair batch
+creation may call management-canister signing, and those calls must be bounded
+by delegation epoch rather than login volume.
 
 ## Test-Only Paths
 

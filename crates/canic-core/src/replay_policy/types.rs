@@ -61,6 +61,7 @@ pub enum ReplayPolicy {
 pub enum CostClass {
     None,
     RootCanisterSignaturePrepare,
+    RootChainKeySigning,
     IssuerCanisterSignaturePrepare,
     ManagementDeployment,
     ValueTransfer,

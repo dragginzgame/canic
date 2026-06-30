@@ -150,6 +150,9 @@ package = "."
 init_mode = "enabled"
 
 [app.whitelist]
+
+[auth.delegated_tokens]
+enabled = false
 "#
     )
 }
@@ -193,6 +196,7 @@ mod tests {
         assert!(cfg.roles.contains_key("sandbox_blank"));
         assert!(!cfg.roles.contains_key("root"));
         assert!(cfg.subnets.is_empty());
+        assert!(!cfg.auth.delegated_tokens.enabled);
         assert!(!config_attaches_role(&cfg, "standalone", "sandbox_blank"));
     }
 
@@ -296,6 +300,9 @@ package = "root"
 kind = "canister"
 package = "app"
 
+[auth.delegated_tokens]
+enabled = false
+
 [subnets.prime.canisters.app]
 kind = "service"
 "#,
@@ -323,6 +330,9 @@ package = "root"
 [roles.app]
 kind = "canister"
 package = "app"
+
+[auth.delegated_tokens]
+enabled = false
 
 [subnets.prime.canisters.app]
 kind = "service"

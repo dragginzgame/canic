@@ -631,6 +631,9 @@ package = "root"
 kind = "canister"
 package = "app"
 
+[auth.delegated_tokens]
+enabled = false
+
 [subnets.prime.canisters.root]
 kind = "root"
 "#

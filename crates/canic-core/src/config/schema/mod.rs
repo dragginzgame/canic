@@ -234,6 +234,48 @@ impl ConfigModel {
         cfg.fleet = Some(FleetConfig {
             name: Some("test".to_string()),
         });
+        cfg.auth.delegated_tokens.enabled = true;
+        cfg.auth.delegated_tokens.network = "local".to_string();
+        cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
+        cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .derivation_path_hash_hex =
+            Some("fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16".to_string());
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .derivation_path_hex = Some(vec![
+            "63616e6963".to_string(),
+            "64656c65676174696f6e".to_string(),
+        ]);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .public_key_hex = Some("02".repeat(33));
+        cfg.auth.delegated_tokens.chain_key_root_proof.key_version = Some(1);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .min_accepted_key_version = Some(1);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .min_accepted_proof_epoch = Some(1);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .min_accepted_registry_epoch = Some(1);
+        cfg.auth.delegated_tokens.chain_key_root_proof.valid_from_ns = Some(1);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .accept_until_ns = Some(2);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .max_revocation_latency_ns = Some(1);
         cfg.roles.insert(
             CanisterRole::ROOT,
             RoleDeclaration {
@@ -349,6 +391,7 @@ pub struct AuthConfig {
 ///   this build verifies delegated tokens or role attestations
 /// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
+/// - root_proof_mode = "chain_key_batch" => 0.76 chain-key root proof contract
 ///
 /// Owned by config schema and validated before delegated auth is enabled.
 ///
@@ -365,6 +408,12 @@ pub struct DelegatedTokenConfig {
     #[serde(default)]
     pub ic_root_public_key_raw_hex: Option<String>,
 
+    #[serde(default = "default_delegated_tokens_root_proof_mode")]
+    pub root_proof_mode: String,
+
+    #[serde(default)]
+    pub chain_key_root_proof: ChainKeyRootProofConfig,
+
     #[serde(default = "default_delegated_tokens_network")]
     pub network: String,
 
@@ -372,8 +421,58 @@ pub struct DelegatedTokenConfig {
     pub max_ttl_secs: Option<u64>,
 }
 
+///
+/// ChainKeyRootProofConfig
+///
+/// Explicit verifier policy for 0.76 chain-key batch root proofs.
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChainKeyRootProofConfig {
+    #[serde(default)]
+    pub key_id: Option<String>,
+
+    #[serde(default)]
+    pub derivation_path_hash_hex: Option<String>,
+
+    #[serde(default)]
+    pub derivation_path_hex: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub public_key_hex: Option<String>,
+
+    #[serde(default)]
+    pub key_version: Option<u64>,
+
+    #[serde(default)]
+    pub min_accepted_key_version: Option<u64>,
+
+    #[serde(default)]
+    pub min_accepted_proof_epoch: Option<u64>,
+
+    #[serde(default)]
+    pub min_accepted_registry_epoch: Option<u64>,
+
+    #[serde(default)]
+    pub valid_from_ns: Option<u64>,
+
+    #[serde(default)]
+    pub accept_until_ns: Option<u64>,
+
+    #[serde(default)]
+    pub max_revocation_latency_ns: Option<u64>,
+
+    #[serde(default)]
+    pub allow_test_key: bool,
+}
+
 const fn default_delegated_tokens_enabled() -> bool {
-    true
+    false
+}
+
+fn default_delegated_tokens_root_proof_mode() -> String {
+    "chain_key_batch".to_string()
 }
 
 fn default_delegated_tokens_network() -> String {
@@ -386,6 +485,8 @@ impl Default for DelegatedTokenConfig {
             enabled: default_delegated_tokens_enabled(),
             root_canister_id: None,
             ic_root_public_key_raw_hex: None,
+            root_proof_mode: default_delegated_tokens_root_proof_mode(),
+            chain_key_root_proof: ChainKeyRootProofConfig::default(),
             network: default_delegated_tokens_network(),
             max_ttl_secs: None,
         }

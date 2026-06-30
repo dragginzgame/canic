@@ -95,12 +95,280 @@ pub struct IcCanisterSignatureProofRecord {
 }
 
 ///
-/// RootProofRecord
+/// ChainKeyAlgorithmRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ChainKeyAlgorithmRecord {
+    EcdsaSecp256k1,
+}
+
+///
+/// ChainKeyKeyIdRecord
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyKeyIdRecord {
+    pub name: String,
+}
+
+///
+/// RootProofModeRecord
+///
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "0.76 proof-mode stable schema is passive until chain-key renewal state is wired"
+    )
+)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RootProofModeRecord {
+    IcCanisterSignature,
+    ChainKeyBatch,
+}
+
+///
+/// BuildNetworkRecord
+///
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "0.76 root key policy stable schema is passive until chain-key renewal state is wired"
+    )
+)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum BuildNetworkRecord {
+    Ic,
+    Local,
+}
+
+///
+/// RootKeyPolicyRecord
+///
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "0.76 root key policy stable schema is passive until chain-key renewal state is wired"
+    )
+)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootKeyPolicyRecord {
+    pub root_canister_id: Principal,
+    pub proof_mode: RootProofModeRecord,
+    pub algorithm: ChainKeyAlgorithmRecord,
+    pub key_id: ChainKeyKeyIdRecord,
+    pub derivation_path_hash: [u8; 32],
+    pub public_key: Vec<u8>,
+    pub key_version: u64,
+    pub min_accepted_key_version: u64,
+    pub min_accepted_proof_epoch: u64,
+    pub min_accepted_registry_epoch: u64,
+    pub max_revocation_latency_ns: u64,
+    pub valid_from_ns: u64,
+    pub accept_until_ns: u64,
+    pub build_network: BuildNetworkRecord,
+}
+
+///
+/// DelegatedAuthRegistrySnapshotRecord
+///
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "0.76 registry snapshot stable schema is passive until chain-key renewal state is wired"
+    )
+)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedAuthRegistrySnapshotRecord {
+    pub schema_version: u16,
+    pub root_canister_id: Principal,
+    pub registry_epoch: u64,
+    pub proof_mode: RootProofModeRecord,
+    pub root_key_policy_hash: [u8; 32],
+    pub issuer_policies: Vec<DelegatedAuthIssuerPolicySnapshotRecord>,
+}
+
+///
+/// DelegatedAuthIssuerPolicySnapshotRecord
+///
+
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "0.76 registry snapshot stable schema is passive until chain-key renewal state is wired"
+    )
+)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedAuthIssuerPolicySnapshotRecord {
+    pub issuer_canister_id: Principal,
+    pub enabled: bool,
+    pub preferred_proof_mode: RootProofModeRecord,
+    pub allowed_audiences: Vec<DelegationAudienceRecord>,
+    pub allowed_grants: Vec<DelegatedRoleGrantRecord>,
+    pub max_root_proof_ttl_ns: u64,
+    pub max_token_ttl_ns: u64,
+    pub issuer_proof_algorithm: IssuerProofAlgorithmRecord,
+    pub issuer_proof_binding_hash: [u8; 32],
+    pub renewal_template_hash: [u8; 32],
+}
+
+///
+/// ChainKeyBatchHeaderRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyBatchHeaderRecord {
+    pub schema_version: u16,
+    pub root_canister_id: Principal,
+    pub batch_id: [u8; 32],
+    pub proof_epoch: u64,
+    pub registry_epoch: u64,
+    pub registry_hash: [u8; 32],
+    pub tree_root: [u8; 32],
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub algorithm: ChainKeyAlgorithmRecord,
+    pub key_id: ChainKeyKeyIdRecord,
+    pub derivation_path_hash: [u8; 32],
+    pub key_version: u64,
+}
+
+///
+/// ChainKeyDelegationCertRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyDelegationCertRecord {
+    pub root_canister_id: Principal,
+    pub issuer_canister_id: Principal,
+    pub proof_epoch: u64,
+    pub issuer_proof_algorithm: IssuerProofAlgorithmRecord,
+    pub issuer_proof_binding_hash: [u8; 32],
+    pub issuer_proof_binding: IssuerProofBindingRecord,
+    pub max_token_ttl_ns: u64,
+    pub audience: DelegationAudienceRecord,
+    pub grants: Vec<DelegatedRoleGrantRecord>,
+    pub not_before_ns: u64,
+    pub expires_at_ns: u64,
+    pub registry_epoch: u64,
+    pub registry_hash: [u8; 32],
+}
+
+///
+/// ChainKeyRootSignatureRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyRootSignatureRecord {
+    pub algorithm: ChainKeyAlgorithmRecord,
+    pub key_id: ChainKeyKeyIdRecord,
+    pub derivation_path: Vec<Vec<u8>>,
+    pub public_key: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+
+///
+/// ChainKeyBatchWitnessRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyBatchWitnessRecord {
+    pub steps: Vec<ChainKeyBatchWitnessStepRecord>,
+}
+
+///
+/// ChainKeyBatchWitnessStepRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ChainKeyBatchWitnessStepRecord {
+    LeftSibling([u8; 32]),
+    RightSibling([u8; 32]),
+}
+
+///
+/// IcChainKeyBatchSignatureProofRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcChainKeyBatchSignatureProofRecord {
+    pub header: ChainKeyBatchHeaderRecord,
+    pub delegation_cert: ChainKeyDelegationCertRecord,
+    pub issuer_witness: ChainKeyBatchWitnessRecord,
+    pub signature: ChainKeyRootSignatureRecord,
+}
+
+///
+/// ChainKeyRootDelegationBatchStatusRecord
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ChainKeyRootDelegationBatchStatusRecord {
+    Prepared,
+    Signing,
+    Signed,
+    Installing,
+    Installed,
+    FailedRetryable,
+}
+
+///
+/// ChainKeyRootDelegationBatchIssuerRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyRootDelegationBatchIssuerRecord {
+    pub issuer_pid: Principal,
+    pub cert_hash: [u8; 32],
+    pub delegation_cert: DelegationCertRecord,
+    pub chain_key_delegation_cert: ChainKeyDelegationCertRecord,
+    pub issuer_witness: ChainKeyBatchWitnessRecord,
+    pub refresh_after_ns: u64,
+    pub installed_at_ns: Option<u64>,
+    pub last_failure: Option<String>,
+}
+
+///
+/// ChainKeyRootDelegationBatchRecord
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChainKeyRootDelegationBatchRecord {
+    pub batch_id: [u8; 32],
+    pub status: ChainKeyRootDelegationBatchStatusRecord,
+    pub header_hash: [u8; 32],
+    pub header: ChainKeyBatchHeaderRecord,
+    pub signature: Option<ChainKeyRootSignatureRecord>,
+    pub issuers: Vec<ChainKeyRootDelegationBatchIssuerRecord>,
+    pub prepared_at_ns: u64,
+    pub signed_at_ns: Option<u64>,
+    pub install_started_at_ns: Option<u64>,
+    pub installed_at_ns: Option<u64>,
+    pub retry_after_ns: Option<u64>,
+    pub failure: Option<String>,
+}
+
+///
+/// RootProofRecord
+///
+
+#[expect(
+    clippy::large_enum_variant,
+    reason = "RootProofRecord mirrors the stable delegated-auth proof schema; boxing would change the persisted record shape"
+)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProofRecord {
     IcCanisterSignatureV1(IcCanisterSignatureProofRecord),
+    IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofRecord),
 }
 
 ///
@@ -279,6 +547,12 @@ pub struct AuthStateRecord {
     pub root_issuers: Vec<RootIssuerRecord>,
 
     #[serde(default)]
+    pub delegated_auth_registry_epoch: u64,
+
+    #[serde(default)]
+    pub delegated_auth_proof_epoch: u64,
+
+    #[serde(default)]
     pub root_issuer_renewal_templates: Vec<RootIssuerRenewalTemplateRecord>,
 
     #[serde(default)]
@@ -289,6 +563,9 @@ pub struct AuthStateRecord {
 
     #[serde(default)]
     pub root_delegation_renewal_batches: Vec<RootDelegationRenewalBatchRecord>,
+
+    #[serde(default)]
+    pub chain_key_root_delegation_batches: Vec<ChainKeyRootDelegationBatchRecord>,
 
     #[serde(default)]
     pub root_provisioners: Vec<RootProvisionerRecord>,

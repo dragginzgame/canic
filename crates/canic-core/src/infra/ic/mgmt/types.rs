@@ -201,6 +201,76 @@ pub struct InfraUpdateSettingsArgs {
 }
 
 //
+// InfraEcdsaCurve
+//
+
+#[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+pub enum InfraEcdsaCurve {
+    #[default]
+    #[serde(rename = "secp256k1")]
+    Secp256k1,
+}
+
+impl From<InfraEcdsaCurve> for u32 {
+    fn from(value: InfraEcdsaCurve) -> Self {
+        match value {
+            InfraEcdsaCurve::Secp256k1 => 0,
+        }
+    }
+}
+
+//
+// InfraEcdsaKeyId
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct InfraEcdsaKeyId {
+    pub curve: InfraEcdsaCurve,
+    pub name: String,
+}
+
+//
+// InfraEcdsaPublicKeyArgs
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct InfraEcdsaPublicKeyArgs {
+    pub canister_id: Option<Principal>,
+    pub derivation_path: Vec<Vec<u8>>,
+    pub key_id: InfraEcdsaKeyId,
+}
+
+//
+// InfraEcdsaPublicKeyResult
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct InfraEcdsaPublicKeyResult {
+    pub public_key: Vec<u8>,
+    pub chain_code: Vec<u8>,
+}
+
+//
+// InfraSignWithEcdsaArgs
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct InfraSignWithEcdsaArgs {
+    pub message_hash: Vec<u8>,
+    pub derivation_path: Vec<Vec<u8>>,
+    pub key_id: InfraEcdsaKeyId,
+}
+
+//
+// InfraSignWithEcdsaResult
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct InfraSignWithEcdsaResult {
+    pub signature: Vec<u8>,
+}
+
+//
 // InfraCanisterStatusType
 //
 

@@ -16,7 +16,9 @@ const ROOT_ISSUER_RENEWAL_TEMPLATE_FINGERPRINT_DOMAIN: &[u8] =
 const ROOT_DELEGATION_RENEWAL_BATCH_ID_DOMAIN: &[u8] = b"canic-root-delegation-renewal-batch:v1";
 const ROOT_ISSUER_RENEWAL_ATTEMPT_ID_DOMAIN: &[u8] = b"canic-root-issuer-renewal-attempt:v1";
 
-pub(super) fn renewal_template_fingerprint(template: &RootIssuerRenewalTemplate) -> [u8; 32] {
+pub(in crate::ops::auth::delegation) fn renewal_template_fingerprint(
+    template: &RootIssuerRenewalTemplate,
+) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hash_renewal_bytes(&mut hasher, ROOT_ISSUER_RENEWAL_TEMPLATE_FINGERPRINT_DOMAIN);
     hash_renewal_principal(&mut hasher, template.issuer_pid);

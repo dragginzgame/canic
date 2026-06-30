@@ -32,7 +32,7 @@ macro_rules! canic_emit_nonroot_auth_attestation_endpoints {
         async fn canic_prepare_delegated_token(
             request: ::canic::dto::auth::DelegatedTokenPrepareRequest,
         ) -> Result<::canic::dto::auth::DelegatedTokenPrepareResponse, ::canic::Error> {
-            $crate::__internal::core::api::auth::AuthApi::prepare_delegated_token(request)
+            $crate::__internal::core::api::auth::AuthApi::prepare_delegated_token(request).await
         }
 
         #[$crate::canic_query(public)]

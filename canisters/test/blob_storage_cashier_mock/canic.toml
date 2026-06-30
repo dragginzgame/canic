@@ -17,6 +17,9 @@ init_mode = "enabled"
 
 [app.whitelist]
 
+[auth.delegated_tokens]
+enabled = false
+
 [subnets.prime]
 
 [subnets.prime.canisters.root]

@@ -8,8 +8,8 @@ use crate::replay_policy::{
     quota::{
         DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1, DURABLE_PUBLISH_QUOTA_V1,
         DURABLE_PUBLISH_RESERVE_V1, ISSUER_CANISTER_SIGNATURE_PREPARE_QUOTA_V1,
-        ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1, VALUE_TRANSFER_QUOTA_V1,
-        VALUE_TRANSFER_RESERVE_V1,
+        ROOT_CANISTER_SIGNATURE_PREPARE_QUOTA_V1, ROOT_CHAIN_KEY_SIGNING_QUOTA_V1,
+        VALUE_TRANSFER_QUOTA_V1, VALUE_TRANSFER_RESERVE_V1,
     },
     types::{
         CostClass, EndpointKind, EndpointReplayPolicy, ReplayImplementationStatus, ReplayPolicy,
@@ -68,6 +68,13 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     update_response_idempotent(
         "canic_install_delegation_proof_batch",
         "auth.install_delegation_proof_batch.v1",
+    ),
+    update_costed_snapshot_convergent(
+        "canic_get_or_create_chain_key_delegation_proof",
+        "auth.get_or_create_chain_key_delegation_proof.v1",
+        CostClass::RootChainKeySigning,
+        Some(ROOT_CHAIN_KEY_SIGNING_QUOTA_V1),
+        None,
     ),
     update_replay_protected(
         "canic_prepare_role_attestation",
@@ -249,6 +256,24 @@ const fn update_snapshot_convergent(
         cost_class: CostClass::None,
         quota_policy: None,
         cycle_reserve_policy: None,
+    }
+}
+
+const fn update_costed_snapshot_convergent(
+    endpoint: &'static str,
+    command_kind: &'static str,
+    cost_class: CostClass,
+    quota_policy: Option<&'static str>,
+    cycle_reserve_policy: Option<&'static str>,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class,
+        quota_policy,
+        cycle_reserve_policy,
     }
 }
 

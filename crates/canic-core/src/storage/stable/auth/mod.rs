@@ -10,13 +10,19 @@ mod records;
 mod sessions;
 
 pub use records::{
-    ActiveDelegationProofRecord, AuthStateRecord, DelegatedRoleGrantRecord,
+    ActiveDelegationProofRecord, AuthStateRecord, BuildNetworkRecord, ChainKeyAlgorithmRecord,
+    ChainKeyBatchHeaderRecord, ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord,
+    ChainKeyDelegationCertRecord, ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
+    ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
+    ChainKeyRootSignatureRecord, DelegatedAuthIssuerPolicySnapshotRecord,
+    DelegatedAuthRegistrySnapshotRecord, DelegatedRoleGrantRecord,
     DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationAudienceRecord,
     DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
-    IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootDelegationRenewalBatchRecord,
-    RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
-    RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord,
-    RootIssuerRenewalTemplateRecord, RootProofRecord, RootProvisionerRecord,
+    IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
+    RootDelegationRenewalBatchRecord, RootIssuerRecord, RootIssuerRenewalAttemptRecord,
+    RootIssuerRenewalAttemptStatusRecord, RootIssuerRenewalOutcomeRecord,
+    RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord,
+    RootKeyPolicyRecord, RootProofModeRecord, RootProofRecord, RootProvisionerRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -205,6 +211,12 @@ impl AuthState {
         })
     }
 
+    // List root delegation-proof issuer policy records.
+    #[must_use]
+    pub(crate) fn list_root_issuers() -> Vec<RootIssuerRecord> {
+        AUTH_STATE.with_borrow(|cell| cell.get().root_issuers.clone())
+    }
+
     // Upsert a root delegation-proof issuer policy record.
     pub(crate) fn upsert_root_issuer(record: RootIssuerRecord) {
         AUTH_STATE.with_borrow_mut(|cell| {
@@ -220,6 +232,45 @@ impl AuthState {
             }
             cell.set(data);
         });
+    }
+
+    // Return the current delegated-auth registry epoch.
+    #[must_use]
+    pub(crate) fn delegated_auth_registry_epoch() -> u64 {
+        AUTH_STATE.with_borrow(|cell| cell.get().delegated_auth_registry_epoch)
+    }
+
+    // Advance the delegated-auth registry epoch after an authority-shaping mutation.
+    pub(crate) fn advance_delegated_auth_registry_epoch() -> u64 {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.delegated_auth_registry_epoch =
+                data.delegated_auth_registry_epoch.saturating_add(1);
+            let epoch = data.delegated_auth_registry_epoch;
+            cell.set(data);
+            epoch
+        })
+    }
+
+    // Return the current delegated-auth proof epoch.
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn delegated_auth_proof_epoch() -> u64 {
+        AUTH_STATE.with_borrow(|cell| cell.get().delegated_auth_proof_epoch)
+    }
+
+    // Advance the delegated-auth proof epoch for a newly persisted root batch.
+    pub(crate) fn advance_delegated_auth_proof_epoch_at_least(min_epoch: u64) -> u64 {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.delegated_auth_proof_epoch = data
+                .delegated_auth_proof_epoch
+                .saturating_add(1)
+                .max(min_epoch);
+            let epoch = data.delegated_auth_proof_epoch;
+            cell.set(data);
+            epoch
+        })
     }
 
     // Resolve a root-managed renewal template by issuer principal.
@@ -342,6 +393,10 @@ impl AuthState {
     }
 
     // Upsert a scheduled root-managed renewal batch.
+    #[allow(
+        dead_code,
+        reason = "pre-0.76 bridge-backed renewal batch writer is retained for historical scheduler code during the hard-cut migration"
+    )]
     pub(crate) fn upsert_root_delegation_renewal_batch(record: RootDelegationRenewalBatchRecord) {
         AUTH_STATE.with_borrow_mut(|cell| {
             let mut data = cell.get().clone();
@@ -366,6 +421,65 @@ impl AuthState {
             data.root_delegation_renewal_batches
                 .retain(|record| now_ns < record.retrieval_expires_at_ns);
             let removed = before.saturating_sub(data.root_delegation_renewal_batches.len());
+            if removed > 0 {
+                cell.set(data);
+            }
+            removed
+        })
+    }
+
+    // Resolve a chain-key root delegation batch by batch id.
+    #[must_use]
+    #[allow(
+        dead_code,
+        reason = "0.76 chain-key install and lazy-repair wiring will use direct batch lookup"
+    )]
+    pub(crate) fn get_chain_key_root_delegation_batch(
+        batch_id: [u8; 32],
+    ) -> Option<ChainKeyRootDelegationBatchRecord> {
+        AUTH_STATE.with_borrow(|cell| {
+            cell.get()
+                .chain_key_root_delegation_batches
+                .iter()
+                .find(|record| record.batch_id == batch_id)
+                .cloned()
+        })
+    }
+
+    // List chain-key root delegation batches.
+    #[must_use]
+    pub(crate) fn list_chain_key_root_delegation_batches() -> Vec<ChainKeyRootDelegationBatchRecord>
+    {
+        AUTH_STATE.with_borrow(|cell| cell.get().chain_key_root_delegation_batches.clone())
+    }
+
+    // Upsert a chain-key root delegation batch.
+    pub(crate) fn upsert_chain_key_root_delegation_batch(
+        record: ChainKeyRootDelegationBatchRecord,
+    ) {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            if let Some(existing) = data
+                .chain_key_root_delegation_batches
+                .iter_mut()
+                .find(|existing| existing.batch_id == record.batch_id)
+            {
+                *existing = record;
+            } else {
+                data.chain_key_root_delegation_batches.push(record);
+            }
+            cell.set(data);
+        });
+    }
+
+    // Remove expired chain-key root delegation batches.
+    pub(crate) fn prune_chain_key_root_delegation_batches(now_ns: u64) -> usize {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            let before = data.chain_key_root_delegation_batches.len();
+            data.chain_key_root_delegation_batches
+                .retain(|record| now_ns < record.header.expires_at_ns);
+            let removed = before.saturating_sub(data.chain_key_root_delegation_batches.len());
             if removed > 0 {
                 cell.set(data);
             }

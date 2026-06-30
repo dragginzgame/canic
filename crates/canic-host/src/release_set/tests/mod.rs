@@ -73,7 +73,7 @@ init_mode = "enabled"
 [app.whitelist]
 
 [auth.delegated_tokens]
-enabled = true
+enabled = false
 
 [standards]
 icrc21 = true

@@ -39,7 +39,7 @@ use crate::{
     },
 };
 
-use identity::renewal_template_fingerprint;
+pub(in crate::ops::auth::delegation) use identity::renewal_template_fingerprint;
 #[cfg(test)]
 use retrieval::get_delegation_renewal_proof_batch_with_getter;
 pub(super) use retrieval::{
@@ -68,6 +68,7 @@ pub(super) fn upsert_root_issuer_renewal_template(
         .map_err(map_root_provisioning_policy_error)?;
 
     AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
+    AuthStateOps::advance_delegated_auth_registry_epoch();
     if !template.enabled {
         disable_active_renewal_attempt(&template, now_ns);
     }

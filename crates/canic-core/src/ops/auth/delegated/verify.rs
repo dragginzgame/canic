@@ -14,7 +14,7 @@ use super::{
 };
 use crate::{
     cdk::types::Principal,
-    dto::auth::{DelegatedToken, IssuerProof, RootProof},
+    dto::auth::{DelegatedToken, DelegationCert, IssuerProof, RootProof},
     ids::CanisterRole,
     ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
@@ -113,15 +113,15 @@ pub fn verify_delegated_token<R, S>(
     mut verify_issuer_proof: S,
 ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError>
 where
-    R: FnMut([u8; 32], &RootProof, Principal) -> Result<(), String>,
+    R: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), String>,
     S: FnMut([u8; 32], &IssuerProof, Principal) -> Result<(), String>,
 {
     let material = verify_delegated_token_material(&input, true)?;
 
     verify_root_proof(
+        &input.token.proof.cert,
         material.cert_hash,
         &input.token.proof.root_proof,
-        input.token.proof.cert.root_pid,
     )
     .map_err(VerifyDelegatedTokenError::RootProofInvalid)?;
 
@@ -428,12 +428,12 @@ mod tests {
 
     fn verify_root_ok(
         expected_cert_hash: [u8; 32],
-    ) -> impl FnMut([u8; 32], &RootProof, Principal) -> Result<(), String> {
-        move |actual_cert_hash, proof, root_pid| {
+    ) -> impl FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), String> {
+        move |cert, actual_cert_hash, proof| {
             if actual_cert_hash != expected_cert_hash {
                 return Err("cert hash mismatch".to_string());
             }
-            if root_pid != p(1) {
+            if cert.root_pid != p(1) {
                 return Err("root pid mismatch".to_string());
             }
             match proof {
@@ -442,7 +442,9 @@ mod tests {
                 {
                     Ok(())
                 }
-                RootProof::IcCanisterSignatureV1(_) => Err("root proof missing".to_string()),
+                RootProof::IcCanisterSignatureV1(_) | RootProof::IcChainKeyBatchSignatureV1(_) => {
+                    Err("root proof missing".to_string())
+                }
             }
         }
     }

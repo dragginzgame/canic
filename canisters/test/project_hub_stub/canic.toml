@@ -20,6 +20,19 @@ package = "../project_instance_stub"
 enabled = true
 network = "local"
 
+[auth.delegated_tokens.chain_key_root_proof]
+key_id = "key_1"
+derivation_path_hash_hex = "fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16"
+derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
+public_key_hex = "02f1a0a900c4b9d53ff5ec024c0e37e7a54174c6ae1d0a77312aebea349adc0b7a"
+key_version = 1
+min_accepted_key_version = 1
+min_accepted_proof_epoch = 1
+min_accepted_registry_epoch = 1
+valid_from_ns = 0
+accept_until_ns = 4102444800000000000
+max_revocation_latency_ns = 60000000000
+
 [subnets.prime]
 
 [subnets.prime.canisters.root]

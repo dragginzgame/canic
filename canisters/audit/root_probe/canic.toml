@@ -8,6 +8,9 @@ name = "root_probe"
 kind = "root"
 package = "."
 
+[auth.delegated_tokens]
+enabled = false
+
 [subnets.prime]
 
 [subnets.prime.canisters.root]

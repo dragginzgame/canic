@@ -5,8 +5,9 @@
 //! Boundary: auth ops bridge delegated-token workflows, config, metrics, and proof helpers.
 
 use super::{
-    AuthOps, AuthProofVerifierConfig, PrepareDelegatedTokenIssuerProofInput,
-    PreparedDelegatedTokenIssuerProof, VerifyDelegatedTokenRuntimeInput,
+    AuthChainKeyRootVerifierConfig, AuthOps, AuthProofVerifierConfig,
+    PrepareDelegatedTokenIssuerProofInput, PreparedDelegatedTokenIssuerProof,
+    VerifyDelegatedTokenRuntimeInput,
     delegated::prepare::{
         PrepareDelegatedTokenError, PrepareDelegatedTokenInput, finish_delegated_token,
         prepare_delegated_token,
@@ -17,13 +18,17 @@ use super::{
             positive_cache_insert, positive_cache_remove,
         },
         cert_rules::DelegatedAuthTtlLimits,
+        chain_key::{
+            ChainKeyRootVerifierPolicy, VerifyChainKeyBatchRootProofInput,
+            verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_public_key_shape,
+            verify_chain_key_ecdsa_signature,
+        },
         verify::{
             VerifiedDelegatedToken, VerifyDelegatedTokenError, VerifyDelegatedTokenInput,
             verify_delegated_token, verify_delegated_token_cached_proof_identity,
         },
     },
     issuer_canister_sig::IssuerPayloadKind,
-    root_canister_sig::RootPayloadKind,
 };
 use crate::{
     InternalError,
@@ -32,8 +37,11 @@ use crate::{
     domain::auth::{
         DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
     },
-    dto::auth::{ActiveDelegationProofStatus, DelegatedToken},
-    ids::CanisterRole,
+    dto::auth::{
+        ActiveDelegationProofStatus, ChainKeyAlgorithm, ChainKeyKeyId, DelegatedToken,
+        DelegationCert, RootKeyPolicyV1, RootProof, RootProofMode,
+    },
+    ids::{BuildNetwork, CanisterRole},
     ops::{
         auth::{AuthScopeError, AuthValidationError},
         config::ConfigOps,
@@ -195,10 +203,15 @@ impl AuthOps {
         cfg: &DelegatedTokenConfig,
     ) -> Result<AuthProofVerifierConfig, InternalError> {
         let network = configured_delegated_auth_network(cfg)?;
+        let root_canister_id = configured_root_canister_id(cfg)?;
+        let root_proof_mode = configured_root_proof_mode(cfg)?;
+        let chain_key_root = configured_chain_key_root_verifier(cfg, root_canister_id, network)?;
         Ok(AuthProofVerifierConfig {
             network,
-            root_canister_id: configured_root_canister_id(cfg)?,
+            root_canister_id,
             ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, network)?,
+            root_proof_mode,
+            chain_key_root,
         })
     }
 }
@@ -329,22 +342,14 @@ fn verify_with_embedded_proofs<'a>(
     validate_network_root_key_pair(verifier_cfg.network, &verifier_cfg.ic_root_public_key_raw)?;
     verify_delegated_token(
         delegated_token_verify_input(input, ctx),
-        |cert_hash, root_proof, root_pid| {
-            if root_pid != verifier_cfg.root_canister_id {
-                return Err(AuthValidationError::InvalidRootAuthority {
-                    expected: verifier_cfg.root_canister_id,
-                    found: root_pid,
-                }
-                .to_string());
-            }
-            AuthOps::verify_root_canister_signature_proof(
-                RootPayloadKind::DelegationCert,
+        |cert, cert_hash, root_proof| {
+            AuthOps::verify_delegation_root_proof(
+                cert,
                 cert_hash,
                 root_proof,
-                verifier_cfg.root_canister_id,
-                &verifier_cfg.ic_root_public_key_raw,
+                verifier_cfg,
+                input.now_ns,
             )
-            .map_err(|err| err.to_string())
         },
         |claims_hash, issuer_proof, issuer_pid| {
             AuthOps::verify_issuer_canister_signature_proof(
@@ -361,6 +366,43 @@ fn verify_with_embedded_proofs<'a>(
         DelegatedAuthMetrics::record_verify_failed(delegated_auth_reason_from_verify_error(&err));
         map_verify_delegated_token_error(err)
     })
+}
+
+impl AuthOps {
+    pub(crate) fn verify_delegation_root_proof(
+        cert: &DelegationCert,
+        _cert_hash: [u8; 32],
+        root_proof: &RootProof,
+        verifier_cfg: &AuthProofVerifierConfig,
+        now_ns: u64,
+    ) -> Result<(), String> {
+        let root_pid = cert.root_pid;
+        if root_pid != verifier_cfg.root_canister_id {
+            return Err(AuthValidationError::InvalidRootAuthority {
+                expected: verifier_cfg.root_canister_id,
+                found: root_pid,
+            }
+            .to_string());
+        }
+
+        if verifier_cfg.root_proof_mode != RootProofMode::ChainKeyBatch {
+            return Err("0.76 delegated auth requires chain_key_batch root proofs".to_string());
+        }
+        let Some(chain_key_root) = verifier_cfg.chain_key_root.as_ref() else {
+            return Err("chain-key root verifier policy is not configured".to_string());
+        };
+        let policy = chain_key_policy_from_config(chain_key_root);
+        verify_chain_key_batch_root_proof(
+            VerifyChainKeyBatchRootProofInput {
+                cert,
+                root_proof,
+                policy: &policy,
+                now_ns,
+            },
+            verify_chain_key_ecdsa_signature,
+        )
+        .map_err(|err| err.to_string())
+    }
 }
 
 fn insert_positive_verification_cache(
@@ -411,6 +453,187 @@ fn configured_delegated_auth_network(
         )
         .into()
     })
+}
+
+fn configured_root_proof_mode(cfg: &DelegatedTokenConfig) -> Result<RootProofMode, InternalError> {
+    match cfg.root_proof_mode.trim() {
+        "chain_key_batch" => Ok(RootProofMode::ChainKeyBatch),
+        _ => Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.root_proof_mode must be chain_key_batch in 0.76".to_string(),
+        )
+        .into()),
+    }
+}
+
+fn configured_chain_key_root_verifier(
+    cfg: &DelegatedTokenConfig,
+    root_canister_id: Principal,
+    network: DelegatedAuthNetwork,
+) -> Result<Option<AuthChainKeyRootVerifierConfig>, InternalError> {
+    let chain_key = &cfg.chain_key_root_proof;
+    let key_id = required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
+    let derivation_path_hash = required_fixed_32_chain_key_hex(
+        chain_key.derivation_path_hash_hex.as_deref(),
+        "derivation_path_hash_hex",
+    )?;
+    let public_key_hex =
+        required_chain_key_field(chain_key.public_key_hex.as_deref(), "public_key_hex")?;
+    let public_key = decode_hex(public_key_hex).map_err(|err| {
+        AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.public_key_hex is not valid hex: {err}"
+        ))
+    })?;
+    verify_chain_key_ecdsa_public_key_shape(&public_key).map_err(|err| {
+        AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.public_key_hex must be a secp256k1 SEC1 public key: {err}"
+        ))
+    })?;
+    let key_version = required_chain_key_u64(chain_key.key_version, "key_version")?;
+    let min_accepted_key_version = required_chain_key_u64(
+        chain_key.min_accepted_key_version,
+        "min_accepted_key_version",
+    )?;
+    let min_accepted_proof_epoch = required_chain_key_u64(
+        chain_key.min_accepted_proof_epoch,
+        "min_accepted_proof_epoch",
+    )?;
+    let min_accepted_registry_epoch = required_chain_key_u64(
+        chain_key.min_accepted_registry_epoch,
+        "min_accepted_registry_epoch",
+    )?;
+    let valid_from_ns = required_chain_key_u64(chain_key.valid_from_ns, "valid_from_ns")?;
+    let accept_until_ns = required_chain_key_u64(chain_key.accept_until_ns, "accept_until_ns")?;
+    let max_revocation_latency_ns = required_chain_key_u64(
+        chain_key.max_revocation_latency_ns,
+        "max_revocation_latency_ns",
+    )?;
+    if valid_from_ns >= accept_until_ns {
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.chain_key_root_proof.valid_from_ns must be before accept_until_ns"
+                .to_string(),
+        )
+        .into());
+    }
+    if max_revocation_latency_ns == 0 {
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.chain_key_root_proof.max_revocation_latency_ns must be greater than zero"
+                .to_string(),
+        )
+        .into());
+    }
+    if network.is_mainnet() && key_id == "test_key_1" {
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.chain_key_root_proof.key_id must not be test_key_1 on network=\"mainnet\""
+                .to_string(),
+        )
+        .into());
+    }
+    if !network.is_mainnet() && key_id == "test_key_1" && !chain_key.allow_test_key {
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.chain_key_root_proof.allow_test_key must be true to use test_key_1 outside mainnet"
+                .to_string(),
+        )
+        .into());
+    }
+
+    Ok(Some(AuthChainKeyRootVerifierConfig {
+        policy: RootKeyPolicyV1 {
+            root_canister_id,
+            proof_mode: RootProofMode::ChainKeyBatch,
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: ChainKeyKeyId {
+                name: key_id.to_string(),
+            },
+            derivation_path_hash,
+            public_key,
+            key_version,
+            min_accepted_key_version,
+            min_accepted_proof_epoch,
+            min_accepted_registry_epoch,
+            max_revocation_latency_ns,
+            valid_from_ns,
+            accept_until_ns,
+            build_network: build_network_for_delegated_auth(network),
+        },
+        allow_test_chain_key: chain_key.allow_test_key,
+    }))
+}
+
+fn required_chain_key_field<'a>(
+    value: Option<&'a str>,
+    field: &'static str,
+) -> Result<&'a str, InternalError> {
+    let Some(value) = value else {
+        return Err(AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.{field} is required when root_proof_mode=\"chain_key_batch\""
+        ))
+        .into());
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.{field} must not be empty"
+        ))
+        .into());
+    }
+    Ok(value)
+}
+
+fn required_chain_key_u64(value: Option<u64>, field: &'static str) -> Result<u64, InternalError> {
+    value.ok_or_else(|| {
+        AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.{field} is required when root_proof_mode=\"chain_key_batch\""
+        ))
+        .into()
+    })
+}
+
+fn required_fixed_32_chain_key_hex(
+    value: Option<&str>,
+    field: &'static str,
+) -> Result<[u8; 32], InternalError> {
+    let value = required_chain_key_field(value, field)?;
+    let decoded = decode_hex(value).map_err(|err| {
+        AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.{field} is not valid hex: {err}"
+        ))
+    })?;
+    decoded.try_into().map_err(|decoded: Vec<u8>| {
+        AuthValidationError::Auth(format!(
+            "auth.delegated_tokens.chain_key_root_proof.{field} must decode to 32 bytes, got {}",
+            decoded.len()
+        ))
+        .into()
+    })
+}
+
+const fn build_network_for_delegated_auth(network: DelegatedAuthNetwork) -> BuildNetwork {
+    if network.is_mainnet() {
+        BuildNetwork::Ic
+    } else {
+        BuildNetwork::Local
+    }
+}
+
+fn chain_key_policy_from_config(
+    config: &AuthChainKeyRootVerifierConfig,
+) -> ChainKeyRootVerifierPolicy {
+    ChainKeyRootVerifierPolicy {
+        root_canister_id: config.policy.root_canister_id,
+        algorithm: config.policy.algorithm,
+        key_id: config.policy.key_id.clone(),
+        derivation_path_hash: config.policy.derivation_path_hash,
+        public_key: config.policy.public_key.clone(),
+        key_version: config.policy.key_version,
+        min_accepted_key_version: config.policy.min_accepted_key_version,
+        min_accepted_proof_epoch: config.policy.min_accepted_proof_epoch,
+        min_accepted_registry_epoch: config.policy.min_accepted_registry_epoch,
+        valid_from_ns: config.policy.valid_from_ns,
+        accept_until_ns: config.policy.accept_until_ns,
+        build_network: config.policy.build_network,
+        allow_test_chain_key: config.allow_test_chain_key,
+        max_revocation_latency_ns: config.policy.max_revocation_latency_ns,
+    }
 }
 
 fn configured_ic_root_public_key_raw(
@@ -573,13 +796,24 @@ mod tests {
     use crate::{
         config::{
             Config,
-            schema::{CanisterAuthConfig, CanisterKind},
+            schema::{CanisterAuthConfig, CanisterKind, ChainKeyRootProofConfig},
         },
         domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
-        dto::error::ErrorCode,
+        dto::{
+            auth::{
+                DelegatedRoleGrant, DelegationAudience, IcCanisterSignatureProofV1,
+                IssuerProofAlgorithm, IssuerProofBinding,
+            },
+            error::ErrorCode,
+        },
         ids::SubnetRole,
+        ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
         storage::stable::env::{Env, EnvRecord},
         test::config::ConfigTestBuilder,
+    };
+    use k256::ecdsa::{
+        Signature as K256TestSignature, SigningKey as K256SigningKey,
+        signature::hazmat::PrehashSigner,
     };
     use std::fmt::Write as _;
 
@@ -588,13 +822,42 @@ mod tests {
     }
 
     fn cfg(network: &str, root_key: Option<Vec<u8>>) -> DelegatedTokenConfig {
-        DelegatedTokenConfig {
+        let mut cfg = DelegatedTokenConfig {
             enabled: true,
             root_canister_id: Some(root_pid().to_string()),
             ic_root_public_key_raw_hex: root_key.map(hex),
+            root_proof_mode: "chain_key_batch".to_string(),
+            chain_key_root_proof: ChainKeyRootProofConfig::default(),
             network: network.to_string(),
             max_ttl_secs: None,
-        }
+        };
+        install_chain_key_policy(&mut cfg, "key_1");
+        cfg
+    }
+
+    fn chain_key_cfg(network: &str, root_key: Vec<u8>, key_id: &str) -> DelegatedTokenConfig {
+        let mut cfg = cfg(network, Some(root_key));
+        install_chain_key_policy(&mut cfg, key_id);
+        cfg
+    }
+
+    fn install_chain_key_policy(cfg: &mut DelegatedTokenConfig, key_id: &str) {
+        cfg.root_proof_mode = "chain_key_batch".to_string();
+        cfg.chain_key_root_proof.key_id = Some(key_id.to_string());
+        cfg.chain_key_root_proof.derivation_path_hash_hex =
+            Some("fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16".to_string());
+        cfg.chain_key_root_proof.derivation_path_hex = Some(vec![
+            "63616e6963".to_string(),
+            "64656c65676174696f6e".to_string(),
+        ]);
+        cfg.chain_key_root_proof.public_key_hex = Some("02".repeat(33));
+        cfg.chain_key_root_proof.key_version = Some(4);
+        cfg.chain_key_root_proof.min_accepted_key_version = Some(4);
+        cfg.chain_key_root_proof.min_accepted_proof_epoch = Some(7);
+        cfg.chain_key_root_proof.min_accepted_registry_epoch = Some(8);
+        cfg.chain_key_root_proof.valid_from_ns = Some(10);
+        cfg.chain_key_root_proof.accept_until_ns = Some(1_000);
+        cfg.chain_key_root_proof.max_revocation_latency_ns = Some(600);
     }
 
     fn hex(bytes: Vec<u8>) -> String {
@@ -615,6 +878,83 @@ mod tests {
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
+    }
+
+    fn delegation_cert() -> DelegationCert {
+        DelegationCert {
+            root_pid: root_pid(),
+            issuer_pid: p(2),
+            issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+            issuer_proof_binding_hash: [4; 32],
+            issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [5; 32] },
+            issued_at_ns: 10,
+            not_before_ns: 10,
+            expires_at_ns: 1_000,
+            max_token_ttl_ns: 60,
+            aud: DelegationAudience::CanicSubnet(p(9)),
+            grants: vec![DelegatedRoleGrant {
+                target: CanisterRole::owned("project_instance".to_string()),
+                scopes: vec!["read".to_string()],
+            }],
+        }
+    }
+
+    #[test]
+    fn chain_key_ecdsa_signature_verifier_accepts_valid_prehash_signature() {
+        let signing_key =
+            K256SigningKey::from_slice(&[7; 32]).expect("test signing key should parse");
+        let public_key = signing_key.verifying_key().to_encoded_point(true);
+        let message_hash = [42; 32];
+        let signature: K256TestSignature = signing_key
+            .sign_prehash(&message_hash)
+            .expect("test prehash signature should sign");
+        let signature_bytes = signature.to_bytes();
+        let key_id = ChainKeyKeyId {
+            name: "key_1".to_string(),
+        };
+        let derivation_path = Vec::new();
+
+        verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: &key_id,
+            derivation_path: &derivation_path,
+            public_key: public_key.as_bytes(),
+            message_hash,
+            signature: signature_bytes.as_ref(),
+        })
+        .expect("valid chain-key ECDSA prehash signature should verify");
+    }
+
+    #[test]
+    fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
+        let signing_key =
+            K256SigningKey::from_slice(&[7; 32]).expect("test signing key should parse");
+        let public_key = signing_key.verifying_key().to_encoded_point(true);
+        let message_hash = [42; 32];
+        let signature: K256TestSignature = signing_key
+            .sign_prehash(&message_hash)
+            .expect("test prehash signature should sign");
+        let mut signature_bytes = signature.to_bytes().to_vec();
+        signature_bytes[0] ^= 1;
+        let key_id = ChainKeyKeyId {
+            name: "key_1".to_string(),
+        };
+        let derivation_path = Vec::new();
+
+        let err = verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: &key_id,
+            derivation_path: &derivation_path,
+            public_key: public_key.as_bytes(),
+            message_hash,
+            signature: &signature_bytes,
+        })
+        .expect_err("altered chain-key ECDSA signature must reject");
+
+        assert!(
+            err.contains("signature verification failed"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -662,6 +1002,22 @@ mod tests {
         assert_eq!(verifier.network, DelegatedAuthNetwork::Mainnet);
         assert_eq!(verifier.root_canister_id, root_pid());
         assert_eq!(verifier.ic_root_public_key_raw, mainnet_key());
+        assert_eq!(verifier.root_proof_mode, RootProofMode::ChainKeyBatch);
+        assert!(verifier.chain_key_root.is_some());
+    }
+
+    #[test]
+    fn auth_proof_verifier_config_rejects_legacy_root_proof_mode() {
+        let mut cfg = cfg("mainnet", Some(mainnet_key()));
+        cfg.root_proof_mode = "canister_signature".to_string();
+
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+            .expect_err("0.76 must reject legacy root proof mode");
+
+        assert!(
+            err.to_string().contains("must be chain_key_batch"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -796,6 +1152,103 @@ mod tests {
     }
 
     #[test]
+    fn auth_proof_verifier_config_chain_key_local_accepts_test_key_when_allowed() {
+        let mut cfg = chain_key_cfg("local", local_key(), "test_key_1");
+        cfg.chain_key_root_proof.allow_test_key = true;
+
+        let verifier =
+            AuthOps::auth_proof_verifier_config_from(&cfg).expect("chain-key config should pass");
+        let chain_key_root = verifier
+            .chain_key_root
+            .as_ref()
+            .expect("chain-key policy should be configured");
+
+        assert_eq!(verifier.root_proof_mode, RootProofMode::ChainKeyBatch);
+        assert_eq!(chain_key_root.policy.root_canister_id, root_pid());
+        assert_eq!(chain_key_root.policy.key_id.name, "test_key_1");
+        assert_eq!(
+            chain_key_root.policy.derivation_path_hash,
+            [
+                0xfe, 0x51, 0xa8, 0x7b, 0x98, 0x8d, 0x22, 0x12, 0x27, 0xb1, 0x34, 0xc4, 0x8f, 0x36,
+                0x78, 0x7e, 0x89, 0x1a, 0x90, 0x2d, 0xcb, 0x5d, 0x48, 0xea, 0x5f, 0x94, 0xcf, 0xf8,
+                0xbf, 0xed, 0x5a, 0x16,
+            ]
+        );
+        assert_eq!(chain_key_root.policy.public_key, vec![0x02; 33]);
+        assert_eq!(chain_key_root.policy.max_revocation_latency_ns, 600);
+        assert_eq!(chain_key_root.policy.build_network, BuildNetwork::Local);
+        assert!(chain_key_root.allow_test_chain_key);
+    }
+
+    #[test]
+    fn auth_proof_verifier_config_chain_key_rejects_invalid_public_key() {
+        let mut cfg = chain_key_cfg("local", local_key(), "test_key_1");
+        cfg.chain_key_root_proof.allow_test_key = true;
+        cfg.chain_key_root_proof.public_key_hex = Some("00".repeat(33));
+
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+            .expect_err("invalid chain-key public key must reject");
+
+        assert!(
+            err.to_string()
+                .contains("must be a secp256k1 SEC1 public key"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn auth_proof_verifier_config_chain_key_rejects_mainnet_test_key() {
+        let cfg = chain_key_cfg("mainnet", mainnet_key(), "test_key_1");
+
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+            .expect_err("mainnet must reject test_key_1");
+
+        assert!(
+            err.to_string().contains("must not be test_key_1"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn auth_proof_verifier_config_chain_key_rejects_unapproved_local_test_key() {
+        let cfg = chain_key_cfg("local", local_key(), "test_key_1");
+
+        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+            .expect_err("local test key requires explicit opt-in");
+
+        assert!(
+            err.to_string().contains("allow_test_key must be true"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn chain_key_root_proof_mode_rejects_legacy_canister_signature_root_proof() {
+        let mut cfg = chain_key_cfg("local", local_key(), "test_key_1");
+        cfg.chain_key_root_proof.allow_test_key = true;
+        let verifier =
+            AuthOps::auth_proof_verifier_config_from(&cfg).expect("chain-key config should pass");
+        let root_proof = RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
+            signature_cbor: vec![1],
+            public_key_der: vec![2],
+        });
+
+        let err = AuthOps::verify_delegation_root_proof(
+            &delegation_cert(),
+            [0; 32],
+            &root_proof,
+            &verifier,
+            20,
+        )
+        .expect_err("chain-key mode must reject legacy root proofs");
+
+        assert!(
+            err.contains("rejected legacy canister-signature proof"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn delegated_token_verifier_gate_rejects_issuer_only_canister() {
         install_verifier_test_config(false, true, false);
 
@@ -847,8 +1300,48 @@ mod tests {
             .with_prime_canister("project_instance", canister_cfg)
             .build();
         cfg.auth.delegated_tokens.network = "local".to_string();
+        cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
         cfg.auth.delegated_tokens.root_canister_id = Some(root_pid().to_string());
         cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex(local_key()));
+        cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .derivation_path_hash_hex =
+            Some("fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16".to_string());
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .derivation_path_hex = Some(vec![
+            "63616e6963".to_string(),
+            "64656c65676174696f6e".to_string(),
+        ]);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .public_key_hex = Some("02".repeat(33));
+        cfg.auth.delegated_tokens.chain_key_root_proof.key_version = Some(4);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .min_accepted_key_version = Some(4);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .min_accepted_proof_epoch = Some(7);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .min_accepted_registry_epoch = Some(8);
+        cfg.auth.delegated_tokens.chain_key_root_proof.valid_from_ns = Some(10);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .accept_until_ns = Some(1_000);
+        cfg.auth
+            .delegated_tokens
+            .chain_key_root_proof
+            .max_revocation_latency_ns = Some(600);
         Config::reset_for_tests();
         Config::init_from_model_for_tests(cfg).expect("test config should install");
 
