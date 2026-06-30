@@ -340,10 +340,6 @@ impl AuthStateOps {
     }
 
     #[must_use]
-    #[allow(
-        dead_code,
-        reason = "0.76 chain-key install and lazy-repair wiring will use direct batch lookup"
-    )]
     pub fn chain_key_root_delegation_batch(
         batch_id: [u8; 32],
     ) -> Option<ChainKeyRootDelegationBatch> {

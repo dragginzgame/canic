@@ -226,8 +226,20 @@ where
                 signing_in_flight: true,
             });
         }
-        ChainKeyRootDelegationBatchStatus::Prepared
-        | ChainKeyRootDelegationBatchStatus::FailedRetryable => {}
+        ChainKeyRootDelegationBatchStatus::Prepared => {}
+        ChainKeyRootDelegationBatchStatus::FailedRetryable => {
+            if batch
+                .retry_after_ns
+                .is_some_and(|retry_after_ns| now_ns < retry_after_ns)
+            {
+                return Ok(SignNextChainKeyRootDelegationBatchResult {
+                    batch_id: None,
+                    signed: false,
+                    reused_signed: false,
+                    signing_in_flight: false,
+                });
+            }
+        }
         ChainKeyRootDelegationBatchStatus::Installed => {
             return Ok(SignNextChainKeyRootDelegationBatchResult {
                 batch_id: None,
@@ -467,6 +479,12 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
     let Some(mut batch) = AuthStateOps::chain_key_root_delegation_batch(batch_id) else {
         return false;
     };
+    if !matches!(
+        batch.status,
+        ChainKeyRootDelegationBatchStatus::Signed | ChainKeyRootDelegationBatchStatus::Installing
+    ) {
+        return false;
+    }
     let Some(index) = batch
         .issuers
         .iter()
@@ -474,6 +492,9 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
     else {
         return false;
     };
+    if batch.issuers[index].installed_at_ns.is_some() {
+        return false;
+    }
 
     let reason = format!("{outcome:?}");
     batch.issuers[index].last_failure = Some(reason.clone());
@@ -1990,6 +2011,56 @@ mod tests {
     }
 
     #[test]
+    fn chain_key_batch_ignores_stale_install_failure_after_success() {
+        let signing_policy = signing_policy();
+        let issuer = p(66);
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer));
+        AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
+        let mut batch = build_chain_key_root_delegation_batch(
+            input(&signing_policy),
+            &[DueChainKeyTemplate {
+                template: template(issuer, 60_000_000_000),
+            }],
+            10,
+        )
+        .expect("batch should build");
+        batch.status = ChainKeyRootDelegationBatchStatus::Signed;
+        batch.signature = Some(sign_header(&batch.header));
+        batch.signed_at_ns = Some(2_000);
+        let batch_id = batch.batch_id;
+        AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+
+        let plan = start_chain_key_root_delegation_batch_install(batch_id, 3_000)
+            .expect("install planning should succeed")
+            .expect("signed batch should produce an install plan");
+        let proof = &plan.proofs[0];
+
+        assert!(record_chain_key_root_delegation_install_success(
+            batch_id,
+            proof.issuer_pid,
+            proof.cert_hash,
+            4_000,
+        ));
+        assert!(!record_chain_key_root_delegation_install_failure(
+            batch_id,
+            proof.issuer_pid,
+            proof.cert_hash,
+            RootDelegationProofInstallOutcome::CallFailed,
+        ));
+
+        let installed = AuthStateOps::chain_key_root_delegation_batch(batch_id)
+            .expect("installed batch should remain stored");
+        assert_eq!(
+            installed.status,
+            ChainKeyRootDelegationBatchStatus::Installed
+        );
+        assert_eq!(installed.installed_at_ns, Some(4_000));
+        assert_eq!(installed.failure, None);
+        assert_eq!(installed.issuers[0].installed_at_ns, Some(4_000));
+        assert_eq!(installed.issuers[0].last_failure, None);
+    }
+
+    #[test]
     fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
         let signing_policy = signing_policy();
         let issuer = p(54);
@@ -2076,6 +2147,65 @@ mod tests {
             .expect("in-flight batch should remain stored");
         assert_eq!(stored.status, ChainKeyRootDelegationBatchStatus::Signing);
         assert!(stored.signature.is_none());
+    }
+
+    #[test]
+    fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
+        let signing_policy = signing_policy();
+        let issuer = p(56);
+        AuthStateOps::upsert_root_issuer_policy(policy(issuer));
+        AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
+
+        let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+            .expect("prepare should build a batch");
+        let batch_id = prepared.batch_id.expect("prepare should return a batch id");
+        let retry_after_ns = 60_000;
+        let mut batch = AuthStateOps::chain_key_root_delegation_batch(batch_id)
+            .expect("prepared batch should be stored");
+        batch.status = ChainKeyRootDelegationBatchStatus::FailedRetryable;
+        batch.retry_after_ns = Some(retry_after_ns);
+        batch.failure = Some("previous signing attempt failed".to_string());
+        AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+
+        let mut early_input = input(&signing_policy);
+        early_input.now_ns = retry_after_ns - 1;
+        let mut early_signer = DynamicMockSigner {
+            public_key_calls: 0,
+            sign_calls: 0,
+        };
+        let early = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+            early_input,
+            issuer,
+            &mut early_signer,
+        ))
+        .expect("early lazy repair should remain retryable");
+
+        assert_eq!(early, None);
+        assert_eq!(early_signer.public_key_calls, 0);
+        assert_eq!(early_signer.sign_calls, 0);
+
+        let mut retry_input = input(&signing_policy);
+        retry_input.now_ns = retry_after_ns;
+        let mut retry_signer = DynamicMockSigner {
+            public_key_calls: 0,
+            sign_calls: 0,
+        };
+        let retried = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+            retry_input,
+            issuer,
+            &mut retry_signer,
+        ))
+        .expect("retry-window lazy repair should sign")
+        .expect("retry-window lazy repair should return a proof");
+
+        assert_eq!(retried.issuer_pid, issuer);
+        assert_eq!(retry_signer.public_key_calls, 1);
+        assert_eq!(retry_signer.sign_calls, 1);
+        let stored = AuthStateOps::chain_key_root_delegation_batch(batch_id)
+            .expect("retried batch should remain stored");
+        assert_eq!(stored.status, ChainKeyRootDelegationBatchStatus::Signed);
+        assert_eq!(stored.retry_after_ns, None);
+        assert_eq!(stored.failure, None);
     }
 
     #[test]

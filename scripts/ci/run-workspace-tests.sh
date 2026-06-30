@@ -61,6 +61,10 @@ clear_pocketic_wasm_targets() {
         "target/delegation_root_stub_embedded_wasm"
     )
 
+    if ! should_clear_pocketic_wasm_targets; then
+        return
+    fi
+
     for target_dir in "${target_dirs[@]}"; do
         if [[ ! -e "$target_dir" ]]; then
             continue
@@ -74,28 +78,32 @@ clear_pocketic_wasm_targets() {
     done
 }
 
+should_clear_pocketic_wasm_targets() {
+    # CI keeps the aggressive cleanup to avoid runner disk exhaustion; local
+    # runs keep Cargo's wasm build cache unless cleanup is explicitly requested.
+    case "${CANIC_CLEAR_PIC_WASM_TARGETS:-}" in
+        1 | true | TRUE | yes | YES)
+            return 0
+            ;;
+        0 | false | FALSE | no | NO)
+            return 1
+            ;;
+    esac
+
+    case "${CI:-}" in
+        1 | true | TRUE | yes | YES)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
 run_pic_test() {
     local label="$1"
     shift
     clear_pocketic_wasm_targets "$label"
     run_test "$label" "$@"
-}
-
-prebuild_root_test_artifacts() {
-    local label="prebuild local ICP artifacts for PocketIC root suites"
-    clear_pocketic_wasm_targets "$label"
-    echo "==> $label"
-    local started_at="$SECONDS"
-    bash scripts/ci/build-ci-wasm-artifacts.sh
-    # The generic prebuild writes .icp/local/canisters directly, while the
-    # root harness stamp records profile-specific env such as internal test
-    # endpoints. Invalidate that stamp so root tests do not trust prebuild
-    # artifacts as matching a later profile-specific build.
-    rm -f .icp/canic-build-env.stamp
-    local elapsed
-    elapsed="$(elapsed_seconds "$started_at")"
-    echo "==> $label done in $elapsed"
-    record_summary "$label" "$elapsed" "prebuild"
 }
 
 # Compile and run all unit/lib/bin tests together first.
@@ -120,7 +128,6 @@ run_test "canic workspace_manifest" -p canic --test workspace_manifest
 run_test "canic-core trap_guard" -p canic-core --test trap_guard
 
 # PocketIC-backed integration suites.
-prebuild_root_test_artifacts
 run_pic_test "canic-tests pic_intent_race" -p canic-tests --test pic_intent_race
 run_pic_test "canic-tests pic_sharding_bootstrap" -p canic-tests --test pic_sharding_bootstrap
 run_pic_test "canic-tests pic_role_attestation" -p canic-tests --test pic_role_attestation

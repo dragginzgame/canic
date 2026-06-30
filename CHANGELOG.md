@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.1` hardens chain-key batch retry/install state and makes local
+  workspace test runs avoid redundant clippy and PocketIC wasm cache churn
+  while preserving CI cleanup behavior.
+
 - `0.76.0` replaces bridge-backed delegated-auth renewal with chain-key batch
   root proofs signed by root through management-canister ECDSA, including
   timer renewal, issuer lazy repair, explicit `chain_key_batch` trust anchors,

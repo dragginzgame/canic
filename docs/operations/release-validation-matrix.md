@@ -86,9 +86,10 @@ make clippy
 make test
 ```
 
-`make test` runs `make clippy` and `make test-unit`. Running `make clippy`
-separately before `make test` is useful when reporting the matrix because it
-separates lint failures from test failures.
+`make test` runs `make test-unit` with the repository's deterministic test
+sequencing. Running `make clippy` separately before `make test` keeps lint
+failures distinct from test failures without recompiling lint-only targets as
+part of the test command.
 
 ## Required CI Gates
 

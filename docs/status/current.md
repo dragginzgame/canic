@@ -89,8 +89,25 @@ inspect only the files needed for the current task.
   `cargo test --locked -p canic --test changelog_governance`,
   `cargo check --locked -p canic-core -p canic`, and
   `cargo check --locked -p canic-tests --test root_suite`.
-  No design-lock gates remain open before 0.76 bridge-free close-out; the next
-  work is implementation close-out or broader validation. The earlier local
+  The current `0.76.1` worktree starts post-release hardening by preserving
+  local PocketIC wasm build caches during `make test` unless CI or
+  `CANIC_CLEAR_PIC_WASM_TARGETS` asks for aggressive cleanup, by keeping
+  chain-key batch install state terminal when a stale issuer install failure
+  arrives after that issuer was already recorded as installed, by making
+  issuer lazy repair honor a failed batch's signing `retry_after_ns` before
+  attempting another management-canister signature, and by removing a stale
+  dead-code suppression from the now-active chain-key batch lookup. The
+  `0.76.1` release changelog is prepared in the root ledger and detailed 0.76
+  notes. Focused validation passing for the 0.76.1 slice:
+  `bash -n scripts/ci/run-workspace-tests.sh`,
+  `cargo fmt --all -- --check`,
+  `cargo test --locked -p canic-core chain_key_batch_ignores_stale_install_failure_after_success --lib`,
+  `cargo test --locked -p canic-core chain_key_lazy_repair_respects_retry_after_before_resigning --lib`,
+  `cargo test --locked -p canic-core chain_key_batch --lib`,
+  `cargo test --locked -p canic --test changelog_governance`, and
+  `git diff --check`.
+  No 0.76.1-specific local gate remains open in this workspace; broader
+  release validation remains maintainer-run. The earlier local
   trust-anchor blocker is resolved for
   public-key discovery: the current PocketIC harness exposes
   `ecdsa:Secp256k1:key_1` and the local fleet now embeds the actual
