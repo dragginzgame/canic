@@ -78,7 +78,7 @@ inspect only the files needed for the current task.
   `cargo test --locked -p canic --test protocol_surface`,
   `cargo check --locked -p canic-tests --test root_suite`,
   `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_chain_key_management_public_key_matches_test_fleet_trust_anchor -- --nocapture`,
-  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_legacy_canister_signature_root_proof_rejected_for_chain_key_only_issuers -- --nocapture`,
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_legacy_bridge_root_proof_surface_absent_for_chain_key_only_issuers -- --nocapture`,
   `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_chain_key_batch_renews_without_external_liveness -- --nocapture`, and
   `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_lazy_repair_uses_cached_batch_and_does_not_sign_per_login -- --nocapture`, and
   `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_timer_batches_multiple_issuers_with_one_signature -- --nocapture`, and
@@ -119,7 +119,7 @@ inspect only the files needed for the current task.
   `cargo check --locked -p canic-core -p canic`,
   `cargo clippy --locked -p canic-core --lib --all-features -- -D warnings`,
   `cargo test --locked -p canic-core chain_key --lib`,
-  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_legacy_canister_signature_root_proof_rejected_for_chain_key_only_issuers -- --nocapture`,
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_legacy_bridge_root_proof_surface_absent_for_chain_key_only_issuers -- --nocapture`,
   and
   `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076_chain_key_batch_renews_without_external_liveness -- --nocapture`.
   Audit note: old bridge-backed root-proof provisioning endpoint/DTO/API/CLI
@@ -190,7 +190,19 @@ inspect only the files needed for the current task.
   `git diff --check`.
   The `0.76.5` release changelog is prepared in the root ledger and detailed
   0.76 notes for this cleanup.
-  No 0.76.5-specific local gate remains open in this workspace; broader
+  Post-`0.76.5` source-hygiene cleanup clarified active auth ops module
+  headers so delegated-token and role-attestation ops are described as auth
+  facades rather than "bridge" modules, and renamed the 0.76 PocketIC legacy
+  surface test so it describes absent bridge root-proof methods rather than
+  rejected root-proof material.
+  Focused validation passing for this cleanup: `cargo fmt --all -- --check`,
+  `cargo check --locked -p canic-core`,
+  `cargo check --locked -p canic-tests --test root_suite`,
+  `cargo test --locked -p canic --test changelog_governance`, and
+  `git diff --check`.
+  The `0.76.6` release changelog is prepared in the root ledger and detailed
+  0.76 notes for this cleanup.
+  No 0.76.6-specific local gate remains open in this workspace; broader
   release validation remains maintainer-run. The earlier local
   trust-anchor blocker is resolved for
   public-key discovery: the current PocketIC harness exposes

@@ -2,7 +2,7 @@
 //!
 //! Responsibility: prepare, retrieve, and verify root role attestation proofs.
 //! Does not own: endpoint authorization, role policy, or public DTO schemas.
-//! Boundary: auth ops bridge role-attestation workflows and root proof helpers.
+//! Boundary: auth ops facade for role-attestation workflows and root proof helpers.
 
 use super::{
     AuthOps, PrepareRootRoleAttestationInput, PreparedRootRoleAttestation, crypto,

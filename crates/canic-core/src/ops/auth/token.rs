@@ -2,7 +2,7 @@
 //!
 //! Responsibility: prepare issuer-local delegated tokens and verify delegated tokens.
 //! Does not own: endpoint authorization, active-proof storage, or auth policy records.
-//! Boundary: auth ops bridge delegated-token workflows, config, metrics, and proof helpers.
+//! Boundary: auth ops facade for delegated-token workflows, config, metrics, and proof helpers.
 
 use super::{
     AuthChainKeyRootVerifierConfig, AuthOps, AuthProofVerifierConfig,
