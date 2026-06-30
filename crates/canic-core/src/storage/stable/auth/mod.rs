@@ -10,18 +10,17 @@ mod records;
 mod sessions;
 
 pub use records::{
-    ActiveDelegationProofRecord, AuthStateRecord, BuildNetworkRecord, ChainKeyAlgorithmRecord,
+    ActiveDelegationProofRecord, AuthStateRecord, ChainKeyAlgorithmRecord,
     ChainKeyBatchHeaderRecord, ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord,
     ChainKeyDelegationCertRecord, ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
     ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
-    ChainKeyRootSignatureRecord, DelegatedAuthIssuerPolicySnapshotRecord,
-    DelegatedAuthRegistrySnapshotRecord, DelegatedRoleGrantRecord,
-    DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord, DelegationAudienceRecord,
-    DelegationCertRecord, DelegationProofRecord, IcCanisterSignatureProofRecord,
-    IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-    RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
+    ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
+    DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
+    IcCanisterSignatureProofRecord, IcChainKeyBatchSignatureProofRecord,
+    IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord,
+    RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
     RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord,
-    RootIssuerRenewalTemplateRecord, RootKeyPolicyRecord, RootProofModeRecord, RootProofRecord,
+    RootIssuerRenewalTemplateRecord, RootProofRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -373,10 +372,6 @@ impl AuthState {
 
     // Resolve a chain-key root delegation batch by batch id.
     #[must_use]
-    #[allow(
-        dead_code,
-        reason = "0.76 chain-key install and lazy-repair wiring will use direct batch lookup"
-    )]
     pub(crate) fn get_chain_key_root_delegation_batch(
         batch_id: [u8; 32],
     ) -> Option<ChainKeyRootDelegationBatchRecord> {

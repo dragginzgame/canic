@@ -113,115 +113,6 @@ pub struct ChainKeyKeyIdRecord {
 }
 
 ///
-/// RootProofModeRecord
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 proof-mode stable schema is passive until chain-key renewal state is wired"
-    )
-)]
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum RootProofModeRecord {
-    IcCanisterSignature,
-    ChainKeyBatch,
-}
-
-///
-/// BuildNetworkRecord
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable schema is passive until chain-key renewal state is wired"
-    )
-)]
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum BuildNetworkRecord {
-    Ic,
-    Local,
-}
-
-///
-/// RootKeyPolicyRecord
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 root key policy stable schema is passive until chain-key renewal state is wired"
-    )
-)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootKeyPolicyRecord {
-    pub root_canister_id: Principal,
-    pub proof_mode: RootProofModeRecord,
-    pub algorithm: ChainKeyAlgorithmRecord,
-    pub key_id: ChainKeyKeyIdRecord,
-    pub derivation_path_hash: [u8; 32],
-    pub public_key: Vec<u8>,
-    pub key_version: u64,
-    pub min_accepted_key_version: u64,
-    pub min_accepted_proof_epoch: u64,
-    pub min_accepted_registry_epoch: u64,
-    pub max_revocation_latency_ns: u64,
-    pub valid_from_ns: u64,
-    pub accept_until_ns: u64,
-    pub build_network: BuildNetworkRecord,
-}
-
-///
-/// DelegatedAuthRegistrySnapshotRecord
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable schema is passive until chain-key renewal state is wired"
-    )
-)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedAuthRegistrySnapshotRecord {
-    pub schema_version: u16,
-    pub root_canister_id: Principal,
-    pub registry_epoch: u64,
-    pub proof_mode: RootProofModeRecord,
-    pub root_key_policy_hash: [u8; 32],
-    pub issuer_policies: Vec<DelegatedAuthIssuerPolicySnapshotRecord>,
-}
-
-///
-/// DelegatedAuthIssuerPolicySnapshotRecord
-///
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "0.76 registry snapshot stable schema is passive until chain-key renewal state is wired"
-    )
-)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DelegatedAuthIssuerPolicySnapshotRecord {
-    pub issuer_canister_id: Principal,
-    pub enabled: bool,
-    pub preferred_proof_mode: RootProofModeRecord,
-    pub allowed_audiences: Vec<DelegationAudienceRecord>,
-    pub allowed_grants: Vec<DelegatedRoleGrantRecord>,
-    pub max_root_proof_ttl_ns: u64,
-    pub max_token_ttl_ns: u64,
-    pub issuer_proof_algorithm: IssuerProofAlgorithmRecord,
-    pub issuer_proof_binding_hash: [u8; 32],
-    pub renewal_template_hash: [u8; 32],
-}
-
-///
 /// ChainKeyBatchHeaderRecord
 ///
 
@@ -511,6 +402,8 @@ pub struct RootIssuerRenewalAttemptRecord {
 ///
 /// RootDelegationRenewalBatchRecord
 ///
+/// Historical bridge-backed renewal batch state retained only for stable-state
+/// decode. Active 0.76 renewal state uses `ChainKeyRootDelegationBatchRecord`.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootDelegationRenewalBatchRecord {
@@ -523,6 +416,8 @@ pub struct RootDelegationRenewalBatchRecord {
 ///
 /// RootProvisionerRecord
 ///
+/// Historical renewal-provisioner ACL state retained only for stable-state
+/// decode. Active 0.76 delegated auth has no provisioner ACL.
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootProvisionerRecord {

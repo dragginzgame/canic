@@ -384,13 +384,11 @@ mod tests {
         dto::auth::{
             ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
             ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId,
-            ChainKeyRootSignatureV1, DelegatedAuthIssuerPolicySnapshotV1,
-            DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegationAudience,
-            DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
-            IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
-            RootKeyPolicyV1, RootProof, RootProofMode,
+            ChainKeyRootSignatureV1, DelegatedRoleGrant, DelegationAudience, DelegationCert,
+            DelegationProof, IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1,
+            IssuerProofAlgorithm, IssuerProofBinding, RootProof,
         },
-        ids::{BuildNetwork, CanisterRole},
+        ids::CanisterRole,
     };
 
     fn p(id: u8) -> Principal {
@@ -503,58 +501,6 @@ mod tests {
         }
     }
 
-    fn root_key_policy() -> RootKeyPolicyV1 {
-        RootKeyPolicyV1 {
-            root_canister_id: p(1),
-            proof_mode: RootProofMode::ChainKeyBatch,
-            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
-            key_id: ChainKeyKeyId {
-                name: "test_key_1".to_string(),
-            },
-            derivation_path_hash: [50; 32],
-            public_key: vec![51; 33],
-            key_version: 4,
-            min_accepted_key_version: 4,
-            min_accepted_proof_epoch: 2,
-            min_accepted_registry_epoch: 3,
-            max_revocation_latency_ns: 600,
-            valid_from_ns: 20,
-            accept_until_ns: 1_000,
-            build_network: BuildNetwork::Local,
-        }
-    }
-
-    fn registry_snapshot() -> DelegatedAuthRegistrySnapshotV1 {
-        DelegatedAuthRegistrySnapshotV1 {
-            schema_version: 1,
-            root_canister_id: p(1),
-            registry_epoch: 3,
-            proof_mode: RootProofMode::ChainKeyBatch,
-            root_key_policy_hash: [52; 32],
-            issuer_policies: vec![registry_issuer_policy(p(2)), registry_issuer_policy(p(3))],
-        }
-    }
-
-    fn registry_issuer_policy(
-        issuer_canister_id: Principal,
-    ) -> DelegatedAuthIssuerPolicySnapshotV1 {
-        DelegatedAuthIssuerPolicySnapshotV1 {
-            issuer_canister_id,
-            enabled: true,
-            preferred_proof_mode: RootProofMode::ChainKeyBatch,
-            allowed_audiences: vec![DelegationAudience::CanicSubnet(p(7))],
-            allowed_grants: vec![DelegatedRoleGrant {
-                target: CanisterRole::owned("project_instance".to_string()),
-                scopes: vec!["read".to_string(), "write".to_string()],
-            }],
-            max_root_proof_ttl_ns: 600,
-            max_token_ttl_ns: 30,
-            issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
-            issuer_proof_binding_hash: [53; 32],
-            renewal_template_hash: [54; 32],
-        }
-    }
-
     #[test]
     fn active_delegation_proof_round_trips_and_filters_by_time() {
         AuthStateOps::clear_active_delegation_proof();
@@ -594,26 +540,6 @@ mod tests {
         assert_eq!(first, minimum);
         assert_eq!(second, first.saturating_add(1));
         assert_eq!(AuthStateOps::delegated_auth_proof_epoch(), second);
-    }
-
-    #[test]
-    fn chain_key_policy_and_registry_snapshot_round_trip_through_records() {
-        let policy = root_key_policy();
-        let policy_record = mapper::RootKeyPolicyRecordMapper::dto_to_record(policy.clone());
-
-        assert_eq!(
-            mapper::RootKeyPolicyRecordMapper::record_to_dto(policy_record),
-            policy
-        );
-
-        let snapshot = registry_snapshot();
-        let snapshot_record =
-            mapper::DelegatedAuthRegistrySnapshotRecordMapper::dto_to_record(snapshot.clone());
-
-        assert_eq!(
-            mapper::DelegatedAuthRegistrySnapshotRecordMapper::record_to_dto(snapshot_record),
-            snapshot
-        );
     }
 
     #[test]

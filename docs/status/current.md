@@ -153,9 +153,28 @@ inspect only the files needed for the current task.
   `cargo fmt --all -- --check`,
   `cargo test --locked -p canic-cli global_icp_is_forwarded_to_auth_renewal_commands`,
   `cargo test --locked -p canic-cli global_network_is_forwarded_to_auth_renewal_commands`,
-  and `cargo test --locked -p canic-cli global_`.
+  `cargo test --locked -p canic-cli global_`,
+  `scripts/ci/verify-packaged-downstream-cli.sh`, and
+  `scripts/ci/verify-installed-canic-cli.sh`.
+  Fresh live auth validation also passes for
+  `POCKET_IC_BIN=/home/adam/projects/canic/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic cargo test --locked -p canic-tests --test root_suite auth_076 -- --nocapture --test-threads=1`
+  (6 passed, 0 failed, 0 ignored).
   The `0.76.3` release changelog is prepared in the root ledger and detailed
   0.76 notes for this cleanup.
+  Post-`0.76.3` cleanup removed unused delegated-auth root-key policy and
+  registry snapshot stable-record mappers and their test-only round-trip
+  scaffold because those records were never persisted in `AuthStateRecord`.
+  The retained historical `root_delegation_renewal_batches` and
+  `root_provisioners` stable fields are now documented as decode-only bridge
+  state, while active 0.76 renewal state remains on
+  `ChainKeyRootDelegationBatchRecord`. Focused validation passing for this
+  cleanup: `cargo fmt --all`, `cargo fmt --all -- --check`,
+  `cargo check --locked -p canic-core`,
+  `cargo test --locked -p canic-core ops::storage::auth --lib`,
+  `cargo clippy --locked -p canic-core --lib --all-features -- -D warnings`,
+  `cargo test --locked -p canic-core chain_key --lib` (68 passed),
+  `cargo test --locked -p canic --test changelog_governance`, and
+  `git diff --check`.
   No 0.76.3-specific local gate remains open in this workspace; broader
   release validation remains maintainer-run. The earlier local
   trust-anchor blocker is resolved for
