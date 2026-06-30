@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.3` removes the remaining top-level CLI global-option forwarding
+  compatibility for the deleted `auth renewal run-once` and
+  `auth renewal provisioner` command tails.
+
 - `0.76.2` removes the old bridge-backed delegated-auth root-proof
   provisioning endpoints, DTO/API/CLI surfaces, replay rows, and provisioner
   access predicate, leaving delegated-token liveness on chain-key renewal and

@@ -145,7 +145,18 @@ inspect only the files needed for the current task.
   `cargo test --locked -p canic-core chain_key --lib`.
   The `0.76.2` release changelog is prepared in the root ledger and detailed
   0.76 notes for this removal slice.
-  No 0.76.2-specific local gate remains open in this workspace; broader
+  Post-`0.76.2` cleanup removed the remaining top-level CLI global-option
+  forwarding compatibility for the deleted `auth renewal run-once` and
+  `auth renewal provisioner` tails, leaving `auth renewal status` as the only
+  auth renewal leaf that receives forwarded global `--icp`/`--network`
+  options. Focused validation passing for this cleanup:
+  `cargo fmt --all -- --check`,
+  `cargo test --locked -p canic-cli global_icp_is_forwarded_to_auth_renewal_commands`,
+  `cargo test --locked -p canic-cli global_network_is_forwarded_to_auth_renewal_commands`,
+  and `cargo test --locked -p canic-cli global_`.
+  The `0.76.3` release changelog is prepared in the root ledger and detailed
+  0.76 notes for this cleanup.
+  No 0.76.3-specific local gate remains open in this workspace; broader
   release validation remains maintainer-run. The earlier local
   trust-anchor blocker is resolved for
   public-key discovery: the current PocketIC harness exposes

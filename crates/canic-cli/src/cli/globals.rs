@@ -174,14 +174,7 @@ fn auth_leaf_accepts_globals(tail: &[OsString]) -> bool {
         return false;
     }
 
-    match tail.get(1).and_then(|arg| arg.to_str()) {
-        Some("run-once" | "status") => true,
-        Some("provisioner") => matches!(
-            tail.get(2).and_then(|arg| arg.to_str()),
-            Some("list" | "enable" | "disable")
-        ),
-        _ => false,
-    }
+    tail.get(1).and_then(|arg| arg.to_str()) == Some("status")
 }
 
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {

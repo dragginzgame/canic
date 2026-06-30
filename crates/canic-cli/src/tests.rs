@@ -553,6 +553,10 @@ fn global_icp_is_forwarded_to_auth_renewal_commands() {
     ];
     let mut help_tail = vec![OsString::from("help")];
 
+    let original_run_once_tail = run_once_tail.clone();
+    let original_provisioner_list_tail = provisioner_list_tail.clone();
+    let original_provisioner_enable_tail = provisioner_enable_tail.clone();
+
     apply_global_icp("auth", &mut run_once_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("auth", &mut status_tail, Some("/tmp/icp".to_string()));
     apply_global_icp(
@@ -567,22 +571,13 @@ fn global_icp_is_forwarded_to_auth_renewal_commands() {
     );
     apply_global_icp("auth", &mut help_tail, Some("/tmp/icp".to_string()));
 
-    assert!(run_once_tail.ends_with(&[
-        OsString::from(INTERNAL_ICP_OPTION),
-        OsString::from("/tmp/icp")
-    ]));
+    assert_eq!(run_once_tail, original_run_once_tail);
     assert!(status_tail.ends_with(&[
         OsString::from(INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp")
     ]));
-    assert!(provisioner_list_tail.ends_with(&[
-        OsString::from(INTERNAL_ICP_OPTION),
-        OsString::from("/tmp/icp")
-    ]));
-    assert!(provisioner_enable_tail.ends_with(&[
-        OsString::from(INTERNAL_ICP_OPTION),
-        OsString::from("/tmp/icp")
-    ]));
+    assert_eq!(provisioner_list_tail, original_provisioner_list_tail);
+    assert_eq!(provisioner_enable_tail, original_provisioner_enable_tail);
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
@@ -876,6 +871,10 @@ fn global_network_is_forwarded_to_auth_renewal_commands() {
     ];
     let mut help_tail = vec![OsString::from("help")];
 
+    let original_run_once_tail = run_once_tail.clone();
+    let original_provisioner_list_tail = provisioner_list_tail.clone();
+    let original_provisioner_disable_tail = provisioner_disable_tail.clone();
+
     apply_global_network("auth", &mut run_once_tail, Some("fixture".to_string()));
     apply_global_network("auth", &mut status_tail, Some("fixture".to_string()));
     apply_global_network(
@@ -890,22 +889,13 @@ fn global_network_is_forwarded_to_auth_renewal_commands() {
     );
     apply_global_network("auth", &mut help_tail, Some("fixture".to_string()));
 
-    assert!(run_once_tail.ends_with(&[
-        OsString::from(INTERNAL_NETWORK_OPTION),
-        OsString::from("fixture")
-    ]));
+    assert_eq!(run_once_tail, original_run_once_tail);
     assert!(status_tail.ends_with(&[
         OsString::from(INTERNAL_NETWORK_OPTION),
         OsString::from("fixture")
     ]));
-    assert!(provisioner_list_tail.ends_with(&[
-        OsString::from(INTERNAL_NETWORK_OPTION),
-        OsString::from("fixture")
-    ]));
-    assert!(provisioner_disable_tail.ends_with(&[
-        OsString::from(INTERNAL_NETWORK_OPTION),
-        OsString::from("fixture")
-    ]));
+    assert_eq!(provisioner_list_tail, original_provisioner_list_tail);
+    assert_eq!(provisioner_disable_tail, original_provisioner_disable_tail);
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
