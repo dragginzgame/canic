@@ -107,8 +107,6 @@ pub(in crate::ops::auth) struct ChainKeySignatureVerificationInput<'a> {
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub(in crate::ops::auth) enum ChainKeyRootProofError {
-    #[error("delegated auth chain-key root proof rejected legacy canister-signature proof")]
-    LegacyRootProofRejected,
     #[error("delegated auth chain-key root proof schema version mismatch")]
     SchemaVersionMismatch { expected: u16, found: u16 },
     #[error("delegated auth chain-key root canister mismatch")]
@@ -168,9 +166,7 @@ pub(in crate::ops::auth) fn verify_chain_key_batch_root_proof<F>(
 where
     F: FnMut(ChainKeySignatureVerificationInput<'_>) -> Result<(), String>,
 {
-    let RootProof::IcChainKeyBatchSignatureV1(proof) = input.root_proof else {
-        return Err(ChainKeyRootProofError::LegacyRootProofRejected);
-    };
+    let RootProof::IcChainKeyBatchSignatureV1(proof) = input.root_proof;
 
     let header = &proof.header;
     let delegation_cert = &proof.delegation_cert;
@@ -529,8 +525,8 @@ mod tests {
     use crate::{
         dto::auth::{
             ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, DelegatedRoleGrant,
-            DelegationAudience, IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1,
-            IssuerProofAlgorithm, IssuerProofBinding,
+            DelegationAudience, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
+            IssuerProofBinding,
         },
         ids::CanisterRole,
         ops::auth::delegated::canonical::issuer_proof_binding_hash,
@@ -663,9 +659,7 @@ mod tests {
         proof: &mut RootProof,
         mut f: impl FnMut(&mut IcChainKeyBatchSignatureProofV1),
     ) {
-        let RootProof::IcChainKeyBatchSignatureV1(proof) = proof else {
-            panic!("test helper expects chain-key proof");
-        };
+        let RootProof::IcChainKeyBatchSignatureV1(proof) = proof;
         f(proof);
     }
 
@@ -696,21 +690,6 @@ mod tests {
         .expect("valid chain-key batch proof should verify");
 
         assert_eq!(calls.get(), 1);
-    }
-
-    #[test]
-    fn chain_key_batch_root_proof_rejects_legacy_canister_signature_proof() {
-        let cert = cert();
-        let policy = policy();
-        let legacy = RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![1],
-            public_key_der: vec![2],
-        });
-
-        assert_eq!(
-            verify(&cert, &legacy, &policy),
-            Err(ChainKeyRootProofError::LegacyRootProofRejected)
-        );
     }
 
     #[test]
@@ -973,9 +952,7 @@ mod tests {
         let cert = cert();
         let policy = policy();
         let proof = proof_for_cert(&cert, &policy);
-        let RootProof::IcChainKeyBatchSignatureV1(proof) = proof else {
-            panic!("test helper expects chain-key proof");
-        };
+        let RootProof::IcChainKeyBatchSignatureV1(proof) = proof;
         let leaf_hash = chain_key_delegation_cert_hash(&proof.delegation_cert).unwrap();
         let witness = ChainKeyBatchWitnessV1 {
             steps: vec![
@@ -1015,9 +992,7 @@ mod tests {
             },
             |input| {
                 assert_eq!(input.message_hash, {
-                    let RootProof::IcChainKeyBatchSignatureV1(proof) = &proof else {
-                        unreachable!("test proof is chain-key");
-                    };
+                    let RootProof::IcChainKeyBatchSignatureV1(proof) = &proof;
                     chain_key_batch_header_hash(&proof.header)
                 });
                 Err("bad signature".to_string())

@@ -28,13 +28,8 @@ pub struct DelegatedRoleGrant {
 // RootProof
 //
 
-#[expect(
-    clippy::large_enum_variant,
-    reason = "RootProof is a Candid boundary DTO; boxing the chain-key variant would change the public Rust contract"
-)]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProof {
-    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
     IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1),
 }
 
@@ -44,7 +39,6 @@ pub enum RootProof {
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProofMode {
-    IcCanisterSignature,
     ChainKeyBatch,
 }
 
@@ -652,6 +646,15 @@ pub struct RoleAttestation {
 }
 
 //
+// RoleAttestationRootProof
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RoleAttestationRootProof {
+    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
+}
+
+//
 // RoleAttestationPrepareResponse
 //
 
@@ -678,7 +681,7 @@ pub struct RoleAttestationGetRequest {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignedRoleAttestation {
     pub payload: RoleAttestation,
-    pub root_proof: RootProof,
+    pub root_proof: RoleAttestationRootProof,
 }
 
 // -----------------------------------------------------------------------------

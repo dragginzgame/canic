@@ -195,8 +195,7 @@ mod tests {
         cdk::types::Principal,
         dto::auth::{
             DelegatedRoleGrant, DelegationAudience, DelegationCert, DelegationProof,
-            IcCanisterSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
-            RootDelegationProofBatchProof, RootProof,
+            IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
         },
         ids::{CanisterRole, cap},
     };
@@ -230,10 +229,7 @@ mod tests {
                         scopes: vec![cap::READ.to_string()],
                     }],
                 },
-                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                    signature_cbor: vec![8; 64],
-                    public_key_der: vec![9; 32],
-                }),
+                root_proof: crate::ops::auth::test_fixtures::chain_key_root_proof(8),
             },
         }
     }

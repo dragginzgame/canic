@@ -165,7 +165,7 @@ mod tests {
         dto::auth::{
             DelegatedRoleGrant, DelegatedToken, DelegatedTokenClaims, DelegationAudience,
             DelegationCert, DelegationProof, IcCanisterSignatureProofV1, IssuerProof,
-            IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+            IssuerProofAlgorithm, IssuerProofBinding,
         },
     };
 
@@ -277,10 +277,7 @@ mod tests {
                     aud: DelegationAudience::Project("test".to_string()),
                     grants: vec![grant("project_instance", &scopes)],
                 },
-                root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                    signature_cbor: vec![12; 64],
-                    public_key_der: vec![13; 32],
-                }),
+                root_proof: crate::ops::auth::test_fixtures::chain_key_root_proof(12),
             },
             issuer_proof: IssuerProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
                 signature_cbor: vec![13; 64],

@@ -12,7 +12,8 @@ use crate::cdk;
 #[cfg(test)]
 use crate::domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, ic_root_public_key_raw_from_der_or_raw};
 use crate::{
-    InternalError, cdk::types::Principal, dto::auth::RootProof, ops::auth::AuthSignatureError,
+    InternalError, cdk::types::Principal, dto::auth::RoleAttestationRootProof,
+    ops::auth::AuthSignatureError,
 };
 #[cfg(feature = "auth-root-canister-sig-create")]
 use crate::{dto::auth::IcCanisterSignatureProofV1, ops::auth::AuthValidationError};
@@ -143,14 +144,14 @@ impl AuthOps {
         prepared_by: Principal,
         root_pid: Principal,
         now_ns: u64,
-    ) -> Result<RootProof, InternalError> {
+    ) -> Result<RoleAttestationRootProof, InternalError> {
         get_root_canister_signature_proof(kind, payload_hash, prepared_by, root_pid, now_ns)
     }
 
     pub(crate) fn verify_root_canister_signature_proof(
         kind: RootPayloadKind,
         payload_hash: [u8; 32],
-        proof: &RootProof,
+        proof: &RoleAttestationRootProof,
         expected_root_pid: Principal,
         ic_root_public_key_raw: &[u8],
     ) -> Result<(), InternalError> {
@@ -259,7 +260,7 @@ fn get_root_canister_signature_proof(
     prepared_by: Principal,
     root_pid: Principal,
     now_ns: u64,
-) -> Result<RootProof, InternalError> {
+) -> Result<RoleAttestationRootProof, InternalError> {
     use ic_canister_sig_creation::{CanisterSigPublicKey, signature_map::CanisterSigInputs};
 
     let key = PendingRootProofKey::new(kind, payload_hash, prepared_by);
@@ -288,7 +289,7 @@ fn get_root_canister_signature_proof(
     let public_key_der =
         CanisterSigPublicKey::new(root_pid, root_canister_sig_seed(kind).to_vec()).to_der();
 
-    Ok(RootProof::IcCanisterSignatureV1(
+    Ok(RoleAttestationRootProof::IcCanisterSignatureV1(
         IcCanisterSignatureProofV1 {
             signature_cbor,
             public_key_der,
@@ -313,7 +314,7 @@ fn get_root_canister_signature_proof(
     _prepared_by: Principal,
     _root_pid: Principal,
     _now_ns: u64,
-) -> Result<RootProof, InternalError> {
+) -> Result<RoleAttestationRootProof, InternalError> {
     Err(AuthSignatureError::ProofUnavailable.into())
 }
 
@@ -321,16 +322,11 @@ fn get_root_canister_signature_proof(
 fn verify_root_canister_signature_proof(
     kind: RootPayloadKind,
     payload_hash: [u8; 32],
-    proof: &RootProof,
+    proof: &RoleAttestationRootProof,
     expected_root_pid: Principal,
     ic_root_public_key_raw: &[u8],
 ) -> Result<(), InternalError> {
-    let RootProof::IcCanisterSignatureV1(proof) = proof else {
-        return Err(AuthSignatureError::ProofInvalid(
-            "root proof is not an IC canister signature".to_string(),
-        )
-        .into());
-    };
+    let RoleAttestationRootProof::IcCanisterSignatureV1(proof) = proof;
     let (canister_id, seed) = parse_canister_sig_public_key_der(&proof.public_key_der)
         .map_err(AuthSignatureError::ProofInvalid)?;
     if canister_id != expected_root_pid {
@@ -362,7 +358,7 @@ fn verify_root_canister_signature_proof(
 fn verify_root_canister_signature_proof(
     _kind: RootPayloadKind,
     _payload_hash: [u8; 32],
-    _proof: &RootProof,
+    _proof: &RoleAttestationRootProof,
     _expected_root_pid: Principal,
     _ic_root_public_key_raw: &[u8],
 ) -> Result<(), InternalError> {

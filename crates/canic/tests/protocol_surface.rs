@@ -23,15 +23,14 @@ use canic::{
         ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
         ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
         DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant,
-        DelegationAudience, DelegationCert, DelegationProof, IcCanisterSignatureProofV1,
-        IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm, IssuerProofBinding,
-        RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
-        RootDelegationProofBatchProofRef, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-        RootIssuerPolicyView, RootIssuerRenewalAttemptStatus, RootIssuerRenewalAttemptView,
-        RootIssuerRenewalOutcome, RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest,
-        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
-        RootIssuerRenewalTemplateUpsertRequest, RootIssuerRenewalTemplateView, RootKeyPolicyV1,
-        RootProof, RootProofMode,
+        DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
+        IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchInstallRequest,
+        RootDelegationProofBatchProof, RootDelegationProofBatchProofRef, RootIssuerPolicyResponse,
+        RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootIssuerRenewalAttemptStatus,
+        RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
+        RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+        RootIssuerRenewalTemplateView, RootKeyPolicyV1, RootProof, RootProofMode,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
@@ -1018,10 +1017,9 @@ fn root_delegation_proof(
             aud: audience,
             grants: vec![grant],
         },
-        root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-            signature_cbor: vec![1, 2, 3],
-            public_key_der: vec![4, 5, 6],
-        }),
+        root_proof: RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(
+            root_pid, issuer_pid,
+        )),
     }
 }
 

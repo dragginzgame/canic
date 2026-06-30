@@ -115,7 +115,6 @@ pub struct ChainKeyKeyId {
 }
 
 pub enum RootProof {
-    IcCanisterSignatureV1(IcCanisterSignatureProofV1),
     IcChainKeyBatchSignatureV1(IcChainKeyBatchSignatureProofV1),
 }
 

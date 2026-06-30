@@ -206,10 +206,7 @@ mod tests {
     }
 
     fn root_proof(byte: u8) -> RootProof {
-        RootProof::IcCanisterSignatureV1(crate::dto::auth::IcCanisterSignatureProofV1 {
-            signature_cbor: vec![byte; 8],
-            public_key_der: vec![byte; 4],
-        })
+        crate::ops::auth::test_fixtures::chain_key_root_proof(byte)
     }
 
     #[test]

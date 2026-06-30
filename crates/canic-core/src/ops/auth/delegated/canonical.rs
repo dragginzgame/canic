@@ -314,11 +314,6 @@ fn chain_key_delegation_cert_bytes(
 
 fn encode_root_proof(out: &mut Vec<u8>, proof: &RootProof) -> Result<(), CanonicalAuthError> {
     match proof {
-        RootProof::IcCanisterSignatureV1(proof) => {
-            out.push(1);
-            encode_bytes(out, &proof.signature_cbor);
-            encode_bytes(out, &proof.public_key_der);
-        }
         RootProof::IcChainKeyBatchSignatureV1(proof) => {
             out.push(2);
             encode_chain_key_proof(out, proof)?;
@@ -465,12 +460,8 @@ fn audience_bytes(audience: &DelegationAudience) -> Result<Vec<u8>, CanonicalAut
     Ok(out)
 }
 
-fn encode_root_proof_mode(out: &mut Vec<u8>, mode: RootProofMode) {
-    let tag = match mode {
-        RootProofMode::IcCanisterSignature => 1,
-        RootProofMode::ChainKeyBatch => 2,
-    };
-    out.push(tag);
+fn encode_root_proof_mode(out: &mut Vec<u8>, _mode: RootProofMode) {
+    out.push(2);
 }
 
 fn encode_build_network(out: &mut Vec<u8>, network: BuildNetwork) {

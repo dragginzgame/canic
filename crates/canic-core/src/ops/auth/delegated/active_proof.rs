@@ -95,8 +95,8 @@ mod tests {
     use super::*;
     use crate::{
         dto::auth::{
-            DelegatedRoleGrant, DelegationAudience, DelegationCert, IcCanisterSignatureProofV1,
-            IssuerProofAlgorithm, IssuerProofBinding, RootProof,
+            DelegatedRoleGrant, DelegationAudience, DelegationCert, IssuerProofAlgorithm,
+            IssuerProofBinding,
         },
         ids::CanisterRole,
         ops::auth::delegated::canonical::issuer_proof_binding_hash,
@@ -133,10 +133,7 @@ mod tests {
     fn proof() -> DelegationProof {
         DelegationProof {
             cert: cert(),
-            root_proof: RootProof::IcCanisterSignatureV1(IcCanisterSignatureProofV1 {
-                signature_cbor: vec![8; 64],
-                public_key_der: vec![9; 32],
-            }),
+            root_proof: crate::ops::auth::test_fixtures::chain_key_root_proof(8),
         }
     }
 

@@ -12,8 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
-- `0.76.6` clarifies active delegated-auth source and PocketIC test wording so
-  "bridge" language is reserved for the removed legacy root-proof path.
+- `0.76.6` hard-cuts delegated-auth root proof survivorship by making
+  delegated `RootProof` chain-key-only, splitting role-attestation root proof
+  material into a separate DTO, removing historical bridge/provisioner auth
+  stable fields, and marking superseded bridge-era auth audits as historical.
 
 - `0.76.5` stops serializing empty historical bridge delegated-auth stable
   fields while keeping populated legacy values decode-compatible for upgrades.
