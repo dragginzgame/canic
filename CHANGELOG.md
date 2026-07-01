@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.12` tightens deployment-truth report producer module boundaries by
+  making leaf-local diagnostic constants private while preserving intentional
+  test and sibling report consumer imports.
+
 - `0.76.11` continues deployment-truth diagnostic-code cleanup across
   authority, executor, comparison, root-verification, and receipt artifact
   gates without changing serialized output or delegated-auth runtime behavior.

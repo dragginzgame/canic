@@ -27,8 +27,7 @@ pub(in crate::deployment_truth) const DUPLICATE_POOL_CANISTER_OBSERVED_CODE: &st
     "duplicate_pool_canister_observed";
 pub(in crate::deployment_truth) const POOL_CANISTER_DIFF_CATEGORY: &str = "pool_canister";
 pub(in crate::deployment_truth) const POOL_CANISTER_MISSING_CODE: &str = "pool_canister_missing";
-pub(in crate::deployment_truth) const POOL_CANISTER_UNOBSERVED_CODE: &str =
-    "pool_canister_unobserved";
+const POOL_CANISTER_UNOBSERVED_CODE: &str = "pool_canister_unobserved";
 pub(in crate::deployment_truth) const POOL_CANISTER_ID_DIFF_CATEGORY: &str = "pool_canister_id";
 pub(in crate::deployment_truth) const POOL_CANISTER_ID_MISMATCH_CODE: &str =
     "pool_canister_id_mismatch";

@@ -1,16 +1,13 @@
 use super::super::*;
 use super::{diff_item, finding};
 
-pub(in crate::deployment_truth) const RAW_CONFIG_PLAN_INCONSISTENT_CODE: &str =
-    "raw_config_plan_inconsistent";
+const RAW_CONFIG_PLAN_INCONSISTENT_CODE: &str = "raw_config_plan_inconsistent";
 pub(in crate::deployment_truth) const RAW_CONFIG_SHA256_DIFF_CATEGORY: &str = "raw_config_sha256";
 pub(in crate::deployment_truth) const RAW_CONFIG_DIGEST_MISMATCH_CODE: &str =
     "raw_config_digest_mismatch";
-pub(in crate::deployment_truth) const CANONICAL_CONFIG_DIFF_CATEGORY: &str = "canonical_config";
-pub(in crate::deployment_truth) const CANONICAL_CONFIG_MISMATCH_CODE: &str =
-    "canonical_config_mismatch";
-pub(in crate::deployment_truth) const CANONICAL_CONFIG_UNOBSERVED_CODE: &str =
-    "canonical_config_unobserved";
+const CANONICAL_CONFIG_DIFF_CATEGORY: &str = "canonical_config";
+const CANONICAL_CONFIG_MISMATCH_CODE: &str = "canonical_config_mismatch";
+const CANONICAL_CONFIG_UNOBSERVED_CODE: &str = "canonical_config_unobserved";
 
 pub(super) fn compare_raw_config(
     plan: &DeploymentPlanV1,

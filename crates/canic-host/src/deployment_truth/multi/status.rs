@@ -10,9 +10,9 @@ pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_WARNING_CODE: 
     "deployment_comparison_input_warning";
 pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE: &str =
     "deployment_comparison_input_blocked";
-pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_NOT_EVALUATED_CODE: &str =
+const DEPLOYMENT_COMPARISON_INPUT_NOT_EVALUATED_CODE: &str =
     "deployment_comparison_input_not_evaluated";
-pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_SCHEMA_MISMATCH_CODE: &str =
+const DEPLOYMENT_COMPARISON_INPUT_SCHEMA_MISMATCH_CODE: &str =
     "deployment_comparison_input_schema_mismatch";
 pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_DIFF_STALE_CODE: &str =
     "deployment_comparison_input_diff_stale";

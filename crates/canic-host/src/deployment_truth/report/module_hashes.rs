@@ -5,8 +5,7 @@ pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_DIFF_CATEGORY: &str 
     "installed_module_hash";
 pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_MISMATCH_CODE: &str =
     "installed_module_hash_mismatch";
-pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_UNOBSERVED_CODE: &str =
-    "installed_module_hash_unobserved";
+const INSTALLED_MODULE_HASH_UNOBSERVED_CODE: &str = "installed_module_hash_unobserved";
 pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY: &str =
     "installed_module_hash_ambiguous";
 pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_AMBIGUOUS_CODE: &str =
