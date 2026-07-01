@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::report::ARTIFACT_MISSING_CODE;
 
 #[test]
 fn artifact_gate_receipt_records_materialized_artifact_evidence() {
@@ -211,6 +212,6 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
             && receipt
                 .error
                 .as_deref()
-                .is_some_and(|error| error.contains("artifact_missing"))
+                .is_some_and(|error| error.contains(ARTIFACT_MISSING_CODE))
     }));
 }

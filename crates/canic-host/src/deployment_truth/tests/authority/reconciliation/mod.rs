@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::authority::AUTHORITY_PROFILE_OVERLAP_CODE;
 
 #[test]
 fn authority_reconciliation_marks_deployment_controlled_delta_as_automatic_dry_run() {
@@ -136,7 +137,7 @@ fn authority_reconciliation_blocks_staging_or_emergency_controller_overlap() {
         reconciliation
             .hard_failures
             .iter()
-            .all(|finding| finding.code == "authority_profile_overlap"
+            .all(|finding| finding.code == AUTHORITY_PROFILE_OVERLAP_CODE
                 && finding.severity == SafetySeverityV1::HardFailure
                 && finding.subject.as_deref() == Some("aaaaa-aa"))
     );

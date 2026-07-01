@@ -1,7 +1,8 @@
 use super::super::*;
 use std::collections::BTreeSet;
 
-pub(super) const AUTHORITY_UNSAFE_BLOCKED_CODE: &str = "authority_unsafe_blocked";
+pub(in crate::deployment_truth) const AUTHORITY_UNSAFE_BLOCKED_CODE: &str =
+    "authority_unsafe_blocked";
 pub(super) fn difference(left: &[String], right: &[String]) -> Vec<String> {
     left.iter()
         .filter(|value| !right.iter().any(|candidate| candidate == *value))

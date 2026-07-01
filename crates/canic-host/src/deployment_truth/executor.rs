@@ -1,3 +1,4 @@
+use super::authority::AUTHORITY_UNSAFE_BLOCKED_CODE;
 use super::{
     AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
     DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
@@ -7,6 +8,17 @@ use super::{
 };
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
+
+pub(in crate::deployment_truth) const DEPLOYMENT_SAFETY_BLOCKED_CODE: &str =
+    "deployment_safety_blocked";
+pub(in crate::deployment_truth) const AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE: &str =
+    "authority_controller_change_pending";
+pub(in crate::deployment_truth) const AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE: &str =
+    "authority_external_action_required";
+pub(in crate::deployment_truth) const AUTHORITY_OBSERVATION_MISSING_CODE: &str =
+    "authority_observation_missing";
+pub(in crate::deployment_truth) const EXECUTOR_CAPABILITY_MISSING_CODE: &str =
+    "executor_capability_missing";
 
 ///
 /// DeploymentExecutionPreflightError
@@ -314,7 +326,7 @@ fn deployment_execution_blockers(
 
     if matches!(safety_report.status, SafetyStatusV1::Blocked) {
         blockers.push(SafetyFindingV1 {
-            code: "deployment_safety_blocked".to_string(),
+            code: DEPLOYMENT_SAFETY_BLOCKED_CODE.to_string(),
             message: safety_report.summary.clone(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(safety_report.report_id.clone()),
@@ -325,7 +337,7 @@ fn deployment_execution_blockers(
         authority_plan
             .hard_failures
             .iter()
-            .filter(|failure| failure.code != "authority_unsafe_blocked")
+            .filter(|failure| failure.code != AUTHORITY_UNSAFE_BLOCKED_CODE)
             .cloned(),
     );
 
@@ -334,7 +346,7 @@ fn deployment_execution_blockers(
             AuthorityReconciliationStateV1::AlreadyCorrect => {}
             AuthorityReconciliationStateV1::CanApplyAutomatically => {
                 blockers.push(SafetyFindingV1 {
-                    code: "authority_controller_change_pending".to_string(),
+                    code: AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: action
@@ -346,7 +358,7 @@ fn deployment_execution_blockers(
             }
             AuthorityReconciliationStateV1::RequiresExternalAction => {
                 blockers.push(SafetyFindingV1 {
-                    code: "authority_external_action_required".to_string(),
+                    code: AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: action
@@ -358,7 +370,7 @@ fn deployment_execution_blockers(
             }
             AuthorityReconciliationStateV1::UnsafeBlocked => {
                 blockers.push(SafetyFindingV1 {
-                    code: "authority_unsafe_blocked".to_string(),
+                    code: AUTHORITY_UNSAFE_BLOCKED_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: action
@@ -373,7 +385,7 @@ fn deployment_execution_blockers(
                     continue;
                 }
                 blockers.push(SafetyFindingV1 {
-                    code: "authority_observation_missing".to_string(),
+                    code: AUTHORITY_OBSERVATION_MISSING_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: action
@@ -388,7 +400,7 @@ fn deployment_execution_blockers(
 
     for capability in missing_capabilities {
         blockers.push(SafetyFindingV1 {
-            code: "executor_capability_missing".to_string(),
+            code: EXECUTOR_CAPABILITY_MISSING_CODE.to_string(),
             message: format!("executor backend is missing required capability: {capability:?}"),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(format!("{capability:?}")),
@@ -476,7 +488,7 @@ fn ensure_missing_capabilities_have_blockers(
     for capability in &preflight.missing_capabilities {
         let subject = format!("{capability:?}");
         if !preflight.blockers.iter().any(|finding| {
-            finding.code == "executor_capability_missing"
+            finding.code == EXECUTOR_CAPABILITY_MISSING_CODE
                 && finding.subject.as_deref() == Some(subject.as_str())
         }) {
             return Err(

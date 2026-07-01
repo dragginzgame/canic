@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::authority::AUTHORITY_UNSAFE_BLOCKED_CODE;
 
 #[test]
 fn authority_dry_run_receipt_preserves_hard_findings() {
@@ -39,7 +40,7 @@ fn authority_reconciliation_blocks_unknown_unsafe_canister() {
     assert_eq!(reconciliation.hard_failures.len(), 1);
     assert_eq!(
         reconciliation.hard_failures[0].code,
-        "authority_unsafe_blocked"
+        AUTHORITY_UNSAFE_BLOCKED_CODE
     );
     assert!(reconciliation.canister_actions.iter().any(|action| {
         action.canister_id.as_deref() == Some("unsafe-canister")
@@ -110,7 +111,7 @@ fn unsafe_authority_receipt_preserves_finding_without_hard_readiness_double_coun
     );
     assert_eq!(receipt.hard_failures, report.hard_failures);
     assert_eq!(receipt.hard_failures.len(), 1);
-    assert_eq!(receipt.hard_failures[0].code, "authority_unsafe_blocked");
+    assert_eq!(receipt.hard_failures[0].code, AUTHORITY_UNSAFE_BLOCKED_CODE);
 }
 
 #[test]

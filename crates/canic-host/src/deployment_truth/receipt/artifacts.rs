@@ -1,5 +1,6 @@
 use super::super::*;
 use super::deployment::phase_receipt;
+use crate::deployment_truth::report::ARTIFACT_MISSING_CODE;
 
 /// Build a lightweight receipt for the current-install artifact materialization
 /// gate. The receipt is evidence only; live inventory/check data remains the
@@ -14,7 +15,7 @@ pub fn artifact_gate_phase_receipt(
         .report
         .hard_failures
         .iter()
-        .filter(|finding| finding.code == "artifact_missing")
+        .filter(|finding| finding.code == ARTIFACT_MISSING_CODE)
         .collect::<Vec<_>>();
     let mut evidence = check
         .inventory
