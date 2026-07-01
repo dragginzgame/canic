@@ -51,6 +51,17 @@ before this compaction is archived at
   codes promised by the 0.78 design: `blob_storage_target_missing`,
   `blob_storage_target_ambiguous`, and `blob_storage_target_not_blob_storage`.
 
+- The 0.78.4 medic readiness slice classifies invalid targeted
+  auth-renewal issuers as
+  `auth_renewal_issuer_invalid` before treating other auth-renewal failures as
+  `auth_renewal_drift_fail`, and by distinguishing missing ICP CLI binaries as
+  `icp_cli_missing` instead of the generic `icp_cli_incompatible`. It also
+  keeps `local_network_implicit` / `local_network_explicit` project-only so
+  deployment medic relies on its deployment-scoped network check instead of
+  emitting duplicate network diagnostics. Blob-storage target resolution now
+  follows the 0.78 design order by treating principal text as a canister ID
+  before falling back to role names.
+
 - 0.77 completed the wasm-footprint feature-boundary line, including
   chain-key/root-publication feature splitting and local DTO replacements for
   helper crate fan-in. Current dependency work may include local
