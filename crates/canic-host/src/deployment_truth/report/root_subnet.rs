@@ -11,8 +11,7 @@ use std::{
 
 const MAINNET_NETWORK: &str = "ic";
 const CLOUD_ENGINE_SUBNET_KIND: &str = "cloud_engine";
-pub(in crate::deployment_truth) const ROOT_AUTH_SUBNET_EVIDENCE_MISSING_CODE: &str =
-    "root_auth_subnet_evidence_missing";
+const ROOT_AUTH_SUBNET_EVIDENCE_MISSING_CODE: &str = "root_auth_subnet_evidence_missing";
 pub(in crate::deployment_truth) const ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE: &str =
     "root_auth_cloud_engine_subnet";
 

@@ -15,8 +15,8 @@ pub(in crate::deployment_truth) const RECEIPT_ROLE_PHASE_CONFLICT_CODE: &str =
 pub(in crate::deployment_truth) const DUPLICATE_RECEIPT_ROLE_PHASE_CODE: &str =
     "duplicate_receipt_role_phase";
 pub(in crate::deployment_truth) const RECEIPT_PLAN_MISMATCH_CODE: &str = "receipt_plan_mismatch";
-pub(in crate::deployment_truth) const RECEIPT_ROOT_MISMATCH_CODE: &str = "receipt_root_mismatch";
-pub(in crate::deployment_truth) const RECEIPT_FAILED_COMMAND_CODE: &str = "receipt_failed_command";
+const RECEIPT_ROOT_MISMATCH_CODE: &str = "receipt_root_mismatch";
+const RECEIPT_FAILED_COMMAND_CODE: &str = "receipt_failed_command";
 pub(in crate::deployment_truth) const RECEIPT_EXECUTION_STATUS_MISMATCH_CODE: &str =
     "receipt_execution_status_mismatch";
 

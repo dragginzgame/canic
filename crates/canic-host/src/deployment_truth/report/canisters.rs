@@ -22,10 +22,10 @@ pub(in crate::deployment_truth) const PLANNED_CANISTER_ID_CONFLICT_CODE: &str =
     "planned_canister_id_conflict";
 pub(in crate::deployment_truth) const PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY: &str =
     "planned_canister_id_conflict";
-pub(in crate::deployment_truth) const CANISTER_DIFF_CATEGORY: &str = "canister";
-pub(in crate::deployment_truth) const CANISTER_MISSING_CODE: &str = "canister_missing";
+const CANISTER_DIFF_CATEGORY: &str = "canister";
+const CANISTER_MISSING_CODE: &str = "canister_missing";
 pub(in crate::deployment_truth) const CANISTER_UNOBSERVED_CODE: &str = "canister_unobserved";
-pub(in crate::deployment_truth) const CONTROL_CLASS_DIFF_CATEGORY: &str = "control_class";
+const CONTROL_CLASS_DIFF_CATEGORY: &str = "control_class";
 pub(in crate::deployment_truth) const UNSAFE_CONTROL_CLASS_CODE: &str = "unsafe_control_class";
 pub(in crate::deployment_truth) const CANISTER_ROLE_AMBIGUOUS_CODE: &str =
     "canister_role_ambiguous";

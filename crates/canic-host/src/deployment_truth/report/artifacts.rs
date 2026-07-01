@@ -16,17 +16,15 @@ pub(in crate::deployment_truth) const ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY: &str
 pub(in crate::deployment_truth) const ARTIFACT_DUPLICATE_DIFF_CATEGORY: &str = "artifact_duplicate";
 pub(in crate::deployment_truth) const DUPLICATE_ARTIFACT_OBSERVED_CODE: &str =
     "duplicate_artifact_observed";
-pub(in crate::deployment_truth) const ARTIFACT_DIFF_CATEGORY: &str = "artifact";
+const ARTIFACT_DIFF_CATEGORY: &str = "artifact";
 pub(in crate::deployment_truth) const ARTIFACT_MISSING_CODE: &str = "artifact_missing";
 pub(in crate::deployment_truth) const ARTIFACT_FILE_SHA256_DIFF_CATEGORY: &str =
     "artifact_file_sha256";
 pub(in crate::deployment_truth) const ARTIFACT_FILE_DIGEST_MISMATCH_CODE: &str =
     "artifact_file_digest_mismatch";
-pub(in crate::deployment_truth) const ARTIFACT_SHA256_DIFF_CATEGORY: &str = "artifact_sha256";
-pub(in crate::deployment_truth) const ARTIFACT_DIGEST_MISMATCH_CODE: &str =
-    "artifact_digest_mismatch";
-pub(in crate::deployment_truth) const ARTIFACT_DIGEST_UNOBSERVED_CODE: &str =
-    "artifact_digest_unobserved";
+const ARTIFACT_SHA256_DIFF_CATEGORY: &str = "artifact_sha256";
+const ARTIFACT_DIGEST_MISMATCH_CODE: &str = "artifact_digest_mismatch";
+const ARTIFACT_DIGEST_UNOBSERVED_CODE: &str = "artifact_digest_unobserved";
 
 pub(super) fn compare_artifacts(
     plan: &DeploymentPlanV1,

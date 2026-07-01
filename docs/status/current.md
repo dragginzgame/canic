@@ -54,12 +54,17 @@ before this compaction is archived at
   observation assumptions, and receipt-aware resume checks without changing
   serialized output or delegated-auth runtime behavior.
 
-- The `0.76.11` changelog is prepared for the follow-up host
-  deployment-truth diagnostic constant pass after `0.76.10`, covering
-  authority overlap/unsafe blocker codes, executor/preflight blocker codes,
-  comparison-input blockers, root-verification blockers, and receipt
-  artifact-gate reuse of the report-owned artifact-missing code without
-  changing serialized output.
+- The `0.76.11` release completed the follow-up host deployment-truth
+  diagnostic constant pass after `0.76.10`, covering authority overlap/unsafe
+  blocker codes, executor/preflight blocker codes, comparison-input blockers,
+  root-verification blockers, and receipt artifact-gate reuse of the
+  report-owned artifact-missing code without changing serialized output.
+
+- The `0.76.12` changelog is prepared for the deployment-truth report producer
+  module-boundary cleanup after `0.76.11`: leaf-local diagnostic constants are
+  private, while producer-owned constants that tests or sibling report
+  consumers intentionally import remain at their existing deployment-truth
+  boundary.
 
 ## Open Work
 

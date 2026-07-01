@@ -2,9 +2,8 @@ use super::super::*;
 use super::{diff_item, duplicate_evidence_groups, finding};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(in crate::deployment_truth) const VERIFIER_READINESS_DIFF_CATEGORY: &str = "verifier_readiness";
-pub(in crate::deployment_truth) const VERIFIER_READINESS_UNOBSERVED_CODE: &str =
-    "verifier_readiness_unobserved";
+const VERIFIER_READINESS_DIFF_CATEGORY: &str = "verifier_readiness";
+const VERIFIER_READINESS_UNOBSERVED_CODE: &str = "verifier_readiness_unobserved";
 pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_DIFF_CATEGORY: &str =
     "verifier_role_epoch";
 pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_STALE_CODE: &str =
