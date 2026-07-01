@@ -1,0 +1,31 @@
+{
+  "canister": "root",
+  "kind": "bundle-canister",
+  "profile": "release",
+  "built": {
+    "wasm_bytes": 5970900,
+    "wasm_gz_bytes": 2255934,
+    "functions": 8519,
+    "data_sections": 3,
+    "data_bytes": 1108984,
+    "exports": 40
+  },
+  "shrunk": {
+    "wasm_bytes": 5658062,
+    "wasm_gz_bytes": 2114310,
+    "functions": 8519,
+    "data_sections": 3,
+    "data_bytes": 1101176,
+    "exports": 40
+  },
+  "wasm_debug_built": {
+    "wasm_bytes": 113352116,
+    "wasm_gz_bytes": 24849898
+  },
+  "debug_vs_profile_delta_bytes": "+107381216",
+  "debug_vs_profile_delta_percent": "1798.41%",
+  "shrink_delta_bytes": 312838,
+  "shrink_delta_percent": 5.24,
+  "baseline_delta_bytes": "N/A",
+  "baseline_delta_percent": "N/A"
+}

@@ -1,24 +1,36 @@
+#[cfg(feature = "wasm-store-canister")]
 pub use crate::ops::storage::template::WasmStoreGcExecutionStats;
 
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+use crate::ids::WasmStoreGcStatus;
 use crate::{
     config,
     dto::template::{
-        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-        WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
-        WasmStoreOverviewResponse, WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
+        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        TemplateManifestInput,
     },
-    ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
-    ops::storage::{
-        state::subnet::SubnetStateOps,
-        template::{TemplateChunkedOps, TemplateManifestOps, WasmStoreLimits},
+    ops::storage::template::{TemplateChunkedOps, TemplateManifestOps, WasmStoreLimits},
+};
+#[cfg(feature = "wasm-store-canister")]
+use crate::{
+    dto::template::{
+        TemplateChunkResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
     },
+    ids::{TemplateId, TemplateVersion},
+};
+#[cfg(feature = "root-control-plane")]
+use crate::{
+    dto::template::{
+        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
+        WasmStoreOverviewResponse, WasmStorePublicationSlotResponse,
+    },
+    ids::{CanisterRole, WasmStoreBinding},
+    ops::storage::state::subnet::SubnetStateOps,
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-use canic_core::{
-    control_plane_support::{cdk::types::Principal, ops::ic::IcOps},
-    dto::error::Error,
-};
+#[cfg(feature = "root-control-plane")]
+use canic_core::control_plane_support::cdk::types::Principal;
+use canic_core::{control_plane_support::ops::ic::IcOps, dto::error::Error};
 
 /// Return the current replica time in whole seconds.
 #[must_use]
@@ -27,11 +39,13 @@ pub fn now_secs() -> u64 {
 }
 
 /// Stage one approved manifest in the current canister's local bootstrap source.
+#[cfg(feature = "root-control-plane")]
 pub fn stage_manifest(input: TemplateManifestInput) {
     TemplateManifestOps::replace_approved_from_input(input);
 }
 
 /// Prepare one local chunk set for chunk-by-chunk staging in the current canister.
+#[cfg(feature = "root-control-plane")]
 pub fn prepare_chunk_set(
     request: TemplateChunkSetPrepareInput,
 ) -> Result<TemplateChunkSetInfoResponse, Error> {
@@ -39,11 +53,13 @@ pub fn prepare_chunk_set(
 }
 
 /// Stage one chunk into the current canister's local bootstrap source.
+#[cfg(feature = "root-control-plane")]
 pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     TemplateChunkedOps::publish_chunk_from_input(request).map_err(Error::from)
 }
 
 /// Publish all root-local staged releases into the current subnet's selected wasm store.
+#[cfg(feature = "root-control-plane")]
 pub async fn publish_staged_release_set_to_current_store() -> Result<(), Error> {
     WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store()
         .await
@@ -51,6 +67,7 @@ pub async fn publish_staged_release_set_to_current_store() -> Result<(), Error> 
 }
 
 /// Return root-owned staged bootstrap visibility for the bootstrap role and release buffer.
+#[cfg(feature = "root-control-plane")]
 pub fn bootstrap_debug(
     bootstrap_role: &CanisterRole,
 ) -> Result<WasmStoreBootstrapDebugResponse, Error> {
@@ -58,6 +75,7 @@ pub fn bootstrap_debug(
 }
 
 /// Execute one typed root-owned WasmStore publication or lifecycle admin command.
+#[cfg(feature = "root-control-plane")]
 pub async fn publication_admin(
     cmd: WasmStoreAdminCommand,
 ) -> Result<WasmStoreAdminResponse, Error> {
@@ -67,6 +85,7 @@ pub async fn publication_admin(
 }
 
 /// Publish the current release set into one subnet-local wasm store.
+#[cfg(feature = "root-control-plane")]
 pub async fn publish_current_release_set_to_store(store_pid: Principal) -> Result<(), Error> {
     WasmStorePublicationWorkflow::publish_current_release_set_to_store(store_pid)
         .await
@@ -74,6 +93,7 @@ pub async fn publish_current_release_set_to_store(store_pid: Principal) -> Resul
 }
 
 /// Publish the current release set into the current subnet's selected publication store.
+#[cfg(feature = "root-control-plane")]
 pub async fn publish_current_release_set_to_current_store() -> Result<(), Error> {
     WasmStorePublicationWorkflow::publish_current_release_set_to_current_store()
         .await
@@ -81,23 +101,27 @@ pub async fn publish_current_release_set_to_current_store() -> Result<(), Error>
 }
 
 /// Persist one explicit publication binding for the current subnet.
+#[cfg(feature = "root-control-plane")]
 pub fn set_current_publication_store_binding(binding: WasmStoreBinding) -> Result<(), Error> {
     WasmStorePublicationWorkflow::set_current_publication_store_binding(binding)
         .map_err(Error::from)
 }
 
 /// Clear the explicit publication binding for the current subnet.
+#[cfg(feature = "root-control-plane")]
 pub fn clear_current_publication_store_binding() -> Result<(), Error> {
     WasmStorePublicationWorkflow::clear_current_publication_store_binding().map_err(Error::from)
 }
 
 /// Retire the current detached publication binding for the current subnet.
+#[cfg(feature = "root-control-plane")]
 #[must_use]
 pub fn retire_detached_publication_store_binding() -> Option<WasmStoreBinding> {
     WasmStorePublicationWorkflow::retire_detached_publication_store_binding()
 }
 
 /// Return the current root-owned approved-release overview for every tracked runtime-managed wasm store.
+#[cfg(feature = "root-control-plane")]
 #[must_use]
 pub fn publication_overview() -> WasmStoreOverviewResponse {
     let store = config::current_subnet_default_wasm_store();
@@ -147,6 +171,7 @@ pub fn publication_overview() -> WasmStoreOverviewResponse {
 }
 
 /// Mark the current retired publication store as prepared for store-local GC execution.
+#[cfg(feature = "root-control-plane")]
 pub async fn prepare_retired_publication_store_for_gc() -> Result<Option<WasmStoreBinding>, Error> {
     WasmStorePublicationWorkflow::prepare_retired_publication_store_for_gc()
         .await
@@ -154,6 +179,7 @@ pub async fn prepare_retired_publication_store_for_gc() -> Result<Option<WasmSto
 }
 
 /// Mark the current retired publication store as actively executing store-local GC.
+#[cfg(feature = "root-control-plane")]
 pub async fn begin_retired_publication_store_gc() -> Result<Option<WasmStoreBinding>, Error> {
     WasmStorePublicationWorkflow::begin_retired_publication_store_gc()
         .await
@@ -161,6 +187,7 @@ pub async fn begin_retired_publication_store_gc() -> Result<Option<WasmStoreBind
 }
 
 /// Mark the current retired publication store as having completed its local GC pass.
+#[cfg(feature = "root-control-plane")]
 pub async fn complete_retired_publication_store_gc() -> Result<Option<WasmStoreBinding>, Error> {
     WasmStorePublicationWorkflow::complete_retired_publication_store_gc()
         .await
@@ -168,6 +195,7 @@ pub async fn complete_retired_publication_store_gc() -> Result<Option<WasmStoreB
 }
 
 /// Finalize the retired publication binding once store-local GC has completed.
+#[cfg(feature = "root-control-plane")]
 pub async fn finalize_retired_publication_store_binding() -> Result<Option<WasmStoreBinding>, Error>
 {
     WasmStorePublicationWorkflow::finalize_retired_publication_store_binding()
@@ -177,6 +205,7 @@ pub async fn finalize_retired_publication_store_binding() -> Result<Option<WasmS
 }
 
 /// Delete one finalized runtime-managed publication store canister.
+#[cfg(feature = "root-control-plane")]
 pub async fn delete_finalized_publication_store(
     binding: WasmStoreBinding,
     store_pid: Principal,
@@ -187,12 +216,14 @@ pub async fn delete_finalized_publication_store(
 }
 
 /// Return the current approved release catalog stored in this local wasm store.
+#[cfg(feature = "wasm-store-canister")]
 #[must_use]
 pub fn local_template_catalog() -> Vec<WasmStoreCatalogEntryResponse> {
     TemplateManifestOps::approved_catalog_response()
 }
 
 /// Return occupied-byte and retention state for this local wasm store.
+#[cfg(feature = "wasm-store-canister")]
 pub fn local_template_status(gc: WasmStoreGcStatus) -> Result<WasmStoreStatusResponse, Error> {
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits {
@@ -208,6 +239,7 @@ pub fn local_template_status(gc: WasmStoreGcStatus) -> Result<WasmStoreStatusRes
 }
 
 /// Prepare one approved template release for chunk-by-chunk publication in this local store.
+#[cfg(feature = "wasm-store-canister")]
 pub fn local_prepare_chunk_set(
     request: TemplateChunkSetPrepareInput,
 ) -> Result<TemplateChunkSetInfoResponse, Error> {
@@ -222,6 +254,7 @@ pub fn local_prepare_chunk_set(
 }
 
 /// Stage one approved manifest in this local wasm store.
+#[cfg(feature = "wasm-store-canister")]
 pub fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits {
@@ -233,6 +266,7 @@ pub fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error>
 }
 
 /// Publish one deterministic chunk into an already prepared local template release.
+#[cfg(feature = "wasm-store-canister")]
 pub fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits {
@@ -244,6 +278,7 @@ pub fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
 }
 
 /// Clear all local template records, chunk metadata, and staged chunk hashes for GC.
+#[cfg(feature = "wasm-store-canister")]
 pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, Error> {
     TemplateChunkedOps::execute_local_store_gc()
         .await
@@ -251,6 +286,7 @@ pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, Error
 }
 
 /// Return deterministic chunk-set metadata for one local template release.
+#[cfg(feature = "wasm-store-canister")]
 pub fn local_template_info(
     template_id: TemplateId,
     version: TemplateVersion,
@@ -259,6 +295,7 @@ pub fn local_template_info(
 }
 
 /// Return one deterministic chunk for one local template release.
+#[cfg(feature = "wasm-store-canister")]
 pub fn local_template_chunk(
     template_id: TemplateId,
     version: TemplateVersion,

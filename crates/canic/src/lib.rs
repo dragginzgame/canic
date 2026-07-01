@@ -25,7 +25,7 @@ pub mod __internal {
     // NOTE:
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
-    #[cfg(feature = "control-plane")]
+    #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
 

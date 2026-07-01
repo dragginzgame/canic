@@ -14,6 +14,7 @@ use crate::{
         is_mainnet_ic_root_public_key_raw,
     },
 };
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::VerifyingKey as K256VerifyingKey;
 
 impl Validate for AuthConfig {
@@ -219,12 +220,29 @@ fn validate_chain_key_public_key_hex(value: &str) -> Result<(), ConfigSchemaErro
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex is not valid hex: {err}"
         ))
     })?;
-    K256VerifyingKey::from_sec1_bytes(&public_key).map_err(|err| {
+    validate_chain_key_public_key_bytes(&public_key)
+}
+
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+fn validate_chain_key_public_key_bytes(public_key: &[u8]) -> Result<(), ConfigSchemaError> {
+    K256VerifyingKey::from_sec1_bytes(public_key).map_err(|err| {
         ConfigSchemaError::ValidationError(format!(
             "auth.delegated_tokens.chain_key_root_proof.public_key_hex must be a secp256k1 SEC1 public key: {err}"
         ))
     })?;
     Ok(())
+}
+
+#[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
+fn validate_chain_key_public_key_bytes(public_key: &[u8]) -> Result<(), ConfigSchemaError> {
+    match public_key {
+        [0x02 | 0x03, ..] if public_key.len() == 33 => Ok(()),
+        [0x04, ..] if public_key.len() == 65 => Ok(()),
+        _ => Err(ConfigSchemaError::ValidationError(
+            "auth.delegated_tokens.chain_key_root_proof.public_key_hex must be a compressed or uncompressed secp256k1 SEC1 public key"
+                .into(),
+        )),
+    }
 }
 
 fn validate_fixed_hex(

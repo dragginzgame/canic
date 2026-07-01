@@ -3,7 +3,7 @@ pub use crate::__internal::core::ids::{
     IntentResourceKey, SubnetRole, SystemMetricKind, cap,
 };
 
-#[cfg(feature = "control-plane")]
+#[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
 pub use canic_control_plane::ids::{
     TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     WasmStoreGcMode, WasmStoreGcStatus,

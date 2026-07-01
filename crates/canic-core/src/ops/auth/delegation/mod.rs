@@ -224,6 +224,14 @@ impl AuthOps {
             batch_id, issuer_pid, cert_hash, outcome,
         )
     }
+
+    pub(crate) const fn chain_key_ecdsa_enabled() -> bool {
+        cfg!(feature = "auth-chain-key-ecdsa")
+    }
+
+    pub(crate) const fn chain_key_root_sign_enabled() -> bool {
+        cfg!(feature = "auth-chain-key-root-sign")
+    }
 }
 
 fn required_chain_key_max_revocation_latency_ns(

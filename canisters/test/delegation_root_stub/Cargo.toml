@@ -13,8 +13,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["auth-delegated-token-verify", "auth-root-canister-sig-create", "control-plane"] }
-canic-control-plane = { workspace = true }
+canic = { workspace = true, features = ["auth-chain-key-root-sign", "auth-delegated-token-verify", "auth-root-canister-sig-create", "control-plane"] }
+canic-control-plane = { workspace = true, features = [
+    "root-control-plane",
+    "wasm-store-canister",
+] }
 ic-cdk = { workspace = true }
 sha2 = { workspace = true }
 

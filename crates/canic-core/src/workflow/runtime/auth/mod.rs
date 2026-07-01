@@ -60,6 +60,15 @@ impl RuntimeAuthWorkflow {
             ));
         }
 
+        if AuthOps::has_enabled_root_issuer_renewal_templates()
+            && !AuthOps::chain_key_root_sign_enabled()
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "root issuer delegation renewal is configured, but this root build does not include chain-key ECDSA signing support; enable the `auth-chain-key-root-sign` feature for the root canister build".to_string(),
+            ));
+        }
+
         Ok(())
     }
 
@@ -111,6 +120,17 @@ impl RuntimeAuthWorkflow {
                 InternalErrorOrigin::Workflow,
                 format!(
                     "canister '{canister_role}' has delegated-token verification enabled, but this build does not include issuer IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-issuer-canister-sig-verify` feature",
+                ),
+            ));
+        }
+
+        if nonroot_requires_chain_key_root_proof_support(canister_cfg)
+            && !AuthOps::chain_key_ecdsa_enabled()
+        {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!(
+                    "canister '{canister_role}' has delegated-token auth enabled, but this build does not include chain-key ECDSA root-proof support; enable the `auth-delegated-token-verify` feature",
                 ),
             ));
         }
@@ -245,6 +265,12 @@ const fn nonroot_requires_issuer_proof_verifier_support(
     canister_cfg: &crate::config::schema::CanisterConfig,
 ) -> bool {
     canister_cfg.auth.delegated_token_verifier
+}
+
+const fn nonroot_requires_chain_key_root_proof_support(
+    canister_cfg: &crate::config::schema::CanisterConfig,
+) -> bool {
+    canister_cfg.auth.delegated_token_issuer || canister_cfg.auth.delegated_token_verifier
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ use crate::{
         },
     },
 };
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::Signature as K256EcdsaSignature;
 use std::{future::Future, pin::Pin};
 use thiserror::Error;
@@ -249,12 +250,29 @@ where
 }
 
 fn normalize_chain_key_ecdsa_signature(signature: &[u8]) -> Result<Vec<u8>, ChainKeySignerError> {
+    normalize_chain_key_ecdsa_signature_enabled(signature)
+}
+
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+fn normalize_chain_key_ecdsa_signature_enabled(
+    signature: &[u8],
+) -> Result<Vec<u8>, ChainKeySignerError> {
     let parsed = K256EcdsaSignature::from_slice(signature).map_err(|err| {
         ChainKeySignerError::SignatureVerification(format!(
             "invalid chain-key ECDSA signature encoding: {err}"
         ))
     })?;
     Ok(parsed.normalize_s().unwrap_or(parsed).to_bytes().to_vec())
+}
+
+#[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
+fn normalize_chain_key_ecdsa_signature_enabled(
+    _signature: &[u8],
+) -> Result<Vec<u8>, ChainKeySignerError> {
+    Err(ChainKeySignerError::SignatureVerification(
+        "chain-key ECDSA signing support is not enabled; enable the `auth-chain-key-root-sign` feature"
+            .to_string(),
+    ))
 }
 
 fn validate_signing_policy(
