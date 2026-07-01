@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
+# Shared CLI surface proofing for the hard-cut auth renewal command family.
+# The retained operator surface is `auth renewal status`; this helper also
+# asserts removed bridge/provisioner commands do not reappear in help output.
+
 AUTH_RENEWAL_PROOF_ISSUER="rrkah-fqaaa-aaaaa-aaaaq-cai"
 
-prepare_auth_renewal_cli_fixture() {
+prepare_auth_renewal_cli_surface_fixture() {
     local downstream_root="$1"
 
     mkdir -p \
@@ -26,7 +30,7 @@ service : {
 EOF
 }
 
-run_auth_renewal_cli_probe_commands() {
+run_auth_renewal_cli_surface_probe_commands() {
     local runner="$1"
     local proof_root="$2"
     local fake_icp="$3"
@@ -68,7 +72,7 @@ assert_auth_renewal_cli_file_not_contains() {
     fi
 }
 
-assert_auth_renewal_cli_probe_outputs() {
+assert_auth_renewal_cli_surface_probe_outputs() {
     local proof_label="$1"
     local proof_root="$2"
 

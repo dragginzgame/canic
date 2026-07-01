@@ -126,13 +126,13 @@ main() {
         exit 1
     fi
     prepare_blob_storage_workspace
-    prepare_auth_renewal_cli_fixture "$DOWNSTREAM_ROOT"
+    prepare_auth_renewal_cli_surface_fixture "$DOWNSTREAM_ROOT"
     prepare_fake_blob_storage_icp "$FAKE_ICP" "$FAKE_ICP_STATE"
     run_blob_storage_cli_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
-    run_auth_renewal_cli_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
+    run_auth_renewal_cli_surface_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
 
     assert_blob_storage_cli_probe_outputs "installed" "$TMP_ROOT"
-    assert_auth_renewal_cli_probe_outputs "installed" "$TMP_ROOT"
+    assert_auth_renewal_cli_surface_probe_outputs "installed" "$TMP_ROOT"
 
     echo "installed canic CLI probe passed"
 }

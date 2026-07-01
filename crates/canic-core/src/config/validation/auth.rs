@@ -10,7 +10,8 @@ use crate::config::schema::{
 use crate::{
     cdk::{types::Principal, utils::hash::decode_hex},
     domain::auth::{
-        DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
+        DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, chain_key_derivation_path_hash,
+        is_mainnet_ic_root_public_key_raw,
     },
 };
 use k256::ecdsa::VerifyingKey as K256VerifyingKey;
@@ -115,15 +116,23 @@ fn validate_chain_key_root_proof_config(
         chain_key.key_id.as_deref(),
         "auth.delegated_tokens.chain_key_root_proof.key_id",
     )?;
-    validate_fixed_hex(
+    let derivation_path_hash = validate_fixed_hex(
         chain_key.derivation_path_hash_hex.as_deref(),
         "auth.delegated_tokens.chain_key_root_proof.derivation_path_hash_hex",
         32,
     )?;
-    validate_chain_key_derivation_path_hex(
+    let derivation_path = validate_chain_key_derivation_path_hex(
         chain_key.derivation_path_hex.as_deref(),
         "auth.delegated_tokens.chain_key_root_proof.derivation_path_hex",
     )?;
+    if chain_key_derivation_path_hash(&derivation_path).as_slice()
+        != derivation_path_hash.as_slice()
+    {
+        return Err(ConfigSchemaError::ValidationError(
+            "auth.delegated_tokens.chain_key_root_proof.derivation_path_hash_hex does not match derivation_path_hex"
+                .into(),
+        ));
+    }
     let public_key = required_chain_key_string(
         chain_key.public_key_hex.as_deref(),
         "auth.delegated_tokens.chain_key_root_proof.public_key_hex",
@@ -222,7 +231,7 @@ fn validate_fixed_hex(
     value: Option<&str>,
     field: &'static str,
     expected_len: usize,
-) -> Result<(), ConfigSchemaError> {
+) -> Result<Vec<u8>, ConfigSchemaError> {
     let value = required_chain_key_string(value, field)?;
     let decoded = decode_hex(value).map_err(|err| {
         ConfigSchemaError::ValidationError(format!("{field} is not valid hex: {err}"))
@@ -232,25 +241,28 @@ fn validate_fixed_hex(
             "{field} must decode to {expected_len} bytes"
         )));
     }
-    Ok(())
+    Ok(decoded)
 }
 
 fn validate_chain_key_derivation_path_hex(
     value: Option<&[String]>,
     field: &'static str,
-) -> Result<(), ConfigSchemaError> {
+) -> Result<Vec<Vec<u8>>, ConfigSchemaError> {
     let Some(path) = value else {
         return Err(ConfigSchemaError::ValidationError(format!(
             "{field} is required when auth.delegated_tokens.root_proof_mode=\"chain_key_batch\""
         )));
     };
-    for (index, component) in path.iter().enumerate() {
-        let component = component.trim();
-        decode_hex(component).map_err(|err| {
-            ConfigSchemaError::ValidationError(format!("{field}[{index}] is not valid hex: {err}"))
-        })?;
-    }
-    Ok(())
+    path.iter()
+        .enumerate()
+        .map(|(index, component)| {
+            decode_hex(component.trim()).map_err(|err| {
+                ConfigSchemaError::ValidationError(format!(
+                    "{field}[{index}] is not valid hex: {err}"
+                ))
+            })
+        })
+        .collect()
 }
 
 fn validate_required_u64(

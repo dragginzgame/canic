@@ -23,8 +23,6 @@ const DOMAIN_SEPARATOR: &[u8] = b"CANIC-AUTH\0";
 const ISSUER_PROOF_BINDING_HASH_DOMAIN: &[u8] = b"canic-issuer-proof-binding-v1";
 const CHAIN_KEY_BATCH_HEADER_DOMAIN: &[u8] = b"CANIC_ROOT_DELEGATION_CHAIN_KEY_BATCH_V1";
 const CHAIN_KEY_DELEGATION_CERT_DOMAIN: &[u8] = b"CANIC_ROOT_DELEGATION_CHAIN_KEY_ISSUER_LEAF_V1";
-const CHAIN_KEY_DERIVATION_PATH_DOMAIN: &[u8] =
-    b"CANIC_ROOT_DELEGATION_CHAIN_KEY_DERIVATION_PATH_V1";
 const ROOT_KEY_POLICY_DOMAIN: &[u8] = b"CANIC_ROOT_KEY_POLICY_V1";
 const DELEGATED_AUTH_REGISTRY_DOMAIN: &[u8] = b"CANIC_DELEGATED_AUTH_REGISTRY_SNAPSHOT_V1";
 pub const MAX_TOKEN_EXT_BYTES: usize = 4096;
@@ -106,10 +104,7 @@ pub fn chain_key_delegation_cert_hash(
 }
 
 pub fn chain_key_derivation_path_hash(derivation_path: &[Vec<u8>]) -> [u8; 32] {
-    let mut out = Vec::with_capacity(CHAIN_KEY_DERIVATION_PATH_DOMAIN.len() + 32);
-    out.extend_from_slice(CHAIN_KEY_DERIVATION_PATH_DOMAIN);
-    encode_chain_key_derivation_path(&mut out, derivation_path);
-    hash_bytes(&out)
+    crate::domain::auth::chain_key_derivation_path_hash(derivation_path)
 }
 
 pub fn root_key_policy_hash(policy: &RootKeyPolicyV1) -> [u8; 32] {

@@ -1,22 +1,19 @@
 use super::authority::AUTHORITY_UNSAFE_BLOCKED_CODE;
 use super::{
-    AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-    DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
-    DeploymentExecutionPreflightV1, DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1,
-    DeploymentPlanV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1,
-    build_authority_reconciliation_plan,
+    AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, CanisterAuthorityActionV1,
+    DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1, DeploymentExecutionContextV1,
+    DeploymentExecutionPreflightStatusV1, DeploymentExecutionPreflightV1,
+    DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1, DeploymentPlanV1, SafetyFindingV1,
+    SafetyReportV1, SafetySeverityV1, SafetyStatusV1, build_authority_reconciliation_plan,
 };
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 
 pub(in crate::deployment_truth) const DEPLOYMENT_SAFETY_BLOCKED_CODE: &str =
     "deployment_safety_blocked";
-pub(in crate::deployment_truth) const AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE: &str =
-    "authority_controller_change_pending";
-pub(in crate::deployment_truth) const AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE: &str =
-    "authority_external_action_required";
-pub(in crate::deployment_truth) const AUTHORITY_OBSERVATION_MISSING_CODE: &str =
-    "authority_observation_missing";
+const AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE: &str = "authority_controller_change_pending";
+const AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE: &str = "authority_external_action_required";
+const AUTHORITY_OBSERVATION_MISSING_CODE: &str = "authority_observation_missing";
 pub(in crate::deployment_truth) const EXECUTOR_CAPABILITY_MISSING_CODE: &str =
     "executor_capability_missing";
 
@@ -133,7 +130,7 @@ pub const CURRENT_CLI_EXECUTOR_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
 pub const TESTKIT_PREFLIGHT_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
     CURRENT_CLI_EXECUTOR_CAPABILITIES;
 
-pub const CURRENT_INSTALL_EXECUTION_PHASES: &[&str] = &[
+const CURRENT_INSTALL_EXECUTION_PHASES: &[&str] = &[
     "resolve_root_canister",
     "build_artifacts",
     "materialize_artifacts",
@@ -349,11 +346,7 @@ fn deployment_execution_blockers(
                     code: AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
-                    subject: action
-                        .canister_id
-                        .clone()
-                        .or_else(|| action.role.clone())
-                        .or_else(|| Some("authority".to_string())),
+                    subject: Some(authority_blocker_subject(action)),
                 });
             }
             AuthorityReconciliationStateV1::RequiresExternalAction => {
@@ -361,11 +354,7 @@ fn deployment_execution_blockers(
                     code: AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
-                    subject: action
-                        .canister_id
-                        .clone()
-                        .or_else(|| action.role.clone())
-                        .or_else(|| Some("authority".to_string())),
+                    subject: Some(authority_blocker_subject(action)),
                 });
             }
             AuthorityReconciliationStateV1::UnsafeBlocked => {
@@ -373,11 +362,7 @@ fn deployment_execution_blockers(
                     code: AUTHORITY_UNSAFE_BLOCKED_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
-                    subject: action
-                        .canister_id
-                        .clone()
-                        .or_else(|| action.role.clone())
-                        .or_else(|| Some("authority".to_string())),
+                    subject: Some(authority_blocker_subject(action)),
                 });
             }
             AuthorityReconciliationStateV1::Unknown => {
@@ -388,11 +373,7 @@ fn deployment_execution_blockers(
                     code: AUTHORITY_OBSERVATION_MISSING_CODE.to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
-                    subject: action
-                        .canister_id
-                        .clone()
-                        .or_else(|| action.role.clone())
-                        .or_else(|| Some("authority".to_string())),
+                    subject: Some(authority_blocker_subject(action)),
                 });
             }
         }
@@ -408,6 +389,14 @@ fn deployment_execution_blockers(
     }
 
     blockers
+}
+
+fn authority_blocker_subject(action: &CanisterAuthorityActionV1) -> String {
+    action
+        .canister_id
+        .clone()
+        .or_else(|| action.role.clone())
+        .unwrap_or_else(|| "authority".to_string())
 }
 
 fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {

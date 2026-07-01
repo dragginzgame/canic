@@ -99,7 +99,7 @@ impl RuntimeAuthWorkflow {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 format!(
-                    "canister '{canister_role}' has role-attestation cache enabled, but this build does not include root IC canister-signature verification support; enable the `auth-delegated-token-verify` or `auth-root-canister-sig-verify` feature",
+                    "canister '{canister_role}' has role-attestation cache enabled, but this build does not include root IC canister-signature verification support; enable the `auth-root-canister-sig-verify` feature",
                 ),
             ));
         }
@@ -410,8 +410,8 @@ mod tests {
             .expect_err("expected verifier feature error");
 
         assert!(
-            err.to_string().contains("auth-delegated-token-verify"),
-            "expected delegated-token verifier feature error, got: {err}"
+            err.to_string().contains("auth-root-canister-sig-verify"),
+            "expected root canister-signature verifier feature error, got: {err}"
         );
     }
 

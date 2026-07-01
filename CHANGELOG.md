@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.13` closes the 0.76 audit follow-up by tightening chain-key verifier
+  config validation, delegated-token verifier feature boundaries, auth-renewal
+  CLI surface proofing, and deployment-truth executor cleanup.
+
 - `0.76.12` tightens deployment-truth report producer module boundaries by
   making leaf-local diagnostic constants private while preserving intentional
   test and sibling report consumer imports.

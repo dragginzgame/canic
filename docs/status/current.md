@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 ## Purpose
 
@@ -60,11 +60,18 @@ before this compaction is archived at
   root-verification blockers, and receipt artifact-gate reuse of the
   report-owned artifact-missing code without changing serialized output.
 
-- The `0.76.12` changelog is prepared for the deployment-truth report producer
+- The `0.76.12` release completed the deployment-truth report producer
   module-boundary cleanup after `0.76.11`: leaf-local diagnostic constants are
   private, while producer-owned constants that tests or sibling report
   consumers intentionally import remain at their existing deployment-truth
   boundary.
+
+- Current local cleanup is tightening deployment-truth executor-local metadata
+  visibility and centralizing executor authority blocker subject derivation
+  after `0.76.12` without changing behavior. A broader
+  `unreachable_pub` scan found private-module host helpers where rustc and the
+  repo's clippy policy prefer different visibility shapes; those are left
+  unchanged rather than adding lint suppressions.
 
 ## Open Work
 

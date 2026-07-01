@@ -509,6 +509,25 @@ fn delegated_tokens_chain_key_derivation_path_must_be_hex() {
 }
 
 #[test]
+fn delegated_tokens_chain_key_derivation_path_hash_must_match_path() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.auth
+        .delegated_tokens
+        .chain_key_root_proof
+        .derivation_path_hash_hex = Some("11".repeat(32));
+
+    let err = cfg
+        .validate()
+        .expect_err("expected mismatched derivation path hash to fail");
+
+    assert!(
+        err.to_string()
+            .contains("does not match derivation_path_hex"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn delegated_tokens_chain_key_public_key_must_be_sec1_secp256k1() {
     let mut cfg = ConfigModel::test_default();
     cfg.auth
