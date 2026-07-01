@@ -48,6 +48,7 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
     setup.pic.tick_n(10);
 
     let after = count_workers(&setup.pic, setup.root_id, scale_hub_pid);
+    drop(setup);
 
     assert_eq!(after, before + 1);
 }

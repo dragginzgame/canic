@@ -64,6 +64,19 @@ pub enum InfoCommandError {
     Metrics(#[from] metrics::MetricsCommandError),
 }
 
+impl InfoCommandError {
+    pub const fn exit_code(&self) -> u8 {
+        match self {
+            Self::Usage(_) => 2,
+            Self::List(_)
+            | Self::Cycles(_)
+            | Self::Env(_)
+            | Self::Endpoints(_)
+            | Self::Metrics(_) => 1,
+        }
+    }
+}
+
 /// Run the installed-deployment information command group.
 pub fn run<I>(args: I) -> Result<(), InfoCommandError>
 where

@@ -940,6 +940,31 @@ fn command_local_global_options_are_hard_rejected() {
     );
 }
 
+#[test]
+fn rejected_medic_command_forms_exit_as_usage_errors() {
+    for raw_args in [
+        &["medic", "demo"][..],
+        &["medic", "--blob-storage", "backend"],
+        &[
+            "medic",
+            "project",
+            "--auth-renewal",
+            "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        ],
+        &["info", "medic", "demo"],
+    ] {
+        let err =
+            run(raw_args.iter().map(OsString::from)).expect_err("rejected medic form should fail");
+
+        assert_eq!(
+            cli_error_exit_code(&err),
+            2,
+            "wrong exit code for {raw_args:?}: {err}"
+        );
+        assert!(!render_cli_error(&err).is_empty());
+    }
+}
+
 // Assert that a CLI argv slice returns successfully.
 fn assert_run_ok(raw_args: &[&str]) {
     let args = raw_args.iter().map(OsString::from).collect::<Vec<_>>();

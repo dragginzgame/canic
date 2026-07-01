@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)
 
+- `0.78.1` tightens the medic CLI exit-code contract and JSON-only output
+  regression coverage while cleaning up drop-lifetime warnings for the
+  `significant_drop_tightening` lint.
+
 - `0.78.0` promotes medic to the top-level `canic medic` preflight surface
   with project/deployment scopes, schema-versioned text/JSON reports, and
   hard-cut removal of the active `canic info medic` route.

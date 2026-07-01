@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
+use crate::{CliError, cli_error_exit_code, render_cli_error};
 use serde_json::Value as JsonValue;
 use std::fs;
 
@@ -207,6 +208,10 @@ fn renders_medic_json_report() {
     let rendered = render_medic_json(&report).expect("render json");
     let value: JsonValue = serde_json::from_str(&rendered).expect("parse json");
 
+    assert!(rendered.trim_start().starts_with('{'));
+    assert!(!rendered.contains("status:"));
+    assert!(!rendered.contains("detail:"));
+    assert!(!rendered.contains("source:"));
     assert_eq!(value["schema_version"], 1);
     assert_eq!(value["command"], "canic medic project");
     assert_eq!(value["scope"], "project");
@@ -214,6 +219,41 @@ fn renders_medic_json_report() {
     assert_eq!(value["deployment"], JsonValue::Null);
     assert_eq!(value["status"], "pass");
     assert!(value["checks"].is_array());
+}
+
+// Ensure medic errors keep the process-level exit-code contract from the 0.78 design.
+#[test]
+fn medic_cli_errors_map_to_designed_exit_codes() {
+    let usage = CliError::from(MedicCommandError::Usage("bad medic args".to_string()));
+    let report_failed = CliError::from(MedicCommandError::ReportFailed);
+    let json = CliError::from(MedicCommandError::Json(
+        serde_json::from_str::<JsonValue>("{").expect_err("invalid json"),
+    ));
+
+    assert_eq!(cli_error_exit_code(&usage), 2);
+    assert_eq!(cli_error_exit_code(&report_failed), 1);
+    assert_eq!(cli_error_exit_code(&json), 3);
+}
+
+// Ensure aggregate fail reports do not add duplicate human diagnostics to stderr.
+#[test]
+fn failed_medic_report_suppresses_cli_stderr() {
+    let cli_error = CliError::from(MedicCommandError::ReportFailed);
+
+    assert_eq!(cli_error_exit_code(&cli_error), 1);
+    assert_eq!(render_cli_error(&cli_error), "");
+}
+
+// Ensure usage and internal errors still produce stderr diagnostics.
+#[test]
+fn medic_usage_and_internal_errors_render_cli_stderr() {
+    let usage = CliError::from(MedicCommandError::Usage("bad medic args".to_string()));
+    let json = CliError::from(MedicCommandError::Json(
+        serde_json::from_str::<JsonValue>("{").expect_err("invalid json"),
+    ));
+
+    assert_eq!(render_cli_error(&usage), "medic: bad medic args");
+    assert!(render_cli_error(&json).contains("medic: failed to render medic JSON output"));
 }
 
 // Ensure deployment reports include the effective network while project reports may omit it.

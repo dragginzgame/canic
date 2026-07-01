@@ -78,7 +78,9 @@ pub fn cargo_metadata_no_deps_cached(
     }
 
     let metadata = cargo_metadata(workspace_root, false)?;
-    let mut cache = cache.lock().expect("cargo metadata cache lock poisoned");
-    cache.insert(cache_key, metadata.clone());
+    {
+        let mut cache = cache.lock().expect("cargo metadata cache lock poisoned");
+        cache.insert(cache_key, metadata.clone());
+    }
     Ok(metadata)
 }
