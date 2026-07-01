@@ -48,11 +48,11 @@ before this compaction is archived at
   docs, and deployment-target state diagnostics. It does not change
   delegated-auth runtime behavior.
 
-- Current local cleanup is continuing the host deployment-truth diagnostics
-  pass. The first post-`0.76.9` slice centralizes report diagnostic codes and
-  diff categories across artifacts, identity/config, controllers, canisters,
-  pools, installed-module hashes, verifier readiness, observation assumptions,
-  and receipt-aware resume checks without changing serialized output.
+- The `0.76.10` cleanup slice centralizes host deployment-truth report
+  diagnostic codes and diff categories across artifacts, identity/config,
+  controllers, canisters, pools, installed-module hashes, verifier readiness,
+  observation assumptions, and receipt-aware resume checks without changing
+  serialized output or delegated-auth runtime behavior.
 
 ## Open Work
 
