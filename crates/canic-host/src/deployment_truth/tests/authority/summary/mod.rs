@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::authority::AUTHORITY_PROFILE_OVERLAP_CODE;
 
 #[test]
 fn authority_reconciliation_reports_already_correct_controller_state() {
@@ -247,9 +248,10 @@ fn authority_text_renders_evidence_and_receipt_details() {
         evidence_text
             .contains("aaaaa-aa AlreadyCorrect/None: observed=[aaaaa-aa] desired=[aaaaa-aa]")
     );
-    assert!(evidence_text.contains(
-        "[authority_profile_overlap] aaaaa-aa: staging authority principal aaaaa-aa overlaps"
-    ));
+    let overlap_text = format!(
+        "[{AUTHORITY_PROFILE_OVERLAP_CODE}] aaaaa-aa: staging authority principal aaaaa-aa overlaps"
+    );
+    assert!(evidence_text.contains(&overlap_text));
     assert!(receipt_text.contains("Authority dry-run receipt"));
     assert!(receipt_text.contains("mode: dry_run"));
     assert!(receipt_text.contains("operation_id: authority-dry-run-1"));
@@ -259,7 +261,5 @@ fn authority_text_renders_evidence_and_receipt_details() {
         receipt_text
             .contains("aaaaa-aa AlreadyCorrect/None: observed=[aaaaa-aa] desired=[aaaaa-aa]")
     );
-    assert!(receipt_text.contains(
-        "[authority_profile_overlap] aaaaa-aa: staging authority principal aaaaa-aa overlaps"
-    ));
+    assert!(receipt_text.contains(&overlap_text));
 }

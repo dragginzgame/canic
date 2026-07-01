@@ -1,4 +1,8 @@
 use super::super::super::*;
+use crate::deployment_truth::report::UNVERIFIED_DEPLOYMENT_ROOT_CODE;
+
+pub(in crate::deployment_truth) const ROOT_VERIFICATION_CHECK_FAILED_CODE: &str =
+    "root_verification_check_failed";
 
 pub(super) fn root_verification_identity_checks(
     request: &DeploymentRootVerificationRequestV1,
@@ -151,13 +155,20 @@ fn failed_checks(
         .iter()
         .filter(|check| !check.satisfied)
         .map(|check| SafetyFindingV1 {
-            code: "root_verification_check_failed".to_string(),
+            code: ROOT_VERIFICATION_CHECK_FAILED_CODE.to_string(),
             message: format!("{category} check {} did not match", check.name),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(check.name.clone()),
         })
         .collect()
 }
+
+pub(in crate::deployment_truth) const ROOT_VERIFICATION_SOURCE_CHECK_SCHEMA_MISMATCH_CODE: &str =
+    "root_verification_source_check_schema_mismatch";
+pub(in crate::deployment_truth) const ROOT_VERIFICATION_SOURCE_CHECK_DIFF_STALE_CODE: &str =
+    "root_verification_source_check_diff_stale";
+pub(in crate::deployment_truth) const ROOT_VERIFICATION_SOURCE_CHECK_REPORT_STALE_CODE: &str =
+    "root_verification_source_check_report_stale";
 
 fn source_check_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFindingV1> {
     let hard_failures = &check.report.hard_failures;
@@ -174,7 +185,7 @@ fn source_check_consistency_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFin
     let mut blockers = Vec::new();
     if check.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
         blockers.push(SafetyFindingV1 {
-            code: "root_verification_source_check_schema_mismatch".to_string(),
+            code: ROOT_VERIFICATION_SOURCE_CHECK_SCHEMA_MISMATCH_CODE.to_string(),
             message: "source deployment check schema version is unsupported".to_string(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(check.check_id.clone()),
@@ -185,7 +196,7 @@ fn source_check_consistency_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFin
     let expected_diff = compare_plan_to_inventory(&check.plan, &check.inventory);
     if check.diff != expected_diff {
         blockers.push(SafetyFindingV1 {
-            code: "root_verification_source_check_diff_stale".to_string(),
+            code: ROOT_VERIFICATION_SOURCE_CHECK_DIFF_STALE_CODE.to_string(),
             message: "source deployment check diff does not match its plan and inventory"
                 .to_string(),
             severity: SafetySeverityV1::HardFailure,
@@ -201,7 +212,7 @@ fn source_check_consistency_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFin
     );
     if check.report != expected_report {
         blockers.push(SafetyFindingV1 {
-            code: "root_verification_source_check_report_stale".to_string(),
+            code: ROOT_VERIFICATION_SOURCE_CHECK_REPORT_STALE_CODE.to_string(),
             message: "source deployment check report does not match its diff".to_string(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(check.check_id.clone()),
@@ -211,6 +222,6 @@ fn source_check_consistency_blockers(check: &DeploymentCheckV1) -> Vec<SafetyFin
 }
 
 fn is_expected_unverified_root_finding(finding: &SafetyFindingV1) -> bool {
-    finding.code == "unverified_deployment_root"
+    finding.code == UNVERIFIED_DEPLOYMENT_ROOT_CODE
         && finding.subject.as_deref() == Some("local_state.unverified_root_canister_id")
 }

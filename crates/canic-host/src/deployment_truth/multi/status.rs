@@ -4,6 +4,21 @@ use crate::deployment_truth::{
     SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1,
 };
 
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_DRIFT_CODE: &str =
+    "deployment_comparison_drift";
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_WARNING_CODE: &str =
+    "deployment_comparison_input_warning";
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE: &str =
+    "deployment_comparison_input_blocked";
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_NOT_EVALUATED_CODE: &str =
+    "deployment_comparison_input_not_evaluated";
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_SCHEMA_MISMATCH_CODE: &str =
+    "deployment_comparison_input_schema_mismatch";
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_DIFF_STALE_CODE: &str =
+    "deployment_comparison_input_diff_stale";
+pub(in crate::deployment_truth) const DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE: &str =
+    "deployment_comparison_input_report_stale";
+
 pub(super) fn comparison_warnings(
     diff_groups: &[&[DeploymentComparisonDiffV1]],
 ) -> Vec<SafetyFindingV1> {
@@ -12,7 +27,7 @@ pub(super) fn comparison_warnings(
         return Vec::new();
     }
     vec![SafetyFindingV1 {
-        code: "deployment_comparison_drift".to_string(),
+        code: DEPLOYMENT_COMPARISON_DRIFT_CODE.to_string(),
         message: format!("deployment comparison found {diff_count} drift item(s)"),
         severity: SafetySeverityV1::Warning,
         subject: None,
@@ -28,19 +43,19 @@ pub(super) fn compare_input_check_status(
     match report.status {
         SafetyStatusV1::Safe => {}
         SafetyStatusV1::Warning => warnings.push(SafetyFindingV1 {
-            code: "deployment_comparison_input_warning".to_string(),
+            code: DEPLOYMENT_COMPARISON_INPUT_WARNING_CODE.to_string(),
             message: "input deployment check has warnings; comparison is drift evidence, not whole-deployment safety".to_string(),
             severity: SafetySeverityV1::Warning,
             subject: Some(format!("{label}:{}", report.report_id)),
         }),
         SafetyStatusV1::Blocked => hard_failures.push(SafetyFindingV1 {
-            code: "deployment_comparison_input_blocked".to_string(),
+            code: DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE.to_string(),
             message: "input deployment check is blocked; comparison cannot be used as ready deployment evidence".to_string(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(format!("{label}:{}", report.report_id)),
         }),
         SafetyStatusV1::NotEvaluated => hard_failures.push(SafetyFindingV1 {
-            code: "deployment_comparison_input_not_evaluated".to_string(),
+            code: DEPLOYMENT_COMPARISON_INPUT_NOT_EVALUATED_CODE.to_string(),
             message: "input deployment check was not evaluated; comparison cannot establish deployment safety".to_string(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(format!("{label}:{}", report.report_id)),
@@ -55,7 +70,7 @@ pub(super) fn compare_input_check_consistency(
 ) {
     if check.schema_version != DEPLOYMENT_TRUTH_SCHEMA_VERSION {
         hard_failures.push(SafetyFindingV1 {
-            code: "deployment_comparison_input_schema_mismatch".to_string(),
+            code: DEPLOYMENT_COMPARISON_INPUT_SCHEMA_MISMATCH_CODE.to_string(),
             message: "input deployment check schema version is unsupported".to_string(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(format!("{label}:{}", check.check_id)),
@@ -66,7 +81,7 @@ pub(super) fn compare_input_check_consistency(
     let expected_diff = compare_plan_to_inventory(&check.plan, &check.inventory);
     if check.diff != expected_diff {
         hard_failures.push(SafetyFindingV1 {
-            code: "deployment_comparison_input_diff_stale".to_string(),
+            code: DEPLOYMENT_COMPARISON_INPUT_DIFF_STALE_CODE.to_string(),
             message: "input deployment check diff does not match its plan and inventory"
                 .to_string(),
             severity: SafetySeverityV1::HardFailure,
@@ -82,7 +97,7 @@ pub(super) fn compare_input_check_consistency(
     );
     if check.report != expected_report {
         hard_failures.push(SafetyFindingV1 {
-            code: "deployment_comparison_input_report_stale".to_string(),
+            code: DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE.to_string(),
             message: "input deployment check report does not match its diff".to_string(),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(format!("{label}:{}", check.check_id)),

@@ -1,5 +1,10 @@
 use super::super::*;
 use crate::deployment_truth::report::{ARTIFACT_MISSING_CODE, UNVERIFIED_DEPLOYMENT_ROOT_CODE};
+use crate::deployment_truth::root::{
+    ROOT_VERIFICATION_CHECK_FAILED_CODE, ROOT_VERIFICATION_SOURCE_CHECK_DIFF_STALE_CODE,
+    ROOT_VERIFICATION_SOURCE_CHECK_REPORT_STALE_CODE,
+    ROOT_VERIFICATION_SOURCE_CHECK_SCHEMA_MISMATCH_CODE,
+};
 
 #[test]
 fn root_verification_report_accepts_bound_root_evidence() {
@@ -137,12 +142,9 @@ fn root_verification_report_rejects_local_state_only_root_evidence() {
         report.state_transition,
         DeploymentRootVerificationStateTransitionV1::Blocked
     );
-    assert!(
-        report
-            .blockers
-            .iter()
-            .any(|finding| finding.subject.as_deref() == Some("root_observation_source"))
-    );
+    assert!(report.blockers.iter().any(|finding| finding.code
+        == ROOT_VERIFICATION_CHECK_FAILED_CODE
+        && finding.subject.as_deref() == Some("root_observation_source")));
 }
 
 #[test]
@@ -157,12 +159,9 @@ fn root_verification_report_rejects_missing_explicit_root_evidence() {
         report.evidence_status,
         DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
     );
-    assert!(
-        report
-            .blockers
-            .iter()
-            .any(|finding| finding.subject.as_deref() == Some("explicit_observed_root"))
-    );
+    assert!(report.blockers.iter().any(|finding| finding.code
+        == ROOT_VERIFICATION_CHECK_FAILED_CODE
+        && finding.subject.as_deref() == Some("explicit_observed_root")));
 }
 
 #[test]
@@ -207,7 +206,7 @@ fn root_verification_report_rejects_stale_source_check_diff() {
         DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
     );
     assert!(report.blockers.iter().any(|finding| {
-        finding.code == "root_verification_source_check_diff_stale"
+        finding.code == ROOT_VERIFICATION_SOURCE_CHECK_DIFF_STALE_CODE
             && finding.subject.as_deref() == Some("check-1")
     }));
 }
@@ -224,7 +223,7 @@ fn root_verification_report_rejects_unsupported_source_check_schema() {
         DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
     );
     assert!(report.blockers.iter().any(|finding| {
-        finding.code == "root_verification_source_check_schema_mismatch"
+        finding.code == ROOT_VERIFICATION_SOURCE_CHECK_SCHEMA_MISMATCH_CODE
             && finding.subject.as_deref() == Some("check-1")
     }));
 }
@@ -244,7 +243,7 @@ fn root_verification_report_rejects_stale_source_check_report() {
         DeploymentRootVerificationEvidenceStatusV1::VerificationFailed
     );
     assert!(report.blockers.iter().any(|finding| {
-        finding.code == "root_verification_source_check_report_stale"
+        finding.code == ROOT_VERIFICATION_SOURCE_CHECK_REPORT_STALE_CODE
             && finding.subject.as_deref() == Some("check-1")
     }));
 }

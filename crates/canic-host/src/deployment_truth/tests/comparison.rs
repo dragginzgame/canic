@@ -1,4 +1,9 @@
 use super::*;
+use crate::deployment_truth::multi::{
+    DEPLOYMENT_COMPARISON_DRIFT_CODE, DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE,
+    DEPLOYMENT_COMPARISON_INPUT_DIFF_STALE_CODE, DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE,
+    DEPLOYMENT_COMPARISON_INPUT_WARNING_CODE,
+};
 
 #[test]
 fn deployment_comparison_report_detects_cross_deployment_drift() {
@@ -44,13 +49,13 @@ fn deployment_comparison_report_detects_cross_deployment_drift() {
         report
             .hard_failures
             .iter()
-            .any(|failure| failure.code == "deployment_comparison_input_blocked")
+            .any(|failure| failure.code == DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE)
     );
     assert!(
         report
             .warnings
             .iter()
-            .any(|warning| warning.code == "deployment_comparison_drift")
+            .any(|warning| warning.code == DEPLOYMENT_COMPARISON_DRIFT_CODE)
     );
     validate_deployment_comparison_report(&report).expect("comparison should validate");
 }
@@ -130,7 +135,7 @@ fn deployment_comparison_report_blocks_stale_input_diff() {
         report
             .hard_failures
             .iter()
-            .any(|failure| failure.code == "deployment_comparison_input_diff_stale")
+            .any(|failure| failure.code == DEPLOYMENT_COMPARISON_INPUT_DIFF_STALE_CODE)
     );
     validate_deployment_comparison_report(&report).expect("comparison should validate");
 }
@@ -162,7 +167,7 @@ fn deployment_comparison_report_blocks_stale_input_report() {
         report
             .hard_failures
             .iter()
-            .any(|failure| failure.code == "deployment_comparison_input_report_stale")
+            .any(|failure| failure.code == DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE)
     );
     validate_deployment_comparison_report(&report).expect("comparison should validate");
 }
@@ -191,7 +196,7 @@ fn deployment_comparison_report_preserves_blocked_input_status() {
         report
             .hard_failures
             .iter()
-            .any(|failure| failure.code == "deployment_comparison_input_blocked")
+            .any(|failure| failure.code == DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE)
     );
     assert!(
         report
@@ -229,7 +234,7 @@ fn deployment_comparison_report_preserves_warning_input_status() {
         report
             .warnings
             .iter()
-            .any(|warning| warning.code == "deployment_comparison_input_warning")
+            .any(|warning| warning.code == DEPLOYMENT_COMPARISON_INPUT_WARNING_CODE)
     );
     validate_deployment_comparison_report(&report).expect("comparison should validate");
 }
@@ -255,6 +260,6 @@ fn deployment_comparison_report_text_is_passive() {
     assert!(text.contains("execution: none"));
     assert!(text.contains("external_lifecycle: 0"));
     assert!(text.contains("hard_failures:"));
-    assert!(text.contains("deployment_comparison_input_report_stale"));
+    assert!(text.contains(DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE));
     assert!(text.contains("next_actions:"));
 }

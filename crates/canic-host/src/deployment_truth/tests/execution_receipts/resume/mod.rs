@@ -1,6 +1,6 @@
 use super::super::*;
 use crate::deployment_truth::report::{
-    DUPLICATE_RECEIPT_PHASE_CODE, DUPLICATE_RECEIPT_ROLE_PHASE_CODE,
+    ARTIFACT_MISSING_CODE, DUPLICATE_RECEIPT_PHASE_CODE, DUPLICATE_RECEIPT_ROLE_PHASE_CODE,
     RECEIPT_EXECUTION_STATUS_MISMATCH_CODE, RECEIPT_PHASE_CONFLICT_CODE,
     RECEIPT_PLAN_MISMATCH_CODE, RECEIPT_POSTCONDITION_UNVERIFIED_CODE,
     RECEIPT_ROLE_PHASE_CONFLICT_CODE,
@@ -176,7 +176,7 @@ fn receipt_aware_diff_blocks_conflicting_duplicate_role_phase_receipt() {
     receipt.role_phase_receipts[0].phase = "materialize_artifacts".to_string();
     let mut conflicting = receipt.role_phase_receipts[0].clone();
     conflicting.result = RolePhaseResultV1::Failed;
-    conflicting.error = Some("artifact_missing".to_string());
+    conflicting.error = Some(ARTIFACT_MISSING_CODE.to_string());
     receipt.role_phase_receipts.push(conflicting);
 
     let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);

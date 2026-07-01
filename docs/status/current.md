@@ -54,6 +54,13 @@ before this compaction is archived at
   observation assumptions, and receipt-aware resume checks without changing
   serialized output or delegated-auth runtime behavior.
 
+- The `0.76.11` changelog is prepared for the follow-up host
+  deployment-truth diagnostic constant pass after `0.76.10`, covering
+  authority overlap/unsafe blocker codes, executor/preflight blocker codes,
+  comparison-input blockers, root-verification blockers, and receipt
+  artifact-gate reuse of the report-owned artifact-missing code without
+  changing serialized output.
+
 ## Open Work
 
 - No 0.76 gate remains open for timer renewal, lazy repair, multi-issuer

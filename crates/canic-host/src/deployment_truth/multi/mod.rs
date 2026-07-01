@@ -22,4 +22,10 @@ pub enum DeploymentComparisonReportError {
 }
 
 pub use report::deployment_comparison_report_from_checks;
+#[cfg(test)]
+pub(in crate::deployment_truth) use status::{
+    DEPLOYMENT_COMPARISON_DRIFT_CODE, DEPLOYMENT_COMPARISON_INPUT_BLOCKED_CODE,
+    DEPLOYMENT_COMPARISON_INPUT_DIFF_STALE_CODE, DEPLOYMENT_COMPARISON_INPUT_REPORT_STALE_CODE,
+    DEPLOYMENT_COMPARISON_INPUT_WARNING_CODE,
+};
 pub use validation::validate_deployment_comparison_report;

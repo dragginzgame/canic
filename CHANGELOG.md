@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.11` continues deployment-truth diagnostic-code cleanup across
+  authority, executor, comparison, root-verification, and receipt artifact
+  gates without changing serialized output or delegated-auth runtime behavior.
+
 - `0.76.10` centralizes deployment-truth diagnostic codes and diff categories
   in their owning host report modules without changing serialized output or
   delegated-auth runtime behavior.

@@ -1,4 +1,10 @@
 use super::super::*;
+use crate::deployment_truth::authority::AUTHORITY_UNSAFE_BLOCKED_CODE;
+use crate::deployment_truth::executor::{
+    DEPLOYMENT_SAFETY_BLOCKED_CODE, EXECUTOR_CAPABILITY_MISSING_CODE,
+};
+
+const DEPLOYMENT_ARTIFACT_MISSING_CODE: &str = "deployment_artifact_missing";
 
 #[test]
 fn deployment_execution_preflight_accepts_safe_plan_and_capable_executor() {
@@ -230,7 +236,7 @@ fn deployment_execution_preflight_v1_json_schema_shape_is_stable() {
             .as_array()
             .expect("blockers should be array")
             .iter()
-            .filter(|finding| finding["code"] == "executor_capability_missing")
+            .filter(|finding| finding["code"] == EXECUTOR_CAPABILITY_MISSING_CODE)
             .count(),
         1
     );
@@ -268,7 +274,7 @@ fn deployment_execution_preflight_blocks_safety_authority_and_capability_gaps() 
     let mut check = sample_unknown_unsafe_check();
     check.report.status = SafetyStatusV1::Blocked;
     check.report.hard_failures.push(SafetyFindingV1 {
-        code: "deployment_artifact_missing".to_string(),
+        code: DEPLOYMENT_ARTIFACT_MISSING_CODE.to_string(),
         message: "planned artifact was not observed".to_string(),
         severity: SafetySeverityV1::HardFailure,
         subject: Some("root".to_string()),
@@ -306,23 +312,23 @@ fn deployment_execution_preflight_blocks_safety_authority_and_capability_gaps() 
         vec![DeploymentExecutorCapabilityV1::StageArtifact]
     );
     assert!(preflight.blockers.iter().any(|finding| {
-        finding.code == "deployment_safety_blocked"
+        finding.code == DEPLOYMENT_SAFETY_BLOCKED_CODE
             && finding.subject.as_deref() == Some("report-1")
     }));
     assert!(
         preflight
             .blockers
             .iter()
-            .any(|finding| finding.code == "deployment_artifact_missing")
+            .any(|finding| finding.code == DEPLOYMENT_ARTIFACT_MISSING_CODE)
     );
     assert!(
         preflight
             .blockers
             .iter()
-            .any(|finding| finding.code == "authority_unsafe_blocked")
+            .any(|finding| finding.code == AUTHORITY_UNSAFE_BLOCKED_CODE)
     );
     assert!(preflight.blockers.iter().any(|finding| {
-        finding.code == "executor_capability_missing"
+        finding.code == EXECUTOR_CAPABILITY_MISSING_CODE
             && finding.subject.as_deref() == Some("StageArtifact")
     }));
 }
