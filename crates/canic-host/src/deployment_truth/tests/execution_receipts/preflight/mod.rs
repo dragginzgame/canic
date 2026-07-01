@@ -332,3 +332,44 @@ fn deployment_execution_preflight_blocks_safety_authority_and_capability_gaps() 
             && finding.subject.as_deref() == Some("StageArtifact")
     }));
 }
+
+#[test]
+fn deployment_execution_preflight_uses_authority_subject_when_action_identity_is_missing() {
+    let check = sample_check(sample_plan(), sample_matching_inventory());
+    let mut authority = build_authority_reconciliation_plan(&check);
+    authority.canister_actions.push(CanisterAuthorityActionV1 {
+        canister_id: None,
+        role: None,
+        control_classification: CanisterControlClassV1::UnknownUnsafe,
+        observed_controllers: Vec::new(),
+        desired_controllers: Vec::new(),
+        controller_delta: AuthorityControllerDeltaV1::default(),
+        action: AuthorityActionV1::UnknownObservation,
+        state: AuthorityReconciliationStateV1::Unknown,
+        can_apply: false,
+        reason: "authority subject was not observed".to_string(),
+    });
+    let executor = CurrentCliDeploymentExecutor::new(
+        Some("/workspace/canic".to_string()),
+        Some("/workspace/canic/.icp".to_string()),
+        vec!["/workspace/canic/.icp/local/canisters".to_string()],
+    );
+
+    let preflight = deployment_execution_preflight(
+        &check.plan,
+        &check.report,
+        &authority,
+        &executor,
+        CURRENT_CLI_EXECUTOR_CAPABILITIES,
+    );
+
+    assert_eq!(
+        preflight.status,
+        DeploymentExecutionPreflightStatusV1::Blocked
+    );
+    assert!(preflight.blockers.iter().any(|finding| {
+        finding.message == "authority subject was not observed"
+            && finding.subject.as_deref() == Some("authority")
+    }));
+    validate_deployment_execution_preflight(&preflight).expect("preflight should validate");
+}

@@ -196,9 +196,9 @@ run_probe() {
         exit 1
     fi
     prepare_blob_storage_cli_fixture "$DOWNSTREAM_ROOT"
-    prepare_auth_renewal_cli_fixture "$DOWNSTREAM_ROOT"
+    prepare_auth_renewal_cli_surface_fixture "$DOWNSTREAM_ROOT"
     run_blob_storage_cli_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
-    run_auth_renewal_cli_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
+    run_auth_renewal_cli_surface_probe_commands run_packaged_canic "$TMP_ROOT" "$FAKE_ICP"
 }
 
 assert_probe_outputs() {
@@ -243,7 +243,7 @@ assert_probe_outputs() {
         exit 1
     }
     assert_blob_storage_cli_probe_outputs "packaged" "$TMP_ROOT"
-    assert_auth_renewal_cli_probe_outputs "packaged" "$TMP_ROOT"
+    assert_auth_renewal_cli_surface_probe_outputs "packaged" "$TMP_ROOT"
 }
 
 main() {

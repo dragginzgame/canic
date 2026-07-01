@@ -149,9 +149,9 @@ example `../../canic.toml`.
 ## Root Canister
 
 The root crate needs Canic's `control-plane` feature. Add
-`auth-root-canister-sig-create` when the fleet enables delegated-token root
-proof issuance. Add `auth-issuer-canister-sig-create` to canisters that issue
-delegated tokens, and `auth-delegated-token-verify` to endpoint verifiers.
+`auth-root-canister-sig-create` only when the fleet issues role attestations.
+Add `auth-issuer-canister-sig-create` to canisters that issue delegated tokens,
+and `auth-delegated-token-verify` to endpoint verifiers.
 
 ```toml
 [package.metadata.canic]

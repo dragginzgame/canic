@@ -33,11 +33,10 @@ These features can also be selected explicitly when default features are off:
 - `control-plane` - enables root control-plane support
 - `sharding` - enables sharding-oriented runtime support from `canic-core`
 - `auth-root-canister-sig-create` - enables root canister-signature proof creation
-- `auth-root-canister-sig-verify` - enables IC canister-signature proof verification
+- `auth-root-canister-sig-verify` - enables root canister-signature proof verification for role attestation
 - `auth-issuer-canister-sig-create` - enables issuer canister-signature token proof creation
 - `auth-issuer-canister-sig-verify` - enables issuer canister-signature token proof verification
-- `auth-delegated-token-verify` - enables delegated-token verification, including
-  root and issuer canister-signature verification
+- `auth-delegated-token-verify` - enables delegated-token verification, including issuer canister-signature verification
 
 ## Typical Use
 
