@@ -276,6 +276,63 @@ fn deployment_report_includes_effective_network() {
     assert_eq!(report.deployment.as_deref(), Some("demo"));
 }
 
+// Ensure deployment-state network drift is classified before live readiness probes.
+#[test]
+fn deployment_network_check_classifies_match_and_mismatch() {
+    let mut state = sample_install_state();
+    let matched = check_deployment_network(&state, "local");
+
+    assert_eq!(matched.status, MedicStatus::Pass);
+    assert_eq!(matched.code, "deployment_network_match");
+    assert_eq!(matched.category, MedicCategory::DeploymentState);
+
+    state.network = "ic".to_string();
+    let mismatched = check_deployment_network(&state, "local");
+
+    assert_eq!(mismatched.status, MedicStatus::Fail);
+    assert_eq!(mismatched.code, "deployment_network_mismatch");
+    assert!(mismatched.detail.contains("scoped to ic"));
+    assert!(mismatched.detail.contains("selected local"));
+}
+
+// Ensure missing root IDs are caught before medic attempts a live readiness query.
+#[test]
+fn root_canister_id_check_classifies_present_and_missing_ids() {
+    let mut state = sample_install_state();
+    let present = check_root_canister_id(&state);
+
+    assert_eq!(present.status, MedicStatus::Pass);
+    assert_eq!(present.code, "root_canister_id_present");
+    assert_eq!(present.detail, "aaaaa-aa");
+
+    state.root_canister_id = "  ".to_string();
+    let missing = check_root_canister_id(&state);
+
+    assert_eq!(missing.status, MedicStatus::Fail);
+    assert_eq!(missing.code, "root_canister_id_missing");
+    assert!(
+        missing
+            .detail
+            .contains("does not record a root canister id")
+    );
+}
+
+// Ensure skipped root readiness is explicit when local deployment-state gates fail.
+#[test]
+fn root_readiness_not_evaluated_explains_skipped_live_query() {
+    let network_mismatch = check_root_readiness_not_evaluated(false, true);
+
+    assert_eq!(network_mismatch.status, MedicStatus::NotEvaluated);
+    assert_eq!(network_mismatch.code, "root_readiness_not_evaluated");
+    assert!(network_mismatch.detail.contains("network does not match"));
+
+    let missing_root = check_root_readiness_not_evaluated(true, false);
+
+    assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
+    assert_eq!(missing_root.code, "root_readiness_not_evaluated");
+    assert!(missing_root.detail.contains("no root canister id"));
+}
+
 // Ensure check ordering is deterministic by category.
 #[test]
 fn orders_checks_by_category() {
@@ -484,6 +541,26 @@ fn sample_check(status: MedicStatus) -> MedicCheck {
         "next",
         MedicSource::Command,
     )
+}
+
+fn sample_install_state() -> InstallState {
+    InstallState {
+        schema_version: 2,
+        deployment_name: "demo".to_string(),
+        fleet_template: "demo".to_string(),
+        created_at_unix_secs: 1,
+        updated_at_unix_secs: 1,
+        network: "local".to_string(),
+        root_target: "root".to_string(),
+        root_canister_id: "aaaaa-aa".to_string(),
+        root_verification: canic_host::install_root::RootVerificationStatus::Verified,
+        root_build_target: "root".to_string(),
+        workspace_root: "/workspace".to_string(),
+        icp_root: "/workspace".to_string(),
+        config_path: "/workspace/fleets/demo/canic.toml".to_string(),
+        release_set_manifest_path: "/workspace/.icp/local/canisters/root/root.release-set.json"
+            .to_string(),
+    }
 }
 
 fn write_candid(root: &std::path::Path, network: &str, role: &str, candid: &str) {
