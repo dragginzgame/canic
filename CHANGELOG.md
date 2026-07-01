@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- `canic medic project` now checks discovered fleet role package metadata and
+  warns about declared-only roles that are not yet deployable, without running
+  Cargo or mutating project state.
+
+- `canic medic deployment <deployment>` now reports latest local
+  deployment-truth receipt completeness, warning on missing/unfinished
+  receipts and failing on partial post-mutation receipts.
+
+- Missing deployment-target medic runs now warn when the requested deployment
+  name exactly matches a known fleet template or role name, making fleet/role
+  versus deployment-target mistakes explicit.
+
+- Deployment-scoped medic now smoke-checks installed deployment registry
+  observation through the existing resolver, reporting observed registry entry
+  counts or blocked registry lookups before targeted readiness checks.
+
+- Targeted blob-storage medic errors now preserve stable target-resolution
+  codes for missing roles/canisters, ambiguous roles, and targets without
+  blob-storage billing readiness metadata.
+
 ## [0.78.x] - 2026-07-01 - Top-Level Medic Preflight
 
 Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)

@@ -25,6 +25,32 @@ before this compaction is archived at
   `--blob-storage <canister-or-role>` and
   `--auth-renewal <issuer-principal>` checks.
 
+- The post-0.78.2 working tree adds passive project-config quality checks to
+  `canic medic project`: discovered roles now report
+  `role_package_metadata_present` / `role_package_metadata_missing`, and
+  declared-only roles report `declared_role_not_deployable` without running
+  Cargo or mutating project state.
+
+- The same working tree adds deployment-truth receipt completeness checks to
+  `canic medic deployment <deployment>`: complete succeeded receipts report
+  `deployment_truth_complete`, missing/unfinished receipts warn as
+  `deployment_truth_incomplete`, and partial post-mutation receipts fail.
+
+- Missing deployment-target medic runs now emit exact-match project-config hints
+  when the requested deployment name matches a known fleet template
+  (`fleet_name_deployment_name_conflated`) or role
+  (`role_name_deployment_name_conflated`).
+
+- Deployment-scoped medic also smoke-checks installed deployment registry
+  observation through the existing resolver, emitting
+  `deployment_registry_observed`, `deployment_registry_empty`,
+  `deployment_registry_unavailable`, or `deployment_registry_not_evaluated`
+  before targeted blob-storage/auth diagnostics.
+
+- Targeted blob-storage medic failures now keep the stable target-resolution
+  codes promised by the 0.78 design: `blob_storage_target_missing`,
+  `blob_storage_target_ambiguous`, and `blob_storage_target_not_blob_storage`.
+
 - 0.77 completed the wasm-footprint feature-boundary line, including
   chain-key/root-publication feature splitting and local DTO replacements for
   helper crate fan-in. Current dependency work may include local
@@ -38,8 +64,7 @@ before this compaction is archived at
 
 ## Open Work
 
-- Continue 0.78 by tightening the next preflight slice around live deployment
-  smoke coverage, process-level exit-code checks, and any broader medic
+- Continue 0.78 by tightening remaining preflight slices around broader medic
   readiness checks selected from the 0.78 design.
 
 - Before release preparation, run the focused gates for touched surfaces and

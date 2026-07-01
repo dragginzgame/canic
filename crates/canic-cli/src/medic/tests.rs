@@ -333,6 +333,288 @@ fn root_readiness_not_evaluated_explains_skipped_live_query() {
     assert!(missing_root.detail.contains("no root canister id"));
 }
 
+// Ensure deployment registry smoke checks are skipped behind local state gates.
+#[test]
+fn deployment_registry_not_evaluated_explains_skipped_live_query() {
+    let network_mismatch = check_deployment_registry_not_evaluated(false, true);
+
+    assert_eq!(network_mismatch.status, MedicStatus::NotEvaluated);
+    assert_eq!(network_mismatch.code, "deployment_registry_not_evaluated");
+    assert!(network_mismatch.detail.contains("network does not match"));
+
+    let missing_root = check_deployment_registry_not_evaluated(true, false);
+
+    assert_eq!(missing_root.status, MedicStatus::NotEvaluated);
+    assert_eq!(missing_root.code, "deployment_registry_not_evaluated");
+    assert!(missing_root.detail.contains("no root canister id"));
+}
+
+// Ensure successful deployment registry observation reports the live entry and role counts.
+#[test]
+fn deployment_registry_observed_check_reports_entry_count() {
+    let resolution = sample_installed_deployment_resolution(vec![
+        registry_entry("aaaaa-aa", Some("root")),
+        registry_entry("bbbbbb-bb", Some("app")),
+    ]);
+
+    let check = deployment_registry_observed_check(&resolution);
+
+    assert_eq!(check.status, MedicStatus::Pass);
+    assert_eq!(check.code, "deployment_registry_observed");
+    assert_eq!(check.source, MedicSource::LocalReplica);
+    assert!(check.detail.contains("entries=2"));
+    assert!(check.detail.contains("roles=2"));
+}
+
+// Ensure an empty observed registry remains visible as a warning.
+#[test]
+fn deployment_registry_observed_check_warns_on_empty_registry() {
+    let resolution = sample_installed_deployment_resolution(Vec::new());
+
+    let check = deployment_registry_observed_check(&resolution);
+
+    assert_eq!(check.status, MedicStatus::Warn);
+    assert_eq!(check.code, "deployment_registry_empty");
+    assert!(check.next.contains("canic deploy check demo"));
+}
+
+// Ensure deployment-truth receipt diagnostics classify missing and complete local receipts.
+#[test]
+fn deployment_truth_receipt_check_classifies_missing_and_complete_receipts() {
+    let root = temp_dir("canic-cli-medic-deployment-truth-complete");
+    let state = sample_install_state();
+    let missing = check_deployment_truth_receipt(Some(&root), &state, "local");
+
+    assert_eq!(missing.status, MedicStatus::Warn);
+    assert_eq!(missing.code, "deployment_truth_incomplete");
+    assert!(missing.detail.contains("no deployment-truth receipt found"));
+
+    write_medic_deployment_receipt(
+        &root,
+        "local",
+        "demo",
+        sample_deployment_receipt(
+            DeploymentExecutionStatusV1::Complete,
+            DeploymentCommandResultV1::Succeeded,
+            Some("inventory-1"),
+        ),
+    );
+    let complete = check_deployment_truth_receipt(Some(&root), &state, "local");
+
+    assert_eq!(complete.status, MedicStatus::Pass);
+    assert_eq!(complete.code, "deployment_truth_complete");
+    assert!(complete.detail.contains("status=complete"));
+    assert!(complete.detail.contains("result=succeeded"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure partial deployment-truth receipts are blocking medic diagnostics.
+#[test]
+fn deployment_truth_receipt_check_fails_on_partial_receipts() {
+    let root = temp_dir("canic-cli-medic-deployment-truth-partial");
+    let state = sample_install_state();
+    write_medic_deployment_receipt(
+        &root,
+        "local",
+        "demo",
+        sample_deployment_receipt(
+            DeploymentExecutionStatusV1::PartiallyApplied,
+            DeploymentCommandResultV1::Failed {
+                code: "install_failed".to_string(),
+                message: "install failed".to_string(),
+            },
+            None,
+        ),
+    );
+
+    let check = check_deployment_truth_receipt(Some(&root), &state, "local");
+
+    assert_eq!(check.status, MedicStatus::Fail);
+    assert_eq!(check.code, "deployment_truth_incomplete");
+    assert!(check.detail.contains("status=partially_applied"));
+    assert!(check.detail.contains("result=failed:install_failed"));
+    assert!(check.next.contains("deploy inspect resume-report demo"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure malformed deployment-truth receipt files fail closed.
+#[test]
+fn deployment_truth_receipt_check_fails_on_invalid_receipt_json() {
+    let root = temp_dir("canic-cli-medic-deployment-truth-invalid");
+    let state = sample_install_state();
+    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
+    fs::create_dir_all(&receipt_dir).expect("create receipt dir");
+    fs::write(receipt_dir.join("unix_100-invalid.json"), "{").expect("write bad receipt");
+
+    let check = check_deployment_truth_receipt(Some(&root), &state, "local");
+
+    assert_eq!(check.status, MedicStatus::Fail);
+    assert_eq!(check.code, "deployment_truth_incomplete");
+    assert!(check.detail.contains("invalid"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure missing deployment targets get exact-match hints when they are likely fleet or role names.
+#[test]
+fn deployment_name_conflation_checks_find_fleet_and_role_names() {
+    let root = temp_dir("canic-cli-medic-deployment-name-conflation");
+    write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+"#,
+    );
+    write_medic_package(&root, "root", "demo", "root");
+    write_medic_package(&root, "app", "demo", "app");
+
+    let fleet = deployment_name_conflation_checks(&root, "demo");
+    let role = deployment_name_conflation_checks(&root, "app");
+    let none = deployment_name_conflation_checks(&root, "demo-local");
+
+    assert!(fleet.iter().any(|check| {
+        check.status == MedicStatus::Warn && check.code == "fleet_name_deployment_name_conflated"
+    }));
+    assert!(role.iter().any(|check| {
+        check.status == MedicStatus::Warn && check.code == "role_name_deployment_name_conflated"
+    }));
+    assert!(none.is_empty());
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure project medic validates package-role metadata without spawning Cargo.
+#[test]
+fn project_config_quality_checks_validate_role_package_metadata() {
+    let root = temp_dir("canic-cli-medic-project-config-quality");
+    let config = write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[roles.store]
+kind = "canister"
+package = "store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+"#,
+    );
+    write_medic_package(&root, "root", "demo", "root");
+    write_medic_package(&root, "app", "demo", "app");
+    write_medic_package(&root, "store", "demo", "store");
+
+    let checks = project_config_quality_checks(&root, &[config]);
+
+    assert!(checks.iter().any(|check| {
+        check.status == MedicStatus::Pass
+            && check.code == "role_package_metadata_present"
+            && check.subject == "demo.app"
+    }));
+    let store = checks
+        .iter()
+        .find(|check| check.code == "declared_role_not_deployable")
+        .expect("declared-only role check");
+    assert_eq!(store.status, MedicStatus::Warn);
+    assert_eq!(store.subject, "demo.store");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure package metadata drift is a blocking project-config diagnostic.
+#[test]
+fn project_config_quality_checks_fail_on_missing_or_mismatched_package_metadata() {
+    let root = temp_dir("canic-cli-medic-project-config-metadata-drift");
+    let config = write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[roles.store]
+kind = "canister"
+package = "store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+
+[subnets.prime.canisters.store]
+kind = "service"
+"#,
+    );
+    write_medic_package(&root, "root", "demo", "root");
+    write_medic_package(&root, "app", "demo", "other");
+
+    let checks = project_config_quality_checks(&root, &[config]);
+
+    let app = checks
+        .iter()
+        .find(|check| check.subject == "demo.app" && check.code == "role_package_metadata_missing")
+        .expect("mismatched metadata check");
+    assert_eq!(app.status, MedicStatus::Fail);
+    assert!(app.detail.contains("expected fleet=demo role=app"));
+
+    let store = checks
+        .iter()
+        .find(|check| {
+            check.subject == "demo.store" && check.code == "role_package_metadata_missing"
+        })
+        .expect("missing metadata check");
+    assert_eq!(store.status, MedicStatus::Fail);
+    assert!(store.detail.contains("failed to read"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure check ordering is deterministic by category.
 #[test]
 fn orders_checks_by_category() {
@@ -379,6 +661,45 @@ fn renders_blob_storage_medic_summary() {
     assert!(report.contains("blob_storage [warn] blob_storage_billing_unready"));
     assert!(report.contains("readiness=warning"));
     assert!(report.contains("canic blob-storage sync-gateways demo backend"));
+}
+
+// Ensure targeted blob-storage medic errors keep stable target-resolution codes.
+#[test]
+fn blob_storage_medic_error_check_classifies_target_errors() {
+    let missing = blob_storage_medic_error_check(
+        BlobStorageCommandError::UnknownTarget {
+            deployment: "demo".to_string(),
+            target: "store".to_string(),
+        },
+        "demo",
+        "store",
+    );
+    let ambiguous = blob_storage_medic_error_check(
+        BlobStorageCommandError::AmbiguousRole {
+            deployment: "demo".to_string(),
+            role: "store".to_string(),
+        },
+        "demo",
+        "store",
+    );
+    let not_blob_storage = blob_storage_medic_error_check(
+        BlobStorageCommandError::CandidUnavailable {
+            deployment: "demo".to_string(),
+            target: "store".to_string(),
+        },
+        "demo",
+        "store",
+    );
+    let generic =
+        blob_storage_medic_error_check(BlobStorageCommandError::ResponseParse, "demo", "store");
+
+    assert_eq!(missing.code, "blob_storage_target_missing");
+    assert_eq!(ambiguous.code, "blob_storage_target_ambiguous");
+    assert_eq!(
+        not_blob_storage.code,
+        "blob_storage_target_not_blob_storage"
+    );
+    assert_eq!(generic.code, "blob_storage_billing_unready");
 }
 
 // Ensure auth-renewal medic uses the shared auth summary without mutating renewal state.
@@ -563,8 +884,116 @@ fn sample_install_state() -> InstallState {
     }
 }
 
+fn sample_installed_deployment_resolution(
+    entries: Vec<canic_host::registry::RegistryEntry>,
+) -> InstalledDeploymentResolution {
+    let mut roles_by_canister = std::collections::BTreeMap::new();
+    for entry in &entries {
+        if let Some(role) = &entry.role {
+            roles_by_canister.insert(entry.pid.clone(), role.clone());
+        }
+    }
+
+    InstalledDeploymentResolution {
+        source: InstalledDeploymentSource::LocalReplica,
+        state: sample_install_state(),
+        registry: canic_host::installed_deployment::InstalledDeploymentRegistry {
+            root_canister_id: "aaaaa-aa".to_string(),
+            entries,
+        },
+        topology: canic_host::installed_deployment::ResolvedDeploymentTopology {
+            root_canister_id: "aaaaa-aa".to_string(),
+            children_by_parent: std::collections::BTreeMap::new(),
+            roles_by_canister,
+        },
+    }
+}
+
+fn registry_entry(pid: &str, role: Option<&str>) -> canic_host::registry::RegistryEntry {
+    canic_host::registry::RegistryEntry {
+        pid: pid.to_string(),
+        role: role.map(str::to_string),
+        kind: Some("service".to_string()),
+        parent_pid: Some("aaaaa-aa".to_string()),
+        module_hash: None,
+    }
+}
+
 fn write_candid(root: &std::path::Path, network: &str, role: &str, candid: &str) {
     let path = local_canister_candid_path(root, network, role);
     fs::create_dir_all(path.parent().expect("candid parent")).expect("create candid parent");
     fs::write(path, candid).expect("write candid");
+}
+
+fn write_medic_config(root: &std::path::Path, source: &str) -> std::path::PathBuf {
+    let path = root.join("fleets").join("demo").join("canic.toml");
+    fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
+    fs::write(&path, source).expect("write config");
+    path
+}
+
+fn write_medic_package(root: &std::path::Path, package: &str, fleet: &str, role: &str) {
+    let path = root
+        .join("fleets")
+        .join("demo")
+        .join(package)
+        .join("Cargo.toml");
+    fs::create_dir_all(path.parent().expect("package parent")).expect("create package parent");
+    fs::write(
+        path,
+        format!(
+            r#"[package]
+name = "{fleet}_{role}"
+edition = "2024"
+version = "0.1.0"
+
+[package.metadata.canic]
+fleet = "{fleet}"
+role = "{role}"
+"#
+        ),
+    )
+    .expect("write package manifest");
+}
+
+fn write_medic_deployment_receipt(
+    root: &std::path::Path,
+    network: &str,
+    deployment: &str,
+    receipt: DeploymentReceiptV1,
+) {
+    let receipt_dir = root
+        .join(".canic")
+        .join(network)
+        .join("deployment-receipts")
+        .join(deployment);
+    fs::create_dir_all(&receipt_dir).expect("create receipt dir");
+    fs::write(
+        receipt_dir.join("unix_100-medic.json"),
+        serde_json::to_vec_pretty(&receipt).expect("serialize receipt"),
+    )
+    .expect("write receipt");
+}
+
+fn sample_deployment_receipt(
+    status: DeploymentExecutionStatusV1,
+    result: DeploymentCommandResultV1,
+    final_inventory: Option<&str>,
+) -> DeploymentReceiptV1 {
+    DeploymentReceiptV1 {
+        schema_version: 1,
+        operation_id: "op-1".to_string(),
+        plan_id: "plan-1".to_string(),
+        execution_context: None,
+        operation_status: status,
+        started_at: "2026-07-01T00:00:00Z".to_string(),
+        finished_at: Some("2026-07-01T00:00:01Z".to_string()),
+        operator_principal: None,
+        root_principal: Some("aaaaa-aa".to_string()),
+        previous_observed_deployment_epoch: None,
+        phase_receipts: Vec::new(),
+        role_phase_receipts: Vec::new(),
+        final_inventory_id: final_inventory.map(str::to_string),
+        command_result: result,
+    }
 }
