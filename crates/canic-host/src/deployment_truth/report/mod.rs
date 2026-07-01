@@ -13,12 +13,63 @@ mod safety;
 mod verifier_readiness;
 
 use artifacts::compare_artifacts;
+#[cfg(test)]
+pub(super) use artifacts::{
+    ARTIFACT_DUPLICATE_DIFF_CATEGORY, ARTIFACT_FILE_DIGEST_MISMATCH_CODE,
+    ARTIFACT_FILE_SHA256_DIFF_CATEGORY, ARTIFACT_MISSING_CODE, ARTIFACT_ROLE_CONFLICT_CODE,
+    ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY, DUPLICATE_ARTIFACT_OBSERVED_CODE,
+    DUPLICATE_PLANNED_ARTIFACT_ROLE_CODE, PLANNED_ARTIFACT_DUPLICATE_DIFF_CATEGORY,
+    PLANNED_ARTIFACT_ROLE_CONFLICT_CODE, PLANNED_ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY,
+};
+#[cfg(test)]
+pub(super) use canisters::{
+    CANISTER_DUPLICATE_DIFF_CATEGORY, CANISTER_EXTRA_DIFF_CATEGORY, CANISTER_ID_ROLE_CONFLICT_CODE,
+    CANISTER_ID_ROLE_CONFLICT_DIFF_CATEGORY, CANISTER_ROLE_AMBIGUOUS_CODE,
+    CANISTER_ROLE_AMBIGUOUS_DIFF_CATEGORY, CANISTER_ROLE_MISMATCH_CODE, CANISTER_UNOBSERVED_CODE,
+    DUPLICATE_CANISTER_OBSERVED_CODE, DUPLICATE_PLANNED_CANISTER_ROLE_CODE,
+    EXTRA_CANISTER_OBSERVED_CODE, PLANNED_CANISTER_DUPLICATE_DIFF_CATEGORY,
+    PLANNED_CANISTER_ID_CONFLICT_CODE, PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY,
+    PLANNED_CANISTER_ROLE_CONFLICT_CODE, PLANNED_CANISTER_ROLE_CONFLICT_DIFF_CATEGORY,
+    ROLE_MISMATCH_DIFF_CATEGORY, UNSAFE_CONTROL_CLASS_CODE,
+};
 use canisters::{compare_canisters, compare_observed_canister_id_conflicts};
+#[cfg(test)]
+pub(super) use config_digests::{RAW_CONFIG_DIGEST_MISMATCH_CODE, RAW_CONFIG_SHA256_DIFF_CATEGORY};
 use config_digests::{compare_embedded_config, compare_raw_config};
 use controllers::compare_authority_profile;
+#[cfg(test)]
+pub(super) use controllers::{
+    CONTROLLER_AUTHORITY_OVERLAP_CODE, CONTROLLER_EXTRA_DIFF_CATEGORY,
+    CONTROLLER_MISSING_DIFF_CATEGORY, CONTROLLERS_UNOBSERVED_CODE,
+    EXPECTED_CONTROLLER_MISSING_CODE, EXTRA_CONTROLLER_OBSERVED_CODE,
+};
 use module_hashes::compare_module_hashes;
+#[cfg(test)]
+pub(super) use module_hashes::{
+    INSTALLED_MODULE_HASH_AMBIGUOUS_CODE, INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY,
+    INSTALLED_MODULE_HASH_DIFF_CATEGORY, INSTALLED_MODULE_HASH_MISMATCH_CODE,
+};
+#[cfg(test)]
+pub(super) use pools::{
+    CANISTER_POOL_ROLE_CONFLICT_CODE, CANISTER_POOL_ROLE_CONFLICT_DIFF_CATEGORY,
+    DUPLICATE_PLANNED_POOL_CODE, DUPLICATE_POOL_CANISTER_OBSERVED_CODE,
+    EXTRA_POOL_CANISTER_OBSERVED_CODE, PLANNED_POOL_CONFLICT_CODE,
+    PLANNED_POOL_CONFLICT_DIFF_CATEGORY, PLANNED_POOL_DUPLICATE_DIFF_CATEGORY,
+    PLANNED_POOL_ID_CONFLICT_CODE, PLANNED_POOL_ID_CONFLICT_DIFF_CATEGORY,
+    POOL_CANISTER_DIFF_CATEGORY, POOL_CANISTER_DUPLICATE_DIFF_CATEGORY,
+    POOL_CANISTER_ID_CONFLICT_CODE, POOL_CANISTER_ID_CONFLICT_DIFF_CATEGORY,
+    POOL_CANISTER_ID_DIFF_CATEGORY, POOL_CANISTER_ID_MISMATCH_CODE, POOL_CANISTER_MISSING_CODE,
+    POOL_CONTROL_CLASS_DIFF_CATEGORY, POOL_EXTRA_DIFF_CATEGORY, UNSAFE_POOL_CONTROL_CLASS_CODE,
+};
 use pools::{compare_observed_canister_pool_role_conflicts, compare_pools};
 pub use receipt_resume::compare_plan_inventory_and_receipt;
+#[cfg(test)]
+pub(super) use receipt_resume::{
+    DUPLICATE_RECEIPT_PHASE_CODE, DUPLICATE_RECEIPT_ROLE_PHASE_CODE,
+    RECEIPT_EXECUTION_STATUS_MISMATCH_CODE, RECEIPT_PHASE_CONFLICT_CODE,
+    RECEIPT_PLAN_MISMATCH_CODE, RECEIPT_POSTCONDITION_UNVERIFIED_CODE,
+    RECEIPT_ROLE_PHASE_CONFLICT_CODE,
+};
 #[cfg(test)]
 pub(super) use root_subnet::ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE;
 pub(super) use root_subnet::apply_root_auth_signer_subnet_check;
@@ -29,6 +80,28 @@ pub(super) use root_subnet::{
 pub use safety::safety_report_from_diff;
 pub(in crate::deployment_truth::report) use safety::{resume_safety_reasons, safety_status};
 use verifier_readiness::compare_verifier_readiness;
+#[cfg(test)]
+pub(super) use verifier_readiness::{
+    DUPLICATE_PLANNED_VERIFIER_ROLE_EPOCH_CODE, DUPLICATE_VERIFIER_ROLE_EPOCH_OBSERVED_CODE,
+    PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_CODE, PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY,
+    PLANNED_VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY, VERIFIER_NOT_OBSERVED_LABEL,
+    VERIFIER_ROLE_EPOCH_CONFLICT_CODE, VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY,
+    VERIFIER_ROLE_EPOCH_DIFF_CATEGORY, VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY,
+    VERIFIER_ROLE_EPOCH_STALE_CODE, VERIFIER_ROLE_EPOCH_UNOBSERVED_CODE,
+};
+
+pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_MISMATCH_CODE: &str =
+    "deployment_manifest_mismatch";
+pub(in crate::deployment_truth) const OBSERVATION_GAP_CODE: &str = "observation_gap";
+pub(in crate::deployment_truth) const UNVERIFIED_DEPLOYMENT_ROOT_CODE: &str =
+    "unverified_deployment_root";
+pub(in crate::deployment_truth) const PLAN_ASSUMPTION_CODE: &str = "plan_assumption";
+pub(in crate::deployment_truth) const IDENTITY_UNOBSERVED_CODE: &str = "identity_unobserved";
+pub(in crate::deployment_truth) const NETWORK_MISMATCH_CODE: &str = "network_mismatch";
+pub(in crate::deployment_truth) const ROOT_TRUST_ANCHOR_MISMATCH_CODE: &str =
+    "root_trust_anchor_mismatch";
+pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_UNOBSERVED_CODE: &str =
+    "deployment_manifest_unobserved";
 
 ///
 /// DuplicateEvidenceGroup
@@ -183,7 +256,7 @@ pub fn compare_plan_to_inventory(
     record_plan_assumptions(plan, &mut hard_failures, &mut warnings);
     for gap in &inventory.unresolved_observations {
         warnings.push(SafetyFindingV1 {
-            code: "observation_gap".to_string(),
+            code: OBSERVATION_GAP_CODE.to_string(),
             message: gap.description.clone(),
             severity: SafetySeverityV1::Warning,
             subject: Some(gap.key.clone()),
@@ -219,14 +292,14 @@ fn record_plan_assumptions(
     for assumption in &plan.unresolved_assumptions {
         if assumption.key == "local_state.unverified_root_canister_id" {
             hard_failures.push(SafetyFindingV1 {
-                code: "unverified_deployment_root".to_string(),
+                code: UNVERIFIED_DEPLOYMENT_ROOT_CODE.to_string(),
                 message: assumption.description.clone(),
                 severity: SafetySeverityV1::HardFailure,
                 subject: Some(assumption.key.clone()),
             });
         } else {
             warnings.push(SafetyFindingV1 {
-                code: "plan_assumption".to_string(),
+                code: PLAN_ASSUMPTION_CODE.to_string(),
                 message: assumption.description.clone(),
                 severity: SafetySeverityV1::Warning,
                 subject: Some(assumption.key.clone()),
@@ -242,7 +315,7 @@ fn compare_identity(
 ) {
     let Some(observed) = &inventory.observed_identity else {
         hard_failures.push(finding(
-            "identity_unobserved",
+            IDENTITY_UNOBSERVED_CODE,
             "deployment identity was not observed",
             SafetySeverityV1::HardFailure,
             None,
@@ -252,7 +325,7 @@ fn compare_identity(
 
     if observed.network != plan.deployment_identity.network {
         hard_failures.push(finding(
-            "network_mismatch",
+            NETWORK_MISMATCH_CODE,
             format!(
                 "plan network {} differs from observed network {}",
                 plan.deployment_identity.network, observed.network
@@ -267,7 +340,7 @@ fn compare_identity(
     ) && expected != actual
     {
         hard_failures.push(finding(
-            "root_trust_anchor_mismatch",
+            ROOT_TRUST_ANCHOR_MISMATCH_CODE,
             format!("plan root {expected} differs from observed root {actual}"),
             SafetySeverityV1::HardFailure,
             Some("deployment_identity.root_principal".to_string()),
@@ -279,7 +352,7 @@ fn compare_identity(
     ) {
         (Some(expected), Some(actual)) if expected != actual => {
             hard_failures.push(finding(
-                "deployment_manifest_mismatch",
+                DEPLOYMENT_MANIFEST_MISMATCH_CODE,
                 "deployment manifest digest differs from the observed local config",
                 SafetySeverityV1::HardFailure,
                 Some("deployment_identity.deployment_manifest_digest".to_string()),
@@ -287,7 +360,7 @@ fn compare_identity(
         }
         (Some(_), None) => {
             hard_failures.push(finding(
-                "deployment_manifest_unobserved",
+                DEPLOYMENT_MANIFEST_UNOBSERVED_CODE,
                 "deployment manifest digest was not observed",
                 SafetySeverityV1::HardFailure,
                 Some("deployment_identity.deployment_manifest_digest".to_string()),

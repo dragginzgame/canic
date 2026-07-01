@@ -1,4 +1,9 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    CONTROLLER_AUTHORITY_OVERLAP_CODE, CONTROLLER_EXTRA_DIFF_CATEGORY,
+    CONTROLLER_MISSING_DIFF_CATEGORY, EXPECTED_CONTROLLER_MISSING_CODE,
+    EXTRA_CONTROLLER_OBSERVED_CODE,
+};
 
 #[test]
 fn deployment_diff_blocks_missing_expected_controller() {
@@ -51,10 +56,10 @@ fn deployment_diff_blocks_missing_expected_controller() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "expected_controller_missing")
+            .any(|finding| finding.code == EXPECTED_CONTROLLER_MISSING_CODE)
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "controller_missing"
+        item.category == CONTROLLER_MISSING_DIFF_CATEGORY
             && item.expected.as_deref() == Some("aaaaa-aa")
             && item.observed.as_deref() == Some("external-controller")
     }));
@@ -115,7 +120,7 @@ fn deployment_diff_warns_for_extra_declared_emergency_controller() {
     assert!(
         diff.warnings
             .iter()
-            .all(|finding| finding.code != "extra_controller_observed")
+            .all(|finding| finding.code != EXTRA_CONTROLLER_OBSERVED_CODE)
     );
 }
 
@@ -155,10 +160,10 @@ fn deployment_diff_blocks_authority_profile_controller_overlap() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "controller_authority_overlap")
+            .any(|finding| finding.code == CONTROLLER_AUTHORITY_OVERLAP_CODE)
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "controller_authority_overlap"
+        item.category == CONTROLLER_AUTHORITY_OVERLAP_CODE
             && item.expected.as_deref() == Some("expected-only")
             && item.observed.as_deref() == Some("aaaaa-aa")
     }));
@@ -216,10 +221,10 @@ fn deployment_diff_warns_for_undeclared_extra_controller() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "extra_controller_observed")
+            .any(|finding| finding.code == EXTRA_CONTROLLER_OBSERVED_CODE)
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "controller_extra"
+        item.category == CONTROLLER_EXTRA_DIFF_CATEGORY
             && item.expected.as_deref() == Some("aaaaa-aa")
             && item.observed.as_deref() == Some("surprise-controller")
     }));

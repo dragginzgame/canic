@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::report::ARTIFACT_MISSING_CODE;
 
 #[test]
 fn local_check_builds_plan_inventory_diff_and_report() {
@@ -33,7 +34,7 @@ fn local_check_builds_plan_inventory_diff_and_report() {
             .diff
             .hard_failures
             .iter()
-            .any(|finding| finding.code == "artifact_missing")
+            .any(|finding| finding.code == ARTIFACT_MISSING_CODE)
     );
     assert_eq!(check.report.status, SafetyStatusV1::Blocked);
 }

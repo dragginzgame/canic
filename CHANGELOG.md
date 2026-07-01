@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)
 
+- `0.76.10` centralizes deployment-truth diagnostic codes and diff categories
+  in their owning host report modules without changing serialized output or
+  delegated-auth runtime behavior.
+
 - `0.76.9` cleans up host/operator diagnostics and active auth docs after the
   hard cut, replacing stale canister-signature and deployment-state wording,
   clarifying removed auth command-tail tests, and centralizing touched

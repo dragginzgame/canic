@@ -3,6 +3,42 @@ use super::canisters::observed_canister_subject;
 use super::{conflicting_assignment_groups, diff_item, duplicate_evidence_groups, finding};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(in crate::deployment_truth) const CANISTER_POOL_ROLE_CONFLICT_CODE: &str =
+    "canister_pool_role_conflict";
+pub(in crate::deployment_truth) const CANISTER_POOL_ROLE_CONFLICT_DIFF_CATEGORY: &str =
+    "canister_pool_role_conflict";
+pub(in crate::deployment_truth) const PLANNED_POOL_CONFLICT_CODE: &str = "planned_pool_conflict";
+pub(in crate::deployment_truth) const PLANNED_POOL_CONFLICT_DIFF_CATEGORY: &str =
+    "planned_pool_conflict";
+pub(in crate::deployment_truth) const PLANNED_POOL_DUPLICATE_DIFF_CATEGORY: &str =
+    "planned_pool_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_PLANNED_POOL_CODE: &str = "duplicate_planned_pool";
+pub(in crate::deployment_truth) const PLANNED_POOL_ID_CONFLICT_CODE: &str =
+    "planned_pool_id_conflict";
+pub(in crate::deployment_truth) const PLANNED_POOL_ID_CONFLICT_DIFF_CATEGORY: &str =
+    "planned_pool_id_conflict";
+pub(in crate::deployment_truth) const POOL_CANISTER_ID_CONFLICT_CODE: &str =
+    "pool_canister_id_conflict";
+pub(in crate::deployment_truth) const POOL_CANISTER_ID_CONFLICT_DIFF_CATEGORY: &str =
+    "pool_canister_id_conflict";
+pub(in crate::deployment_truth) const POOL_CANISTER_DUPLICATE_DIFF_CATEGORY: &str =
+    "pool_canister_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_POOL_CANISTER_OBSERVED_CODE: &str =
+    "duplicate_pool_canister_observed";
+pub(in crate::deployment_truth) const POOL_CANISTER_DIFF_CATEGORY: &str = "pool_canister";
+pub(in crate::deployment_truth) const POOL_CANISTER_MISSING_CODE: &str = "pool_canister_missing";
+pub(in crate::deployment_truth) const POOL_CANISTER_UNOBSERVED_CODE: &str =
+    "pool_canister_unobserved";
+pub(in crate::deployment_truth) const POOL_CANISTER_ID_DIFF_CATEGORY: &str = "pool_canister_id";
+pub(in crate::deployment_truth) const POOL_CANISTER_ID_MISMATCH_CODE: &str =
+    "pool_canister_id_mismatch";
+pub(in crate::deployment_truth) const POOL_CONTROL_CLASS_DIFF_CATEGORY: &str = "pool_control_class";
+pub(in crate::deployment_truth) const UNSAFE_POOL_CONTROL_CLASS_CODE: &str =
+    "unsafe_pool_control_class";
+pub(in crate::deployment_truth) const POOL_EXTRA_DIFF_CATEGORY: &str = "pool_extra";
+pub(in crate::deployment_truth) const EXTRA_POOL_CANISTER_OBSERVED_CODE: &str =
+    "extra_pool_canister_observed";
+
 pub(super) fn compare_observed_canister_pool_role_conflicts(
     inventory: &DeploymentInventoryV1,
     pool_diff: &mut Vec<DiffItemV1>,
@@ -36,14 +72,14 @@ pub(super) fn compare_observed_canister_pool_role_conflicts(
                 observed_pool_subject(observed_pool)
             );
             pool_diff.push(diff_item(
-                "canister_pool_role_conflict",
+                CANISTER_POOL_ROLE_CONFLICT_DIFF_CATEGORY,
                 &observed_canister.canister_id,
                 None,
                 Some(observed_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "canister_pool_role_conflict",
+                CANISTER_POOL_ROLE_CONFLICT_CODE,
                 format!(
                     "observed canister {} has conflicting canister/pool roles {observed_label}",
                     observed_canister.canister_id
@@ -117,14 +153,14 @@ fn compare_planned_pool_conflicts(
         if group.is_conflict {
             subject_conflicts.insert(group.subject.clone());
             pool_diff.push(diff_item(
-                "planned_pool_conflict",
+                PLANNED_POOL_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 Some("one planned pool canister".to_string()),
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "planned_pool_conflict",
+                PLANNED_POOL_CONFLICT_CODE,
                 format!(
                     "planned pool {} has conflicting evidence: {}",
                     group.subject, group.evidence_label
@@ -134,14 +170,14 @@ fn compare_planned_pool_conflicts(
             ));
         } else {
             pool_diff.push(diff_item(
-                "planned_pool_duplicate",
+                PLANNED_POOL_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_planned_pool",
+                DUPLICATE_PLANNED_POOL_CODE,
                 format!(
                     "planned pool {} was declared {} times with identical evidence",
                     group.subject, group.count
@@ -160,14 +196,14 @@ fn compare_planned_pool_conflicts(
     ) {
         id_conflicts.insert(group.subject.clone());
         pool_diff.push(diff_item(
-            "planned_pool_id_conflict",
+            PLANNED_POOL_ID_CONFLICT_DIFF_CATEGORY,
             &group.subject,
             Some("one planned pool identity".to_string()),
             Some(group.evidence_label.clone()),
             SafetySeverityV1::HardFailure,
         ));
         hard_failures.push(finding(
-            "planned_pool_id_conflict",
+            PLANNED_POOL_ID_CONFLICT_CODE,
             format!(
                 "planned pool id {} is assigned to conflicting identities {}",
                 group.subject, group.evidence_label
@@ -206,14 +242,14 @@ fn compare_observed_pool_id_conflicts(
     ) {
         if group.is_conflict {
             pool_diff.push(diff_item(
-                "pool_canister_id_conflict",
+                POOL_CANISTER_ID_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 None,
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "pool_canister_id_conflict",
+                POOL_CANISTER_ID_CONFLICT_CODE,
                 format!(
                     "observed pool canister {} has conflicting pool identities {}",
                     group.subject, group.evidence_label
@@ -223,14 +259,14 @@ fn compare_observed_pool_id_conflicts(
             ));
         } else {
             pool_diff.push(diff_item(
-                "pool_canister_duplicate",
+                POOL_CANISTER_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_pool_canister_observed",
+                DUPLICATE_POOL_CANISTER_OBSERVED_CODE,
                 format!(
                     "observed pool canister {} was reported {} times for {}",
                     group.subject, group.count, group.evidence_label
@@ -288,7 +324,7 @@ fn record_missing_pool(
     };
     let subject = expected_pool_subject(expected);
     pool_diff.push(diff_item(
-        "pool_canister",
+        POOL_CANISTER_DIFF_CATEGORY,
         &subject,
         expected.canister_id.clone(),
         None,
@@ -296,9 +332,9 @@ fn record_missing_pool(
     ));
     let finding = finding(
         if expected.canister_id.is_some() {
-            "pool_canister_missing"
+            POOL_CANISTER_MISSING_CODE
         } else {
-            "pool_canister_unobserved"
+            POOL_CANISTER_UNOBSERVED_CODE
         },
         format!("missing observed pool canister for {subject}"),
         severity,
@@ -322,14 +358,14 @@ fn record_pool_id_mismatch(
     {
         let subject = observed_pool_subject(observed);
         pool_diff.push(diff_item(
-            "pool_canister_id",
+            POOL_CANISTER_ID_DIFF_CATEGORY,
             &subject,
             Some(expected_id.clone()),
             Some(observed.canister_id.clone()),
             SafetySeverityV1::HardFailure,
         ));
         hard_failures.push(finding(
-            "pool_canister_id_mismatch",
+            POOL_CANISTER_ID_MISMATCH_CODE,
             format!(
                 "pool canister {subject} has observed id {}, expected {expected_id}",
                 observed.canister_id
@@ -353,14 +389,14 @@ fn record_unsafe_pool_control_class(
     }
     let subject = observed_pool_subject(observed);
     pool_diff.push(diff_item(
-        "pool_control_class",
+        POOL_CONTROL_CLASS_DIFF_CATEGORY,
         &subject,
         Some("CanicManagedPool".to_string()),
         Some(format!("{:?}", observed.control_class)),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "unsafe_pool_control_class",
+        UNSAFE_POOL_CONTROL_CLASS_CODE,
         format!("pool canister {subject} has unsafe observed control class"),
         SafetySeverityV1::HardFailure,
         Some(subject),
@@ -384,14 +420,14 @@ fn warn_extra_observed_pool(
     }
     let subject = observed_pool_subject(observed);
     pool_diff.push(diff_item(
-        "pool_extra",
+        POOL_EXTRA_DIFF_CATEGORY,
         &subject,
         None,
         Some(observed.canister_id.clone()),
         SafetySeverityV1::Warning,
     ));
     warnings.push(finding(
-        "extra_pool_canister_observed",
+        EXTRA_POOL_CANISTER_OBSERVED_CODE,
         format!("observed undeclared pool canister {subject}"),
         SafetySeverityV1::Warning,
         Some(subject),

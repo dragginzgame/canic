@@ -1,4 +1,11 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    ARTIFACT_DUPLICATE_DIFF_CATEGORY, ARTIFACT_FILE_DIGEST_MISMATCH_CODE,
+    ARTIFACT_FILE_SHA256_DIFF_CATEGORY, ARTIFACT_ROLE_CONFLICT_CODE,
+    ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY, DUPLICATE_ARTIFACT_OBSERVED_CODE,
+    DUPLICATE_PLANNED_ARTIFACT_ROLE_CODE, PLANNED_ARTIFACT_DUPLICATE_DIFF_CATEGORY,
+    PLANNED_ARTIFACT_ROLE_CONFLICT_CODE, PLANNED_ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY,
+};
 
 #[test]
 fn deployment_diff_blocks_artifact_file_digest_mismatch() {
@@ -42,10 +49,10 @@ fn deployment_diff_blocks_artifact_file_digest_mismatch() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "artifact_file_digest_mismatch")
+            .any(|finding| finding.code == ARTIFACT_FILE_DIGEST_MISMATCH_CODE)
     );
     assert!(diff.artifact_diff.iter().any(|item| {
-        item.category == "artifact_file_sha256"
+        item.category == ARTIFACT_FILE_SHA256_DIFF_CATEGORY
             && item.expected.as_deref() == Some("planned-file")
             && item.observed.as_deref() == Some("observed-file")
             && item.severity == SafetySeverityV1::HardFailure
@@ -72,11 +79,11 @@ fn deployment_diff_blocks_conflicting_artifact_observations_for_same_role() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "artifact_role_conflict"
+            .any(|finding| finding.code == ARTIFACT_ROLE_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("root"))
     );
     assert!(diff.artifact_diff.iter().any(|item| {
-        item.category == "artifact_role_conflict"
+        item.category == ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("root.wasm.gz") && observed.contains("alternate-root.wasm.gz")
@@ -99,11 +106,11 @@ fn deployment_diff_warns_for_duplicate_identical_artifact_observation() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "duplicate_artifact_observed"
+            .any(|finding| finding.code == DUPLICATE_ARTIFACT_OBSERVED_CODE
                 && finding.subject.as_deref() == Some("root"))
     );
     assert!(diff.artifact_diff.iter().any(|item| {
-        item.category == "artifact_duplicate"
+        item.category == ARTIFACT_DUPLICATE_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning
@@ -121,14 +128,11 @@ fn deployment_diff_blocks_conflicting_planned_artifacts_for_same_role() {
     let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
-    assert!(
-        diff.hard_failures
-            .iter()
-            .any(|finding| finding.code == "planned_artifact_role_conflict"
-                && finding.subject.as_deref() == Some("root"))
-    );
+    assert!(diff.hard_failures.iter().any(|finding| finding.code
+        == PLANNED_ARTIFACT_ROLE_CONFLICT_CODE
+        && finding.subject.as_deref() == Some("root")));
     assert!(diff.artifact_diff.iter().any(|item| {
-        item.category == "planned_artifact_role_conflict"
+        item.category == PLANNED_ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("root.wasm.gz") && observed.contains("alternate-root.wasm.gz")
@@ -146,14 +150,11 @@ fn deployment_diff_warns_for_duplicate_identical_planned_artifact_role() {
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
     assert!(diff.hard_failures.is_empty());
-    assert!(
-        diff.warnings
-            .iter()
-            .any(|finding| finding.code == "duplicate_planned_artifact_role"
-                && finding.subject.as_deref() == Some("root"))
-    );
+    assert!(diff.warnings.iter().any(|finding| finding.code
+        == DUPLICATE_PLANNED_ARTIFACT_ROLE_CODE
+        && finding.subject.as_deref() == Some("root")));
     assert!(diff.artifact_diff.iter().any(|item| {
-        item.category == "planned_artifact_duplicate"
+        item.category == PLANNED_ARTIFACT_DUPLICATE_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning

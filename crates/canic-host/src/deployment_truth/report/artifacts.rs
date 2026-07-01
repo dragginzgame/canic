@@ -2,6 +2,32 @@ use super::super::*;
 use super::{diff_item, duplicate_evidence_groups, finding};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(in crate::deployment_truth) const PLANNED_ARTIFACT_ROLE_CONFLICT_CODE: &str =
+    "planned_artifact_role_conflict";
+pub(in crate::deployment_truth) const PLANNED_ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY: &str =
+    "planned_artifact_role_conflict";
+pub(in crate::deployment_truth) const PLANNED_ARTIFACT_DUPLICATE_DIFF_CATEGORY: &str =
+    "planned_artifact_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_PLANNED_ARTIFACT_ROLE_CODE: &str =
+    "duplicate_planned_artifact_role";
+pub(in crate::deployment_truth) const ARTIFACT_ROLE_CONFLICT_CODE: &str = "artifact_role_conflict";
+pub(in crate::deployment_truth) const ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY: &str =
+    "artifact_role_conflict";
+pub(in crate::deployment_truth) const ARTIFACT_DUPLICATE_DIFF_CATEGORY: &str = "artifact_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_ARTIFACT_OBSERVED_CODE: &str =
+    "duplicate_artifact_observed";
+pub(in crate::deployment_truth) const ARTIFACT_DIFF_CATEGORY: &str = "artifact";
+pub(in crate::deployment_truth) const ARTIFACT_MISSING_CODE: &str = "artifact_missing";
+pub(in crate::deployment_truth) const ARTIFACT_FILE_SHA256_DIFF_CATEGORY: &str =
+    "artifact_file_sha256";
+pub(in crate::deployment_truth) const ARTIFACT_FILE_DIGEST_MISMATCH_CODE: &str =
+    "artifact_file_digest_mismatch";
+pub(in crate::deployment_truth) const ARTIFACT_SHA256_DIFF_CATEGORY: &str = "artifact_sha256";
+pub(in crate::deployment_truth) const ARTIFACT_DIGEST_MISMATCH_CODE: &str =
+    "artifact_digest_mismatch";
+pub(in crate::deployment_truth) const ARTIFACT_DIGEST_UNOBSERVED_CODE: &str =
+    "artifact_digest_unobserved";
+
 pub(super) fn compare_artifacts(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -57,14 +83,14 @@ fn compare_planned_artifact_role_conflicts(
         if group.is_conflict {
             conflicting_roles.insert(group.subject.clone());
             artifact_diff.push(diff_item(
-                "planned_artifact_role_conflict",
+                PLANNED_ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 Some("one planned artifact".to_string()),
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "planned_artifact_role_conflict",
+                PLANNED_ARTIFACT_ROLE_CONFLICT_CODE,
                 format!(
                     "planned artifact role {} has conflicting evidence: {}",
                     group.subject, group.evidence_label
@@ -74,14 +100,14 @@ fn compare_planned_artifact_role_conflicts(
             ));
         } else {
             artifact_diff.push(diff_item(
-                "planned_artifact_duplicate",
+                PLANNED_ARTIFACT_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_planned_artifact_role",
+                DUPLICATE_PLANNED_ARTIFACT_ROLE_CODE,
                 format!(
                     "planned artifact role {} was declared {} times with identical evidence",
                     group.subject, group.count
@@ -128,14 +154,14 @@ fn compare_observed_artifact_role_conflicts(
         if group.is_conflict {
             conflicting_roles.insert(group.subject.clone());
             artifact_diff.push(diff_item(
-                "artifact_role_conflict",
+                ARTIFACT_ROLE_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 Some("one artifact observation".to_string()),
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "artifact_role_conflict",
+                ARTIFACT_ROLE_CONFLICT_CODE,
                 format!(
                     "observed artifact role {} has conflicting evidence: {}",
                     group.subject, group.evidence_label
@@ -145,14 +171,14 @@ fn compare_observed_artifact_role_conflicts(
             ));
         } else {
             artifact_diff.push(diff_item(
-                "artifact_duplicate",
+                ARTIFACT_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_artifact_observed",
+                DUPLICATE_ARTIFACT_OBSERVED_CODE,
                 format!(
                     "observed artifact role {} was reported {} times with identical evidence",
                     group.subject, group.count
@@ -184,14 +210,14 @@ fn record_missing_artifact(
     hard_failures: &mut Vec<SafetyFindingV1>,
 ) {
     artifact_diff.push(diff_item(
-        "artifact",
+        ARTIFACT_DIFF_CATEGORY,
         &expected.role,
         expected.wasm_gz_path.clone(),
         None,
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "artifact_missing",
+        ARTIFACT_MISSING_CODE,
         format!("missing observed artifact for role {}", expected.role),
         SafetySeverityV1::HardFailure,
         Some(expected.role.clone()),
@@ -210,14 +236,14 @@ fn compare_artifact_file_sha256(
     ) {
         (Some(want), Some(got)) if want != got => {
             artifact_diff.push(diff_item(
-                "artifact_file_sha256",
+                ARTIFACT_FILE_SHA256_DIFF_CATEGORY,
                 &expected.role,
                 Some(want.clone()),
                 Some(got.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "artifact_file_digest_mismatch",
+                ARTIFACT_FILE_DIGEST_MISMATCH_CODE,
                 format!(
                     "observed artifact file digest changed during deployment truth check for role {}",
                     expected.role
@@ -228,7 +254,7 @@ fn compare_artifact_file_sha256(
         }
         (_, Some(got)) => {
             artifact_diff.push(diff_item(
-                "artifact_file_sha256",
+                ARTIFACT_FILE_SHA256_DIFF_CATEGORY,
                 &expected.role,
                 expected.observed_wasm_gz_file_sha256.clone(),
                 Some(got.clone()),
@@ -252,21 +278,21 @@ fn compare_artifact_payload_sha256(
     ) {
         (Some(want), Some(got)) if want != got => {
             artifact_diff.push(diff_item(
-                "artifact_sha256",
+                ARTIFACT_SHA256_DIFF_CATEGORY,
                 &expected.role,
                 Some(want.clone()),
                 Some(got.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "artifact_digest_mismatch",
+                ARTIFACT_DIGEST_MISMATCH_CODE,
                 format!("artifact digest mismatch for role {}", expected.role),
                 SafetySeverityV1::HardFailure,
                 Some(expected.role.clone()),
             ));
         }
         (Some(want), None) => warnings.push(finding(
-            "artifact_digest_unobserved",
+            ARTIFACT_DIGEST_UNOBSERVED_CODE,
             format!(
                 "expected artifact digest {want} for role {} was not observed",
                 expected.role

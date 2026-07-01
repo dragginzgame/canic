@@ -3,6 +3,40 @@ use super::controllers::compare_role_controllers;
 use super::{conflicting_assignment_groups, diff_item, duplicate_evidence_groups, finding};
 use std::collections::BTreeSet;
 
+pub(in crate::deployment_truth) const CANISTER_ID_ROLE_CONFLICT_CODE: &str =
+    "canister_id_role_conflict";
+pub(in crate::deployment_truth) const CANISTER_ID_ROLE_CONFLICT_DIFF_CATEGORY: &str =
+    "canister_id_role_conflict";
+pub(in crate::deployment_truth) const CANISTER_DUPLICATE_DIFF_CATEGORY: &str = "canister_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_CANISTER_OBSERVED_CODE: &str =
+    "duplicate_canister_observed";
+pub(in crate::deployment_truth) const PLANNED_CANISTER_ROLE_CONFLICT_CODE: &str =
+    "planned_canister_role_conflict";
+pub(in crate::deployment_truth) const PLANNED_CANISTER_ROLE_CONFLICT_DIFF_CATEGORY: &str =
+    "planned_canister_role_conflict";
+pub(in crate::deployment_truth) const PLANNED_CANISTER_DUPLICATE_DIFF_CATEGORY: &str =
+    "planned_canister_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_PLANNED_CANISTER_ROLE_CODE: &str =
+    "duplicate_planned_canister_role";
+pub(in crate::deployment_truth) const PLANNED_CANISTER_ID_CONFLICT_CODE: &str =
+    "planned_canister_id_conflict";
+pub(in crate::deployment_truth) const PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY: &str =
+    "planned_canister_id_conflict";
+pub(in crate::deployment_truth) const CANISTER_DIFF_CATEGORY: &str = "canister";
+pub(in crate::deployment_truth) const CANISTER_MISSING_CODE: &str = "canister_missing";
+pub(in crate::deployment_truth) const CANISTER_UNOBSERVED_CODE: &str = "canister_unobserved";
+pub(in crate::deployment_truth) const CONTROL_CLASS_DIFF_CATEGORY: &str = "control_class";
+pub(in crate::deployment_truth) const UNSAFE_CONTROL_CLASS_CODE: &str = "unsafe_control_class";
+pub(in crate::deployment_truth) const CANISTER_ROLE_AMBIGUOUS_CODE: &str =
+    "canister_role_ambiguous";
+pub(in crate::deployment_truth) const CANISTER_ROLE_AMBIGUOUS_DIFF_CATEGORY: &str =
+    "canister_role_ambiguous";
+pub(in crate::deployment_truth) const ROLE_MISMATCH_DIFF_CATEGORY: &str = "role_mismatch";
+pub(in crate::deployment_truth) const CANISTER_ROLE_MISMATCH_CODE: &str = "canister_role_mismatch";
+pub(in crate::deployment_truth) const CANISTER_EXTRA_DIFF_CATEGORY: &str = "canister_extra";
+pub(in crate::deployment_truth) const EXTRA_CANISTER_OBSERVED_CODE: &str =
+    "extra_canister_observed";
+
 pub(super) fn compare_observed_canister_id_conflicts(
     inventory: &DeploymentInventoryV1,
     controller_diff: &mut Vec<DiffItemV1>,
@@ -17,14 +51,14 @@ pub(super) fn compare_observed_canister_id_conflicts(
     ) {
         if group.is_conflict {
             controller_diff.push(diff_item(
-                "canister_id_role_conflict",
+                CANISTER_ID_ROLE_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 None,
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "canister_id_role_conflict",
+                CANISTER_ID_ROLE_CONFLICT_CODE,
                 format!(
                     "observed canister {} has conflicting roles {}",
                     group.subject, group.evidence_label
@@ -34,14 +68,14 @@ pub(super) fn compare_observed_canister_id_conflicts(
             ));
         } else {
             controller_diff.push(diff_item(
-                "canister_duplicate",
+                CANISTER_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_canister_observed",
+                DUPLICATE_CANISTER_OBSERVED_CODE,
                 format!(
                     "observed canister {} was reported {} times for role {}",
                     group.subject, group.count, group.evidence_label
@@ -148,14 +182,14 @@ fn compare_planned_canister_conflicts(
         if group.is_conflict {
             role_conflicts.insert(group.subject.clone());
             controller_diff.push(diff_item(
-                "planned_canister_role_conflict",
+                PLANNED_CANISTER_ROLE_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 Some("one planned canister".to_string()),
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "planned_canister_role_conflict",
+                PLANNED_CANISTER_ROLE_CONFLICT_CODE,
                 format!(
                     "planned canister role {} has conflicting evidence: {}",
                     group.subject, group.evidence_label
@@ -165,14 +199,14 @@ fn compare_planned_canister_conflicts(
             ));
         } else {
             controller_diff.push(diff_item(
-                "planned_canister_duplicate",
+                PLANNED_CANISTER_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_planned_canister_role",
+                DUPLICATE_PLANNED_CANISTER_ROLE_CODE,
                 format!(
                     "planned canister role {} was declared {} times with identical evidence",
                     group.subject, group.count
@@ -191,14 +225,14 @@ fn compare_planned_canister_conflicts(
     ) {
         id_conflicts.insert(group.subject.clone());
         controller_diff.push(diff_item(
-            "planned_canister_id_conflict",
+            PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY,
             &group.subject,
             Some("one planned role".to_string()),
             Some(group.evidence_label.clone()),
             SafetySeverityV1::HardFailure,
         ));
         hard_failures.push(finding(
-            "planned_canister_id_conflict",
+            PLANNED_CANISTER_ID_CONFLICT_CODE,
             format!(
                 "planned canister id {} is assigned to conflicting roles {}",
                 group.subject, group.evidence_label
@@ -235,7 +269,7 @@ fn record_missing_canister(
         SafetySeverityV1::Warning
     };
     controller_diff.push(diff_item(
-        "canister",
+        CANISTER_DIFF_CATEGORY,
         &expected.role,
         expected.canister_id.clone(),
         None,
@@ -243,9 +277,9 @@ fn record_missing_canister(
     ));
     let finding = finding(
         if expected.canister_id.is_some() {
-            "canister_missing"
+            CANISTER_MISSING_CODE
         } else {
-            "canister_unobserved"
+            CANISTER_UNOBSERVED_CODE
         },
         format!("missing observed canister for role {}", expected.role),
         severity,
@@ -272,14 +306,14 @@ fn record_unsafe_canister_control_class(
         return;
     }
     controller_diff.push(diff_item(
-        "control_class",
+        CONTROL_CLASS_DIFF_CATEGORY,
         &expected.role,
         Some("DeploymentControlled".to_string()),
         Some(format!("{:?}", observed.control_class)),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "unsafe_control_class",
+        UNSAFE_CONTROL_CLASS_CODE,
         format!("role {} has unsafe observed control class", expected.role),
         SafetySeverityV1::HardFailure,
         Some(expected.role.clone()),
@@ -298,14 +332,14 @@ fn record_ambiguous_canister_role(
         .collect::<Vec<_>>()
         .join(",");
     controller_diff.push(diff_item(
-        "canister_role_ambiguous",
+        CANISTER_ROLE_AMBIGUOUS_DIFF_CATEGORY,
         &expected.role,
         Some("one observed canister".to_string()),
         Some(observed_ids.clone()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "canister_role_ambiguous",
+        CANISTER_ROLE_AMBIGUOUS_CODE,
         format!(
             "expected role {} has multiple observed canisters: {observed_ids}",
             expected.role
@@ -328,14 +362,14 @@ fn compare_observed_role(
         return;
     }
     controller_diff.push(diff_item(
-        "role_mismatch",
+        ROLE_MISMATCH_DIFF_CATEGORY,
         &expected.role,
         Some(expected.role.clone()),
         Some(observed_role.to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "canister_role_mismatch",
+        CANISTER_ROLE_MISMATCH_CODE,
         format!(
             "expected canister {} to have role {}, observed role {observed_role}",
             observed.canister_id, expected.role
@@ -369,14 +403,14 @@ fn warn_extra_observed_canisters(
         }
         let subject = observed_canister_subject(observed);
         controller_diff.push(diff_item(
-            "canister_extra",
+            CANISTER_EXTRA_DIFF_CATEGORY,
             &subject,
             None,
             Some(observed.canister_id.clone()),
             SafetySeverityV1::Warning,
         ));
         warnings.push(finding(
-            "extra_canister_observed",
+            EXTRA_CANISTER_OBSERVED_CODE,
             format!("observed undeclared canister {subject}"),
             SafetySeverityV1::Warning,
             Some(subject),
