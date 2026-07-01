@@ -34,12 +34,10 @@ async-trait = { workspace = true }
 candid = { workspace = true }
 ic-canister-sig-creation = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
-ic-cdk-management-canister = { workspace = true }
 ic-cdk-timers = { workspace = true }
 ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
 ic-signature-verification = { workspace = true, optional = true }
-icrc-ledger-types = { workspace = true }
 k256 = { workspace = true, optional = true }
 remain = { workspace = true }
 serde = { workspace = true }

@@ -6,10 +6,10 @@
 
 use crate::{
     InternalError,
-    cdk::{candid::Nat, icrc_ledger_types::icrc1::transfer::TransferError, types::Principal},
+    cdk::{candid::Nat, types::Principal},
     dto::icp_refill::{IcpRefillErrorCode, IcpRefillRequest, IcpRefillResponse, IcpRefillStatus},
     ids::CanisterRole,
-    infra::ic::icp_refill::{NotifyTopUpArg, NotifyTopUpError},
+    infra::ic::icp_refill::{NotifyTopUpArg, NotifyTopUpError, TransferError},
     ops::{
         cost_guard::CostGuardPermit,
         ic::{IcOps, icp_refill::IcpRefillOps},

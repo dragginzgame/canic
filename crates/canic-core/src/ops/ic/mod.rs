@@ -65,6 +65,12 @@ impl IcOps {
         cdk::api::canister_self()
     }
 
+    /// Return the current canister's cycle balance.
+    #[must_use]
+    pub fn canister_cycle_balance() -> crate::cdk::types::Cycles {
+        cdk::api::canister_cycle_balance().into()
+    }
+
     /// Return the current caller principal.
     #[must_use]
     pub fn msg_caller() -> Principal {

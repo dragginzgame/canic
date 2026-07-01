@@ -27,7 +27,7 @@ use crate::{
             client::CashierClientOps,
             conversion::{CashierConversionOps, CashierDecodeError},
         },
-        ic::{IcOps, mgmt::MgmtOps},
+        ic::IcOps,
     },
 };
 
@@ -183,7 +183,7 @@ impl BlobStorageApi {
 
         let attachment = Self::funding_attachment(
             requested_cycles,
-            MgmtOps::canister_cycle_balance().to_u128(),
+            IcOps::canister_cycle_balance().to_u128(),
             config.project_cycles_reserve,
         );
         let project_cycles_before = attachment.project_cycles_available;
@@ -221,7 +221,7 @@ impl BlobStorageApi {
             CashierConversionOps::account_cycle_balances_to_u128(&top_up.balance)
                 .map(|balances| balances.total)
                 .map_err(Self::map_cashier_decode_error)?;
-        let project_cycles_after = MgmtOps::canister_cycle_balance().to_u128();
+        let project_cycles_after = IcOps::canister_cycle_balance().to_u128();
 
         Ok(Self::top_up_report(
             requested_cycles,
@@ -236,7 +236,7 @@ impl BlobStorageApi {
 
     /// Return backend blob-storage billing status without transferring cycles.
     pub async fn status(request: BlobStorageStatusRequest) -> BlobStorageStatusResponse {
-        let project_cycles_available = MgmtOps::canister_cycle_balance().to_u128();
+        let project_cycles_available = IcOps::canister_cycle_balance().to_u128();
         let gateway_principal_count = Self::gateway_principal_count();
         let last_gateway_principal_sync_at_ns =
             BlobStorageLifecycleOps::last_gateway_principal_sync_at_ns();

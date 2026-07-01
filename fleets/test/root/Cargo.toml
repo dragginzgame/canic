@@ -20,6 +20,7 @@ crate-type = ["cdylib"]
 candid = { workspace = true }
 canic = { workspace = true, features = ["auth-chain-key-root-sign", "auth-root-canister-sig-create", "control-plane"] }
 ic-cdk = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
 canic = { workspace = true }

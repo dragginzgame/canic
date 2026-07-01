@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.77.md](docs/changelog/0.77.md)
 
+- `0.77.1` removes the remaining ICRC ledger and management-canister helper
+  crate fan-in from ordinary canister builds while preserving ICP refill,
+  HTTP outcall, and test/fleet management-call behavior through local Candid
+  DTOs.
+
 - `0.77.0` splits chain-key ECDSA and wasm-store control-plane features so
   store/control-plane-only wasm builds avoid unnecessary auth/signing and
   root-publication fan-in while preserving delegated-token verification,
