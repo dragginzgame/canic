@@ -98,13 +98,7 @@ impl MemoryRegistryOps {
         let authorities = snapshot
             .authorities
             .into_iter()
-            .map(|authority| MemoryRangeAuthorityEntry {
-                owner: authority.authority,
-                start: authority.range.start(),
-                end: authority.range.end(),
-                mode: memory_range_authority_mode(authority.mode),
-                purpose: authority.purpose.unwrap_or_default(),
-            })
+            .map(memory_range_authority_entry_response)
             .collect();
 
         let records: Vec<MemoryAllocationRecordEntry> = snapshot
@@ -207,6 +201,19 @@ fn memory_ledger_memory_entry_response(
     })
 }
 
+fn memory_range_authority_entry_response(
+    authority: ic_memory::MemoryManagerAuthorityRecord,
+) -> MemoryRangeAuthorityEntry {
+    let range = authority.range();
+    MemoryRangeAuthorityEntry {
+        owner: authority.authority().to_string(),
+        start: range.start(),
+        end: range.end(),
+        mode: memory_range_authority_mode(authority.mode()),
+        purpose: authority.purpose().unwrap_or_default().to_string(),
+    }
+}
+
 const fn memory_allocation_size_response(size: DiagnosticMemorySize) -> MemoryAllocationSizeEntry {
     MemoryAllocationSizeEntry {
         wasm_pages: size.wasm_pages,
@@ -227,7 +234,7 @@ const fn memory_schema_metadata_response(
 ) -> MemorySchemaMetadataEntry {
     MemorySchemaMetadataEntry {
         generation: record.generation(),
-        schema_version: record.schema().schema_version,
+        schema_version: record.schema().schema_version(),
         schema_fingerprint: None,
     }
 }
@@ -269,6 +276,7 @@ const fn commit_recovery_error_response(
         CommitRecoveryError::UnexpectedGeneration { .. } => {
             MemoryCommitRecoveryErrorResponse::UnexpectedGeneration
         }
+        _ => MemoryCommitRecoveryErrorResponse::Unknown,
     }
 }
 

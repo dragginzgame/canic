@@ -190,6 +190,10 @@ fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryReg
                 },
             }
         }
+        _ => MemoryRegistryError::InvalidDeclaration {
+            stable_key: "<slot>".to_string(),
+            reason: "unsupported MemoryManager slot error",
+        },
     }
 }
 

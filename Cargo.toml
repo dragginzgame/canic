@@ -79,8 +79,8 @@ ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.1"
 ic-cdk-timers = "1.0"
 ic-certification = "3.0"
-ic-memory = "0.7.1"
-ic-query = { version = "0.5.23", default-features = false, features = ["host"] }
+ic-memory = "0.7.4"
+ic-query = { version = "0.6.2", default-features = false, features = ["host"] }
 ic-signature-verification = "0.3.0"
 ic-testkit = "0.1.11"
 k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
