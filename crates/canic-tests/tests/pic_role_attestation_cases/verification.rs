@@ -1,6 +1,10 @@
 use crate::pic_role_attestation_support::*;
 
 #[test]
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "pic borrows the cached setup owner for the full test"
+)]
 fn role_attestation_verification_paths() {
     let setup = install_test_root_cached();
     let pic = setup.pic.pic();

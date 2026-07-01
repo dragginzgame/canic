@@ -71,5 +71,6 @@ fn root_reference_topology_is_consistent() {
         "assert root diagnostics are controller-gated",
     );
     assert_root_diagnostics_are_controller_gated(&setup.pic, setup.root_id);
+    drop(setup);
     test_progress("root_reference_topology_is_consistent", "done");
 }

@@ -57,6 +57,7 @@ pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
                 checkpoint_rows,
             )
         };
+    drop(setup);
     let avg_local_instructions = total_instructions.checked_div(count).unwrap_or(0);
 
     ScenarioResult {

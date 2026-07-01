@@ -2,6 +2,10 @@ use crate::pic_role_attestation_support::*;
 
 // Verify rejected guard checks are observable through the public metrics endpoint.
 #[test]
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "pic borrows the cached setup owner for the full test"
+)]
 fn issuer_guard_denial_records_access_metric() {
     let setup = install_test_root_cached();
     let pic = setup.pic.pic();
@@ -29,6 +33,10 @@ fn issuer_guard_denial_records_access_metric() {
 
 // Verify successful endpoint dispatch records endpoint perf metrics end to end.
 #[test]
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "pic borrows the cached setup owner for the full test"
+)]
 fn issuer_guard_success_records_perf_metric() {
     let setup = install_test_root_cached();
     let pic = setup.pic.pic();

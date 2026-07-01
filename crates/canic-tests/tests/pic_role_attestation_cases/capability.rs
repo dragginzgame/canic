@@ -1,6 +1,10 @@
 use crate::pic_role_attestation_support::*;
 
 #[test]
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "pic borrows the cached setup owner for the full test"
+)]
 fn capability_endpoint_policy_and_structural_paths() {
     test_progress(
         "capability_endpoint_policy_and_structural_paths",

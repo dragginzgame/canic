@@ -40,6 +40,7 @@ fn later_auto_created_sibling_refreshes_existing_subnet_index_cache() {
         .expect("test canister must exist");
 
     let app_subnet_index = query_subnet_index(&setup, app_pid);
+    drop(setup);
     assert!(
         app_subnet_index
             .iter()
@@ -84,6 +85,7 @@ fn unauthorized_caller_is_denied_for_each_root_capability_variant() {
     }
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(
         root_capability_count_total(&metrics),
         baseline_count,
@@ -114,6 +116,7 @@ fn upgrade_policy_denies_registered_non_parent_caller() {
     assert_eq!(err.code, ErrorCode::Forbidden);
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "Upgrade", "ProofRejected"), 1);
     assert_eq!(metric_count(&metrics, "Upgrade", "Denied"), 0);
     assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 0);
@@ -148,6 +151,7 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     }
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 1);
     assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(
@@ -177,6 +181,7 @@ fn root_cycles_request_increases_direct_child_balance() {
     let before = canister_cycle_balance(&setup, caller);
     let response = root_response_as(&setup, caller, request).expect("root cycles call works");
     let after = canister_cycle_balance(&setup, caller);
+    drop(setup);
 
     match response {
         Response::Cycles(response) => assert_eq!(response.cycles_transferred, amount),
@@ -205,6 +210,7 @@ fn parent_cycles_request_increases_direct_child_balance() {
             .pic
             .update_call(caller, "request_cycles_from_parent", (amount,));
     let metrics = cycles_funding_metrics(&setup, parent);
+    drop(setup);
 
     let transferred = response
         .expect("parent cycles transport must succeed")
@@ -243,6 +249,7 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
             );
 
             let metrics = root_capability_metrics(&setup);
+            drop(setup);
             assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 2);
             assert_eq!(metric_count(&metrics, "Upgrade", "ReplayAccepted"), 2);
             assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 0);
@@ -266,6 +273,7 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
     let _ = first;
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "Upgrade", "Authorized"), 1);
     assert_eq!(metric_count(&metrics, "Upgrade", "ReplayAccepted"), 1);
     assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 1);
@@ -308,6 +316,7 @@ fn replay_rejects_cross_variant_same_request_id() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ReplayDuplicateConflict"),
         1
@@ -348,6 +357,7 @@ fn replay_rejects_same_variant_mutated_payload() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ReplayDuplicateConflict"),
         1
@@ -387,6 +397,7 @@ fn replay_returns_cached_response_for_identical_request() {
     }
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ReplayDuplicateSame"),
@@ -429,6 +440,7 @@ fn cycles_request_above_default_policy_is_clamped_and_transferred() {
     );
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 1);
     assert_eq!(
@@ -455,6 +467,7 @@ fn replay_rejects_ttl_above_max() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ReplayTtlExceeded"),
         1
@@ -495,6 +508,7 @@ fn replay_rejects_expired_request() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayExpired"), 1);
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
@@ -545,6 +559,7 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
             );
 
             let metrics = root_capability_metrics(&setup);
+            drop(setup);
             assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 0);
             assert_eq!(
                 metric_count(&metrics, "Upgrade", "ReplayDuplicateConflict"),
@@ -579,6 +594,7 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let metrics = root_capability_metrics(&setup);
+    drop(setup);
     assert_eq!(metric_count(&metrics, "Upgrade", "ReplayDuplicateSame"), 1);
     assert_eq!(
         metric_count(&metrics, "Upgrade", "ReplayDuplicateConflict"),

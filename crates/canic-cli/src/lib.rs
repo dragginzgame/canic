@@ -184,6 +184,7 @@ pub fn cli_error_exit_code(err: &CliError) -> i32 {
     match err {
         CliError::Auth(err) => i32::from(err.exit_code()),
         CliError::BlobStorage(err) => i32::from(err.exit_code()),
+        CliError::Info(err) => i32::from(err.exit_code()),
         CliError::Medic(err) => i32::from(err.exit_code()),
         _ => 1,
     }

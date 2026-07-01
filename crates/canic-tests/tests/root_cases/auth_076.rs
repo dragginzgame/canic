@@ -53,6 +53,7 @@ fn auth_076_chain_key_management_public_key_matches_test_fleet_trust_anchor() {
         ),
     );
     let public_key = public_key.expect("key_1 public-key probe application failed");
+    drop(setup);
 
     assert_eq!(
         hex_lower(&public_key),
@@ -80,6 +81,7 @@ fn auth_076_chain_key_batch_renews_without_external_liveness() {
     assert_eq!(renewed_status.issuer_pid, Some(issuer_pid));
 
     verify_issuer_local_delegated_token(&setup, verifier_pid, issuer_pid, subject, &renewed_status);
+    drop(setup);
 }
 
 #[test]
@@ -145,6 +147,7 @@ fn auth_076_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
         "repeated login under a fresh active proof must not call root threshold signing"
     );
     let repeated_status = active_delegation_proof_status(&setup, issuer_pid);
+    drop(setup);
     assert_eq!(repeated_status.status, ActiveDelegationProofStatus::Valid);
     assert_eq!(
         repeated_status.cert_hash, repaired_status.cert_hash,
@@ -247,8 +250,10 @@ fn auth_076_concurrent_missing_proof_repairs_collapse_to_one_signature() {
         10 * SECOND_NS,
         200,
     );
+    let management_updates_after_reuse = root_management_update_completed_count(&setup);
+    drop(setup);
     assert_eq!(
-        root_management_update_completed_count(&setup),
+        management_updates_after_reuse,
         management_updates_before + 2,
         "fresh issuer-local proof reuse must require zero additional threshold signatures"
     );
@@ -288,8 +293,10 @@ fn auth_076_timer_batches_multiple_issuers_with_one_signature() {
         })
         .collect::<Vec<_>>();
 
+    let management_updates_after_renewal = root_management_update_completed_count(&setup);
+    drop(setup);
     assert_eq!(
-        root_management_update_completed_count(&setup),
+        management_updates_after_renewal,
         management_updates_before + 2,
         "timer renewal for two due issuers should perform one root chain-key signing operation"
     );

@@ -101,6 +101,7 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
     );
 
     let reconciled = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
     let reconciled_store = store_with_approved_template(&reconciled, &template_id);
     assert_eq!(
         reconciled_store.binding, published_store.binding,
@@ -127,6 +128,7 @@ fn root_republish_reuses_exact_release_without_allocating_another_store() {
     publish_current_release_set_to_current_store(&setup.pic, setup.root_id);
 
     let after = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
     let after_store = store_with_approved_template(&after, &template_id);
     let after_match_count = approved_template_store_count(&after, &template_id);
 
@@ -164,6 +166,7 @@ fn root_conflicting_duplicate_release_is_rejected_without_fleet_mutation() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let after = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
     assert_eq!(
         after, before,
         "a conflicting duplicate release must not mutate the managed fleet view on failure"
@@ -187,6 +190,7 @@ fn root_fixed_target_conflicting_duplicate_is_rejected_without_fleet_mutation() 
     assert_eq!(err.code, ErrorCode::Internal);
 
     let after = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
     assert_eq!(
         after, before,
         "a fixed-target conflicting duplicate release must not mutate the managed fleet view on failure"
@@ -219,6 +223,7 @@ fn root_fixed_target_capacity_failure_is_rejected_without_fleet_mutation() {
     assert_eq!(err.code, ErrorCode::Internal);
 
     let after = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
     assert_eq!(
         after, before,
         "a fixed-target capacity failure must not mutate the managed fleet view"
@@ -260,6 +265,7 @@ fn root_direct_wasm_store_update_call_accepts_root_and_rejects_non_root() {
     let err = response
         .expect("non-root wasm_store prepare transport should return a typed Canic error")
         .expect_err("non-root wasm_store prepare must be rejected");
+    drop(setup);
     assert_eq!(err.code, ErrorCode::Unauthorized);
 }
 
@@ -325,6 +331,7 @@ fn root_publication_binding_transitions_mark_active_detached_and_retired_slots()
     retire_detached_publication_binding(&setup.pic, setup.root_id, &first_store.binding);
 
     let after_retire = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
     assert_publication_state(
         &after_retire,
         Some(second_store.binding.clone()),
