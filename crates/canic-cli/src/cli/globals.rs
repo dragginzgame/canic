@@ -180,7 +180,7 @@ fn auth_leaf_accepts_globals(tail: &[OsString]) -> bool {
 fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
     matches!(
         tail.first().and_then(|arg| arg.to_str()),
-        Some("cycles" | "endpoints" | "env" | "list" | "medic" | "metrics")
+        Some("cycles" | "endpoints" | "env" | "list" | "metrics")
     )
 }
 
