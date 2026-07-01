@@ -1,4 +1,10 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    DEPLOYMENT_MANIFEST_MISMATCH_CODE, INSTALLED_MODULE_HASH_AMBIGUOUS_CODE,
+    INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY, INSTALLED_MODULE_HASH_DIFF_CATEGORY,
+    INSTALLED_MODULE_HASH_MISMATCH_CODE, RAW_CONFIG_DIGEST_MISMATCH_CODE,
+    RAW_CONFIG_SHA256_DIFF_CATEGORY,
+};
 
 #[test]
 fn deployment_diff_blocks_deployment_manifest_mismatch() {
@@ -43,7 +49,7 @@ fn deployment_diff_blocks_deployment_manifest_mismatch() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "deployment_manifest_mismatch")
+            .any(|finding| finding.code == DEPLOYMENT_MANIFEST_MISMATCH_CODE)
     );
 }
 
@@ -92,10 +98,10 @@ fn deployment_diff_blocks_raw_config_digest_mismatch_without_claiming_manifest_i
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "raw_config_digest_mismatch")
+            .any(|finding| finding.code == RAW_CONFIG_DIGEST_MISMATCH_CODE)
     );
     assert!(diff.embedded_config_diff.iter().any(|item| {
-        item.category == "raw_config_sha256"
+        item.category == RAW_CONFIG_SHA256_DIFF_CATEGORY
             && item.expected.as_deref() == Some("planned-raw-config")
             && item.observed.as_deref() == Some("observed-raw-config")
     }));
@@ -152,10 +158,10 @@ fn deployment_diff_blocks_installed_module_hash_mismatch() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "installed_module_hash_mismatch")
+            .any(|finding| finding.code == INSTALLED_MODULE_HASH_MISMATCH_CODE)
     );
     assert!(diff.module_hash_diff.iter().any(|item| {
-        item.category == "installed_module_hash"
+        item.category == INSTALLED_MODULE_HASH_DIFF_CATEGORY
             && item.expected.as_deref() == Some("module")
             && item.observed.as_deref() == Some("different-module")
     }));
@@ -184,12 +190,12 @@ fn deployment_diff_uses_concrete_expected_id_for_installed_module_hash() {
     assert!(
         diff.hard_failures
             .iter()
-            .all(|finding| finding.code != "installed_module_hash_mismatch")
+            .all(|finding| finding.code != INSTALLED_MODULE_HASH_MISMATCH_CODE)
     );
     assert!(
         diff.module_hash_diff
             .iter()
-            .all(|item| item.category != "installed_module_hash")
+            .all(|item| item.category != INSTALLED_MODULE_HASH_DIFF_CATEGORY)
     );
 }
 
@@ -214,14 +220,11 @@ fn deployment_diff_blocks_ambiguous_installed_module_hash_target() {
     let diff = compare_plan_to_inventory(&plan, &inventory);
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
-    assert!(
-        diff.hard_failures
-            .iter()
-            .any(|finding| finding.code == "installed_module_hash_ambiguous"
-                && finding.subject.as_deref() == Some("root"))
-    );
+    assert!(diff.hard_failures.iter().any(|finding| finding.code
+        == INSTALLED_MODULE_HASH_AMBIGUOUS_CODE
+        && finding.subject.as_deref() == Some("root")));
     assert!(diff.module_hash_diff.iter().any(|item| {
-        item.category == "installed_module_hash_ambiguous"
+        item.category == INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("aaaaa-aa") && observed.contains("duplicate-root-id")

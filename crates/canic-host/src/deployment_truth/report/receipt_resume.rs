@@ -5,6 +5,21 @@ use super::{
 };
 use std::collections::BTreeSet;
 
+pub(in crate::deployment_truth) const RECEIPT_POSTCONDITION_UNVERIFIED_CODE: &str =
+    "receipt_postcondition_unverified";
+pub(in crate::deployment_truth) const RECEIPT_PHASE_CONFLICT_CODE: &str = "receipt_phase_conflict";
+pub(in crate::deployment_truth) const DUPLICATE_RECEIPT_PHASE_CODE: &str =
+    "duplicate_receipt_phase";
+pub(in crate::deployment_truth) const RECEIPT_ROLE_PHASE_CONFLICT_CODE: &str =
+    "receipt_role_phase_conflict";
+pub(in crate::deployment_truth) const DUPLICATE_RECEIPT_ROLE_PHASE_CODE: &str =
+    "duplicate_receipt_role_phase";
+pub(in crate::deployment_truth) const RECEIPT_PLAN_MISMATCH_CODE: &str = "receipt_plan_mismatch";
+pub(in crate::deployment_truth) const RECEIPT_ROOT_MISMATCH_CODE: &str = "receipt_root_mismatch";
+pub(in crate::deployment_truth) const RECEIPT_FAILED_COMMAND_CODE: &str = "receipt_failed_command";
+pub(in crate::deployment_truth) const RECEIPT_EXECUTION_STATUS_MISMATCH_CODE: &str =
+    "receipt_execution_status_mismatch";
+
 /// Compare intended state, observed inventory, and a prior receipt into a
 /// resume-aware deployment diff.
 #[must_use]
@@ -45,7 +60,7 @@ fn apply_receipt_resume_safety(
         }
         if receipt.verified_postcondition.status != ObservationStatusV1::Observed {
             diff.hard_failures.push(finding(
-                "receipt_postcondition_unverified",
+                RECEIPT_POSTCONDITION_UNVERIFIED_CODE,
                 format!(
                     "receipt phase {} has no observed postcondition",
                     receipt.phase
@@ -84,7 +99,7 @@ fn validate_receipt_phase_duplicates(
         if group.is_conflict {
             conflicting_phases.insert(group.subject.clone());
             hard_failures.push(finding(
-                "receipt_phase_conflict",
+                RECEIPT_PHASE_CONFLICT_CODE,
                 format!(
                     "receipt phase {} has conflicting evidence: {}",
                     group.subject, group.evidence_label
@@ -94,7 +109,7 @@ fn validate_receipt_phase_duplicates(
             ));
         } else {
             warnings.push(finding(
-                "duplicate_receipt_phase",
+                DUPLICATE_RECEIPT_PHASE_CODE,
                 format!(
                     "receipt phase {} was reported {} times with identical evidence",
                     group.subject, group.count
@@ -136,7 +151,7 @@ fn validate_receipt_role_phase_duplicates(
                 conflicting_phases.insert(phase);
             }
             hard_failures.push(finding(
-                "receipt_role_phase_conflict",
+                RECEIPT_ROLE_PHASE_CONFLICT_CODE,
                 format!(
                     "receipt role phase {} has conflicting evidence: {}",
                     group.subject, group.evidence_label
@@ -146,7 +161,7 @@ fn validate_receipt_role_phase_duplicates(
             ));
         } else {
             warnings.push(finding(
-                "duplicate_receipt_role_phase",
+                DUPLICATE_RECEIPT_ROLE_PHASE_CODE,
                 format!(
                     "receipt role phase {} was reported {} times with identical evidence",
                     group.subject, group.count
@@ -189,7 +204,7 @@ fn validate_receipt_identity(
 ) {
     if receipt.plan_id != plan.plan_id {
         hard_failures.push(finding(
-            "receipt_plan_mismatch",
+            RECEIPT_PLAN_MISMATCH_CODE,
             format!(
                 "receipt plan {} does not match current plan {}",
                 receipt.plan_id, plan.plan_id
@@ -204,7 +219,7 @@ fn validate_receipt_identity(
     ) && expected != observed
     {
         hard_failures.push(finding(
-            "receipt_root_mismatch",
+            RECEIPT_ROOT_MISMATCH_CODE,
             format!("receipt root {observed} does not match current plan root {expected}"),
             SafetySeverityV1::HardFailure,
             Some("receipt.root_principal".to_string()),
@@ -218,7 +233,7 @@ fn validate_receipt_command_result(
 ) {
     if let DeploymentCommandResultV1::Failed { code, message } = &receipt.command_result {
         hard_failures.push(finding(
-            "receipt_failed_command",
+            RECEIPT_FAILED_COMMAND_CODE,
             format!("receipt command failed with {code}: {message}"),
             SafetySeverityV1::HardFailure,
             Some("receipt.command_result".to_string()),
@@ -248,7 +263,7 @@ fn validate_receipt_execution_status(
 
     if !status_is_consistent {
         hard_failures.push(finding(
-            "receipt_execution_status_mismatch",
+            RECEIPT_EXECUTION_STATUS_MISMATCH_CODE,
             format!(
                 "receipt operation status {:?} does not match command result and role-phase evidence {:?}",
                 receipt.operation_status, derived_status

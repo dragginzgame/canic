@@ -2,6 +2,16 @@ use super::super::*;
 use super::{diff_item, finding};
 use std::collections::BTreeSet;
 
+pub(in crate::deployment_truth) const CONTROLLER_AUTHORITY_OVERLAP_CODE: &str =
+    "controller_authority_overlap";
+pub(in crate::deployment_truth) const CONTROLLERS_UNOBSERVED_CODE: &str = "controllers_unobserved";
+pub(in crate::deployment_truth) const CONTROLLER_MISSING_DIFF_CATEGORY: &str = "controller_missing";
+pub(in crate::deployment_truth) const EXPECTED_CONTROLLER_MISSING_CODE: &str =
+    "expected_controller_missing";
+pub(in crate::deployment_truth) const CONTROLLER_EXTRA_DIFF_CATEGORY: &str = "controller_extra";
+pub(in crate::deployment_truth) const EXTRA_CONTROLLER_OBSERVED_CODE: &str =
+    "extra_controller_observed";
+
 pub(super) fn compare_authority_profile(
     plan: &DeploymentPlanV1,
     controller_diff: &mut Vec<DiffItemV1>,
@@ -16,14 +26,14 @@ pub(super) fn compare_authority_profile(
             continue;
         }
         controller_diff.push(diff_item(
-            "controller_authority_overlap",
+            CONTROLLER_AUTHORITY_OVERLAP_CODE,
             "authority_profile",
             Some("expected-only".to_string()),
             Some(controller.clone()),
             SafetySeverityV1::HardFailure,
         ));
         hard_failures.push(finding(
-            "controller_authority_overlap",
+            CONTROLLER_AUTHORITY_OVERLAP_CODE,
             format!(
                 "controller {controller} appears in both expected and staging/emergency authority"
             ),
@@ -43,7 +53,7 @@ pub(super) fn compare_role_controllers(
     let role = observed.role.as_deref().unwrap_or("unknown");
     if observed.controllers.is_empty() && !observed_source_includes_live_status(observed) {
         warnings.push(finding(
-            "controllers_unobserved",
+            CONTROLLERS_UNOBSERVED_CODE,
             format!("controllers were not observed for role {role}"),
             SafetySeverityV1::Warning,
             Some(role.to_string()),
@@ -83,14 +93,14 @@ fn record_missing_expected_controller(
     hard_failures: &mut Vec<SafetyFindingV1>,
 ) {
     controller_diff.push(diff_item(
-        "controller_missing",
+        CONTROLLER_MISSING_DIFF_CATEGORY,
         role,
         Some(expected.to_string()),
         Some(controller_set_label(observed_controllers)),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "expected_controller_missing",
+        EXPECTED_CONTROLLER_MISSING_CODE,
         format!("role {role} is missing expected controller {expected}"),
         SafetySeverityV1::HardFailure,
         Some(role.to_string()),
@@ -105,7 +115,7 @@ fn record_extra_controller(
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
     controller_diff.push(diff_item(
-        "controller_extra",
+        CONTROLLER_EXTRA_DIFF_CATEGORY,
         role,
         Some(controller_set_label(
             &plan.authority_profile.expected_controllers,
@@ -114,7 +124,7 @@ fn record_extra_controller(
         SafetySeverityV1::Warning,
     ));
     warnings.push(finding(
-        "extra_controller_observed",
+        EXTRA_CONTROLLER_OBSERVED_CODE,
         format!("role {role} has controller outside the expected authority profile"),
         SafetySeverityV1::Warning,
         Some(role.to_string()),

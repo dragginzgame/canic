@@ -1,6 +1,17 @@
 use super::super::*;
 use super::{diff_item, finding};
 
+pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_DIFF_CATEGORY: &str =
+    "installed_module_hash";
+pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_MISMATCH_CODE: &str =
+    "installed_module_hash_mismatch";
+pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_UNOBSERVED_CODE: &str =
+    "installed_module_hash_unobserved";
+pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY: &str =
+    "installed_module_hash_ambiguous";
+pub(in crate::deployment_truth) const INSTALLED_MODULE_HASH_AMBIGUOUS_CODE: &str =
+    "installed_module_hash_ambiguous";
+
 pub(super) fn compare_module_hashes(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -70,14 +81,14 @@ fn record_module_hash_mismatch(
     hard_failures: &mut Vec<SafetyFindingV1>,
 ) {
     module_hash_diff.push(diff_item(
-        "installed_module_hash",
+        INSTALLED_MODULE_HASH_DIFF_CATEGORY,
         role,
         Some(expected.to_string()),
         Some(observed.to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "installed_module_hash_mismatch",
+        INSTALLED_MODULE_HASH_MISMATCH_CODE,
         format!("installed module hash differs for role {role}"),
         SafetySeverityV1::HardFailure,
         Some(role.to_string()),
@@ -86,7 +97,7 @@ fn record_module_hash_mismatch(
 
 fn record_module_hash_unobserved(role: &str, warnings: &mut Vec<SafetyFindingV1>) {
     warnings.push(finding(
-        "installed_module_hash_unobserved",
+        INSTALLED_MODULE_HASH_UNOBSERVED_CODE,
         format!("installed module hash was not observed for role {role}"),
         SafetySeverityV1::Warning,
         Some(role.to_string()),
@@ -105,14 +116,14 @@ fn record_ambiguous_module_hash_role(
         .collect::<Vec<_>>()
         .join(",");
     module_hash_diff.push(diff_item(
-        "installed_module_hash_ambiguous",
+        INSTALLED_MODULE_HASH_AMBIGUOUS_DIFF_CATEGORY,
         role,
         Some("one observed canister".to_string()),
         Some(observed_ids.clone()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "installed_module_hash_ambiguous",
+        INSTALLED_MODULE_HASH_AMBIGUOUS_CODE,
         format!(
             "installed module hash for role {role} has multiple observed canisters: {observed_ids}"
         ),

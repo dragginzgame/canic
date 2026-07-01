@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::report::{ARTIFACT_MISSING_CODE, UNVERIFIED_DEPLOYMENT_ROOT_CODE};
 
 #[test]
 fn root_verification_report_accepts_bound_root_evidence() {
@@ -92,7 +93,7 @@ fn root_verification_report_rejects_unverified_root_plus_unrelated_blocker() {
     let mut check = sample_check(plan, sample_root_verification_inventory());
     check.report.status = SafetyStatusV1::Blocked;
     check.report.hard_failures.push(SafetyFindingV1 {
-        code: "artifact_missing".to_string(),
+        code: ARTIFACT_MISSING_CODE.to_string(),
         message: "root artifact is missing".to_string(),
         severity: SafetySeverityV1::HardFailure,
         subject: Some("root".to_string()),
@@ -108,13 +109,13 @@ fn root_verification_report_rejects_unverified_root_plus_unrelated_blocker() {
         report
             .blockers
             .iter()
-            .any(|finding| finding.code == "artifact_missing")
+            .any(|finding| finding.code == ARTIFACT_MISSING_CODE)
     );
     assert!(
         report
             .blockers
             .iter()
-            .any(|finding| finding.code == "unverified_deployment_root")
+            .any(|finding| finding.code == UNVERIFIED_DEPLOYMENT_ROOT_CODE)
     );
 }
 
@@ -169,7 +170,7 @@ fn root_verification_report_rejects_unrelated_source_check_blocker() {
     let mut check = sample_root_verification_check();
     check.report.status = SafetyStatusV1::Blocked;
     check.report.hard_failures.push(SafetyFindingV1 {
-        code: "artifact_missing".to_string(),
+        code: ARTIFACT_MISSING_CODE.to_string(),
         message: "root artifact is missing".to_string(),
         severity: SafetySeverityV1::HardFailure,
         subject: Some("root".to_string()),
@@ -185,7 +186,7 @@ fn root_verification_report_rejects_unrelated_source_check_blocker() {
         report
             .blockers
             .iter()
-            .any(|finding| finding.code == "artifact_missing")
+            .any(|finding| finding.code == ARTIFACT_MISSING_CODE)
     );
 }
 

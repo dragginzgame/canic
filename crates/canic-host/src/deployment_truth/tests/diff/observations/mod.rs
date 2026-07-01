@@ -1,4 +1,8 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    ARTIFACT_FILE_SHA256_DIFF_CATEGORY, ARTIFACT_MISSING_CODE, OBSERVATION_GAP_CODE,
+    PLAN_ASSUMPTION_CODE, UNSAFE_CONTROL_CLASS_CODE, UNVERIFIED_DEPLOYMENT_ROOT_CODE,
+};
 
 #[test]
 fn deployment_diff_blocks_missing_artifacts_and_unsafe_control_class() {
@@ -41,12 +45,12 @@ fn deployment_diff_blocks_missing_artifacts_and_unsafe_control_class() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|item| item.code == "artifact_missing")
+            .any(|item| item.code == ARTIFACT_MISSING_CODE)
     );
     assert!(
         diff.hard_failures
             .iter()
-            .any(|item| item.code == "unsafe_control_class")
+            .any(|item| item.code == UNSAFE_CONTROL_CLASS_CODE)
     );
     assert_eq!(report.status, SafetyStatusV1::Blocked);
     assert_eq!(
@@ -101,13 +105,13 @@ fn deployment_diff_warns_on_observation_gaps_without_blocking() {
     assert!(
         diff.artifact_diff
             .iter()
-            .any(|item| item.category == "artifact_file_sha256"
+            .any(|item| item.category == ARTIFACT_FILE_SHA256_DIFF_CATEGORY
                 && item.severity == SafetySeverityV1::Info)
     );
     assert!(
         diff.warnings
             .iter()
-            .any(|item| item.code == "observation_gap")
+            .any(|item| item.code == OBSERVATION_GAP_CODE)
     );
     assert_eq!(report.status, SafetyStatusV1::Warning);
 }
@@ -159,7 +163,7 @@ fn deployment_diff_warns_on_plan_assumptions_without_blocking() {
     assert!(
         diff.warnings
             .iter()
-            .any(|item| item.code == "plan_assumption"
+            .any(|item| item.code == PLAN_ASSUMPTION_CODE
                 && item.subject.as_deref() == Some("local_state.root_canister_id"))
     );
     assert_eq!(report.status, SafetyStatusV1::Warning);
@@ -212,7 +216,7 @@ fn deployment_diff_blocks_unverified_registered_root_assumption() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|item| item.code == "unverified_deployment_root"
+            .any(|item| item.code == UNVERIFIED_DEPLOYMENT_ROOT_CODE
                 && item.subject.as_deref() == Some("local_state.unverified_root_canister_id"))
     );
     assert_eq!(report.status, SafetyStatusV1::Blocked);

@@ -1,6 +1,17 @@
 use super::super::*;
 use super::{diff_item, finding};
 
+pub(in crate::deployment_truth) const RAW_CONFIG_PLAN_INCONSISTENT_CODE: &str =
+    "raw_config_plan_inconsistent";
+pub(in crate::deployment_truth) const RAW_CONFIG_SHA256_DIFF_CATEGORY: &str = "raw_config_sha256";
+pub(in crate::deployment_truth) const RAW_CONFIG_DIGEST_MISMATCH_CODE: &str =
+    "raw_config_digest_mismatch";
+pub(in crate::deployment_truth) const CANONICAL_CONFIG_DIFF_CATEGORY: &str = "canonical_config";
+pub(in crate::deployment_truth) const CANONICAL_CONFIG_MISMATCH_CODE: &str =
+    "canonical_config_mismatch";
+pub(in crate::deployment_truth) const CANONICAL_CONFIG_UNOBSERVED_CODE: &str =
+    "canonical_config_unobserved";
+
 pub(super) fn compare_raw_config(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -17,7 +28,7 @@ pub(super) fn compare_raw_config(
     let [expected] = expected.as_slice() else {
         if expected.len() > 1 {
             hard_failures.push(finding(
-                "raw_config_plan_inconsistent",
+                RAW_CONFIG_PLAN_INCONSISTENT_CODE,
                 "planned role artifacts disagree on raw config digest",
                 SafetySeverityV1::HardFailure,
                 Some("role_artifacts.raw_config_sha256".to_string()),
@@ -40,14 +51,14 @@ fn record_raw_config_mismatch(
     hard_failures: &mut Vec<SafetyFindingV1>,
 ) {
     embedded_config_diff.push(diff_item(
-        "raw_config_sha256",
+        RAW_CONFIG_SHA256_DIFF_CATEGORY,
         "deployment",
         Some(expected.to_string()),
         Some(observed.to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "raw_config_digest_mismatch",
+        RAW_CONFIG_DIGEST_MISMATCH_CODE,
         "raw local config digest changed during deployment truth check",
         SafetySeverityV1::HardFailure,
         Some("local_config.raw_sha256".to_string()),
@@ -85,14 +96,14 @@ fn record_canonical_config_mismatch(
     hard_failures: &mut Vec<SafetyFindingV1>,
 ) {
     embedded_config_diff.push(diff_item(
-        "canonical_config",
+        CANONICAL_CONFIG_DIFF_CATEGORY,
         "deployment",
         Some(expected.to_string()),
         Some(observed.to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "canonical_config_mismatch",
+        CANONICAL_CONFIG_MISMATCH_CODE,
         "canonical runtime config digest differs from the plan",
         SafetySeverityV1::HardFailure,
         Some("local_config".to_string()),
@@ -101,7 +112,7 @@ fn record_canonical_config_mismatch(
 
 fn record_canonical_config_unobserved(warnings: &mut Vec<SafetyFindingV1>) {
     warnings.push(finding(
-        "canonical_config_unobserved",
+        CANONICAL_CONFIG_UNOBSERVED_CODE,
         "canonical runtime config digest was not observed",
         SafetySeverityV1::Warning,
         Some("local_config".to_string()),

@@ -2,6 +2,33 @@ use super::super::*;
 use super::{diff_item, duplicate_evidence_groups, finding};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(in crate::deployment_truth) const VERIFIER_READINESS_DIFF_CATEGORY: &str = "verifier_readiness";
+pub(in crate::deployment_truth) const VERIFIER_READINESS_UNOBSERVED_CODE: &str =
+    "verifier_readiness_unobserved";
+pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_DIFF_CATEGORY: &str =
+    "verifier_role_epoch";
+pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_STALE_CODE: &str =
+    "verifier_role_epoch_stale";
+pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_UNOBSERVED_CODE: &str =
+    "verifier_role_epoch_unobserved";
+pub(in crate::deployment_truth) const PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_CODE: &str =
+    "planned_verifier_role_epoch_conflict";
+pub(in crate::deployment_truth) const PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY: &str =
+    "planned_verifier_role_epoch_conflict";
+pub(in crate::deployment_truth) const PLANNED_VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY: &str =
+    "planned_verifier_role_epoch_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_PLANNED_VERIFIER_ROLE_EPOCH_CODE: &str =
+    "duplicate_planned_verifier_role_epoch";
+pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_CONFLICT_CODE: &str =
+    "verifier_role_epoch_conflict";
+pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY: &str =
+    "verifier_role_epoch_conflict";
+pub(in crate::deployment_truth) const VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY: &str =
+    "verifier_role_epoch_duplicate";
+pub(in crate::deployment_truth) const DUPLICATE_VERIFIER_ROLE_EPOCH_OBSERVED_CODE: &str =
+    "duplicate_verifier_role_epoch_observed";
+pub(in crate::deployment_truth) const VERIFIER_NOT_OBSERVED_LABEL: &str = "not_observed";
+
 pub(super) fn compare_verifier_readiness(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,
@@ -14,14 +41,14 @@ pub(super) fn compare_verifier_readiness(
     }
     if inventory.observed_verifier_readiness.status == ObservationStatusV1::NotObserved {
         verifier_readiness_diff.push(diff_item(
-            "verifier_readiness",
+            VERIFIER_READINESS_DIFF_CATEGORY,
             "deployment",
             Some("required".to_string()),
-            Some("not_observed".to_string()),
+            Some(VERIFIER_NOT_OBSERVED_LABEL.to_string()),
             SafetySeverityV1::Warning,
         ));
         warnings.push(finding(
-            "verifier_readiness_unobserved",
+            VERIFIER_READINESS_UNOBSERVED_CODE,
             "verifier readiness was required but not observed",
             SafetySeverityV1::Warning,
             Some("verifier_readiness".to_string()),
@@ -82,14 +109,14 @@ fn record_stale_verifier_role_epoch(
     hard_failures: &mut Vec<SafetyFindingV1>,
 ) {
     verifier_readiness_diff.push(diff_item(
-        "verifier_role_epoch",
+        VERIFIER_ROLE_EPOCH_DIFF_CATEGORY,
         &expected.role,
         Some(expected.minimum_epoch.to_string()),
         Some(observed_epoch.to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
-        "verifier_role_epoch_stale",
+        VERIFIER_ROLE_EPOCH_STALE_CODE,
         format!(
             "verifier role {} has epoch {observed_epoch}, expected at least {}",
             expected.role, expected.minimum_epoch
@@ -105,14 +132,14 @@ fn record_unobserved_verifier_role_epoch(
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
     verifier_readiness_diff.push(diff_item(
-        "verifier_role_epoch",
+        VERIFIER_ROLE_EPOCH_DIFF_CATEGORY,
         &expected.role,
         Some(expected.minimum_epoch.to_string()),
-        Some("not_observed".to_string()),
+        Some(VERIFIER_NOT_OBSERVED_LABEL.to_string()),
         SafetySeverityV1::Warning,
     ));
     warnings.push(finding(
-        "verifier_role_epoch_unobserved",
+        VERIFIER_ROLE_EPOCH_UNOBSERVED_CODE,
         format!("verifier role {} epoch was not observed", expected.role),
         SafetySeverityV1::Warning,
         Some(expected.role.clone()),
@@ -135,14 +162,14 @@ fn compare_planned_verifier_epoch_conflicts(
         if group.is_conflict {
             conflicting_roles.insert(group.subject.clone());
             verifier_readiness_diff.push(diff_item(
-                "planned_verifier_role_epoch_conflict",
+                PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 Some("one minimum epoch".to_string()),
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "planned_verifier_role_epoch_conflict",
+                PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_CODE,
                 format!(
                     "planned verifier role {} has conflicting minimum epochs: {}",
                     group.subject, group.evidence_label
@@ -152,14 +179,14 @@ fn compare_planned_verifier_epoch_conflicts(
             ));
         } else {
             verifier_readiness_diff.push(diff_item(
-                "planned_verifier_role_epoch_duplicate",
+                PLANNED_VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_planned_verifier_role_epoch",
+                DUPLICATE_PLANNED_VERIFIER_ROLE_EPOCH_CODE,
                 format!(
                     "planned verifier role {} epoch was declared {} times with identical evidence",
                     group.subject, group.count
@@ -188,14 +215,14 @@ fn compare_observed_verifier_epoch_conflicts(
         if group.is_conflict {
             conflicting_roles.insert(group.subject.clone());
             verifier_readiness_diff.push(diff_item(
-                "verifier_role_epoch_conflict",
+                VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY,
                 &group.subject,
                 Some("one epoch observation".to_string()),
                 Some(group.evidence_label.clone()),
                 SafetySeverityV1::HardFailure,
             ));
             hard_failures.push(finding(
-                "verifier_role_epoch_conflict",
+                VERIFIER_ROLE_EPOCH_CONFLICT_CODE,
                 format!(
                     "verifier role {} has conflicting epoch observations: {}",
                     group.subject, group.evidence_label
@@ -205,14 +232,14 @@ fn compare_observed_verifier_epoch_conflicts(
             ));
         } else {
             verifier_readiness_diff.push(diff_item(
-                "verifier_role_epoch_duplicate",
+                VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY,
                 &group.subject,
                 Some(group.evidence_label.clone()),
                 Some(group.count.to_string()),
                 SafetySeverityV1::Warning,
             ));
             warnings.push(finding(
-                "duplicate_verifier_role_epoch_observed",
+                DUPLICATE_VERIFIER_ROLE_EPOCH_OBSERVED_CODE,
                 format!(
                     "verifier role {} epoch was reported {} times with identical evidence",
                     group.subject, group.count

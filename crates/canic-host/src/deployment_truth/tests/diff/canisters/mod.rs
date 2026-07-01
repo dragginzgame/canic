@@ -1,4 +1,15 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    CANISTER_DUPLICATE_DIFF_CATEGORY, CANISTER_EXTRA_DIFF_CATEGORY, CANISTER_ID_ROLE_CONFLICT_CODE,
+    CANISTER_ID_ROLE_CONFLICT_DIFF_CATEGORY, CANISTER_ROLE_AMBIGUOUS_CODE,
+    CANISTER_ROLE_AMBIGUOUS_DIFF_CATEGORY, CANISTER_ROLE_MISMATCH_CODE, CANISTER_UNOBSERVED_CODE,
+    CONTROLLERS_UNOBSERVED_CODE, DUPLICATE_CANISTER_OBSERVED_CODE,
+    DUPLICATE_PLANNED_CANISTER_ROLE_CODE, EXPECTED_CONTROLLER_MISSING_CODE,
+    EXTRA_CANISTER_OBSERVED_CODE, PLANNED_CANISTER_DUPLICATE_DIFF_CATEGORY,
+    PLANNED_CANISTER_ID_CONFLICT_CODE, PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY,
+    PLANNED_CANISTER_ROLE_CONFLICT_CODE, PLANNED_CANISTER_ROLE_CONFLICT_DIFF_CATEGORY,
+    ROLE_MISMATCH_DIFF_CATEGORY,
+};
 
 #[test]
 fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
@@ -41,7 +52,7 @@ fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "canister_unobserved"
+            .any(|finding| finding.code == CANISTER_UNOBSERVED_CODE
                 && finding.subject.as_deref() == Some("root"))
     );
 }
@@ -60,14 +71,11 @@ fn deployment_diff_blocks_conflicting_planned_canisters_for_same_role() {
     let diff = compare_plan_to_inventory(&plan, &sample_matching_inventory());
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
-    assert!(
-        diff.hard_failures
-            .iter()
-            .any(|finding| finding.code == "planned_canister_role_conflict"
-                && finding.subject.as_deref() == Some("root"))
-    );
+    assert!(diff.hard_failures.iter().any(|finding| finding.code
+        == PLANNED_CANISTER_ROLE_CONFLICT_CODE
+        && finding.subject.as_deref() == Some("root")));
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "planned_canister_role_conflict"
+        item.category == PLANNED_CANISTER_ROLE_CONFLICT_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("aaaaa-aa") && observed.contains("duplicate-root-id")
@@ -93,11 +101,11 @@ fn deployment_diff_blocks_conflicting_planned_roles_for_same_canister_id() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "planned_canister_id_conflict"
+            .any(|finding| finding.code == PLANNED_CANISTER_ID_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("aaaaa-aa"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "planned_canister_id_conflict"
+        item.category == PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY
             && item.subject == "aaaaa-aa"
             && item
                 .observed
@@ -119,14 +127,11 @@ fn deployment_diff_warns_for_duplicate_identical_planned_canister_role() {
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
     assert!(diff.hard_failures.is_empty());
-    assert!(
-        diff.warnings
-            .iter()
-            .any(|finding| finding.code == "duplicate_planned_canister_role"
-                && finding.subject.as_deref() == Some("root"))
-    );
+    assert!(diff.warnings.iter().any(|finding| finding.code
+        == DUPLICATE_PLANNED_CANISTER_ROLE_CODE
+        && finding.subject.as_deref() == Some("root")));
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "planned_canister_duplicate"
+        item.category == PLANNED_CANISTER_DUPLICATE_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning
@@ -156,11 +161,11 @@ fn deployment_diff_warns_for_extra_observed_canister_roles() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "extra_canister_observed"
+            .any(|finding| finding.code == EXTRA_CANISTER_OBSERVED_CODE
                 && finding.subject.as_deref() == Some("user_hub"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "canister_extra"
+        item.category == CANISTER_EXTRA_DIFF_CATEGORY
             && item.subject == "user_hub"
             && item.observed.as_deref() == Some("user-hub-id")
     }));
@@ -189,11 +194,11 @@ fn deployment_diff_warns_for_duplicate_observed_planned_role() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "extra_canister_observed"
+            .any(|finding| finding.code == EXTRA_CANISTER_OBSERVED_CODE
                 && finding.subject.as_deref() == Some("root"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "canister_extra"
+        item.category == CANISTER_EXTRA_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref() == Some("duplicate-root-id")
     }));
@@ -240,11 +245,11 @@ fn deployment_diff_blocks_ambiguous_expected_role_without_canister_id() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "canister_role_ambiguous"
+            .any(|finding| finding.code == CANISTER_ROLE_AMBIGUOUS_CODE
                 && finding.subject.as_deref() == Some("user_hub"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "canister_role_ambiguous"
+        item.category == CANISTER_ROLE_AMBIGUOUS_DIFF_CATEGORY
             && item.subject == "user_hub"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("user-hub-a") && observed.contains("user-hub-b")
@@ -268,11 +273,11 @@ fn deployment_diff_blocks_expected_canister_role_mismatch() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "canister_role_mismatch"
+            .any(|finding| finding.code == CANISTER_ROLE_MISMATCH_CODE
                 && finding.subject.as_deref() == Some("root"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "role_mismatch"
+        item.category == ROLE_MISMATCH_DIFF_CATEGORY
             && item.subject == "root"
             && item.expected.as_deref() == Some("root")
             && item.observed.as_deref() == Some("user_hub")
@@ -304,11 +309,11 @@ fn deployment_diff_blocks_conflicting_roles_for_same_canister_id() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "canister_id_role_conflict"
+            .any(|finding| finding.code == CANISTER_ID_ROLE_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("aaaaa-aa"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "canister_id_role_conflict"
+        item.category == CANISTER_ID_ROLE_CONFLICT_DIFF_CATEGORY
             && item.subject == "aaaaa-aa"
             && item.observed.as_deref() == Some("root,user_hub")
     }));
@@ -332,11 +337,11 @@ fn deployment_diff_warns_for_exact_duplicate_canister_observation() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "duplicate_canister_observed"
+            .any(|finding| finding.code == DUPLICATE_CANISTER_OBSERVED_CODE
                 && finding.subject.as_deref() == Some("aaaaa-aa"))
     );
     assert!(diff.controller_diff.iter().any(|item| {
-        item.category == "canister_duplicate"
+        item.category == CANISTER_DUPLICATE_DIFF_CATEGORY
             && item.subject == "aaaaa-aa"
             && item.expected.as_deref() == Some("root")
             && item.observed.as_deref() == Some("2")
@@ -373,12 +378,12 @@ fn enriched_registry_status_participates_in_controller_checks() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "expected_controller_missing"
+            .any(|finding| finding.code == EXPECTED_CONTROLLER_MISSING_CODE
                 && finding.subject.as_deref() == Some("user_hub"))
     );
     assert!(
         diff.warnings
             .iter()
-            .all(|finding| finding.code != "controllers_unobserved")
+            .all(|finding| finding.code != CONTROLLERS_UNOBSERVED_CODE)
     );
 }

@@ -1,4 +1,12 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    DUPLICATE_PLANNED_VERIFIER_ROLE_EPOCH_CODE, DUPLICATE_VERIFIER_ROLE_EPOCH_OBSERVED_CODE,
+    PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_CODE, PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY,
+    PLANNED_VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY, VERIFIER_NOT_OBSERVED_LABEL,
+    VERIFIER_ROLE_EPOCH_CONFLICT_CODE, VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY,
+    VERIFIER_ROLE_EPOCH_DIFF_CATEGORY, VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY,
+    VERIFIER_ROLE_EPOCH_STALE_CODE, VERIFIER_ROLE_EPOCH_UNOBSERVED_CODE,
+};
 
 #[test]
 fn deployment_diff_blocks_stale_verifier_role_epoch() {
@@ -16,10 +24,10 @@ fn deployment_diff_blocks_stale_verifier_role_epoch() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "verifier_role_epoch_stale")
+            .any(|finding| finding.code == VERIFIER_ROLE_EPOCH_STALE_CODE)
     );
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
-        item.category == "verifier_role_epoch"
+        item.category == VERIFIER_ROLE_EPOCH_DIFF_CATEGORY
             && item.subject == "root"
             && item.expected.as_deref() == Some("1")
             && item.observed.as_deref() == Some("0")
@@ -40,13 +48,13 @@ fn deployment_diff_warns_when_required_verifier_role_epoch_is_unobserved() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "verifier_role_epoch_unobserved")
+            .any(|finding| finding.code == VERIFIER_ROLE_EPOCH_UNOBSERVED_CODE)
     );
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
-        item.category == "verifier_role_epoch"
+        item.category == VERIFIER_ROLE_EPOCH_DIFF_CATEGORY
             && item.subject == "root"
             && item.expected.as_deref() == Some("1")
-            && item.observed.as_deref() == Some("not_observed")
+            && item.observed.as_deref() == Some(VERIFIER_NOT_OBSERVED_LABEL)
             && item.severity == SafetySeverityV1::Warning
     }));
 }
@@ -74,11 +82,11 @@ fn deployment_diff_blocks_conflicting_verifier_role_epoch_observations() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "verifier_role_epoch_conflict"
+            .any(|finding| finding.code == VERIFIER_ROLE_EPOCH_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("root"))
     );
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
-        item.category == "verifier_role_epoch_conflict"
+        item.category == VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("epoch=1") && observed.contains("epoch=0")
@@ -100,10 +108,10 @@ fn deployment_diff_warns_for_duplicate_identical_verifier_role_epoch_observation
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
     assert!(diff.hard_failures.is_empty());
     assert!(diff.warnings.iter().any(|finding| finding.code
-        == "duplicate_verifier_role_epoch_observed"
+        == DUPLICATE_VERIFIER_ROLE_EPOCH_OBSERVED_CODE
         && finding.subject.as_deref() == Some("root")));
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
-        item.category == "verifier_role_epoch_duplicate"
+        item.category == VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning
@@ -124,10 +132,10 @@ fn deployment_diff_blocks_conflicting_planned_verifier_role_epoch() {
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
     assert!(diff.hard_failures.iter().any(|finding| finding.code
-        == "planned_verifier_role_epoch_conflict"
+        == PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_CODE
         && finding.subject.as_deref() == Some("root")));
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
-        item.category == "planned_verifier_role_epoch_conflict"
+        item.category == PLANNED_VERIFIER_ROLE_EPOCH_CONFLICT_DIFF_CATEGORY
             && item.subject == "root"
             && item
                 .observed
@@ -149,10 +157,10 @@ fn deployment_diff_warns_for_duplicate_identical_planned_verifier_role_epoch() {
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
     assert!(diff.hard_failures.is_empty());
     assert!(diff.warnings.iter().any(|finding| finding.code
-        == "duplicate_planned_verifier_role_epoch"
+        == DUPLICATE_PLANNED_VERIFIER_ROLE_EPOCH_CODE
         && finding.subject.as_deref() == Some("root")));
     assert!(diff.verifier_readiness_diff.iter().any(|item| {
-        item.category == "planned_verifier_role_epoch_duplicate"
+        item.category == PLANNED_VERIFIER_ROLE_EPOCH_DUPLICATE_DIFF_CATEGORY
             && item.subject == "root"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning

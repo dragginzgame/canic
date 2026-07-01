@@ -1,4 +1,15 @@
 use super::super::*;
+use crate::deployment_truth::report::{
+    CANISTER_POOL_ROLE_CONFLICT_CODE, CANISTER_POOL_ROLE_CONFLICT_DIFF_CATEGORY,
+    DUPLICATE_PLANNED_POOL_CODE, DUPLICATE_POOL_CANISTER_OBSERVED_CODE,
+    EXTRA_POOL_CANISTER_OBSERVED_CODE, PLANNED_POOL_CONFLICT_CODE,
+    PLANNED_POOL_CONFLICT_DIFF_CATEGORY, PLANNED_POOL_DUPLICATE_DIFF_CATEGORY,
+    PLANNED_POOL_ID_CONFLICT_CODE, PLANNED_POOL_ID_CONFLICT_DIFF_CATEGORY,
+    POOL_CANISTER_DIFF_CATEGORY, POOL_CANISTER_DUPLICATE_DIFF_CATEGORY,
+    POOL_CANISTER_ID_CONFLICT_CODE, POOL_CANISTER_ID_CONFLICT_DIFF_CATEGORY,
+    POOL_CANISTER_ID_DIFF_CATEGORY, POOL_CANISTER_ID_MISMATCH_CODE, POOL_CANISTER_MISSING_CODE,
+    POOL_CONTROL_CLASS_DIFF_CATEGORY, POOL_EXTRA_DIFF_CATEGORY, UNSAFE_POOL_CONTROL_CLASS_CODE,
+};
 
 #[test]
 fn deployment_diff_blocks_missing_expected_pool_canister() {
@@ -16,10 +27,10 @@ fn deployment_diff_blocks_missing_expected_pool_canister() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "pool_canister_missing")
+            .any(|finding| finding.code == POOL_CANISTER_MISSING_CODE)
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "pool_canister"
+        item.category == POOL_CANISTER_DIFF_CATEGORY
             && item.subject == "user_shards:user_shard"
             && item.expected.as_deref() == Some("pool-canister")
             && item.observed.is_none()
@@ -47,11 +58,11 @@ fn deployment_diff_blocks_conflicting_planned_pool_subject() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "planned_pool_conflict"
+            .any(|finding| finding.code == PLANNED_POOL_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("user_shards:user_shard"))
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "planned_pool_conflict"
+        item.category == PLANNED_POOL_CONFLICT_DIFF_CATEGORY
             && item.subject == "user_shards:user_shard"
             && item
                 .observed
@@ -81,11 +92,11 @@ fn deployment_diff_blocks_conflicting_planned_pool_id() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "planned_pool_id_conflict"
+            .any(|finding| finding.code == PLANNED_POOL_ID_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("pool-canister"))
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "planned_pool_id_conflict"
+        item.category == PLANNED_POOL_ID_CONFLICT_DIFF_CATEGORY
             && item.subject == "pool-canister"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("directory:project_instance")
@@ -120,11 +131,11 @@ fn deployment_diff_warns_for_duplicate_identical_planned_pool() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "duplicate_planned_pool"
+            .any(|finding| finding.code == DUPLICATE_PLANNED_POOL_CODE
                 && finding.subject.as_deref() == Some("user_shards:user_shard"))
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "planned_pool_duplicate"
+        item.category == PLANNED_POOL_DUPLICATE_DIFF_CATEGORY
             && item.subject == "user_shards:user_shard"
             && item.observed.as_deref() == Some("2")
             && item.severity == SafetySeverityV1::Warning
@@ -153,10 +164,10 @@ fn deployment_diff_blocks_unsafe_pool_control_class() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "unsafe_pool_control_class")
+            .any(|finding| finding.code == UNSAFE_POOL_CONTROL_CLASS_CODE)
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "pool_control_class"
+        item.category == POOL_CONTROL_CLASS_DIFF_CATEGORY
             && item.subject == "user_shards:user_shard"
             && item.expected.as_deref() == Some("CanicManagedPool")
             && item.observed.as_deref() == Some("UserControlled")
@@ -185,10 +196,10 @@ fn deployment_diff_blocks_pool_canister_id_mismatch() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "pool_canister_id_mismatch")
+            .any(|finding| finding.code == POOL_CANISTER_ID_MISMATCH_CODE)
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "pool_canister_id"
+        item.category == POOL_CANISTER_ID_DIFF_CATEGORY
             && item.subject == "user_shards:user_shard"
             && item.expected.as_deref() == Some("planned-pool-canister")
             && item.observed.as_deref() == Some("observed-pool-canister")
@@ -196,7 +207,7 @@ fn deployment_diff_blocks_pool_canister_id_mismatch() {
     assert!(
         diff.warnings
             .iter()
-            .all(|finding| finding.code != "extra_pool_canister_observed")
+            .all(|finding| finding.code != EXTRA_POOL_CANISTER_OBSERVED_CODE)
     );
 }
 
@@ -228,11 +239,11 @@ fn deployment_diff_blocks_conflicting_pool_identities_for_same_canister_id() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "pool_canister_id_conflict"
+            .any(|finding| finding.code == POOL_CANISTER_ID_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("pool-canister"))
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "pool_canister_id_conflict"
+        item.category == POOL_CANISTER_ID_CONFLICT_DIFF_CATEGORY
             && item.subject == "pool-canister"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("directory:project_instance")
@@ -264,14 +275,11 @@ fn deployment_diff_warns_for_exact_duplicate_pool_observation() {
 
     assert_eq!(diff.resume_safety.status, SafetyStatusV1::Warning);
     assert!(diff.hard_failures.is_empty());
-    assert!(
-        diff.warnings
-            .iter()
-            .any(|finding| finding.code == "duplicate_pool_canister_observed"
-                && finding.subject.as_deref() == Some("pool-canister"))
-    );
+    assert!(diff.warnings.iter().any(|finding| finding.code
+        == DUPLICATE_POOL_CANISTER_OBSERVED_CODE
+        && finding.subject.as_deref() == Some("pool-canister")));
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "pool_canister_duplicate"
+        item.category == POOL_CANISTER_DUPLICATE_DIFF_CATEGORY
             && item.subject == "pool-canister"
             && item.expected.as_deref() == Some("user_shards:user_shard")
             && item.observed.as_deref() == Some("2")
@@ -312,11 +320,11 @@ fn deployment_diff_blocks_cross_surface_role_conflict_for_same_canister_id() {
     assert!(
         diff.hard_failures
             .iter()
-            .any(|finding| finding.code == "canister_pool_role_conflict"
+            .any(|finding| finding.code == CANISTER_POOL_ROLE_CONFLICT_CODE
                 && finding.subject.as_deref() == Some("shared-canister"))
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "canister_pool_role_conflict"
+        item.category == CANISTER_POOL_ROLE_CONFLICT_DIFF_CATEGORY
             && item.subject == "shared-canister"
             && item.observed.as_deref().is_some_and(|observed| {
                 observed.contains("canister=user_hub")
@@ -344,10 +352,10 @@ fn deployment_diff_warns_for_extra_pool_canister() {
     assert!(
         diff.warnings
             .iter()
-            .any(|finding| finding.code == "extra_pool_canister_observed")
+            .any(|finding| finding.code == EXTRA_POOL_CANISTER_OBSERVED_CODE)
     );
     assert!(diff.pool_diff.iter().any(|item| {
-        item.category == "pool_extra"
+        item.category == POOL_EXTRA_DIFF_CATEGORY
             && item.subject == "directory:project_instance"
             && item.observed.as_deref() == Some("extra-pool-canister")
             && item.severity == SafetySeverityV1::Warning

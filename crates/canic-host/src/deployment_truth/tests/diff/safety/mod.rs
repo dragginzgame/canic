@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::deployment_truth::report::ARTIFACT_FILE_SHA256_DIFF_CATEGORY;
 
 #[test]
 fn deployment_diff_is_safe_when_checked_facts_match() {
@@ -50,7 +51,7 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
     assert!(
         diff.artifact_diff
             .iter()
-            .any(|item| item.category == "artifact_file_sha256"
+            .any(|item| item.category == ARTIFACT_FILE_SHA256_DIFF_CATEGORY
                 && item.severity == SafetySeverityV1::Info)
     );
     assert!(diff.hard_failures.is_empty());
