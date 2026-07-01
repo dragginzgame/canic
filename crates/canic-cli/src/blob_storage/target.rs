@@ -121,6 +121,25 @@ fn resolve_blob_storage_target(
     root_canister_id: &str,
     registry: &[RegistryEntry],
 ) -> Result<ResolvedBlobStorageTarget, BlobStorageCommandError> {
+    if selector == "root" || selector == root_canister_id {
+        return Ok(ResolvedBlobStorageTarget {
+            input: selector.to_string(),
+            role: Some("root".to_string()),
+            canister_id: root_canister_id.to_string(),
+        });
+    }
+
+    if Principal::from_text(selector).is_ok() {
+        if let Some(entry) = registry.iter().find(|entry| entry.pid == selector) {
+            return Ok(resolved_from_entry(selector, entry));
+        }
+        return Ok(ResolvedBlobStorageTarget {
+            input: selector.to_string(),
+            role: None,
+            canister_id: selector.to_string(),
+        });
+    }
+
     let role_matches = registry
         .iter()
         .filter(|entry| entry.role.as_deref() == Some(selector))
@@ -136,22 +155,8 @@ fn resolve_blob_storage_target(
         }
     }
 
-    if selector == "root" || selector == root_canister_id {
-        return Ok(ResolvedBlobStorageTarget {
-            input: selector.to_string(),
-            role: Some("root".to_string()),
-            canister_id: root_canister_id.to_string(),
-        });
-    }
     if let Some(entry) = registry.iter().find(|entry| entry.pid == selector) {
         return Ok(resolved_from_entry(selector, entry));
-    }
-    if Principal::from_text(selector).is_ok() {
-        return Ok(ResolvedBlobStorageTarget {
-            input: selector.to_string(),
-            role: None,
-            canister_id: selector.to_string(),
-        });
     }
     Err(BlobStorageCommandError::UnknownTarget {
         deployment: deployment.to_string(),
@@ -205,13 +210,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn role_match_wins_before_principal_resolution() {
+    fn principal_resolution_wins_before_role_match() {
         let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
-        let entry = registry_entry(principal, Some(principal));
+        let entry = registry_entry("ryjl3-tyaaa-aaaaa-aaaba-cai", Some(principal));
         let target = resolve_blob_storage_target("local", principal, "aaaaa-aa", &[entry])
-            .expect("role principal-like target should resolve");
+            .expect("principal-like target should resolve as canister id");
 
-        assert_eq!(target.role.as_deref(), Some(principal));
+        assert_eq!(target.role, None);
+        assert_eq!(target.canister_id, principal);
+    }
+
+    #[test]
+    fn direct_registered_canister_id_reuses_registry_role_metadata() {
+        let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let entry = registry_entry(principal, Some("backend"));
+        let target = resolve_blob_storage_target("local", principal, "aaaaa-aa", &[entry])
+            .expect("registered principal should resolve");
+
+        assert_eq!(target.role.as_deref(), Some("backend"));
         assert_eq!(target.canister_id, principal);
     }
 

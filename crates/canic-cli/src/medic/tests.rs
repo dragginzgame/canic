@@ -276,6 +276,27 @@ fn deployment_report_includes_effective_network() {
     assert_eq!(report.deployment.as_deref(), Some("demo"));
 }
 
+// Ensure project-only network warnings do not duplicate deployment-scoped network checks.
+#[test]
+fn project_network_selection_check_is_project_only() {
+    let project = MedicOptions::project(false, None, "icp".to_string());
+    let deployment = MedicOptions {
+        scope: MedicScope::Deployment,
+        deployment: Some("demo".to_string()),
+        blob_storage: None,
+        auth_renewal: None,
+        json: false,
+        network: None,
+        icp: "icp".to_string(),
+    };
+
+    let project_check = project_network_selection_check(&project).expect("project network check");
+
+    assert_eq!(project_check.code, "local_network_implicit");
+    assert_eq!(project_check.status, MedicStatus::Warn);
+    assert!(project_network_selection_check(&deployment).is_none());
+}
+
 // Ensure deployment-state network drift is classified before live readiness probes.
 #[test]
 fn deployment_network_check_classifies_match_and_mismatch() {
@@ -644,6 +665,22 @@ fn orders_checks_by_category() {
     assert_eq!(report.checks[1].category, MedicCategory::BlobStorage);
 }
 
+// Ensure ICP CLI availability failures keep distinct stable medic codes.
+#[test]
+fn icp_cli_error_check_distinguishes_missing_cli() {
+    let missing = icp_cli_error_check(IcpCommandError::MissingCli {
+        executable: "icp-missing".to_string(),
+    });
+    let incompatible = icp_cli_error_check(IcpCommandError::IncompatibleCliVersion {
+        executable: "icp".to_string(),
+        found: "icp 0.1.0".to_string(),
+    });
+
+    assert_eq!(missing.status, MedicStatus::Fail);
+    assert_eq!(missing.code, "icp_cli_missing");
+    assert_eq!(incompatible.code, "icp_cli_incompatible");
+}
+
 // Ensure blob-storage medic uses the shared status summary without reinterpreting warnings.
 #[test]
 fn renders_blob_storage_medic_summary() {
@@ -719,6 +756,28 @@ fn renders_auth_renewal_medic_summary() {
     assert!(report.contains("auth [warn] auth_renewal_drift_warn"));
     assert!(report.contains("status=drift_detected"));
     assert!(report.contains("canic auth renewal status demo --issuer"));
+}
+
+// Ensure targeted auth-renewal medic preserves the stable invalid-issuer code.
+#[test]
+fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
+    let invalid = auth_renewal_medic_error_check(
+        AuthCommandError::InvalidIssuerPrincipal {
+            issuer: "not a principal".to_string(),
+        },
+        "demo",
+        "not a principal",
+    );
+    let generic = auth_renewal_medic_error_check(
+        AuthCommandError::InstallState("missing state".to_string()),
+        "demo",
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    );
+
+    assert_eq!(invalid.status, MedicStatus::Fail);
+    assert_eq!(invalid.code, "auth_renewal_issuer_invalid");
+    assert_eq!(invalid.source, MedicSource::Command);
+    assert_eq!(generic.code, "auth_renewal_drift_fail");
 }
 
 // Ensure default deployment medic can discover blob-storage-capable local Candid sidecars passively.

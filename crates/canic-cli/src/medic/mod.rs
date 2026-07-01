@@ -10,7 +10,7 @@
 mod tests;
 
 use crate::{
-    auth::{self, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
+    auth::{self, AuthCommandError, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
     blob_storage::{
         self, BlobStorageCommandError, BlobStorageMedicStatus, BlobStorageMedicSummary,
     },
@@ -33,7 +33,7 @@ use canic_host::{
     deployment_truth::{
         DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     },
-    icp::{IcpCli, local_canister_candid_path},
+    icp::{IcpCli, IcpCommandError, local_canister_candid_path},
     icp_config::{inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root},
     install_root::{
         InstallState, discover_project_canic_config_choices,
@@ -363,27 +363,37 @@ fn project_config_checks(root: &Path, options: &MedicOptions) -> Vec<MedicCheck>
         )),
     }
 
-    if options.network.is_some() {
-        checks.push(MedicCheck::pass(
+    if let Some(network) = project_network_selection_check(options) {
+        checks.push(network);
+    }
+
+    checks
+}
+
+fn project_network_selection_check(options: &MedicOptions) -> Option<MedicCheck> {
+    if options.scope != MedicScope::Project {
+        return None;
+    }
+
+    Some(if options.network.is_some() {
+        MedicCheck::pass(
             MedicCategory::ProjectConfig,
             "local_network_explicit",
             "network",
             "network selected explicitly",
             "none",
             MedicSource::IcpConfig,
-        ));
+        )
     } else {
-        checks.push(MedicCheck::warn(
+        MedicCheck::warn(
             MedicCategory::ProjectConfig,
             "local_network_implicit",
             "network",
             "no network was selected for project-level checks",
             "select an explicit network before deployment checks",
             MedicSource::IcpConfig,
-        ));
-    }
-
-    checks
+        )
+    })
 }
 
 fn project_config_quality_checks(root: &Path, configs: &[PathBuf]) -> Vec<MedicCheck> {
@@ -759,15 +769,28 @@ fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
             "none",
             MedicSource::IcpCli,
         ),
-        Err(err) => MedicCheck::fail(
-            MedicCategory::Environment,
-            "icp_cli_incompatible",
-            "icp",
-            err.to_string(),
-            "install supported icp-cli or pass top-level --icp <path>",
-            MedicSource::IcpCli,
-        ),
+        Err(err) => icp_cli_error_check(err),
     }
+}
+
+fn icp_cli_error_check(error: IcpCommandError) -> MedicCheck {
+    let code = match error {
+        IcpCommandError::MissingCli { .. } => "icp_cli_missing",
+        IcpCommandError::IncompatibleCliVersion { .. }
+        | IcpCommandError::Io(_)
+        | IcpCommandError::Failed { .. }
+        | IcpCommandError::Json { .. }
+        | IcpCommandError::SnapshotIdUnavailable { .. } => "icp_cli_incompatible",
+    };
+
+    MedicCheck::fail(
+        MedicCategory::Environment,
+        code,
+        "icp",
+        error.to_string(),
+        "install supported icp-cli or pass top-level --icp <path>",
+        MedicSource::IcpCli,
+    )
 }
 
 fn check_icp_identity_session_cache_hint() -> MedicCheck {
@@ -1340,18 +1363,36 @@ fn blob_storage_medic_error_check(
 fn check_auth_renewal(options: &MedicOptions, issuer: &str, network: &str) -> MedicCheck {
     match auth::renewal_medic_summary(options.deployment_name(), issuer, network, &options.icp) {
         Ok(summary) => auth_renewal_medic_check_from_summary(summary),
-        Err(err) => MedicCheck::fail(
-            MedicCategory::Auth,
+        Err(err) => auth_renewal_medic_error_check(err, options.deployment_name(), issuer),
+    }
+}
+
+fn auth_renewal_medic_error_check(
+    error: AuthCommandError,
+    deployment: &str,
+    issuer: &str,
+) -> MedicCheck {
+    let (code, next, source) = match &error {
+        AuthCommandError::InvalidIssuerPrincipal { .. } => (
+            "auth_renewal_issuer_invalid",
+            "pass a valid issuer canister principal".to_string(),
+            MedicSource::Command,
+        ),
+        _ => (
             "auth_renewal_drift_fail",
-            "auth_renewal",
-            err.to_string(),
-            format!(
-                "run canic auth renewal status {} --issuer {issuer}",
-                options.deployment_name()
-            ),
+            format!("run canic auth renewal status {deployment} --issuer {issuer}"),
             MedicSource::AuthRenewal,
         ),
-    }
+    };
+
+    MedicCheck::fail(
+        MedicCategory::Auth,
+        code,
+        "auth_renewal",
+        error.to_string(),
+        next,
+        source,
+    )
 }
 
 fn auth_renewal_medic_check_from_summary(summary: AuthRenewalMedicSummary) -> MedicCheck {
