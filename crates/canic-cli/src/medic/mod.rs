@@ -427,12 +427,11 @@ fn run_deployment_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         }
     };
 
-    if let Some(state) = state {
-        checks.push(check_config_path(&state));
-        checks.push(check_root_ready(
+    if let Some(state) = state.as_ref() {
+        checks.extend(installed_deployment_state_checks(
             options,
             icp_root.as_deref(),
-            &state,
+            state,
             &network,
         ));
     }
@@ -461,6 +460,30 @@ fn run_deployment_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     }
 
     checks
+}
+
+fn installed_deployment_state_checks(
+    options: &MedicOptions,
+    icp_root: Option<&Path>,
+    state: &InstallState,
+    network: &str,
+) -> Vec<MedicCheck> {
+    let deployment_network = check_deployment_network(state, network);
+    let deployment_network_matches = deployment_network.status != MedicStatus::Fail;
+    let root_canister = check_root_canister_id(state);
+    let root_canister_present = root_canister.status != MedicStatus::Fail;
+    let root_readiness = if deployment_network_matches && root_canister_present {
+        check_root_ready(options, icp_root, state, network)
+    } else {
+        check_root_readiness_not_evaluated(deployment_network_matches, root_canister_present)
+    };
+
+    vec![
+        deployment_network,
+        check_config_path(state),
+        root_canister,
+        root_readiness,
+    ]
 }
 
 fn is_missing_installed_deployment(error: &str) -> bool {
@@ -520,6 +543,75 @@ fn check_config_path(state: &InstallState) -> MedicCheck {
             MedicSource::InstalledDeployment,
         )
     }
+}
+
+fn check_deployment_network(state: &InstallState, selected_network: &str) -> MedicCheck {
+    if state.network == selected_network {
+        MedicCheck::pass(
+            MedicCategory::DeploymentState,
+            "deployment_network_match",
+            "network",
+            format!("deployment record is scoped to {selected_network}"),
+            "none",
+            MedicSource::InstalledDeployment,
+        )
+    } else {
+        MedicCheck::fail(
+            MedicCategory::DeploymentState,
+            "deployment_network_mismatch",
+            "network",
+            format!(
+                "deployment record is scoped to {}, but medic selected {selected_network}",
+                state.network
+            ),
+            "select the deployment record network or repair the installed deployment state",
+            MedicSource::InstalledDeployment,
+        )
+    }
+}
+
+fn check_root_canister_id(state: &InstallState) -> MedicCheck {
+    if state.root_canister_id.trim().is_empty() {
+        MedicCheck::fail(
+            MedicCategory::Topology,
+            "root_canister_id_missing",
+            "root",
+            "installed deployment state does not record a root canister id",
+            "re-register the deployment target or reinstall from the owning fleet template",
+            MedicSource::InstalledDeployment,
+        )
+    } else {
+        MedicCheck::pass(
+            MedicCategory::Topology,
+            "root_canister_id_present",
+            "root",
+            state.root_canister_id.clone(),
+            "none",
+            MedicSource::InstalledDeployment,
+        )
+    }
+}
+
+fn check_root_readiness_not_evaluated(
+    deployment_network_matches: bool,
+    root_canister_present: bool,
+) -> MedicCheck {
+    let detail = if !deployment_network_matches {
+        "root readiness skipped because the deployment record network does not match the selected network"
+    } else if !root_canister_present {
+        "root readiness skipped because the deployment record has no root canister id"
+    } else {
+        "root readiness was not evaluated"
+    };
+
+    MedicCheck::not_evaluated(
+        MedicCategory::Topology,
+        "root_readiness_not_evaluated",
+        "root",
+        detail,
+        "repair the blocking deployment-state check, then rerun canic medic deployment <deployment>",
+        MedicSource::InstalledDeployment,
+    )
 }
 
 fn check_root_ready(
