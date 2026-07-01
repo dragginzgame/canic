@@ -19,7 +19,7 @@ ignored = ["serde_bytes"]
 [dependencies]
 candid = { workspace = true }
 candid_parser = { workspace = true }
-canic-core = { workspace = true }
+canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 flate2 = { workspace = true }
 ic-query = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

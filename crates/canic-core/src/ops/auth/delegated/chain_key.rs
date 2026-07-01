@@ -17,6 +17,7 @@ use crate::{
     ids::BuildNetwork,
     ops::auth::AUTH_TIME_SKEW_ALLOWANCE_NS,
 };
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
 use k256::ecdsa::{
     Signature as K256EcdsaSignature, VerifyingKey as K256VerifyingKey,
     signature::hazmat::PrehashVerifier,
@@ -241,6 +242,13 @@ pub(in crate::ops::auth) fn verify_chain_key_ecdsa_signature(
         return Err("unsupported chain-key signature algorithm".to_string());
     }
 
+    verify_chain_key_ecdsa_signature_enabled(input)
+}
+
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+fn verify_chain_key_ecdsa_signature_enabled(
+    input: ChainKeySignatureVerificationInput<'_>,
+) -> Result<(), String> {
     let verifying_key = K256VerifyingKey::from_sec1_bytes(input.public_key)
         .map_err(|err| format!("invalid chain-key secp256k1 public key: {err}"))?;
     let signature = K256EcdsaSignature::from_slice(input.signature)
@@ -251,12 +259,36 @@ pub(in crate::ops::auth) fn verify_chain_key_ecdsa_signature(
         .map_err(|err| format!("chain-key ECDSA signature verification failed: {err}"))
 }
 
+#[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
+fn verify_chain_key_ecdsa_signature_enabled(
+    input: ChainKeySignatureVerificationInput<'_>,
+) -> Result<(), String> {
+    let _ = (input.public_key, input.message_hash, input.signature);
+    Err(
+        "chain-key ECDSA verification support is not enabled; enable the `auth-chain-key-ecdsa` feature"
+            .to_string(),
+    )
+}
+
 pub(in crate::ops::auth) fn verify_chain_key_ecdsa_public_key_shape(
     public_key: &[u8],
 ) -> Result<(), String> {
+    verify_chain_key_ecdsa_public_key_shape_enabled(public_key)
+}
+
+#[cfg(any(feature = "auth-chain-key-ecdsa", test))]
+fn verify_chain_key_ecdsa_public_key_shape_enabled(public_key: &[u8]) -> Result<(), String> {
     K256VerifyingKey::from_sec1_bytes(public_key)
         .map(|_| ())
         .map_err(|err| format!("invalid chain-key secp256k1 public key: {err}"))
+}
+
+#[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
+fn verify_chain_key_ecdsa_public_key_shape_enabled(_public_key: &[u8]) -> Result<(), String> {
+    Err(
+        "chain-key ECDSA public-key validation support is not enabled; enable the `auth-chain-key-ecdsa` feature"
+            .to_string(),
+    )
 }
 
 const fn verify_policy_window(

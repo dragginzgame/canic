@@ -8,19 +8,24 @@ use crate::ids::TemplateChunkKey;
 use crate::{
     dto::template::{
         TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
+    },
+    ids::{TemplateId, TemplateManifestState, TemplateReleaseKey},
+    storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
+};
+#[cfg(feature = "root-control-plane")]
+use crate::{
+    dto::template::{
         WasmStoreGcStatusResponse, WasmStoreOverviewStoreResponse,
         WasmStorePublicationSlotResponse, WasmStoreTemplateStatusResponse,
     },
     ids::{
-        CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateReleaseKey,
-        TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
+        CanisterRole, TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
     },
-    storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
-use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
-    format::byte_size,
-};
+use canic_core::control_plane_support::error::{InternalError, InternalErrorOrigin};
+#[cfg(feature = "root-control-plane")]
+use canic_core::control_plane_support::format::byte_size;
+#[cfg(feature = "root-control-plane")]
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
@@ -30,9 +35,11 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum TemplateManifestOpsError {
+    #[cfg(feature = "root-control-plane")]
     #[error("approved manifest missing for '{0}'")]
     ApprovedManifestMissing(CanisterRole),
 
+    #[cfg(feature = "root-control-plane")]
     #[error("multiple approved manifests for '{0}'")]
     ApprovedManifestConflict(CanisterRole),
 
@@ -136,6 +143,7 @@ impl TemplateManifestOps {
     }
 
     // Return the currently approved manifests that still belong to the configured managed release set.
+    #[cfg(feature = "root-control-plane")]
     #[must_use]
     pub fn approved_manifests_for_roles_response(
         roles: &BTreeSet<CanisterRole>,
@@ -162,6 +170,7 @@ impl TemplateManifestOps {
     }
 
     // Return the root-owned approved-release overview for one tracked runtime wasm store.
+    #[cfg(feature = "root-control-plane")]
     #[must_use]
     pub fn root_store_overview_response(
         store_binding: &WasmStoreBinding,
@@ -239,6 +248,7 @@ impl TemplateManifestOps {
     }
 
     // Return the single approved manifest for a role or an explicit conflict error.
+    #[cfg(feature = "root-control-plane")]
     pub fn approved_for_role_response(
         role: &CanisterRole,
     ) -> Result<TemplateManifestResponse, InternalError> {
@@ -258,6 +268,7 @@ impl TemplateManifestOps {
     }
 
     // Return whether exactly one approved manifest exists for this role.
+    #[cfg(feature = "root-control-plane")]
     pub fn has_approved_for_role(role: &CanisterRole) -> Result<bool, InternalError> {
         let approved_count = TemplateManifestStateStore::export()
             .entries
@@ -298,6 +309,7 @@ impl TemplateManifestOps {
     }
 
     // Deprecate any currently approved managed release whose role is no longer configured.
+    #[cfg(feature = "root-control-plane")]
     #[must_use]
     pub fn deprecate_approved_roles_not_in(roles: &BTreeSet<CanisterRole>) -> usize {
         let mut deprecated = 0;
@@ -359,6 +371,7 @@ fn record_to_response(
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 fn projected_template_versions_for_manifests(
     manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
 ) -> BTreeMap<TemplateId, BTreeSet<TemplateVersion>> {

@@ -69,11 +69,15 @@ pub mod canister {
         pub use crate::__internal::core::api::placement::sharding::ShardingApi;
     }
 
-    #[cfg(feature = "control-plane")]
+    #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
     pub mod template {
+        #[cfg(feature = "wasm-store-canister")]
         pub use canic_control_plane::api::template::WasmStoreApi as EmbeddedTemplateApi;
+        #[cfg(feature = "wasm-store-canister")]
+        pub use canic_control_plane::api::template::{WasmStoreApi, WasmStoreCanisterApi};
+        #[cfg(feature = "control-plane")]
         pub use canic_control_plane::api::template::{
-            WasmStoreApi, WasmStoreBootstrapApi, WasmStoreCanisterApi, WasmStorePublicationApi,
+            WasmStoreBootstrapApi, WasmStorePublicationApi,
         };
     }
 }

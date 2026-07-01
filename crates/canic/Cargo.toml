@@ -16,11 +16,18 @@ publish = true
 [features]
 default = ["metrics"]
 metrics = []
-control-plane = ["dep:canic-control-plane"]
+control-plane = [
+    "dep:canic-control-plane",
+    "canic-control-plane/root-control-plane",
+    "canic-control-plane/wasm-store-canister",
+]
+wasm-store-canister = ["dep:canic-control-plane", "canic-control-plane/wasm-store-canister"]
 icp-refill = []
 blob-storage = ["canic-core/blob-storage"]
 blob-storage-billing = ["blob-storage", "canic-core/blob-storage-billing"]
 sharding = ["canic-core/sharding"]
+auth-chain-key-ecdsa = ["canic-core/auth-chain-key-ecdsa"]
+auth-chain-key-root-sign = ["canic-core/auth-chain-key-root-sign"]
 auth-root-canister-sig-create = ["canic-core/auth-root-canister-sig-create"]
 auth-root-canister-sig-verify = ["canic-core/auth-root-canister-sig-verify"]
 auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]

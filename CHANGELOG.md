@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.77.x] - 2026-07-01 - Wasm Footprint Feature Boundaries
+
+Detailed patch breakdown: [docs/changelog/0.77.md](docs/changelog/0.77.md)
+
+- `0.77.0` splits chain-key ECDSA and wasm-store control-plane features so
+  store/control-plane-only wasm builds avoid unnecessary auth/signing and
+  root-publication fan-in while preserving delegated-token verification,
+  root renewal, and root publication behavior.
+
 ## [0.76.x] - 2026-06-30 - Bridge-Free Delegated Auth
 
 Detailed patch breakdown: [docs/changelog/0.76.md](docs/changelog/0.76.md)

@@ -28,8 +28,10 @@ pub(crate) mod config;
 pub mod dto;
 pub mod ids;
 pub(crate) mod ops;
+#[cfg(feature = "root-control-plane")]
 pub mod runtime;
 pub mod schema;
 pub(crate) mod storage;
 pub(crate) mod support;
+#[cfg(feature = "root-control-plane")]
 pub(crate) mod workflow;

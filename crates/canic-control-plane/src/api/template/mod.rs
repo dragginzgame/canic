@@ -1,31 +1,48 @@
 use crate::{
     dto::template::{
-        TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreAdminCommand,
-        WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse, WasmStoreCatalogEntryResponse,
-        WasmStoreOverviewResponse, WasmStoreStatusResponse,
+        TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
+        TemplateManifestInput,
     },
-    ids::{
-        CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode,
-        WasmStoreGcStatus,
-    },
-    ops::storage::template::WasmStoreGcOps,
-    support::{self, WasmStoreGcExecutionStats},
+    ids::TemplateId,
+    support,
 };
+#[cfg(feature = "wasm-store-canister")]
+use crate::{
+    dto::template::{
+        TemplateChunkResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
+    },
+    ids::{TemplateVersion, WasmStoreGcMode, WasmStoreGcStatus},
+    ops::storage::template::WasmStoreGcOps,
+    support::WasmStoreGcExecutionStats,
+};
+#[cfg(feature = "root-control-plane")]
+use crate::{
+    dto::template::{
+        WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
+        WasmStoreOverviewResponse,
+    },
+    ids::{CanisterRole, WasmStoreBinding},
+};
+#[cfg(feature = "root-control-plane")]
 use canic_core::{
     api::runtime::install::ModuleSourceRuntimeApi, bootstrap::EmbeddedRootBootstrapEntry,
-    cdk::types::Principal, dto::error::Error, log, log::Topic,
+    cdk::types::Principal,
 };
+use canic_core::{dto::error::Error, log, log::Topic};
 
+#[cfg(feature = "root-control-plane")]
 const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
+#[cfg(feature = "root-control-plane")]
 const ROOT_WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
 
 ///
 /// WasmStoreBootstrapApi
 ///
 
+#[cfg(feature = "root-control-plane")]
 pub struct WasmStoreBootstrapApi;
 
+#[cfg(feature = "root-control-plane")]
 impl WasmStoreBootstrapApi {
     // Register the dedicated embedded bootstrap release set used for the first live store install.
     pub fn register_embedded_root_wasm_store_release_set(
@@ -213,8 +230,10 @@ impl WasmStoreBootstrapApi {
 /// WasmStorePublicationApi
 ///
 
+#[cfg(feature = "root-control-plane")]
 pub struct WasmStorePublicationApi;
 
+#[cfg(feature = "root-control-plane")]
 impl WasmStorePublicationApi {
     // Execute one typed root-owned WasmStore publication or lifecycle admin command.
     pub async fn admin(cmd: WasmStoreAdminCommand) -> Result<WasmStoreAdminResponse, Error> {
@@ -288,8 +307,10 @@ impl WasmStorePublicationApi {
 /// WasmStoreApi
 ///
 
+#[cfg(feature = "wasm-store-canister")]
 pub struct WasmStoreApi;
 
+#[cfg(feature = "wasm-store-canister")]
 impl WasmStoreApi {
     // Return the current approved release catalog stored in this local wasm store.
     pub fn template_catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {
@@ -345,8 +366,10 @@ impl WasmStoreApi {
 /// WasmStoreCanisterApi
 ///
 
+#[cfg(feature = "wasm-store-canister")]
 pub struct WasmStoreCanisterApi;
 
+#[cfg(feature = "wasm-store-canister")]
 impl WasmStoreCanisterApi {
     // Return the current approved release catalog stored in this local wasm store.
     pub fn catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {

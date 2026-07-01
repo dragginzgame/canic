@@ -13,6 +13,11 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
+[features]
+default = ["root-control-plane", "wasm-store-canister"]
+root-control-plane = ["wasm-store-canister"]
+wasm-store-canister = []
+
 [dependencies]
 async-trait = { workspace = true }
 candid = { workspace = true }

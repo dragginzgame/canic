@@ -15,7 +15,10 @@ ic-testkit = { workspace = true }
 
 [dev-dependencies]
 candid = { workspace = true }
-canic-control-plane = { workspace = true }
+canic-control-plane = { workspace = true, features = [
+    "root-control-plane",
+    "wasm-store-canister",
+] }
 canic-core = { workspace = true }
 canic-host = { workspace = true }
 ic-memory = { workspace = true }

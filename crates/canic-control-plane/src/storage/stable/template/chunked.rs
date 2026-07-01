@@ -9,7 +9,9 @@ use canic_core::eager_static;
 use canic_core::impl_storable_unbounded;
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, cell::RefCell, collections::BTreeMap as StdBTreeMap};
+#[cfg(feature = "root-control-plane")]
+use std::collections::BTreeMap as StdBTreeMap;
+use std::{borrow::Cow, cell::RefCell};
 
 const TEMPLATE_CHUNK_SETS_ID: u8 = 81;
 const TEMPLATE_CHUNK_REFS_ID: u8 = 82;
@@ -338,6 +340,7 @@ impl TemplateChunkStore {
     }
 
     // Count staged chunks by release without cloning chunk payload bytes.
+    #[cfg(feature = "root-control-plane")]
     #[must_use]
     pub fn count_by_release() -> StdBTreeMap<TemplateReleaseKey, u32> {
         let mut counts: StdBTreeMap<TemplateReleaseKey, u32> = StdBTreeMap::new();

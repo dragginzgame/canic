@@ -19,11 +19,13 @@ ignored = ["serde_bytes"]
 [features]
 default = []
 sharding = []
+auth-chain-key-ecdsa = ["dep:k256"]
+auth-chain-key-root-sign = ["auth-chain-key-ecdsa"]
 auth-root-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
 auth-root-canister-sig-verify = ["dep:ic-signature-verification"]
 auth-issuer-canister-sig-create = ["dep:ic-canister-sig-creation", "dep:ic-certification"]
 auth-issuer-canister-sig-verify = ["dep:ic-signature-verification"]
-auth-delegated-token-verify = ["auth-issuer-canister-sig-verify"]
+auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
 blob-storage = []
 blob-storage-billing = ["blob-storage"]
 
@@ -38,7 +40,7 @@ ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
 ic-signature-verification = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }
-k256 = { workspace = true }
+k256 = { workspace = true, optional = true }
 remain = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
@@ -57,6 +59,7 @@ candid = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 futures = { workspace = true }
+k256 = { workspace = true }
 
 [[bench]]
 name = "serialize"
