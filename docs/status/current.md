@@ -62,6 +62,12 @@ before this compaction is archived at
   follows the 0.78 design order by treating principal text as a canister ID
   before falling back to role names.
 
+- The 0.78.5 cleanup slice updates active `canic install` collision
+  guidance to point at
+  `canic medic deployment <deployment>` instead of the removed
+  `canic info medic <deployment>` route, and by removing the same retired
+  `info medic` leaf from top-level global ICP/network option forwarding.
+
 - 0.77 completed the wasm-footprint feature-boundary line, including
   chain-key/root-publication feature splitting and local DTO replacements for
   helper crate fan-in. Current dependency work may include local

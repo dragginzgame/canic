@@ -137,6 +137,8 @@ fn install_usage_explains_fleet_config() {
     assert!(text.contains("--profile"));
     assert!(normalized.contains("fresh local creation"));
     assert!(normalized.contains("project upgrade flow"));
+    assert!(normalized.contains("canic medic deployment"));
+    assert!(!normalized.contains("canic info medic"));
     assert!(text.contains("[fleet]"));
     assert!(text.contains("name = \"test\""));
 }
@@ -152,7 +154,7 @@ fn install_existing_deployment_errors_get_action_hint() {
     let message = err.to_string();
 
     assert!(message.contains("canic --network academic info list demo"));
-    assert!(message.contains("canic --network academic info medic demo"));
+    assert!(message.contains("canic --network academic medic deployment demo"));
     assert!(message.contains("project upgrade flow"));
 
     std::assert_matches!(

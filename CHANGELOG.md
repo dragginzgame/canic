@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)
 
+- `0.78.5` removes the last active `canic info medic` survivorship from
+  install guidance and top-level global-option forwarding, keeping operators
+  on the hard-cut `canic medic deployment` surface.
+
 - `0.78.4` tightens medic readiness diagnostics by preserving precise ICP CLI
   and auth-renewal error codes, keeping project-only network warnings out of
   deployment reports, and aligning blob-storage target resolution with the

@@ -467,13 +467,20 @@ fn global_icp_is_forwarded_to_info_query_commands() {
         OsString::from("app"),
     ];
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
+    let mut removed_medic_tail = vec![OsString::from("medic"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("help")];
+    let original_removed_medic_tail = removed_medic_tail.clone();
 
     apply_global_icp("info", &mut list_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut cycles_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut metrics_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut endpoints_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut env_tail, Some("/tmp/icp".to_string()));
+    apply_global_icp(
+        "info",
+        &mut removed_medic_tail,
+        Some("/tmp/icp".to_string()),
+    );
     apply_global_icp("info", &mut help_tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
@@ -522,6 +529,7 @@ fn global_icp_is_forwarded_to_info_query_commands() {
             OsString::from("/tmp/icp")
         ]
     );
+    assert_eq!(removed_medic_tail, original_removed_medic_tail);
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
@@ -793,13 +801,16 @@ fn global_network_is_forwarded_to_info_query_commands() {
         OsString::from("app"),
     ];
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
+    let mut removed_medic_tail = vec![OsString::from("medic"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("help")];
+    let original_removed_medic_tail = removed_medic_tail.clone();
 
     apply_global_network("info", &mut list_tail, Some("local".to_string()));
     apply_global_network("info", &mut cycles_tail, Some("local".to_string()));
     apply_global_network("info", &mut metrics_tail, Some("local".to_string()));
     apply_global_network("info", &mut endpoints_tail, Some("local".to_string()));
     apply_global_network("info", &mut env_tail, Some("local".to_string()));
+    apply_global_network("info", &mut removed_medic_tail, Some("local".to_string()));
     apply_global_network("info", &mut help_tail, Some("local".to_string()));
 
     assert_eq!(
@@ -848,6 +859,7 @@ fn global_network_is_forwarded_to_info_query_commands() {
             OsString::from("local")
         ]
     );
+    assert_eq!(removed_medic_tail, original_removed_medic_tail);
     assert_eq!(help_tail, vec![OsString::from("help")]);
 }
 
