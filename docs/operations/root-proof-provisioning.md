@@ -60,7 +60,7 @@ The retained operator command is status-only:
 ```bash
 canic auth renewal status <deployment> --issuer <principal>
 canic auth renewal status <deployment> --issuer <principal> --json
-canic info medic <deployment> --auth-renewal <principal>
+canic medic deployment <deployment> --auth-renewal <principal>
 ```
 
 The status command reports root-owned template/state/attempt data and, when the

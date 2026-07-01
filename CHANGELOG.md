@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.78.x] - 2026-07-01 - Top-Level Medic Preflight
+
+Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)
+
+- `0.78.0` promotes medic to the top-level `canic medic` preflight surface
+  with project/deployment scopes, schema-versioned text/JSON reports, and
+  hard-cut removal of the active `canic info medic` route.
+
 ## [0.77.x] - 2026-07-01 - Wasm Footprint Feature Boundaries
 
 Detailed patch breakdown: [docs/changelog/0.77.md](docs/changelog/0.77.md)

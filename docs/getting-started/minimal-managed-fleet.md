@@ -254,8 +254,8 @@ paths for the explicit roots and config file.
 
 `canic info list example` shows the root and managed children. If it only shows
 `root`, the root canister has been reserved but the managed tree is not fully
-installed yet; run `canic info medic example` and reinstall the local fleet if
-the local replica was restarted.
+installed yet; run `canic medic deployment example` and reinstall the local
+fleet if the local replica was restarted.
 
 ## Testing Shape
 

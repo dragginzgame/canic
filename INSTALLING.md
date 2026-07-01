@@ -257,7 +257,7 @@ canic replica start --background
 canic install --profile fast test
 canic info list test
 canic info env test
-canic info medic test
+canic medic deployment test
 ```
 
 Build one artifact without installing:
@@ -308,17 +308,18 @@ canic fleet create demo --yes
 canic fleet delete demo
 ```
 
-Use `canic info medic` when local project state, replica ownership, or a named
-fleet does not look right:
+Use `canic medic` when local project state, replica ownership, or a named
+deployment does not look right:
 
 ```bash
-canic info medic test
+canic medic
+canic medic deployment test
 ```
 
 Use `canic info list <deployment>`, `canic info env <deployment>`, and
-`canic info medic <deployment>` before changing fleet topology when local state
-looks wrong. `info list` shows the deployed root registry, `info env` prints
-sourceable `CANIC_<ROLE>` canister ID exports, and `fleet config` shows
+`canic medic deployment <deployment>` before changing fleet topology when local
+state looks wrong. `info list` shows the deployed root registry, `info env`
+prints sourceable `CANIC_<ROLE>` canister ID exports, and `fleet config` shows
 configured intent.
 
 Named-fleet commands default to the local ICP CLI environment. Pass top-level
@@ -405,7 +406,7 @@ Canic-owned methods.
   `[package.metadata.canic] fleet = "<fleet>"` and `role = "<role>"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not
   fully installed or the local replica lost state. Run
-  `canic info medic <fleet>` and reinstall the local fleet.
+  `canic medic deployment <fleet>` and reinstall the local fleet.
 - If a test manually installs root and child canisters, it is not validating the
   managed fleet path. A managed-fleet test should let root create/register
   children and then resolve them from `canic_subnet_registry`.

@@ -76,6 +76,9 @@ pub enum CliError {
     #[error("info: {0}")]
     Info(#[from] info::InfoCommandError),
 
+    #[error("medic: {0}")]
+    Medic(#[from] medic::MedicCommandError),
+
     #[error("fleet: {0}")]
     Fleets(#[from] fleets::FleetCommandError),
 
@@ -151,6 +154,7 @@ where
         "fleet" => fleets::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
+        "medic" => medic::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),
@@ -170,6 +174,7 @@ pub const fn version_text() -> &'static str {
 pub fn render_cli_error(error: &CliError) -> String {
     match error {
         CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
+        CliError::Medic(err) if err.suppress_stderr() => String::new(),
         _ => error.to_string(),
     }
 }
@@ -179,6 +184,7 @@ pub fn cli_error_exit_code(err: &CliError) -> i32 {
     match err {
         CliError::Auth(err) => i32::from(err.exit_code()),
         CliError::BlobStorage(err) => i32::from(err.exit_code()),
+        CliError::Medic(err) => i32::from(err.exit_code()),
         _ => 1,
     }
 }

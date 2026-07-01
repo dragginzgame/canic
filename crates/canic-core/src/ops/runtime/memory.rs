@@ -74,7 +74,7 @@ impl MemoryRegistryOps {
     #[cfg(target_arch = "wasm32")]
     #[must_use]
     pub fn is_initialized() -> bool {
-        ic_memory::runtime::is_default_memory_manager_bootstrapped()
+        crate::memory::runtime::is_memory_bootstrap_ready()
     }
 
     #[cfg(target_arch = "wasm32")]

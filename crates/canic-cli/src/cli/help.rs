@@ -52,6 +52,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Project,
     },
     CommandSpec {
+        name: "medic",
+        about: "Diagnose project and deployment preflight readiness",
+        scope: CommandScope::Project,
+    },
+    CommandSpec {
         name: "fleet",
         about: "Manage Canic fleets and roles",
         scope: CommandScope::Project,

@@ -9,7 +9,7 @@ use crate::{
         clap::{parse_subcommand, passthrough_subcommand},
         help::print_help_or_version,
     },
-    cycles, endpoints, info_env, list, medic, metrics, version_text,
+    cycles, endpoints, info_env, list, metrics, version_text,
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -25,7 +25,6 @@ Commands:
   cycles     Summarize deployment cycle history
   metrics    Query Canic runtime telemetry
   endpoints  List callable Candid endpoints
-  medic      Diagnose local deployment target setup
   env        Print sourceable canister ID exports
   help       Print this message or the help of the given subcommand(s)
 
@@ -34,11 +33,8 @@ Examples:
   canic info cycles test --subtree scale_hub
   canic info metrics test
   canic info endpoints test app
-  canic info medic test
-  canic info medic test --blob-storage backend
-  canic info medic test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai
   canic info env test";
-const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "medic", "env"];
+const INFO_SUBCOMMANDS: &[&str] = &["list", "cycles", "metrics", "endpoints", "env"];
 
 ///
 /// InfoCommandError
@@ -64,9 +60,6 @@ pub enum InfoCommandError {
     #[error("endpoints: {0}")]
     Endpoints(#[from] endpoints::EndpointsCommandError),
 
-    #[error("medic: {0}")]
-    Medic(#[from] medic::MedicCommandError),
-
     #[error("metrics: {0}")]
     Metrics(#[from] metrics::MetricsCommandError),
 }
@@ -87,7 +80,6 @@ where
         "cycles" => cycles::run_info(tail).map_err(InfoCommandError::from),
         "metrics" => metrics::run_info(tail).map_err(InfoCommandError::from),
         "endpoints" => endpoints::run_info(tail).map_err(InfoCommandError::from),
-        "medic" => medic::run_info(tail).map_err(InfoCommandError::from),
         "env" => info_env::run(tail).map_err(InfoCommandError::from),
         _ => unreachable!("clap restricts info subcommands"),
     }
@@ -155,11 +147,10 @@ mod tests {
     }
 
     #[test]
-    fn info_usage_mentions_targeted_blob_storage_medic() {
+    fn info_usage_does_not_include_top_level_medic() {
         let text = usage();
 
-        assert!(text.contains("canic info medic test"));
-        assert!(text.contains("canic info medic test --blob-storage backend"));
-        assert!(text.contains("canic info medic test --auth-renewal"));
+        assert!(!text.contains("canic info medic"));
+        assert!(text.contains("canic info env test"));
     }
 }

@@ -1,105 +1,286 @@
 use super::*;
 use crate::test_support::temp_dir;
+use serde_json::Value as JsonValue;
 use std::fs;
 
-// Ensure medic options parse the deployment target, network, and ICP CLI selectors.
+// Ensure bare top-level medic selects the project scope without inventing a deployment.
 #[test]
-fn parses_medic_options() {
-    let options = MedicOptions::parse_info([
+fn parses_bare_project_medic_options() {
+    let options = MedicOptions::parse([
+        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
+        OsString::from("/tmp/icp"),
+    ])
+    .expect("parse medic options");
+
+    assert_eq!(options.scope, MedicScope::Project);
+    assert_eq!(options.deployment, None);
+    assert_eq!(options.network, None);
+    assert_eq!(options.icp, "/tmp/icp");
+}
+
+// Ensure explicit project medic keeps the same scope and accepts JSON output.
+#[test]
+fn parses_project_medic_options() {
+    let options = MedicOptions::parse([OsString::from("project"), OsString::from("--json")])
+        .expect("parse medic project options");
+
+    assert_eq!(options.scope, MedicScope::Project);
+    assert!(options.json);
+    assert_eq!(options.deployment, None);
+}
+
+// Ensure deployment medic parses target, network, and ICP selectors.
+#[test]
+fn parses_deployment_medic_options() {
+    let options = MedicOptions::parse([
+        OsString::from("deployment"),
         OsString::from("demo"),
         OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
         OsString::from("local"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
     ])
-    .expect("parse medic options");
+    .expect("parse medic deployment options");
 
-    assert_eq!(options.deployment, "demo");
-    assert_eq!(options.blob_storage, None);
-    assert_eq!(options.auth_renewal, None);
-    assert_eq!(options.network, "local");
+    assert_eq!(options.scope, MedicScope::Deployment);
+    assert_eq!(options.deployment.as_deref(), Some("demo"));
+    assert_eq!(options.network.as_deref(), Some("local"));
     assert_eq!(options.icp, "/tmp/icp");
 }
 
-// Ensure targeted blob-storage medic diagnostics are opt-in.
+// Ensure targeted blob-storage medic diagnostics are deployment-only.
 #[test]
-fn parses_blob_storage_medic_target() {
-    let options = MedicOptions::parse_info([
+fn parses_deployment_blob_storage_medic_target() {
+    let options = MedicOptions::parse([
+        OsString::from("deployment"),
         OsString::from("demo"),
         OsString::from("--blob-storage"),
         OsString::from("backend"),
     ])
     .expect("parse medic options");
 
-    assert_eq!(options.deployment, "demo");
+    assert_eq!(options.deployment.as_deref(), Some("demo"));
     assert_eq!(options.blob_storage.as_deref(), Some("backend"));
 }
 
-// Ensure targeted auth-renewal medic diagnostics are opt-in.
+// Ensure targeted auth-renewal medic diagnostics are deployment-only.
 #[test]
-fn parses_auth_renewal_medic_target() {
-    let options = MedicOptions::parse_info([
+fn parses_deployment_auth_renewal_medic_target() {
+    let options = MedicOptions::parse([
+        OsString::from("deployment"),
         OsString::from("demo"),
         OsString::from("--auth-renewal"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ])
     .expect("parse medic options");
 
-    assert_eq!(options.deployment, "demo");
+    assert_eq!(options.deployment.as_deref(), Some("demo"));
     assert_eq!(
         options.auth_renewal.as_deref(),
         Some("rrkah-fqaaa-aaaaa-aaaaq-cai")
     );
 }
 
-// Ensure medic help explains the diagnostic command rather than printing a one-liner.
+// Ensure hard-cut rejected command forms do not parse as compatibility aliases.
 #[test]
-fn medic_usage_includes_examples() {
-    let text = info_usage();
-
-    assert!(text.contains("Diagnose local Canic deployment target setup"));
-    assert!(text.contains("Usage: canic info medic [OPTIONS] <deployment>"));
-    assert!(text.contains("<deployment>"));
-    assert!(text.contains("--blob-storage <canister-or-role>"));
-    assert!(text.contains("--auth-renewal <issuer-principal>"));
-    assert!(!text.contains("--fleet <name>"));
-    assert!(!text.contains("--network"));
-    assert!(!text.contains("--icp"));
-    assert!(text.contains("Examples:"));
+fn rejects_legacy_or_shorthand_medic_forms() {
+    for args in [
+        vec![OsString::from("demo")],
+        vec![OsString::from("--blob-storage"), OsString::from("backend")],
+        vec![
+            OsString::from("--auth-renewal"),
+            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+        ],
+        vec![
+            OsString::from("project"),
+            OsString::from("--blob-storage"),
+            OsString::from("backend"),
+        ],
+        vec![
+            OsString::from("project"),
+            OsString::from("--auth-renewal"),
+            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+        ],
+    ] {
+        assert!(matches!(
+            MedicOptions::parse(args),
+            Err(MedicCommandError::Usage(_))
+        ));
+    }
 }
 
-// Ensure the medic report is stable, readable block text instead of a wide table.
+// Ensure medic help explains the new top-level command surface.
 #[test]
-fn renders_medic_report() {
-    let report = render_medic_report(&[
-        MedicCheck::ok("network", "local", "-"),
-        MedicCheck::warn(
-            "deployment state",
-            "no installed deployment found",
-            "run canic install",
-        ),
-    ]);
+fn medic_usage_includes_top_level_examples() {
+    let text = usage();
 
-    assert!(report.starts_with("network [ok]"));
-    assert!(report.contains("\n  detail: local\n"));
-    assert!(report.contains("deployment state [warn]"));
-    assert!(report.contains("  next: run canic install"));
-    assert!(!report.contains("CHECK"));
+    assert!(text.contains("Diagnose Canic project and deployment preflight readiness"));
+    assert!(text.contains("Usage: canic medic"));
+    assert!(text.contains("canic medic project"));
+    assert!(text.contains("canic medic deployment test"));
+    assert!(text.contains("canic medic deployment test --blob-storage backend"));
+    assert!(text.contains("canic medic deployment test --auth-renewal"));
+    assert!(text.contains("--json"));
+    assert!(!text.contains("canic info medic"));
 }
 
-// Ensure blob-storage medic uses the shared status summary without reinterpreting readiness.
+// Ensure aggregate status follows the 0.78 report contract.
+#[test]
+fn aggregate_status_follows_report_contract() {
+    assert_eq!(aggregate_status(&[]), MedicStatus::NotEvaluated);
+    assert_eq!(
+        aggregate_status(&[MedicCheck::not_evaluated(
+            MedicCategory::DeploymentState,
+            "deployment_not_selected",
+            "deployment",
+            "none",
+            "none",
+            MedicSource::Command,
+        )]),
+        MedicStatus::NotEvaluated
+    );
+    assert_eq!(
+        aggregate_status(&[
+            sample_check(MedicStatus::Pass),
+            sample_check(MedicStatus::NotEvaluated)
+        ]),
+        MedicStatus::Pass
+    );
+    assert_eq!(
+        aggregate_status(&[
+            sample_check(MedicStatus::Pass),
+            sample_check(MedicStatus::Warn)
+        ]),
+        MedicStatus::Warn
+    );
+    assert_eq!(
+        aggregate_status(&[
+            sample_check(MedicStatus::Warn),
+            sample_check(MedicStatus::Fail)
+        ]),
+        MedicStatus::Fail
+    );
+}
+
+// Ensure the text report carries status, category, code, detail, next, and source.
+#[test]
+fn renders_medic_text_report() {
+    let report = MedicReport::new(
+        &MedicOptions::project(false, None, "icp".to_string()),
+        vec![
+            MedicCheck::warn(
+                MedicCategory::ProjectConfig,
+                "local_network_implicit",
+                "network",
+                "no network was selected",
+                "select an explicit network before deployment checks",
+                MedicSource::IcpConfig,
+            ),
+            MedicCheck::pass(
+                MedicCategory::Environment,
+                "icp_cli_ok",
+                "icp",
+                "icp 1.0.0",
+                "none",
+                MedicSource::IcpCli,
+            ),
+        ],
+    );
+    let rendered = render_medic_text(&report);
+
+    assert!(rendered.starts_with("canic medic project\nstatus: warn"));
+    assert!(rendered.contains("network: not selected"));
+    assert!(rendered.contains("environment [pass] icp_cli_ok"));
+    assert!(rendered.contains("project_config [warn] local_network_implicit"));
+    assert!(rendered.contains("  detail: no network was selected"));
+    assert!(rendered.contains("  next: select an explicit network"));
+    assert!(rendered.contains("  source: icp_config"));
+}
+
+// Ensure JSON output emits schema_version and stable top-level fields.
+#[test]
+fn renders_medic_json_report() {
+    let report = MedicReport::new(
+        &MedicOptions::project(true, None, "icp".to_string()),
+        vec![sample_check(MedicStatus::Pass)],
+    );
+    let rendered = render_medic_json(&report).expect("render json");
+    let value: JsonValue = serde_json::from_str(&rendered).expect("parse json");
+
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["command"], "canic medic project");
+    assert_eq!(value["scope"], "project");
+    assert_eq!(value["network"], JsonValue::Null);
+    assert_eq!(value["deployment"], JsonValue::Null);
+    assert_eq!(value["status"], "pass");
+    assert!(value["checks"].is_array());
+}
+
+// Ensure deployment reports include the effective network while project reports may omit it.
+#[test]
+fn deployment_report_includes_effective_network() {
+    let report = MedicReport::new(
+        &MedicOptions {
+            scope: MedicScope::Deployment,
+            deployment: Some("demo".to_string()),
+            blob_storage: None,
+            auth_renewal: None,
+            json: false,
+            network: None,
+            icp: "icp".to_string(),
+        },
+        vec![sample_check(MedicStatus::Pass)],
+    );
+
+    assert_eq!(report.network.as_deref(), Some("local"));
+    assert_eq!(report.deployment.as_deref(), Some("demo"));
+}
+
+// Ensure check ordering is deterministic by category.
+#[test]
+fn orders_checks_by_category() {
+    let report = MedicReport::new(
+        &MedicOptions::project(false, None, "icp".to_string()),
+        vec![
+            MedicCheck::pass(
+                MedicCategory::BlobStorage,
+                "blob_storage_not_selected",
+                "blob_storage",
+                "none",
+                "none",
+                MedicSource::Command,
+            ),
+            MedicCheck::pass(
+                MedicCategory::Environment,
+                "icp_cli_ok",
+                "icp",
+                "ok",
+                "none",
+                MedicSource::IcpCli,
+            ),
+        ],
+    );
+
+    assert_eq!(report.checks[0].category, MedicCategory::Environment);
+    assert_eq!(report.checks[1].category, MedicCategory::BlobStorage);
+}
+
+// Ensure blob-storage medic uses the shared status summary without reinterpreting warnings.
 #[test]
 fn renders_blob_storage_medic_summary() {
     let check = blob_storage_medic_check_from_summary(BlobStorageMedicSummary {
-        status: BlobStorageMedicStatus::Blocked,
-        detail: "readiness=blocked; configured=true; gateways=0; funding=funding_needed"
+        status: BlobStorageMedicStatus::Warning,
+        detail: "readiness=warning; configured=true; gateways=0; funding=funding_needed"
             .to_string(),
         next: "canic blob-storage sync-gateways demo backend".to_string(),
     });
-    let report = render_medic_report(&[check]);
+    let report = render_medic_text(&MedicReport::new(
+        &MedicOptions::project(false, None, "icp".to_string()),
+        vec![check],
+    ));
 
-    assert!(report.contains("blob-storage billing [warn]"));
-    assert!(report.contains("readiness=blocked"));
+    assert!(report.contains("blob_storage [warn] blob_storage_billing_unready"));
+    assert!(report.contains("readiness=warning"));
     assert!(report.contains("canic blob-storage sync-gateways demo backend"));
 }
 
@@ -112,14 +293,17 @@ fn renders_auth_renewal_medic_summary() {
             .to_string(),
         next: "canic auth renewal status demo --issuer rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
     });
-    let report = render_medic_report(&[check]);
+    let report = render_medic_text(&MedicReport::new(
+        &MedicOptions::project(false, None, "icp".to_string()),
+        vec![check],
+    ));
 
-    assert!(report.contains("auth renewal [warn]"));
+    assert!(report.contains("auth [warn] auth_renewal_drift_warn"));
     assert!(report.contains("status=drift_detected"));
     assert!(report.contains("canic auth renewal status demo --issuer"));
 }
 
-// Ensure default medic can discover blob-storage-capable local Candid sidecars passively.
+// Ensure default deployment medic can discover blob-storage-capable local Candid sidecars passively.
 #[test]
 fn passive_blob_storage_hint_uses_local_candid_only() {
     let root = temp_dir("canic-cli-medic-blob-storage-passive");
@@ -145,34 +329,25 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
             }
         ",
     );
-    write_candid(
-        &root,
-        "local",
-        "partial",
-        r#"
-            service : {
-                get_blob_storage_status : () -> () query;
-                "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
-            }
-        "#,
-    );
 
     let roles = blob_storage_billing_roles_from_candid_dir(&root, "local");
     let options = MedicOptions {
-        deployment: "demo".to_string(),
+        scope: MedicScope::Deployment,
+        deployment: Some("demo".to_string()),
         blob_storage: None,
         auth_renewal: None,
-        network: "local".to_string(),
+        json: false,
+        network: Some("local".to_string()),
         icp: "icp".to_string(),
     };
-    let check = check_blob_storage_passive_hint(&options, &root).expect("passive hint");
+    let check = check_blob_storage_not_selected(&options, Some(&root), "local");
 
     assert_eq!(roles, vec!["backend".to_string()]);
-    assert_eq!(check.status, MedicStatus::Ok);
-    assert!(check.detail.contains("backend"));
+    assert_eq!(check.status, MedicStatus::NotEvaluated);
+    assert_eq!(check.code, "blob_storage_not_selected");
     assert_eq!(
         check.next,
-        "run canic info medic demo --blob-storage backend"
+        "run canic medic deployment demo --blob-storage backend"
     );
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -210,13 +385,19 @@ fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
 // Ensure long medic details and next actions wrap to terminal-readable lines.
 #[test]
 fn wraps_long_medic_report_fields() {
-    let report = render_medic_report(&[MedicCheck::warn(
-        "deployment state",
-        "this is a deliberately long diagnostic message that should wrap across multiple indented lines instead of widening a terminal table",
-        "run canic install <fleet-template> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
-    )]);
+    let report = render_medic_text(&MedicReport::new(
+        &MedicOptions::project(false, None, "icp".to_string()),
+        vec![MedicCheck::warn(
+            MedicCategory::DeploymentState,
+            "deployment_target_missing",
+            "deployment",
+            "this is a deliberately long diagnostic message that should wrap across multiple indented lines instead of widening a terminal table",
+            "run canic install <fleet-template> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
+            MedicSource::InstalledDeployment,
+        )],
+    ));
 
-    assert!(report.contains("deployment state [warn]"));
+    assert!(report.contains("deployment_state [warn] deployment_target_missing"));
     assert!(
         report
             .lines()
@@ -234,23 +415,35 @@ fn wraps_long_medic_report_fields() {
 fn icp_identity_session_cache_hint_is_informational() {
     let check = check_icp_identity_session_cache_hint();
 
-    assert_eq!(check.status, MedicStatus::Ok);
-    assert_eq!(check.name, "icp identity session");
+    assert_eq!(check.status, MedicStatus::Pass);
+    assert_eq!(check.code, "icp_identity_session_hint");
     assert!(check.detail.contains("PEM identities"));
     assert!(check.next.contains("icp settings session-length"));
     assert!(check.next.contains("icp identity reauth"));
     assert!(!check.next.contains("1.0.0"));
 }
 
-// Ensure host installed-deployment missing-state errors remain warnings, not failures.
+// Ensure host installed-deployment missing-state errors remain classifiable.
 #[test]
-fn missing_installed_deployment_error_is_warnable() {
+fn missing_installed_deployment_error_is_classifiable() {
     assert!(is_missing_installed_deployment(
         "deployment target demo is not installed on network local"
     ));
     assert!(!is_missing_installed_deployment(
         "failed to read canic deployment state: bad json"
     ));
+}
+
+fn sample_check(status: MedicStatus) -> MedicCheck {
+    MedicCheck::new(
+        MedicCategory::Environment,
+        "sample",
+        status,
+        "subject",
+        "detail",
+        "next",
+        MedicSource::Command,
+    )
 }
 
 fn write_candid(root: &std::path::Path, network: &str, role: &str, candid: &str) {
