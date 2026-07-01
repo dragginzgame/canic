@@ -8,7 +8,13 @@ use crate::{
     InternalError,
     dto::http,
     ids::SystemMetricKind,
-    infra::{InfraError, ic::http::HttpInfra},
+    infra::{
+        InfraError,
+        ic::http::{
+            HttpInfra, InfraHttpHeader, InfraHttpMethod, InfraHttpRequestArgs,
+            InfraHttpRequestResult,
+        },
+    },
     ops::{
         ic::IcOpsError,
         runtime::metrics::{
@@ -212,12 +218,12 @@ impl HttpOps {
         label: Option<&str>,
     ) -> Result<HttpRequestResult, InternalError> {
         Self::record_metrics(args.method, &args.url, label);
-        let cdk_args = crate::cdk::mgmt::HttpRequestArgs::from(args);
+        let infra_args = InfraHttpRequestArgs::from(args);
         record_http_call(
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
         );
-        let res = match HttpInfra::http_request_raw(&cdk_args).await {
+        let res = match HttpInfra::http_request_raw(&infra_args).await {
             Ok(res) => res,
             Err(err) => {
                 record_http_call(
@@ -293,27 +299,27 @@ const fn metrics_method(method: HttpMethod) -> MetricsHttpMethod {
     }
 }
 
-impl From<HttpMethod> for crate::cdk::mgmt::HttpMethod {
+impl From<HttpMethod> for InfraHttpMethod {
     fn from(method: HttpMethod) -> Self {
         match method {
-            HttpMethod::Get => Self::GET,
-            HttpMethod::Post => Self::POST,
-            HttpMethod::Head => Self::HEAD,
+            HttpMethod::Get => Self::Get,
+            HttpMethod::Post => Self::Post,
+            HttpMethod::Head => Self::Head,
         }
     }
 }
 
-impl From<crate::cdk::mgmt::HttpMethod> for HttpMethod {
-    fn from(method: crate::cdk::mgmt::HttpMethod) -> Self {
+impl From<InfraHttpMethod> for HttpMethod {
+    fn from(method: InfraHttpMethod) -> Self {
         match method {
-            crate::cdk::mgmt::HttpMethod::GET => Self::Get,
-            crate::cdk::mgmt::HttpMethod::POST => Self::Post,
-            crate::cdk::mgmt::HttpMethod::HEAD => Self::Head,
+            InfraHttpMethod::Get => Self::Get,
+            InfraHttpMethod::Post => Self::Post,
+            InfraHttpMethod::Head => Self::Head,
         }
     }
 }
 
-impl From<HttpHeader> for crate::cdk::mgmt::HttpHeader {
+impl From<HttpHeader> for InfraHttpHeader {
     fn from(header: HttpHeader) -> Self {
         Self {
             name: header.name,
@@ -322,8 +328,8 @@ impl From<HttpHeader> for crate::cdk::mgmt::HttpHeader {
     }
 }
 
-impl From<crate::cdk::mgmt::HttpHeader> for HttpHeader {
-    fn from(header: crate::cdk::mgmt::HttpHeader) -> Self {
+impl From<InfraHttpHeader> for HttpHeader {
+    fn from(header: InfraHttpHeader) -> Self {
         Self {
             name: header.name,
             value: header.value,
@@ -331,7 +337,7 @@ impl From<crate::cdk::mgmt::HttpHeader> for HttpHeader {
     }
 }
 
-impl From<HttpRequestArgs> for crate::cdk::mgmt::HttpRequestArgs {
+impl From<HttpRequestArgs> for InfraHttpRequestArgs {
     fn from(args: HttpRequestArgs) -> Self {
         Self {
             url: args.url,
@@ -345,8 +351,8 @@ impl From<HttpRequestArgs> for crate::cdk::mgmt::HttpRequestArgs {
     }
 }
 
-impl From<crate::cdk::mgmt::HttpRequestResult> for HttpRequestResult {
-    fn from(result: crate::cdk::mgmt::HttpRequestResult) -> Self {
+impl From<InfraHttpRequestResult> for HttpRequestResult {
+    fn from(result: InfraHttpRequestResult) -> Self {
         Self {
             status: result.status,
             headers: result.headers.into_iter().map(Into::into).collect(),

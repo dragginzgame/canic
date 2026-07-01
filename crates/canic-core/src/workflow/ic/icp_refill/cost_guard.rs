@@ -8,7 +8,7 @@ use crate::{
     InternalError, InternalErrorOrigin,
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
-        ic::{IcOps, mgmt::MgmtOps},
+        ic::IcOps,
         replay::receipt::ReplayReceiptToken,
     },
     replay_policy::CostClass,
@@ -40,7 +40,7 @@ pub(super) fn reserve_icp_refill_cost_guard_if_needed(
     let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
         token,
         IcOps::canister_self(),
-        MgmtOps::canister_cycle_balance().to_u128(),
+        IcOps::canister_cycle_balance().to_u128(),
         IcOps::now_secs(),
     ))
     .map_err(map_cost_guard_reserve_error)?;

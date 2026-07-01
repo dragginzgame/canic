@@ -15,7 +15,10 @@ use crate::{
     },
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
-        ic::mgmt::{CanisterInstallMode, MgmtOps},
+        ic::{
+            IcOps,
+            mgmt::{CanisterInstallMode, MgmtOps},
+        },
         replay::model::CommandKind,
         runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
         runtime::metrics::canister_ops::{
@@ -248,7 +251,7 @@ impl CanisterLifecycleWorkflow {
 
         let cost_permit = match reserve_canister_upgrade_cost_guard(
             cost_context,
-            MgmtOps::canister_cycle_balance().to_u128(),
+            IcOps::canister_cycle_balance().to_u128(),
         ) {
             Ok(permit) => permit,
             Err(err) => {

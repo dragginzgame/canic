@@ -234,7 +234,7 @@ fn reserve_pool_create_empty_cost_guard(
         now_secs: IcOps::now_secs(),
         quota_window_secs: POOL_CREATE_EMPTY_QUOTA_WINDOW_SECONDS,
         max_operations_per_window: POOL_CREATE_EMPTY_MAX_OPERATIONS_PER_WINDOW,
-        current_cycle_balance: MgmtOps::canister_cycle_balance().to_u128(),
+        current_cycle_balance: IcOps::canister_cycle_balance().to_u128(),
         cycle_reservation_cycles: POOL_CANISTER_CYCLES,
         min_cycles_after_reservation: POOL_CREATE_EMPTY_MIN_CYCLES_AFTER_RESERVATION,
     })

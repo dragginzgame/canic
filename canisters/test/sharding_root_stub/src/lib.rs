@@ -4,6 +4,10 @@
 
 use canic::{
     Error, cdk,
+    cdk::{
+        call::Call,
+        candid::{CandidType, Deserialize, Nat, Principal},
+    },
     dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     dto::rpc::{
         CreateCanisterResponse, CyclesResponse, RecycleCanisterResponse, Request, Response,
@@ -12,6 +16,47 @@ use canic::{
 };
 
 const CREATE_CANISTER_CYCLES: u128 = 1_000_000_000_000;
+
+#[derive(CandidType)]
+struct StubCreateCanisterArgs {
+    settings: Option<StubCanisterSettings>,
+    sender_canister_version: Option<u64>,
+}
+
+#[derive(CandidType)]
+struct StubCanisterSettings {
+    controllers: Option<Vec<Principal>>,
+    compute_allocation: Option<Nat>,
+    memory_allocation: Option<Nat>,
+    freezing_threshold: Option<Nat>,
+    reserved_cycles_limit: Option<Nat>,
+    log_visibility: Option<StubLogVisibility>,
+    log_memory_limit: Option<Nat>,
+    wasm_memory_limit: Option<Nat>,
+    wasm_memory_threshold: Option<Nat>,
+    environment_variables: Option<Vec<StubEnvironmentVariable>>,
+}
+
+#[derive(CandidType, Deserialize)]
+enum StubLogVisibility {
+    #[serde(rename = "controllers")]
+    Controllers,
+    #[serde(rename = "public")]
+    Public,
+    #[serde(rename = "allowed_viewers")]
+    AllowedViewers(Vec<Principal>),
+}
+
+#[derive(CandidType)]
+struct StubEnvironmentVariable {
+    name: String,
+    value: String,
+}
+
+#[derive(CandidType, Deserialize)]
+struct StubCreateCanisterResult {
+    canister_id: Principal,
+}
 
 #[cdk::init]
 fn init() {}
@@ -40,12 +85,20 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
     }
 }
 
-async fn create_canister() -> Result<cdk::types::Principal, Error> {
-    let args = cdk::mgmt::CreateCanisterArgs { settings: None };
+async fn create_canister() -> Result<Principal, Error> {
+    let args = StubCreateCanisterArgs {
+        settings: None,
+        sender_canister_version: Some(cdk::api::canister_version()),
+    };
 
-    let res = cdk::mgmt::create_canister_with_extra_cycles(&args, CREATE_CANISTER_CYCLES)
+    let response = Call::bounded_wait(Principal::management_canister(), "create_canister")
+        .with_arg(args)
+        .with_cycles(CREATE_CANISTER_CYCLES)
         .await
         .map_err(|err| Error::internal(format!("create_canister failed: {err}")))?;
+    let res: StubCreateCanisterResult = response
+        .candid()
+        .map_err(|err| Error::internal(format!("create_canister response failed: {err}")))?;
 
     Ok(res.canister_id)
 }

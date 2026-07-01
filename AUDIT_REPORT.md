@@ -38,7 +38,7 @@ contains:
 | Language | Rust 2024 |
 | Toolchain | `rust-toolchain.toml` pins Rust `1.96.0` with `rustfmt` and `clippy` |
 | Package/build | Cargo workspace, `Makefile` wrappers |
-| Runtime target | Internet Computer canisters, `ic-cdk`, `ic-cdk-management-canister` |
+| Runtime target | Internet Computer canisters, `ic-cdk`, local management-canister Candid calls |
 | Integration tests | PocketIC via `canic-tests` / `canic-testing-internal` |
 | CLI | `clap`, published `canic` binary from `canic-cli` |
 | Serialization | Candid, CBOR/serde, stable record DTOs |

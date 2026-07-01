@@ -294,7 +294,7 @@ pub(super) fn authorize_request_cycles_inner(
         );
     }
 
-    let available = MgmtOps::canister_cycle_balance().to_u128();
+    let available = IcOps::canister_cycle_balance().to_u128();
     if decision.approved_cycles > available {
         CyclesFundingMetrics::record_denied(
             ctx.caller,
@@ -530,7 +530,7 @@ fn reserve_request_cycles_cost_guard(
     CostGuardOps::reserve(request_cycles_cost_guard_request(
         ctx,
         approved_cycles,
-        MgmtOps::canister_cycle_balance().to_u128(),
+        IcOps::canister_cycle_balance().to_u128(),
     ))
     .map_err(map_cost_guard_reserve_error)
 }

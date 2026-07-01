@@ -5,7 +5,7 @@ use crate::{
     dto::icp_refill::IcpRefillStatus,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, mgmt::MgmtOps},
+        ic::IcOps,
         rpc::request::RequestOps,
         runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics, timer::TimerId},
         storage::cycles::{CycleTopupEventOps, CycleTrackerOps},
@@ -144,12 +144,12 @@ impl CycleTrackerWorkflow {
     fn read_standard_sample() -> CycleBalanceSample {
         CycleBalanceSample {
             timestamp_secs: IcOps::now_secs(),
-            cycles: MgmtOps::canister_cycle_balance(),
+            cycles: IcOps::canister_cycle_balance(),
         }
     }
 
     fn evaluate_current_topup() {
-        let cycles = MgmtOps::canister_cycle_balance();
+        let cycles = IcOps::canister_cycle_balance();
         if EnvOps::is_root() {
             Self::check_hub_self_refill(&cycles);
             return;
@@ -274,7 +274,7 @@ impl CycleTrackerWorkflow {
                         "requested {}, topped up by {}, now {}",
                         requested_cycles,
                         Cycles::from(res.cycles_transferred),
-                        MgmtOps::canister_cycle_balance()
+                        IcOps::canister_cycle_balance()
                     );
                 }
                 Err(e) => {

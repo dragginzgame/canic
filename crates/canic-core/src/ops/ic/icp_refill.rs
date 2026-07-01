@@ -8,7 +8,6 @@ use crate::{
     InternalError,
     cdk::{
         candid::Nat,
-        icrc_ledger_types::icrc1::transfer::TransferArg,
         types::{Account, Principal, Subaccount},
     },
     ids::BuildNetwork,
@@ -17,6 +16,7 @@ use crate::{
         ic::icp_refill::{
             IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
             IcpXdrConversionRateResponse, Icrc1TransferResult, NotifyTopUpArg, NotifyTopUpResult,
+            TransferArg,
         },
     },
     ops::{cost_guard::CostGuardPermit, ic::IcOpsError},

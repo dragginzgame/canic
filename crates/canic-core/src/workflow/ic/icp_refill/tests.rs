@@ -3,14 +3,13 @@ use crate::{
     InternalErrorClass,
     cdk::{
         candid::Nat,
-        icrc_ledger_types::icrc1::transfer::TransferError,
         types::{Principal, TC},
     },
     dto::{
         error::ErrorCode,
         icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
     },
-    infra::ic::icp_refill::NotifyTopUpError,
+    infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     ops::{
         cost_guard::CostGuardOps,
         replay::model::{

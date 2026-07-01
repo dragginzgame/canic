@@ -21,7 +21,7 @@ use crate::{
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
-        ic::{IcOps, mgmt::MgmtOps},
+        ic::IcOps,
         replay::{
             guard::ReplayPending,
             model::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
@@ -163,7 +163,7 @@ fn reserve_root_provision_cost_guard(
     CostGuardOps::reserve(root_provision_cost_guard_request(
         ctx,
         reservation_cycles,
-        MgmtOps::canister_cycle_balance().to_u128(),
+        IcOps::canister_cycle_balance().to_u128(),
     ))
     .map_err(map_cost_guard_reserve_error)
 }

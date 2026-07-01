@@ -7,7 +7,6 @@
 use crate::{
     cdk::{
         candid::{CandidType, Nat},
-        icrc_ledger_types::icrc1::transfer::{Memo, TransferArg, TransferError},
         types::{Account, Principal, Subaccount},
     },
     ids::BuildNetwork,
@@ -21,6 +20,8 @@ use crate::{
     },
 };
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
+use std::fmt;
 use thiserror::Error as ThisError;
 
 pub type Icrc1TransferResult = Result<Nat, TransferError>;
@@ -28,6 +29,94 @@ pub type NotifyTopUpResult = Result<Nat, NotifyTopUpError>;
 
 const CMC_TOPUP_MEMO_BYTES: &[u8] = b"TPUP\0\0\0\0";
 const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
+
+///
+/// TransferArg
+///
+/// ICRC-1 `icrc1_transfer` request payload used for ICP refill transfers.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TransferArg {
+    #[serde(default)]
+    pub from_subaccount: Option<Subaccount>,
+    pub to: Account,
+    #[serde(default)]
+    pub fee: Option<Nat>,
+    #[serde(default)]
+    pub created_at_time: Option<u64>,
+    #[serde(default)]
+    pub memo: Option<Memo>,
+    pub amount: Nat,
+}
+
+///
+/// Memo
+///
+/// ICRC-1 memo blob.
+///
+
+#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct Memo(pub ByteBuf);
+
+impl From<Vec<u8>> for Memo {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self(ByteBuf::from(bytes))
+    }
+}
+
+///
+/// TransferError
+///
+/// ICRC-1 `icrc1_transfer` error payload.
+///
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum TransferError {
+    BadFee { expected_fee: Nat },
+    BadBurn { min_burn_amount: Nat },
+    InsufficientFunds { balance: Nat },
+    TooOld,
+    CreatedInFuture { ledger_time: u64 },
+    TemporarilyUnavailable,
+    Duplicate { duplicate_of: Nat },
+    GenericError { error_code: Nat, message: String },
+}
+
+impl fmt::Display for TransferError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BadFee { expected_fee } => write!(f, "transfer fee should be {expected_fee}"),
+            Self::BadBurn { min_burn_amount } => {
+                write!(
+                    f,
+                    "the minimum number of tokens to be burned is {min_burn_amount}"
+                )
+            }
+            Self::InsufficientFunds { balance } => {
+                write!(
+                    f,
+                    "the debit account doesn't have enough funds to complete the transaction, current balance: {balance}"
+                )
+            }
+            Self::TooOld => write!(f, "transaction's created_at_time is too far in the past"),
+            Self::CreatedInFuture { ledger_time } => write!(
+                f,
+                "transaction's created_at_time is in future, current ledger time is {ledger_time}"
+            ),
+            Self::TemporarilyUnavailable => write!(f, "the ledger is temporarily unavailable"),
+            Self::Duplicate { duplicate_of } => write!(
+                f,
+                "transaction is a duplicate of another transaction in block {duplicate_of}"
+            ),
+            Self::GenericError {
+                error_code,
+                message,
+            } => write!(f, "{error_code} {message}"),
+        }
+    }
+}
 
 ///
 /// IcpRefillInfraError
