@@ -49,6 +49,7 @@ pub enum MemoryCommitRecoveryErrorResponse {
     AmbiguousGeneration,
     GenerationOverflow,
     UnexpectedGeneration,
+    Unknown,
 }
 
 ///
