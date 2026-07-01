@@ -65,7 +65,7 @@ pub fn init_eager_tls() {
 /// Return whether memory access is currently allowed during bootstrap.
 #[must_use]
 pub fn is_memory_bootstrap_ready() -> bool {
-    ic_memory::runtime::is_default_memory_manager_bootstrapped()
+    ic_memory::is_default_memory_manager_bootstrapped()
 }
 
 /// Panic if a stable-memory slot is touched before memory bootstrap is ready.

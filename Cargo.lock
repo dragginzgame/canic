@@ -2026,9 +2026,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b2d7aa4c5d0d1ff6873050256f7477099e24d492e5cdb240432c48aa24a56a4"
+checksum = "f7fec742612278f55cb89c14bb33083a088600744499ce5b45c6e06a5bea7bee"
 dependencies = [
  "ctor",
  "ic-stable-structures",
@@ -2039,9 +2039,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.6.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa71ca92da6e193ca8afac647a6eb1662502c399cdc486af29a920c44021d94c"
+checksum = "c665035b05dfc8a0a9836553bf1e261dc097c5eb3a000131c1c1990782d2b030"
 dependencies = [
  "candid",
  "futures",

@@ -185,11 +185,12 @@ canic fleet create my_app --yes
 canic install my_app
 ```
 
-Diagnose the named fleet, replica reachability, saved config path, and root
-readiness:
+Diagnose project-level setup, or explicitly diagnose one installed deployment
+target:
 
 ```bash
-canic info medic test
+canic medic
+canic medic deployment test
 ```
 
 For downstream projects that combine Canic commands with raw `icp` calls on a

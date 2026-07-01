@@ -11,6 +11,7 @@ use crate::{
     cdk::api::canister_self,
     dto::env::EnvSnapshotResponse,
     ids::SubnetRole,
+    memory::runtime::is_memory_bootstrap_ready,
     ops::runtime::env::mapper::EnvRecordMapper,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvRecord},
@@ -278,7 +279,7 @@ impl EnvOps {
     }
 
     fn assert_memory_registry_initialized() -> Result<(), InternalError> {
-        let initialized = ic_memory::runtime::is_default_memory_manager_bootstrapped();
+        let initialized = is_memory_bootstrap_ready();
         debug_assert!(
             initialized,
             "memory registry must be initialized before env restore"

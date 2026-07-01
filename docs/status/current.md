@@ -11,74 +11,36 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is post-`0.76.9` bridge-free delegated auth cleanup.
-  Delegated-token `RootProof` is chain-key-only:
-  `RootProof::IcChainKeyBatchSignatureV1`. The old bridge-backed
-  canister-signature delegated root-proof renewal path is historical
-  documentation only, not public runtime/API/CLI code or active auth stable
-  state.
+- The active line is `0.78.0` top-level medic preflight. Source of truth:
+  `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
 
-- Closed 0.76 gates include chain-key batch DTO/canonical/verifier support,
-  management-canister ECDSA signing wrappers, persisted chain-key root
-  delegation batch state, delegated auth registry/proof epoch state, root timer
-  prepare/sign/install orchestration, issuer lazy repair, high-s signature
-  normalization, hard-cut config validation for
-  `root_proof_mode = "chain_key_batch"`, local test-fleet chain-key trust
-  anchors, removal of bridge-backed delegated root-proof endpoints/DTO/API/CLI
-  surfaces, and live PocketIC coverage for no-external-liveness, lazy repair,
-  multi-issuer batching, concurrent repair collapse, and legacy bridge surface
-  absence.
+- The first 0.78 slice is implemented: `canic medic` is the top-level
+  diagnostic surface with project and explicit deployment scopes, a
+  `schema_version = 1` report model, text/JSON renderers, deterministic
+  status/category ordering, and hard-cut rejection of old/shorthand forms.
+  The old `canic info medic` route is removed from active CLI dispatch.
 
-- The `0.76.7` release completed the first pre-1.0 auth cleanup pass:
-  recurring audit templates were refreshed, chain-key auth operator wording was
-  clarified, a role-attestation data-certificate error was narrowed, and the
-  chain-key batch renewal implementation was split into private `batch_id`,
-  `install`, `merkle`, and `selection` helper modules.
+- Existing deployment-scoped diagnostics are being preserved under
+  `canic medic deployment <deployment>`, including targeted
+  `--blob-storage <canister-or-role>` and
+  `--auth-renewal <issuer-principal>` checks.
 
-- The `0.76.8` release completed the structure/docs continuation:
-  active config docs now describe the required chain-key batch trust-anchor
-  fields, auth DTO/API surfaces are split by concern while preserving
-  `dto::auth::*` and `AuthApi::*` call paths, chain-key batch signing and tests
-  have separate private modules, and focused Makefile validation targets cover
-  auth, chain-key auth, CLI, and fast runtime checks.
+- 0.77 completed the wasm-footprint feature-boundary line, including
+  chain-key/root-publication feature splitting and local DTO replacements for
+  helper crate fan-in. Current dependency work may include local
+  `ic-memory` surface adjustments; preserve those edits if present.
 
-- The `0.76.9` cleanup slice clarifies host/operator diagnostics and active
-  auth docs after the hard cut: root-auth signer subnet wording, removed auth
-  command-tail tests, role-attestation DTO docs, chain-key batch source-map
-  docs, and deployment-target state diagnostics. It does not change
-  delegated-auth runtime behavior.
-
-- The `0.76.10` cleanup slice centralizes host deployment-truth report
-  diagnostic codes and diff categories across artifacts, identity/config,
-  controllers, canisters, pools, installed-module hashes, verifier readiness,
-  observation assumptions, and receipt-aware resume checks without changing
-  serialized output or delegated-auth runtime behavior.
-
-- The `0.76.11` release completed the follow-up host deployment-truth
-  diagnostic constant pass after `0.76.10`, covering authority overlap/unsafe
-  blocker codes, executor/preflight blocker codes, comparison-input blockers,
-  root-verification blockers, and receipt artifact-gate reuse of the
-  report-owned artifact-missing code without changing serialized output.
-
-- The `0.76.12` release completed the deployment-truth report producer
-  module-boundary cleanup after `0.76.11`: leaf-local diagnostic constants are
-  private, while producer-owned constants that tests or sibling report
-  consumers intentionally import remain at their existing deployment-truth
-  boundary.
-
-- Current local cleanup is tightening deployment-truth executor-local metadata
-  visibility and centralizing executor authority blocker subject derivation
-  after `0.76.12` without changing behavior. A broader
-  `unreachable_pub` scan found private-module host helpers where rustc and the
-  repo's clippy policy prefer different visibility shapes; those are left
-  unchanged rather than adding lint suppressions.
+- 0.76 bridge-free delegated auth is closed. Delegated-token `RootProof` is
+  chain-key-only: `RootProof::IcChainKeyBatchSignatureV1`. The old
+  bridge-backed canister-signature delegated root-proof renewal path is
+  historical documentation only, not public runtime/API/CLI code or active auth
+  stable state.
 
 ## Open Work
 
-- No 0.76 gate remains open for timer renewal, lazy repair, multi-issuer
-  batching, concurrent signing-volume proofing, verifier negatives,
-  retry/failure state-machine coverage, platform-spec review, or non-Rust
-  verifier fixture decisions.
+- Continue 0.78 by tightening the next preflight slice around live deployment
+  smoke coverage, process-level exit-code checks, and any broader medic
+  readiness checks selected from the 0.78 design.
 
 - Before release preparation, run the focused gates for touched surfaces and
   broaden to the release matrix as needed. Do not assign a new patch version or
@@ -87,7 +49,21 @@ before this compaction is archived at
 
 ## Useful Validation
 
-Recent 0.76 validation already passed before this cleanup:
+Focused 0.78 medic validation:
+
+```text
+cargo test --locked -p canic-cli medic
+cargo test --locked -p canic-cli status
+cargo test --locked -p canic-host deployment_truth --lib
+```
+
+Broader CLI validation after command-surface edits:
+
+```text
+cargo test --locked -p canic-cli
+```
+
+Retained auth validation when a change touches live delegated-auth behavior:
 
 ```text
 cargo check --locked -p canic-core -p canic

@@ -36,14 +36,14 @@ canic info endpoints <deployment> <canister-or-role>
 Run targeted medic diagnostics:
 
 ```text
-canic info medic <deployment> --blob-storage <canister-or-role>
+canic medic deployment <deployment> --blob-storage <canister-or-role>
 ```
 
 Default medic may also show a passive blob-storage hint when local Candid
 sidecars advertise the billing endpoints:
 
 ```text
-canic info medic <deployment>
+canic medic deployment <deployment>
 ```
 
 That passive hint does not call blob-storage status, sync gateway principals, or
