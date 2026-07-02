@@ -240,6 +240,10 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
             .iter()
             .any(|item| item["code"] == "observed_inventory_unavailable")
     );
+    assert_next_action(
+        &json,
+        "run canic build or provide a build profile with resolved artifacts",
+    );
     assert_proposed_operation_keys(
         &json,
         &[
@@ -252,6 +256,9 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
             "future_apply_preview|register_child|user_hub|not_executed",
             "future_apply_preview|register_child|wasm_store|not_executed",
             "future_apply_preview|register_root|root|not_executed",
+            "future_apply_preview|upload_artifact|root|not_executed",
+            "future_apply_preview|upload_artifact|user_hub|not_executed",
+            "future_apply_preview|upload_artifact|wasm_store|not_executed",
             "future_apply_preview|verify_topology|demo-local|not_executed",
         ],
     );
@@ -813,6 +820,7 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
 #[test]
 fn deploy_plan_text_avoids_apply_safety_claims() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-text");
+    write_artifact(&icp_root, "root", b"root-artifact");
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
@@ -832,7 +840,9 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("schema_version: 1"));
     assert!(text.contains("command: canic deploy plan"));
     assert!(text.contains("future apply preview"));
+    assert!(text.contains("label: upload_artifact subject: root status: not_executed"));
     assert!(text.contains("label: verify_topology subject: demo-local status: not_executed"));
+    assert!(text.contains("run canic build or provide a build profile with resolved artifacts"));
     assert!(text.contains("source: fleet_config"));
     assert!(text.contains("source: deployment_plan_builder"));
     assert!(text.contains("source: installed_deployment"));
@@ -840,6 +850,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(!text.contains("deployment is safe"));
     assert!(!text.contains("will create"));
     assert!(!text.contains("will install"));
+    assert!(!text.contains("will upload"));
 }
 
 fn temp_plan_workspace(prefix: &str) -> (TempDir, PathBuf, PathBuf) {
@@ -978,6 +989,18 @@ fn assert_proposed_operation(report: &JsonValue, label: &str, subject: &str) {
     );
 }
 
+fn assert_next_action(report: &JsonValue, expected: &str) {
+    assert!(
+        report["next_actions"]
+            .as_array()
+            .expect("next actions")
+            .iter()
+            .any(|item| item == expected),
+        "missing next action {expected}: {:#}",
+        report["next_actions"]
+    );
+}
+
 fn assert_proposed_operation_keys(report: &JsonValue, expected: &[&str]) {
     let actual = report["proposed_operations"]
         .as_array()
@@ -1012,6 +1035,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "demo-local",
             "deployment_config",
         ),
+        ("build_profile_resolved", "demo-local", "build_profile"),
         ("deployment_target_resolved", "demo-local", "fleet_config"),
         (
             "expected_controller_set_resolved",
@@ -1039,9 +1063,20 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "demo-local",
             "deployment_plan_builder",
         ),
+        ("plan_id_resolved", "demo-local", "deployment_plan_builder"),
+        (
+            "planner_version_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
         ("role_artifact_observed", "root", "local_observation"),
         (
             "role_topology_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        (
+            "runtime_variant_resolved",
             "demo-local",
             "deployment_plan_builder",
         ),
