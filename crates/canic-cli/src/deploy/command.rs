@@ -33,6 +33,10 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
         about: "Inspect or verify deployment-root evidence",
     },
     DeploySubcommand {
+        name: "plan",
+        about: "Explain the deterministic deployment plan without mutation",
+    },
+    DeploySubcommand {
         name: "install",
         about: "Install through the current runner using a supplied deployment plan",
     },
@@ -54,6 +58,8 @@ const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
   canic deploy check demo --format text
+  canic deploy plan demo
+  canic deploy plan demo --json
   canic deploy inspect plan demo
   canic deploy inspect compare --left staging-check.json --right prod-check.json
   canic deploy inspect catalog list
@@ -68,6 +74,7 @@ Examples:
 
 Use `canic deploy inspect help` for raw plan, inventory, diff, report,
 comparison, local catalog, root-verification, and resume-safety JSON artifacts.
+Use `canic deploy plan <deployment>` for the 0.79 operator planning report.
 Plan-mediated deployment-target mutation flows through `canic deploy install
 <deployment> --plan <file>`. `canic install <fleet>` remains the fleet-template
 bootstrap entrypoint.";
@@ -78,7 +85,7 @@ pub fn deploy_command() -> ClapCommand {
         .fold(
             ClapCommand::new("deploy")
                 .bin_name("canic deploy")
-                .about("Check deployment truth before mutation")
+                .about("Plan and check deployment truth before mutation")
                 .disable_help_flag(true),
             |command, subcommand| command.subcommand(deploy_passthrough_command(*subcommand)),
         )

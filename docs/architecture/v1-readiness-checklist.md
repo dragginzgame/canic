@@ -83,6 +83,19 @@ Build an attached role and write stable build provenance:
 canic build <fleet> <role> --provenance <path>
 ```
 
+Inspect the desired deployment shape without mutation:
+
+```text
+canic deploy plan <deployment>
+canic deploy plan <deployment> --json
+canic deploy plan <deployment> --out <path>
+```
+
+`canic deploy plan` emits a no-mutation `DeploymentPlanReport` with
+`schema_version = 1`. It is not an evidence envelope and does not create
+deployment truth. `--out` writes JSON only and does not create parent
+directories.
+
 Check a deployment target and save stable evidence:
 
 ```text
@@ -107,6 +120,7 @@ canic deploy inspect catalog inspect <deployment>
 The v1 surface should produce or read these evidence artifacts:
 
 - `EvidenceEnvelopeV1` for stable automation output;
+- `DeploymentPlanReport` for the 0.79 no-mutation deploy-plan output;
 - `canic.build_provenance.v1` for build provenance payloads;
 - `canic.deployment_check.v1` for deployment-check payloads;
 - `PolicyGateReportV1` or `ProjectEvidenceGateReportV1` for policy results;

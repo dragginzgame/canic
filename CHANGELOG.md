@@ -8,9 +8,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.79.x] - 2026-07-02 - Declarative Deployment Plan
+
+Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
+
+- `0.79.0` adds the no-mutation `canic deploy plan <deployment>` planning
+  surface with text/JSON reports, safe JSON `--out`, installed-state comparison
+  status, hard-cut rejected forms, and medic handoffs to the planner.
+
 ## [0.78.x] - 2026-07-01 - Top-Level Medic Preflight
 
 Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)
+
+- `0.78.6` closes the medic preflight audit follow-ups by selecting unique
+  recorded deployment networks before local fallback, fixing non-local readiness
+  source labels, and documenting the final stable check codes.
 
 - `0.78.5` aligns installed and packaged downstream CLI proof fixtures with
   the hard-cut medic auth-renewal surface and its project-level preconditions.

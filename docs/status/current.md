@@ -11,7 +11,26 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.78.0` top-level medic preflight. Source of truth:
+- The active line is `0.79.0` declarative deployment plan. Source of truth:
+  `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
+
+- The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
+  a deterministic, no-mutation `DeploymentPlanReport` from local project config
+  by embedding the existing `DeploymentPlanV1`. It supports text output,
+  `--json`, safe JSON `--out` writes, and hard-cut rejection of aliases,
+  shorthand forms, `--apply`, `--write-truth`, `--evidence`, and `--force`.
+  Missing installed deployment state is a warning/comparison gap, not a
+  blocker; verified installed root state is surfaced as a report fact;
+  unverified installed root state blocks the plan; malformed desired config
+  blocks the plan. Already-available installed-state evidence now drives
+  `comparison_status` to `compared`, `compared_with_warnings`, or
+  `compared_with_drift`; missing installed state remains `not_available`.
+  Invalid deployment target names are explicit blockers. Future-apply preview
+  labels distinguish first-install `install_wasm` from known-canister
+  `upgrade_wasm`. Medic next actions may point to
+  `canic deploy plan`, but medic does not execute the planner.
+
+- The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
 
 - The first 0.78 slice is implemented: `canic medic` is the top-level
@@ -90,8 +109,10 @@ before this compaction is archived at
 
 ## Open Work
 
-- Continue 0.78 by tightening remaining preflight slices around broader medic
-  readiness checks selected from the 0.78 design.
+- Continue 0.79 by tightening the deploy-plan report contract and only then
+  consider thin read-only comparison against existing local evidence. Do not add
+  apply, live observation, deployment truth writes, evidence wrapping, locks, or
+  mutation semantics.
 
 - Before release preparation, run the focused gates for touched surfaces and
   broaden to the release matrix as needed. Do not assign a new patch version or

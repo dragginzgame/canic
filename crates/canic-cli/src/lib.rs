@@ -174,6 +174,7 @@ pub const fn version_text() -> &'static str {
 pub fn render_cli_error(error: &CliError) -> String {
     match error {
         CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
+        CliError::Deploy(err) if err.suppress_stderr() => String::new(),
         CliError::Medic(err) if err.suppress_stderr() => String::new(),
         _ => error.to_string(),
     }
@@ -182,8 +183,10 @@ pub fn render_cli_error(error: &CliError) -> String {
 #[must_use]
 pub fn cli_error_exit_code(err: &CliError) -> i32 {
     match err {
+        CliError::Usage(_) => 2,
         CliError::Auth(err) => i32::from(err.exit_code()),
         CliError::BlobStorage(err) => i32::from(err.exit_code()),
+        CliError::Deploy(err) => i32::from(err.exit_code()),
         CliError::Info(err) => i32::from(err.exit_code()),
         CliError::Medic(err) => i32::from(err.exit_code()),
         _ => 1,

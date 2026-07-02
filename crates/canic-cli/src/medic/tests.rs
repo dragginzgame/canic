@@ -344,6 +344,106 @@ fn deployment_report_includes_effective_network() {
     assert_eq!(report.deployment.as_deref(), Some("demo"));
 }
 
+// Ensure deployment medic uses a unique installed deployment record network when
+// the operator does not pass an explicit network.
+#[test]
+fn deployment_network_selection_uses_recorded_network_before_local_default() {
+    let root = temp_dir("canic-cli-medic-recorded-network");
+    let mut state = sample_install_state();
+    state.network = "ic".to_string();
+    write_medic_install_state(&root, "ic", &state);
+    let options = MedicOptions {
+        scope: MedicScope::Deployment,
+        deployment: Some("demo".to_string()),
+        blob_storage: None,
+        auth_renewal: None,
+        json: false,
+        network: None,
+        icp: "icp".to_string(),
+    };
+
+    let (network, check) = deployment_network_selection(&options, Some(&root));
+    let report = MedicReport::with_network(
+        &options,
+        Some(network.clone()),
+        vec![sample_check(MedicStatus::Pass)],
+    );
+
+    assert_eq!(network, "ic");
+    assert_eq!(check.code, "deployment_network_from_record");
+    assert_eq!(check.source, MedicSource::InstalledDeployment);
+    assert_eq!(report.network.as_deref(), Some("ic"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure an explicit operator network still wins over discovered deployment
+// records.
+#[test]
+fn deployment_network_selection_prefers_explicit_network() {
+    let root = temp_dir("canic-cli-medic-explicit-network");
+    let mut state = sample_install_state();
+    state.network = "ic".to_string();
+    write_medic_install_state(&root, "ic", &state);
+    let options = MedicOptions {
+        scope: MedicScope::Deployment,
+        deployment: Some("demo".to_string()),
+        blob_storage: None,
+        auth_renewal: None,
+        json: false,
+        network: Some("local".to_string()),
+        icp: "icp".to_string(),
+    };
+
+    let (network, check) = deployment_network_selection(&options, Some(&root));
+
+    assert_eq!(network, "local");
+    assert_eq!(check.code, "local_network_explicit");
+    assert_eq!(check.source, MedicSource::Command);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure missing installed targets point operators at the no-mutation planner.
+#[test]
+fn deployment_target_missing_points_to_deploy_plan() {
+    let root = temp_dir("canic-cli-medic-missing-target-plan");
+    fs::create_dir_all(&root).expect("create temp root");
+    let options = MedicOptions {
+        scope: MedicScope::Deployment,
+        deployment: Some("demo".to_string()),
+        blob_storage: None,
+        auth_renewal: None,
+        json: false,
+        network: Some("local".to_string()),
+        icp: "icp".to_string(),
+    };
+    let context = DeploymentMedicContext {
+        icp_root: Some(root.clone()),
+        network: "local".to_string(),
+        network_check: MedicCheck::pass(
+            MedicCategory::Network,
+            "local_network_explicit",
+            "network",
+            "local",
+            "none",
+            MedicSource::Command,
+        ),
+    };
+
+    let checks = run_deployment_checks(&options, &context);
+    let missing = checks
+        .iter()
+        .find(|check| check.code == "deployment_target_missing")
+        .expect("missing deployment check");
+
+    assert_eq!(missing.status, MedicStatus::Fail);
+    assert!(missing.next.contains("canic deploy plan demo"));
+    assert!(missing.next.contains("canic install <fleet-template>"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure project-only network warnings do not duplicate deployment-scoped network checks.
 #[test]
 fn project_network_selection_check_is_project_only() {
@@ -422,6 +522,13 @@ fn root_readiness_not_evaluated_explains_skipped_live_query() {
     assert!(missing_root.detail.contains("no root canister id"));
 }
 
+// Ensure readiness diagnostics identify local replica versus ICP CLI sources.
+#[test]
+fn root_readiness_source_tracks_selected_network() {
+    assert_eq!(root_readiness_source("local"), MedicSource::LocalReplica);
+    assert_eq!(root_readiness_source("ic"), MedicSource::IcpCli);
+}
+
 // Ensure deployment registry smoke checks are skipped behind local state gates.
 #[test]
 fn deployment_registry_not_evaluated_explains_skipped_live_query() {
@@ -464,6 +571,7 @@ fn deployment_registry_observed_check_warns_on_empty_registry() {
 
     assert_eq!(check.status, MedicStatus::Warn);
     assert_eq!(check.code, "deployment_registry_empty");
+    assert!(check.next.contains("canic deploy plan demo"));
     assert!(check.next.contains("canic deploy check demo"));
 }
 
@@ -477,6 +585,8 @@ fn deployment_truth_receipt_check_classifies_missing_and_complete_receipts() {
     assert_eq!(missing.status, MedicStatus::Warn);
     assert_eq!(missing.code, "deployment_truth_incomplete");
     assert!(missing.detail.contains("no deployment-truth receipt found"));
+    assert!(missing.next.contains("canic deploy plan demo"));
+    assert!(missing.next.contains("canic deploy check demo"));
 
     write_medic_deployment_receipt(
         &root,
@@ -584,6 +694,11 @@ kind = "service"
     assert!(fleet.iter().any(|check| {
         check.status == MedicStatus::Warn && check.code == "fleet_name_deployment_name_conflated"
     }));
+    assert!(
+        fleet
+            .iter()
+            .any(|check| check.next.contains("canic deploy plan demo"))
+    );
     assert!(role.iter().any(|check| {
         check.status == MedicStatus::Warn && check.code == "role_name_deployment_name_conflated"
     }));
@@ -1122,6 +1237,16 @@ fn write_medic_deployment_receipt(
         serde_json::to_vec_pretty(&receipt).expect("serialize receipt"),
     )
     .expect("write receipt");
+}
+
+fn write_medic_install_state(root: &std::path::Path, network: &str, state: &InstallState) {
+    let state_dir = root.join(".canic").join(network).join("deployments");
+    fs::create_dir_all(&state_dir).expect("create state dir");
+    fs::write(
+        state_dir.join(format!("{}.json", state.deployment_name)),
+        serde_json::to_vec_pretty(state).expect("serialize install state"),
+    )
+    .expect("write install state");
 }
 
 fn sample_deployment_receipt(

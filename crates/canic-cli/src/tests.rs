@@ -326,6 +326,14 @@ fn deploy_version_flags_return_ok() {
     assert!(
         run([
             OsString::from("deploy"),
+            OsString::from("plan"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
+    assert!(
+        run([
+            OsString::from("deploy"),
             OsString::from("inspect"),
             OsString::from("diff"),
             OsString::from("--version")
@@ -359,6 +367,67 @@ fn deploy_version_flags_return_ok() {
         ])
         .is_ok()
     );
+}
+
+#[test]
+fn rejected_deploy_plan_command_forms_are_usage_errors() {
+    for raw_args in [
+        &["plan", "demo"][..],
+        &["deploy", "plan"],
+        &["deploy", "plan", "--deployment", "demo"],
+        &["deploy", "diff", "demo"],
+        &["apply", "demo"],
+        &["apply", "demo", "--plan", "deployment-plan.json"],
+        &["deploy", "plan", "demo", "--apply"],
+        &["deploy", "plan", "demo", "--write-truth"],
+        &["deploy", "plan", "demo", "--evidence"],
+        &["deploy", "plan", "demo", "--format", "json"],
+        &[
+            "deploy",
+            "plan",
+            "demo",
+            "--from-check",
+            "deployment-check.json",
+        ],
+        &["deploy", "plan", "demo", "--observe-local"],
+        &[
+            "deploy",
+            "plan",
+            "demo",
+            "--out",
+            "deployment-plan.json",
+            "--force",
+        ],
+    ] {
+        let err = run(raw_args.iter().map(OsString::from))
+            .expect_err("rejected deploy plan form should fail");
+
+        assert!(
+            matches!(
+                err,
+                CliError::Usage(_) | CliError::Deploy(deploy::DeployCommandError::Usage(_))
+            ),
+            "wrong error for {raw_args:?}: {err}"
+        );
+        assert_eq!(
+            cli_error_exit_code(&err),
+            2,
+            "wrong exit code for {raw_args:?}: {err}"
+        );
+    }
+}
+
+#[test]
+fn blocked_deploy_plan_report_suppresses_duplicate_cli_stderr() {
+    let blocked = CliError::Deploy(deploy::DeployCommandError::PlanBlocked(
+        "blocked".to_string(),
+    ));
+    assert_eq!(cli_error_exit_code(&blocked), 1);
+    assert!(render_cli_error(&blocked).is_empty());
+
+    let usage = CliError::Deploy(deploy::DeployCommandError::Usage("usage".to_string()));
+    assert_eq!(cli_error_exit_code(&usage), 2);
+    assert!(!render_cli_error(&usage).is_empty());
 }
 
 #[test]

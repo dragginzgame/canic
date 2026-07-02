@@ -287,11 +287,14 @@ fn usage() -> String {
 }
 
 fn build_medic_report(options: &MedicOptions) -> MedicReport {
-    let checks = match options.scope {
-        MedicScope::Project => run_project_checks(options),
-        MedicScope::Deployment => run_deployment_checks(options),
-    };
-    MedicReport::new(options, checks)
+    match options.scope {
+        MedicScope::Project => MedicReport::new(options, run_project_checks(options)),
+        MedicScope::Deployment => {
+            let context = deployment_medic_context(options);
+            let network = Some(context.network.clone());
+            MedicReport::with_network(options, network, run_deployment_checks(options, &context))
+        }
+    }
 }
 
 fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
@@ -601,31 +604,115 @@ struct CanicPackageMetadata {
     role: String,
 }
 
-fn run_deployment_checks(options: &MedicOptions) -> Vec<MedicCheck> {
+///
+/// DeploymentMedicContext
+///
+
+struct DeploymentMedicContext {
+    icp_root: Option<PathBuf>,
+    network: String,
+    network_check: MedicCheck,
+}
+
+fn deployment_medic_context(options: &MedicOptions) -> DeploymentMedicContext {
+    let icp_root = resolve_current_canic_icp_root().ok();
+    let (network, network_check) = deployment_network_selection(options, icp_root.as_deref());
+    DeploymentMedicContext {
+        icp_root,
+        network,
+        network_check,
+    }
+}
+
+fn deployment_network_selection(
+    options: &MedicOptions,
+    icp_root: Option<&Path>,
+) -> (String, MedicCheck) {
+    if let Some(network) = &options.network {
+        return (
+            network.clone(),
+            MedicCheck::pass(
+                MedicCategory::Network,
+                "local_network_explicit",
+                "network",
+                network.clone(),
+                "none",
+                MedicSource::Command,
+            ),
+        );
+    }
+
+    if let Some(network) =
+        icp_root.and_then(|root| recorded_deployment_network(root, options.deployment_name()))
+    {
+        return (
+            network.clone(),
+            MedicCheck::pass(
+                MedicCategory::Network,
+                "deployment_network_from_record",
+                "network",
+                network,
+                "override with top-level --network <name>",
+                MedicSource::InstalledDeployment,
+            ),
+        );
+    }
+
+    let network = local_network();
+    (
+        network.clone(),
+        MedicCheck::pass(
+            MedicCategory::Network,
+            "local_network_implicit",
+            "network",
+            network,
+            "override with top-level --network <name>",
+            MedicSource::Command,
+        ),
+    )
+}
+
+fn recorded_deployment_network(icp_root: &Path, deployment: &str) -> Option<String> {
+    let canic_dir = icp_root.join(".canic");
+    let mut networks = fs::read_dir(canic_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|network| {
+            icp_root
+                .join(".canic")
+                .join(network)
+                .join("deployments")
+                .join(format!("{deployment}.json"))
+                .is_file()
+        })
+        .collect::<Vec<_>>();
+    networks.sort();
+    networks.dedup();
+    match networks.as_slice() {
+        [network] => Some(network.clone()),
+        _ => None,
+    }
+}
+
+fn run_deployment_checks(
+    options: &MedicOptions,
+    context: &DeploymentMedicContext,
+) -> Vec<MedicCheck> {
     let mut checks = run_project_checks(options)
         .into_iter()
         .filter(|check| check.code != "deployment_not_selected")
         .collect::<Vec<_>>();
-    let network = options.deployment_network();
-    let icp_root = resolve_current_canic_icp_root().ok();
+    let network = &context.network;
+    let icp_root = context.icp_root.as_deref();
 
-    checks.push(MedicCheck::pass(
-        MedicCategory::Network,
-        if options.network.is_some() {
-            "local_network_explicit"
-        } else {
-            "local_network_implicit"
-        },
-        "network",
-        network.clone(),
-        "override with top-level --network <name>",
-        MedicSource::Command,
-    ));
+    checks.push(context.network_check.clone());
 
-    let state = match icp_root.as_deref().map_or_else(
+    let state = match icp_root.map_or_else(
         || Err("could not resolve ICP project root".to_string()),
         |root| {
-            read_installed_deployment_state_from_root(&network, options.deployment_name(), root)
+            read_installed_deployment_state_from_root(network, options.deployment_name(), root)
                 .map_err(|err| err.to_string())
         },
     ) {
@@ -646,10 +733,13 @@ fn run_deployment_checks(options: &MedicOptions) -> Vec<MedicCheck> {
                 "deployment_target_missing",
                 "deployment",
                 "no installed deployment found",
-                "run canic install <fleet-template> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
+                deploy_plan_then(
+                    options.deployment_name(),
+                    "then run canic install <fleet-template> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
+                ),
                 MedicSource::InstalledDeployment,
             ));
-            if let Some(root) = icp_root.as_deref() {
+            if let Some(root) = icp_root {
                 checks.extend(deployment_name_conflation_checks(
                     root,
                     options.deployment_name(),
@@ -663,7 +753,10 @@ fn run_deployment_checks(options: &MedicOptions) -> Vec<MedicCheck> {
                 "deployment_target_missing",
                 "deployment",
                 err,
-                "reinstall from the owning fleet template or re-register the deployment target with --allow-unverified",
+                deploy_plan_then(
+                    options.deployment_name(),
+                    "then reinstall from the owning fleet template or re-register the deployment target with --allow-unverified",
+                ),
                 MedicSource::InstalledDeployment,
             ));
             None
@@ -672,25 +765,18 @@ fn run_deployment_checks(options: &MedicOptions) -> Vec<MedicCheck> {
 
     if let Some(state) = state.as_ref() {
         checks.extend(installed_deployment_state_checks(
-            options,
-            icp_root.as_deref(),
-            state,
-            &network,
+            options, icp_root, state, network,
         ));
     }
 
     if let Some(canister) = &options.blob_storage {
-        checks.push(check_blob_storage_billing(options, canister, &network));
+        checks.push(check_blob_storage_billing(options, canister, network));
     } else {
-        checks.push(check_blob_storage_not_selected(
-            options,
-            icp_root.as_deref(),
-            &network,
-        ));
+        checks.push(check_blob_storage_not_selected(options, icp_root, network));
     }
 
     if let Some(issuer) = &options.auth_renewal {
-        checks.push(check_auth_renewal(options, issuer, &network));
+        checks.push(check_auth_renewal(options, issuer, network));
     } else {
         checks.push(MedicCheck::not_evaluated(
             MedicCategory::Auth,
@@ -724,7 +810,12 @@ fn deployment_name_conflation_checks(root: &Path, deployment: &str) -> Vec<Medic
                     fleet,
                     display_medic_path(root, &config)
                 ),
-                format!("run canic install {fleet}, or choose an installed deployment target"),
+                deploy_plan_then(
+                    deployment,
+                    format!(
+                        "then run canic install {fleet}, or choose an installed deployment target"
+                    ),
+                ),
                 MedicSource::FleetConfig,
             ));
         }
@@ -889,7 +980,8 @@ fn check_deployment_truth_receipt(
                     state.deployment_name
                 ),
                 format!(
-                    "run canic deploy check {} before mutating the deployment",
+                    "{}; then run canic deploy check {} before mutating the deployment",
+                    deploy_plan_next(&state.deployment_name),
                     state.deployment_name
                 ),
                 MedicSource::DeploymentTruth,
@@ -1085,7 +1177,8 @@ fn deployment_registry_observed_check(resolution: &InstalledDeploymentResolution
             "registry",
             detail,
             format!(
-                "run canic deploy check {}",
+                "{}; then run canic deploy check {}",
+                deploy_plan_next(&resolution.state.deployment_name),
                 resolution.state.deployment_name
             ),
             source,
@@ -1100,6 +1193,14 @@ fn deployment_registry_observed_check(resolution: &InstalledDeploymentResolution
         "none",
         source,
     )
+}
+
+fn deploy_plan_next(deployment: &str) -> String {
+    format!("run canic deploy plan {deployment} to inspect desired deployment shape")
+}
+
+fn deploy_plan_then(deployment: &str, next: impl AsRef<str>) -> String {
+    format!("{}; {}", deploy_plan_next(deployment), next.as_ref())
 }
 
 const fn installed_deployment_source_for_medic(source: InstalledDeploymentSource) -> MedicSource {
@@ -1205,6 +1306,7 @@ fn check_root_ready(
     state: &InstallState,
     network: &str,
 ) -> MedicCheck {
+    let source = root_readiness_source(network);
     let mut icp = IcpCli::new(&options.icp, None, Some(network.to_string()));
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
@@ -1226,7 +1328,7 @@ fn check_root_ready(
             "root",
             "canic_ready=true",
             "none",
-            MedicSource::LocalReplica,
+            source,
         ),
         Ok(false) => MedicCheck::warn(
             MedicCategory::Topology,
@@ -1234,7 +1336,7 @@ fn check_root_ready(
             "root",
             "canic_ready=false",
             "wait briefly, then run canic medic deployment <deployment>",
-            MedicSource::LocalReplica,
+            source,
         ),
         Err(err) => MedicCheck::fail(
             MedicCategory::Topology,
@@ -1242,8 +1344,16 @@ fn check_root_ready(
             "root",
             err,
             "run canic install",
-            MedicSource::LocalReplica,
+            source,
         ),
+    }
+}
+
+fn root_readiness_source(network: &str) -> MedicSource {
+    if network == local_network() {
+        MedicSource::LocalReplica
+    } else {
+        MedicSource::IcpCli
     }
 }
 
@@ -1587,11 +1697,19 @@ struct MedicReport {
 
 impl MedicReport {
     fn new(options: &MedicOptions, checks: Vec<MedicCheck>) -> Self {
-        let status = aggregate_status(&checks);
         let network = match options.scope {
             MedicScope::Project => options.network.clone(),
             MedicScope::Deployment => Some(options.deployment_network()),
         };
+        Self::with_network(options, network, checks)
+    }
+
+    fn with_network(
+        options: &MedicOptions,
+        network: Option<String>,
+        checks: Vec<MedicCheck>,
+    ) -> Self {
+        let status = aggregate_status(&checks);
         Self {
             schema_version: SCHEMA_VERSION,
             command: options.command_label(),
