@@ -89,6 +89,28 @@ stable `canic.build_provenance.v1` payload wrapped by `EvidenceEnvelopeV1`.
 It does not install the artifact, register it in `wasm_store`, change
 controllers, attach topology, or update deployment truth.
 
+## Plan Desired Deployment Shape
+
+Before checking live deployment evidence, inspect the desired deployment shape
+that Canic can derive from local config:
+
+```text
+canic deploy plan demo-staging
+canic deploy plan demo-staging --json
+canic deploy plan demo-staging --out artifacts/canic/deployment-plan.json
+```
+
+`canic deploy plan` emits a `DeploymentPlanReport` with `schema_version = 1`
+and embeds the existing `DeploymentPlanV1` desired-state model. It separates
+verified config facts, unresolved assumptions, blockers, warnings, future apply
+preview labels, and next actions.
+
+The command is diagnostic and planning-only. It does not install Wasm, create
+canisters, change controllers, query live mainnet by default, write deployment
+truth, create installed deployment records, sign evidence, or authorize apply.
+`--out` writes JSON only and fails if the target file already exists or the
+parent directory does not exist.
+
 ## Check Deployment Evidence
 
 When a deployment target exists, run a passive deployment check and save a

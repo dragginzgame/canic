@@ -7,6 +7,7 @@ mod external;
 mod inspect;
 mod install;
 mod output_format;
+mod plan;
 mod promote;
 mod register;
 mod resume_report;
@@ -57,8 +58,27 @@ pub enum DeployCommandError {
     #[error(transparent)]
     Check(#[from] Box<dyn std::error::Error>),
 
+    #[error("failed to write deployment plan output: {0}")]
+    PlanOutput(#[source] Box<dyn std::error::Error>),
+
+    #[error("deployment plan blocked: {0}")]
+    PlanBlocked(String),
+
     #[error("deployment truth check blocked: {0}")]
     Blocked(String),
+}
+
+impl DeployCommandError {
+    pub const fn exit_code(&self) -> u8 {
+        match self {
+            Self::Usage(_) | Self::PlanOutput(_) => 2,
+            Self::Check(_) | Self::PlanBlocked(_) | Self::Blocked(_) => 1,
+        }
+    }
+
+    pub const fn suppress_stderr(&self) -> bool {
+        matches!(self, Self::PlanBlocked(_))
+    }
 }
 
 ///
@@ -93,6 +113,7 @@ where
             "inspect" => inspect::run(args),
             "promote" => promote::run(args),
             "root" => root::run(args),
+            "plan" => plan::run(args),
             "install" => install::run(args),
             "register" => register::run(args),
             "check" => check::run(args),

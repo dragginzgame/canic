@@ -7,6 +7,7 @@ mod external_commands;
 mod fixtures;
 mod inspect;
 mod install;
+mod plan;
 mod promote;
 mod register;
 mod root;
