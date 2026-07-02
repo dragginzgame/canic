@@ -448,6 +448,7 @@ fn role_artifact_fact_detail(artifact: &RoleArtifactV1, digest: &str) -> String 
 fn plan_assumptions(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
     plan.unresolved_assumptions
         .iter()
+        .filter(|assumption| !is_unsupported_plan_assumption(&assumption.key))
         .filter(|assumption| !is_blocking_plan_assumption(&assumption.key))
         .filter(|assumption| !is_warning_plan_assumption(&assumption.key))
         .map(assumption_diagnostic)
@@ -457,9 +458,16 @@ fn plan_assumptions(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
 fn plan_blockers(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
     plan.unresolved_assumptions
         .iter()
-        .filter(|assumption| is_blocking_plan_assumption(&assumption.key))
+        .filter(|assumption| {
+            is_unsupported_plan_assumption(&assumption.key)
+                || is_blocking_plan_assumption(&assumption.key)
+        })
         .map(blocking_assumption_diagnostic)
         .collect()
+}
+
+fn is_unsupported_plan_assumption(key: &str) -> bool {
+    key.starts_with("unsupported.")
 }
 
 fn is_blocking_plan_assumption(key: &str) -> bool {
@@ -471,10 +479,19 @@ fn is_warning_plan_assumption(key: &str) -> bool {
 }
 
 fn blocking_assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic {
+    let unsupported = is_unsupported_plan_assumption(&assumption.key);
     PlanDiagnostic {
-        category: assumption_category(&assumption.key),
+        category: if unsupported {
+            "unsupported_shape"
+        } else {
+            assumption_category(&assumption.key)
+        },
         code: diagnostic_code(&assumption.key),
-        severity: "blocked",
+        severity: if unsupported {
+            "unsupported"
+        } else {
+            "blocked"
+        },
         subject: assumption.key.clone(),
         detail: assumption.description.clone(),
         next: Some(blocking_assumption_next(&assumption.key)),
@@ -483,7 +500,9 @@ fn blocking_assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDi
 }
 
 fn blocking_assumption_next(key: &str) -> String {
-    if key == "local_state.unverified_root_canister_id" {
+    if is_unsupported_plan_assumption(key) {
+        "change the desired deployment shape to one supported by canic deploy plan".to_string()
+    } else if key == "local_state.unverified_root_canister_id" {
         "run canic deploy check and verify the registered root before planning apply".to_string()
     } else {
         "repair the local fleet config before planning apply".to_string()
@@ -579,6 +598,20 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
             operations.push(operation("create_canister", &subject));
         }
     }
+    for canister in &plan.expected_canisters {
+        if canister.canister_id.is_none() {
+            operations.push(operation(
+                registration_operation_label(&canister.role),
+                &canister.role,
+            ));
+        }
+    }
+    for canister in &plan.expected_pool {
+        if canister.canister_id.is_none() {
+            let subject = pool_operation_subject(&canister.pool, canister.role.as_deref());
+            operations.push(operation("register_child", &subject));
+        }
+    }
     for artifact in &plan.role_artifacts {
         operations.push(operation(
             wasm_operation_label(plan, &artifact.role),
@@ -596,6 +629,14 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
         &plan.deployment_identity.deployment_name,
     ));
     operations
+}
+
+fn registration_operation_label(role: &str) -> &'static str {
+    if role == "root" {
+        "register_root"
+    } else {
+        "register_child"
+    }
 }
 
 fn pool_operation_subject(pool: &str, role: Option<&str>) -> String {
@@ -968,6 +1009,116 @@ impl ComparisonStatus {
             Self::Compared => "compared",
             Self::ComparedWithWarnings => "compared_with_warnings",
             Self::ComparedWithDrift => "compared_with_drift",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_host::deployment_truth::{
+        AuthorityProfileV1, DeploymentIdentityV1, TrustDomainV1, VerifierReadinessExpectationV1,
+    };
+
+    #[test]
+    fn unsupported_plan_assumptions_become_unsupported_blockers() {
+        let plan = plan_with_assumptions([assumption(
+            "unsupported.pool_relationship",
+            "pool relationship is outside the 0.79 planner contract",
+        )]);
+
+        let blockers = plan_blockers(&plan);
+        let assumptions = plan_assumptions(&plan);
+        let warnings = plan_warnings(&plan);
+
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].category, "unsupported_shape");
+        assert_eq!(blockers[0].code, "unsupported_pool_relationship");
+        assert_eq!(blockers[0].severity, "unsupported");
+        assert_eq!(blockers[0].subject, "unsupported.pool_relationship");
+        assert!(
+            blockers[0]
+                .next
+                .as_deref()
+                .is_some_and(|next| { next.contains("desired deployment shape") })
+        );
+        assert!(assumptions.is_empty());
+        assert!(warnings.is_empty());
+        assert_eq!(
+            aggregate_status(&blockers, &warnings, &assumptions),
+            PlanStatus::Unsupported
+        );
+    }
+
+    #[test]
+    fn blocked_status_wins_when_no_unsupported_assumption_exists() {
+        let plan = plan_with_assumptions([assumption(
+            "local_config.controllers",
+            "could not resolve configured controllers",
+        )]);
+
+        let blockers = plan_blockers(&plan);
+        let assumptions = plan_assumptions(&plan);
+        let warnings = plan_warnings(&plan);
+
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].category, "authority");
+        assert_eq!(blockers[0].severity, "blocked");
+        assert!(assumptions.is_empty());
+        assert!(warnings.is_empty());
+        assert_eq!(
+            aggregate_status(&blockers, &warnings, &assumptions),
+            PlanStatus::Blocked
+        );
+    }
+
+    fn plan_with_assumptions(
+        assumptions: impl IntoIterator<Item = DeploymentAssumptionV1>,
+    ) -> DeploymentPlanV1 {
+        DeploymentPlanV1 {
+            schema_version: 1,
+            plan_id: "local:demo-local:plan".to_string(),
+            deployment_identity: DeploymentIdentityV1 {
+                deployment_name: "demo-local".to_string(),
+                network: "local".to_string(),
+                root_principal: None,
+                authority_profile_hash: None,
+                role_topology_hash: None,
+                deployment_manifest_digest: None,
+                canonical_runtime_config_digest: None,
+                role_embedded_config_set_digest: None,
+                artifact_set_digest: None,
+                pool_identity_set_digest: None,
+                canic_version: None,
+                ic_memory_version: None,
+            },
+            trust_domain: TrustDomainV1 {
+                root_trust_anchor: None,
+                migration_from: None,
+            },
+            fleet_template: "demo".to_string(),
+            runtime_variant: "local".to_string(),
+            authority_profile: AuthorityProfileV1 {
+                profile_id: "local:demo-local:authority".to_string(),
+                expected_controllers: Vec::new(),
+                staging_controllers: Vec::new(),
+                emergency_controllers: Vec::new(),
+            },
+            role_artifacts: Vec::new(),
+            expected_canisters: Vec::new(),
+            expected_pool: Vec::new(),
+            expected_verifier_readiness: VerifierReadinessExpectationV1 {
+                required: false,
+                expected_role_epochs: Vec::new(),
+            },
+            unresolved_assumptions: assumptions.into_iter().collect(),
+        }
+    }
+
+    fn assumption(key: &str, description: &str) -> DeploymentAssumptionV1 {
+        DeploymentAssumptionV1 {
+            key: key.to_string(),
+            description: description.to_string(),
         }
     }
 }

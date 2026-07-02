@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.3` completes deploy-plan preview/report classification by surfacing
+  root/child registration labels and explicit unsupported-shape diagnostics
+  without adding apply semantics or mutation.
+
 - `0.79.2` expands deploy-plan future-apply preview labels for configured
   pool canister creation and desired controller reconciliation while keeping
   them non-executed planning labels only.

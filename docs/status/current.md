@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.2` declarative deployment plan. Source of truth:
+- The active line is `0.79.3` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -43,6 +43,16 @@ before this compaction is archived at
   operation objects. Desired authority profiles with configured deployment
   controllers now also emit one deployment-scoped `set_controllers` preview
   label, with the same non-executed planning semantics.
+
+- The 0.79.3 working slice extends deploy-plan future-apply preview labels for
+  root and child registration. Expected canisters and configured pool
+  identities without known ids now emit `register_root` or `register_child`
+  labels alongside create/install labels; these remain report-only planning
+  labels, not apply instructions. The same slice reserves the
+  `unsupported.*` assumption namespace for desired shapes outside the 0.79
+  planner contract so those become explicit `unsupported` diagnostics instead
+  of generic blockers or warnings. The 0.79.3 changelog entries are staged in
+  the root ledger and detailed 0.79 notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
