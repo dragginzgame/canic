@@ -34,6 +34,44 @@ const REPORT_SCHEMA_VERSION: u16 = 1;
 const REPORT_COMMAND: &str = "canic deploy plan";
 const FUTURE_APPLY_PREVIEW_PHASE: &str = "future_apply_preview";
 const PROPOSED_OPERATION_NOT_EXECUTED: &str = "not_executed";
+const SEVERITY_INFO: &str = "info";
+const SEVERITY_WARNING: &str = "warning";
+const SEVERITY_BLOCKED: &str = "blocked";
+const SEVERITY_UNSUPPORTED: &str = "unsupported";
+const CATEGORY_ARTIFACT: &str = "artifact";
+const CATEGORY_AUTHORITY: &str = "authority";
+const CATEGORY_CONFIG: &str = "config";
+const CATEGORY_DEPLOYMENT_IDENTITY: &str = "deployment_identity";
+const CATEGORY_INVENTORY: &str = "inventory";
+const CATEGORY_OBSERVATION: &str = "observation";
+const CATEGORY_TOPOLOGY: &str = "topology";
+const CATEGORY_TRUST_DOMAIN: &str = "trust_domain";
+const CATEGORY_UNSUPPORTED_SHAPE: &str = "unsupported_shape";
+const CATEGORY_VERIFIER_READINESS: &str = "verifier_readiness";
+const SOURCE_CLI_ARG: &str = "cli_arg";
+const SOURCE_DEPLOYMENT_CONFIG: &str = "deployment_config";
+const SOURCE_DEPLOYMENT_PLAN_BUILDER: &str = "deployment_plan_builder";
+const SOURCE_FLEET_CONFIG: &str = "fleet_config";
+const SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
+const SOURCE_LOCAL_OBSERVATION: &str = "local_observation";
+const OP_CREATE_CANISTER: &str = "create_canister";
+const OP_INSTALL_WASM: &str = "install_wasm";
+const OP_UPGRADE_WASM: &str = "upgrade_wasm";
+const OP_SET_CONTROLLERS: &str = "set_controllers";
+const OP_REGISTER_CHILD: &str = "register_child";
+const OP_REGISTER_ROOT: &str = "register_root";
+const OP_VERIFY_READINESS: &str = "verify_readiness";
+const OP_VERIFY_TOPOLOGY: &str = "verify_topology";
+const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
+const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
+const ASSUMPTION_PREFIX_LOCAL_STATE: &str = "local_state.";
+const ASSUMPTION_PREFIX_UNSUPPORTED: &str = "unsupported.";
+const ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS: &str = "local_config.controllers";
+const ASSUMPTION_KEY_LOCAL_CONFIG_POOLS: &str = "local_config.pools";
+const ASSUMPTION_KEY_LOCAL_CONFIG_ROLES: &str = "local_config.roles";
+const ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID: &str = "local_state.root_canister_id";
+const ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID: &str =
+    "local_state.unverified_root_canister_id";
 const DEPLOYMENT_ARG: &str = "deployment";
 const JSON_ARG: &str = "json";
 const OUT_ARG: &str = "out";
@@ -155,19 +193,13 @@ pub(super) fn build_report(
     let mut assumptions = plan_assumptions(&plan);
     let mut warnings = plan_warnings(&plan);
     let mut verified_facts = verified_facts(options, &config_path, target_resolved, &plan);
-    let mut proposed_operations = proposed_operations(&plan);
+    let proposed_operations = proposed_operations(&plan);
     let mut next_actions = next_actions(options, &blockers, &warnings, &assumptions);
 
     sort_diagnostics(&mut blockers);
     sort_diagnostics(&mut warnings);
     sort_diagnostics(&mut assumptions);
     sort_diagnostics(&mut verified_facts);
-    proposed_operations.sort_by(|left, right| {
-        left.phase
-            .cmp(right.phase)
-            .then_with(|| left.label.cmp(right.label))
-            .then_with(|| left.subject.cmp(&right.subject))
-    });
     next_actions.sort();
     next_actions.dedup();
 
@@ -215,22 +247,22 @@ fn target_resolution_blockers(
 ) -> Vec<PlanDiagnostic> {
     if let Err(err) = validate_deployment_target_name(&options.deployment) {
         return vec![PlanDiagnostic {
-            category: "deployment_identity",
+            category: CATEGORY_DEPLOYMENT_IDENTITY,
             code: "deployment_target_invalid".to_string(),
-            severity: "blocked",
+            severity: SEVERITY_BLOCKED,
             subject: options.deployment.clone(),
             detail: err,
             next: Some("use letters, numbers, '-' or '_' for deployment target names".to_string()),
-            source: "cli_arg",
+            source: SOURCE_CLI_ARG,
         }];
     }
 
     match configured_fleet_name(config_path) {
         Ok(_) => Vec::new(),
         Err(err) => vec![PlanDiagnostic {
-            category: "config",
+            category: CATEGORY_CONFIG,
             code: "deployment_target_unresolved".to_string(),
-            severity: "blocked",
+            severity: SEVERITY_BLOCKED,
             subject: options.deployment.clone(),
             detail: format!(
                 "deployment target {} could not be resolved from {}: {err}",
@@ -240,7 +272,7 @@ fn target_resolution_blockers(
             next: Some(
                 "provide --config with a readable fleet config for this deployment".to_string(),
             ),
-            source: "deployment_config",
+            source: SOURCE_DEPLOYMENT_CONFIG,
         }],
     }
 }
@@ -270,9 +302,9 @@ fn verified_facts(
     }
 
     let mut facts = vec![PlanDiagnostic {
-        category: "config",
+        category: CATEGORY_CONFIG,
         code: "deployment_target_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: options.deployment.clone(),
         detail: format!(
             "deployment target {} resolved from {}",
@@ -280,17 +312,17 @@ fn verified_facts(
             config_path.display()
         ),
         next: None,
-        source: "fleet_config",
+        source: SOURCE_FLEET_CONFIG,
     }];
 
     facts.push(PlanDiagnostic {
-        category: "config",
+        category: CATEGORY_CONFIG,
         code: "fleet_template_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!("fleet template resolved: {}", plan.fleet_template),
         next: None,
-        source: "fleet_config",
+        source: SOURCE_FLEET_CONFIG,
     });
     facts.extend(plan_identity_facts(plan));
     facts.extend(authority_profile_facts(plan));
@@ -303,13 +335,13 @@ fn verified_facts(
 
     if let Some(root) = &plan.trust_domain.root_trust_anchor {
         facts.push(PlanDiagnostic {
-            category: "observation",
+            category: CATEGORY_OBSERVATION,
             code: "installed_root_canister_id_resolved".to_string(),
-            severity: "info",
+            severity: SEVERITY_INFO,
             subject: options.deployment.clone(),
             detail: format!("installed deployment state resolves root canister {root}"),
             next: None,
-            source: "installed_deployment",
+            source: SOURCE_INSTALLED_DEPLOYMENT,
         });
     }
 
@@ -321,79 +353,79 @@ fn plan_identity_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
     let subject = &identity.deployment_name;
     let mut facts = Vec::new();
 
-    if !has_plan_assumption_prefix(plan, "local_artifacts.")
-        && !has_plan_assumption_key(plan, "local_config.roles")
+    if !has_plan_assumption_prefix(plan, ASSUMPTION_PREFIX_LOCAL_ARTIFACTS)
+        && !has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_ROLES)
     {
         push_digest_fact(
             &mut facts,
             DigestFact {
-                category: "artifact",
+                category: CATEGORY_ARTIFACT,
                 code: "artifact_set_resolved",
                 subject,
                 label: "artifact set digest",
                 digest: identity.artifact_set_digest.as_deref(),
-                source: "deployment_plan_builder",
+                source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
             },
         );
     }
     push_digest_fact(
         &mut facts,
         DigestFact {
-            category: "artifact",
+            category: CATEGORY_ARTIFACT,
             code: "deployment_manifest_resolved",
             subject,
             label: "deployment manifest digest",
             digest: identity.deployment_manifest_digest.as_deref(),
-            source: "deployment_plan_builder",
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
         },
     );
-    if !has_plan_assumption_key(plan, "local_config.controllers") {
+    if !has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS) {
         push_digest_fact(
             &mut facts,
             DigestFact {
-                category: "authority",
+                category: CATEGORY_AUTHORITY,
                 code: "authority_profile_resolved",
                 subject,
                 label: "authority profile hash",
                 digest: identity.authority_profile_hash.as_deref(),
-                source: "deployment_plan_builder",
+                source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
             },
         );
     }
     push_digest_fact(
         &mut facts,
         DigestFact {
-            category: "config",
+            category: CATEGORY_CONFIG,
             code: "canonical_runtime_config_resolved",
             subject,
             label: "canonical runtime config digest",
             digest: identity.canonical_runtime_config_digest.as_deref(),
-            source: "deployment_config",
+            source: SOURCE_DEPLOYMENT_CONFIG,
         },
     );
-    if !has_plan_assumption_key(plan, "local_config.pools") {
+    if !has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_POOLS) {
         push_digest_fact(
             &mut facts,
             DigestFact {
-                category: "topology",
+                category: CATEGORY_TOPOLOGY,
                 code: "pool_identity_set_resolved",
                 subject,
                 label: "pool identity set digest",
                 digest: identity.pool_identity_set_digest.as_deref(),
-                source: "deployment_plan_builder",
+                source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
             },
         );
     }
-    if !has_plan_assumption_key(plan, "local_config.roles") {
+    if !has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_ROLES) {
         push_digest_fact(
             &mut facts,
             DigestFact {
-                category: "topology",
+                category: CATEGORY_TOPOLOGY,
                 code: "role_topology_resolved",
                 subject,
                 label: "role topology hash",
                 digest: identity.role_topology_hash.as_deref(),
-                source: "deployment_plan_builder",
+                source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
             },
         );
     }
@@ -427,7 +459,7 @@ fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
         facts.push(PlanDiagnostic {
             category: fact.category,
             code: fact.code.to_string(),
-            severity: "info",
+            severity: SEVERITY_INFO,
             subject: fact.subject.to_string(),
             detail: format!("{} resolved: {digest}", fact.label),
             next: None,
@@ -437,72 +469,72 @@ fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
 }
 
 fn authority_profile_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    if has_plan_assumption_key(plan, "local_config.controllers") {
+    if has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS) {
         return Vec::new();
     }
 
     let expected_count = plan.authority_profile.expected_controllers.len();
     vec![PlanDiagnostic {
-        category: "authority",
+        category: CATEGORY_AUTHORITY,
         code: "expected_controller_set_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!("expected controller set resolved: {expected_count} controller(s)"),
         next: None,
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }]
 }
 
 fn expected_role_artifact_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    if has_plan_assumption_key(plan, "local_config.roles") {
+    if has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_ROLES) {
         return Vec::new();
     }
 
     let expected_count = plan.role_artifacts.len();
     vec![PlanDiagnostic {
-        category: "artifact",
+        category: CATEGORY_ARTIFACT,
         code: "expected_role_artifact_inventory_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!("expected role artifact inventory resolved: {expected_count} role(s)"),
         next: None,
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }]
 }
 
 fn expected_canister_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    if has_plan_assumption_key(plan, "local_config.roles") {
+    if has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_ROLES) {
         return Vec::new();
     }
 
     let expected_count = plan.expected_canisters.len();
     vec![PlanDiagnostic {
-        category: "inventory",
+        category: CATEGORY_INVENTORY,
         code: "expected_canister_inventory_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!("expected canister inventory resolved: {expected_count} canister role(s)"),
         next: None,
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }]
 }
 
 fn expected_pool_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
-    if has_plan_assumption_key(plan, "local_config.pools") {
+    if has_plan_assumption_key(plan, ASSUMPTION_KEY_LOCAL_CONFIG_POOLS) {
         return Vec::new();
     }
 
     let expected_count = plan.expected_pool.len();
     vec![PlanDiagnostic {
-        category: "inventory",
+        category: CATEGORY_INVENTORY,
         code: "expected_pool_inventory_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!(
             "expected pool inventory resolved: {expected_count} pool canister expectation(s)"
         ),
         next: None,
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }]
 }
 
@@ -514,13 +546,13 @@ fn role_artifact_facts(artifacts: &[RoleArtifactV1]) -> Vec<PlanDiagnostic> {
                 .observed_wasm_gz_file_sha256
                 .as_ref()
                 .map(|digest| PlanDiagnostic {
-                    category: "artifact",
+                    category: CATEGORY_ARTIFACT,
                     code: "role_artifact_observed".to_string(),
-                    severity: "info",
+                    severity: SEVERITY_INFO,
                     subject: artifact.role.clone(),
                     detail: role_artifact_fact_detail(artifact, digest),
                     next: None,
-                    source: "local_observation",
+                    source: SOURCE_LOCAL_OBSERVATION,
                 })
         })
         .collect()
@@ -539,25 +571,25 @@ fn trust_domain_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
 
     if let Some(root) = &plan.trust_domain.root_trust_anchor {
         facts.push(PlanDiagnostic {
-            category: "trust_domain",
+            category: CATEGORY_TRUST_DOMAIN,
             code: "root_trust_anchor_resolved".to_string(),
-            severity: "info",
+            severity: SEVERITY_INFO,
             subject: subject.clone(),
             detail: format!("root trust anchor resolved: {root}"),
             next: None,
-            source: "installed_deployment",
+            source: SOURCE_INSTALLED_DEPLOYMENT,
         });
     }
 
     if let Some(migration_from) = &plan.trust_domain.migration_from {
         facts.push(PlanDiagnostic {
-            category: "trust_domain",
+            category: CATEGORY_TRUST_DOMAIN,
             code: "migration_trust_anchor_resolved".to_string(),
-            severity: "info",
+            severity: SEVERITY_INFO,
             subject,
             detail: format!("migration trust anchor resolved: {migration_from}"),
             next: None,
-            source: "deployment_plan_builder",
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
         });
     }
 
@@ -577,13 +609,13 @@ fn verifier_readiness_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
     };
 
     vec![PlanDiagnostic {
-        category: "verifier_readiness",
+        category: CATEGORY_VERIFIER_READINESS,
         code: "verifier_readiness_expectation_resolved".to_string(),
-        severity: "info",
+        severity: SEVERITY_INFO,
         subject: plan.deployment_identity.deployment_name.clone(),
         detail,
         next: None,
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }]
 }
 
@@ -609,42 +641,43 @@ fn plan_blockers(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
 }
 
 fn is_unsupported_plan_assumption(key: &str) -> bool {
-    key.starts_with("unsupported.")
+    key.starts_with(ASSUMPTION_PREFIX_UNSUPPORTED)
 }
 
 fn is_blocking_plan_assumption(key: &str) -> bool {
-    key.starts_with("local_config.") || key == "local_state.unverified_root_canister_id"
+    key.starts_with(ASSUMPTION_PREFIX_LOCAL_CONFIG)
+        || key == ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID
 }
 
 fn is_warning_plan_assumption(key: &str) -> bool {
-    key.starts_with("local_state.") && !is_blocking_plan_assumption(key)
+    key.starts_with(ASSUMPTION_PREFIX_LOCAL_STATE) && !is_blocking_plan_assumption(key)
 }
 
 fn blocking_assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic {
     let unsupported = is_unsupported_plan_assumption(&assumption.key);
     PlanDiagnostic {
         category: if unsupported {
-            "unsupported_shape"
+            CATEGORY_UNSUPPORTED_SHAPE
         } else {
             assumption_category(&assumption.key)
         },
         code: diagnostic_code(&assumption.key),
         severity: if unsupported {
-            "unsupported"
+            SEVERITY_UNSUPPORTED
         } else {
-            "blocked"
+            SEVERITY_BLOCKED
         },
         subject: assumption.key.clone(),
         detail: assumption.description.clone(),
         next: Some(blocking_assumption_next(&assumption.key)),
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }
 }
 
 fn blocking_assumption_next(key: &str) -> String {
     if is_unsupported_plan_assumption(key) {
         "change the desired deployment shape to one supported by canic deploy plan".to_string()
-    } else if key == "local_state.unverified_root_canister_id" {
+    } else if key == ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID {
         "run canic deploy check and verify the registered root before planning apply".to_string()
     } else {
         "repair the local fleet config before planning apply".to_string()
@@ -656,15 +689,15 @@ fn plan_warnings(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
         .iter()
         .filter(|assumption| is_warning_plan_assumption(&assumption.key))
         .map(|assumption| PlanDiagnostic {
-            category: "observation",
+            category: CATEGORY_OBSERVATION,
             code: local_state_warning_code(assumption),
-            severity: "warning",
+            severity: SEVERITY_WARNING,
             subject: plan.deployment_identity.deployment_name.clone(),
             detail: assumption.description.clone(),
             next: Some(
                 "run canic deploy check after installation or provide saved evidence".to_string(),
             ),
-            source: "installed_deployment",
+            source: SOURCE_INSTALLED_DEPLOYMENT,
         })
         .collect()
 }
@@ -672,7 +705,7 @@ fn plan_warnings(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
 fn local_state_warning_code(assumption: &DeploymentAssumptionV1) -> String {
     if is_observed_state_drift_assumption(assumption) {
         "observed_inventory_drift".to_string()
-    } else if assumption.key == "local_state.root_canister_id" {
+    } else if assumption.key == ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID {
         "observed_inventory_unavailable".to_string()
     } else {
         diagnostic_code(&assumption.key)
@@ -683,25 +716,25 @@ fn assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic 
     PlanDiagnostic {
         category: assumption_category(&assumption.key),
         code: diagnostic_code(&assumption.key),
-        severity: "warning",
+        severity: SEVERITY_WARNING,
         subject: assumption.key.clone(),
         detail: assumption.description.clone(),
         next: assumption_next(&assumption.key),
-        source: "deployment_plan_builder",
+        source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
     }
 }
 
 fn assumption_category(key: &str) -> &'static str {
     if key.contains("artifact") || key.contains("manifest") {
-        "artifact"
+        CATEGORY_ARTIFACT
     } else if key.contains("state") {
-        "observation"
+        CATEGORY_OBSERVATION
     } else if key.contains("controller") {
-        "authority"
+        CATEGORY_AUTHORITY
     } else if key.contains("pool") {
-        "topology"
+        CATEGORY_TOPOLOGY
     } else {
-        "config"
+        CATEGORY_CONFIG
     }
 }
 
@@ -731,13 +764,13 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
     let mut operations = Vec::new();
     for canister in &plan.expected_canisters {
         if canister.canister_id.is_none() {
-            operations.push(operation("create_canister", &canister.role));
+            operations.push(operation(OP_CREATE_CANISTER, &canister.role));
         }
     }
     for canister in &plan.expected_pool {
         if canister.canister_id.is_none() {
             let subject = pool_operation_subject(&canister.pool, canister.role.as_deref());
-            operations.push(operation("create_canister", &subject));
+            operations.push(operation(OP_CREATE_CANISTER, &subject));
         }
     }
     for canister in &plan.expected_canisters {
@@ -751,7 +784,7 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
     for canister in &plan.expected_pool {
         if canister.canister_id.is_none() {
             let subject = pool_operation_subject(&canister.pool, canister.role.as_deref());
-            operations.push(operation("register_child", &subject));
+            operations.push(operation(OP_REGISTER_CHILD, &subject));
         }
     }
     for artifact in &plan.role_artifacts {
@@ -762,20 +795,21 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
     }
     if !plan.authority_profile.expected_controllers.is_empty() {
         operations.push(operation(
-            "set_controllers",
+            OP_SET_CONTROLLERS,
             &plan.deployment_identity.deployment_name,
         ));
     }
     if verifier_readiness_required(plan) {
         operations.push(operation(
-            "verify_readiness",
+            OP_VERIFY_READINESS,
             &plan.deployment_identity.deployment_name,
         ));
     }
     operations.push(operation(
-        "verify_topology",
+        OP_VERIFY_TOPOLOGY,
         &plan.deployment_identity.deployment_name,
     ));
+    sort_proposed_operations(&mut operations);
     operations
 }
 
@@ -789,9 +823,9 @@ const fn verifier_readiness_required(plan: &DeploymentPlanV1) -> bool {
 
 fn registration_operation_label(role: &str) -> &'static str {
     if role == "root" {
-        "register_root"
+        OP_REGISTER_ROOT
     } else {
-        "register_child"
+        OP_REGISTER_CHILD
     }
 }
 
@@ -808,9 +842,9 @@ fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> &'static str {
         .iter()
         .any(|canister| canister.role == role && canister.canister_id.is_some())
     {
-        "upgrade_wasm"
+        OP_UPGRADE_WASM
     } else {
-        "install_wasm"
+        OP_INSTALL_WASM
     }
 }
 
@@ -850,7 +884,7 @@ fn aggregate_status(
 ) -> PlanStatus {
     if blockers
         .iter()
-        .any(|diagnostic| diagnostic.severity == "unsupported")
+        .any(|diagnostic| diagnostic.severity == SEVERITY_UNSUPPORTED)
     {
         return PlanStatus::Unsupported;
     }
@@ -900,25 +934,47 @@ fn has_observed_state_drift(plan: &DeploymentPlanV1) -> bool {
 
 fn has_missing_observed_state(plan: &DeploymentPlanV1) -> bool {
     plan.unresolved_assumptions.iter().any(|assumption| {
-        assumption.key == "local_state.root_canister_id"
+        assumption.key == ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID
             && !is_observed_state_drift_assumption(assumption)
     })
 }
 
 fn is_observed_state_drift_assumption(assumption: &DeploymentAssumptionV1) -> bool {
-    assumption.key == "local_state.root_canister_id"
+    assumption.key == ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID
         && assumption.description.contains(" has network ")
 }
 
 fn sort_diagnostics(diagnostics: &mut [PlanDiagnostic]) {
     diagnostics.sort_by(|left, right| {
-        left.severity
-            .cmp(right.severity)
+        diagnostic_severity_rank(left.severity)
+            .cmp(&diagnostic_severity_rank(right.severity))
+            .then_with(|| left.severity.cmp(right.severity))
             .then_with(|| left.category.cmp(right.category))
             .then_with(|| left.code.cmp(&right.code))
             .then_with(|| left.subject.cmp(&right.subject))
             .then_with(|| left.source.cmp(right.source))
     });
+}
+
+fn diagnostic_severity_rank(severity: &str) -> u8 {
+    match severity {
+        SEVERITY_BLOCKED => 0,
+        SEVERITY_UNSUPPORTED => 1,
+        SEVERITY_WARNING => 2,
+        SEVERITY_INFO => 3,
+        _ => 4,
+    }
+}
+
+fn sort_proposed_operations(operations: &mut Vec<ProposedOperationLabel>) {
+    operations.sort_by(|left, right| {
+        left.phase
+            .cmp(right.phase)
+            .then_with(|| left.label.cmp(right.label))
+            .then_with(|| left.subject.cmp(&right.subject))
+            .then_with(|| left.status.cmp(right.status))
+    });
+    operations.dedup();
 }
 
 pub(super) fn write_report(
@@ -1153,9 +1209,9 @@ impl PlanStatus {
     const fn as_str(self) -> &'static str {
         match self {
             Self::Planned => "planned",
-            Self::Warning => "warning",
-            Self::Blocked => "blocked",
-            Self::Unsupported => "unsupported",
+            Self::Warning => SEVERITY_WARNING,
+            Self::Blocked => SEVERITY_BLOCKED,
+            Self::Unsupported => SEVERITY_UNSUPPORTED,
         }
     }
 }
@@ -1176,14 +1232,15 @@ impl ComparisonStatus {
 mod tests {
     use super::*;
     use canic_host::deployment_truth::{
-        AuthorityProfileV1, DeploymentIdentityV1, RoleEpochExpectationV1, TrustDomainV1,
-        VerifierReadinessExpectationV1,
+        AuthorityProfileV1, CanisterControlClassV1, DeploymentIdentityV1, ExpectedCanisterV1,
+        RoleEpochExpectationV1, TrustDomainV1, VerifierReadinessExpectationV1,
     };
 
     #[test]
     fn unsupported_plan_assumptions_become_unsupported_blockers() {
+        let unsupported_key = format!("{ASSUMPTION_PREFIX_UNSUPPORTED}pool_relationship");
         let plan = plan_with_assumptions([assumption(
-            "unsupported.pool_relationship",
+            &unsupported_key,
             "pool relationship is outside the 0.79 planner contract",
         )]);
 
@@ -1192,10 +1249,10 @@ mod tests {
         let warnings = plan_warnings(&plan);
 
         assert_eq!(blockers.len(), 1);
-        assert_eq!(blockers[0].category, "unsupported_shape");
+        assert_eq!(blockers[0].category, CATEGORY_UNSUPPORTED_SHAPE);
         assert_eq!(blockers[0].code, "unsupported_pool_relationship");
-        assert_eq!(blockers[0].severity, "unsupported");
-        assert_eq!(blockers[0].subject, "unsupported.pool_relationship");
+        assert_eq!(blockers[0].severity, SEVERITY_UNSUPPORTED);
+        assert_eq!(blockers[0].subject, unsupported_key);
         assert!(
             blockers[0]
                 .next
@@ -1213,7 +1270,7 @@ mod tests {
     #[test]
     fn blocked_status_wins_when_no_unsupported_assumption_exists() {
         let plan = plan_with_assumptions([assumption(
-            "local_config.controllers",
+            ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS,
             "could not resolve configured controllers",
         )]);
 
@@ -1222,8 +1279,8 @@ mod tests {
         let warnings = plan_warnings(&plan);
 
         assert_eq!(blockers.len(), 1);
-        assert_eq!(blockers[0].category, "authority");
-        assert_eq!(blockers[0].severity, "blocked");
+        assert_eq!(blockers[0].category, CATEGORY_AUTHORITY);
+        assert_eq!(blockers[0].severity, SEVERITY_BLOCKED);
         assert!(assumptions.is_empty());
         assert!(warnings.is_empty());
         assert_eq!(
@@ -1237,7 +1294,7 @@ mod tests {
         let mut required_plan = plan_with_assumptions([]);
         required_plan.expected_verifier_readiness.required = true;
 
-        assert_proposed_operation(&required_plan, "verify_readiness", "demo-local");
+        assert_proposed_operation(&required_plan, OP_VERIFY_READINESS, "demo-local");
 
         let mut epoch_plan = plan_with_assumptions([]);
         epoch_plan
@@ -1248,7 +1305,7 @@ mod tests {
                 minimum_epoch: 42,
             });
 
-        assert_proposed_operation(&epoch_plan, "verify_readiness", "demo-local");
+        assert_proposed_operation(&epoch_plan, OP_VERIFY_READINESS, "demo-local");
     }
 
     #[test]
@@ -1258,7 +1315,7 @@ mod tests {
         assert!(
             proposed_operations(&plan)
                 .iter()
-                .all(|operation| operation.label != "verify_readiness")
+                .all(|operation| operation.label != OP_VERIFY_READINESS)
         );
     }
 
@@ -1273,11 +1330,11 @@ mod tests {
         let facts = verifier_readiness_facts(&plan);
 
         assert_eq!(facts.len(), 1);
-        assert_eq!(facts[0].category, "verifier_readiness");
+        assert_eq!(facts[0].category, CATEGORY_VERIFIER_READINESS);
         assert_eq!(facts[0].code, "verifier_readiness_expectation_resolved");
-        assert_eq!(facts[0].severity, "info");
+        assert_eq!(facts[0].severity, SEVERITY_INFO);
         assert_eq!(facts[0].subject, "demo-local");
-        assert_eq!(facts[0].source, "deployment_plan_builder");
+        assert_eq!(facts[0].source, SOURCE_DEPLOYMENT_PLAN_BUILDER);
         assert!(facts[0].detail.contains("1 role epoch"));
     }
 
@@ -1315,6 +1372,7 @@ mod tests {
             "blocked|config|plan_blocker|demo|deployment_plan_builder",
             "unsupported|unsupported_shape|unsupported_pool|demo|deployment_plan_builder",
             "warning|artifact|artifact_gap|beta|deployment_plan_builder",
+            "info|config|resolved_fact|demo|deployment_plan_builder",
         ]);
 
         sort_diagnostics(&mut diagnostics);
@@ -1329,8 +1387,57 @@ mod tests {
                 "warning|artifact|artifact_gap|beta|deployment_plan_builder",
                 "warning|artifact|artifact_gap|beta|fleet_config",
                 "warning|config|z_config_gap|demo|deployment_plan_builder",
+                "info|config|resolved_fact|demo|deployment_plan_builder",
             ]
         );
+    }
+
+    #[test]
+    fn proposed_operation_sort_order_deduplicates_repeated_labels() {
+        let mut operations = vec![
+            operation(OP_VERIFY_TOPOLOGY, "demo-local"),
+            operation(OP_INSTALL_WASM, "root"),
+            operation(OP_INSTALL_WASM, "root"),
+            operation(OP_REGISTER_CHILD, "user_hub"),
+            operation(OP_REGISTER_CHILD, "user_hub"),
+        ];
+
+        sort_proposed_operations(&mut operations);
+
+        assert_eq!(
+            operation_keys(&operations),
+            vec![
+                "future_apply_preview|install_wasm|root|not_executed",
+                "future_apply_preview|register_child|user_hub|not_executed",
+                "future_apply_preview|verify_topology|demo-local|not_executed",
+            ]
+        );
+    }
+
+    #[test]
+    fn proposed_operations_returns_sorted_deduplicated_preview() {
+        let mut plan = plan_with_assumptions([]);
+        plan.expected_canisters = vec![expected_canister("root"), expected_canister("root")];
+
+        assert_eq!(
+            operation_keys(&proposed_operations(&plan)),
+            vec![
+                "future_apply_preview|create_canister|root|not_executed",
+                "future_apply_preview|register_root|root|not_executed",
+                "future_apply_preview|verify_topology|demo-local|not_executed",
+            ]
+        );
+    }
+
+    fn operation_keys(operations: &[ProposedOperationLabel]) -> Vec<String> {
+        operations.iter().map(operation_key).collect()
+    }
+
+    fn operation_key(operation: &ProposedOperationLabel) -> String {
+        format!(
+            "{}|{}|{}|{}",
+            operation.phase, operation.label, operation.subject, operation.status
+        )
     }
 
     fn diagnostic_fixtures(keys: impl IntoIterator<Item = &'static str>) -> Vec<PlanDiagnostic> {
@@ -1432,6 +1539,14 @@ mod tests {
         DeploymentAssumptionV1 {
             key: key.to_string(),
             description: description.to_string(),
+        }
+    }
+
+    fn expected_canister(role: &str) -> ExpectedCanisterV1 {
+        ExpectedCanisterV1 {
+            role: role.to_string(),
+            canister_id: None,
+            control_class: CanisterControlClassV1::DeploymentControlled,
         }
     }
 

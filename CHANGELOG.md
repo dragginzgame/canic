@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.8` hardens deploy-plan report determinism by centralizing report and
+  assumption vocabulary, deduplicating future-apply preview labels, and pinning
+  diagnostic severity ordering.
+
 - `0.79.7` hardens the deploy-plan text/report contract by naming explicit
   preview fields and pinning exit-code, help, and deterministic ordering
   behavior.

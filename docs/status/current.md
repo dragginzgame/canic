@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.7` declarative deployment plan. Source of truth:
+- The active line is `0.79.8` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -92,6 +92,19 @@ before this compaction is archived at
   deployment truth, apply behavior, or mutation semantics. The 0.79.6 and
   0.79.7 changelog entries are staged in the root ledger and detailed 0.79
   notes.
+
+- The 0.79.8 working slice has started with a report-layer cleanup:
+  `proposed_operations()` now returns sorted and deduplicated operation labels
+  so repeated desired-plan inputs cannot duplicate future-apply preview lines.
+  Stable severity, category, source, operation-label, and known assumption-key
+  strings are also centralized so report construction, status derivation,
+  assumption classification, and tests share the same serialized values.
+  Diagnostic sorting now uses an explicit severity rank instead of relying on
+  lexical string order, and the public JSON report test pins the complete
+  sorted future-apply preview array. This does not change the embedded
+  `DeploymentPlanV1`, plan construction, observation, deployment truth, apply
+  behavior, or mutation semantics. The 0.79.8 changelog entries are staged in
+  the root ledger and detailed 0.79 notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
