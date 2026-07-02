@@ -238,6 +238,12 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
     );
     assert_verified_fact(
         &json,
+        "expected_canister_inventory_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
+    assert_verified_fact(
+        &json,
         "pool_identity_set_resolved",
         "demo-local",
         "deployment_plan_builder",
@@ -635,6 +641,7 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
             .any(|item| item["code"] == "deployment_target_resolved")
     );
     assert_no_verified_fact(&json, "authority_profile_resolved");
+    assert_no_verified_fact(&json, "expected_canister_inventory_resolved");
     assert!(
         json["blockers"]
             .as_array()
