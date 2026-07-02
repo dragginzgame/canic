@@ -972,6 +972,8 @@ fn plan_output_error(err: impl std::error::Error + 'static) -> DeployCommandErro
 pub(super) fn render_text(report: &DeploymentPlanReport) -> String {
     let mut lines = vec![
         "Deployment plan".to_string(),
+        format!("schema_version: {}", report.schema_version),
+        format!("command: {}", report.command),
         format!("status: {}", report.status.as_str()),
         format!("comparison: {}", report.comparison_status.as_str()),
         format!("target: {}", report.target),
@@ -1004,6 +1006,7 @@ fn append_diagnostics(lines: &mut Vec<String>, label: &str, diagnostics: &[PlanD
         ));
         lines.push(format!("    subject: {}", diagnostic.subject));
         lines.push(format!("    detail: {}", diagnostic.detail));
+        lines.push(format!("    source: {}", diagnostic.source));
         if let Some(next) = &diagnostic.next {
             lines.push(format!("    next: {next}"));
         }

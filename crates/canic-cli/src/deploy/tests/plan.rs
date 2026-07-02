@@ -808,7 +808,12 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     let text = deploy_plan::render_text(&report);
 
     assert!(text.contains("Deployment plan"));
+    assert!(text.contains("schema_version: 1"));
+    assert!(text.contains("command: canic deploy plan"));
     assert!(text.contains("future apply preview"));
+    assert!(text.contains("source: fleet_config"));
+    assert!(text.contains("source: deployment_plan_builder"));
+    assert!(text.contains("source: installed_deployment"));
     assert!(!text.contains("ready_to_apply"));
     assert!(!text.contains("deployment is safe"));
     assert!(!text.contains("will create"));
