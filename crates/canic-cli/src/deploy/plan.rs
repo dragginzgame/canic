@@ -31,6 +31,9 @@ use std::{
 };
 
 const REPORT_SCHEMA_VERSION: u16 = 1;
+const REPORT_COMMAND: &str = "canic deploy plan";
+const FUTURE_APPLY_PREVIEW_PHASE: &str = "future_apply_preview";
+const PROPOSED_OPERATION_NOT_EXECUTED: &str = "not_executed";
 const DEPLOYMENT_ARG: &str = "deployment";
 const JSON_ARG: &str = "json";
 const OUT_ARG: &str = "out";
@@ -173,7 +176,7 @@ pub(super) fn build_report(
 
     DeploymentPlanReport {
         schema_version: REPORT_SCHEMA_VERSION,
-        command: "canic deploy plan",
+        command: REPORT_COMMAND,
         target: options.deployment.clone(),
         network: options.network.clone(),
         build_profile: build_profile_name(options),
@@ -813,10 +816,10 @@ fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> &'static str {
 
 fn operation(label: &'static str, subject: &str) -> ProposedOperationLabel {
     ProposedOperationLabel {
-        phase: "future_apply_preview",
+        phase: FUTURE_APPLY_PREVIEW_PHASE,
         label,
         subject: subject.to_string(),
-        status: "not_executed",
+        status: PROPOSED_OPERATION_NOT_EXECUTED,
     }
 }
 
@@ -1022,7 +1025,7 @@ fn append_operations(lines: &mut Vec<String>, operations: &[ProposedOperationLab
     lines.push("future apply preview".to_string());
     for operation in operations {
         lines.push(format!(
-            "  - {} {} ({})",
+            "  - label: {} subject: {} status: {}",
             operation.label, operation.subject, operation.status
         ));
     }
@@ -1091,7 +1094,7 @@ impl DeployPlanRoots {
 
 pub(super) fn command() -> ClapCommand {
     ClapCommand::new("plan")
-        .bin_name("canic deploy plan")
+        .bin_name(REPORT_COMMAND)
         .about("Explain the deterministic deployment plan without mutation")
         .disable_help_flag(true)
         .override_usage("canic deploy plan <deployment>")
@@ -1285,6 +1288,103 @@ mod tests {
         assert!(verifier_readiness_facts(&plan).is_empty());
     }
 
+    #[test]
+    fn command_exit_contract_matches_plan_status() {
+        for status in [PlanStatus::Planned, PlanStatus::Warning] {
+            let report = report_with_status(status);
+
+            assert!(command_exit_result(&report).is_ok());
+        }
+
+        for status in [PlanStatus::Blocked, PlanStatus::Unsupported] {
+            let report = report_with_status(status);
+            let err = command_exit_result(&report).expect_err("blocked status should fail");
+
+            assert!(matches!(err, DeployCommandError::PlanBlocked(_)));
+            assert_eq!(err.exit_code(), 1);
+            assert!(err.suppress_stderr());
+        }
+    }
+
+    #[test]
+    fn diagnostic_sort_order_is_deterministic() {
+        let mut diagnostics = diagnostic_fixtures([
+            "warning|config|z_config_gap|demo|deployment_plan_builder",
+            "warning|artifact|artifact_gap|beta|fleet_config",
+            "warning|artifact|artifact_gap|alpha|deployment_plan_builder",
+            "blocked|config|plan_blocker|demo|deployment_plan_builder",
+            "unsupported|unsupported_shape|unsupported_pool|demo|deployment_plan_builder",
+            "warning|artifact|artifact_gap|beta|deployment_plan_builder",
+        ]);
+
+        sort_diagnostics(&mut diagnostics);
+
+        let ordered = diagnostics.iter().map(diagnostic_key).collect::<Vec<_>>();
+        assert_eq!(
+            ordered,
+            vec![
+                "blocked|config|plan_blocker|demo|deployment_plan_builder",
+                "unsupported|unsupported_shape|unsupported_pool|demo|deployment_plan_builder",
+                "warning|artifact|artifact_gap|alpha|deployment_plan_builder",
+                "warning|artifact|artifact_gap|beta|deployment_plan_builder",
+                "warning|artifact|artifact_gap|beta|fleet_config",
+                "warning|config|z_config_gap|demo|deployment_plan_builder",
+            ]
+        );
+    }
+
+    fn diagnostic_fixtures(keys: impl IntoIterator<Item = &'static str>) -> Vec<PlanDiagnostic> {
+        keys.into_iter().map(diagnostic_fixture).collect()
+    }
+
+    fn diagnostic_key(diagnostic: &PlanDiagnostic) -> String {
+        format!(
+            "{}|{}|{}|{}|{}",
+            diagnostic.severity,
+            diagnostic.category,
+            diagnostic.code,
+            diagnostic.subject,
+            diagnostic.source
+        )
+    }
+
+    fn diagnostic_fixture(key: &'static str) -> PlanDiagnostic {
+        let [severity, category, code, subject, source] = key
+            .split('|')
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("diagnostic fixture keys contain five fields");
+        PlanDiagnostic {
+            category,
+            code: code.to_string(),
+            severity,
+            subject: subject.to_string(),
+            detail: "diagnostic detail".to_string(),
+            next: None,
+            source,
+        }
+    }
+
+    fn report_with_status(status: PlanStatus) -> DeploymentPlanReport {
+        DeploymentPlanReport {
+            schema_version: REPORT_SCHEMA_VERSION,
+            command: REPORT_COMMAND,
+            target: "demo-local".to_string(),
+            network: "local".to_string(),
+            build_profile: "debug".to_string(),
+            config_path: "fleets/demo/canic.toml".to_string(),
+            status,
+            comparison_status: ComparisonStatus::NotRequested,
+            plan: plan_with_assumptions([]),
+            blockers: Vec::new(),
+            warnings: Vec::new(),
+            assumptions: Vec::new(),
+            verified_facts: Vec::new(),
+            proposed_operations: Vec::new(),
+            next_actions: Vec::new(),
+        }
+    }
+
     fn plan_with_assumptions(
         assumptions: impl IntoIterator<Item = DeploymentAssumptionV1>,
     ) -> DeploymentPlanV1 {
@@ -1338,10 +1438,10 @@ mod tests {
     fn assert_proposed_operation(plan: &DeploymentPlanV1, label: &str, subject: &str) {
         assert!(
             proposed_operations(plan).iter().any(|operation| {
-                operation.phase == "future_apply_preview"
+                operation.phase == FUTURE_APPLY_PREVIEW_PHASE
                     && operation.label == label
                     && operation.subject == subject
-                    && operation.status == "not_executed"
+                    && operation.status == PROPOSED_OPERATION_NOT_EXECUTED
             }),
             "missing proposed operation {label} for {subject}"
         );

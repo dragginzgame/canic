@@ -123,6 +123,21 @@ fn deploy_plan_is_top_level_deploy_command() {
 }
 
 #[test]
+fn deploy_plan_help_documents_no_mutation_contract() {
+    let help = deploy_plan::usage();
+
+    assert!(help.contains("canic deploy plan <deployment>"));
+    assert!(help.contains("canic deploy plan demo-local --json"));
+    assert!(help.contains("canic deploy plan demo-local --out deployment-plan.json"));
+    assert!(help.contains("does not install, upgrade, create canisters"));
+    assert!(help.contains("write deployment truth"));
+    assert!(help.contains("installed deployment records"));
+    assert!(help.contains("call live IC state"));
+    assert!(help.contains("--out writes JSON only"));
+    assert!(help.contains("fails if the requested path already exists"));
+}
+
+#[test]
 fn deploy_plan_options_parse_supported_surface() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
@@ -811,6 +826,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("schema_version: 1"));
     assert!(text.contains("command: canic deploy plan"));
     assert!(text.contains("future apply preview"));
+    assert!(text.contains("label: verify_topology subject: demo-local status: not_executed"));
     assert!(text.contains("source: fleet_config"));
     assert!(text.contains("source: deployment_plan_builder"));
     assert!(text.contains("source: installed_deployment"));

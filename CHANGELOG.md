@@ -8,13 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- `canic deploy plan` text output now includes schema version, command
-  identity, and diagnostic source provenance, matching the report model and
-  JSON payload without changing plan semantics.
-
 ## [0.79.x] - 2026-07-02 - Declarative Deployment Plan
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
+
+- `0.79.7` hardens the deploy-plan text/report contract by naming explicit
+  preview fields and pinning exit-code, help, and deterministic ordering
+  behavior.
+
+- `0.79.6` aligns deploy-plan text output with the stable report model by
+  adding schema, command, and diagnostic source provenance.
 
 - `0.79.5` expands deploy-plan verified facts for fleet template,
   controller, artifact, pool, and trust-domain resolution already present in
