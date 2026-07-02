@@ -60,19 +60,22 @@ before this compaction is archived at
   deployment medic relies on its deployment-scoped network check instead of
   emitting duplicate network diagnostics. Blob-storage target resolution now
   follows the 0.78 design order by treating principal text as a canister ID
-  before falling back to role names.
-
-- The 0.78.5 cleanup slice updates active `canic install` collision
-  guidance to point at
+  before falling back to role names. The same released slice updates active
+  `canic install` collision guidance to point at
   `canic medic deployment <deployment>` instead of the removed
-  `canic info medic <deployment>` route, and by removing the same retired
-  `info medic` leaf from top-level global ICP/network option forwarding.
-
-- The 0.78.6 cleanup slice keeps medic subcommand help usage-only:
+  `canic info medic <deployment>` route, removes the same retired `info medic`
+  leaf from top-level global ICP/network option forwarding, and keeps medic
+  subcommand help usage-only:
   `canic medic project help` and `canic medic deployment help` render medic
   usage instead of entering project/deployment report construction, including
   when medic-local flags such as `--json` appear around the subcommand. The
   same slice wraps unbroken long diagnostic values within `MEDIC_REPORT_WIDTH`.
+
+- The 0.78.5 slice retargets the auth-renewal installed/packaged CLI proof
+  helper from the removed `canic info medic` route to
+  `canic medic deployment <deployment> --auth-renewal <issuer>`, makes the
+  fixture satisfy deployment medic's project-level preconditions, and asserts
+  the current medic `auth_renewal_drift_warn` output shape.
 
 - 0.77 completed the wasm-footprint feature-boundary line, including
   chain-key/root-publication feature splitting and local DTO replacements for

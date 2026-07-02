@@ -62,6 +62,10 @@ done
 
 for arg in "$@"; do
     case "$arg" in
+        canic_ready)
+            echo 'true'
+            exit 0
+            ;;
         canic_subnet_registry)
             cat <<'JSON'
 {"Ok":[{"pid":"ryjl3-tyaaa-aaaaa-aaaba-cai","role":"root","record":{"pid":"ryjl3-tyaaa-aaaaa-aaaba-cai","role":"root","kind":"root","parent_pid":null,"module_hash":null}},{"pid":"rrkah-fqaaa-aaaaa-aaaaq-cai","role":"app","kind":"singleton","record":{"pid":"rrkah-fqaaa-aaaaa-aaaaq-cai","role":"app","parent_pid":["ryjl3-tyaaa-aaaaa-aaaba-cai"],"module_hash":null}}]}

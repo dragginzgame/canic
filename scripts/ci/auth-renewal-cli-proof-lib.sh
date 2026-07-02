@@ -10,11 +10,96 @@ prepare_auth_renewal_cli_surface_fixture() {
     local downstream_root="$1"
 
     mkdir -p \
+        "$downstream_root/.canic/fixture/deployments" \
         "$downstream_root/.icp/fixture/canisters/app" \
-        "$downstream_root/.icp/fixture/canisters/root"
+        "$downstream_root/.icp/fixture/canisters/root" \
+        "$downstream_root/fleets/downstream/app" \
+        "$downstream_root/fleets/downstream/root"
+
+    cat > "$downstream_root/icp.yaml" <<'EOF'
+canisters:
+  - name: root
+  - name: app
+
+networks:
+  - name: local
+    mode: managed
+    gateway:
+      bind: 127.0.0.1
+      port: 8001
+
+environments:
+  - name: downstream
+    network: local
+    canisters: [root, app]
+EOF
+
+    cat > "$downstream_root/fleets/downstream/canic.toml" <<'EOF'
+controllers = []
+app_index = ["app"]
+
+[fleet]
+name = "downstream"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+EOF
+
+    cat > "$downstream_root/.canic/fixture/deployments/downstream.json" <<EOF
+{
+  "schema_version": 2,
+  "deployment_name": "downstream",
+  "fleet_template": "downstream",
+  "created_at_unix_secs": 1,
+  "updated_at_unix_secs": 1,
+  "network": "fixture",
+  "root_target": "root",
+  "root_canister_id": "ryjl3-tyaaa-aaaaa-aaaba-cai",
+  "root_verification": "not_verified",
+  "root_build_target": "root",
+  "workspace_root": "$downstream_root",
+  "icp_root": "$downstream_root",
+  "config_path": "$downstream_root/fleets/downstream/canic.toml",
+  "release_set_manifest_path": "$downstream_root/.icp/fixture/canisters/root/release-set.json"
+}
+EOF
+
+    cat > "$downstream_root/fleets/downstream/root/Cargo.toml" <<'EOF'
+[package]
+name = "downstream-root"
+version = { workspace = true }
+edition = "2024"
+
+[package.metadata.canic]
+fleet = "downstream"
+role = "root"
+EOF
+
+    cat > "$downstream_root/fleets/downstream/app/Cargo.toml" <<'EOF'
+[package]
+name = "downstream-app"
+version = { workspace = true }
+edition = "2024"
+
+[package.metadata.canic]
+fleet = "downstream"
+role = "app"
+EOF
 
     cat > "$downstream_root/.icp/fixture/canisters/root/root.did" <<'EOF'
 service : {
+  canic_ready : () -> (bool) query;
   canic_subnet_registry : () -> () query;
   canic_root_issuer_renewal_status : (record { issuer_pid : principal }) -> () query;
 }
@@ -40,7 +125,7 @@ run_auth_renewal_cli_surface_probe_commands() {
         auth renewal status downstream --issuer "$AUTH_RENEWAL_PROOF_ISSUER" --json \
         > "$proof_root/auth-renewal-status-drift.json"
     "$runner" --network fixture --icp "$fake_icp" \
-        info medic downstream --auth-renewal "$AUTH_RENEWAL_PROOF_ISSUER" \
+        medic deployment downstream --auth-renewal "$AUTH_RENEWAL_PROOF_ISSUER" \
         > "$proof_root/auth-renewal-medic-drift.out"
 }
 
@@ -79,7 +164,7 @@ assert_auth_renewal_cli_surface_probe_outputs() {
     assert_auth_renewal_cli_file_contains \
         "$proof_label" \
         "auth renewal help to describe renewal workflows" \
-        'Run root-managed delegation proof renewal workflows' \
+        'Run delegated-auth operator workflows' \
         "$proof_root/auth-renewal-help.out" \
         '1,160p'
     assert_auth_renewal_cli_file_not_contains \
@@ -133,7 +218,7 @@ assert_auth_renewal_cli_surface_probe_outputs() {
     assert_auth_renewal_cli_file_contains \
         "$proof_label" \
         "auth renewal medic warning" \
-        'auth renewal [warn]' \
+        'auth [warn] auth_renewal_drift_warn' \
         "$proof_root/auth-renewal-medic-drift.out" \
         '1,180p'
     assert_auth_renewal_cli_file_contains \
