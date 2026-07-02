@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- `canic deploy plan` text output now includes schema version, command
+  identity, and diagnostic source provenance, matching the report model and
+  JSON payload without changing plan semantics.
+
 ## [0.79.x] - 2026-07-02 - Declarative Deployment Plan
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
