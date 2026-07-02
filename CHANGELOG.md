@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.5` expands deploy-plan verified facts for fleet template,
+  controller, artifact, pool, and trust-domain resolution already present in
+  the embedded plan, while preserving the no-mutation report boundary.
+
 - `0.79.4` tightens deploy-plan visibility for verifier-readiness and expected
   canister inventory already present in the embedded plan, while keeping output
   diagnostic-only and non-mutating.

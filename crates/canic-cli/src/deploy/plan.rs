@@ -280,9 +280,22 @@ fn verified_facts(
         source: "fleet_config",
     }];
 
+    facts.push(PlanDiagnostic {
+        category: "config",
+        code: "fleet_template_resolved".to_string(),
+        severity: "info",
+        subject: plan.deployment_identity.deployment_name.clone(),
+        detail: format!("fleet template resolved: {}", plan.fleet_template),
+        next: None,
+        source: "fleet_config",
+    });
     facts.extend(plan_identity_facts(plan));
+    facts.extend(authority_profile_facts(plan));
+    facts.extend(expected_role_artifact_inventory_facts(plan));
     facts.extend(expected_canister_inventory_facts(plan));
+    facts.extend(expected_pool_inventory_facts(plan));
     facts.extend(role_artifact_facts(&plan.role_artifacts));
+    facts.extend(trust_domain_facts(plan));
     facts.extend(verifier_readiness_facts(plan));
 
     if let Some(root) = &plan.trust_domain.root_trust_anchor {
@@ -420,6 +433,40 @@ fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
     }
 }
 
+fn authority_profile_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    if has_plan_assumption_key(plan, "local_config.controllers") {
+        return Vec::new();
+    }
+
+    let expected_count = plan.authority_profile.expected_controllers.len();
+    vec![PlanDiagnostic {
+        category: "authority",
+        code: "expected_controller_set_resolved".to_string(),
+        severity: "info",
+        subject: plan.deployment_identity.deployment_name.clone(),
+        detail: format!("expected controller set resolved: {expected_count} controller(s)"),
+        next: None,
+        source: "deployment_plan_builder",
+    }]
+}
+
+fn expected_role_artifact_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    if has_plan_assumption_key(plan, "local_config.roles") {
+        return Vec::new();
+    }
+
+    let expected_count = plan.role_artifacts.len();
+    vec![PlanDiagnostic {
+        category: "artifact",
+        code: "expected_role_artifact_inventory_resolved".to_string(),
+        severity: "info",
+        subject: plan.deployment_identity.deployment_name.clone(),
+        detail: format!("expected role artifact inventory resolved: {expected_count} role(s)"),
+        next: None,
+        source: "deployment_plan_builder",
+    }]
+}
+
 fn expected_canister_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
     if has_plan_assumption_key(plan, "local_config.roles") {
         return Vec::new();
@@ -432,6 +479,25 @@ fn expected_canister_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnos
         severity: "info",
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!("expected canister inventory resolved: {expected_count} canister role(s)"),
+        next: None,
+        source: "deployment_plan_builder",
+    }]
+}
+
+fn expected_pool_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    if has_plan_assumption_key(plan, "local_config.pools") {
+        return Vec::new();
+    }
+
+    let expected_count = plan.expected_pool.len();
+    vec![PlanDiagnostic {
+        category: "inventory",
+        code: "expected_pool_inventory_resolved".to_string(),
+        severity: "info",
+        subject: plan.deployment_identity.deployment_name.clone(),
+        detail: format!(
+            "expected pool inventory resolved: {expected_count} pool canister expectation(s)"
+        ),
         next: None,
         source: "deployment_plan_builder",
     }]
@@ -462,6 +528,37 @@ fn role_artifact_fact_detail(artifact: &RoleArtifactV1, digest: &str) -> String 
         Some(path) => format!("observed wasm artifact {path} with sha256 {digest}"),
         None => format!("observed wasm artifact sha256 {digest}"),
     }
+}
+
+fn trust_domain_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    let mut facts = Vec::new();
+    let subject = plan.deployment_identity.deployment_name.clone();
+
+    if let Some(root) = &plan.trust_domain.root_trust_anchor {
+        facts.push(PlanDiagnostic {
+            category: "trust_domain",
+            code: "root_trust_anchor_resolved".to_string(),
+            severity: "info",
+            subject: subject.clone(),
+            detail: format!("root trust anchor resolved: {root}"),
+            next: None,
+            source: "installed_deployment",
+        });
+    }
+
+    if let Some(migration_from) = &plan.trust_domain.migration_from {
+        facts.push(PlanDiagnostic {
+            category: "trust_domain",
+            code: "migration_trust_anchor_resolved".to_string(),
+            severity: "info",
+            subject,
+            detail: format!("migration trust anchor resolved: {migration_from}"),
+            next: None,
+            source: "deployment_plan_builder",
+        });
+    }
+
+    facts
 }
 
 fn verifier_readiness_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
