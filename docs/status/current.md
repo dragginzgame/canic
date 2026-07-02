@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.3` declarative deployment plan. Source of truth:
+- The active line is `0.79.4` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -53,6 +53,15 @@ before this compaction is archived at
   planner contract so those become explicit `unsupported` diagnostics instead
   of generic blockers or warnings. The 0.79.3 changelog entries are staged in
   the root ledger and detailed 0.79 notes.
+
+- The 0.79.4 working slice extends deploy-plan future-apply preview labels to
+  include `verify_readiness` when the embedded `DeploymentPlanV1` already
+  carries verifier-readiness requirements or expected role epochs, and surfaces
+  the same expectation as a `verifier_readiness_expectation_resolved` report
+  fact. Reports also name resolved expected canister inventory when role config
+  is available. This remains non-executed and does not add live observation or
+  mutation. The 0.79.4 changelog entries are staged in the root ledger and
+  detailed 0.79 notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.

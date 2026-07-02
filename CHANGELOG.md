@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.4` tightens deploy-plan visibility for verifier-readiness and expected
+  canister inventory already present in the embedded plan, while keeping output
+  diagnostic-only and non-mutating.
+
 - `0.79.3` completes deploy-plan preview/report classification by surfacing
   root/child registration labels and explicit unsupported-shape diagnostics
   without adding apply semantics or mutation.

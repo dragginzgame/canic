@@ -281,7 +281,9 @@ fn verified_facts(
     }];
 
     facts.extend(plan_identity_facts(plan));
+    facts.extend(expected_canister_inventory_facts(plan));
     facts.extend(role_artifact_facts(&plan.role_artifacts));
+    facts.extend(verifier_readiness_facts(plan));
 
     if let Some(root) = &plan.trust_domain.root_trust_anchor {
         facts.push(PlanDiagnostic {
@@ -418,6 +420,23 @@ fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
     }
 }
 
+fn expected_canister_inventory_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    if has_plan_assumption_key(plan, "local_config.roles") {
+        return Vec::new();
+    }
+
+    let expected_count = plan.expected_canisters.len();
+    vec![PlanDiagnostic {
+        category: "inventory",
+        code: "expected_canister_inventory_resolved".to_string(),
+        severity: "info",
+        subject: plan.deployment_identity.deployment_name.clone(),
+        detail: format!("expected canister inventory resolved: {expected_count} canister role(s)"),
+        next: None,
+        source: "deployment_plan_builder",
+    }]
+}
+
 fn role_artifact_facts(artifacts: &[RoleArtifactV1]) -> Vec<PlanDiagnostic> {
     artifacts
         .iter()
@@ -443,6 +462,29 @@ fn role_artifact_fact_detail(artifact: &RoleArtifactV1, digest: &str) -> String 
         Some(path) => format!("observed wasm artifact {path} with sha256 {digest}"),
         None => format!("observed wasm artifact sha256 {digest}"),
     }
+}
+
+fn verifier_readiness_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    if !verifier_readiness_required(plan) {
+        return Vec::new();
+    }
+
+    let role_epoch_count = plan.expected_verifier_readiness.expected_role_epochs.len();
+    let detail = if role_epoch_count == 0 {
+        "verifier readiness is required by the deployment plan".to_string()
+    } else {
+        format!("verifier readiness is required for {role_epoch_count} role epoch expectation(s)")
+    };
+
+    vec![PlanDiagnostic {
+        category: "verifier_readiness",
+        code: "verifier_readiness_expectation_resolved".to_string(),
+        severity: "info",
+        subject: plan.deployment_identity.deployment_name.clone(),
+        detail,
+        next: None,
+        source: "deployment_plan_builder",
+    }]
 }
 
 fn plan_assumptions(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
@@ -624,11 +666,25 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
             &plan.deployment_identity.deployment_name,
         ));
     }
+    if verifier_readiness_required(plan) {
+        operations.push(operation(
+            "verify_readiness",
+            &plan.deployment_identity.deployment_name,
+        ));
+    }
     operations.push(operation(
         "verify_topology",
         &plan.deployment_identity.deployment_name,
     ));
     operations
+}
+
+const fn verifier_readiness_required(plan: &DeploymentPlanV1) -> bool {
+    plan.expected_verifier_readiness.required
+        || !plan
+            .expected_verifier_readiness
+            .expected_role_epochs
+            .is_empty()
 }
 
 fn registration_operation_label(role: &str) -> &'static str {
@@ -1017,7 +1073,8 @@ impl ComparisonStatus {
 mod tests {
     use super::*;
     use canic_host::deployment_truth::{
-        AuthorityProfileV1, DeploymentIdentityV1, TrustDomainV1, VerifierReadinessExpectationV1,
+        AuthorityProfileV1, DeploymentIdentityV1, RoleEpochExpectationV1, TrustDomainV1,
+        VerifierReadinessExpectationV1,
     };
 
     #[test]
@@ -1072,6 +1129,62 @@ mod tests {
         );
     }
 
+    #[test]
+    fn verifier_readiness_expectations_emit_preview_label() {
+        let mut required_plan = plan_with_assumptions([]);
+        required_plan.expected_verifier_readiness.required = true;
+
+        assert_proposed_operation(&required_plan, "verify_readiness", "demo-local");
+
+        let mut epoch_plan = plan_with_assumptions([]);
+        epoch_plan
+            .expected_verifier_readiness
+            .expected_role_epochs
+            .push(RoleEpochExpectationV1 {
+                role: "user_hub".to_string(),
+                minimum_epoch: 42,
+            });
+
+        assert_proposed_operation(&epoch_plan, "verify_readiness", "demo-local");
+    }
+
+    #[test]
+    fn verifier_readiness_preview_label_is_omitted_without_expectation() {
+        let plan = plan_with_assumptions([]);
+
+        assert!(
+            proposed_operations(&plan)
+                .iter()
+                .all(|operation| operation.label != "verify_readiness")
+        );
+    }
+
+    #[test]
+    fn verifier_readiness_expectations_emit_verified_fact() {
+        let mut plan = plan_with_assumptions([]);
+        plan.expected_verifier_readiness.expected_role_epochs = vec![RoleEpochExpectationV1 {
+            role: "user_hub".to_string(),
+            minimum_epoch: 42,
+        }];
+
+        let facts = verifier_readiness_facts(&plan);
+
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0].category, "verifier_readiness");
+        assert_eq!(facts[0].code, "verifier_readiness_expectation_resolved");
+        assert_eq!(facts[0].severity, "info");
+        assert_eq!(facts[0].subject, "demo-local");
+        assert_eq!(facts[0].source, "deployment_plan_builder");
+        assert!(facts[0].detail.contains("1 role epoch"));
+    }
+
+    #[test]
+    fn verifier_readiness_fact_is_omitted_without_expectation() {
+        let plan = plan_with_assumptions([]);
+
+        assert!(verifier_readiness_facts(&plan).is_empty());
+    }
+
     fn plan_with_assumptions(
         assumptions: impl IntoIterator<Item = DeploymentAssumptionV1>,
     ) -> DeploymentPlanV1 {
@@ -1120,5 +1233,17 @@ mod tests {
             key: key.to_string(),
             description: description.to_string(),
         }
+    }
+
+    fn assert_proposed_operation(plan: &DeploymentPlanV1, label: &str, subject: &str) {
+        assert!(
+            proposed_operations(plan).iter().any(|operation| {
+                operation.phase == "future_apply_preview"
+                    && operation.label == label
+                    && operation.subject == subject
+                    && operation.status == "not_executed"
+            }),
+            "missing proposed operation {label} for {subject}"
+        );
     }
 }
