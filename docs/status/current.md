@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.6` declarative deployment plan. Source of truth:
+- The active line is `0.79.7` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -72,9 +72,26 @@ before this compaction is archived at
 
 - The 0.79.6 working slice aligns deploy-plan text output with the stable
   report model by rendering schema version, command identity, and each
-  diagnostic source. This is output-only provenance; it does not alter JSON
-  shape, plan construction, comparison, observation, deployment truth, or
-  mutation behavior.
+  diagnostic source. Future-apply preview lines now also render explicit
+  label, subject, and status fields. This is output-only provenance; it does
+  not alter JSON shape, plan construction, comparison, observation, deployment
+  truth, or mutation behavior.
+
+- The 0.79.7 working slice continues deploy-plan report-contract hardening by
+  keeping the text-output parity changes from the post-0.79.6 branch and
+  adding focused tests for the documented exit-code contract: planned and
+  warning reports exit successfully, while blocked and unsupported reports
+  return `PlanBlocked` with exit code 1. The same slice now smoke-tests
+  `canic deploy plan help` and `canic deploy plan --help` so the planning
+  command's safety-contract help remains reachable through the shared CLI
+  help path. Deploy-plan coverage also pins the command help's no-mutation /
+  JSON `--out` wording and the deterministic diagnostic sort order used by
+  report arrays. Stable report command, preview phase, and preview status
+  strings are centralized to reduce contract drift. This guards the report
+  contract without changing plan construction, output schema, observation,
+  deployment truth, apply behavior, or mutation semantics. The 0.79.6 and
+  0.79.7 changelog entries are staged in the root ledger and detailed 0.79
+  notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.

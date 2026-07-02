@@ -104,6 +104,8 @@ fn command_family_help_returns_ok() {
         &["cycles", "topup", "help"],
         &["deploy", "help"],
         &["deploy", "check", "help"],
+        &["deploy", "plan", "help"],
+        &["deploy", "plan", "--help"],
         &["deploy", "inspect", "help"],
         &["deploy", "inspect", "diff", "help"],
         &["deploy", "inspect", "inventory", "help"],
