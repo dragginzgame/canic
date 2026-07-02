@@ -17,7 +17,9 @@ use crate::{
     cli::{
         clap::{flag_arg, parse_matches, render_usage, required_string, string_option, value_arg},
         defaults::{default_icp, local_network},
-        globals::{internal_icp_arg, internal_network_arg},
+        globals::{
+            INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION, internal_icp_arg, internal_network_arg,
+        },
         help::print_help_or_version,
     },
     support::candid::role_candid_path,
@@ -189,6 +191,10 @@ where
     if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
+    if medic_subcommand_help_requested(&args) {
+        println!("{}", usage());
+        return Ok(());
+    }
 
     let options = MedicOptions::parse(args)?;
     let report = build_medic_report(&options);
@@ -201,6 +207,31 @@ where
         return Err(MedicCommandError::ReportFailed);
     }
     Ok(())
+}
+
+fn medic_subcommand_help_requested(args: &[OsString]) -> bool {
+    let mut index = skip_medic_options(args, 0);
+    let Some(PROJECT_COMMAND | DEPLOYMENT_COMMAND) = args.get(index).and_then(|arg| arg.to_str())
+    else {
+        return false;
+    };
+    index = skip_medic_options(args, index + 1);
+    args.get(index).is_some_and(is_medic_help_arg)
+}
+
+fn skip_medic_options(args: &[OsString], mut index: usize) -> usize {
+    while let Some(arg) = args.get(index).and_then(|arg| arg.to_str()) {
+        match arg {
+            "--json" => index += 1,
+            INTERNAL_ICP_OPTION | INTERNAL_NETWORK_OPTION => index += 2,
+            _ => break,
+        }
+    }
+    index
+}
+
+fn is_medic_help_arg(arg: &OsString) -> bool {
+    matches!(arg.to_str(), Some("help" | "--help" | "-h"))
 }
 
 fn medic_command() -> ClapCommand {
@@ -1494,6 +1525,15 @@ fn wrap_medic_line(line: &str, width: usize) -> Vec<String> {
     let mut current = String::new();
 
     for word in line.split_whitespace() {
+        if word.chars().count() > width {
+            if !current.is_empty() {
+                lines.push(current);
+                current = String::new();
+            }
+            lines.extend(split_medic_word(word, width));
+            continue;
+        }
+
         let candidate_width =
             current.chars().count() + usize::from(!current.is_empty()) + word.chars().count();
         if current.is_empty() {
@@ -1511,6 +1551,23 @@ fn wrap_medic_line(line: &str, width: usize) -> Vec<String> {
         lines.push(current);
     }
     lines
+}
+
+fn split_medic_word(word: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    for ch in word.chars() {
+        if current.chars().count() == width {
+            chunks.push(current);
+            current = String::new();
+        }
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    chunks
 }
 
 ///

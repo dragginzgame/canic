@@ -125,6 +125,74 @@ fn medic_usage_includes_top_level_examples() {
     assert!(!text.contains("canic info medic"));
 }
 
+// Ensure subcommand help requests stop before project or deployment checks run.
+#[test]
+fn medic_subcommand_help_requests_are_not_targets() {
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("project"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("project"),
+        OsString::from("--help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("deployment"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("deployment"),
+        OsString::from("-h")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("--json"),
+        OsString::from("deployment"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("deployment"),
+        OsString::from("--json"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("project"),
+        OsString::from("--json"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from("local"),
+        OsString::from("deployment"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
+        OsString::from("/tmp/icp"),
+        OsString::from("project"),
+        OsString::from("help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("deployment"),
+        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from("local"),
+        OsString::from("help")
+    ]));
+    assert!(!medic_subcommand_help_requested(&[
+        OsString::from("deployment"),
+        OsString::from("demo")
+    ]));
+    assert!(!medic_subcommand_help_requested(&[
+        OsString::from("--json"),
+        OsString::from("deployment"),
+        OsString::from("demo")
+    ]));
+    assert!(!medic_subcommand_help_requested(&[
+        OsString::from("deployment"),
+        OsString::from("demo"),
+        OsString::from("help")
+    ]));
+}
+
 // Ensure aggregate status follows the 0.78 report contract.
 #[test]
 fn aggregate_status_follows_report_contract() {
@@ -884,6 +952,28 @@ fn wraps_long_medic_report_fields() {
         report
             .lines()
             .any(|line| line.starts_with("          ") && !line.trim().is_empty())
+    );
+}
+
+// Ensure unbroken long values cannot widen text reports past the fixed report width.
+#[test]
+fn wraps_unbroken_long_medic_report_fields() {
+    let report = render_medic_text(&MedicReport::new(
+        &MedicOptions::project(false, None, "icp".to_string()),
+        vec![MedicCheck::warn(
+            MedicCategory::DeploymentState,
+            "deployment_target_missing",
+            "deployment",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            MedicSource::InstalledDeployment,
+        )],
+    ));
+
+    assert!(
+        report
+            .lines()
+            .all(|line| line.chars().count() <= MEDIC_REPORT_WIDTH)
     );
 }
 

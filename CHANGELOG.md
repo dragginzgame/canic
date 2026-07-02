@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Medic subcommand help requests now stop at usage rendering, including when
+  medic-local flags appear around the subcommand, so
+  `canic medic deployment help` is not
+  interpreted as a deployment target.
+
+- Medic text output now wraps unbroken long diagnostic values so paths,
+  principals, and generated identifiers cannot widen the report past the
+  fixed report width.
+
 ## [0.78.x] - 2026-07-01 - Top-Level Medic Preflight
 
 Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)
