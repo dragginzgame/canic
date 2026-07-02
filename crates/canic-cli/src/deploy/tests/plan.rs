@@ -133,8 +133,12 @@ fn deploy_plan_help_documents_no_mutation_contract() {
     assert!(help.contains("write deployment truth"));
     assert!(help.contains("installed deployment records"));
     assert!(help.contains("call live IC state"));
+    assert!(help.contains("proposed operation labels only"));
+    assert!(help.contains("not executed"));
+    assert!(help.contains("operation objects"));
     assert!(help.contains("--out writes JSON only"));
-    assert!(help.contains("fails if the requested path already exists"));
+    assert!(help.contains("requested path"));
+    assert!(help.contains("exists"));
 }
 
 #[test]
@@ -458,18 +462,8 @@ fn deploy_plan_report_previews_controller_reconciliation() {
         "demo-local",
         "deployment_plan_builder",
     );
-    assert!(
-        json["proposed_operations"]
-            .as_array()
-            .expect("proposed operations")
-            .iter()
-            .any(|item| {
-                item["phase"] == "future_apply_preview"
-                    && item["label"] == "set_controllers"
-                    && item["subject"] == "demo-local"
-                    && item["status"] == "not_executed"
-            })
-    );
+    assert_proposed_operation(&json, "apply_policy", "demo-local");
+    assert_proposed_operation(&json, "set_controllers", "demo-local");
 }
 
 #[test]
@@ -773,7 +767,10 @@ fn deploy_plan_json_renderer_is_report_only() {
     assert!(!json.contains("Deployment plan"));
     assert!(!json.contains("next actions"));
     assert!(!json.contains("ready_to_apply"));
+    assert!(!json.contains("ready to apply"));
     assert!(!json.contains("deployment is safe"));
+    assert!(!json.contains("safe_to_deploy"));
+    assert!(!json.contains("safe to deploy"));
 }
 
 #[test]
@@ -839,15 +836,22 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("Deployment plan"));
     assert!(text.contains("schema_version: 1"));
     assert!(text.contains("command: canic deploy plan"));
-    assert!(text.contains("future apply preview"));
-    assert!(text.contains("label: upload_artifact subject: root status: not_executed"));
-    assert!(text.contains("label: verify_topology subject: demo-local status: not_executed"));
+    assert!(text.contains("future apply preview (proposed operation labels; not executed)"));
+    assert!(text.contains(
+        "phase: future_apply_preview label: upload_artifact subject: root status: not_executed"
+    ));
+    assert!(text.contains(
+        "phase: future_apply_preview label: verify_topology subject: demo-local status: not_executed"
+    ));
     assert!(text.contains("run canic build or provide a build profile with resolved artifacts"));
     assert!(text.contains("source: fleet_config"));
     assert!(text.contains("source: deployment_plan_builder"));
     assert!(text.contains("source: installed_deployment"));
     assert!(!text.contains("ready_to_apply"));
+    assert!(!text.contains("ready to apply"));
     assert!(!text.contains("deployment is safe"));
+    assert!(!text.contains("safe_to_deploy"));
+    assert!(!text.contains("safe to deploy"));
     assert!(!text.contains("will create"));
     assert!(!text.contains("will install"));
     assert!(!text.contains("will upload"));

@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.10` declarative deployment plan. Source of truth:
+- The active line is `0.79.11` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -128,6 +128,18 @@ before this compaction is archived at
   observation, deployment truth, apply behavior, or mutation semantics. The
   0.79.10 changelog entries are staged in the root ledger and detailed 0.79
   notes.
+
+- The 0.79.11 working slice has started by adding a report-only
+  `apply_policy` future-apply preview label when the desired authority profile
+  already includes controller policy expectations. The label remains
+  non-executed planning output and does not add apply operation objects,
+  controller mutation, deployment truth writes, live observation, or mutation
+  semantics. Text output also now prints each preview label's `phase` field so
+  the human renderer mirrors the JSON `ProposedOperationLabel` shape more
+  closely, and the future-apply section header names rows as non-executed
+  proposed-operation labels. Command help now documents the same
+  preview-label boundary. The 0.79.11 changelog entries are staged in the root
+  ledger and detailed 0.79 notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
