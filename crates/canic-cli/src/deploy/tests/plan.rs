@@ -38,6 +38,73 @@ controllers = ["not-a-principal"]
 name = "demo"
 "#;
 
+const CONTROLLER_CONFIG: &str = r#"
+controllers = [
+  "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
+  "aaaaa-aa",
+]
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.user_hub]
+kind = "canister"
+package = "user_hub"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "service"
+"#;
+
+const POOL_CONFIG: &str = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.user_hub]
+kind = "canister"
+package = "user_hub"
+
+[roles.user_shard]
+kind = "canister"
+package = "user_shard"
+
+[app]
+init_mode = "enabled"
+[app.whitelist]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.user_hub]
+kind = "service"
+
+[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+canister_role = "user_shard"
+policy.capacity = 100
+policy.max_shards = 4
+
+[subnets.prime.canisters.user_shard]
+kind = "shard"
+"#;
+
 #[test]
 fn deploy_plan_is_top_level_deploy_command() {
     let parsed = parse_subcommand(
@@ -313,6 +380,88 @@ fn deploy_plan_report_marks_complete_installed_state_as_compared() {
         "role_artifact_observed",
         "wasm_store",
         "local_observation",
+    );
+}
+
+#[test]
+fn deploy_plan_report_previews_pool_canister_creation() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace_with_config("canic-deploy-plan-pool-preview", POOL_CONFIG);
+    write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
+    write_artifact(&icp_root, "user_shard", b"user-shard-artifact");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--config"),
+        OsString::from("fleets/demo/canic.toml"),
+    ])
+    .expect("parse deploy plan options");
+
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root,
+        },
+    );
+    let json = serde_json::to_value(&report).expect("report should serialize");
+
+    assert_eq!(json["plan"]["expected_pool"][0]["pool"], "user_shards");
+    assert_eq!(json["plan"]["expected_pool"][0]["role"], "user_shard");
+    assert!(
+        json["proposed_operations"]
+            .as_array()
+            .expect("proposed operations")
+            .iter()
+            .any(|item| {
+                item["phase"] == "future_apply_preview"
+                    && item["label"] == "create_canister"
+                    && item["subject"] == "user_shards:user_shard"
+                    && item["status"] == "not_executed"
+            })
+    );
+}
+
+#[test]
+fn deploy_plan_report_previews_controller_reconciliation() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace_with_config("canic-deploy-plan-controller-preview", CONTROLLER_CONFIG);
+    write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--config"),
+        OsString::from("fleets/demo/canic.toml"),
+    ])
+    .expect("parse deploy plan options");
+
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root,
+        },
+    );
+    let json = serde_json::to_value(&report).expect("report should serialize");
+
+    assert_eq!(
+        json["plan"]["authority_profile"]["expected_controllers"],
+        serde_json::json!([
+            "aaaaa-aa",
+            "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"
+        ])
+    );
+    assert!(
+        json["proposed_operations"]
+            .as_array()
+            .expect("proposed operations")
+            .iter()
+            .any(|item| {
+                item["phase"] == "future_apply_preview"
+                    && item["label"] == "set_controllers"
+                    && item["subject"] == "demo-local"
+                    && item["status"] == "not_executed"
+            })
     );
 }
 

@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.1` declarative deployment plan. Source of truth:
+- The active line is `0.79.2` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -35,6 +35,14 @@ before this compaction is archived at
   role-artifact facts that are already present in the embedded
   `DeploymentPlanV1`, without adding live observation, apply semantics, or
   mutation.
+
+- The 0.79.2 working slice extends deploy-plan future-apply preview labels for
+  configured pool expectations. Expected pool identities with no known
+  canister id now emit `create_canister` preview labels such as
+  `user_shards:user_shard`; these remain non-executed labels, not apply
+  operation objects. Desired authority profiles with configured deployment
+  controllers now also emit one deployment-scoped `set_controllers` preview
+  label, with the same non-executed planning semantics.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
