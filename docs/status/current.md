@@ -125,7 +125,9 @@ before this compaction is archived at
   `config_path_resolved` and `network_resolved` verified facts from the
   deploy-plan invocation and embedded plan identity. These mirror existing
   top-level report fields and do not change plan construction, comparison,
-  observation, deployment truth, apply behavior, or mutation semantics.
+  observation, deployment truth, apply behavior, or mutation semantics. The
+  0.79.10 changelog entries are staged in the root ledger and detailed 0.79
+  notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
