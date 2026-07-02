@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.1` tightens deploy-plan report facts and JSON contract coverage by
+  surfacing only resolved config, topology, authority, and artifact observations
+  already present in the embedded deployment plan.
+
 - `0.79.0` adds the no-mutation `canic deploy plan <deployment>` planning
   surface with text/JSON reports, safe JSON `--out`, installed-state comparison
   status, hard-cut rejected forms, and medic handoffs to the planner.

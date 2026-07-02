@@ -13,7 +13,9 @@ use crate::{
 };
 use canic_host::{
     canister_build::CanisterBuildProfile,
-    deployment_truth::{DeploymentAssumptionV1, DeploymentPlanV1, LocalDeploymentPlanRequest},
+    deployment_truth::{
+        DeploymentAssumptionV1, DeploymentPlanV1, LocalDeploymentPlanRequest, RoleArtifactV1,
+    },
     release_set::{
         configured_fleet_name, icp_root as resolve_icp_root,
         workspace_root as resolve_workspace_root,
@@ -278,6 +280,9 @@ fn verified_facts(
         source: "fleet_config",
     }];
 
+    facts.extend(plan_identity_facts(plan));
+    facts.extend(role_artifact_facts(&plan.role_artifacts));
+
     if let Some(root) = &plan.trust_domain.root_trust_anchor {
         facts.push(PlanDiagnostic {
             category: "observation",
@@ -291,6 +296,153 @@ fn verified_facts(
     }
 
     facts
+}
+
+fn plan_identity_facts(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    let identity = &plan.deployment_identity;
+    let subject = &identity.deployment_name;
+    let mut facts = Vec::new();
+
+    if !has_plan_assumption_prefix(plan, "local_artifacts.")
+        && !has_plan_assumption_key(plan, "local_config.roles")
+    {
+        push_digest_fact(
+            &mut facts,
+            DigestFact {
+                category: "artifact",
+                code: "artifact_set_resolved",
+                subject,
+                label: "artifact set digest",
+                digest: identity.artifact_set_digest.as_deref(),
+                source: "deployment_plan_builder",
+            },
+        );
+    }
+    push_digest_fact(
+        &mut facts,
+        DigestFact {
+            category: "artifact",
+            code: "deployment_manifest_resolved",
+            subject,
+            label: "deployment manifest digest",
+            digest: identity.deployment_manifest_digest.as_deref(),
+            source: "deployment_plan_builder",
+        },
+    );
+    if !has_plan_assumption_key(plan, "local_config.controllers") {
+        push_digest_fact(
+            &mut facts,
+            DigestFact {
+                category: "authority",
+                code: "authority_profile_resolved",
+                subject,
+                label: "authority profile hash",
+                digest: identity.authority_profile_hash.as_deref(),
+                source: "deployment_plan_builder",
+            },
+        );
+    }
+    push_digest_fact(
+        &mut facts,
+        DigestFact {
+            category: "config",
+            code: "canonical_runtime_config_resolved",
+            subject,
+            label: "canonical runtime config digest",
+            digest: identity.canonical_runtime_config_digest.as_deref(),
+            source: "deployment_config",
+        },
+    );
+    if !has_plan_assumption_key(plan, "local_config.pools") {
+        push_digest_fact(
+            &mut facts,
+            DigestFact {
+                category: "topology",
+                code: "pool_identity_set_resolved",
+                subject,
+                label: "pool identity set digest",
+                digest: identity.pool_identity_set_digest.as_deref(),
+                source: "deployment_plan_builder",
+            },
+        );
+    }
+    if !has_plan_assumption_key(plan, "local_config.roles") {
+        push_digest_fact(
+            &mut facts,
+            DigestFact {
+                category: "topology",
+                code: "role_topology_resolved",
+                subject,
+                label: "role topology hash",
+                digest: identity.role_topology_hash.as_deref(),
+                source: "deployment_plan_builder",
+            },
+        );
+    }
+
+    facts
+}
+
+fn has_plan_assumption_key(plan: &DeploymentPlanV1, key: &str) -> bool {
+    plan.unresolved_assumptions
+        .iter()
+        .any(|assumption| assumption.key == key)
+}
+
+fn has_plan_assumption_prefix(plan: &DeploymentPlanV1, prefix: &str) -> bool {
+    plan.unresolved_assumptions
+        .iter()
+        .any(|assumption| assumption.key.starts_with(prefix))
+}
+
+struct DigestFact<'a> {
+    category: &'static str,
+    code: &'static str,
+    subject: &'a str,
+    label: &'static str,
+    digest: Option<&'a str>,
+    source: &'static str,
+}
+
+fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
+    if let Some(digest) = fact.digest {
+        facts.push(PlanDiagnostic {
+            category: fact.category,
+            code: fact.code.to_string(),
+            severity: "info",
+            subject: fact.subject.to_string(),
+            detail: format!("{} resolved: {digest}", fact.label),
+            next: None,
+            source: fact.source,
+        });
+    }
+}
+
+fn role_artifact_facts(artifacts: &[RoleArtifactV1]) -> Vec<PlanDiagnostic> {
+    artifacts
+        .iter()
+        .filter_map(|artifact| {
+            artifact
+                .observed_wasm_gz_file_sha256
+                .as_ref()
+                .map(|digest| PlanDiagnostic {
+                    category: "artifact",
+                    code: "role_artifact_observed".to_string(),
+                    severity: "info",
+                    subject: artifact.role.clone(),
+                    detail: role_artifact_fact_detail(artifact, digest),
+                    next: None,
+                    source: "local_observation",
+                })
+        })
+        .collect()
+}
+
+fn role_artifact_fact_detail(artifact: &RoleArtifactV1, digest: &str) -> String {
+    match &artifact.wasm_gz_path {
+        Some(path) => format!("observed wasm artifact {path} with sha256 {digest}"),
+        None => format!("observed wasm artifact sha256 {digest}"),
+    }
 }
 
 fn plan_assumptions(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
