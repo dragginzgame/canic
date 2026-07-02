@@ -240,15 +240,21 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
             .iter()
             .any(|item| item["code"] == "observed_inventory_unavailable")
     );
-    assert!(
-        json["proposed_operations"]
-            .as_array()
-            .expect("proposed operations")
-            .iter()
-            .any(|item| item["label"] == "install_wasm" && item["subject"] == "root")
+    assert_proposed_operation_keys(
+        &json,
+        &[
+            "future_apply_preview|create_canister|root|not_executed",
+            "future_apply_preview|create_canister|user_hub|not_executed",
+            "future_apply_preview|create_canister|wasm_store|not_executed",
+            "future_apply_preview|install_wasm|root|not_executed",
+            "future_apply_preview|install_wasm|user_hub|not_executed",
+            "future_apply_preview|install_wasm|wasm_store|not_executed",
+            "future_apply_preview|register_child|user_hub|not_executed",
+            "future_apply_preview|register_child|wasm_store|not_executed",
+            "future_apply_preview|register_root|root|not_executed",
+            "future_apply_preview|verify_topology|demo-local|not_executed",
+        ],
     );
-    assert_proposed_operation(&json, "register_root", "root");
-    assert_proposed_operation(&json, "register_child", "user_hub");
     assert!(
         json["assumptions"]
             .as_array()
@@ -970,6 +976,27 @@ fn assert_proposed_operation(report: &JsonValue, label: &str, subject: &str) {
         "missing proposed operation {label} for {subject}: {:#}",
         report["proposed_operations"]
     );
+}
+
+fn assert_proposed_operation_keys(report: &JsonValue, expected: &[&str]) {
+    let actual = report["proposed_operations"]
+        .as_array()
+        .expect("proposed operations")
+        .iter()
+        .map(proposed_operation_key)
+        .collect::<Vec<_>>();
+
+    assert_eq!(actual, expected, "proposed operation keys");
+}
+
+fn proposed_operation_key(item: &JsonValue) -> String {
+    format!(
+        "{}|{}|{}|{}",
+        item["phase"].as_str().unwrap_or_default(),
+        item["label"].as_str().unwrap_or_default(),
+        item["subject"].as_str().unwrap_or_default(),
+        item["status"].as_str().unwrap_or_default()
+    )
 }
 
 fn assert_base_plan_verified_facts(report: &JsonValue) {
