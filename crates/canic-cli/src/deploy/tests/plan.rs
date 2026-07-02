@@ -217,44 +217,7 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
         "demo-local"
     );
     assert_eq!(json["plan"]["fleet_template"], "demo");
-    assert_no_verified_fact(&json, "artifact_set_resolved");
-    assert_verified_fact(
-        &json,
-        "authority_profile_resolved",
-        "demo-local",
-        "deployment_plan_builder",
-    );
-    assert_verified_fact(
-        &json,
-        "canonical_runtime_config_resolved",
-        "demo-local",
-        "deployment_config",
-    );
-    assert_verified_fact(
-        &json,
-        "deployment_target_resolved",
-        "demo-local",
-        "fleet_config",
-    );
-    assert_verified_fact(
-        &json,
-        "expected_canister_inventory_resolved",
-        "demo-local",
-        "deployment_plan_builder",
-    );
-    assert_verified_fact(
-        &json,
-        "pool_identity_set_resolved",
-        "demo-local",
-        "deployment_plan_builder",
-    );
-    assert_verified_fact(&json, "role_artifact_observed", "root", "local_observation");
-    assert_verified_fact(
-        &json,
-        "role_topology_resolved",
-        "demo-local",
-        "deployment_plan_builder",
-    );
+    assert_base_plan_verified_facts(&json);
     assert!(
         json["warnings"]
             .as_array()
@@ -317,6 +280,12 @@ fn deploy_plan_report_records_verified_installed_root_fact() {
             .iter()
             .any(|item| item["code"] == "installed_root_canister_id_resolved"
                 && item["source"] == "installed_deployment")
+    );
+    assert_verified_fact(
+        &json,
+        "root_trust_anchor_resolved",
+        "demo-local",
+        "installed_deployment",
     );
     assert!(
         json["warnings"]
@@ -416,6 +385,12 @@ fn deploy_plan_report_previews_pool_canister_creation() {
 
     assert_eq!(json["plan"]["expected_pool"][0]["pool"], "user_shards");
     assert_eq!(json["plan"]["expected_pool"][0]["role"], "user_shard");
+    assert_verified_fact(
+        &json,
+        "expected_pool_inventory_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
     assert_proposed_operation(&json, "create_canister", "user_shards:user_shard");
     assert_proposed_operation(&json, "register_child", "user_shards:user_shard");
 }
@@ -448,6 +423,12 @@ fn deploy_plan_report_previews_controller_reconciliation() {
             "aaaaa-aa",
             "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae"
         ])
+    );
+    assert_verified_fact(
+        &json,
+        "expected_controller_set_resolved",
+        "demo-local",
+        "deployment_plan_builder",
     );
     assert!(
         json["proposed_operations"]
@@ -641,6 +622,7 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
             .any(|item| item["code"] == "deployment_target_resolved")
     );
     assert_no_verified_fact(&json, "authority_profile_resolved");
+    assert_no_verified_fact(&json, "expected_controller_set_resolved");
     assert_no_verified_fact(&json, "expected_canister_inventory_resolved");
     assert!(
         json["blockers"]
@@ -967,6 +949,57 @@ fn assert_proposed_operation(report: &JsonValue, label: &str, subject: &str) {
         "missing proposed operation {label} for {subject}: {:#}",
         report["proposed_operations"]
     );
+}
+
+fn assert_base_plan_verified_facts(report: &JsonValue) {
+    assert_no_verified_fact(report, "artifact_set_resolved");
+    for (code, subject, source) in [
+        (
+            "authority_profile_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        (
+            "canonical_runtime_config_resolved",
+            "demo-local",
+            "deployment_config",
+        ),
+        ("deployment_target_resolved", "demo-local", "fleet_config"),
+        (
+            "expected_controller_set_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        (
+            "expected_canister_inventory_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        (
+            "expected_role_artifact_inventory_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        (
+            "expected_pool_inventory_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        ("fleet_template_resolved", "demo-local", "fleet_config"),
+        (
+            "pool_identity_set_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+        ("role_artifact_observed", "root", "local_observation"),
+        (
+            "role_topology_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
+    ] {
+        assert_verified_fact(report, code, subject, source);
+    }
 }
 
 fn assert_top_level_json_field_order(json: &str, fields: &[&str]) {
