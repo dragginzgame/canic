@@ -68,15 +68,11 @@ before this compaction is archived at
   `canic info medic <deployment>` route, and by removing the same retired
   `info medic` leaf from top-level global ICP/network option forwarding.
 
-- The post-0.78.5 working tree begins the next medic command-surface cleanup:
-  `canic medic project help` and `canic medic deployment help` now render
-  medic usage instead of entering project/deployment report construction,
-  including when medic-local flags such as `--json` appear around the
-  subcommand.
-
-- The same working tree tightens medic text rendering so unbroken long
-  diagnostic values wrap within `MEDIC_REPORT_WIDTH` instead of widening the
-  report.
+- The 0.78.6 cleanup slice keeps medic subcommand help usage-only:
+  `canic medic project help` and `canic medic deployment help` render medic
+  usage instead of entering project/deployment report construction, including
+  when medic-local flags such as `--json` appear around the subcommand. The
+  same slice wraps unbroken long diagnostic values within `MEDIC_REPORT_WIDTH`.
 
 - 0.77 completed the wasm-footprint feature-boundary line, including
   chain-key/root-publication feature splitting and local DTO replacements for
