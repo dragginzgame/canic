@@ -573,10 +573,22 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
             operations.push(operation("create_canister", &canister.role));
         }
     }
+    for canister in &plan.expected_pool {
+        if canister.canister_id.is_none() {
+            let subject = pool_operation_subject(&canister.pool, canister.role.as_deref());
+            operations.push(operation("create_canister", &subject));
+        }
+    }
     for artifact in &plan.role_artifacts {
         operations.push(operation(
             wasm_operation_label(plan, &artifact.role),
             &artifact.role,
+        ));
+    }
+    if !plan.authority_profile.expected_controllers.is_empty() {
+        operations.push(operation(
+            "set_controllers",
+            &plan.deployment_identity.deployment_name,
         ));
     }
     operations.push(operation(
@@ -584,6 +596,13 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
         &plan.deployment_identity.deployment_name,
     ));
     operations
+}
+
+fn pool_operation_subject(pool: &str, role: Option<&str>) -> String {
+    match role {
+        Some(role) => format!("{pool}:{role}"),
+        None => pool.to_string(),
+    }
 }
 
 fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> &'static str {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.2` expands deploy-plan future-apply preview labels for configured
+  pool canister creation and desired controller reconciliation while keeping
+  them non-executed planning labels only.
+
 - `0.79.1` tightens deploy-plan report facts and JSON contract coverage by
   surfacing only resolved config, topology, authority, and artifact observations
   already present in the embedded deployment plan.
