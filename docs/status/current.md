@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.9` declarative deployment plan. Source of truth:
+- The active line is `0.79.10` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -118,6 +118,14 @@ before this compaction is archived at
   same slice surfaces passive `build_profile_resolved`, `plan_id_resolved`,
   `runtime_variant_resolved`, and `planner_version_resolved` verified facts
   already present in the command options or embedded `DeploymentPlanV1`.
+  The 0.79.9 changelog entries are staged in the root ledger and detailed
+  0.79 notes.
+
+- The 0.79.10 working slice has started by surfacing passive
+  `config_path_resolved` and `network_resolved` verified facts from the
+  deploy-plan invocation and embedded plan identity. These mirror existing
+  top-level report fields and do not change plan construction, comparison,
+  observation, deployment truth, apply behavior, or mutation semantics.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
