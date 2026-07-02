@@ -326,7 +326,7 @@ fn verified_facts(
         next: None,
         source: SOURCE_FLEET_CONFIG,
     });
-    facts.extend(plan_context_facts(options, plan));
+    facts.extend(plan_context_facts(options, config_path, plan));
     facts.extend(plan_identity_facts(plan));
     facts.extend(authority_profile_facts(plan));
     facts.extend(expected_role_artifact_inventory_facts(plan));
@@ -351,7 +351,11 @@ fn verified_facts(
     facts
 }
 
-fn plan_context_facts(options: &DeployPlanOptions, plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+fn plan_context_facts(
+    options: &DeployPlanOptions,
+    config_path: &Path,
+    plan: &DeploymentPlanV1,
+) -> Vec<PlanDiagnostic> {
     let subject = plan.deployment_identity.deployment_name.clone();
     let mut facts = vec![
         PlanDiagnostic {
@@ -365,10 +369,28 @@ fn plan_context_facts(options: &DeployPlanOptions, plan: &DeploymentPlanV1) -> V
         },
         PlanDiagnostic {
             category: CATEGORY_CONFIG,
+            code: "config_path_resolved".to_string(),
+            severity: SEVERITY_INFO,
+            subject: subject.clone(),
+            detail: format!("config path resolved: {}", config_path.display()),
+            next: None,
+            source: SOURCE_DEPLOYMENT_CONFIG,
+        },
+        PlanDiagnostic {
+            category: CATEGORY_CONFIG,
             code: "runtime_variant_resolved".to_string(),
             severity: SEVERITY_INFO,
             subject: subject.clone(),
             detail: format!("runtime variant resolved: {}", plan.runtime_variant),
+            next: None,
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
+        },
+        PlanDiagnostic {
+            category: CATEGORY_DEPLOYMENT_IDENTITY,
+            code: "network_resolved".to_string(),
+            severity: SEVERITY_INFO,
+            subject: subject.clone(),
+            detail: format!("network resolved: {}", plan.deployment_identity.network),
             next: None,
             source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
         },

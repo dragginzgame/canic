@@ -1036,6 +1036,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "deployment_config",
         ),
         ("build_profile_resolved", "demo-local", "build_profile"),
+        ("config_path_resolved", "demo-local", "deployment_config"),
         ("deployment_target_resolved", "demo-local", "fleet_config"),
         (
             "expected_controller_set_resolved",
@@ -1058,6 +1059,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "deployment_plan_builder",
         ),
         ("fleet_template_resolved", "demo-local", "fleet_config"),
+        ("network_resolved", "demo-local", "deployment_plan_builder"),
         (
             "pool_identity_set_resolved",
             "demo-local",
