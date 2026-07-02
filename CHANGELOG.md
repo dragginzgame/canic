@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- `canic deploy plan` now emits non-executed `upload_artifact` future-apply
+  preview labels for each resolved role artifact, making the artifact staging
+  step visible, adding artifact-specific build guidance, and surfacing passive
+  planner context/identity facts without introducing apply operation objects,
+  deployment truth writes, or mutation semantics.
+
 ## [0.79.x] - 2026-07-02 - Declarative Deployment Plan
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)

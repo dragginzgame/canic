@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.8` declarative deployment plan. Source of truth:
+- The active line is `0.79.9` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -105,6 +105,19 @@ before this compaction is archived at
   `DeploymentPlanV1`, plan construction, observation, deployment truth, apply
   behavior, or mutation semantics. The 0.79.8 changelog entries are staged in
   the root ledger and detailed 0.79 notes.
+
+- The 0.79.9 working slice has started by adding report-only
+  `upload_artifact` future-apply preview labels for each resolved
+  `DeploymentPlanV1.role_artifacts` entry. The labels remain non-executed
+  planning output and do not add apply operation objects, artifact registration,
+  deployment truth writes, live observation, or mutation semantics. Public JSON
+  and text-renderer coverage now pins the label while continuing to reject
+  apply-safety wording such as `will upload`. Plans with artifact diagnostics
+  now also include the top-level next action
+  `run canic build or provide a build profile with resolved artifacts`. The
+  same slice surfaces passive `build_profile_resolved`, `plan_id_resolved`,
+  `runtime_variant_resolved`, and `planner_version_resolved` verified facts
+  already present in the command options or embedded `DeploymentPlanV1`.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.

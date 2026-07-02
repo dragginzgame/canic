@@ -49,6 +49,7 @@ const CATEGORY_TRUST_DOMAIN: &str = "trust_domain";
 const CATEGORY_UNSUPPORTED_SHAPE: &str = "unsupported_shape";
 const CATEGORY_VERIFIER_READINESS: &str = "verifier_readiness";
 const SOURCE_CLI_ARG: &str = "cli_arg";
+const SOURCE_BUILD_PROFILE: &str = "build_profile";
 const SOURCE_DEPLOYMENT_CONFIG: &str = "deployment_config";
 const SOURCE_DEPLOYMENT_PLAN_BUILDER: &str = "deployment_plan_builder";
 const SOURCE_FLEET_CONFIG: &str = "fleet_config";
@@ -62,6 +63,7 @@ const OP_REGISTER_CHILD: &str = "register_child";
 const OP_REGISTER_ROOT: &str = "register_root";
 const OP_VERIFY_READINESS: &str = "verify_readiness";
 const OP_VERIFY_TOPOLOGY: &str = "verify_topology";
+const OP_UPLOAD_ARTIFACT: &str = "upload_artifact";
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
 const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
 const ASSUMPTION_PREFIX_LOCAL_STATE: &str = "local_state.";
@@ -324,6 +326,7 @@ fn verified_facts(
         next: None,
         source: SOURCE_FLEET_CONFIG,
     });
+    facts.extend(plan_context_facts(options, plan));
     facts.extend(plan_identity_facts(plan));
     facts.extend(authority_profile_facts(plan));
     facts.extend(expected_role_artifact_inventory_facts(plan));
@@ -342,6 +345,53 @@ fn verified_facts(
             detail: format!("installed deployment state resolves root canister {root}"),
             next: None,
             source: SOURCE_INSTALLED_DEPLOYMENT,
+        });
+    }
+
+    facts
+}
+
+fn plan_context_facts(options: &DeployPlanOptions, plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
+    let subject = plan.deployment_identity.deployment_name.clone();
+    let mut facts = vec![
+        PlanDiagnostic {
+            category: CATEGORY_ARTIFACT,
+            code: "build_profile_resolved".to_string(),
+            severity: SEVERITY_INFO,
+            subject: subject.clone(),
+            detail: format!("build profile resolved: {}", build_profile_name(options)),
+            next: None,
+            source: SOURCE_BUILD_PROFILE,
+        },
+        PlanDiagnostic {
+            category: CATEGORY_CONFIG,
+            code: "runtime_variant_resolved".to_string(),
+            severity: SEVERITY_INFO,
+            subject: subject.clone(),
+            detail: format!("runtime variant resolved: {}", plan.runtime_variant),
+            next: None,
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
+        },
+        PlanDiagnostic {
+            category: CATEGORY_DEPLOYMENT_IDENTITY,
+            code: "plan_id_resolved".to_string(),
+            severity: SEVERITY_INFO,
+            subject: subject.clone(),
+            detail: format!("plan id resolved: {}", plan.plan_id),
+            next: None,
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
+        },
+    ];
+
+    if let Some(version) = &plan.deployment_identity.canic_version {
+        facts.push(PlanDiagnostic {
+            category: CATEGORY_DEPLOYMENT_IDENTITY,
+            code: "planner_version_resolved".to_string(),
+            severity: SEVERITY_INFO,
+            subject,
+            detail: format!("planner version resolved: {version}"),
+            next: None,
+            source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
         });
     }
 
@@ -788,6 +838,7 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
         }
     }
     for artifact in &plan.role_artifacts {
+        operations.push(operation(OP_UPLOAD_ARTIFACT, &artifact.role));
         operations.push(operation(
             wasm_operation_label(plan, &artifact.role),
             &artifact.role,
@@ -870,11 +921,24 @@ fn next_actions(
     if !warnings.is_empty() || !assumptions.is_empty() {
         actions.push("resolve warnings before designing apply".to_string());
     }
+    if has_artifact_diagnostics(blockers)
+        || has_artifact_diagnostics(warnings)
+        || has_artifact_diagnostics(assumptions)
+    {
+        actions
+            .push("run canic build or provide a build profile with resolved artifacts".to_string());
+    }
     actions.push(format!(
         "run canic medic deployment {} if operator readiness is uncertain",
         options.deployment
     ));
     actions
+}
+
+fn has_artifact_diagnostics(diagnostics: &[PlanDiagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.category == CATEGORY_ARTIFACT)
 }
 
 fn aggregate_status(
@@ -1232,8 +1296,9 @@ impl ComparisonStatus {
 mod tests {
     use super::*;
     use canic_host::deployment_truth::{
-        AuthorityProfileV1, CanisterControlClassV1, DeploymentIdentityV1, ExpectedCanisterV1,
-        RoleEpochExpectationV1, TrustDomainV1, VerifierReadinessExpectationV1,
+        ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1, DeploymentIdentityV1,
+        ExpectedCanisterV1, RoleArtifactV1, RoleEpochExpectationV1, TrustDomainV1,
+        VerifierReadinessExpectationV1,
     };
 
     #[test]
@@ -1429,6 +1494,23 @@ mod tests {
         );
     }
 
+    #[test]
+    fn proposed_operations_include_artifact_upload_preview_labels() {
+        let mut plan = plan_with_assumptions([]);
+        plan.role_artifacts = vec![role_artifact("root"), role_artifact("user_hub")];
+
+        assert_eq!(
+            operation_keys(&proposed_operations(&plan)),
+            vec![
+                "future_apply_preview|install_wasm|root|not_executed",
+                "future_apply_preview|install_wasm|user_hub|not_executed",
+                "future_apply_preview|upload_artifact|root|not_executed",
+                "future_apply_preview|upload_artifact|user_hub|not_executed",
+                "future_apply_preview|verify_topology|demo-local|not_executed",
+            ]
+        );
+    }
+
     fn operation_keys(operations: &[ProposedOperationLabel]) -> Vec<String> {
         operations.iter().map(operation_key).collect()
     }
@@ -1547,6 +1629,31 @@ mod tests {
             role: role.to_string(),
             canister_id: None,
             control_class: CanisterControlClassV1::DeploymentControlled,
+        }
+    }
+
+    fn role_artifact(role: &str) -> RoleArtifactV1 {
+        RoleArtifactV1 {
+            role: role.to_string(),
+            source: ArtifactSourceV1::LocalBuild,
+            build_profile: "debug".to_string(),
+            wasm_path: None,
+            wasm_gz_path: None,
+            wasm_gz_size_bytes: None,
+            wasm_sha256: None,
+            wasm_gz_sha256: None,
+            wasm_gz_sha256_source: None,
+            observed_wasm_gz_file_sha256: None,
+            observed_wasm_gz_file_sha256_source: None,
+            installed_module_hash: None,
+            candid_path: None,
+            candid_sha256: None,
+            raw_config_sha256: None,
+            canonical_embedded_config_sha256: None,
+            embedded_topology_sha256: None,
+            builder_version: None,
+            rust_toolchain: None,
+            package_version: None,
         }
     }
 
