@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
 
+- `0.79.11` tightens deploy-plan future-apply preview output by surfacing
+  policy-application labels, aligning text rows with JSON preview fields, and
+  documenting that preview rows are non-executed labels only.
+
 - `0.79.10` mirrors deploy-plan config path and network context into passive
   verified facts so automation can consume the same invocation context exposed
   by the top-level report fields.

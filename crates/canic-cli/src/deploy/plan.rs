@@ -58,6 +58,7 @@ const SOURCE_LOCAL_OBSERVATION: &str = "local_observation";
 const OP_CREATE_CANISTER: &str = "create_canister";
 const OP_INSTALL_WASM: &str = "install_wasm";
 const OP_UPGRADE_WASM: &str = "upgrade_wasm";
+const OP_APPLY_POLICY: &str = "apply_policy";
 const OP_SET_CONTROLLERS: &str = "set_controllers";
 const OP_REGISTER_CHILD: &str = "register_child";
 const OP_REGISTER_ROOT: &str = "register_root";
@@ -89,8 +90,10 @@ Examples:
 
 Builds a deterministic planning report from local project config. The command
 does not install, upgrade, create canisters, write deployment truth, update
-installed deployment records, or call live IC state. --out writes JSON only and
-fails if the requested path already exists or its parent directory is missing.";
+installed deployment records, or call live IC state. Future-apply preview rows
+are proposed operation labels only; they are not executed and are not apply
+operation objects. --out writes JSON only and fails if the requested path already
+exists or its parent directory is missing.";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DeployPlanOptions {
@@ -868,6 +871,10 @@ fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
     }
     if !plan.authority_profile.expected_controllers.is_empty() {
         operations.push(operation(
+            OP_APPLY_POLICY,
+            &plan.deployment_identity.deployment_name,
+        ));
+        operations.push(operation(
             OP_SET_CONTROLLERS,
             &plan.deployment_identity.deployment_name,
         ));
@@ -1164,11 +1171,11 @@ fn append_operations(lines: &mut Vec<String>, operations: &[ProposedOperationLab
         return;
     }
 
-    lines.push("future apply preview".to_string());
+    lines.push("future apply preview (proposed operation labels; not executed)".to_string());
     for operation in operations {
         lines.push(format!(
-            "  - label: {} subject: {} status: {}",
-            operation.label, operation.subject, operation.status
+            "  - phase: {} label: {} subject: {} status: {}",
+            operation.phase, operation.label, operation.subject, operation.status
         ));
     }
     lines.push(String::new());
@@ -1528,6 +1535,21 @@ mod tests {
                 "future_apply_preview|install_wasm|user_hub|not_executed",
                 "future_apply_preview|upload_artifact|root|not_executed",
                 "future_apply_preview|upload_artifact|user_hub|not_executed",
+                "future_apply_preview|verify_topology|demo-local|not_executed",
+            ]
+        );
+    }
+
+    #[test]
+    fn proposed_operations_include_authority_policy_preview_labels() {
+        let mut plan = plan_with_assumptions([]);
+        plan.authority_profile.expected_controllers = vec!["aaaaa-aa".to_string()];
+
+        assert_eq!(
+            operation_keys(&proposed_operations(&plan)),
+            vec![
+                "future_apply_preview|apply_policy|demo-local|not_executed",
+                "future_apply_preview|set_controllers|demo-local|not_executed",
                 "future_apply_preview|verify_topology|demo-local|not_executed",
             ]
         );
