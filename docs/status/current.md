@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.0` declarative deployment plan. Source of truth:
+- The active line is `0.79.1` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -29,6 +29,12 @@ before this compaction is archived at
   labels distinguish first-install `install_wasm` from known-canister
   `upgrade_wasm`. Medic next actions may point to
   `canic deploy plan`, but medic does not execute the planner.
+
+- The 0.79.1 working slice tightens deploy-plan report facts: reports now
+  surface deterministic config, topology, authority, artifact-set, and observed
+  role-artifact facts that are already present in the embedded
+  `DeploymentPlanV1`, without adding live observation, apply semantics, or
+  mutation.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.

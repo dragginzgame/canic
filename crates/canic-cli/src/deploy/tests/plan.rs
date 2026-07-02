@@ -150,12 +150,37 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
         "demo-local"
     );
     assert_eq!(json["plan"]["fleet_template"], "demo");
-    assert!(
-        json["verified_facts"]
-            .as_array()
-            .expect("verified facts")
-            .iter()
-            .any(|item| item["code"] == "deployment_target_resolved")
+    assert_no_verified_fact(&json, "artifact_set_resolved");
+    assert_verified_fact(
+        &json,
+        "authority_profile_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
+    assert_verified_fact(
+        &json,
+        "canonical_runtime_config_resolved",
+        "demo-local",
+        "deployment_config",
+    );
+    assert_verified_fact(
+        &json,
+        "deployment_target_resolved",
+        "demo-local",
+        "fleet_config",
+    );
+    assert_verified_fact(
+        &json,
+        "pool_identity_set_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
+    assert_verified_fact(&json, "role_artifact_observed", "root", "local_observation");
+    assert_verified_fact(
+        &json,
+        "role_topology_resolved",
+        "demo-local",
+        "deployment_plan_builder",
     );
     assert!(
         json["warnings"]
@@ -264,6 +289,31 @@ fn deploy_plan_report_marks_complete_installed_state_as_compared() {
     assert_eq!(json["blockers"], JsonValue::Array(vec![]));
     assert_eq!(json["warnings"], JsonValue::Array(vec![]));
     assert_eq!(json["assumptions"], JsonValue::Array(vec![]));
+    assert_verified_fact(
+        &json,
+        "artifact_set_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
+    assert_verified_fact(
+        &json,
+        "deployment_manifest_resolved",
+        "demo-local",
+        "deployment_plan_builder",
+    );
+    assert_verified_fact(&json, "role_artifact_observed", "root", "local_observation");
+    assert_verified_fact(
+        &json,
+        "role_artifact_observed",
+        "user_hub",
+        "local_observation",
+    );
+    assert_verified_fact(
+        &json,
+        "role_artifact_observed",
+        "wasm_store",
+        "local_observation",
+    );
 }
 
 #[test]
@@ -443,6 +493,7 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
             .iter()
             .any(|item| item["code"] == "deployment_target_resolved")
     );
+    assert_no_verified_fact(&json, "authority_profile_resolved");
     assert!(
         json["blockers"]
             .as_array()
@@ -568,6 +619,47 @@ fn deploy_plan_json_renderer_is_report_only() {
 }
 
 #[test]
+fn deploy_plan_json_renderer_uses_contract_field_order() {
+    let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-json-order");
+    let options = deploy_plan::DeployPlanOptions::parse([
+        OsString::from("demo-local"),
+        OsString::from("--config"),
+        OsString::from("fleets/demo/canic.toml"),
+    ])
+    .expect("parse deploy plan options");
+    let report = deploy_plan::build_report(
+        &options,
+        &deploy_plan::DeployPlanRoots {
+            workspace_root,
+            icp_root,
+        },
+    );
+
+    let json = deploy_plan::render_json(&report).expect("render report json");
+
+    assert_top_level_json_field_order(
+        &json,
+        &[
+            "schema_version",
+            "command",
+            "target",
+            "network",
+            "build_profile",
+            "config_path",
+            "status",
+            "comparison_status",
+            "plan",
+            "blockers",
+            "warnings",
+            "assumptions",
+            "verified_facts",
+            "proposed_operations",
+            "next_actions",
+        ],
+    );
+}
+
+#[test]
 fn deploy_plan_text_avoids_apply_safety_claims() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-text");
     let options = deploy_plan::DeployPlanOptions::parse([
@@ -683,5 +775,46 @@ fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> Instal
         icp_root: "/workspace".to_string(),
         config_path: "fleets/demo/canic.toml".to_string(),
         release_set_manifest_path: ".icp/local/canisters/root/release-set.json".to_string(),
+    }
+}
+
+fn assert_verified_fact(report: &JsonValue, code: &str, subject: &str, source: &str) {
+    assert!(
+        report["verified_facts"]
+            .as_array()
+            .expect("verified facts")
+            .iter()
+            .any(|item| {
+                item["code"] == code && item["subject"] == subject && item["source"] == source
+            }),
+        "missing verified fact {code} for {subject} from {source}: {:#}",
+        report["verified_facts"]
+    );
+}
+
+fn assert_no_verified_fact(report: &JsonValue, code: &str) {
+    assert!(
+        report["verified_facts"]
+            .as_array()
+            .expect("verified facts")
+            .iter()
+            .all(|item| item["code"] != code),
+        "unexpected verified fact {code}: {:#}",
+        report["verified_facts"]
+    );
+}
+
+fn assert_top_level_json_field_order(json: &str, fields: &[&str]) {
+    let mut last = 0;
+    for field in fields {
+        let pattern = format!("\n  \"{field}\"");
+        let position = json
+            .find(&pattern)
+            .unwrap_or_else(|| panic!("missing top-level JSON field {field}: {json}"));
+        assert!(
+            position >= last,
+            "top-level JSON field {field} appeared out of order"
+        );
+        last = position;
     }
 }
