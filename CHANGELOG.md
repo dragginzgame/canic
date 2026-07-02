@@ -12,18 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.78.md](docs/changelog/0.78.md)
 
-- `0.78.6` hardens medic command-surface and text-output handling so
-  subcommand help stays usage-only and long diagnostic values stay within the
-  fixed report width.
+- `0.78.5` aligns installed and packaged downstream CLI proof fixtures with
+  the hard-cut medic auth-renewal surface and its project-level preconditions.
 
-- `0.78.5` removes the last active `canic info medic` survivorship from
-  install guidance and top-level global-option forwarding, keeping operators
-  on the hard-cut `canic medic deployment` surface.
-
-- `0.78.4` tightens medic readiness diagnostics by preserving precise ICP CLI
-  and auth-renewal error codes, keeping project-only network warnings out of
-  deployment reports, and aligning blob-storage target resolution with the
-  0.78 principal-first contract.
+- `0.78.4` hardens medic readiness and command-surface behavior by preserving
+  precise ICP/auth/target diagnostics, removing retired `info medic`
+  survivorship, keeping subcommand help usage-only, and wrapping long
+  diagnostic values.
 
 - `0.78.3` expands medic preflight with project package-metadata checks,
   deployment-truth and registry-observation diagnostics, deployment-name
