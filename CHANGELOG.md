@@ -8,15 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- `canic deploy plan` now mirrors resolved config path and network context into
-  passive verified facts, so automation consuming the fact list sees the same
-  invocation context as the top-level report fields without changing plan
-  construction, comparison, observation, deployment truth, or mutation
-  semantics.
-
 ## [0.79.x] - 2026-07-02 - Declarative Deployment Plan
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
+
+- `0.79.10` mirrors deploy-plan config path and network context into passive
+  verified facts so automation can consume the same invocation context exposed
+  by the top-level report fields.
 
 - `0.79.9` expands deploy-plan report visibility with artifact upload preview
   labels, artifact-specific next actions, and passive planner context facts
