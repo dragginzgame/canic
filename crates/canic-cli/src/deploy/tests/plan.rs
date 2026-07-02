@@ -263,6 +263,8 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
             .iter()
             .any(|item| item["label"] == "install_wasm" && item["subject"] == "root")
     );
+    assert_proposed_operation(&json, "register_root", "root");
+    assert_proposed_operation(&json, "register_child", "user_hub");
     assert!(
         json["assumptions"]
             .as_array()
@@ -408,18 +410,8 @@ fn deploy_plan_report_previews_pool_canister_creation() {
 
     assert_eq!(json["plan"]["expected_pool"][0]["pool"], "user_shards");
     assert_eq!(json["plan"]["expected_pool"][0]["role"], "user_shard");
-    assert!(
-        json["proposed_operations"]
-            .as_array()
-            .expect("proposed operations")
-            .iter()
-            .any(|item| {
-                item["phase"] == "future_apply_preview"
-                    && item["label"] == "create_canister"
-                    && item["subject"] == "user_shards:user_shard"
-                    && item["status"] == "not_executed"
-            })
-    );
+    assert_proposed_operation(&json, "create_canister", "user_shards:user_shard");
+    assert_proposed_operation(&json, "register_child", "user_shards:user_shard");
 }
 
 #[test]
@@ -950,6 +942,23 @@ fn assert_no_verified_fact(report: &JsonValue, code: &str) {
             .all(|item| item["code"] != code),
         "unexpected verified fact {code}: {:#}",
         report["verified_facts"]
+    );
+}
+
+fn assert_proposed_operation(report: &JsonValue, label: &str, subject: &str) {
+    assert!(
+        report["proposed_operations"]
+            .as_array()
+            .expect("proposed operations")
+            .iter()
+            .any(|item| {
+                item["phase"] == "future_apply_preview"
+                    && item["label"] == label
+                    && item["subject"] == subject
+                    && item["status"] == "not_executed"
+            }),
+        "missing proposed operation {label} for {subject}: {:#}",
+        report["proposed_operations"]
     );
 }
 
