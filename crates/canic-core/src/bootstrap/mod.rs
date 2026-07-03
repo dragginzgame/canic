@@ -12,9 +12,30 @@ use crate::config::{Config, ConfigError, schema::ConfigModel};
 use crate::domain::auth::{
     DelegatedAuthNetwork, ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw,
 };
+#[cfg(any(not(target_arch = "wasm32"), test))]
+use crate::{config::schema::CanisterConfig, ids::CanisterRole};
+#[cfg(any(not(target_arch = "wasm32"), test))]
+use std::collections::BTreeSet;
 #[cfg(any(target_arch = "wasm32", test))]
 use std::fmt::Write as _;
 use std::sync::Arc;
+
+pub const AUTH_ROOT_CANISTER_SIG_CREATE_FEATURE: &str = "auth-root-canister-sig-create";
+pub const AUTH_ROOT_CANISTER_SIG_VERIFY_FEATURE: &str = "auth-root-canister-sig-verify";
+pub const AUTH_ISSUER_CANISTER_SIG_CREATE_FEATURE: &str = "auth-issuer-canister-sig-create";
+pub const AUTH_DELEGATED_TOKEN_VERIFY_FEATURE: &str = "auth-delegated-token-verify";
+
+///
+/// CanicFeatureRequirement
+///
+/// Build feature required by one validated role configuration.
+///
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanicFeatureRequirement {
+    pub config_key: &'static str,
+    pub feature: &'static str,
+    pub reason: &'static str,
+}
 
 #[doc(hidden)]
 pub mod compiled {
@@ -75,6 +96,108 @@ pub fn init_compiled_config(
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub fn parse_config_model(toml: &str) -> Result<ConfigModel, ConfigError> {
     Config::parse_toml(toml)
+}
+
+/// Return the explicit `canic` crate features required by one package role.
+#[cfg(any(not(target_arch = "wasm32"), test))]
+#[must_use]
+pub fn role_required_canic_features(
+    config: &ConfigModel,
+    role: &CanisterRole,
+) -> Vec<CanicFeatureRequirement> {
+    let mut requirements = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    if role.is_root() && config_requires_root_role_attestation_signing(config) {
+        push_requirement(
+            &mut requirements,
+            &mut seen,
+            CanicFeatureRequirement {
+                config_key: "auth.role_attestation_cache",
+                feature: AUTH_ROOT_CANISTER_SIG_CREATE_FEATURE,
+                reason: "root signs role-attestation canister-signature proofs for cache users",
+            },
+        );
+    }
+
+    if !role.is_root() {
+        for subnet in config.subnets.values() {
+            if let Some(canister) = subnet.get_canister(role) {
+                push_canister_feature_requirements(&canister, &mut requirements, &mut seen);
+            }
+        }
+    }
+
+    requirements
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+fn push_canister_feature_requirements(
+    canister: &CanisterConfig,
+    requirements: &mut Vec<CanicFeatureRequirement>,
+    seen: &mut BTreeSet<&'static str>,
+) {
+    if canister.auth.role_attestation_cache {
+        push_requirement(
+            requirements,
+            seen,
+            CanicFeatureRequirement {
+                config_key: "auth.role_attestation_cache",
+                feature: AUTH_ROOT_CANISTER_SIG_VERIFY_FEATURE,
+                reason: "role-attestation cache verifies root canister-signature proofs locally",
+            },
+        );
+    }
+
+    if canister.auth.delegated_token_issuer {
+        push_requirement(
+            requirements,
+            seen,
+            CanicFeatureRequirement {
+                config_key: "auth.delegated_token_issuer",
+                feature: AUTH_ISSUER_CANISTER_SIG_CREATE_FEATURE,
+                reason: "delegated-token issuers create issuer canister-signature proofs",
+            },
+        );
+    }
+
+    if canister.auth.delegated_token_issuer || canister.auth.delegated_token_verifier {
+        let config_key = if canister.auth.delegated_token_issuer {
+            "auth.delegated_token_issuer"
+        } else {
+            "auth.delegated_token_verifier"
+        };
+        push_requirement(
+            requirements,
+            seen,
+            CanicFeatureRequirement {
+                config_key,
+                feature: AUTH_DELEGATED_TOKEN_VERIFY_FEATURE,
+                reason: "delegated-token roles verify delegated-token root proof material",
+            },
+        );
+    }
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+fn push_requirement(
+    requirements: &mut Vec<CanicFeatureRequirement>,
+    seen: &mut BTreeSet<&'static str>,
+    requirement: CanicFeatureRequirement,
+) {
+    if seen.insert(requirement.feature) {
+        requirements.push(requirement);
+    }
+}
+
+#[cfg(any(not(target_arch = "wasm32"), test))]
+fn config_requires_root_role_attestation_signing(config: &ConfigModel) -> bool {
+    config.subnets.values().any(|subnet| {
+        subnet
+            .canisters
+            .values()
+            .any(|canister| canister.auth.role_attestation_cache)
+    })
 }
 
 /// compact_config_source
@@ -173,7 +296,11 @@ fn hex_bytes(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
+    use crate::{
+        config::schema::{CanisterAuthConfig, CanisterKind},
+        domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, MAINNET_IC_ROOT_PUBLIC_KEY_RAW},
+        test::config::ConfigTestBuilder,
+    };
 
     #[test]
     fn runtime_root_key_injection_sets_local_missing_key() {
@@ -245,6 +372,89 @@ mod tests {
             err.to_string()
                 .contains("must not use the mainnet IC root public key"),
             "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn role_required_canic_features_maps_role_attestation_cache() {
+        let mut app = ConfigTestBuilder::canister_config(CanisterKind::Service);
+        app.auth = CanisterAuthConfig {
+            delegated_token_issuer: false,
+            delegated_token_verifier: false,
+            role_attestation_cache: true,
+        };
+        let config = ConfigTestBuilder::new()
+            .with_prime_canister(
+                CanisterRole::ROOT,
+                ConfigTestBuilder::canister_config(CanisterKind::Root),
+            )
+            .with_prime_canister("app", app)
+            .build();
+
+        let app_requirements =
+            role_required_canic_features(&config, &CanisterRole::owned("app".to_string()));
+        assert_eq!(
+            app_requirements
+                .iter()
+                .map(|requirement| requirement.feature)
+                .collect::<Vec<_>>(),
+            vec![AUTH_ROOT_CANISTER_SIG_VERIFY_FEATURE]
+        );
+
+        let root_requirements = role_required_canic_features(&config, &CanisterRole::ROOT);
+        assert_eq!(
+            root_requirements
+                .iter()
+                .map(|requirement| requirement.feature)
+                .collect::<Vec<_>>(),
+            vec![AUTH_ROOT_CANISTER_SIG_CREATE_FEATURE]
+        );
+    }
+
+    #[test]
+    fn role_required_canic_features_maps_delegated_token_roles() {
+        let mut issuer = ConfigTestBuilder::canister_config(CanisterKind::Shard);
+        issuer.auth = CanisterAuthConfig {
+            delegated_token_issuer: true,
+            delegated_token_verifier: false,
+            role_attestation_cache: false,
+        };
+        let mut verifier = ConfigTestBuilder::canister_config(CanisterKind::Service);
+        verifier.auth = CanisterAuthConfig {
+            delegated_token_issuer: false,
+            delegated_token_verifier: true,
+            role_attestation_cache: false,
+        };
+        let config = ConfigTestBuilder::new()
+            .with_prime_canister(
+                CanisterRole::ROOT,
+                ConfigTestBuilder::canister_config(CanisterKind::Root),
+            )
+            .with_prime_canister("issuer", issuer)
+            .with_prime_canister("verifier", verifier)
+            .build();
+
+        let issuer_requirements =
+            role_required_canic_features(&config, &CanisterRole::owned("issuer".to_string()));
+        assert_eq!(
+            issuer_requirements
+                .iter()
+                .map(|requirement| requirement.feature)
+                .collect::<Vec<_>>(),
+            vec![
+                AUTH_ISSUER_CANISTER_SIG_CREATE_FEATURE,
+                AUTH_DELEGATED_TOKEN_VERIFY_FEATURE,
+            ]
+        );
+
+        let verifier_requirements =
+            role_required_canic_features(&config, &CanisterRole::owned("verifier".to_string()));
+        assert_eq!(
+            verifier_requirements
+                .iter()
+                .map(|requirement| requirement.feature)
+                .collect::<Vec<_>>(),
+            vec![AUTH_DELEGATED_TOKEN_VERIFY_FEATURE]
         );
     }
 }

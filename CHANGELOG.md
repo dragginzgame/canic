@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.3` adds config-driven medic and build-time checks for runtime Canic
+  feature gates implied by fleet auth settings.
+
 - `0.80.2` expands diagnostic state-manifest coverage and reserves removed
   stable-memory IDs so active domains cannot reclaim them without an explicit
   migration design.
