@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.9` hardens top-level state-manifest validation for manifest schema
+  compatibility and duplicate canister-role ownership.
+
 - `0.80.8` hardens state-audit metadata validation for support windows,
   migration declarations, and duplicate domain ownership.
 

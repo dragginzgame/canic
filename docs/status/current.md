@@ -77,6 +77,14 @@ before this compaction is archived at
   role. The 0.80.8 changelog entries are staged in the root ledger and
   detailed 0.80 notes.
 
+- The current `0.80.9` working slice starts by making the top-level state
+  manifest schema version part of `canic state audit`: supported manifest
+  schemas emit `state_manifest_schema_version_supported`, while unsupported
+  schemas fail with `state_manifest_schema_version_unsupported` before domain
+  metadata is trusted. The same slice rejects duplicate canister-role entries
+  with `state_role_duplicate`. The 0.80.9 changelog entries are staged in the
+  root ledger and detailed 0.80 notes.
+
 - The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 

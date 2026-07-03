@@ -8,8 +8,9 @@
 //! diagnostic-only reports.
 
 use canic_core::state_contract::{
-    MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest, StateDomainManifest,
-    StateManifest, StateMigrationManifest, StateStorage, canic_state_manifest_for_role,
+    MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION,
+    StateDomainManifest, StateManifest, StateMigrationManifest, StateRoleManifest, StateStorage,
+    canic_state_manifest_for_role,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -131,14 +132,17 @@ pub fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
 }
 
 fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<StateAuditCheck> {
+    let mut checks = manifest_schema_checks(manifest);
+
     if manifest.roles.is_empty() {
-        return role_filter
-            .map(role_not_found_check)
-            .into_iter()
-            .collect::<Vec<_>>();
+        if let Some(check) = role_filter.map(role_not_found_check) {
+            checks.push(check);
+        }
+        return checks;
     }
 
-    let mut checks = Vec::new();
+    checks.extend(role_identity_checks(&manifest.roles));
+
     for role in &manifest.roles {
         checks.push(pass(
             CATEGORY_MANIFEST,
@@ -171,6 +175,27 @@ fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<Stat
     checks
 }
 
+fn role_identity_checks(roles: &[StateRoleManifest]) -> Vec<StateAuditCheck> {
+    let mut by_role = BTreeMap::<&str, usize>::new();
+    for role in roles {
+        *by_role.entry(&role.canister_role).or_default() += 1;
+    }
+
+    by_role
+        .into_iter()
+        .filter(|&(_, count)| count > 1)
+        .map(|(role, count)| {
+            fail(
+                CATEGORY_MANIFEST,
+                "state_role_duplicate",
+                role,
+                format!("state role {role} is declared {count} times"),
+                "declare each canister role once in the state manifest",
+            )
+        })
+        .collect()
+}
+
 fn role_not_found_check(role: &str) -> StateAuditCheck {
     fail(
         CATEGORY_MANIFEST,
@@ -179,6 +204,31 @@ fn role_not_found_check(role: &str) -> StateAuditCheck {
         format!("no state manifest role named {role} is declared"),
         "choose a declared role or omit --role to audit all declared roles",
     )
+}
+
+fn manifest_schema_checks(manifest: &StateManifest) -> Vec<StateAuditCheck> {
+    if manifest.schema_version == STATE_MANIFEST_SCHEMA_VERSION {
+        vec![pass(
+            CATEGORY_SCHEMA_VERSION,
+            "state_manifest_schema_version_supported",
+            "state_manifest",
+            format!(
+                "manifest schema version {} is supported",
+                manifest.schema_version
+            ),
+        )]
+    } else {
+        vec![fail(
+            CATEGORY_SCHEMA_VERSION,
+            "state_manifest_schema_version_unsupported",
+            "state_manifest",
+            format!(
+                "manifest schema version {} is not supported by schema version {}",
+                manifest.schema_version, STATE_MANIFEST_SCHEMA_VERSION
+            ),
+            "regenerate the manifest from current Rust state declarations",
+        )]
+    }
 }
 
 fn domain_identity_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
@@ -869,6 +919,10 @@ mod tests {
         let report = build_state_audit_report(Some("root"));
 
         assert_eq!(report.status, StateAuditStatus::Warn);
+        assert!(report.checks.iter().any(|check| {
+            check.code == "state_manifest_schema_version_supported"
+                && check.status == StateAuditStatus::Pass
+        }));
         assert!(
             report
                 .checks
@@ -881,6 +935,32 @@ mod tests {
                 .iter()
                 .all(|check| check.status != StateAuditStatus::Fail)
         );
+    }
+
+    #[test]
+    fn unsupported_manifest_schema_version_fails() {
+        let mut manifest = declared_state_manifest(Some("root"));
+        manifest.schema_version = STATE_MANIFEST_SCHEMA_VERSION + 1;
+
+        let checks = audit_checks(&manifest, Some("root"));
+
+        assert!(checks.iter().any(|check| {
+            check.code == "state_manifest_schema_version_unsupported"
+                && check.status == StateAuditStatus::Fail
+        }));
+    }
+
+    #[test]
+    fn duplicate_state_role_fails() {
+        let mut manifest = declared_state_manifest(Some("root"));
+        let duplicate = manifest.roles[0].clone();
+        manifest.roles.push(duplicate);
+
+        let checks = audit_checks(&manifest, None);
+
+        assert!(checks.iter().any(|check| {
+            check.code == "state_role_duplicate" && check.status == StateAuditStatus::Fail
+        }));
     }
 
     #[test]
