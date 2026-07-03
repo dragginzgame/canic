@@ -674,10 +674,10 @@ fn canic_package_metadata(path: &Path) -> Result<CanicPackageMetadata, String> {
 
 fn canic_dependency_features_for_manifest(path: &Path, manifest: &TomlValue) -> BTreeSet<String> {
     let mut features = canic_dependency_features(manifest);
-    if canic_dependency_inherits_workspace(manifest) {
-        if let Some(manifest_dir) = path.parent() {
-            features.extend(workspace_canic_dependency_features(manifest_dir));
-        }
+    if canic_dependency_inherits_workspace(manifest)
+        && let Some(manifest_dir) = path.parent()
+    {
+        features.extend(workspace_canic_dependency_features(manifest_dir));
     }
     features
 }
