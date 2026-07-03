@@ -1,4 +1,5 @@
 use super::*;
+use toml::Value as TomlValue;
 
 #[test]
 fn declare_fleet_role_adds_declared_only_canister_role() {
@@ -278,6 +279,25 @@ kind = "shard"
             .package_source
             .as_deref()
             .is_some_and(|source| source.contains("role = \"router\""))
+    );
+    let package_source = updated.package_source.as_deref().expect("package source");
+    let package_manifest =
+        toml::from_str::<TomlValue>(package_source).expect("updated package manifest parses");
+    let package_canic = package_manifest
+        .get("package")
+        .and_then(TomlValue::as_table)
+        .and_then(|package| package.get("metadata"))
+        .and_then(TomlValue::as_table)
+        .and_then(|metadata| metadata.get("canic"))
+        .and_then(TomlValue::as_table)
+        .expect("updated canic metadata");
+    assert_eq!(
+        package_canic.get("fleet").and_then(TomlValue::as_str),
+        Some("demo")
+    );
+    assert_eq!(
+        package_canic.get("role").and_then(TomlValue::as_str),
+        Some("router")
     );
 
     let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
