@@ -55,6 +55,19 @@ before this compaction is archived at
   automatic dependency feature editing. The 0.80.6 changelog entries are
   staged in the root ledger and detailed 0.80 notes.
 
+- The current `0.80.7` working slice returns to the stable-state design by
+  adding explicit `reserved_memory` manifest rows for allocated stable-memory
+  IDs that are not yet precise active or removed state domains. Root now
+  reserves the raw cycle tracker and the two stable-log memories so those
+  upgrade-safety gaps are visible in `canic state manifest` and warn in
+  `canic state audit`; reservation collisions with active or removed state are
+  blocking findings. The same slice adds an explicit `not_applicable`
+  state-storage classification for declaration-only metadata so it is not
+  conflated with heap-only runtime state. The pre-existing scaffold cleanup
+  diff in `crates/canic-cli/src/scaffold/mod.rs` is unrelated to this slice and
+  should be preserved. The 0.80.7 changelog entries are staged in the root
+  ledger and detailed 0.80 notes.
+
 - The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 

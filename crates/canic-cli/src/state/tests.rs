@@ -119,6 +119,13 @@ fn manifest_json_is_manifest_directly() {
     assert_eq!(json["schema_version"], 1);
     assert!(json.get("command").is_none());
     assert_eq!(json["roles"][0]["canister_role"], "root");
+    assert!(
+        json["roles"][0]["reserved_memory"]
+            .as_array()
+            .expect("reserved memory")
+            .iter()
+            .any(|entry| entry["label"] == "log_index")
+    );
 }
 
 #[test]
@@ -134,6 +141,9 @@ fn text_renderers_include_stable_fields() {
     assert!(manifest.contains("canic state manifest"));
     assert!(manifest.contains("migration_policy: new_domain"));
     assert!(manifest.contains("removed_state"));
+    assert!(manifest.contains("reserved_memory"));
+    assert!(manifest.contains("log_index"));
+    assert_eq!(storage_label(StateStorage::NotApplicable), "not_applicable");
 }
 
 #[test]

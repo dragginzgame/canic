@@ -546,9 +546,7 @@ fn workspace_manifest_value(source: &str) -> Result<TomlValue, ScaffoldCommandEr
         .map_err(|err| ScaffoldCommandError::Usage(format!("invalid Cargo.toml: {err}")))
 }
 
-fn workspace_members<'a>(
-    manifest: &'a TomlValue,
-) -> Result<Option<Vec<&'a str>>, ScaffoldCommandError> {
+fn workspace_members(manifest: &TomlValue) -> Result<Option<Vec<&str>>, ScaffoldCommandError> {
     let workspace = manifest
         .get("workspace")
         .and_then(TomlValue::as_table)

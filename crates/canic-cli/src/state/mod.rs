@@ -326,6 +326,15 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
                 lines.push(format!("    reason: {}", entry.reason));
             }
         }
+        if !role.reserved_memory.is_empty() {
+            lines.push("reserved_memory".to_string());
+            for entry in &role.reserved_memory {
+                lines.push(format!("  {}", entry.label));
+                lines.push(format!("    memory_id: {}", entry.memory_id));
+                lines.push(format!("    owner: {}", entry.owner));
+                lines.push(format!("    reason: {}", entry.reason));
+            }
+        }
     }
     lines.join("\n")
 }
@@ -343,6 +352,7 @@ const fn storage_label(storage: StateStorage) -> &'static str {
     match storage {
         StateStorage::StableMemory => "stable_memory",
         StateStorage::HeapOnly => "heap_only",
+        StateStorage::NotApplicable => "not_applicable",
     }
 }
 
