@@ -57,6 +57,11 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Project,
     },
     CommandSpec {
+        name: "state",
+        about: "Audit declared Canic state metadata",
+        scope: CommandScope::Project,
+    },
+    CommandSpec {
         name: "fleet",
         about: "Manage Canic fleets and roles",
         scope: CommandScope::Project,

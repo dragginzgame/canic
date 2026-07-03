@@ -20,6 +20,7 @@ mod replica;
 mod restore;
 mod scaffold;
 mod snapshot;
+mod state;
 mod status;
 mod support;
 #[cfg(test)]
@@ -84,6 +85,9 @@ pub enum CliError {
 
     #[error("snapshot: {0}")]
     Snapshot(#[from] snapshot::SnapshotCommandError),
+
+    #[error("state: {0}")]
+    State(#[from] state::StateCommandError),
 
     #[error("scaffold: {0}")]
     Scaffold(#[from] scaffold::ScaffoldCommandError),
@@ -158,6 +162,7 @@ where
         "replica" => replica::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "snapshot" => snapshot::run(tail).map_err(CliError::from),
+        "state" => state::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
         "token" => token::run(tail).map_err(CliError::from),
         "restore" => restore::run(tail).map_err(CliError::from),
@@ -176,6 +181,7 @@ pub fn render_cli_error(error: &CliError) -> String {
         CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
         CliError::Deploy(err) if err.suppress_stderr() => String::new(),
         CliError::Medic(err) if err.suppress_stderr() => String::new(),
+        CliError::State(err) if err.suppress_stderr() => String::new(),
         _ => error.to_string(),
     }
 }
@@ -189,6 +195,7 @@ pub fn cli_error_exit_code(err: &CliError) -> i32 {
         CliError::Deploy(err) => i32::from(err.exit_code()),
         CliError::Info(err) => i32::from(err.exit_code()),
         CliError::Medic(err) => i32::from(err.exit_code()),
+        CliError::State(err) => i32::from(err.exit_code()),
         _ => 1,
     }
 }

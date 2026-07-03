@@ -44,6 +44,8 @@ pub mod protocol;
 pub mod replay_policy;
 #[doc(hidden)]
 pub mod shared_support;
+#[doc(hidden)]
+pub mod state_contract;
 #[cfg(test)]
 pub mod test;
 

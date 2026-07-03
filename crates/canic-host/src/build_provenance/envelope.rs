@@ -68,7 +68,7 @@ pub fn build_provenance_envelope(
     })
 }
 
-pub fn build_provenance_payload(
+fn build_provenance_payload(
     request: &BuildProvenanceRequest,
 ) -> Result<BuildProvenanceV1, Box<dyn std::error::Error>> {
     let mut warnings = Vec::new();

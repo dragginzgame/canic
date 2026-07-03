@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-02
+Last updated: 2026-07-03
 
 ## Purpose
 
@@ -11,7 +11,22 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.12` declarative deployment plan. Source of truth:
+- The active line is `0.80.0` stable state migrations. Source of truth:
+  `docs/design/0.80-stable-state-migrations/0.80-design.md`.
+
+- The first post-0.80.0 working slice adds diagnostic state metadata surfaces:
+  `canic state audit` and `canic state manifest`. Static Rust declarations
+  currently cover the root canister family for seven canic-core stable-memory
+  domains plus the retired root replay memory ID. The reports are
+  diagnostic-only, render text/JSON with `schema_version = 1`, check duplicate
+  memory IDs within a role, schema/storage declarations, record/snapshot naming,
+  migration declarations, removed-state disposition, restore order, and
+  post-upgrade invariant metadata. They do not read stable memory, run
+  migrations, write generated manifests, write deployment truth, or mutate
+  canisters. The 0.80.1 changelog entries are staged in the root ledger and
+  detailed 0.80 notes.
+
+- The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -228,10 +243,11 @@ before this compaction is archived at
 
 ## Open Work
 
-- Continue 0.79 by tightening the deploy-plan report contract and only then
-  consider thin read-only comparison against existing local evidence. Do not add
-  apply, live observation, deployment truth writes, evidence wrapping, locks, or
-  mutation semantics.
+- Continue 0.80 by expanding Rust-authored state declarations beyond the first
+  root-family slice, then add more precise `*Data` snapshot declarations and
+  migration coverage metadata. Do not add migration execution, stable-memory
+  inspection, state dump/explore commands, generated manifest writes, runtime
+  introspection endpoints, or mutation semantics.
 
 - Before release preparation, run the focused gates for touched surfaces and
   broaden to the release matrix as needed. Do not assign a new patch version or

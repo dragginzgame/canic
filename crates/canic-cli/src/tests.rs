@@ -42,7 +42,8 @@ fn usage_lists_command_families() {
     assert!(plain.contains("ICP wallet commands"));
     assert!(plain.contains("Backup and restore commands"));
     assert!(plain.find("    status") < plain.find("    medic"));
-    assert!(plain.find("    medic") < plain.find("    fleet"));
+    assert!(plain.find("    medic") < plain.find("    state"));
+    assert!(plain.find("    state") < plain.find("    fleet"));
     assert!(plain.find("    fleet") < plain.find("    scaffold"));
     assert!(plain.find("    scaffold") < plain.find("    replica"));
     assert!(plain.find("    replica") < plain.find("    install"));
@@ -59,6 +60,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("--icp <path>"));
     assert!(plain.contains("--network <name>"));
     assert!(plain.contains("Diagnose project and deployment preflight readiness"));
+    assert!(plain.contains("Audit declared Canic state metadata"));
     assert!(plain.contains("    scaffold"));
     assert!(plain.contains("cycles"));
     assert!(plain.contains("token"));
@@ -73,6 +75,7 @@ fn usage_lists_command_families() {
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
     assert!(plain.contains("    medic"));
+    assert!(plain.contains("    state"));
     assert!(plain.contains("fleet"));
     assert!(plain.contains("replica"));
     assert!(plain.contains("install"));
@@ -155,6 +158,9 @@ fn command_family_help_returns_ok() {
         &["restore", "plan", "help"],
         &["restore", "apply", "help"],
         &["restore", "run", "help"],
+        &["state", "help"],
+        &["state", "audit", "help"],
+        &["state", "manifest", "help"],
         &["token", "help"],
         &["token", "balance", "help"],
         &["token", "icp", "balance", "help"],
@@ -253,6 +259,7 @@ fn version_flags_return_ok() {
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("state"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
     assert!(
         run([
