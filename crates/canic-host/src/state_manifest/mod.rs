@@ -150,6 +150,7 @@ fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<Stat
                 role.canister_role
             ),
         ));
+        checks.extend(domain_identity_checks(&role.canister_role, &role.state));
         checks.extend(memory_id_checks(
             &role.canister_role,
             &role.state,
@@ -178,6 +179,27 @@ fn role_not_found_check(role: &str) -> StateAuditCheck {
         format!("no state manifest role named {role} is declared"),
         "choose a declared role or omit --role to audit all declared roles",
     )
+}
+
+fn domain_identity_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
+    let mut by_domain = BTreeMap::<&str, usize>::new();
+    for domain in domains {
+        *by_domain.entry(&domain.domain).or_default() += 1;
+    }
+
+    by_domain
+        .into_iter()
+        .filter(|&(_, count)| count > 1)
+        .map(|(domain, count)| {
+            fail(
+                CATEGORY_MANIFEST,
+                "state_domain_duplicate",
+                &format!("{role}/{domain}"),
+                format!("state domain {domain} is declared {count} times for role {role}"),
+                "declare each state domain once per canister role",
+            )
+        })
+        .collect()
 }
 
 fn memory_id_checks(
@@ -383,7 +405,20 @@ fn naming_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditChec
 
 fn migration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
     let subject = domain_subject(role, domain);
-    if domain.min_supported_version >= domain.version {
+    if domain.min_supported_version == 0 || domain.min_supported_version > domain.version {
+        return vec![fail(
+            CATEGORY_MIGRATION,
+            "state_domain_invalid_support_window",
+            &subject,
+            format!(
+                "min_supported_version {} is not valid for current version {}",
+                domain.min_supported_version, domain.version
+            ),
+            "set min_supported_version to a positive version less than or equal to the current version",
+        )];
+    }
+
+    if domain.min_supported_version == domain.version {
         return vec![pass(
             CATEGORY_MIGRATION,
             "migration_available",
@@ -393,7 +428,11 @@ fn migration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditC
     }
 
     match domain.migration_policy {
-        MigrationPolicy::Migrate => migration_path_checks(role, domain),
+        MigrationPolicy::Migrate => {
+            let mut checks = migration_declaration_checks(role, domain);
+            checks.extend(migration_path_checks(role, domain));
+            checks
+        }
         MigrationPolicy::ManualMigrationRequired => vec![warn(
             CATEGORY_MIGRATION,
             "manual_migration_required_declared",
@@ -419,6 +458,55 @@ fn migration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditC
             "declare migration, manual migration, discard, or hard-cut min_supported_version",
         )],
     }
+}
+
+fn migration_declaration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
+    let mut checks = Vec::new();
+    let mut by_edge = BTreeMap::<(u32, u32), usize>::new();
+
+    for migration in &domain.migrations {
+        *by_edge.entry((migration.from, migration.to)).or_default() += 1;
+        let expected_next = migration.from.checked_add(1);
+        if migration.from == 0
+            || migration.to == 0
+            || migration.from >= migration.to
+            || expected_next != Some(migration.to)
+            || migration.from < domain.min_supported_version
+            || migration.to > domain.version
+        {
+            let subject = format!(
+                "{}/{domain} v{} -> v{}",
+                role,
+                migration.from,
+                migration.to,
+                domain = domain.domain
+            );
+            checks.push(fail(
+                CATEGORY_MIGRATION,
+                "migration_declaration_invalid",
+                &subject,
+                format!(
+                    "declared migration edge v{} -> v{} is outside the supported window {}..={}",
+                    migration.from, migration.to, domain.min_supported_version, domain.version
+                ),
+                "declare only one-step migrations inside the supported version window",
+            ));
+        }
+    }
+
+    checks.extend(by_edge.into_iter().filter(|&(_, count)| count > 1).map(
+        |((from, to), count)| {
+            let subject = format!("{}/{domain} v{from} -> v{to}", role, domain = domain.domain);
+            fail(
+                CATEGORY_MIGRATION,
+                "migration_declaration_duplicate",
+                &subject,
+                format!("migration edge v{from} -> v{to} is declared {count} times"),
+                "declare each migration edge once",
+            )
+        },
+    ));
+    checks
 }
 
 fn migration_path_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
@@ -811,6 +899,24 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_state_domain_fails_within_role() {
+        let mut manifest = declared_state_manifest(Some("root"));
+        let role = manifest.roles.first_mut().expect("root role");
+        let mut duplicate = role.state[0].clone();
+        duplicate.memory_id = Some(250);
+        role.state.push(duplicate);
+
+        let checks = audit_checks(&manifest, Some("root"));
+
+        assert!(
+            checks
+                .iter()
+                .any(|check| check.code == "state_domain_duplicate"
+                    && check.status == StateAuditStatus::Fail)
+        );
+    }
+
+    #[test]
     fn active_domain_reclaiming_removed_memory_id_fails() {
         let mut manifest = declared_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
@@ -897,6 +1003,134 @@ mod tests {
                 .iter()
                 .all(|check| check.code != "state_domain_missing_memory_id")
         );
+    }
+
+    #[test]
+    fn invalid_support_window_fails() {
+        let manifest = StateManifest {
+            schema_version: 1,
+            roles: vec![StateRoleManifest {
+                canister_role: "root".to_string(),
+                state: vec![StateDomainManifest {
+                    domain: "auth_sessions".to_string(),
+                    version: 2,
+                    storage: StateStorage::StableMemory,
+                    memory_id: Some(19),
+                    owner: "canic-core".to_string(),
+                    record: "AuthSessionRecord".to_string(),
+                    snapshot: "AuthSessionsData".to_string(),
+                    min_supported_version: 3,
+                    migration_policy: MigrationPolicy::NewDomain,
+                    restore_order: Some(10),
+                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
+                    migrations: Vec::new(),
+                }],
+                removed_state: Vec::new(),
+                reserved_memory: Vec::new(),
+            }],
+        };
+
+        let checks = audit_checks(&manifest, None);
+
+        assert!(checks.iter().any(|check| {
+            check.code == "state_domain_invalid_support_window"
+                && check.status == StateAuditStatus::Fail
+        }));
+        assert!(
+            checks
+                .iter()
+                .all(|check| check.code != "migration_available")
+        );
+    }
+
+    #[test]
+    fn duplicate_migration_declaration_fails() {
+        let manifest = StateManifest {
+            schema_version: 1,
+            roles: vec![StateRoleManifest {
+                canister_role: "root".to_string(),
+                state: vec![StateDomainManifest {
+                    domain: "auth_sessions".to_string(),
+                    version: 3,
+                    storage: StateStorage::StableMemory,
+                    memory_id: Some(19),
+                    owner: "canic-core".to_string(),
+                    record: "AuthSessionRecord".to_string(),
+                    snapshot: "AuthSessionsData".to_string(),
+                    min_supported_version: 2,
+                    migration_policy: MigrationPolicy::Migrate,
+                    restore_order: Some(10),
+                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
+                    migrations: vec![
+                        StateMigrationManifest {
+                            from: 2,
+                            to: 3,
+                            kind: "function".to_string(),
+                            name: Some("migrate_auth_sessions_v2_to_v3".to_string()),
+                            test: Some(
+                                "auth_sessions_v2_to_v3_upgrade_preserves_sessions".to_string(),
+                            ),
+                        },
+                        StateMigrationManifest {
+                            from: 2,
+                            to: 3,
+                            kind: "function".to_string(),
+                            name: Some("migrate_auth_sessions_v2_to_v3_again".to_string()),
+                            test: Some(
+                                "auth_sessions_v2_to_v3_upgrade_preserves_sessions".to_string(),
+                            ),
+                        },
+                    ],
+                }],
+                removed_state: Vec::new(),
+                reserved_memory: Vec::new(),
+            }],
+        };
+
+        let checks = audit_checks(&manifest, None);
+
+        assert!(checks.iter().any(|check| {
+            check.code == "migration_declaration_duplicate"
+                && check.status == StateAuditStatus::Fail
+        }));
+    }
+
+    #[test]
+    fn invalid_migration_declaration_fails() {
+        let manifest = StateManifest {
+            schema_version: 1,
+            roles: vec![StateRoleManifest {
+                canister_role: "root".to_string(),
+                state: vec![StateDomainManifest {
+                    domain: "auth_sessions".to_string(),
+                    version: 4,
+                    storage: StateStorage::StableMemory,
+                    memory_id: Some(19),
+                    owner: "canic-core".to_string(),
+                    record: "AuthSessionRecord".to_string(),
+                    snapshot: "AuthSessionsData".to_string(),
+                    min_supported_version: 2,
+                    migration_policy: MigrationPolicy::Migrate,
+                    restore_order: Some(10),
+                    post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
+                    migrations: vec![StateMigrationManifest {
+                        from: 2,
+                        to: 4,
+                        kind: "function".to_string(),
+                        name: Some("migrate_auth_sessions_v2_to_v4".to_string()),
+                        test: Some("auth_sessions_v2_to_v4_upgrade_preserves_sessions".to_string()),
+                    }],
+                }],
+                removed_state: Vec::new(),
+                reserved_memory: Vec::new(),
+            }],
+        };
+
+        let checks = audit_checks(&manifest, None);
+
+        assert!(checks.iter().any(|check| {
+            check.code == "migration_declaration_invalid" && check.status == StateAuditStatus::Fail
+        }));
     }
 
     #[test]

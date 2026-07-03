@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.8` hardens state-audit metadata validation for support windows,
+  migration declarations, and duplicate domain ownership.
+
 - `0.80.7` makes allocated-but-unmodeled stable-memory IDs explicit in state
   manifests and separates declaration-only metadata from heap-only runtime
   state.
