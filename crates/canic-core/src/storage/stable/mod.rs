@@ -79,7 +79,6 @@ pub mod memory {
 
     pub mod auth {
         pub const AUTH_STATE_ID: u8 = 19;
-        #[expect(dead_code)]
         // Historical root replay memory ID. Root replay moved to REPLAY_RECEIPTS_ID.
         pub const ROOT_REPLAY_ID: u8 = 20;
         pub const REPLAY_RECEIPTS_ID: u8 = 21;

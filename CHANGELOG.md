@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.1` adds diagnostic state manifest and audit surfaces backed by
+  Rust-authored root state declarations, without stable-memory inspection,
+  migration execution, generated manifest writes, or canister mutation.
+
 - `0.80.0` fixes packaged downstream root `fast` builds for the implicit
   `wasm_store`, keeping bootstrap-store source resolution and profile handling
   owned by Canic instead of downstream projects.

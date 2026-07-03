@@ -7,7 +7,7 @@ mod inputs;
 mod model;
 mod source;
 
-pub use envelope::{build_provenance_envelope, build_provenance_payload, build_provenance_schema};
+pub use envelope::{build_provenance_envelope, build_provenance_schema};
 pub use model::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, BUILD_PROVENANCE_SCHEMA_ID,
     BuildProvenanceRequest, BuildProvenanceStatusV1, BuildProvenanceV1, BuildScriptInputStateV1,
