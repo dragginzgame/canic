@@ -68,6 +68,15 @@ before this compaction is archived at
   should be preserved. The 0.80.7 changelog entries are staged in the root
   ledger and detailed 0.80 notes.
 
+- The current `0.80.8` working slice tightens state-audit upgrade-window
+  validation so a domain whose `min_supported_version` is zero or greater than
+  its current `version` fails with `state_domain_invalid_support_window`
+  instead of being treated as a no-migration case. The same slice rejects
+  invalid or duplicate migration declarations before checking required
+  migration edges, and fails duplicate state-domain names within one canister
+  role. The 0.80.8 changelog entries are staged in the root ledger and
+  detailed 0.80 notes.
+
 - The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
