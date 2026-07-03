@@ -146,7 +146,8 @@ before this compaction is archived at
   as `DeploymentPlanReport`, not an evidence envelope, deployment truth, or
   authorization to mutate. Report-renderer coverage also pins that actual
   text/JSON reports do not include those truth/evidence/authorization claims
-  or apply-safety wording.
+  or apply-safety wording. The 0.79.12 changelog entries are staged in the
+  root ledger and detailed 0.79 notes.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
