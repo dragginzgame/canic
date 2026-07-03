@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.2` expands diagnostic state-manifest coverage and reserves removed
+  stable-memory IDs so active domains cannot reclaim them without an explicit
+  migration design.
+
 - `0.80.1` adds diagnostic state manifest and audit surfaces backed by
   Rust-authored root state declarations, without stable-memory inspection,
   migration execution, generated manifest writes, or canister mutation.

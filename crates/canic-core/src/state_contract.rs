@@ -11,8 +11,14 @@ use serde::Serialize;
 
 use crate::storage::stable::memory::{
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
-    env::{APP_STATE_ID, ENV_ID},
-    topology::{APP_INDEX_ID, APP_REGISTRY_ID, CANISTER_CHILDREN_ID},
+    env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
+    intent::{INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID},
+    observability::{CYCLE_TOPUP_EVENTS_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID},
+    placement::{DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID},
+    pool::CANISTER_POOL_ID,
+    topology::{
+        APP_INDEX_ID, APP_REGISTRY_ID, CANISTER_CHILDREN_ID, SUBNET_INDEX_ID, SUBNET_REGISTRY_ID,
+    },
 };
 
 pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 1;
@@ -149,76 +155,221 @@ pub fn canic_state_manifest_for_role(role: Option<&str>) -> StateManifest {
 }
 
 fn root_role_manifest() -> StateRoleManifest {
+    let mut state = Vec::new();
+    state.extend(root_topology_domains());
+    state.extend(root_env_domains());
+    state.extend(root_auth_domains());
+    state.extend(root_observability_domains());
+    state.extend(root_intent_domains());
+    state.extend(root_capacity_domains());
+
     StateRoleManifest {
         canister_role: ROOT_ROLE.to_string(),
-        state: vec![
-            state_domain(
-                "app_index",
-                APP_INDEX_ID,
-                "AppIndexRecord",
-                "AppIndexRecord",
-                10,
-                "app_index_import_restores_unique_roles",
-            ),
-            state_domain(
-                "app_registry",
-                APP_REGISTRY_ID,
-                "AppRegistryRecord",
-                "AppRegistryRecord",
-                20,
-                "app_registry_entries_have_root_principals",
-            ),
-            state_domain(
-                "auth_state",
-                AUTH_STATE_ID,
-                "AuthStateRecord",
-                "AuthStateRecord",
-                60,
-                "auth_state_delegated_proofs_are_chain_key_only",
-            ),
-            state_domain(
-                "canister_children",
-                CANISTER_CHILDREN_ID,
-                "CanisterChildrenRecord",
-                "CanisterChildrenRecord",
-                30,
-                "canister_children_projection_is_imported",
-            ),
-            state_domain(
-                "env",
-                ENV_ID,
-                "EnvRecord",
-                "EnvRecord",
-                40,
-                "env_root_and_role_bindings_are_restored",
-            ),
-            state_domain(
-                "app_state",
-                APP_STATE_ID,
-                "AppStateRecord",
-                "AppStateRecord",
-                50,
-                "app_state_mode_is_restored_before_hooks",
-            ),
-            state_domain(
-                "replay_receipts",
-                REPLAY_RECEIPTS_ID,
-                "ReplayReceiptRecord",
-                "ReplayReceiptRecord",
-                70,
-                "replay_receipts_reject_unsupported_schema_versions",
-            ),
-        ],
-        removed_state: vec![RemovedStateManifest {
-            domain: "root_replay".to_string(),
-            last_version: 1,
-            removed_in_version: 2,
-            memory_id: Some(ROOT_REPLAY_ID),
-            disposition: "moved_to_replay_receipts".to_string(),
-            reason: "root replay receipts moved into the shared replay receipt store".to_string(),
-            test: Some("root_replay_record_round_trips_populated_response".to_string()),
-        }],
+        state,
+        removed_state: root_removed_state_domains(),
     }
+}
+
+fn root_topology_domains() -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "app_index",
+            APP_INDEX_ID,
+            "AppIndexRecord",
+            "AppIndexRecord",
+            10,
+            "app_index_import_restores_unique_roles",
+        ),
+        state_domain(
+            "subnet_index",
+            SUBNET_INDEX_ID,
+            "SubnetIndexRecord",
+            "SubnetIndexRecord",
+            15,
+            "subnet_index_import_restores_unique_roles",
+        ),
+        state_domain(
+            "app_registry",
+            APP_REGISTRY_ID,
+            "AppRegistryRecord",
+            "AppRegistryRecord",
+            20,
+            "app_registry_entries_have_root_principals",
+        ),
+        state_domain(
+            "subnet_registry",
+            SUBNET_REGISTRY_ID,
+            "SubnetRegistryRecord",
+            "SubnetRegistryRecord",
+            25,
+            "subnet_registry_parent_links_are_restored",
+        ),
+        state_domain(
+            "canister_children",
+            CANISTER_CHILDREN_ID,
+            "CanisterChildrenRecord",
+            "CanisterChildrenRecord",
+            30,
+            "canister_children_projection_is_imported",
+        ),
+    ]
+}
+
+fn root_env_domains() -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "env",
+            ENV_ID,
+            "EnvRecord",
+            "EnvRecord",
+            40,
+            "env_root_and_role_bindings_are_restored",
+        ),
+        state_domain(
+            "app_state",
+            APP_STATE_ID,
+            "AppStateRecord",
+            "AppStateRecord",
+            50,
+            "app_state_mode_is_restored_before_hooks",
+        ),
+        state_domain(
+            "subnet_state",
+            SUBNET_STATE_ID,
+            "SubnetStateRecord",
+            "SubnetStateRecord",
+            55,
+            "subnet_state_restores_auth_state",
+        ),
+    ]
+}
+
+fn root_auth_domains() -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "auth_state",
+            AUTH_STATE_ID,
+            "AuthStateRecord",
+            "AuthStateRecord",
+            60,
+            "auth_state_delegated_proofs_are_chain_key_only",
+        ),
+        state_domain(
+            "replay_receipts",
+            REPLAY_RECEIPTS_ID,
+            "ReplayReceiptRecord",
+            "ReplayReceiptRecord",
+            70,
+            "replay_receipts_reject_unsupported_schema_versions",
+        ),
+    ]
+}
+
+fn root_observability_domains() -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "cycle_topup_events",
+            CYCLE_TOPUP_EVENTS_ID,
+            "CycleTopupEventRecord",
+            "CycleTopupEventRecord",
+            80,
+            "cycle_topup_events_decode_status_values",
+        ),
+        state_domain(
+            "cycles_funding_ledger",
+            CYCLES_FUNDING_LEDGER_ID,
+            "CyclesFundingLedgerRecord",
+            "CyclesFundingLedgerRecord",
+            90,
+            "cycles_funding_ledger_restores_child_budget_state",
+        ),
+        state_domain(
+            "icp_refill_records",
+            ICP_REFILL_RECORDS_ID,
+            "IcpRefillRecord",
+            "IcpRefillRecord",
+            100,
+            "icp_refill_records_decode_status_and_error_codes",
+        ),
+    ]
+}
+
+fn root_intent_domains() -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "intent_meta",
+            INTENT_META_ID,
+            "IntentStoreMetaRecord",
+            "IntentStoreMetaRecord",
+            110,
+            "intent_meta_restores_schema_version",
+        ),
+        state_domain(
+            "intent_records",
+            INTENT_RECORDS_ID,
+            "IntentRecord",
+            "IntentRecord",
+            111,
+            "intent_records_restore_state_transitions",
+        ),
+        state_domain(
+            "intent_totals",
+            INTENT_TOTALS_ID,
+            "IntentResourceTotalsRecord",
+            "IntentResourceTotalsRecord",
+            112,
+            "intent_totals_restore_resource_accounting",
+        ),
+        state_domain(
+            "intent_pending",
+            INTENT_PENDING_ID,
+            "IntentPendingEntryRecord",
+            "IntentPendingEntryRecord",
+            113,
+            "intent_pending_entries_restore_ttl_metadata",
+        ),
+    ]
+}
+
+fn root_capacity_domains() -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "canister_pool",
+            CANISTER_POOL_ID,
+            "PoolStoreRecord",
+            "PoolStoreRecord",
+            130,
+            "canister_pool_entries_restore_header_state",
+        ),
+        state_domain(
+            "scaling_registry",
+            SCALING_REGISTRY_ID,
+            "ScalingRegistryRecord",
+            "ScalingRegistryRecord",
+            140,
+            "scaling_registry_restores_worker_pool_membership",
+        ),
+        state_domain(
+            "directory_registry",
+            DIRECTORY_REGISTRY_ID,
+            "DirectoryRegistryRecord",
+            "DirectoryRegistryRecord",
+            150,
+            "directory_registry_entries_restore_bindings",
+        ),
+    ]
+}
+
+fn root_removed_state_domains() -> Vec<RemovedStateManifest> {
+    vec![RemovedStateManifest {
+        domain: "root_replay".to_string(),
+        last_version: 1,
+        removed_in_version: 2,
+        memory_id: Some(ROOT_REPLAY_ID),
+        disposition: "moved_to_replay_receipts".to_string(),
+        reason: "root replay receipts moved into the shared replay receipt store".to_string(),
+        test: Some("root_replay_record_round_trips_populated_response".to_string()),
+    }]
 }
 
 fn state_domain(
@@ -261,7 +412,6 @@ fn sort_manifest(manifest: &mut StateManifest) {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,6 +429,45 @@ mod tests {
         ids.dedup();
 
         assert_eq!(ids.len(), role.state.len());
+    }
+
+    #[test]
+    fn root_manifest_covers_declared_core_memory_ids() {
+        let manifest = canic_state_manifest_for_role(Some(ROOT_ROLE));
+        let role = manifest.roles.first().expect("root role manifest");
+        let ids = role
+            .state
+            .iter()
+            .filter_map(|domain| domain.memory_id)
+            .collect::<Vec<_>>();
+
+        for expected in [
+            CANISTER_CHILDREN_ID,
+            APP_INDEX_ID,
+            SUBNET_INDEX_ID,
+            APP_REGISTRY_ID,
+            SUBNET_REGISTRY_ID,
+            ENV_ID,
+            SUBNET_STATE_ID,
+            APP_STATE_ID,
+            AUTH_STATE_ID,
+            REPLAY_RECEIPTS_ID,
+            CYCLE_TOPUP_EVENTS_ID,
+            ICP_REFILL_RECORDS_ID,
+            CYCLES_FUNDING_LEDGER_ID,
+            INTENT_META_ID,
+            INTENT_RECORDS_ID,
+            INTENT_TOTALS_ID,
+            INTENT_PENDING_ID,
+            CANISTER_POOL_ID,
+            SCALING_REGISTRY_ID,
+            DIRECTORY_REGISTRY_ID,
+        ] {
+            assert!(
+                ids.contains(&expected),
+                "state manifest should declare memory id {expected}"
+            );
+        }
     }
 
     #[test]
