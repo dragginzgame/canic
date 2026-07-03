@@ -38,6 +38,7 @@ pub(super) struct FleetOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DeleteFleetOptions {
     pub(super) fleet: String,
+    pub(super) dry_run: bool,
 }
 
 ///
@@ -77,6 +78,7 @@ pub(super) struct RoleDeclareOptions {
     pub(super) fleet: String,
     pub(super) role: String,
     pub(super) package: String,
+    pub(super) dry_run: bool,
 }
 
 ///
@@ -89,6 +91,7 @@ pub(super) struct RoleAttachOptions {
     pub(super) role: String,
     pub(super) subnet: String,
     pub(super) kind: String,
+    pub(super) dry_run: bool,
 }
 
 ///
@@ -100,6 +103,7 @@ pub(super) struct RoleRenameOptions {
     pub(super) fleet: String,
     pub(super) old_role: String,
     pub(super) new_role: String,
+    pub(super) dry_run: bool,
 }
 
 ///
@@ -155,6 +159,7 @@ impl DeleteFleetOptions {
 
         Ok(Self {
             fleet: required_string(&matches, "fleet"),
+            dry_run: matches.get_flag("dry-run"),
         })
     }
 }
@@ -246,6 +251,7 @@ impl RoleDeclareOptions {
             fleet: required_string(&matches, "fleet"),
             role: required_string(&matches, "role"),
             package: required_string(&matches, "package"),
+            dry_run: matches.get_flag("dry-run"),
         })
     }
 }
@@ -271,6 +277,7 @@ impl RoleAttachOptions {
             role: required_string(&matches, "role"),
             subnet: required_string(&matches, "subnet"),
             kind: required_string(&matches, "kind"),
+            dry_run: matches.get_flag("dry-run"),
         })
     }
 }
@@ -295,6 +302,7 @@ impl RoleRenameOptions {
             fleet: required_string(&matches, "fleet"),
             old_role: required_string(&matches, "old-role"),
             new_role: required_string(&matches, "new-role"),
+            dry_run: matches.get_flag("dry-run"),
         })
     }
 }

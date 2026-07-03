@@ -20,7 +20,8 @@ use canic_host::{
     },
     release_set::{
         attach_fleet_role, configured_role_lifecycle, declare_fleet_role, display_workspace_path,
-        matching_fleet_config_paths, rename_fleet_role,
+        matching_fleet_config_paths, plan_attach_fleet_role, plan_declare_fleet_role,
+        plan_rename_fleet_role, rename_fleet_role,
     },
 };
 use command::{
@@ -37,8 +38,9 @@ use options::{
 #[cfg(test)]
 use render::{FleetListRow, render_fleet_rows};
 use render::{
-    render_attached_role, render_declared_role, render_fleet_list, render_renamed_role,
-    render_role_inspection, render_role_lifecycle_rows,
+    render_attached_role, render_declared_role, render_fleet_list, render_planned_attached_role,
+    render_planned_declared_role, render_planned_delete, render_planned_renamed_role,
+    render_renamed_role, render_role_inspection, render_role_lifecycle_rows,
 };
 use std::{
     ffi::OsString,
@@ -207,16 +209,29 @@ where
     let options = RoleDeclareOptions::parse(args)?;
     let config_path = selected_fleet_config_path(&options.fleet)?;
     let project_root = current_canic_project_root()?;
-    let declared = declare_fleet_role(
-        &config_path,
-        &options.fleet,
-        &options.role,
-        &options.package,
-    )?;
-    println!(
-        "{}",
-        render_declared_role(&declared, &project_root, &config_path)
-    );
+    if options.dry_run {
+        let declared = plan_declare_fleet_role(
+            &config_path,
+            &options.fleet,
+            &options.role,
+            &options.package,
+        )?;
+        println!(
+            "{}",
+            render_planned_declared_role(&declared, &project_root, &config_path)
+        );
+    } else {
+        let declared = declare_fleet_role(
+            &config_path,
+            &options.fleet,
+            &options.role,
+            &options.package,
+        )?;
+        println!(
+            "{}",
+            render_declared_role(&declared, &project_root, &config_path)
+        );
+    }
     Ok(())
 }
 
@@ -232,17 +247,31 @@ where
     let options = RoleAttachOptions::parse(args)?;
     let config_path = selected_fleet_config_path(&options.fleet)?;
     let project_root = current_canic_project_root()?;
-    let attached = attach_fleet_role(
-        &config_path,
-        &options.fleet,
-        &options.role,
-        &options.subnet,
-        &options.kind,
-    )?;
-    println!(
-        "{}",
-        render_attached_role(&attached, &project_root, &config_path)
-    );
+    if options.dry_run {
+        let attached = plan_attach_fleet_role(
+            &config_path,
+            &options.fleet,
+            &options.role,
+            &options.subnet,
+            &options.kind,
+        )?;
+        println!(
+            "{}",
+            render_planned_attached_role(&attached, &project_root, &config_path)
+        );
+    } else {
+        let attached = attach_fleet_role(
+            &config_path,
+            &options.fleet,
+            &options.role,
+            &options.subnet,
+            &options.kind,
+        )?;
+        println!(
+            "{}",
+            render_attached_role(&attached, &project_root, &config_path)
+        );
+    }
     Ok(())
 }
 
@@ -258,16 +287,29 @@ where
     let options = RoleRenameOptions::parse(args)?;
     let config_path = selected_fleet_config_path(&options.fleet)?;
     let project_root = current_canic_project_root()?;
-    let renamed = rename_fleet_role(
-        &config_path,
-        &options.fleet,
-        &options.old_role,
-        &options.new_role,
-    )?;
-    println!(
-        "{}",
-        render_renamed_role(&renamed, &project_root, &config_path)
-    );
+    if options.dry_run {
+        let renamed = plan_rename_fleet_role(
+            &config_path,
+            &options.fleet,
+            &options.old_role,
+            &options.new_role,
+        )?;
+        println!(
+            "{}",
+            render_planned_renamed_role(&renamed, &project_root, &config_path)
+        );
+    } else {
+        let renamed = rename_fleet_role(
+            &config_path,
+            &options.fleet,
+            &options.old_role,
+            &options.new_role,
+        )?;
+        println!(
+            "{}",
+            render_renamed_role(&renamed, &project_root, &config_path)
+        );
+    }
     Ok(())
 }
 
@@ -378,6 +420,13 @@ where
     let options = DeleteFleetOptions::parse(args)?;
     let project_root = current_canic_project_root()?;
     let target = delete_target_dir(&project_root, &options.fleet)?;
+    if options.dry_run {
+        println!(
+            "{}",
+            render_planned_delete(&project_root, &options.fleet, &target)
+        );
+        return Ok(());
+    }
     confirm_delete_fleet(&options.fleet, &target, io::stdin().lock(), io::stdout())?;
     fs::remove_dir_all(&target)?;
 

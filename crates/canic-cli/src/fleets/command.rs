@@ -5,7 +5,7 @@
 
 use crate::{
     cli::{
-        clap::{passthrough_subcommand, render_usage, value_arg},
+        clap::{flag_arg, passthrough_subcommand, render_usage, value_arg},
         globals::internal_network_arg,
     },
     scaffold,
@@ -27,7 +27,15 @@ Examples:
   canic fleet config demo
   canic fleet create demo
   canic fleet check test
-  canic fleet delete demo";
+  canic fleet delete demo
+
+Mutation notes:
+  canic fleet check/list/config/adoption/role list/role inspect are read-only.
+  canic fleet create writes new local source/config files.
+  canic fleet role declare/attach/rename update canic.toml; rename may also
+  update matching package metadata.
+  canic fleet delete removes the selected fleet directory.
+  Mutating fleet commands that can be previewed expose --dry-run.";
 const FLEET_LIST_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
@@ -39,16 +47,24 @@ Examples:
 const FLEET_DELETE_HELP_AFTER: &str = "\
 Examples:
   canic fleet delete demo
+  canic fleet delete demo --dry-run
 
 This removes the matching config-defined fleet directory after you type the
-fleet name exactly.";
+fleet name exactly. --dry-run validates and prints the target without
+prompting or deleting files.";
 const FLEET_ROLE_HELP_AFTER: &str = "\
 Examples:
   canic fleet role declare demo store --package store
   canic fleet role attach demo store --subnet prime
   canic fleet role rename demo hub router
   canic fleet role list demo
-  canic fleet role inspect demo app";
+  canic fleet role inspect demo app
+
+Mutation notes:
+  list and inspect are read-only.
+  declare and attach update canic.toml.
+  rename updates canic.toml and may update matching package metadata.
+  declare, attach, and rename support --dry-run.";
 const FLEET_ROLE_LIST_HELP_AFTER: &str = "\
 Examples:
   canic fleet role list demo";
@@ -57,14 +73,17 @@ Examples:
   canic fleet role inspect demo app";
 const FLEET_ROLE_DECLARE_HELP_AFTER: &str = "\
 Examples:
-  canic fleet role declare demo store --package store";
+  canic fleet role declare demo store --package store
+  canic fleet role declare demo store --package store --dry-run";
 const FLEET_ROLE_ATTACH_HELP_AFTER: &str = "\
 Examples:
   canic fleet role attach demo store --subnet prime
-  canic fleet role attach demo worker --subnet prime --kind replica";
+  canic fleet role attach demo worker --subnet prime --kind replica
+  canic fleet role attach demo store --subnet prime --dry-run";
 const FLEET_ROLE_RENAME_HELP_AFTER: &str = "\
 Examples:
-  canic fleet role rename demo hub router";
+  canic fleet role rename demo hub router
+  canic fleet role rename demo hub router --dry-run";
 const FLEET_ADOPTION_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
@@ -283,6 +302,11 @@ pub(super) fn fleet_role_declare_command() -> ClapCommand {
                 .required(true)
                 .help("Package path recorded in [roles.<role>]"),
         )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Validate and print planned config writes without changing files"),
+        )
         .after_help(FLEET_ROLE_DECLARE_HELP_AFTER)
 }
 
@@ -317,6 +341,11 @@ pub(super) fn fleet_role_attach_command() -> ClapCommand {
                 .default_value("singleton")
                 .help("Canister kind: singleton, shard, replica, or instance"),
         )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Validate and print planned config writes without changing files"),
+        )
         .after_help(FLEET_ROLE_ATTACH_HELP_AFTER)
 }
 
@@ -343,6 +372,9 @@ pub(super) fn fleet_role_rename_command() -> ClapCommand {
                 .required(true)
                 .help("New local role name"),
         )
+        .arg(flag_arg("dry-run").long("dry-run").help(
+            "Validate and print planned config/package metadata writes without changing files",
+        ))
         .after_help(FLEET_ROLE_RENAME_HELP_AFTER)
 }
 
@@ -413,6 +445,11 @@ pub(super) fn fleet_delete_command() -> ClapCommand {
                 .value_name("name")
                 .required(true)
                 .help("Config-defined fleet name to delete"),
+        )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Validate and print the delete target without removing files"),
         )
         .after_help(FLEET_DELETE_HELP_AFTER)
 }

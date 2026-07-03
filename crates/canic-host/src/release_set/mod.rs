@@ -15,7 +15,8 @@ pub use config::{
     configured_release_roles, configured_role_auto_create, configured_role_capabilities,
     configured_role_details, configured_role_kinds, configured_role_lifecycle,
     configured_role_metrics_profiles, configured_role_topups, declare_fleet_role,
-    matching_fleet_config_paths, rename_fleet_role,
+    matching_fleet_config_paths, plan_attach_fleet_role, plan_declare_fleet_role,
+    plan_rename_fleet_role, rename_fleet_role,
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,

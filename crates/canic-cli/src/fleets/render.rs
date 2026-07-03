@@ -3,6 +3,7 @@
 //! Does not own: command dispatch, option parsing, filesystem mutation, or reports.
 //! Boundary: deterministic text/table formatting for fleet listing and role lifecycle commands.
 
+use crate::cli::render::append_dry_run_footer;
 use canic_host::{
     release_set::{
         AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, RenamedFleetRole,
@@ -167,6 +168,24 @@ pub(super) fn render_declared_role(
     .join("\n")
 }
 
+pub(super) fn render_planned_declared_role(
+    role: &DeclaredFleetRole,
+    workspace_root: &Path,
+    config_path: &Path,
+) -> String {
+    let mut lines = vec![
+        "Planned fleet role declaration:".to_string(),
+        format!("  role: {}", role.display),
+        format!("  package: {}", role.package),
+        format!(
+            "  would_write: {}",
+            display_workspace_path(workspace_root, config_path)
+        ),
+    ];
+    append_dry_run_footer(&mut lines);
+    lines.join("\n")
+}
+
 pub(super) fn render_attached_role(
     role: &AttachedFleetRole,
     workspace_root: &Path,
@@ -185,6 +204,25 @@ pub(super) fn render_attached_role(
         format!("  next action: canic build {} {}", role.fleet, role.role),
     ]
     .join("\n")
+}
+
+pub(super) fn render_planned_attached_role(
+    role: &AttachedFleetRole,
+    workspace_root: &Path,
+    config_path: &Path,
+) -> String {
+    let mut lines = vec![
+        "Planned fleet role attachment:".to_string(),
+        format!("  role: {}", role.display),
+        format!("  kind: {}", role.kind),
+        format!("  topology: {}", role.topology),
+        format!(
+            "  would_write: {}",
+            display_workspace_path(workspace_root, config_path)
+        ),
+    ];
+    append_dry_run_footer(&mut lines);
+    lines.join("\n")
 }
 
 pub(super) fn render_renamed_role(
@@ -217,4 +255,46 @@ pub(super) fn render_renamed_role(
         ),
     ]
     .join("\n")
+}
+
+pub(super) fn render_planned_renamed_role(
+    role: &RenamedFleetRole,
+    workspace_root: &Path,
+    config_path: &Path,
+) -> String {
+    let package = role.package_manifest.as_ref().map_or_else(
+        || {
+            role.package_manifest_note
+                .as_deref()
+                .unwrap_or("not updated")
+                .to_string()
+        },
+        |path| display_workspace_path(workspace_root, path),
+    );
+
+    let mut lines = vec![
+        "Planned fleet role rename:".to_string(),
+        format!("  old: {}", role.old_display),
+        format!("  new: {}", role.new_display),
+        format!(
+            "  would_write: {}",
+            display_workspace_path(workspace_root, config_path)
+        ),
+        format!("  would_write_package_manifest: {package}"),
+    ];
+    append_dry_run_footer(&mut lines);
+    lines.join("\n")
+}
+
+pub(super) fn render_planned_delete(workspace_root: &Path, fleet: &str, target: &Path) -> String {
+    let mut lines = vec![
+        "Planned fleet delete:".to_string(),
+        format!("  fleet: {fleet}"),
+        format!(
+            "  would_remove: {}",
+            display_workspace_path(workspace_root, target)
+        ),
+    ];
+    append_dry_run_footer(&mut lines);
+    lines.join("\n")
 }

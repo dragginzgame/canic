@@ -14,13 +14,14 @@ use crate::{
         required_string,
     },
     cli::help::print_help_or_version,
+    cli::render::append_dry_run_footer,
     version_text,
 };
 use canic_host::{
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
     release_set::{
-        configured_role_lifecycle, declare_fleet_role, display_workspace_path,
-        matching_fleet_config_paths,
+        declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
+        plan_declare_fleet_role,
     },
 };
 use clap::{Arg, Command as ClapCommand};
@@ -35,13 +36,20 @@ use thiserror::Error as ThisError;
 const FLEET_CREATE_HELP_AFTER: &str = "\
 Examples:
   canic fleet create demo
-  canic fleet create demo --yes";
+  canic fleet create demo --yes
+  canic fleet create demo --dry-run";
 const SCAFFOLD_HELP_AFTER: &str = "\
 Examples:
-  canic scaffold canister demo store";
+  canic scaffold canister demo store
+
+Mutation notes:
+  canic scaffold canister writes a new local role crate, appends the workspace
+  Cargo.toml member when present, and declares the role in canic.toml.
+  Use --dry-run to validate and preview without changing files.";
 const SCAFFOLD_CANISTER_HELP_AFTER: &str = "\
 Examples:
-  canic scaffold canister demo store";
+  canic scaffold canister demo store
+  canic scaffold canister demo store --dry-run";
 
 ///
 /// ScaffoldCommandError
@@ -87,6 +95,7 @@ pub enum ScaffoldCommandError {
 struct ScaffoldOptions {
     name: String,
     yes: bool,
+    dry_run: bool,
 }
 
 ///
@@ -97,6 +106,7 @@ struct ScaffoldOptions {
 struct CanisterScaffoldOptions {
     fleet: String,
     role: String,
+    dry_run: bool,
 }
 
 impl ScaffoldOptions {
@@ -121,6 +131,7 @@ impl ScaffoldOptions {
         Ok(Self {
             name: required_string(&matches, "name"),
             yes: matches.get_flag("yes"),
+            dry_run: matches.get_flag("dry-run"),
         })
     }
 }
@@ -147,6 +158,7 @@ impl CanisterScaffoldOptions {
         Ok(Self {
             fleet: required_string(&matches, "fleet"),
             role: required_string(&matches, "role"),
+            dry_run: matches.get_flag("dry-run"),
         })
     }
 }
@@ -203,7 +215,13 @@ where
         scaffold_canister_command(),
         scaffold_canister_usage,
     )?;
-    let result = scaffold_canister(&options)?;
+    let result = if options.dry_run {
+        let plan = plan_scaffold_canister(&options)?;
+        println!("{}", render_canister_scaffold_plan(&plan));
+        return Ok(());
+    } else {
+        scaffold_canister(&options)?
+    };
     println!("Created Canic canister role:");
     println!("  role: {}.{}", result.fleet, result.role);
     println!("  package: {}", result.package);
@@ -227,6 +245,11 @@ where
 
 fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     let project_root = scaffold_project_root()?;
+    if options.dry_run {
+        let plan = plan_scaffold_project_at(&project_root, &options)?;
+        println!("{}", render_scaffold_project_plan(&plan));
+        return Ok(());
+    }
     if !options.yes {
         confirm_scaffold(&options, &project_root, io::stdin().lock(), io::stdout())?;
     }
@@ -261,6 +284,19 @@ struct CanisterScaffoldResult {
 }
 
 ///
+/// CanisterScaffoldPlan
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CanisterScaffoldPlan {
+    result: CanisterScaffoldResult,
+    canister_dir: PathBuf,
+    config_path: PathBuf,
+    workspace_member: String,
+    workspace_manifest_path: Option<PathBuf>,
+}
+
+///
 /// ScaffoldResult
 ///
 
@@ -272,10 +308,20 @@ struct ScaffoldResult {
     config_path: PathBuf,
 }
 
-fn scaffold_project_at(
+///
+/// ScaffoldProjectPlan
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ScaffoldProjectPlan {
+    result: ScaffoldResult,
+    files: Vec<PathBuf>,
+}
+
+fn plan_scaffold_project_at(
     project_root: &Path,
     options: &ScaffoldOptions,
-) -> Result<ScaffoldResult, ScaffoldCommandError> {
+) -> Result<ScaffoldProjectPlan, ScaffoldCommandError> {
     let project_dir = project_root.join("fleets").join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
@@ -284,28 +330,53 @@ fn scaffold_project_at(
     }
 
     let root_dir = project_dir.join("root");
-    let root_src_dir = root_dir.join("src");
     let app_dir = project_dir.join("app");
-    let app_src_dir = app_dir.join("src");
-
     let config_path = project_dir.join("canic.toml");
-    write_new_file(&config_path, &canic_toml(&options.name))?;
+    let files = vec![
+        config_path.clone(),
+        root_dir.join("Cargo.toml"),
+        root_dir.join("build.rs"),
+        root_dir.join("src/lib.rs"),
+        app_dir.join("Cargo.toml"),
+        app_dir.join("build.rs"),
+        app_dir.join("src/lib.rs"),
+    ];
+
+    Ok(ScaffoldProjectPlan {
+        result: ScaffoldResult {
+            project_dir,
+            root_dir,
+            app_dir,
+            config_path,
+        },
+        files,
+    })
+}
+
+fn scaffold_project_at(
+    project_root: &Path,
+    options: &ScaffoldOptions,
+) -> Result<ScaffoldResult, ScaffoldCommandError> {
+    let plan = plan_scaffold_project_at(project_root, options)?;
+    let result = &plan.result;
+    let root_src_dir = result.root_dir.join("src");
+    let app_src_dir = result.app_dir.join("src");
+
+    write_new_file(&result.config_path, &canic_toml(&options.name))?;
     write_new_file(
-        &root_dir.join("Cargo.toml"),
+        &result.root_dir.join("Cargo.toml"),
         &root_cargo_toml(&options.name),
     )?;
-    write_new_file(&root_dir.join("build.rs"), ROOT_BUILD_RS)?;
+    write_new_file(&result.root_dir.join("build.rs"), ROOT_BUILD_RS)?;
     write_new_file(&root_src_dir.join("lib.rs"), ROOT_LIB_RS)?;
-    write_new_file(&app_dir.join("Cargo.toml"), &app_cargo_toml(&options.name))?;
-    write_new_file(&app_dir.join("build.rs"), APP_BUILD_RS)?;
+    write_new_file(
+        &result.app_dir.join("Cargo.toml"),
+        &app_cargo_toml(&options.name),
+    )?;
+    write_new_file(&result.app_dir.join("build.rs"), APP_BUILD_RS)?;
     write_new_file(&app_src_dir.join("lib.rs"), APP_LIB_RS)?;
 
-    Ok(ScaffoldResult {
-        project_dir,
-        root_dir,
-        app_dir,
-        config_path,
-    })
+    Ok(plan.result)
 }
 
 /// Create a declared-only canister crate under an existing fleet config.
@@ -315,15 +386,20 @@ fn scaffold_canister(
     scaffold_canister_at(&scaffold_project_root()?, options)
 }
 
-fn scaffold_canister_at(
+fn plan_scaffold_canister(
+    options: &CanisterScaffoldOptions,
+) -> Result<CanisterScaffoldPlan, ScaffoldCommandError> {
+    plan_scaffold_canister_at(&scaffold_project_root()?, options)
+}
+
+fn plan_scaffold_canister_at(
     project_root: &Path,
     options: &CanisterScaffoldOptions,
-) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
+) -> Result<CanisterScaffoldPlan, ScaffoldCommandError> {
     let config_path = selected_fleet_config_path(project_root, &options.fleet)?;
     let fleet_dir = config_path
         .parent()
         .ok_or_else(|| ScaffoldCommandError::MissingFleetDirectory(options.fleet.clone()))?;
-    ensure_role_not_declared(&config_path, &options.fleet, &options.role)?;
     let canister_dir = fleet_dir.join(&options.role);
     if canister_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
@@ -331,45 +407,87 @@ fn scaffold_canister_at(
         ));
     }
 
-    let src_dir = canister_dir.join("src");
-
     let package = options.role.clone();
-    let package_name = canister_package_name(&options.fleet, &options.role);
+    plan_declare_fleet_role(&config_path, &options.fleet, &options.role, &package)
+        .map_err(|err| ScaffoldCommandError::Usage(err.to_string()))?;
     let workspace_member = display_workspace_path(project_root, &canister_dir);
+    validate_workspace_member_update(project_root, &workspace_member)?;
+    let workspace_manifest_path = workspace_manifest_path(project_root);
+    let package_name = canister_package_name(&options.fleet, &options.role);
+
+    Ok(CanisterScaffoldPlan {
+        result: CanisterScaffoldResult {
+            fleet: options.fleet.clone(),
+            role: options.role.clone(),
+            package,
+            package_name,
+            canister_dir: display_path(project_root, &canister_dir),
+            config_path: display_path(project_root, &config_path),
+        },
+        canister_dir,
+        config_path,
+        workspace_member,
+        workspace_manifest_path,
+    })
+}
+
+fn scaffold_canister_at(
+    project_root: &Path,
+    options: &CanisterScaffoldOptions,
+) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
+    let plan = plan_scaffold_canister_at(project_root, options)?;
+    let src_dir = plan.canister_dir.join("src");
+
     write_new_file(
-        &canister_dir.join("Cargo.toml"),
+        &plan.canister_dir.join("Cargo.toml"),
         &canister_cargo_toml(&options.fleet, &options.role),
     )?;
-    write_new_file(&canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
+    write_new_file(&plan.canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
     write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
-    append_workspace_member(project_root, &workspace_member)?;
-    declare_fleet_role(&config_path, &options.fleet, &options.role, &package)?;
+    append_workspace_member(project_root, &plan.workspace_member)?;
+    declare_fleet_role(
+        &plan.config_path,
+        &options.fleet,
+        &options.role,
+        &plan.result.package,
+    )?;
 
-    Ok(CanisterScaffoldResult {
-        fleet: options.fleet.clone(),
-        role: options.role.clone(),
-        package,
-        package_name,
-        canister_dir: display_path(project_root, &canister_dir),
-        config_path: display_path(project_root, &config_path),
-    })
+    Ok(plan.result)
 }
 
 fn append_workspace_member(
     workspace_root: &Path,
     member: &str,
 ) -> Result<(), ScaffoldCommandError> {
-    let manifest_path = workspace_root.join("Cargo.toml");
-    if !manifest_path.is_file() {
+    let Some(manifest_path) = workspace_manifest_path(workspace_root) else {
         return Ok(());
-    }
-
+    };
     let source = fs::read_to_string(&manifest_path)?;
     let updated = append_workspace_member_source(&source, member)?;
     if updated != source {
         fs::write(manifest_path, updated)?;
     }
     Ok(())
+}
+
+fn validate_workspace_member_update(
+    workspace_root: &Path,
+    member: &str,
+) -> Result<(), ScaffoldCommandError> {
+    let Some(manifest_path) = workspace_manifest_path(workspace_root) else {
+        return Ok(());
+    };
+    let source = fs::read_to_string(&manifest_path)?;
+    append_workspace_member_source(&source, member)?;
+    Ok(())
+}
+
+fn workspace_manifest_path(workspace_root: &Path) -> Option<PathBuf> {
+    let manifest_path = workspace_root.join("Cargo.toml");
+    if !manifest_path.is_file() {
+        return None;
+    }
+    Some(manifest_path)
 }
 
 fn append_workspace_member_source(
@@ -481,20 +599,6 @@ fn find_members_array_offset(section: &str) -> Option<usize> {
     })
 }
 
-fn ensure_role_not_declared(
-    config_path: &Path,
-    fleet: &str,
-    role: &str,
-) -> Result<(), ScaffoldCommandError> {
-    let roles = configured_role_lifecycle(config_path)?;
-    if roles.iter().any(|row| row.role == role) {
-        return Err(ScaffoldCommandError::Usage(format!(
-            "role {fleet}.{role} is already declared"
-        )));
-    }
-    Ok(())
-}
-
 fn scaffold_command() -> ClapCommand {
     ClapCommand::new("scaffold")
         .bin_name("canic scaffold")
@@ -526,6 +630,11 @@ fn fleet_create_command() -> ClapCommand {
                 .short('y')
                 .help("Create the fleet without prompting for confirmation"),
         )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Validate and print planned source files without writing them"),
+        )
         .after_help(FLEET_CREATE_HELP_AFTER)
 }
 
@@ -548,6 +657,11 @@ fn scaffold_canister_command() -> ClapCommand {
                 .value_parser(clap::builder::ValueParser::new(parse_project_name))
                 .help("Snake-case role name to scaffold"),
         )
+        .arg(
+            flag_arg("dry-run")
+                .long("dry-run")
+                .help("Validate and print planned source/config writes without changing files"),
+        )
         .after_help(SCAFFOLD_CANISTER_HELP_AFTER)
 }
 
@@ -561,6 +675,44 @@ pub fn fleet_create_usage() -> String {
 
 fn scaffold_canister_usage() -> String {
     render_usage(scaffold_canister_command)
+}
+
+fn render_scaffold_project_plan(plan: &ScaffoldProjectPlan) -> String {
+    let mut lines = vec![
+        "Planned Canic fleet scaffold:".to_string(),
+        format!("  project: {}", plan.result.project_dir.display()),
+        format!("  root: {}", plan.result.root_dir.display()),
+        format!("  app: {}", plan.result.app_dir.display()),
+        format!("  config: {}", plan.result.config_path.display()),
+    ];
+    append_dry_run_footer(&mut lines);
+    lines.push("  would_create:".to_string());
+    lines.extend(
+        plan.files
+            .iter()
+            .map(|path| format!("    {}", path.display())),
+    );
+    lines.join("\n")
+}
+
+fn render_canister_scaffold_plan(plan: &CanisterScaffoldPlan) -> String {
+    let workspace = plan
+        .workspace_manifest_path
+        .as_ref()
+        .map_or_else(|| "none".to_string(), |path| path.display().to_string());
+
+    let mut lines = vec![
+        "Planned Canic canister role scaffold:".to_string(),
+        format!("  role: {}.{}", plan.result.fleet, plan.result.role),
+        format!("  package: {}", plan.result.package),
+        format!("  crate: {}", plan.result.canister_dir.display()),
+        format!("  config: {}", plan.result.config_path.display()),
+        format!("  workspace_member: {}", plan.workspace_member),
+        format!("  would_write_workspace: {workspace}"),
+        "  would_write_role_files: Cargo.toml, build.rs, src/lib.rs".to_string(),
+    ];
+    append_dry_run_footer(&mut lines);
+    lines.join("\n")
 }
 
 fn confirm_scaffold<R, W>(

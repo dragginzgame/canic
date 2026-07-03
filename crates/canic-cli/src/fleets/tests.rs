@@ -27,6 +27,17 @@ fn parses_delete_fleet_options() {
         DeleteFleetOptions::parse([OsString::from("demo")]).expect("parse delete options");
 
     assert_eq!(options.fleet, "demo");
+    assert!(!options.dry_run);
+}
+
+// Ensure fleet delete supports target preview mode.
+#[test]
+fn parses_delete_fleet_dry_run_option() {
+    let options = DeleteFleetOptions::parse([OsString::from("demo"), OsString::from("--dry-run")])
+        .expect("parse delete dry-run options");
+
+    assert_eq!(options.fleet, "demo");
+    assert!(options.dry_run);
 }
 
 // Ensure fleet check requires one fleet name.
@@ -71,6 +82,22 @@ fn parses_role_declare_fleet_role_and_package() {
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.role, "store");
     assert_eq!(options.package, "store");
+    assert!(!options.dry_run);
+}
+
+// Ensure role declaration supports config-write preview mode.
+#[test]
+fn parses_role_declare_dry_run_option() {
+    let options = RoleDeclareOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("store"),
+        OsString::from("--package"),
+        OsString::from("store"),
+        OsString::from("--dry-run"),
+    ])
+    .expect("parse role declare dry-run options");
+
+    assert!(options.dry_run);
 }
 
 // Ensure role attachment requires fleet, role, and subnet and defaults to singleton.
@@ -88,6 +115,7 @@ fn parses_role_attach_fleet_role_and_subnet() {
     assert_eq!(options.role, "store");
     assert_eq!(options.subnet, "prime");
     assert_eq!(options.kind, "singleton");
+    assert!(!options.dry_run);
 }
 
 // Ensure role attachment accepts explicit non-singleton kind.
@@ -106,6 +134,21 @@ fn parses_role_attach_kind() {
     assert_eq!(options.kind, "replica");
 }
 
+// Ensure role attachment supports config-write preview mode.
+#[test]
+fn parses_role_attach_dry_run_option() {
+    let options = RoleAttachOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("store"),
+        OsString::from("--subnet"),
+        OsString::from("prime"),
+        OsString::from("--dry-run"),
+    ])
+    .expect("parse role attach dry-run options");
+
+    assert!(options.dry_run);
+}
+
 // Ensure role rename requires fleet, old role, and new role names.
 #[test]
 fn parses_role_rename_fleet_old_role_and_new_role() {
@@ -119,6 +162,21 @@ fn parses_role_rename_fleet_old_role_and_new_role() {
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.old_role, "hub");
     assert_eq!(options.new_role, "router");
+    assert!(!options.dry_run);
+}
+
+// Ensure role rename supports config/package metadata preview mode.
+#[test]
+fn parses_role_rename_dry_run_option() {
+    let options = RoleRenameOptions::parse_test([
+        OsString::from("demo"),
+        OsString::from("hub"),
+        OsString::from("router"),
+        OsString::from("--dry-run"),
+    ])
+    .expect("parse role rename dry-run options");
+
+    assert!(options.dry_run);
 }
 
 // Ensure adoption report requires explicit fleet and profile, with text output by default.
@@ -468,6 +526,29 @@ fn renders_declared_role_output() {
     assert!(output.contains("canic fleet role attach demo store --subnet <subnet>"));
 }
 
+// Ensure declaration dry-run output is explicit about no writes.
+#[test]
+fn renders_planned_declared_role_output() {
+    let root = Path::new("/workspace");
+    let config = root.join("fleets/demo/canic.toml");
+    let output = render_planned_declared_role(
+        &DeclaredFleetRole {
+            fleet: "demo".to_string(),
+            role: "store".to_string(),
+            display: "demo.store".to_string(),
+            package: "store".to_string(),
+        },
+        root,
+        &config,
+    );
+
+    assert!(output.contains("Planned fleet role declaration:"));
+    assert!(output.contains("role: demo.store"));
+    assert!(output.contains("would_write: fleets/demo/canic.toml"));
+    assert!(output.contains("dry_run: true"));
+    assert!(output.contains("files_changed: 0"));
+}
+
 // Ensure attachment output points at artifact build as the next step.
 #[test]
 fn renders_attached_role_output() {
@@ -493,6 +574,30 @@ fn renders_attached_role_output() {
     assert!(output.contains("config: fleets/demo/canic.toml"));
     assert!(output.contains("state: attached"));
     assert!(output.contains("canic build demo store"));
+}
+
+// Ensure attachment dry-run output names the topology and config target.
+#[test]
+fn renders_planned_attached_role_output() {
+    let root = Path::new("/workspace");
+    let config = root.join("fleets/demo/canic.toml");
+    let output = render_planned_attached_role(
+        &AttachedFleetRole {
+            fleet: "demo".to_string(),
+            role: "store".to_string(),
+            display: "demo.store".to_string(),
+            subnet: "prime".to_string(),
+            kind: "singleton".to_string(),
+            topology: "prime/store".to_string(),
+        },
+        root,
+        &config,
+    );
+
+    assert!(output.contains("Planned fleet role attachment:"));
+    assert!(output.contains("topology: prime/store"));
+    assert!(output.contains("would_write: fleets/demo/canic.toml"));
+    assert!(output.contains("files_changed: 0"));
 }
 
 // Ensure rename output reports config and package metadata updates.
@@ -521,6 +626,47 @@ fn renders_renamed_role_output() {
     assert!(output.contains("config: fleets/demo/canic.toml"));
     assert!(output.contains("package_manifest: fleets/demo/router/Cargo.toml"));
     assert!(output.contains("canic fleet role inspect demo router"));
+}
+
+// Ensure rename dry-run output names both possible write targets.
+#[test]
+fn renders_planned_renamed_role_output() {
+    let root = Path::new("/workspace");
+    let config = root.join("fleets/demo/canic.toml");
+    let manifest = root.join("fleets/demo/router/Cargo.toml");
+    let output = render_planned_renamed_role(
+        &RenamedFleetRole {
+            fleet: "demo".to_string(),
+            old_role: "hub".to_string(),
+            new_role: "router".to_string(),
+            old_display: "demo.hub".to_string(),
+            new_display: "demo.router".to_string(),
+            package_manifest: Some(manifest),
+            package_manifest_note: None,
+        },
+        root,
+        &config,
+    );
+
+    assert!(output.contains("Planned fleet role rename:"));
+    assert!(output.contains("old: demo.hub"));
+    assert!(output.contains("new: demo.router"));
+    assert!(output.contains("would_write: fleets/demo/canic.toml"));
+    assert!(output.contains("would_write_package_manifest: fleets/demo/router/Cargo.toml"));
+    assert!(output.contains("files_changed: 0"));
+}
+
+// Ensure delete dry-run output names the safe target without deleting.
+#[test]
+fn renders_planned_delete_output() {
+    let root = Path::new("/workspace");
+    let target = root.join("fleets/demo");
+    let output = render_planned_delete(root, "demo", &target);
+
+    assert!(output.contains("Planned fleet delete:"));
+    assert!(output.contains("fleet: demo"));
+    assert!(output.contains("would_remove: fleets/demo"));
+    assert!(output.contains("files_changed: 0"));
 }
 
 // Ensure text adoption reports summarize lifecycle state without mutating config.
@@ -1089,6 +1235,13 @@ fn fleet_usage_lists_subcommands_and_examples() {
     assert!(!text.contains("use"));
     assert!(!text.contains("search"));
     assert!(text.contains("Examples:"));
+    assert!(text.contains("Mutation notes:"));
+    assert!(
+        text.contains(
+            "canic fleet check/list/config/adoption/role list/role inspect are read-only"
+        )
+    );
+    assert!(text.contains("Mutating fleet commands that can be previewed expose --dry-run"));
 }
 
 // Ensure fleet adoption help lists the read-only report command.
@@ -1116,6 +1269,9 @@ fn fleet_role_usage_lists_subcommands_and_examples() {
     assert!(text.contains("list"));
     assert!(text.contains("inspect"));
     assert!(text.contains("Examples:"));
+    assert!(text.contains("Mutation notes:"));
+    assert!(text.contains("declare and attach update canic.toml"));
+    assert!(text.contains("rename updates canic.toml"));
 }
 
 // Ensure fleet check help explains read-only ICP config checks.
@@ -1160,6 +1316,7 @@ fn delete_usage_lists_confirmation() {
     assert!(text.contains("Delete a config-defined Canic fleet directory"));
     assert!(text.contains("Usage: canic fleet delete"));
     assert!(text.contains("<name>"));
+    assert!(text.contains("--dry-run"));
     assert!(text.contains("type the"));
 }
 
@@ -1190,6 +1347,7 @@ fn role_declare_usage_lists_required_package() {
     assert!(text.contains("<fleet>"));
     assert!(text.contains("<role>"));
     assert!(text.contains("--package <path>"));
+    assert!(text.contains("--dry-run"));
     assert!(text.contains("Examples:"));
 }
 
@@ -1203,6 +1361,7 @@ fn role_attach_usage_lists_required_subnet() {
     assert!(text.contains("<role>"));
     assert!(text.contains("--subnet <subnet>"));
     assert!(text.contains("--kind <kind>"));
+    assert!(text.contains("--dry-run"));
     assert!(text.contains("Examples:"));
 }
 
@@ -1211,7 +1370,11 @@ fn role_attach_usage_lists_required_subnet() {
 fn role_rename_usage_lists_fleet_old_role_and_new_role_arguments() {
     let text = role_rename_usage();
 
-    assert!(text.contains("Usage: canic fleet role rename <fleet> <old-role> <new-role>"));
+    assert!(text.contains("Usage: canic fleet role rename"));
+    assert!(text.contains("<fleet>"));
+    assert!(text.contains("<old-role>"));
+    assert!(text.contains("<new-role>"));
+    assert!(text.contains("--dry-run"));
     assert!(text.contains("Examples:"));
 }
 

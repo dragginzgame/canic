@@ -47,6 +47,14 @@ before this compaction is archived at
   state-audit logic. The 0.80.5 changelog entries are staged in the root ledger
   and detailed 0.80 notes.
 
+- The current cleanup slice makes mutation boundaries easier to inspect before
+  running commands by putting mutation notes directly in fleet/scaffold command
+  help and adding `--dry-run` previews for local source/config mutators: fleet
+  create, scaffold canister, fleet role declare/attach/rename, and fleet
+  delete. It keeps Cargo.toml feature fixes developer-owned and does not add
+  automatic dependency feature editing. The 0.80.6 changelog entries are
+  staged in the root ledger and detailed 0.80 notes.
+
 - The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 

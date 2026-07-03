@@ -9,6 +9,7 @@ fn parses_scaffold_options() {
 
     assert_eq!(options.name, "my_app");
     assert!(!options.yes);
+    assert!(!options.dry_run);
 }
 
 // Ensure scaffold accepts explicit noninteractive confirmation.
@@ -20,6 +21,15 @@ fn parses_scaffold_yes_option() {
     assert!(options.yes);
 }
 
+// Ensure scaffold accepts source-write preview mode.
+#[test]
+fn parses_scaffold_dry_run_option() {
+    let options = ScaffoldOptions::parse([OsString::from("my_app"), OsString::from("--dry-run")])
+        .expect("parse scaffold dry-run option");
+
+    assert!(options.dry_run);
+}
+
 // Ensure canister scaffold options parse fleet and role identity.
 #[test]
 fn parses_canister_scaffold_options() {
@@ -28,6 +38,20 @@ fn parses_canister_scaffold_options() {
 
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.role, "store");
+    assert!(!options.dry_run);
+}
+
+// Ensure canister scaffold accepts source/config preview mode.
+#[test]
+fn parses_canister_scaffold_dry_run_option() {
+    let options = CanisterScaffoldOptions::parse([
+        OsString::from("demo"),
+        OsString::from("store"),
+        OsString::from("--dry-run"),
+    ])
+    .expect("parse canister scaffold dry-run options");
+
+    assert!(options.dry_run);
 }
 
 // Ensure confirmation accepts an explicit yes response.
@@ -37,6 +61,7 @@ fn confirm_scaffold_accepts_yes() {
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: false,
+        dry_run: false,
     };
     let mut output = Vec::new();
 
@@ -56,6 +81,7 @@ fn confirm_scaffold_rejects_empty_response() {
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: false,
+        dry_run: false,
     };
     let mut output = Vec::new();
 
@@ -101,6 +127,7 @@ fn scaffold_project_writes_root_and_app_files() {
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: true,
+        dry_run: false,
     };
 
     let result = scaffold_project_at(&root, &options).expect("scaffold project");
@@ -148,6 +175,26 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(app_lib.contains("canic::finish!();"));
 }
 
+// Ensure fleet scaffold dry-run plans files without creating them.
+#[test]
+fn scaffold_project_plan_does_not_write_files() {
+    let root = TempDir::new("canic-cli-scaffold-plan");
+    let options = ScaffoldOptions {
+        name: "my_app".to_string(),
+        yes: false,
+        dry_run: true,
+    };
+
+    let plan = plan_scaffold_project_at(&root, &options).expect("plan scaffold");
+    let text = render_scaffold_project_plan(&plan);
+
+    assert!(text.contains("Planned Canic fleet scaffold:"));
+    assert!(text.contains("dry_run: true"));
+    assert!(text.contains("files_changed: 0"));
+    assert!(text.contains("canic.toml"));
+    assert!(!plan.result.project_dir.exists());
+}
+
 // Ensure canister scaffold writes a declared-only canister role under one fleet.
 #[test]
 fn scaffold_canister_writes_declared_only_role_files() {
@@ -163,6 +210,7 @@ fn scaffold_canister_writes_declared_only_role_files() {
     let options = CanisterScaffoldOptions {
         fleet: "demo".to_string(),
         role: "store".to_string(),
+        dry_run: false,
     };
 
     let result = scaffold_canister_at(&root, &options).expect("scaffold canister");
@@ -194,6 +242,47 @@ fn scaffold_canister_writes_declared_only_role_files() {
     assert!(lib.contains("canic::finish!();"));
 }
 
+// Ensure canister scaffold dry-run validates all intended writes without changing files.
+#[test]
+fn scaffold_canister_plan_does_not_write_files() {
+    let root = TempDir::new("canic-cli-scaffold-canister-plan");
+    let fleet_dir = root.join("fleets/demo");
+    fs::create_dir_all(&fleet_dir).expect("create fleet dir");
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\n    \"fleets/demo/root\",\n]\n",
+    )
+    .expect("write workspace manifest");
+    fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
+    let before_config = fs::read_to_string(fleet_dir.join("canic.toml")).expect("read config");
+    let before_workspace = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace");
+    let options = CanisterScaffoldOptions {
+        fleet: "demo".to_string(),
+        role: "store".to_string(),
+        dry_run: true,
+    };
+
+    let plan = plan_scaffold_canister_at(&root, &options).expect("plan canister scaffold");
+    let text = render_canister_scaffold_plan(&plan);
+    let after_config = fs::read_to_string(fleet_dir.join("canic.toml")).expect("read config");
+    let after_workspace = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace");
+
+    assert_eq!(after_config, before_config);
+    assert_eq!(after_workspace, before_workspace);
+    assert!(!fleet_dir.join("store").exists());
+    assert_eq!(plan.canister_dir, fleet_dir.join("store"));
+    assert_eq!(plan.config_path, fleet_dir.join("canic.toml"));
+    assert_eq!(plan.result.canister_dir, PathBuf::from("fleets/demo/store"));
+    assert_eq!(
+        plan.result.config_path,
+        PathBuf::from("fleets/demo/canic.toml")
+    );
+    assert!(text.contains("Planned Canic canister role scaffold:"));
+    assert!(text.contains("role: demo.store"));
+    assert!(text.contains("workspace_member: fleets/demo/store"));
+    assert!(text.contains("files_changed: 0"));
+}
+
 // Ensure workspace member insertion handles compact workspace arrays.
 #[test]
 fn append_workspace_member_source_updates_compact_members_array() {
@@ -217,6 +306,7 @@ fn scaffold_canister_rejects_existing_target() {
     let options = CanisterScaffoldOptions {
         fleet: "demo".to_string(),
         role: "store".to_string(),
+        dry_run: false,
     };
 
     let err = scaffold_canister_at(&root, &options).expect_err("existing scaffold should fail");
@@ -234,6 +324,7 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
     let options = CanisterScaffoldOptions {
         fleet: "demo".to_string(),
         role: "app".to_string(),
+        dry_run: false,
     };
 
     let err = scaffold_canister_at(&root, &options).expect_err("declared role should fail");
@@ -248,8 +339,22 @@ fn scaffold_canister_usage_lists_fleet_and_role() {
     let text = scaffold_canister_usage();
 
     assert!(text.contains("Create a declared-only canister role"));
-    assert!(text.contains("Usage: canic scaffold canister <fleet> <role>"));
+    assert!(text.contains("Usage: canic scaffold canister"));
+    assert!(text.contains("<fleet>"));
+    assert!(text.contains("<role>"));
+    assert!(text.contains("--dry-run"));
     assert!(text.contains("Examples:"));
+}
+
+// Ensure scaffold family help explains local write boundaries.
+#[test]
+fn scaffold_usage_lists_mutation_notes() {
+    let text = usage();
+
+    assert!(text.contains("Mutation notes:"));
+    assert!(text.contains("writes a new local role crate"));
+    assert!(text.contains("appends the workspace"));
+    assert!(text.contains("Use --dry-run"));
 }
 
 // Ensure scaffold refuses to overwrite an existing project directory.
@@ -259,6 +364,7 @@ fn scaffold_project_rejects_existing_target() {
     let options = ScaffoldOptions {
         name: "my_app".to_string(),
         yes: true,
+        dry_run: false,
     };
     fs::create_dir_all(root.join("fleets/my_app")).expect("create existing target");
 

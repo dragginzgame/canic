@@ -11,7 +11,7 @@ use super::config::{
 use super::stage::read_release_artifact;
 use super::{
     canister_manifest_path, canisters_root, config_path, configured_install_targets,
-    root_manifest_path,
+    plan_attach_fleet_role, plan_declare_fleet_role, plan_rename_fleet_role, root_manifest_path,
 };
 use crate::test_support::temp_dir;
 use flate2::{Compression, write::GzEncoder};
