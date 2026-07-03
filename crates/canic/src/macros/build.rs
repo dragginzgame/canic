@@ -182,6 +182,18 @@ macro_rules! __canic_build_internal {
             }
         }
 
+        let __canic_required_features =
+            $crate::__internal::core::bootstrap::role_required_canic_features(
+                $cfg.as_ref(),
+                &role_id,
+            );
+        $crate::__build::assert_required_canic_dependency_features(
+            std::path::Path::new(&manifest_dir),
+            fleet_name,
+            role_name,
+            &__canic_required_features,
+        );
+
         if role_name == "root" {
             println!("cargo:rustc-cfg=canic_is_root");
             if $crate::__build::emit_root_wasm_store_bootstrap_release_set(&$cfg_path) {

@@ -819,6 +819,183 @@ kind = "service"
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
+// Ensure project medic reports config-driven runtime feature requirements before startup traps.
+#[test]
+fn project_config_quality_checks_report_missing_required_canic_features() {
+    let root = temp_dir("canic-cli-medic-project-required-features");
+    let config = write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+
+[subnets.prime.canisters.app.auth]
+role_attestation_cache = true
+"#,
+    );
+    write_medic_package_with_canic_features(
+        &root,
+        "root",
+        "demo",
+        "root",
+        &["auth-root-canister-sig-create"],
+    );
+    write_medic_package_with_canic_features(
+        &root,
+        "app",
+        "demo",
+        "app",
+        &["auth-delegated-token-verify"],
+    );
+
+    let checks = project_config_quality_checks(&root, &[config]);
+
+    let app = checks
+        .iter()
+        .find(|check| {
+            check.subject == "demo.app" && check.code == "role_required_canic_feature_missing"
+        })
+        .expect("missing feature check");
+    assert_eq!(app.status, MedicStatus::Fail);
+    assert!(app.detail.contains("auth.role_attestation_cache"));
+    assert!(app.detail.contains("auth-root-canister-sig-verify"));
+    assert!(app.next.contains("fleets/demo/app/Cargo.toml"));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure project medic accepts roles whose runtime canic dependency enables required features.
+#[test]
+fn project_config_quality_checks_accept_required_canic_features() {
+    let root = temp_dir("canic-cli-medic-project-required-features-present");
+    let config = write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+
+[subnets.prime.canisters.app.auth]
+role_attestation_cache = true
+"#,
+    );
+    write_medic_package_with_canic_features(
+        &root,
+        "root",
+        "demo",
+        "root",
+        &["auth-root-canister-sig-create"],
+    );
+    write_medic_package_with_canic_features(
+        &root,
+        "app",
+        "demo",
+        "app",
+        &["auth-root-canister-sig-verify"],
+    );
+
+    let checks = project_config_quality_checks(&root, &[config]);
+
+    assert!(checks.iter().any(|check| {
+        check.subject == "demo.app"
+            && check.code == "role_required_canic_feature_present"
+            && check.status == MedicStatus::Pass
+    }));
+    assert!(!checks.iter().any(|check| {
+        check.subject == "demo.app" && check.code == "role_required_canic_feature_missing"
+    }));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure project medic accepts required features inherited from workspace dependencies.
+#[test]
+fn project_config_quality_checks_accept_workspace_required_canic_features() {
+    let root = temp_dir("canic-cli-medic-project-workspace-required-features");
+    let config = write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+
+[subnets.prime.canisters.app.auth]
+role_attestation_cache = true
+"#,
+    );
+    write_medic_workspace_canic_features(
+        &root,
+        &[
+            "auth-root-canister-sig-create",
+            "auth-root-canister-sig-verify",
+        ],
+    );
+    write_medic_package(&root, "root", "demo", "root");
+    write_medic_package(&root, "app", "demo", "app");
+
+    let checks = project_config_quality_checks(&root, &[config]);
+
+    assert!(checks.iter().any(|check| {
+        check.subject == "demo.app"
+            && check.code == "role_required_canic_feature_present"
+            && check.status == MedicStatus::Pass
+    }));
+    assert!(!checks.iter().any(|check| {
+        check.subject == "demo.app" && check.code == "role_required_canic_feature_missing"
+    }));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure check ordering is deterministic by category.
 #[test]
 fn orders_checks_by_category() {
@@ -1197,12 +1374,47 @@ fn write_medic_config(root: &std::path::Path, source: &str) -> std::path::PathBu
 }
 
 fn write_medic_package(root: &std::path::Path, package: &str, fleet: &str, role: &str) {
+    write_medic_package_with_canic_features(root, package, fleet, role, &[]);
+}
+
+fn write_medic_workspace_canic_features(root: &std::path::Path, features: &[&str]) {
+    let features = features
+        .iter()
+        .map(|feature| format!(r#""{feature}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
+    fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            r#"[workspace]
+members = ["fleets/demo/root", "fleets/demo/app"]
+
+[workspace.dependencies]
+canic = {{ path = "crates/canic", features = [{features}] }}
+"#
+        ),
+    )
+    .expect("write workspace manifest");
+}
+
+fn write_medic_package_with_canic_features(
+    root: &std::path::Path,
+    package: &str,
+    fleet: &str,
+    role: &str,
+    features: &[&str],
+) {
     let path = root
         .join("fleets")
         .join("demo")
         .join(package)
         .join("Cargo.toml");
     fs::create_dir_all(path.parent().expect("package parent")).expect("create package parent");
+    let features = features
+        .iter()
+        .map(|feature| format!(r#""{feature}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
     fs::write(
         path,
         format!(
@@ -1210,6 +1422,9 @@ fn write_medic_package(root: &std::path::Path, package: &str, fleet: &str, role:
 name = "{fleet}_{role}"
 edition = "2024"
 version = "0.1.0"
+
+[dependencies]
+canic = {{ workspace = true, features = [{features}] }}
 
 [package.metadata.canic]
 fleet = "{fleet}"

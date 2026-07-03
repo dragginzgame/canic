@@ -25,9 +25,13 @@ use crate::{
     support::candid::role_candid_path,
     version_text,
 };
-use canic_core::protocol::{
-    BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
-    BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+use canic_core::{
+    bootstrap::{CanicFeatureRequirement, parse_config_model, role_required_canic_features},
+    ids::CanisterRole,
+    protocol::{
+        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
+        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+    },
 };
 use canic_host::{
     candid_endpoints::parse_candid_service_endpoints,
@@ -51,6 +55,7 @@ use canic_host::{
 use clap::Command as ClapCommand;
 use serde::Serialize;
 use std::{
+    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
@@ -465,16 +470,50 @@ fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
             )];
         }
     };
+    let required_features_by_role = required_canic_features_by_role(config, &roles);
 
     roles
         .iter()
         .flat_map(|role| {
             let mut checks = vec![check_role_package_metadata(root, config, role, &fleet)];
+            checks.extend(check_role_required_canic_features(
+                root,
+                config,
+                role,
+                required_features_by_role
+                    .get(&role.role)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+            ));
             if !role.attached {
                 checks.push(check_declared_role_not_deployable(root, config, role));
             }
             checks
         })
+        .collect()
+}
+
+fn required_canic_features_by_role(
+    config: &Path,
+    roles: &[ConfiguredRoleLifecycle],
+) -> BTreeMap<String, Vec<CanicFeatureRequirement>> {
+    let Ok(config_source) = fs::read_to_string(config) else {
+        return BTreeMap::new();
+    };
+    let Ok(config_model) = parse_config_model(&config_source) else {
+        return BTreeMap::new();
+    };
+
+    roles
+        .iter()
+        .map(|role| {
+            let role_id = CanisterRole::owned(role.role.clone());
+            (
+                role.role.clone(),
+                role_required_canic_features(&config_model, &role_id),
+            )
+        })
+        .filter(|(_, requirements)| !requirements.is_empty())
         .collect()
 }
 
@@ -525,6 +564,62 @@ fn check_role_package_metadata(
     }
 }
 
+fn check_role_required_canic_features(
+    root: &Path,
+    config: &Path,
+    role: &ConfiguredRoleLifecycle,
+    requirements: &[CanicFeatureRequirement],
+) -> Vec<MedicCheck> {
+    if requirements.is_empty() {
+        return Vec::new();
+    }
+
+    let manifest = role_package_manifest_path(config, &role.package);
+    let Ok(metadata) = canic_package_metadata(&manifest) else {
+        return Vec::new();
+    };
+
+    requirements
+        .iter()
+        .map(|requirement| {
+            if metadata.canic_features.contains(requirement.feature) {
+                MedicCheck::pass(
+                    MedicCategory::ProjectConfig,
+                    "role_required_canic_feature_present",
+                    role.display.clone(),
+                    format!(
+                        "{} resolves required canic feature `{}` for {}",
+                        display_medic_path(root, &manifest),
+                        requirement.feature,
+                        requirement.config_key
+                    ),
+                    "none",
+                    MedicSource::FleetConfig,
+                )
+            } else {
+                MedicCheck::fail(
+                    MedicCategory::ProjectConfig,
+                    "role_required_canic_feature_missing",
+                    role.display.clone(),
+                    format!(
+                        "{} requires canic feature `{}` because {} is enabled ({})",
+                        role.display,
+                        requirement.feature,
+                        requirement.config_key,
+                        requirement.reason
+                    ),
+                    format!(
+                        "add `{}` to [dependencies].canic features in {} or inherited [workspace.dependencies].canic features",
+                        requirement.feature,
+                        display_medic_path(root, &manifest)
+                    ),
+                    MedicSource::FleetConfig,
+                )
+            }
+        })
+        .collect()
+}
+
 fn check_declared_role_not_deployable(
     root: &Path,
     config: &Path,
@@ -569,7 +664,77 @@ fn canic_package_metadata(path: &Path) -> Result<CanicPackageMetadata, String> {
         .map_err(|err| format!("invalid {}: {err}", path.display()))?;
     let fleet = manifest_string(&manifest, &["package", "metadata", "canic", "fleet"], path)?;
     let role = manifest_string(&manifest, &["package", "metadata", "canic", "role"], path)?;
-    Ok(CanicPackageMetadata { fleet, role })
+    let canic_features = canic_dependency_features_for_manifest(path, &manifest);
+    Ok(CanicPackageMetadata {
+        fleet,
+        role,
+        canic_features,
+    })
+}
+
+fn canic_dependency_features_for_manifest(path: &Path, manifest: &TomlValue) -> BTreeSet<String> {
+    let mut features = canic_dependency_features(manifest);
+    if canic_dependency_inherits_workspace(manifest) {
+        if let Some(manifest_dir) = path.parent() {
+            features.extend(workspace_canic_dependency_features(manifest_dir));
+        }
+    }
+    features
+}
+
+fn canic_dependency_features(manifest: &TomlValue) -> BTreeSet<String> {
+    manifest
+        .get("dependencies")
+        .and_then(|dependencies| dependencies.get("canic"))
+        .map(toml_dependency_features)
+        .unwrap_or_default()
+}
+
+fn canic_dependency_inherits_workspace(manifest: &TomlValue) -> bool {
+    manifest
+        .get("dependencies")
+        .and_then(|dependencies| dependencies.get("canic"))
+        .and_then(|canic| canic.get("workspace"))
+        .and_then(TomlValue::as_bool)
+        .unwrap_or(false)
+}
+
+fn workspace_canic_dependency_features(manifest_dir: &Path) -> BTreeSet<String> {
+    for dir in manifest_dir.ancestors() {
+        let manifest_path = dir.join(PACKAGE_MANIFEST_FILE);
+        let Ok(manifest_source) = fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+        let Ok(manifest) = toml::from_str::<TomlValue>(&manifest_source) else {
+            continue;
+        };
+        if let Some(features) = workspace_canic_dependency_features_from_manifest(&manifest) {
+            return features;
+        }
+    }
+
+    BTreeSet::new()
+}
+
+fn workspace_canic_dependency_features_from_manifest(
+    manifest: &TomlValue,
+) -> Option<BTreeSet<String>> {
+    manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(|dependencies| dependencies.get("canic"))
+        .map(toml_dependency_features)
+}
+
+fn toml_dependency_features(dependency: &TomlValue) -> BTreeSet<String> {
+    dependency
+        .get("features")
+        .and_then(TomlValue::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(TomlValue::as_str)
+        .map(ToString::to_string)
+        .collect()
 }
 
 fn manifest_string(
@@ -602,6 +767,7 @@ fn display_medic_path(root: &Path, path: &Path) -> String {
 struct CanicPackageMetadata {
     fleet: String,
     role: String,
+    canic_features: BTreeSet<String>,
 }
 
 ///
