@@ -8,8 +8,8 @@
 //! diagnostic-only reports.
 
 use canic_core::state_contract::{
-    MigrationPolicy, StateDomainManifest, StateManifest, StateMigrationManifest, StateStorage,
-    canic_state_manifest_for_role,
+    MigrationPolicy, RemovedStateManifest, StateDomainManifest, StateManifest,
+    StateMigrationManifest, StateStorage, canic_state_manifest_for_role,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -150,7 +150,11 @@ fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<Stat
                 role.canister_role
             ),
         ));
-        checks.extend(memory_id_checks(&role.canister_role, &role.state));
+        checks.extend(memory_id_checks(
+            &role.canister_role,
+            &role.state,
+            &role.removed_state,
+        ));
         checks.extend(role_state_checks(&role.canister_role, &role.state));
         checks.extend(removed_state_checks(
             &role.canister_role,
@@ -170,7 +174,11 @@ fn role_not_found_check(role: &str) -> StateAuditCheck {
     )
 }
 
-fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
+fn memory_id_checks(
+    role: &str,
+    domains: &[StateDomainManifest],
+    removed: &[RemovedStateManifest],
+) -> Vec<StateAuditCheck> {
     let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
     for domain in domains
         .iter()
@@ -181,22 +189,20 @@ fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAud
         }
     }
 
+    let mut checks = Vec::new();
     let duplicates = by_id
         .iter()
         .filter(|(_, domains)| domains.len() > 1)
         .collect::<Vec<_>>();
     if duplicates.is_empty() {
-        return vec![pass(
+        checks.push(pass(
             CATEGORY_MEMORY_ID,
             "memory_id_unique",
             role,
             format!("all stable-memory domains for {role} use unique memory IDs"),
-        )];
-    }
-
-    duplicates
-        .into_iter()
-        .map(|(memory_id, domains)| {
+        ));
+    } else {
+        checks.extend(duplicates.into_iter().map(|(memory_id, domains)| {
             fail(
                 CATEGORY_MEMORY_ID,
                 "memory_id_duplicate",
@@ -204,6 +210,46 @@ fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAud
                 format!("memory id {memory_id} is used by {}", domains.join(", ")),
                 "assign a unique memory id or add an explicit migration design",
             )
+        }));
+    }
+
+    checks.extend(removed_memory_id_checks(role, &by_id, removed));
+    checks
+}
+
+fn removed_memory_id_checks(
+    role: &str,
+    active_by_id: &BTreeMap<u8, Vec<&str>>,
+    removed: &[RemovedStateManifest],
+) -> Vec<StateAuditCheck> {
+    removed
+        .iter()
+        .filter_map(|entry| {
+            let memory_id = entry.memory_id?;
+            let subject = format!("{role}/memory_id/{memory_id}");
+            if let Some(active_domains) = active_by_id.get(&memory_id) {
+                Some(fail(
+                    CATEGORY_REMOVED_STATE,
+                    "removed_state_memory_id_reclaimed",
+                    &subject,
+                    format!(
+                        "removed state {} reserved memory id {memory_id}, but active domain(s) {} use it",
+                        entry.domain,
+                        active_domains.join(", ")
+                    ),
+                    "keep retired memory ids reserved or add an explicit migration design",
+                ))
+            } else {
+                Some(pass(
+                    CATEGORY_REMOVED_STATE,
+                    "removed_state_memory_id_reserved",
+                    &subject,
+                    format!(
+                        "removed state {} keeps retired memory id {memory_id} reserved",
+                        entry.domain
+                    ),
+                ))
+            }
         })
         .collect()
 }
@@ -449,10 +495,7 @@ fn lifecycle_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditC
     vec![restore_check, invariant_check]
 }
 
-fn removed_state_checks(
-    role: &str,
-    removed: &[canic_core::state_contract::RemovedStateManifest],
-) -> Vec<StateAuditCheck> {
+fn removed_state_checks(role: &str, removed: &[RemovedStateManifest]) -> Vec<StateAuditCheck> {
     removed
         .iter()
         .map(|entry| {
@@ -642,6 +685,27 @@ mod tests {
             checks
                 .iter()
                 .any(|check| check.code == "memory_id_duplicate"
+                    && check.status == StateAuditStatus::Fail)
+        );
+    }
+
+    #[test]
+    fn active_domain_reclaiming_removed_memory_id_fails() {
+        let mut manifest = declared_state_manifest(Some("root"));
+        let role = manifest.roles.first_mut().expect("root role");
+        let retired_id = role
+            .removed_state
+            .first()
+            .and_then(|entry| entry.memory_id)
+            .expect("retired memory id");
+        role.state[0].memory_id = Some(retired_id);
+
+        let checks = audit_checks(&manifest, Some("root"));
+
+        assert!(
+            checks
+                .iter()
+                .any(|check| check.code == "removed_state_memory_id_reclaimed"
                     && check.status == StateAuditStatus::Fail)
         );
     }

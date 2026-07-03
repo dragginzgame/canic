@@ -16,15 +16,24 @@ before this compaction is archived at
 
 - The first post-0.80.0 working slice adds diagnostic state metadata surfaces:
   `canic state audit` and `canic state manifest`. Static Rust declarations
-  currently cover the root canister family for seven canic-core stable-memory
-  domains plus the retired root replay memory ID. The reports are
-  diagnostic-only, render text/JSON with `schema_version = 1`, check duplicate
-  memory IDs within a role, schema/storage declarations, record/snapshot naming,
-  migration declarations, removed-state disposition, restore order, and
-  post-upgrade invariant metadata. They do not read stable memory, run
-  migrations, write generated manifests, write deployment truth, or mutate
-  canisters. The 0.80.1 changelog entries are staged in the root ledger and
-  detailed 0.80 notes.
+  cover the root canister family for canic-core stable-memory domains plus the
+  retired root replay memory ID. The reports are diagnostic-only, render
+  text/JSON with `schema_version = 1`, check duplicate memory IDs within a role,
+  schema/storage declarations, record/snapshot naming, migration declarations,
+  removed-state disposition, restore order, and post-upgrade invariant metadata.
+  They do not read stable memory, run migrations, write generated manifests,
+  write deployment truth, or mutate canisters. The 0.80.1 changelog entries are
+  staged in the root ledger and detailed 0.80 notes.
+
+- The `0.80.2` working slice expands the root-family manifest coverage to
+  additional non-gated canic-core domains: subnet topology/state, cycle
+  top-up/funding/refill records, intent store slots, canister pool, scaling
+  registry, and directory registry. Ambiguous multi-memory log/cycle-tracker
+  declarations and feature-gated sharding/blob-storage declarations remain
+  deferred. The same slice now fails `canic state audit` if active state
+  reclaims a memory ID declared by removed state, keeping retired IDs reserved
+  unless a future explicit migration design handles them. The 0.80.2 changelog
+  entries are staged in the root ledger and detailed 0.80 notes.
 
 - The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
