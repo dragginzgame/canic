@@ -44,6 +44,50 @@ fn declare_fleet_role_rejects_root_and_duplicates() {
 }
 
 #[test]
+fn plan_fleet_role_mutations_validate_without_writing_files() {
+    let temp = TempWorkspace::new();
+    let config_path = temp.path().join("canic.toml");
+    let hub_dir = temp.path().join("user_hub");
+    fs::create_dir_all(&hub_dir).expect("create package");
+    fs::write(&config_path, REAL_CONFIG).expect("write config");
+    fs::write(
+        hub_dir.join("Cargo.toml"),
+        r#"
+[package]
+name = "demo_user_hub"
+
+[package.metadata.canic]
+fleet = "demo"
+role = "user_hub"
+"#,
+    )
+    .expect("write manifest");
+    let before_config = fs::read_to_string(&config_path).expect("read config");
+    let before_manifest = fs::read_to_string(hub_dir.join("Cargo.toml")).expect("read manifest");
+
+    let declared =
+        plan_declare_fleet_role(&config_path, "demo", "store", "store").expect("plan declare");
+    let attached =
+        plan_attach_fleet_role(&config_path, "demo", "role_baseline", "prime", "service")
+            .expect("plan attach");
+    let renamed = plan_rename_fleet_role(&config_path, "demo", "user_hub", "user_router")
+        .expect("plan rename");
+
+    assert_eq!(declared.display, "demo.store");
+    assert_eq!(attached.topology, "prime/role_baseline");
+    assert_eq!(renamed.new_display, "demo.user_router");
+    assert!(renamed.package_manifest.is_some());
+    assert_eq!(
+        fs::read_to_string(&config_path).expect("read config after plans"),
+        before_config
+    );
+    assert_eq!(
+        fs::read_to_string(hub_dir.join("Cargo.toml")).expect("read manifest after plans"),
+        before_manifest
+    );
+}
+
+#[test]
 fn attach_fleet_role_adds_direct_topology_attachment() {
     let config = r#"
 controllers = []

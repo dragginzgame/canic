@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.6` makes local mutation boundaries discoverable in fleet/scaffold help
+  and adds dry-run previews for source/config mutators.
+
 - `0.80.5` surfaces `canic state audit` status inside project-level medic as a
   diagnostic-only readiness check while preserving state-audit ownership.
 

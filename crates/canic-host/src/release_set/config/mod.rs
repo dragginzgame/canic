@@ -25,6 +25,47 @@ pub(super) use projection::{
     configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
 };
 
+// Validate a package-backed role declaration without writing `canic.toml`.
+pub fn plan_declare_fleet_role(
+    config_path: &Path,
+    expected_fleet: &str,
+    role: &str,
+    package: &str,
+) -> Result<DeclaredFleetRole, Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(config_path)?;
+    let updated = declare_fleet_role_source(&source, expected_fleet, role, package)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    Ok(updated.role)
+}
+
+// Validate a package-backed role topology attachment without writing `canic.toml`.
+pub fn plan_attach_fleet_role(
+    config_path: &Path,
+    expected_fleet: &str,
+    role: &str,
+    subnet: &str,
+    kind: &str,
+) -> Result<AttachedFleetRole, Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(config_path)?;
+    let updated = attach_fleet_role_source(&source, expected_fleet, role, subnet, kind)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    Ok(updated.role)
+}
+
+// Validate a role rename and package metadata update without writing files.
+pub fn plan_rename_fleet_role(
+    config_path: &Path,
+    expected_fleet: &str,
+    old_role: &str,
+    new_role: &str,
+) -> Result<RenamedFleetRole, Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(config_path)?;
+    let updated =
+        rename_fleet_role_source(&source, config_path, expected_fleet, old_role, new_role)
+            .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    Ok(updated.role)
+}
+
 // Enumerate the configured ordinary roles that root must publish before bootstrap resumes.
 pub fn configured_release_roles(
     config_path: &Path,
