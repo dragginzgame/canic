@@ -8,15 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- `canic deploy plan` help now states that JSON output is a
-  `DeploymentPlanReport`, not an evidence envelope, deployment truth, or
-  authorization to mutate, and report-renderer coverage pins that actual
-  text/JSON reports do not include those truth/evidence/authorization claims
-  or apply-safety wording.
-
 ## [0.79.x] - 2026-07-02 - Declarative Deployment Plan
 
 Detailed patch breakdown: [docs/changelog/0.79.md](docs/changelog/0.79.md)
+
+- `0.79.12` hardens deploy-plan evidence/truth boundaries by documenting the
+  JSON report as diagnostic output and expanding renderer guards against
+  truth, evidence, authorization, and apply-safety claims.
 
 - `0.79.11` tightens deploy-plan future-apply preview output by surfacing
   policy-application labels, aligning text rows with JSON preview fields, and
