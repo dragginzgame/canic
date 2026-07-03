@@ -310,6 +310,29 @@ fn renders_medic_json_report() {
     assert!(value["checks"].is_array());
 }
 
+// Ensure project medic summarizes state-audit metadata without owning or running migrations.
+#[test]
+fn project_medic_summarizes_state_audit_status() {
+    let state_report = build_state_audit_report(None);
+    let check = state_audit_project_check();
+    let (expected_status, expected_code) = match state_report.status {
+        StateAuditStatus::Pass => (MedicStatus::Pass, "state_audit_pass"),
+        StateAuditStatus::Warn => (MedicStatus::Warn, "state_audit_warn"),
+        StateAuditStatus::Fail => (MedicStatus::Fail, "state_audit_fail"),
+        StateAuditStatus::NotEvaluated => (MedicStatus::NotEvaluated, "state_audit_not_evaluated"),
+    };
+
+    assert_eq!(check.category, MedicCategory::Runtime);
+    assert_eq!(check.status, expected_status);
+    assert_eq!(check.code, expected_code);
+    assert_eq!(check.subject, "state_manifest");
+    assert!(check.detail.contains("state audit status"));
+    assert_eq!(check.source, MedicSource::StateManifest);
+    if check.status != MedicStatus::Pass {
+        assert!(check.next.contains("canic state audit"));
+    }
+}
+
 // Ensure CI text output is short and includes only failing checks.
 #[test]
 fn renders_medic_ci_report_with_fail_only_rows() {

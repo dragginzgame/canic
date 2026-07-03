@@ -51,6 +51,7 @@ use canic_host::{
         resolve_installed_deployment_from_root,
     },
     release_set::{ConfiguredRoleLifecycle, configured_fleet_name, configured_role_lifecycle},
+    state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -320,6 +321,7 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let mut checks = vec![
         check_icp_cli(options),
         check_icp_identity_session_cache_hint(),
+        state_audit_project_check(),
     ];
 
     match resolve_current_canic_icp_root() {
@@ -355,6 +357,59 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         MedicSource::Command,
     ));
     checks
+}
+
+fn state_audit_project_check() -> MedicCheck {
+    let report = build_state_audit_report(None);
+    let detail = format!(
+        "state audit status {} with {} check(s)",
+        state_audit_status_label(report.status),
+        report.checks.len()
+    );
+
+    match report.status {
+        StateAuditStatus::Pass => MedicCheck::pass(
+            MedicCategory::Runtime,
+            "state_audit_pass",
+            "state_manifest",
+            detail,
+            "none",
+            MedicSource::StateManifest,
+        ),
+        StateAuditStatus::Warn => MedicCheck::warn(
+            MedicCategory::Runtime,
+            "state_audit_warn",
+            "state_manifest",
+            detail,
+            "run canic state audit",
+            MedicSource::StateManifest,
+        ),
+        StateAuditStatus::Fail => MedicCheck::fail(
+            MedicCategory::Runtime,
+            "state_audit_fail",
+            "state_manifest",
+            detail,
+            "run canic state audit and fix failing state metadata checks",
+            MedicSource::StateManifest,
+        ),
+        StateAuditStatus::NotEvaluated => MedicCheck::not_evaluated(
+            MedicCategory::Runtime,
+            "state_audit_not_evaluated",
+            "state_manifest",
+            detail,
+            "declare state metadata, then run canic state audit",
+            MedicSource::StateManifest,
+        ),
+    }
+}
+
+const fn state_audit_status_label(status: StateAuditStatus) -> &'static str {
+    match status {
+        StateAuditStatus::Pass => "pass",
+        StateAuditStatus::Warn => "warn",
+        StateAuditStatus::Fail => "fail",
+        StateAuditStatus::NotEvaluated => "not_evaluated",
+    }
 }
 
 fn project_config_checks(root: &Path, options: &MedicOptions) -> Vec<MedicCheck> {
@@ -2131,7 +2186,6 @@ enum MedicCategory {
     Feature,
     Auth,
     BlobStorage,
-    #[expect(dead_code, reason = "0.78 report schema reserves runtime checks")]
     Runtime,
 }
 
@@ -2183,6 +2237,7 @@ enum MedicSource {
     LocalReplica,
     BlobStorageReadiness,
     AuthRenewal,
+    StateManifest,
 }
 
 impl MedicSource {
@@ -2197,6 +2252,7 @@ impl MedicSource {
             Self::LocalReplica => "local_replica",
             Self::BlobStorageReadiness => "blob_storage_readiness",
             Self::AuthRenewal => "auth_renewal",
+            Self::StateManifest => "state_manifest",
         }
     }
 }

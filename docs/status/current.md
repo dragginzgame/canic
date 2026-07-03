@@ -35,6 +35,18 @@ before this compaction is archived at
   unless a future explicit migration design handles them. The 0.80.2 changelog
   entries are staged in the root ledger and detailed 0.80 notes.
 
+- The `0.80.3` and `0.80.4` slices add config-driven medic/build checks for
+  runtime Canic feature gates implied by fleet auth settings, plus concise CI
+  medic output and developer-owned Cargo.toml guidance. These are pushed.
+
+- The `0.80.5` working slice returns to the stable-state design by summarizing
+  `canic state audit` inside project-level medic as a diagnostic-only runtime
+  readiness check. Medic maps the aggregate state-audit status into a single
+  `state_audit_*` row and points operators to `canic state audit` for details;
+  it does not inspect stable memory, run migrations, or take ownership of
+  state-audit logic. The 0.80.5 changelog entries are staged in the root ledger
+  and detailed 0.80 notes.
+
 - The previous line was `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
