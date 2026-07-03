@@ -136,6 +136,10 @@ fn deploy_plan_help_documents_no_mutation_contract() {
     assert!(help.contains("proposed operation labels only"));
     assert!(help.contains("not executed"));
     assert!(help.contains("operation objects"));
+    assert!(help.contains("DeploymentPlanReport"));
+    assert!(help.contains("EvidenceEnvelope"));
+    assert!(help.contains("authorization"));
+    assert!(help.contains("mutate"));
     assert!(help.contains("--out writes JSON only"));
     assert!(help.contains("requested path"));
     assert!(help.contains("exists"));
@@ -766,11 +770,7 @@ fn deploy_plan_json_renderer_is_report_only() {
     assert_eq!(parsed["command"], "canic deploy plan");
     assert!(!json.contains("Deployment plan"));
     assert!(!json.contains("next actions"));
-    assert!(!json.contains("ready_to_apply"));
-    assert!(!json.contains("ready to apply"));
-    assert!(!json.contains("deployment is safe"));
-    assert!(!json.contains("safe_to_deploy"));
-    assert!(!json.contains("safe to deploy"));
+    assert_no_deploy_plan_safety_claims(&json);
 }
 
 #[test]
@@ -847,14 +847,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     assert!(text.contains("source: fleet_config"));
     assert!(text.contains("source: deployment_plan_builder"));
     assert!(text.contains("source: installed_deployment"));
-    assert!(!text.contains("ready_to_apply"));
-    assert!(!text.contains("ready to apply"));
-    assert!(!text.contains("deployment is safe"));
-    assert!(!text.contains("safe_to_deploy"));
-    assert!(!text.contains("safe to deploy"));
-    assert!(!text.contains("will create"));
-    assert!(!text.contains("will install"));
-    assert!(!text.contains("will upload"));
+    assert_no_deploy_plan_safety_claims(&text);
 }
 
 fn temp_plan_workspace(prefix: &str) -> (TempDir, PathBuf, PathBuf) {
@@ -1103,5 +1096,33 @@ fn assert_top_level_json_field_order(json: &str, fields: &[&str]) {
             "top-level JSON field {field} appeared out of order"
         );
         last = position;
+    }
+}
+
+fn assert_no_deploy_plan_safety_claims(rendered: &str) {
+    for phrase in [
+        "DeploymentPlanReport",
+        "EvidenceEnvelope",
+        "authorization to mutate",
+        "deployment is safe",
+        "deployment truth",
+        "ready to apply",
+        "ready_for_apply",
+        "ready_to_apply",
+        "safe to deploy",
+        "safe_to_deploy",
+        "will apply",
+        "will create",
+        "will install",
+        "will mutate",
+        "will register",
+        "will set",
+        "will upgrade",
+        "will upload",
+    ] {
+        assert!(
+            !rendered.contains(phrase),
+            "deploy-plan output must not contain safety/evidence/truth claim {phrase:?}: {rendered}"
+        );
     }
 }

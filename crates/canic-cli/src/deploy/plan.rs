@@ -92,8 +92,9 @@ Builds a deterministic planning report from local project config. The command
 does not install, upgrade, create canisters, write deployment truth, update
 installed deployment records, or call live IC state. Future-apply preview rows
 are proposed operation labels only; they are not executed and are not apply
-operation objects. --out writes JSON only and fails if the requested path already
-exists or its parent directory is missing.";
+operation objects. JSON output is a DeploymentPlanReport, not an EvidenceEnvelope,
+deployment truth, or authorization to mutate. --out writes JSON only and fails if
+the requested path already exists or its parent directory is missing.";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DeployPlanOptions {

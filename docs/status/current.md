@@ -11,7 +11,7 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.79.11` declarative deployment plan. Source of truth:
+- The active line is `0.79.12` declarative deployment plan. Source of truth:
   `docs/design/0.79-declarative-deployment-plan/0.79-design.md`.
 
 - The first 0.79 slice is implemented: `canic deploy plan <deployment>` builds
@@ -140,6 +140,13 @@ before this compaction is archived at
   proposed-operation labels. Command help now documents the same
   preview-label boundary. The 0.79.11 changelog entries are staged in the root
   ledger and detailed 0.79 notes.
+
+- The 0.79.12 working slice has started by tightening the deploy-plan
+  evidence/truth boundary in command help: JSON output is explicitly described
+  as `DeploymentPlanReport`, not an evidence envelope, deployment truth, or
+  authorization to mutate. Report-renderer coverage also pins that actual
+  text/JSON reports do not include those truth/evidence/authorization claims
+  or apply-safety wording.
 
 - The previous line was `0.78.0` top-level medic preflight. Source of truth:
   `docs/design/0.78-top-level-medic-preflight/0.78-design.md`.
