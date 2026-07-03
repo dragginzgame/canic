@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.5` surfaces `canic state audit` status inside project-level medic as a
+  diagnostic-only readiness check while preserving state-audit ownership.
+
 - `0.80.4` improves auth feature-gate developer experience with concise CI
   medic output, copy-pasteable manual Cargo.toml snippets, scaffold guidance,
   and explicit config-to-feature documentation.
