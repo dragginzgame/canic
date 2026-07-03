@@ -38,6 +38,23 @@ These features can also be selected explicitly when default features are off:
 - `auth-issuer-canister-sig-verify` - enables issuer canister-signature token proof verification
 - `auth-delegated-token-verify` - enables delegated-token verification, including issuer canister-signature verification
 
+## Config-Driven Auth Features
+
+Some `canic.toml` auth settings require matching runtime `canic` features in
+the role crate's `[dependencies]`. Add these to the runtime dependency, not
+only `[build-dependencies]`.
+
+| Config setting | Role crate that needs the feature | Required runtime `canic` feature |
+| --- | --- | --- |
+| `auth.role_attestation_cache = true` on a non-root canister | that non-root role | `auth-root-canister-sig-verify` |
+| any non-root role uses `auth.role_attestation_cache = true` | root role | `auth-root-canister-sig-create` |
+| `auth.delegated_token_issuer = true` | that issuer role | `auth-issuer-canister-sig-create`, `auth-delegated-token-verify` |
+| `auth.delegated_token_verifier = true` | that verifier role | `auth-delegated-token-verify` |
+
+Run `canic medic project --ci` for concise fail-only diagnostics, or
+`canic medic project --json` for automation-friendly check rows such as
+`role_required_canic_feature_missing`.
+
 ## Typical Use
 
 Use `canic` in both `[dependencies]` and `[build-dependencies]` so the build

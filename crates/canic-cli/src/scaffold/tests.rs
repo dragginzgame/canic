@@ -130,6 +130,7 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(root_manifest.contains("version = \"0.1.0\""));
     assert!(root_manifest.contains("fleet = \"my_app\""));
     assert!(root_manifest.contains("role = \"root\""));
+    assert!(root_manifest.contains("Add runtime Canic features here"));
     assert!(root_manifest.contains("canic = \""));
     assert!(root_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!root_manifest.contains("workspace = true"));
@@ -138,6 +139,7 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(app_manifest.contains("name = \"canister_my_app_app\""));
     assert!(app_manifest.contains("fleet = \"my_app\""));
     assert!(app_manifest.contains("role = \"app\""));
+    assert!(app_manifest.contains("Add runtime Canic features here"));
     assert!(app_manifest.contains("canic = \""));
     assert!(app_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!app_manifest.contains("workspace = true"));
@@ -185,6 +187,7 @@ fn scaffold_canister_writes_declared_only_role_files() {
     assert!(manifest.contains("fleet = \"demo\""));
     assert!(manifest.contains("role = \"store\""));
     assert!(manifest.contains("crate-type = [\"cdylib\"]"));
+    assert!(manifest.contains("Add runtime Canic features here"));
     assert!(build_rs.contains("canic::build!(\"../canic.toml\")"));
     assert!(lib.contains("canic::start!();"));
     assert!(lib.contains("pub async fn canic_install(_: Option<Vec<u8>>) {}"));

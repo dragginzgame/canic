@@ -133,11 +133,23 @@ pub fn assert_required_canic_dependency_features(
         })
         .collect::<Vec<_>>()
         .join("; ");
+    let snippet =
+        canic_dependency_feature_snippet(missing.iter().map(|requirement| requirement.feature));
 
     panic!(
-        "canister role '{fleet}.{role}' requires missing canic feature(s) {missing_features}; {reasons}; add the feature(s) to [dependencies].canic features or inherited [workspace.dependencies].canic features in {}",
+        "canister role '{fleet}.{role}' requires missing canic feature(s) {missing_features}; {reasons}; edit the runtime [dependencies].canic entry, not only [build-dependencies], in {}; for example:\n{snippet}",
         manifest_path.display()
     );
+}
+
+fn canic_dependency_feature_snippet<'a>(features: impl IntoIterator<Item = &'a str>) -> String {
+    let features = features
+        .into_iter()
+        .map(|feature| format!(r#""{feature}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!("[dependencies]\ncanic = {{ workspace = true, features = [{features}] }}")
 }
 
 /// Read features enabled on this package's runtime `canic` dependency.
@@ -503,7 +515,11 @@ canic = { workspace = true, features = ["auth-delegated-token-verify"] }
 
         assert!(message.contains("demo.app"));
         assert!(message.contains("auth-root-canister-sig-verify"));
-        assert!(message.contains("[workspace.dependencies].canic features"));
+        assert!(message.contains("runtime [dependencies].canic"));
+        assert!(message.contains("not only [build-dependencies]"));
+        assert!(message.contains(
+            r#"canic = { workspace = true, features = ["auth-root-canister-sig-verify"] }"#
+        ));
         fs::remove_dir_all(&dir).expect("remove temp manifest dir");
     }
 

@@ -213,9 +213,14 @@ where
     println!();
     println!("Next:");
     println!("  cargo check -p {}", result.package_name);
+    println!("  canic medic project --ci");
     println!(
         "  canic fleet role attach {} {} --subnet <subnet>",
         result.fleet, result.role
+    );
+    println!(
+        "  if medic reports required auth features, edit {} manually",
+        result.canister_dir.join("Cargo.toml").display()
     );
     Ok(())
 }
@@ -235,6 +240,7 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     println!();
     println!("Next:");
     println!("  edit icp.yaml");
+    println!("  canic medic project --ci");
     println!("  canic status");
     println!("  canic install {}", options.name);
     Ok(())
@@ -690,6 +696,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = {{ version = "0.10", default-features = false }}
+# Add runtime Canic features here when canic.toml enables auth settings.
 canic = "{canic_version}"
 ic-cdk = "0.20"
 
@@ -748,6 +755,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = {{ version = "0.10", default-features = false }}
+# Add runtime Canic features here when canic.toml enables auth settings.
 canic = {{ version = "{canic_version}", features = ["control-plane"] }}
 ic-cdk = "0.20"
 
@@ -776,6 +784,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = {{ version = "0.10", default-features = false }}
+# Add runtime Canic features here when canic.toml enables auth settings.
 canic = "{canic_version}"
 ic-cdk = "0.20"
 
