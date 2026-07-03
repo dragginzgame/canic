@@ -296,6 +296,45 @@ fn append_workspace_member_source_updates_compact_members_array() {
     assert!(updated.contains("\"fleets/demo/store\""));
 }
 
+// Ensure workspace appends only treat real [workspace].members entries as present.
+#[test]
+fn append_workspace_member_source_does_not_skip_unrelated_string_matches() {
+    let updated = append_workspace_member_source(
+        "[package]\ndescription = \"fleets/demo/store\"\n\n[workspace]\nmembers = [\"fleets/demo/root\"]\n",
+        "fleets/demo/store",
+    )
+    .expect("append member");
+
+    let manifest = toml::from_str::<TomlValue>(&updated).expect("parse updated manifest");
+    let members = manifest
+        .get("workspace")
+        .and_then(TomlValue::as_table)
+        .and_then(|workspace| workspace.get("members"))
+        .and_then(TomlValue::as_array)
+        .expect("workspace members");
+
+    assert_eq!(
+        members
+            .iter()
+            .filter_map(TomlValue::as_str)
+            .filter(|member| *member == "fleets/demo/store")
+            .count(),
+        1
+    );
+}
+
+// Ensure workspace appends fail closed when members is not a string array.
+#[test]
+fn append_workspace_member_source_rejects_non_array_members() {
+    let err = append_workspace_member_source(
+        "[workspace]\nmembers = \"fleets/demo/root\"\n",
+        "fleets/demo/store",
+    )
+    .expect_err("non-array members should fail");
+
+    std::assert_matches!(err, ScaffoldCommandError::Usage(_));
+}
+
 // Ensure canister scaffold refuses to overwrite an existing role crate.
 #[test]
 fn scaffold_canister_rejects_existing_target() {

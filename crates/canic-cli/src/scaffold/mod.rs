@@ -32,6 +32,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
+use toml::Value as TomlValue;
 
 const FLEET_CREATE_HELP_AFTER: &str = "\
 Examples:
@@ -494,11 +495,11 @@ fn append_workspace_member_source(
     source: &str,
     member: &str,
 ) -> Result<String, ScaffoldCommandError> {
-    let member_literal = toml_string_literal(member);
-    if source.contains(&member_literal) {
+    if workspace_members_contains(source, member)? {
         return Ok(source.to_string());
     }
 
+    let member_literal = toml_string_literal(member);
     let workspace_line = source
         .lines()
         .position(|line| line.trim() == "[workspace]")
@@ -509,16 +510,69 @@ fn append_workspace_member_source(
     let workspace_end = section_end_offset(source, workspace_start);
     let section = &source[workspace_start..workspace_end];
 
-    if let Some(members_offset) = find_members_array_offset(section) {
-        return insert_workspace_member(source, workspace_start + members_offset, &member_literal);
-    }
-
-    let mut updated = source.to_string();
-    updated.insert_str(
-        workspace_start,
-        &format!("members = [\n    {member_literal},\n]\n"),
-    );
+    let updated = if let Some(members_offset) = find_members_array_offset(section) {
+        insert_workspace_member(source, workspace_start + members_offset, &member_literal)?
+    } else {
+        let mut updated = source.to_string();
+        updated.insert_str(
+            workspace_start,
+            &format!("members = [\n    {member_literal},\n]\n"),
+        );
+        updated
+    };
+    ensure_workspace_member_present(&updated, member)?;
     Ok(updated)
+}
+
+fn workspace_members_contains(source: &str, member: &str) -> Result<bool, ScaffoldCommandError> {
+    let manifest = workspace_manifest_value(source)?;
+    let Some(members) = workspace_members(&manifest)? else {
+        return Ok(false);
+    };
+    Ok(members.contains(&member))
+}
+
+fn ensure_workspace_member_present(source: &str, member: &str) -> Result<(), ScaffoldCommandError> {
+    if workspace_members_contains(source, member)? {
+        return Ok(());
+    }
+    Err(ScaffoldCommandError::Usage(format!(
+        "failed to append workspace member {member}"
+    )))
+}
+
+fn workspace_manifest_value(source: &str) -> Result<TomlValue, ScaffoldCommandError> {
+    toml::from_str::<TomlValue>(source)
+        .map_err(|err| ScaffoldCommandError::Usage(format!("invalid Cargo.toml: {err}")))
+}
+
+fn workspace_members<'a>(
+    manifest: &'a TomlValue,
+) -> Result<Option<Vec<&'a str>>, ScaffoldCommandError> {
+    let workspace = manifest
+        .get("workspace")
+        .and_then(TomlValue::as_table)
+        .ok_or_else(|| {
+            ScaffoldCommandError::Usage("Cargo.toml is missing [workspace]".to_string())
+        })?;
+    let Some(members) = workspace.get("members") else {
+        return Ok(None);
+    };
+    let members = members
+        .as_array()
+        .ok_or_else(|| {
+            ScaffoldCommandError::Usage("workspace members must be an array".to_string())
+        })?
+        .iter()
+        .map(|member| {
+            member.as_str().ok_or_else(|| {
+                ScaffoldCommandError::Usage(
+                    "workspace members must be an array of strings".to_string(),
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some(members))
 }
 
 fn insert_workspace_member(
@@ -593,10 +647,21 @@ fn section_end_offset(source: &str, section_start: usize) -> usize {
 }
 
 fn find_members_array_offset(section: &str) -> Option<usize> {
-    section.match_indices("members").find_map(|(offset, _)| {
-        let rest = &section[offset + "members".len()..];
-        rest.trim_start().starts_with('=').then_some(offset)
-    })
+    let mut offset = 0;
+    for line in section.split_inclusive('\n') {
+        let line_without_newline = line.strip_suffix('\n').unwrap_or(line);
+        let trimmed = line_without_newline.trim_start();
+        let Some((key, _)) = trimmed.split_once('=') else {
+            offset += line.len();
+            continue;
+        };
+        if key.trim() == "members" {
+            let indentation = line_without_newline.len() - trimmed.len();
+            return Some(offset + indentation);
+        }
+        offset += line.len();
+    }
+    None
 }
 
 fn scaffold_command() -> ClapCommand {

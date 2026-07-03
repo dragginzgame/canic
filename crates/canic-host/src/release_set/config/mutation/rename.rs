@@ -191,7 +191,36 @@ fn update_package_manifest_role(
     }
 
     let source = fs::read_to_string(manifest)?;
-    let metadata = toml::from_str::<TomlValue>(&source)?;
+    let Some((fleet, role)) = package_canic_metadata(&source)? else {
+        return Ok(None);
+    };
+    if fleet != expected_fleet || role != old_role {
+        return Ok(None);
+    }
+
+    let updated = rename_package_metadata_role_source(&source, old_role, new_role);
+    let Some((updated_fleet, updated_role)) = package_canic_metadata(&updated)? else {
+        return Err(format!(
+            "updated {} would remove [package.metadata.canic]",
+            manifest.display()
+        )
+        .into());
+    };
+    if updated_fleet != expected_fleet || updated_role != new_role {
+        return Err(format!(
+            "updated {} would not contain expected Canic metadata fleet={expected_fleet:?} role={new_role:?}",
+            manifest.display()
+        )
+        .into());
+    }
+
+    Ok(Some(updated))
+}
+
+fn package_canic_metadata(
+    source: &str,
+) -> Result<Option<(String, String)>, Box<dyn std::error::Error>> {
+    let metadata = toml::from_str::<TomlValue>(source)?;
     let Some(canic_metadata) = metadata
         .get("package")
         .and_then(TomlValue::as_table)
@@ -202,15 +231,13 @@ fn update_package_manifest_role(
     else {
         return Ok(None);
     };
-    if canic_metadata.get("fleet").and_then(TomlValue::as_str) != Some(expected_fleet)
-        || canic_metadata.get("role").and_then(TomlValue::as_str) != Some(old_role)
-    {
+    let Some(fleet) = canic_metadata.get("fleet").and_then(TomlValue::as_str) else {
         return Ok(None);
-    }
-
-    Ok(Some(rename_package_metadata_role_source(
-        &source, old_role, new_role,
-    )))
+    };
+    let Some(role) = canic_metadata.get("role").and_then(TomlValue::as_str) else {
+        return Ok(None);
+    };
+    Ok(Some((fleet.to_string(), role.to_string())))
 }
 
 fn rename_package_metadata_role_source(source: &str, old_role: &str, new_role: &str) -> String {
