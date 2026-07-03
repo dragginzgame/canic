@@ -231,7 +231,7 @@ make package
 ```
 
 These checks exercise installed binaries, packaged downstream crate resolution,
-the special packaged `wasm_store` wrapper path, and publishable package
+the special packaged `wasm_store` bootstrap paths, and publishable package
 creation. They may require a clean worktree, local Cargo cache state, or network
 access depending on the environment. If they are not run locally, the RC audit
 must record where they will be run.

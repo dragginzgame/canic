@@ -50,4 +50,4 @@ validation notes.
 - [Packaged downstream CLI](0.56-packaged-downstream-cli.md) documents the
   packaged downstream CLI proof.
 - [Packaged wasm store](0.56-packaged-wasm-store.md) documents the special
-  packaged downstream `wasm_store` wrapper proof.
+  packaged downstream `wasm_store` bootstrap proof.

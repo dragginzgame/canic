@@ -22,6 +22,34 @@ const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-wasm-store";
 const CANIC_FAMILY_CRATES: &[&str] = &["canic-control-plane", "canic-core", "canic-macros"];
+const WASM_STORE_RELEASE_PROFILE_CONFIG_ARGS: &[&str] = &[
+    "--config",
+    "profile.release.opt-level=\"z\"",
+    "--config",
+    "profile.release.lto=true",
+    "--config",
+    "profile.release.codegen-units=1",
+    "--config",
+    "profile.release.strip=\"symbols\"",
+    "--config",
+    "profile.release.debug=false",
+    "--config",
+    "profile.release.panic=\"abort\"",
+    "--config",
+    "profile.release.overflow-checks=false",
+    "--config",
+    "profile.release.incremental=false",
+];
+const WASM_STORE_FAST_PROFILE_CONFIG_ARGS: &[&str] = &[
+    "--config",
+    "profile.fast.inherits=\"release\"",
+    "--config",
+    "profile.fast.lto=false",
+    "--config",
+    "profile.fast.codegen-units=16",
+    "--config",
+    "profile.fast.incremental=true",
+];
 
 ///
 /// BootstrapWasmStoreBuildOutput
@@ -228,7 +256,7 @@ role = \"wasm_store\"\n\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
 [dependencies]\n\
-canic = {{ path = \"{}\", features = [\"control-plane\"] }}\n\
+canic = {{ path = \"{}\", features = [\"wasm-store-canister\"] }}\n\
 ic-cdk = \"0.20.0\"\n\
 candid = {{ version = \"0.10\", default-features = false }}\n\n\
 [build-dependencies]\n\
@@ -379,8 +407,9 @@ fn run_wasm_store_cargo_build(
             &manifest_path.display().to_string(),
             "--target",
             "wasm32-unknown-unknown",
-        ])
-        .args(profile.cargo_args());
+        ]);
+    append_wasm_store_profile_config_args(&mut command, profile);
+    command.args(profile.cargo_args());
 
     let output = command.output()?;
     if output.status.success() {
@@ -392,6 +421,20 @@ fn run_wasm_store_cargo_build(
         String::from_utf8_lossy(&output.stderr)
     )
     .into())
+}
+
+fn append_wasm_store_profile_config_args(command: &mut Command, profile: CanisterBuildProfile) {
+    match profile {
+        CanisterBuildProfile::Debug => {}
+        CanisterBuildProfile::Fast => {
+            command
+                .args(WASM_STORE_RELEASE_PROFILE_CONFIG_ARGS)
+                .args(WASM_STORE_FAST_PROFILE_CONFIG_ARGS);
+        }
+        CanisterBuildProfile::Release => {
+            command.args(WASM_STORE_RELEASE_PROFILE_CONFIG_ARGS);
+        }
+    }
 }
 
 // Copy or regenerate the `.did` file that matches the built bootstrap artifact.
