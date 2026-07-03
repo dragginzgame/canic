@@ -13,7 +13,10 @@ use crate::storage::stable::memory::{
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
     intent::{INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID},
-    observability::{CYCLE_TOPUP_EVENTS_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID},
+    observability::{
+        CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
+        LOG_DATA_ID, LOG_INDEX_ID,
+    },
     placement::{DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID},
     pool::CANISTER_POOL_ID,
     topology::{
@@ -48,6 +51,7 @@ pub struct StateRoleManifest {
     pub canister_role: String,
     pub state: Vec<StateDomainManifest>,
     pub removed_state: Vec<RemovedStateManifest>,
+    pub reserved_memory: Vec<ReservedMemoryManifest>,
 }
 
 ///
@@ -83,6 +87,7 @@ pub struct StateDomainManifest {
 pub enum StateStorage {
     StableMemory,
     HeapOnly,
+    NotApplicable,
 }
 
 ///
@@ -133,6 +138,21 @@ pub struct RemovedStateManifest {
     pub test: Option<String>,
 }
 
+///
+/// ReservedMemoryManifest
+///
+/// Explicit reservation for a stable memory ID whose persisted state shape is
+/// known but not yet represented as one active or removed state domain.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ReservedMemoryManifest {
+    pub label: String,
+    pub memory_id: u8,
+    pub owner: String,
+    pub reason: String,
+}
+
 #[must_use]
 pub fn canic_state_manifest() -> StateManifest {
     let mut manifest = StateManifest {
@@ -167,6 +187,7 @@ fn root_role_manifest() -> StateRoleManifest {
         canister_role: ROOT_ROLE.to_string(),
         state,
         removed_state: root_removed_state_domains(),
+        reserved_memory: root_reserved_memory_domains(),
     }
 }
 
@@ -372,6 +393,26 @@ fn root_removed_state_domains() -> Vec<RemovedStateManifest> {
     }]
 }
 
+fn root_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+    vec![
+        reserved_memory(
+            "cycle_tracker",
+            CYCLE_TRACKER_ID,
+            "cycle tracker stores raw cycle balances and needs an explicit record/snapshot declaration",
+        ),
+        reserved_memory(
+            "log_index",
+            LOG_INDEX_ID,
+            "stable log index memory is one half of the logical log domain and needs multi-memory domain modeling",
+        ),
+        reserved_memory(
+            "log_data",
+            LOG_DATA_ID,
+            "stable log data memory is one half of the logical log domain and needs multi-memory domain modeling",
+        ),
+    ]
+}
+
 fn state_domain(
     domain: &str,
     memory_id: u8,
@@ -396,6 +437,15 @@ fn state_domain(
     }
 }
 
+fn reserved_memory(label: &str, memory_id: u8, reason: &str) -> ReservedMemoryManifest {
+    ReservedMemoryManifest {
+        label: label.to_string(),
+        memory_id,
+        owner: CANIC_CORE_OWNER.to_string(),
+        reason: reason.to_string(),
+    }
+}
+
 fn sort_manifest(manifest: &mut StateManifest) {
     manifest
         .roles
@@ -405,6 +455,8 @@ fn sort_manifest(manifest: &mut StateManifest) {
             .sort_by(|left, right| left.domain.cmp(&right.domain));
         role.removed_state
             .sort_by(|left, right| left.domain.cmp(&right.domain));
+        role.reserved_memory
+            .sort_by_key(|reservation| reservation.memory_id);
         for domain in &mut role.state {
             domain
                 .migrations
@@ -466,6 +518,24 @@ mod tests {
             assert!(
                 ids.contains(&expected),
                 "state manifest should declare memory id {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn root_manifest_tracks_reserved_core_memory_ids() {
+        let manifest = canic_state_manifest_for_role(Some(ROOT_ROLE));
+        let role = manifest.roles.first().expect("root role manifest");
+        let ids = role
+            .reserved_memory
+            .iter()
+            .map(|reservation| reservation.memory_id)
+            .collect::<Vec<_>>();
+
+        for expected in [CYCLE_TRACKER_ID, LOG_INDEX_ID, LOG_DATA_ID] {
+            assert!(
+                ids.contains(&expected),
+                "state manifest should reserve memory id {expected}"
             );
         }
     }

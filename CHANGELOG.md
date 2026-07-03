@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
 
+- `0.80.7` makes allocated-but-unmodeled stable-memory IDs explicit in state
+  manifests and separates declaration-only metadata from heap-only runtime
+  state.
+
 - `0.80.6` makes local mutation boundaries discoverable in fleet/scaffold help
   and adds dry-run previews for source/config mutators.
 

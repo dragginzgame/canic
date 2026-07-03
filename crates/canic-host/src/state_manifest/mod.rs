@@ -8,8 +8,8 @@
 //! diagnostic-only reports.
 
 use canic_core::state_contract::{
-    MigrationPolicy, RemovedStateManifest, StateDomainManifest, StateManifest,
-    StateMigrationManifest, StateStorage, canic_state_manifest_for_role,
+    MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest, StateDomainManifest,
+    StateManifest, StateMigrationManifest, StateStorage, canic_state_manifest_for_role,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -159,6 +159,12 @@ fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<Stat
         checks.extend(removed_state_checks(
             &role.canister_role,
             &role.removed_state,
+        ));
+        checks.extend(reserved_memory_checks(
+            &role.canister_role,
+            &role.state,
+            &role.removed_state,
+            &role.reserved_memory,
         ));
     }
     checks
@@ -314,6 +320,19 @@ fn storage_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditChe
             &subject,
             format!("heap-only domain also declares memory id {memory_id}"),
             "remove the memory id or change storage to stable_memory",
+        )],
+        (StateStorage::NotApplicable, None) => vec![pass(
+            CATEGORY_MEMORY_ID,
+            "state_domain_storage_not_applicable",
+            &subject,
+            "domain explicitly declares storage is not applicable".to_string(),
+        )],
+        (StateStorage::NotApplicable, Some(memory_id)) => vec![warn(
+            CATEGORY_MEMORY_ID,
+            "state_domain_storage_not_applicable",
+            &subject,
+            format!("storage-not-applicable domain also declares memory id {memory_id}"),
+            "remove the memory id or choose a concrete storage substrate",
         )],
     }
 }
@@ -520,6 +539,108 @@ fn removed_state_checks(role: &str, removed: &[RemovedStateManifest]) -> Vec<Sta
         .collect()
 }
 
+fn reserved_memory_checks(
+    role: &str,
+    domains: &[StateDomainManifest],
+    removed: &[RemovedStateManifest],
+    reserved: &[ReservedMemoryManifest],
+) -> Vec<StateAuditCheck> {
+    let active_by_id = active_memory_ids(domains);
+    let removed_by_id = removed_memory_ids(removed);
+    let mut reserved_by_id = BTreeMap::<u8, Vec<&str>>::new();
+    for entry in reserved {
+        reserved_by_id
+            .entry(entry.memory_id)
+            .or_default()
+            .push(&entry.label);
+    }
+
+    let mut checks = Vec::new();
+    for entry in reserved {
+        let subject = format!("{role}/memory_id/{}", entry.memory_id);
+        if let Some(active_domains) = active_by_id.get(&entry.memory_id) {
+            checks.push(fail(
+                CATEGORY_MEMORY_ID,
+                "reserved_memory_id_collision",
+                &subject,
+                format!(
+                    "reserved memory id {} for {} is used by active domain(s) {}",
+                    entry.memory_id,
+                    entry.label,
+                    active_domains.join(", ")
+                ),
+                "declare one owner for the memory id or add an explicit migration design",
+            ));
+        } else if let Some(removed_domains) = removed_by_id.get(&entry.memory_id) {
+            checks.push(fail(
+                CATEGORY_MEMORY_ID,
+                "reserved_memory_id_collision",
+                &subject,
+                format!(
+                    "reserved memory id {} for {} is already declared by removed state {}",
+                    entry.memory_id,
+                    entry.label,
+                    removed_domains.join(", ")
+                ),
+                "keep the memory id in exactly one manifest section",
+            ));
+        } else if reserved_by_id
+            .get(&entry.memory_id)
+            .is_some_and(|labels| labels.len() > 1)
+        {
+            checks.push(fail(
+                CATEGORY_MEMORY_ID,
+                "reserved_memory_id_duplicate",
+                &subject,
+                format!(
+                    "reserved memory id {} is listed for {}",
+                    entry.memory_id,
+                    reserved_by_id
+                        .get(&entry.memory_id)
+                        .map(|labels| labels.join(", "))
+                        .unwrap_or_default()
+                ),
+                "reserve each memory id once",
+            ));
+        } else {
+            checks.push(warn(
+                CATEGORY_MEMORY_ID,
+                "reserved_memory_id_declared",
+                &subject,
+                format!(
+                    "memory id {} is reserved for {} but is not yet modeled as an active or removed state domain",
+                    entry.memory_id, entry.label
+                ),
+                "model this reservation as a precise state domain or removed-state disposition when the state shape is known",
+            ));
+        }
+    }
+    checks
+}
+
+fn active_memory_ids(domains: &[StateDomainManifest]) -> BTreeMap<u8, Vec<&str>> {
+    let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
+    for domain in domains
+        .iter()
+        .filter(|domain| domain.storage == StateStorage::StableMemory)
+    {
+        if let Some(memory_id) = domain.memory_id {
+            by_id.entry(memory_id).or_default().push(&domain.domain);
+        }
+    }
+    by_id
+}
+
+fn removed_memory_ids(removed: &[RemovedStateManifest]) -> BTreeMap<u8, Vec<&str>> {
+    let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
+    for entry in removed {
+        if let Some(memory_id) = entry.memory_id {
+            by_id.entry(memory_id).or_default().push(&entry.domain);
+        }
+    }
+    by_id
+}
+
 fn domain_subject(role: &str, domain: &StateDomainManifest) -> String {
     format!("{role}/{}", domain.domain)
 }
@@ -711,6 +832,74 @@ mod tests {
     }
 
     #[test]
+    fn reserved_memory_ids_warn_until_modeled() {
+        let report = build_state_audit_report(Some("root"));
+
+        assert!(report.checks.iter().any(|check| {
+            check.code == "reserved_memory_id_declared" && check.status == StateAuditStatus::Warn
+        }));
+    }
+
+    #[test]
+    fn active_domain_reclaiming_reserved_memory_id_fails() {
+        let mut manifest = declared_state_manifest(Some("root"));
+        let role = manifest.roles.first_mut().expect("root role");
+        let reserved_id = role
+            .reserved_memory
+            .first()
+            .map(|entry| entry.memory_id)
+            .expect("reserved memory id");
+        role.state[0].memory_id = Some(reserved_id);
+
+        let checks = audit_checks(&manifest, Some("root"));
+
+        assert!(
+            checks
+                .iter()
+                .any(|check| check.code == "reserved_memory_id_collision"
+                    && check.status == StateAuditStatus::Fail)
+        );
+    }
+
+    #[test]
+    fn storage_not_applicable_is_explicit_metadata() {
+        let manifest = StateManifest {
+            schema_version: 1,
+            roles: vec![StateRoleManifest {
+                canister_role: "root".to_string(),
+                state: vec![StateDomainManifest {
+                    domain: "external_authority".to_string(),
+                    version: 1,
+                    storage: StateStorage::NotApplicable,
+                    memory_id: None,
+                    owner: "canic-core".to_string(),
+                    record: "ExternalAuthorityRecord".to_string(),
+                    snapshot: "ExternalAuthorityData".to_string(),
+                    min_supported_version: 1,
+                    migration_policy: MigrationPolicy::NotApplicable,
+                    restore_order: Some(10),
+                    post_upgrade_invariant: Some("external_authority_invariants".to_string()),
+                    migrations: Vec::new(),
+                }],
+                removed_state: Vec::new(),
+                reserved_memory: Vec::new(),
+            }],
+        };
+
+        let checks = audit_checks(&manifest, None);
+
+        assert!(checks.iter().any(|check| {
+            check.code == "state_domain_storage_not_applicable"
+                && check.status == StateAuditStatus::Pass
+        }));
+        assert!(
+            checks
+                .iter()
+                .all(|check| check.code != "state_domain_missing_memory_id")
+        );
+    }
+
+    #[test]
     fn missing_migration_test_warns_separately_from_missing_migration() {
         let manifest = StateManifest {
             schema_version: 1,
@@ -737,6 +926,7 @@ mod tests {
                     }],
                 }],
                 removed_state: Vec::new(),
+                reserved_memory: Vec::new(),
             }],
         };
         let checks = audit_checks(&manifest, None);
