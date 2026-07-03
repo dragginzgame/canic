@@ -17,6 +17,7 @@ fn parses_bare_project_medic_options() {
     assert_eq!(options.deployment, None);
     assert_eq!(options.network, None);
     assert_eq!(options.icp, "/tmp/icp");
+    assert!(!options.ci);
 }
 
 // Ensure explicit project medic keeps the same scope and accepts JSON output.
@@ -27,6 +28,19 @@ fn parses_project_medic_options() {
 
     assert_eq!(options.scope, MedicScope::Project);
     assert!(options.json);
+    assert!(!options.ci);
+    assert_eq!(options.deployment, None);
+}
+
+// Ensure project medic accepts the concise CI renderer flag.
+#[test]
+fn parses_project_medic_ci_options() {
+    let options = MedicOptions::parse([OsString::from("project"), OsString::from("--ci")])
+        .expect("parse medic project ci options");
+
+    assert_eq!(options.scope, MedicScope::Project);
+    assert!(options.ci);
+    assert!(!options.json);
     assert_eq!(options.deployment, None);
 }
 
@@ -47,6 +61,7 @@ fn parses_deployment_medic_options() {
     assert_eq!(options.deployment.as_deref(), Some("demo"));
     assert_eq!(options.network.as_deref(), Some("local"));
     assert_eq!(options.icp, "/tmp/icp");
+    assert!(!options.ci);
 }
 
 // Ensure targeted blob-storage medic diagnostics are deployment-only.
@@ -118,6 +133,7 @@ fn medic_usage_includes_top_level_examples() {
     assert!(text.contains("Diagnose Canic project and deployment preflight readiness"));
     assert!(text.contains("Usage: canic medic"));
     assert!(text.contains("canic medic project"));
+    assert!(text.contains("canic medic project --ci"));
     assert!(text.contains("canic medic deployment test"));
     assert!(text.contains("canic medic deployment test --blob-storage backend"));
     assert!(text.contains("canic medic deployment test --auth-renewal"));
@@ -135,6 +151,11 @@ fn medic_subcommand_help_requests_are_not_targets() {
     assert!(medic_subcommand_help_requested(&[
         OsString::from("project"),
         OsString::from("--help")
+    ]));
+    assert!(medic_subcommand_help_requested(&[
+        OsString::from("--ci"),
+        OsString::from("project"),
+        OsString::from("help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("deployment"),
@@ -235,7 +256,7 @@ fn aggregate_status_follows_report_contract() {
 #[test]
 fn renders_medic_text_report() {
     let report = MedicReport::new(
-        &MedicOptions::project(false, None, "icp".to_string()),
+        &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![
             MedicCheck::warn(
                 MedicCategory::ProjectConfig,
@@ -270,7 +291,7 @@ fn renders_medic_text_report() {
 #[test]
 fn renders_medic_json_report() {
     let report = MedicReport::new(
-        &MedicOptions::project(true, None, "icp".to_string()),
+        &MedicOptions::project(true, false, None, "icp".to_string()),
         vec![sample_check(MedicStatus::Pass)],
     );
     let rendered = render_medic_json(&report).expect("render json");
@@ -287,6 +308,62 @@ fn renders_medic_json_report() {
     assert_eq!(value["deployment"], JsonValue::Null);
     assert_eq!(value["status"], "pass");
     assert!(value["checks"].is_array());
+}
+
+// Ensure CI text output is short and includes only failing checks.
+#[test]
+fn renders_medic_ci_report_with_fail_only_rows() {
+    let report = MedicReport::new(
+        &MedicOptions::project(false, true, None, "icp".to_string()),
+        vec![
+            MedicCheck::pass(
+                MedicCategory::Environment,
+                "icp_cli_ok",
+                "icp",
+                "icp 1.0.0",
+                "none",
+                MedicSource::IcpCli,
+            ),
+            MedicCheck::warn(
+                MedicCategory::ProjectConfig,
+                "local_network_implicit",
+                "network",
+                "no network was selected",
+                "select an explicit network before deployment checks",
+                MedicSource::IcpConfig,
+            ),
+            MedicCheck::fail(
+                MedicCategory::ProjectConfig,
+                "role_required_canic_feature_missing",
+                "demo.app",
+                "demo.app requires canic feature `auth-root-canister-sig-verify`",
+                "edit runtime [dependencies].canic",
+                MedicSource::FleetConfig,
+            ),
+        ],
+    );
+    let rendered = render_medic_ci_text(&report);
+
+    assert!(rendered.starts_with("canic medic project\nstatus: fail\nfailures: 1"));
+    assert!(rendered.contains("fail project_config role_required_canic_feature_missing demo.app"));
+    assert!(rendered.contains("  next: edit runtime [dependencies].canic"));
+    assert!(!rendered.contains("icp_cli_ok"));
+    assert!(!rendered.contains("local_network_implicit"));
+}
+
+// Ensure CI text output remains explicit when no failing checks exist.
+#[test]
+fn renders_medic_ci_report_without_failures() {
+    let report = MedicReport::new(
+        &MedicOptions::project(false, true, None, "icp".to_string()),
+        vec![sample_check(MedicStatus::Warn)],
+    );
+    let rendered = render_medic_ci_text(&report);
+
+    assert_eq!(
+        rendered,
+        "canic medic project\nstatus: warn\nfailures: none"
+    );
 }
 
 // Ensure medic errors keep the process-level exit-code contract from the 0.78 design.
@@ -334,6 +411,7 @@ fn deployment_report_includes_effective_network() {
             blob_storage: None,
             auth_renewal: None,
             json: false,
+            ci: false,
             network: None,
             icp: "icp".to_string(),
         },
@@ -358,6 +436,7 @@ fn deployment_network_selection_uses_recorded_network_before_local_default() {
         blob_storage: None,
         auth_renewal: None,
         json: false,
+        ci: false,
         network: None,
         icp: "icp".to_string(),
     };
@@ -391,6 +470,7 @@ fn deployment_network_selection_prefers_explicit_network() {
         blob_storage: None,
         auth_renewal: None,
         json: false,
+        ci: false,
         network: Some("local".to_string()),
         icp: "icp".to_string(),
     };
@@ -415,6 +495,7 @@ fn deployment_target_missing_points_to_deploy_plan() {
         blob_storage: None,
         auth_renewal: None,
         json: false,
+        ci: false,
         network: Some("local".to_string()),
         icp: "icp".to_string(),
     };
@@ -447,13 +528,14 @@ fn deployment_target_missing_points_to_deploy_plan() {
 // Ensure project-only network warnings do not duplicate deployment-scoped network checks.
 #[test]
 fn project_network_selection_check_is_project_only() {
-    let project = MedicOptions::project(false, None, "icp".to_string());
+    let project = MedicOptions::project(false, false, None, "icp".to_string());
     let deployment = MedicOptions {
         scope: MedicScope::Deployment,
         deployment: Some("demo".to_string()),
         blob_storage: None,
         auth_renewal: None,
         json: false,
+        ci: false,
         network: None,
         icp: "icp".to_string(),
     };
@@ -877,6 +959,13 @@ role_attestation_cache = true
     assert!(app.detail.contains("auth.role_attestation_cache"));
     assert!(app.detail.contains("auth-root-canister-sig-verify"));
     assert!(app.next.contains("fleets/demo/app/Cargo.toml"));
+    assert!(app.next.contains("runtime [dependencies].canic"));
+    assert!(app.next.contains("not [build-dependencies]"));
+    assert!(
+        app.next.contains(
+            r#"canic = { workspace = true, features = ["auth-root-canister-sig-verify"] }"#
+        )
+    );
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -1000,7 +1089,7 @@ role_attestation_cache = true
 #[test]
 fn orders_checks_by_category() {
     let report = MedicReport::new(
-        &MedicOptions::project(false, None, "icp".to_string()),
+        &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![
             MedicCheck::pass(
                 MedicCategory::BlobStorage,
@@ -1051,7 +1140,7 @@ fn renders_blob_storage_medic_summary() {
         next: "canic blob-storage sync-gateways demo backend".to_string(),
     });
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, None, "icp".to_string()),
+        &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![check],
     ));
 
@@ -1109,7 +1198,7 @@ fn renders_auth_renewal_medic_summary() {
         next: "canic auth renewal status demo --issuer rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
     });
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, None, "icp".to_string()),
+        &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![check],
     ));
 
@@ -1174,6 +1263,7 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
         blob_storage: None,
         auth_renewal: None,
         json: false,
+        ci: false,
         network: Some("local".to_string()),
         icp: "icp".to_string(),
     };
@@ -1223,7 +1313,7 @@ fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
 #[test]
 fn wraps_long_medic_report_fields() {
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, None, "icp".to_string()),
+        &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![MedicCheck::warn(
             MedicCategory::DeploymentState,
             "deployment_target_missing",
@@ -1251,7 +1341,7 @@ fn wraps_long_medic_report_fields() {
 #[test]
 fn wraps_unbroken_long_medic_report_fields() {
     let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::project(false, None, "icp".to_string()),
+        &MedicOptions::project(false, false, None, "icp".to_string()),
         vec![MedicCheck::warn(
             MedicCategory::DeploymentState,
             "deployment_target_missing",

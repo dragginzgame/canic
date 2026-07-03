@@ -69,6 +69,7 @@ const PROJECT_COMMAND: &str = "project";
 const DEPLOYMENT_COMMAND: &str = "deployment";
 const DEPLOYMENT_ARG: &str = "deployment";
 const JSON_ARG: &str = "json";
+const CI_ARG: &str = "ci";
 const BLOB_STORAGE_ARG: &str = "blob-storage";
 const AUTH_RENEWAL_ARG: &str = "auth-renewal";
 const PACKAGE_MANIFEST_FILE: &str = "Cargo.toml";
@@ -79,6 +80,7 @@ const MEDIC_HELP_AFTER: &str = "\
 Examples:
   canic medic
   canic medic project
+  canic medic project --ci
   canic medic deployment test
   canic medic deployment test --blob-storage backend
   canic medic deployment test --auth-renewal rrkah-fqaaa-aaaaa-aaaaq-cai
@@ -125,6 +127,7 @@ struct MedicOptions {
     blob_storage: Option<String>,
     auth_renewal: Option<String>,
     json: bool,
+    ci: bool,
     network: Option<String>,
     icp: String,
 }
@@ -137,17 +140,19 @@ impl MedicOptions {
         let matches =
             parse_matches(medic_command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
         let json = matches.get_flag(JSON_ARG);
+        let ci = matches.get_flag(CI_ARG);
         let network = string_option(&matches, "network");
         let icp = string_option(&matches, "icp").unwrap_or_else(default_icp);
 
         match matches.subcommand() {
-            None | Some((PROJECT_COMMAND, _)) => Ok(Self::project(json, network, icp)),
+            None | Some((PROJECT_COMMAND, _)) => Ok(Self::project(json, ci, network, icp)),
             Some((DEPLOYMENT_COMMAND, matches)) => Ok(Self {
                 scope: MedicScope::Deployment,
                 deployment: Some(required_string(matches, DEPLOYMENT_ARG)),
                 blob_storage: string_option(matches, BLOB_STORAGE_ARG),
                 auth_renewal: string_option(matches, AUTH_RENEWAL_ARG),
                 json,
+                ci,
                 network,
                 icp,
             }),
@@ -155,13 +160,14 @@ impl MedicOptions {
         }
     }
 
-    const fn project(json: bool, network: Option<String>, icp: String) -> Self {
+    const fn project(json: bool, ci: bool, network: Option<String>, icp: String) -> Self {
         Self {
             scope: MedicScope::Project,
             deployment: None,
             blob_storage: None,
             auth_renewal: None,
             json,
+            ci,
             network,
             icp,
         }
@@ -205,6 +211,8 @@ where
     let report = build_medic_report(&options);
     if options.json {
         println!("{}", render_medic_json(&report)?);
+    } else if options.ci {
+        println!("{}", render_medic_ci_text(&report));
     } else {
         println!("{}", render_medic_text(&report));
     }
@@ -227,7 +235,7 @@ fn medic_subcommand_help_requested(args: &[OsString]) -> bool {
 fn skip_medic_options(args: &[OsString], mut index: usize) -> usize {
     while let Some(arg) = args.get(index).and_then(|arg| arg.to_str()) {
         match arg {
-            "--json" => index += 1,
+            "--json" | "--ci" => index += 1,
             INTERNAL_ICP_OPTION | INTERNAL_NETWORK_OPTION => index += 2,
             _ => break,
         }
@@ -249,6 +257,12 @@ fn medic_command() -> ClapCommand {
                 .long(JSON_ARG)
                 .global(true)
                 .help("Print JSON output"),
+        )
+        .arg(
+            flag_arg(CI_ARG)
+                .long(CI_ARG)
+                .global(true)
+                .help("Print concise fail-only text output for CI logs"),
         )
         .arg(internal_network_arg().global(true))
         .arg(internal_icp_arg().global(true))
@@ -608,16 +622,20 @@ fn check_role_required_canic_features(
                         requirement.config_key,
                         requirement.reason
                     ),
-                    format!(
-                        "add `{}` to [dependencies].canic features in {} or inherited [workspace.dependencies].canic features",
-                        requirement.feature,
-                        display_medic_path(root, &manifest)
-                    ),
+                    missing_canic_feature_next_action(root, &manifest, requirement.feature),
                     MedicSource::FleetConfig,
                 )
             }
         })
         .collect()
+}
+
+fn missing_canic_feature_next_action(root: &Path, manifest: &Path, feature: &str) -> String {
+    format!(
+        "edit runtime [dependencies].canic in {} (not [build-dependencies]) and add `{feature}`; for workspace inheritance, edit inherited [workspace.dependencies].canic features; example:\n{}",
+        display_medic_path(root, manifest),
+        canic_dependency_feature_snippet([feature])
+    )
 }
 
 fn check_declared_role_not_deployable(
@@ -735,6 +753,16 @@ fn toml_dependency_features(dependency: &TomlValue) -> BTreeSet<String> {
         .filter_map(TomlValue::as_str)
         .map(ToString::to_string)
         .collect()
+}
+
+fn canic_dependency_feature_snippet<'a>(features: impl IntoIterator<Item = &'a str>) -> String {
+    let features = features
+        .into_iter()
+        .map(|feature| format!(r#""{feature}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!("[dependencies]\ncanic = {{ workspace = true, features = [{features}] }}")
 }
 
 fn manifest_string(
@@ -1754,6 +1782,38 @@ fn render_medic_text(report: &MedicReport) -> String {
         push_medic_field(&mut lines, "next", &check.next);
         push_medic_field(&mut lines, "source", check.source.label());
     }
+    lines.join("\n")
+}
+
+fn render_medic_ci_text(report: &MedicReport) -> String {
+    let mut lines = vec![
+        report.command.clone(),
+        format!("status: {}", report.status.label()),
+    ];
+    let failures = ordered_checks(&report.checks)
+        .into_iter()
+        .filter(|check| check.status == MedicStatus::Fail)
+        .collect::<Vec<_>>();
+
+    if failures.is_empty() {
+        lines.push("failures: none".to_string());
+        return lines.join("\n");
+    }
+
+    lines.push(format!("failures: {}", failures.len()));
+    for check in failures {
+        lines.push(format!(
+            "{} {} {} {}",
+            check.status.label(),
+            check.category.label(),
+            check.code,
+            check.subject
+        ));
+        push_medic_field(&mut lines, "detail", &check.detail);
+        push_medic_field(&mut lines, "next", &check.next);
+        push_medic_field(&mut lines, "source", check.source.label());
+    }
+
     lines.join("\n")
 }
 
