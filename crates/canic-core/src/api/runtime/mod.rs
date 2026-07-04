@@ -412,6 +412,7 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::runtime::bootstrap::BootstrapStatusOps;
     use crate::ops::runtime::metrics::timer::{TimerMetrics, TimerMode};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
     use std::time::Duration;
@@ -619,6 +620,38 @@ mod tests {
         assert_eq!(status.recent_failures[0].occurred_at_ns, 77);
         assert_eq!(status.recent_failures[0].subsystem, "runtime");
         assert_eq!(status.recent_failures[0].code, "readiness_failed");
+
+        RecentFailureOps::reset();
+    }
+
+    #[test]
+    fn runtime_status_includes_bootstrap_failure_metadata() {
+        RecentFailureOps::reset();
+        BootstrapStatusOps::set_phase("root:init");
+        BootstrapStatusOps::mark_failed("raw bootstrap failure detail");
+
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.81.0",
+            7,
+        );
+
+        let failure = status
+            .recent_failures
+            .iter()
+            .find(|failure| failure.code == "bootstrap_failed")
+            .expect("bootstrap failure metadata");
+
+        assert_eq!(failure.subsystem, "runtime_bootstrap");
+        assert_eq!(failure.severity, FailureSeverity::Error);
+        assert_eq!(failure.correlation_id.as_deref(), Some("root:init"));
+        assert!(
+            !failure.summary.contains("raw bootstrap failure detail"),
+            "runtime status recent failures should not mirror raw bootstrap errors"
+        );
 
         RecentFailureOps::reset();
     }

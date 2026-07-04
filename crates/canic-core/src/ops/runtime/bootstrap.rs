@@ -4,7 +4,11 @@
 //! Does not own: lifecycle orchestration, readiness policy, or status DTO schema.
 //! Boundary: stores process-local bootstrap status for query projection.
 
-use crate::dto::state::BootstrapStatusResponse;
+use super::recent_failure::{RecentFailureInput, RecentFailureOps};
+use crate::{
+    cdk::utils::time::now_nanos,
+    dto::{runtime::FailureSeverity, state::BootstrapStatusResponse},
+};
 use std::cell::RefCell;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,10 +56,20 @@ impl BootstrapStatusOps {
 
     // Record one terminal bootstrap failure for diagnostics.
     pub fn mark_failed(message: impl Into<String>) {
+        let message = message.into();
         BOOTSTRAP_STATUS.with_borrow_mut(|status| {
+            let failed_phase = status.phase;
             status.ready = false;
             status.phase = "failed";
-            status.last_error = Some(message.into());
+            status.last_error = Some(message);
+            RecentFailureOps::record(RecentFailureInput {
+                occurred_at_ns: now_nanos(),
+                subsystem: "runtime_bootstrap".to_string(),
+                code: "bootstrap_failed".to_string(),
+                severity: FailureSeverity::Error,
+                summary: "bootstrap failed; inspect canic_bootstrap_status for details".to_string(),
+                correlation_id: Some(failed_phase.to_string()),
+            });
         });
     }
 
@@ -76,6 +90,7 @@ impl BootstrapStatusOps {
 #[cfg(test)]
 mod tests {
     use super::BootstrapStatusOps;
+    use crate::ops::runtime::recent_failure::RecentFailureOps;
 
     #[test]
     fn bootstrap_status_starts_idle_and_not_ready() {
@@ -90,6 +105,7 @@ mod tests {
 
     #[test]
     fn bootstrap_status_tracks_failure() {
+        RecentFailureOps::reset();
         BootstrapStatusOps::mark_failed("nope");
 
         let status = BootstrapStatusOps::snapshot();
@@ -97,6 +113,22 @@ mod tests {
         assert!(!status.ready);
         assert_eq!(status.phase, "failed");
         assert_eq!(status.last_error.as_deref(), Some("nope"));
+
+        let failures = RecentFailureOps::snapshot();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].subsystem, "runtime_bootstrap");
+        assert_eq!(failures[0].code, "bootstrap_failed");
+        assert_eq!(
+            failures[0].severity,
+            crate::dto::runtime::FailureSeverity::Error
+        );
+        assert_eq!(
+            failures[0].summary,
+            "bootstrap failed; inspect canic_bootstrap_status for details"
+        );
+        assert!(!failures[0].summary.contains("nope"));
+
+        RecentFailureOps::reset();
     }
 
     #[test]
