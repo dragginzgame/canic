@@ -7,10 +7,11 @@ use crate::{
         runtime::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanicTimerStatus,
             FailureSeverity, RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus,
-            RuntimeBuildInfo, RuntimeCheck, RuntimeCheckStatus, RuntimeDiagnostic,
-            RuntimeDiagnosticSeverity, RuntimeFeatureStatus, RuntimeFieldVisibility,
-            RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary,
-            RuntimeStatus, RuntimeTopologyStatus, RuntimeVisibilityEntry, TimerStatus,
+            RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary, RuntimeBuildInfo,
+            RuntimeCheck, RuntimeCheckStatus, RuntimeDiagnostic, RuntimeDiagnosticSeverity,
+            RuntimeFeatureStatus, RuntimeFieldVisibility, RuntimeStateDomainStatus,
+            RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeStatus, RuntimeTopologyStatus,
+            RuntimeVisibilityEntry, TimerStatus,
         },
     },
     ops::{
@@ -231,6 +232,8 @@ impl RuntimeIntrospectionApi {
             }),
             timers: timer_statuses(),
             state,
+            auth: Some(runtime_auth_status()),
+            blob_storage: runtime_blob_storage_status(),
             recent_failures: RecentFailureOps::snapshot(),
             visibility: runtime_visibility(),
             readiness,
@@ -261,13 +264,42 @@ impl RuntimeIntrospectionApi {
 fn runtime_features() -> Vec<RuntimeFeatureStatus> {
     RUNTIME_FEATURE_FLAGS
         .into_iter()
-        .map(|(name, enabled)| RuntimeFeatureStatus {
-            name: name.to_string(),
-            enabled,
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-            source: RUNTIME_FEATURE_SOURCE.to_string(),
-        })
+        .map(|(name, enabled)| runtime_feature_status(name, enabled))
         .collect()
+}
+
+fn runtime_feature_status(name: &str, enabled: bool) -> RuntimeFeatureStatus {
+    RuntimeFeatureStatus {
+        name: name.to_string(),
+        enabled,
+        visibility: RuntimeFieldVisibility::OperatorOnly,
+        source: RUNTIME_FEATURE_SOURCE.to_string(),
+    }
+}
+
+fn runtime_auth_status() -> RuntimeAuthStatusSummary {
+    RuntimeAuthStatusSummary {
+        auth_features: RUNTIME_FEATURE_FLAGS
+            .into_iter()
+            .filter(|(name, _)| name.starts_with("auth-"))
+            .map(|(name, enabled)| runtime_feature_status(name, enabled))
+            .collect(),
+    }
+}
+
+fn runtime_blob_storage_status() -> Option<RuntimeBlobStorageStatusSummary> {
+    let blob_storage_enabled = cfg!(feature = "blob-storage");
+    let billing_enabled = cfg!(feature = "blob-storage-billing");
+
+    (blob_storage_enabled || billing_enabled).then(|| RuntimeBlobStorageStatusSummary {
+        blob_storage_features: [
+            ("blob-storage", blob_storage_enabled),
+            ("blob-storage-billing", billing_enabled),
+        ]
+        .into_iter()
+        .map(|(name, enabled)| runtime_feature_status(name, enabled))
+        .collect(),
+    })
 }
 
 fn timer_statuses() -> Vec<CanicTimerStatus> {
@@ -396,6 +428,8 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
         ("topology", RuntimeFieldVisibility::ControllerOnly),
         ("timers", RuntimeFieldVisibility::OperatorOnly),
         ("state", RuntimeFieldVisibility::OperatorOnly),
+        ("auth", RuntimeFieldVisibility::OperatorOnly),
+        ("blob_storage", RuntimeFieldVisibility::FeatureGated),
         ("recent_failures", RuntimeFieldVisibility::OperatorOnly),
         ("readiness", RuntimeFieldVisibility::OperatorOnly),
         ("status", RuntimeFieldVisibility::OperatorOnly),
@@ -478,6 +512,8 @@ mod tests {
             ("topology", RuntimeFieldVisibility::ControllerOnly),
             ("timers", RuntimeFieldVisibility::OperatorOnly),
             ("state", RuntimeFieldVisibility::OperatorOnly),
+            ("auth", RuntimeFieldVisibility::OperatorOnly),
+            ("blob_storage", RuntimeFieldVisibility::FeatureGated),
             ("recent_failures", RuntimeFieldVisibility::OperatorOnly),
             ("readiness", RuntimeFieldVisibility::OperatorOnly),
             ("status", RuntimeFieldVisibility::OperatorOnly),
@@ -511,6 +547,74 @@ mod tests {
             );
             assert_eq!(status.features[index].source, RUNTIME_FEATURE_SOURCE);
         }
+    }
+
+    #[test]
+    fn runtime_status_reports_auth_and_blob_storage_feature_summaries() {
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.81.0",
+            7,
+        );
+
+        let auth = status.auth.expect("auth feature summary");
+        assert!(
+            auth.auth_features
+                .windows(2)
+                .all(|features| features[0].name <= features[1].name)
+        );
+        assert_runtime_feature(
+            &auth.auth_features,
+            "auth-chain-key-ecdsa",
+            cfg!(feature = "auth-chain-key-ecdsa"),
+        );
+        assert_runtime_feature(
+            &auth.auth_features,
+            "auth-delegated-token-verify",
+            cfg!(feature = "auth-delegated-token-verify"),
+        );
+        assert_runtime_feature(
+            &auth.auth_features,
+            "auth-issuer-canister-sig-create",
+            cfg!(feature = "auth-issuer-canister-sig-create"),
+        );
+
+        if cfg!(any(
+            feature = "blob-storage",
+            feature = "blob-storage-billing"
+        )) {
+            let blob_storage = status.blob_storage.expect("blob-storage feature summary");
+            assert_runtime_feature(
+                &blob_storage.blob_storage_features,
+                "blob-storage",
+                cfg!(feature = "blob-storage"),
+            );
+            assert_runtime_feature(
+                &blob_storage.blob_storage_features,
+                "blob-storage-billing",
+                cfg!(feature = "blob-storage-billing"),
+            );
+        } else {
+            assert!(status.blob_storage.is_none());
+        }
+    }
+
+    fn assert_runtime_feature(
+        features: &[RuntimeFeatureStatus],
+        name: &str,
+        expected_enabled: bool,
+    ) {
+        let feature = features
+            .iter()
+            .find(|feature| feature.name == name)
+            .unwrap_or_else(|| panic!("expected runtime feature {name}"));
+
+        assert_eq!(feature.enabled, expected_enabled);
+        assert_eq!(feature.visibility, RuntimeFieldVisibility::OperatorOnly);
+        assert_eq!(feature.source, RUNTIME_FEATURE_SOURCE);
     }
 
     #[test]

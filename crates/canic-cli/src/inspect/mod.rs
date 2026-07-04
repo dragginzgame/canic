@@ -16,7 +16,8 @@ use crate::{
 };
 use candid::{Decode, Principal, types::principal::PrincipalError};
 use canic_core::dto::runtime::{
-    CanicRuntimeStatus, FailureSeverity, RuntimeStateDomainStatus, RuntimeStatus, TimerStatus,
+    CanicRuntimeStatus, FailureSeverity, RuntimeFeatureStatus, RuntimeStateDomainStatus,
+    RuntimeStatus, TimerStatus,
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
@@ -474,6 +475,18 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
         "enabled_features: {}",
         enabled_runtime_features(status)
     ));
+    if let Some(auth) = &status.auth {
+        lines.push(format!(
+            "auth: enabled_features={}",
+            enabled_runtime_feature_rows(&auth.auth_features)
+        ));
+    }
+    if let Some(blob_storage) = &status.blob_storage {
+        lines.push(format!(
+            "blob_storage: enabled_features={}",
+            enabled_runtime_feature_rows(&blob_storage.blob_storage_features)
+        ));
+    }
 
     for timer in &status.timers {
         lines.push(format!(
@@ -514,8 +527,11 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
 }
 
 fn enabled_runtime_features(status: &CanicRuntimeStatus) -> String {
-    let names = status
-        .features
+    enabled_runtime_feature_rows(&status.features)
+}
+
+fn enabled_runtime_feature_rows(features: &[RuntimeFeatureStatus]) -> String {
+    let names = features
         .iter()
         .filter(|feature| feature.enabled)
         .map(|feature| feature.name.as_str())
@@ -1043,7 +1059,8 @@ mod tests {
     fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
         use canic_core::dto::runtime::{
             CanicReadinessStatus, CanicTimerStatus, FailureSeverity, ReadinessStatus,
-            RecentFailure, RuntimeBuildInfo, RuntimeFeatureStatus, RuntimeFieldVisibility,
+            RecentFailure, RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary,
+            RuntimeBuildInfo, RuntimeFeatureStatus, RuntimeFieldVisibility,
             RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary, TimerStatus,
         };
 
@@ -1098,6 +1115,22 @@ mod tests {
                     status: RuntimeStateDomainStatus::Ok,
                 }],
                 total_stable_memory_pages: None,
+            }),
+            auth: Some(RuntimeAuthStatusSummary {
+                auth_features: vec![RuntimeFeatureStatus {
+                    name: "auth-delegated-token-verify".to_string(),
+                    enabled: true,
+                    visibility: RuntimeFieldVisibility::OperatorOnly,
+                    source: "compile_feature".to_string(),
+                }],
+            }),
+            blob_storage: Some(RuntimeBlobStorageStatusSummary {
+                blob_storage_features: vec![RuntimeFeatureStatus {
+                    name: "blob-storage".to_string(),
+                    enabled: false,
+                    visibility: RuntimeFieldVisibility::OperatorOnly,
+                    source: "compile_feature".to_string(),
+                }],
             }),
             recent_failures: vec![RecentFailure {
                 occurred_at_ns: 41,
