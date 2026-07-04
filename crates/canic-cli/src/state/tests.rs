@@ -107,7 +107,14 @@ fn audit_json_uses_schema_version_one() {
             .as_array()
             .expect("checks")
             .iter()
-            .any(|check| check["code"] == "snapshot_name_invalid")
+            .any(|check| check["code"] == "reserved_memory_id_declared")
+    );
+    assert!(
+        json["checks"]
+            .as_array()
+            .expect("checks")
+            .iter()
+            .any(|check| check["code"] == "reserved_export_import_ok")
     );
 }
 
@@ -136,10 +143,11 @@ fn text_renderers_include_stable_fields() {
 
     assert!(audit.contains("schema_version: 1"));
     assert!(audit.contains("scope: role"));
-    assert!(audit.contains("snapshot [warn] snapshot_name_invalid"));
+    assert!(audit.contains("memory_id [warn] reserved_memory_id_declared"));
     assert!(audit.contains("source: state_manifest"));
     assert!(manifest.contains("canic state manifest"));
     assert!(manifest.contains("migration_policy: new_domain"));
+    assert!(manifest.contains("template_manifests"));
     assert!(manifest.contains("removed_state"));
     assert!(manifest.contains("reserved_memory"));
     assert!(manifest.contains("log_index"));

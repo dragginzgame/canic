@@ -7,6 +7,7 @@ mod canic;
 mod delegation;
 mod lifecycle;
 mod root;
+mod upgrade;
 
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 pub use attestation::{
@@ -33,3 +34,4 @@ pub use root::{
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
     setup_root_topology,
 };
+pub use upgrade::{UpgradeScenario, UpgradeScenarioError};

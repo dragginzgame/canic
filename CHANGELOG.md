@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.80.x] - 2026-07-03 - Packaged Wasm Store Bootstrap
+## [0.80.x] - 2026-07-04 - Packaged Wasm Store Bootstrap
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)
+
+- `0.80.10` closes the state-audit cleanup follow-ups by extending manifest
+  declarations to control-plane state, normalizing snapshot metadata, and
+  tightening removed-state and export/import audit coverage.
 
 - `0.80.9` hardens top-level state-manifest validation for manifest schema
   compatibility and duplicate canister-role ownership.

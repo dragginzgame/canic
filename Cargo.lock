@@ -529,6 +529,7 @@ version = "0.80.9"
 dependencies = [
  "candid",
  "candid_parser",
+ "canic-control-plane",
  "canic-core",
  "flate2",
  "ic-query",
