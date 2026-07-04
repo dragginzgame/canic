@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.9` closes the runtime-introspection closeout follow-ups by completing
+  the health status vocabulary, adding metadata-only auth/blob-storage runtime
+  summaries, and refreshing the session handoff.
+
 - `0.81.8` hardens `canic inspect` reports by making untyped runtime-status
   fallback responses explicit with warnings and next actions, while pinning
   rejected command aliases such as `--format json`.
@@ -50,6 +54,13 @@ Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
   runtime reports, timer/state metadata projections, a bounded heap-only
   recent-failure ring, and help wording that separates live inspection from
   deployment-truth artifact inspection.
+
+```bash
+canic inspect canister <principal>
+canic inspect canister <principal> --json
+canic inspect deployment <deployment> --role <role>
+canic inspect deployment <deployment> --role <role> --json
+```
 
 ## [0.80.x] - 2026-07-04 - Packaged Wasm Store Bootstrap
 

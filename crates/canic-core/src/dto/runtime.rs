@@ -46,6 +46,8 @@ pub struct CanicRuntimeStatus {
     pub topology: Option<RuntimeTopologyStatus>,
     pub timers: Vec<CanicTimerStatus>,
     pub state: Option<RuntimeStateSummary>,
+    pub auth: Option<RuntimeAuthStatusSummary>,
+    pub blob_storage: Option<RuntimeBlobStorageStatusSummary>,
     pub recent_failures: Vec<RecentFailure>,
     pub visibility: Vec<RuntimeVisibilityEntry>,
     pub readiness: CanicReadinessStatus,
@@ -162,6 +164,24 @@ pub struct RuntimeStateDomainSummary {
 }
 
 //
+// RuntimeAuthStatusSummary
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RuntimeAuthStatusSummary {
+    pub auth_features: Vec<RuntimeFeatureStatus>,
+}
+
+//
+// RuntimeBlobStorageStatusSummary
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RuntimeBlobStorageStatusSummary {
+    pub blob_storage_features: Vec<RuntimeFeatureStatus>,
+}
+
+//
 // RecentFailure
 //
 
@@ -199,6 +219,8 @@ pub enum HealthStatus {
     Degraded,
     #[serde(alias = "Unhealthy")]
     Unhealthy,
+    #[serde(alias = "Unknown")]
+    Unknown,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -320,7 +342,7 @@ mod tests {
 
     #[test]
     fn runtime_enums_roundtrip_candid_with_runtime_variant_labels() {
-        assert_enum_candid_contract(HealthStatus::Unhealthy);
+        assert_enum_candid_contract(HealthStatus::Unknown);
         assert_enum_candid_contract(ReadinessStatus::NotEvaluated);
         assert_enum_candid_contract(RuntimeStatus::Failing);
         assert_enum_candid_contract(TimerStatus::NotRegistered);

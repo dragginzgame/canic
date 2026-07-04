@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-03
+Last updated: 2026-07-04
 
 ## Purpose
 
@@ -11,8 +11,8 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.80.0` stable state migrations. Source of truth:
-  `docs/design/0.80-stable-state-migrations/0.80-design.md`.
+- The active line is `0.81.x` runtime introspection. Source of truth:
+  `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
 - The first post-0.80.0 working slice adds diagnostic state metadata surfaces:
   `canic state audit` and `canic state manifest`. Static Rust declarations
