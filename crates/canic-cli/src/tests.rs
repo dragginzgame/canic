@@ -448,8 +448,26 @@ fn rejected_inspect_command_forms_are_usage_errors() {
         &["inspect", "demo-local"],
         &["inspect", "deployment", "demo-local"],
         &["inspect", "deployment", "demo-local", "--all"],
+        &[
+            "inspect",
+            "deployment",
+            "demo-local",
+            "--role",
+            "root",
+            "--all",
+        ],
         &["inspect", "canister", "aaaaa-aa", "--health"],
         &["inspect", "canister", "aaaaa-aa", "--readiness"],
+        &["inspect", "canister", "aaaaa-aa", "--format", "json"],
+        &[
+            "inspect",
+            "deployment",
+            "demo-local",
+            "--role",
+            "root",
+            "--format",
+            "json",
+        ],
     ] {
         let err =
             run(raw_args.iter().map(OsString::from)).expect_err("inspect form should be rejected");
