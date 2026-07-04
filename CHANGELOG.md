@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.4` hardens runtime-introspection privacy and report contracts by
+  completing field-visibility metadata, bounding runtime-facing diagnostic
+  labels, and replacing raw inspect Candid fallback output with presence
+  metadata.
+
 - `0.81.3` hardens runtime-introspection closeout coverage by proving the live
   PocketIC endpoint DTOs and controller guards, and by pinning rejected
   `canic inspect` command expansions.

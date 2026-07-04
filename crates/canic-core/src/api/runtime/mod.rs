@@ -26,6 +26,9 @@ use crate::{
     state_contract::{StateStorage, canic_state_manifest_for_role},
 };
 
+const MAX_TIMER_SUBSYSTEM_BYTES: usize = 64;
+const MAX_TIMER_NAME_BYTES: usize = 96;
+
 ///
 /// MemoryRuntimeApi
 ///
@@ -288,46 +291,73 @@ const fn state_storage_name(storage: StateStorage) -> &'static str {
 
 fn split_timer_label(label: &str) -> (String, String) {
     label.split_once(':').map_or_else(
-        || ("runtime".to_string(), label.to_string()),
-        |(subsystem, name)| (subsystem.to_string(), name.to_string()),
+        || {
+            (
+                "runtime".to_string(),
+                bounded_runtime_text(label, MAX_TIMER_NAME_BYTES),
+            )
+        },
+        |(subsystem, name)| {
+            (
+                bounded_runtime_text(subsystem, MAX_TIMER_SUBSYSTEM_BYTES),
+                bounded_runtime_text(name, MAX_TIMER_NAME_BYTES),
+            )
+        },
     )
 }
 
+fn bounded_runtime_text(value: &str, max_bytes: usize) -> String {
+    let sanitized = value
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+
+    if sanitized.len() <= max_bytes {
+        return sanitized;
+    }
+
+    let mut end = 0;
+    for (index, character) in sanitized.char_indices() {
+        let next = index + character.len_utf8();
+        if next > max_bytes {
+            break;
+        }
+        end = next;
+    }
+
+    sanitized[..end].to_string()
+}
+
 fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
-    vec![
-        RuntimeVisibilityEntry {
-            field: "schema_version".to_string(),
-            visibility: RuntimeFieldVisibility::PublicSafe,
-        },
-        RuntimeVisibilityEntry {
-            field: "status".to_string(),
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-        },
-        RuntimeVisibilityEntry {
-            field: "role".to_string(),
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-        },
-        RuntimeVisibilityEntry {
-            field: "root".to_string(),
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-        },
-        RuntimeVisibilityEntry {
-            field: "topology".to_string(),
-            visibility: RuntimeFieldVisibility::ControllerOnly,
-        },
-        RuntimeVisibilityEntry {
-            field: "timers".to_string(),
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-        },
-        RuntimeVisibilityEntry {
-            field: "state".to_string(),
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-        },
-        RuntimeVisibilityEntry {
-            field: "recent_failures".to_string(),
-            visibility: RuntimeFieldVisibility::OperatorOnly,
-        },
+    [
+        ("schema_version", RuntimeFieldVisibility::PublicSafe),
+        ("observed_at_ns", RuntimeFieldVisibility::PublicSafe),
+        ("canister_id", RuntimeFieldVisibility::OperatorOnly),
+        ("role", RuntimeFieldVisibility::OperatorOnly),
+        ("root", RuntimeFieldVisibility::OperatorOnly),
+        ("network", RuntimeFieldVisibility::OperatorOnly),
+        ("build", RuntimeFieldVisibility::OperatorOnly),
+        ("features", RuntimeFieldVisibility::OperatorOnly),
+        ("topology", RuntimeFieldVisibility::ControllerOnly),
+        ("timers", RuntimeFieldVisibility::OperatorOnly),
+        ("state", RuntimeFieldVisibility::OperatorOnly),
+        ("recent_failures", RuntimeFieldVisibility::OperatorOnly),
+        ("readiness", RuntimeFieldVisibility::OperatorOnly),
+        ("status", RuntimeFieldVisibility::OperatorOnly),
+        ("visibility", RuntimeFieldVisibility::OperatorOnly),
     ]
+    .into_iter()
+    .map(|(field, visibility)| RuntimeVisibilityEntry {
+        field: field.to_string(),
+        visibility,
+    })
+    .collect()
 }
 
 #[cfg(test)]
@@ -377,6 +407,41 @@ mod tests {
     }
 
     #[test]
+    fn runtime_status_classifies_each_top_level_field_visibility() {
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.81.0",
+            7,
+        );
+        let expected = [
+            ("schema_version", RuntimeFieldVisibility::PublicSafe),
+            ("observed_at_ns", RuntimeFieldVisibility::PublicSafe),
+            ("canister_id", RuntimeFieldVisibility::OperatorOnly),
+            ("role", RuntimeFieldVisibility::OperatorOnly),
+            ("root", RuntimeFieldVisibility::OperatorOnly),
+            ("network", RuntimeFieldVisibility::OperatorOnly),
+            ("build", RuntimeFieldVisibility::OperatorOnly),
+            ("features", RuntimeFieldVisibility::OperatorOnly),
+            ("topology", RuntimeFieldVisibility::ControllerOnly),
+            ("timers", RuntimeFieldVisibility::OperatorOnly),
+            ("state", RuntimeFieldVisibility::OperatorOnly),
+            ("recent_failures", RuntimeFieldVisibility::OperatorOnly),
+            ("readiness", RuntimeFieldVisibility::OperatorOnly),
+            ("status", RuntimeFieldVisibility::OperatorOnly),
+            ("visibility", RuntimeFieldVisibility::OperatorOnly),
+        ];
+
+        assert_eq!(status.visibility.len(), expected.len());
+        for (index, (field, visibility)) in expected.into_iter().enumerate() {
+            assert_eq!(status.visibility[index].field, field);
+            assert_eq!(status.visibility[index].visibility, visibility);
+        }
+    }
+
+    #[test]
     fn runtime_status_projects_registered_timer_metrics() {
         TimerMetrics::reset();
         TimerMetrics::record_timer_scheduled(
@@ -411,6 +476,31 @@ mod tests {
         assert_eq!(status.timers[1].subsystem, "cycles");
         assert_eq!(status.timers[1].name, "interval");
         assert_eq!(status.timers[1].status, TimerStatus::Unknown);
+
+        TimerMetrics::reset();
+    }
+
+    #[test]
+    fn runtime_status_bounds_timer_labels() {
+        TimerMetrics::reset();
+
+        let label = format!("{}\n:{}\n", "subsystem".repeat(12), "timer_name".repeat(16));
+        TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), &label);
+
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.81.0",
+            7,
+        );
+
+        assert_eq!(status.timers.len(), 1);
+        assert!(status.timers[0].subsystem.len() <= MAX_TIMER_SUBSYSTEM_BYTES);
+        assert!(status.timers[0].name.len() <= MAX_TIMER_NAME_BYTES);
+        assert!(!status.timers[0].subsystem.contains('\n'));
+        assert!(!status.timers[0].name.contains('\n'));
 
         TimerMetrics::reset();
     }

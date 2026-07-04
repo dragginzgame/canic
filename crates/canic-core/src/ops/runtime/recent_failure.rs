@@ -8,6 +8,8 @@ use crate::dto::runtime::{FailureSeverity, RecentFailure};
 use std::{cell::RefCell, collections::VecDeque};
 
 const MAX_RECENT_FAILURES: usize = 16;
+const MAX_SUBSYSTEM_BYTES: usize = 64;
+const MAX_CODE_BYTES: usize = 96;
 const MAX_SUMMARY_BYTES: usize = 256;
 const MAX_CORRELATION_ID_BYTES: usize = 96;
 
@@ -46,6 +48,8 @@ impl RecentFailureOps {
     /// This is intentionally heap-only and best-effort. It does not write
     /// stable state and is cleared by upgrade/reinstall.
     pub fn record(input: RecentFailureInput) {
+        let (subsystem, subsystem_redacted) = bounded_text(&input.subsystem, MAX_SUBSYSTEM_BYTES);
+        let (code, code_redacted) = bounded_text(&input.code, MAX_CODE_BYTES);
         let (summary, summary_redacted) = bounded_text(&input.summary, MAX_SUMMARY_BYTES);
         let (correlation_id, correlation_redacted) = input
             .correlation_id
@@ -56,12 +60,15 @@ impl RecentFailureOps {
         RECENT_FAILURES.with_borrow_mut(|failures| {
             failures.push_front(RecentFailure {
                 occurred_at_ns: input.occurred_at_ns,
-                subsystem: input.subsystem,
-                code: input.code,
+                subsystem,
+                code,
                 severity: input.severity,
                 summary,
                 correlation_id,
-                redacted: summary_redacted || correlation_redacted,
+                redacted: subsystem_redacted
+                    || code_redacted
+                    || summary_redacted
+                    || correlation_redacted,
             });
             while failures.len() > MAX_RECENT_FAILURES {
                 let _ = failures.pop_back();
@@ -136,8 +143,8 @@ mod tests {
         RecentFailureOps::reset();
         RecentFailureOps::record(RecentFailureInput {
             occurred_at_ns: 1,
-            subsystem: "auth".to_string(),
-            code: "token_failed".to_string(),
+            subsystem: format!("auth\n{}", "s".repeat(MAX_SUBSYSTEM_BYTES + 10)),
+            code: format!("token_failed\n{}", "c".repeat(MAX_CODE_BYTES + 10)),
             severity: FailureSeverity::Error,
             summary: format!("line\n{}", "x".repeat(MAX_SUMMARY_BYTES + 10)),
             correlation_id: Some("c".repeat(MAX_CORRELATION_ID_BYTES + 10)),
@@ -149,6 +156,10 @@ mod tests {
             .expect("failure");
 
         assert!(failure.redacted);
+        assert!(failure.subsystem.len() <= MAX_SUBSYSTEM_BYTES);
+        assert!(!failure.subsystem.contains('\n'));
+        assert!(failure.code.len() <= MAX_CODE_BYTES);
+        assert!(!failure.code.contains('\n'));
         assert!(failure.summary.len() <= MAX_SUMMARY_BYTES);
         assert!(!failure.summary.contains('\n'));
         assert!(
