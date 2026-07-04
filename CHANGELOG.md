@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.3` hardens runtime-introspection closeout coverage by proving the live
+  PocketIC endpoint DTOs and controller guards, and by pinning rejected
+  `canic inspect` command expansions.
+
 - `0.81.2` makes runtime-introspection DTOs roundtrip through Candid correctly
   and lets `canic inspect` decode typed runtime status, including failing
   status exit behavior.

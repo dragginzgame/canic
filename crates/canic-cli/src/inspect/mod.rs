@@ -653,6 +653,45 @@ mod tests {
     }
 
     #[test]
+    fn rejects_broad_deployment_fanout() {
+        assert!(
+            InspectOptions::parse([
+                OsString::from("deployment"),
+                OsString::from("demo-local"),
+                OsString::from("--all"),
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_endpoint_mode_flags_in_first_slice() {
+        assert!(
+            InspectOptions::parse([
+                OsString::from("canister"),
+                OsString::from("aaaaa-aa"),
+                OsString::from("--health"),
+            ])
+            .is_err()
+        );
+        assert!(
+            InspectOptions::parse([
+                OsString::from("canister"),
+                OsString::from("aaaaa-aa"),
+                OsString::from("--readiness"),
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_runtime_status_alias() {
+        assert!(
+            InspectOptions::parse([OsString::from("runtime"), OsString::from("aaaaa-aa")]).is_err()
+        );
+    }
+
+    #[test]
     fn usage_distinguishes_runtime_inspect_from_deploy_artifacts() {
         let text = usage();
 
