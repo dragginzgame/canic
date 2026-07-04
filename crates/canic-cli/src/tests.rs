@@ -88,6 +88,16 @@ fn usage_lists_command_families() {
     assert!(plain.contains("Tip: Run `canic <command> help`"));
 }
 
+#[test]
+fn inspect_report_status_suppresses_duplicate_stderr_and_exits_one() {
+    let error = CliError::Inspect(inspect::InspectCommandError::ReportStatus(
+        "failing".to_string(),
+    ));
+
+    assert_eq!(render_cli_error(&error), "");
+    assert_eq!(cli_error_exit_code(&error), 1);
+}
+
 // Ensure command-family help paths return successfully instead of erroring.
 #[test]
 fn command_family_help_returns_ok() {

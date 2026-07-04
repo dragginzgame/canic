@@ -185,6 +185,7 @@ pub fn render_cli_error(error: &CliError) -> String {
     match error {
         CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
         CliError::Deploy(err) if err.suppress_stderr() => String::new(),
+        CliError::Inspect(err) if err.suppress_stderr() => String::new(),
         CliError::Medic(err) if err.suppress_stderr() => String::new(),
         CliError::State(err) if err.suppress_stderr() => String::new(),
         _ => error.to_string(),
